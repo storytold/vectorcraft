@@ -1060,6 +1060,12 @@ impl Session {
         self.tool.wants_samples()
     }
 
+    /// Does a stroke the active tool draws now vary with an airbrush pen's finger wheel
+    /// ([`vectorcraft_tools::Tool::reads_wheel`])? False with no document open.
+    pub fn tool_reads_wheel(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.reads_wheel(cx))
+    }
+
     /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`]), is input
     /// held until an edit it computes is applied, or are requests for the UI left from making it?
     pub fn tool_waiting(&self) -> bool {

@@ -1861,6 +1861,11 @@ impl Tool for GestureTool {
     fn wants_samples(&self) -> bool {
         matches!(self.id, "pencil" | "paintbrush" | "blobBrush" | "eraser" | "knife" | "smooth" | "pathEraser")
     }
+    /// The Blob Brush's and the Eraser's tip varies with the wheel when a value is on Stylus Wheel
+    /// with a Variation above 0.
+    fn reads_wheel(&self, _cx: &ToolContext) -> bool {
+        self.tip_modes().contains(&Variation::StylusWheel)
+    }
     /// The outline of a long Blob Brush or Eraser drag, and a smoothing drag's band outlined again
     /// after a zoom change, reach the whole drag over several frames.
     fn overlays_pending(&self) -> bool {

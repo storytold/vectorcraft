@@ -4008,3 +4008,22 @@ fn pencil_alt_toggles_to_smooth_when_enabled_and_closes_when_disabled() {
     assert!(matches!(&last[0], Action::Preview(_, v) if v["closed"] == true && v["style"] == "pencil"));
     assert_eq!(last[1], Action::Commit);
 }
+
+#[test]
+fn the_eraser_reads_the_wheel_only_with_a_value_on_stylus_wheel() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    for id in ["pencil", "paintbrush", "blobBrush", "eraser"] {
+        assert!(!GestureTool::new(id).reads_wheel(&cx), "{id} at its defaults");
+    }
+    for value in ["angle", "roundness", "size"] {
+        let mut t = GestureTool::new("eraser");
+        t.set_option(&format!("{value}Mode"), &json!("stylusWheel"));
+        assert!(!t.reads_wheel(&cx), "{value} on Stylus Wheel with no Variation");
+        t.set_option(&format!("{value}Variation"), &json!(4));
+        assert!(t.reads_wheel(&cx), "{value} on Stylus Wheel");
+        t.set_option(&format!("{value}Mode"), &json!("pressure"));
+        assert!(!t.reads_wheel(&cx), "{value} on Pressure");
+    }
+}

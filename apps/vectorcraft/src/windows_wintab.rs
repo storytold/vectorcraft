@@ -8,9 +8,13 @@
 //! Windows Ink comparison says the wheel comes only through Wintab
 //! (<https://developer-support.wacom.com/hc/en-us/articles/12844630619415-Windows-Ink>).
 //!
+//! - Nothing here runs until the active tool draws with a brush or tip that varies with the
+//!   finger wheel (Stylus Wheel), as the app says through [`set_wheel_used`]: until then pen
+//!   messages load no library, install no hook and open no context, and when the tool stops
+//!   using the wheel the context closes ([`unused_context`]).
 //! - `Wintab32.dll` is loaded at run time from the system directory only, the first time a pen
-//!   comes over a window. Without it, without one of its exports, or when a call fails, the pens
-//!   read no wheel and draw as before; the user sees no error.
+//!   comes over a window while the wheel is used. Without it, without one of its exports, or when
+//!   a call fails, the pens read no wheel and draw as before; the user sees no error.
 //! - The context is opened from the driver's default context for the window that owns the pen's
 //!   window ([`configure`]), with packet messages on and the system cursor off: it moves no cursor
 //!   and makes no press. When the pen comes over another top-level window, such as a separate
@@ -403,6 +407,35 @@ fn next_context(current: Option<(usize, bool)>, tried: Option<(usize, u32)>, own
     (step, active && (due || step != Current::Keep))
 }
 
+/// The context step for a pen message while the active tool reads no wheel ([`Wheel::Unused`]):
+/// an open context closes, or is dropped when its window is gone (`current` as for
+/// [`next_context`]), and none opens.
+fn unused_context(current: Option<(usize, bool)>) -> Current {
+    match current {
+        Some((_, false)) => Current::Drop,
+        Some(_) => Current::Close,
+        None => Current::Keep,
+    }
+}
+
+/// Whether the active tool draws with a brush or tip that varies with the finger wheel, as the
+/// app last said ([`set_wheel_used`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Wheel {
+    /// No pen message loads `Wintab32.dll`, installs the thread's hook or opens a context, and a
+    /// context still open closes.
+    #[default]
+    Unused,
+    /// Pen messages open the context as [`next_context`] says.
+    Used,
+}
+
+/// Whether a pen message calls the driver at all: while the wheel is used, or to close a context
+/// still open after it stopped being used.
+fn calls_driver(wheel: Wheel, open: bool) -> bool {
+    wheel == Wheel::Used || open
+}
+
 /// Whether a step that failed at the message time `at` is tried again at `time`: [`RETRY_MS`] or
 /// more later, on the message clock, which wraps.
 fn retry_due(at: u32, time: u32) -> bool {
@@ -533,12 +566,12 @@ fn message(message: u32, wparam: usize, lparam: isize) -> Message {
 }
 
 #[cfg(windows)]
-pub use win::{forget, msg_hook, pen_wheel, wheel_pen};
+pub use win::{forget, msg_hook, pen_wheel, set_wheel_used, wheel_pen};
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod win {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
     use std::sync::OnceLock;
 
@@ -554,8 +587,8 @@ mod win {
 
     use super::{
         Axis, CSR_PKTDATA, CSR_TYPE, Current, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES, MAX_INDEX,
-        MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE,
-        configure, decode, device_of, hooked_open, message, next_context, retry_due, wheel_axis,
+        MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE, Wheel,
+        calls_driver, configure, decode, device_of, hooked_open, message, next_context, retry_due, unused_context, wheel_axis,
     };
 
     /// `WTInfoW`, `WTOpenW`, `WTClose` and `WTPacket` (`wintab.h`).
@@ -598,6 +631,9 @@ mod win {
         /// Kept apart from [`STATE`], so the window procedure can note a notice the driver sends
         /// while [`STATE`] is borrowed for a driver call.
         static NOTICES: RefCell<Notices> = RefCell::new(Notices::default());
+        /// Whether the active tool uses the wheel ([`set_wheel_used`]), kept apart from [`STATE`] so
+        /// the app can say so while [`STATE`] is borrowed.
+        static WHEEL: Cell<Wheel> = const { Cell::new(Wheel::Unused) };
     }
 
     /// The window property that holds the window procedure [`wnd_proc`] passes messages on to.
@@ -802,6 +838,11 @@ mod win {
         wheel_axis(csr_type, csr_pktdata, info::<4>(api, WTI_DEVICES + device, DVC_TPRESSURE))
     }
 
+    /// Whether a context is open, or may be: [`STATE`] is borrowed for a driver call.
+    fn context_open() -> bool {
+        STATE.with(|s| !s.try_borrow().is_ok_and(|s| s.context.is_none()))
+    }
+
     fn is_window(hwnd: *mut c_void) -> bool {
         // SAFETY: `IsWindow` takes any handle value and reads no caller memory.
         unsafe { IsWindow(Some(HWND(hwnd))) }.as_bool()
@@ -845,14 +886,18 @@ mod win {
         }
 
         /// Moves the context to the window that owns `hwnd`, for a pen message at the message time
-        /// `time` ([`next_context`]).
-        fn open_for(&mut self, api: Api, hwnd: *mut c_void, time: u32) {
+        /// `time` ([`next_context`]), or closes it when the active tool does not use the wheel
+        /// (`wheel`, [`unused_context`]).
+        fn open_for(&mut self, api: Api, hwnd: *mut c_void, time: u32, wheel: Wheel) {
             // SAFETY: `GetAncestor` takes any handle value and reads no caller memory.
             let owner = unsafe { GetAncestor(HWND(hwnd), GA_ROOTOWNER) }.0;
             let owner = if owner.is_null() { hwnd } else { owner };
             let current = self.context.as_ref().map(|c| (c.hwnd as usize, is_window(c.hwnd)));
             let tried = self.tried.map(|(w, at)| (w as usize, at));
-            let (step, open) = next_context(current, tried, owner as usize, time, is_active());
+            let (step, open) = match wheel {
+                Wheel::Used => next_context(current, tried, owner as usize, time, is_active()),
+                Wheel::Unused => (unused_context(current), false),
+            };
             match step {
                 Current::Keep => {}
                 Current::Drop => {
@@ -907,6 +952,9 @@ mod win {
         if what == Message::Other {
             return;
         }
+        if !calls_driver(WHEEL.get(), context_open()) {
+            return;
+        }
         let Some(api) = api() else { return };
         note(what);
         STATE.with(|s| {
@@ -935,21 +983,51 @@ mod win {
 
     /// The wheel for a pointer message of the pen with the pointer id `pen` to `hwnd` at the message
     /// time `time`, with its `eraser` end ([`Readings::wheel_for`]), opening the context first when
-    /// none is open. The first call installs [`call_wnd_proc`] ([`hook_thread`]); until it is
+    /// none is open. While the active tool does not use the wheel ([`set_wheel_used`]), it reads
+    /// none and calls the driver only to close a context still open ([`calls_driver`]). The first
+    /// call that opens a context installs [`call_wnd_proc`] ([`hook_thread`]); until it is
     /// installed, no context opens and the pens read no wheel.
     pub fn pen_wheel(hwnd: HWND, time: u32, pen: u32, eraser: bool) -> Option<f32> {
+        let used = WHEEL.get();
+        if !calls_driver(used, context_open()) {
+            return None;
+        }
         let api = api()?;
-        if !hook_thread(time) {
+        if used == Wheel::Used && !hook_thread(time) {
             return None;
         }
         let wheel = STATE.with(|s| {
             let mut s = s.try_borrow_mut().ok()?;
             s.take_notices(api);
-            s.open_for(api, hwnd.0, time);
+            s.open_for(api, hwnd.0, time, used);
             s.readings.wheel_for(time, pen, eraser)
         });
         settle();
-        wheel
+        wheel.filter(|_| used == Wheel::Used)
+    }
+
+    /// The app says whether the active tool draws with a brush or tip that varies with the finger
+    /// wheel (`used`). Until it says so, pen messages read no wheel and leave the driver alone; when
+    /// it stops, the context closes now, or at the next pen message while the reader is in a call
+    /// of its own.
+    pub fn set_wheel_used(used: bool) {
+        let wheel = if used { Wheel::Used } else { Wheel::Unused };
+        if WHEEL.replace(wheel) == wheel {
+            return;
+        }
+        STATE.with(|s| {
+            let Ok(mut s) = s.try_borrow_mut() else { return };
+            s.tried = None;
+            if wheel == Wheel::Unused
+                && s.context.is_some()
+                && let Some(api) = api()
+            {
+                // A context the driver closed is dropped without `WTClose`.
+                s.take_notices(api);
+                s.close(api);
+            }
+        });
+        settle();
     }
 
     /// The pen whose leaving starts the readings afresh, for a message of the pen with the pointer
@@ -1218,6 +1296,18 @@ mod tests {
         assert_eq!(next_context(Some((main, true)), None, doc, t, false), (Current::Close, false), "another window's context closes");
         assert_eq!(next_context(Some((main, false)), None, main, t, false), (Current::Drop, false), "a gone window's is dropped");
         assert_eq!(next_context(None, None, main, t, true), (Current::Keep, true), "and the app's return opens it");
+    }
+
+    #[test]
+    fn the_driver_is_left_alone_until_the_wheel_is_used() {
+        assert!(!calls_driver(Wheel::Unused, false), "no brush or tip on Stylus Wheel");
+        assert!(calls_driver(Wheel::Used, false), "one is: the context opens");
+        assert!(calls_driver(Wheel::Unused, true), "none any more: the open context closes");
+        assert_eq!(Wheel::default(), Wheel::Unused, "at start-up");
+        let main = 0x10;
+        assert_eq!(unused_context(None), Current::Keep, "nothing open");
+        assert_eq!(unused_context(Some((main, true))), Current::Close, "the pen window's context closes");
+        assert_eq!(unused_context(Some((main, false))), Current::Drop, "a gone window's is dropped");
     }
 
     #[test]

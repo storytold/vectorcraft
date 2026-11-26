@@ -22,6 +22,10 @@ use crate::VectorcraftApp;
 /// The tool the pen's eraser end selects.
 const ERASER: &str = "eraser";
 
+/// What decides whether the active tool reads an airbrush pen's finger wheel ([`sync_wheel_use`]):
+/// the active document's uid and revision, its current brush, and the tool with its options.
+type WheelKey = (Option<(u64, u64)>, Option<String>, &'static str, serde_json::Value);
+
 /// The end of the pen the canvas saw last, and the tool the eraser end stands in for
 /// ([`sync_eraser_tool`]).
 #[derive(Clone, Debug, Default)]
@@ -30,6 +34,8 @@ pub(crate) struct PenEnd {
     end: Option<bool>,
     /// The tool that was active when the eraser end selected the Eraser.
     before: Option<&'static str>,
+    /// What the host was last told about the finger wheel, and for which state ([`sync_wheel_use`]).
+    wheel: Option<(WheelKey, bool)>,
 }
 
 impl PenEnd {
@@ -79,6 +85,33 @@ pub(crate) fn sync_eraser_tool(app: &mut VectorcraftApp) -> bool {
     }
 }
 
+/// Tells the host whether the active tool reads an airbrush pen's finger wheel
+/// ([`crate::Services::stylus_wheel`]): the Paintbrush with a brush on Stylus Wheel, or
+/// the Eraser with a value on it. The host is told at the first call and then each time the answer
+/// changes; the tool is asked again only when the document, its current brush, the tool or its
+/// options change.
+///
+/// [`VectorcraftApp::tick`] calls this once a frame, with no document open too, and the canvas
+/// calls it again when the pen's end changes the tool ([`sync_eraser_tool`]).
+pub(crate) fn sync_wheel_use(app: &mut VectorcraftApp) {
+    if app.services.stylus_wheel.is_none() {
+        return;
+    }
+    let st = app.session.active();
+    let key =
+        (st.map(|s| (s.uid, s.revision)), st.and_then(|s| vectorcraft_brush::current(&s.doc)), app.session.tool_id(), app.session.tool_options());
+    if app.pen_end.wheel.as_ref().is_some_and(|(k, _)| *k == key) {
+        return;
+    }
+    let used = app.session.tool_reads_wheel(app.view_info());
+    let told = app.pen_end.wheel.replace((key, used)).map(|(_, u)| u);
+    if told != Some(used)
+        && let Some(tell) = app.services.stylus_wheel.as_mut()
+    {
+        tell(used);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +158,34 @@ mod tests {
         pen.set(reading(false));
         assert!(!sync_eraser_tool(&mut app));
         assert_eq!(app.session.tool_id(), "rectangle");
+    }
+
+    #[test]
+    fn the_host_is_told_when_the_tool_starts_and_stops_reading_the_wheel() {
+        use serde_json::json;
+        let told = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let tell = told.clone();
+        app.services.stylus_wheel = Some(Box::new(move |used| tell.borrow_mut().push(used)));
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.select_tool("paintbrush");
+        let frame = |app: &mut VectorcraftApp| {
+            sync_wheel_use(app);
+            told.borrow().clone()
+        };
+        assert_eq!(frame(&mut app), [false], "told at the first frame");
+        assert_eq!(frame(&mut app), [false], "and not again while nothing changes");
+        app.session.execute("brush.setCurrent", &json!({"name": "3 pt. Round"})).unwrap();
+        assert_eq!(frame(&mut app), [false], "a brush without Stylus Wheel");
+        let params = json!({"variation": [0, 0, 2], "modes": ["fixed", "fixed", "stylusWheel"]});
+        app.session.execute("brush.options", &json!({"name": "3 pt. Round", "params": params})).unwrap();
+        assert_eq!(frame(&mut app), [false, true], "its size on Stylus Wheel");
+        app.select_tool("rectangle");
+        assert_eq!(frame(&mut app), [false, true, false], "another tool");
+        app.select_tool(ERASER);
+        assert_eq!(frame(&mut app), [false, true, false], "the Eraser at its defaults");
+        app.session.set_tool_option("sizeMode", &json!("stylusWheel"));
+        app.session.set_tool_option("sizeVariation", &json!(4));
+        assert_eq!(frame(&mut app), [false, true, false, true], "its size on Stylus Wheel");
     }
 }

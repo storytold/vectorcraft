@@ -441,6 +441,11 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // With no document open too, so closing the last one stops the host reading the wheel. A
+        // held press, whose previews change the document each frame, keeps what it was told.
+        if self.canvas.grab.is_none() {
+            crate::stylus::sync_wheel_use(self);
+        }
         self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A

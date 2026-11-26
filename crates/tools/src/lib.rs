@@ -319,6 +319,12 @@ pub trait Tool: Send {
     fn wants_samples(&self) -> bool {
         false
     }
+    /// Does a stroke the tool draws now vary with an airbrush pen's finger wheel (a brush or tip
+    /// with Stylus Wheel variation)? A host that has to open a tablet interface of its own to read
+    /// the wheel opens it only while this is so.
+    fn reads_wheel(&self, _cx: &ToolContext) -> bool {
+        false
+    }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
     /// for the Shape Builder and the Live Paint Bucket, a Shape Builder merge of one)? It
     /// highlights nothing under the pointer until a map is done. While this holds, the desktop app
