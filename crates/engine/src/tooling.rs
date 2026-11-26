@@ -1582,7 +1582,15 @@ impl Session {
             let set = other.id();
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
-        self.keep_press_set(before_press, |k| sets_pressed && values.contains_key(k), sets_pressed);
+        // Another tool's set also names the keys of the stores it shares with the pressed tool.
+        let shared: Vec<&str> = match (self.pressed_tool().map(|t| t.id()), id) {
+            (Some(pressed), Some(set)) if pressed != set => settings::stores(pressed)
+                .filter(|(store, _)| settings::stores(set).any(|(s, _)| s == *store))
+                .flat_map(|(_, keys)| keys.iter().copied())
+                .collect(),
+            _ => Vec::new(),
+        };
+        self.keep_press_set(before_press, |k| values.contains_key(k) && (sets_pressed || shared.contains(&k)), sets_pressed);
         // The Eyedropper waiting for a Cmd-drag it lent a selection tool to is armed as the active one.
         if (active || lender) && values.contains_key("stop") {
             let eyedropper = id.unwrap_or(self.tool.id()) == "eyedropper";
