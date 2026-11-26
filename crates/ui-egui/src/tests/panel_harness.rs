@@ -378,11 +378,6 @@ impl Panel {
         tree.keys().into_iter().any(|key| tree.value_of(key).is_some_and(&matches))
     }
 
-    /// Whether the control named `name` reports selected state.
-    pub(crate) fn selected(&self, name: &str) -> bool {
-        self.fixture.tree().selected_of(self.look(name).node).unwrap_or(false)
-    }
-
     /// The toggle state of the control named `name`.
     // PLAN: assumed the facade re-exports the behavior crate's `Mixed` as `craft::behavior::Mixed`.
     pub(crate) fn toggled(&self, name: &str) -> Option<craft::behavior::Mixed<bool>> {
