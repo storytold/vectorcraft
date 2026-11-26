@@ -2890,6 +2890,8 @@ own rules:
 - `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
   item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
   statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+  The statics accept registered host class constructors and bound constructors as `this`; ordinary host functions
+  still give a `TypeError`.
 - A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
   report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
   rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts

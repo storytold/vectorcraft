@@ -58,6 +58,37 @@ fn promise_prototype_cannot_be_replaced() {
 }
 
 #[test]
+fn promise_statics_accept_registered_host_constructors_and_bound_targets() {
+    let mut r = realm();
+    let make: HostFunction = std::rc::Rc::new(|_| Ok(Data::Object(Vec::new())));
+    r.define_host_classes(
+        vec![HostClass { name: "Thing".into(), parent: None, members: Vec::new(), index: None, construct: Some(make) }],
+        Vec::new(),
+    )
+    .unwrap();
+    r.define_host_function("ordinary", Vec::new(), std::rc::Rc::new(|_| Ok(Data::Undefined))).unwrap();
+    let result = r
+        .run(
+            "var constructors = [Thing, Thing.bind(null), Thing.bind(null).bind(null)]; \
+         var methods = ['resolve', 'reject', 'all', 'allSettled', 'race']; var log = []; \
+         for (var i = 0; i < constructors.length; i++) { \
+           var C = constructors[i]; C.resolve = Promise.resolve; \
+           log.push(new C() instanceof Thing); \
+           for (var j = 0; j < methods.length; j++) { \
+             var p = Promise[methods[j]].call(C, []); \
+             log.push(p instanceof Promise); p.catch(function () {}); \
+           } \
+         } \
+         for (var j = 0; j < methods.length; j++) { \
+           try { Promise[methods[j]].call(ordinary, []); log.push(false); } \
+           catch (e) { log.push(e instanceof TypeError); } \
+         } log.join()",
+        )
+        .unwrap();
+    assert_eq!(result, JsValue::String(vec!["true"; 23].join(",")));
+}
+
+#[test]
 fn then_callbacks_run_after_the_scripts_code_in_order() {
     let src = "Promise.resolve(1).then(function (v) { log.push('a' + v); });\n\
                new Promise(function (res) { log.push('executor'); res(2); }).then(function (v) { log.push('b' + v); });\n\

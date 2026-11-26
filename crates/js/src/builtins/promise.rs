@@ -31,6 +31,7 @@ use super::{arg, constructor, create_at, method, native, new_array};
 use crate::LimitKind;
 use crate::bytecode::Code;
 use crate::heap::{BOUND_ARG_BYTES, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key};
+use crate::host::ArgRead;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::string_builtins::flat_charged;
 use crate::value::Value;
@@ -912,7 +913,7 @@ fn thrower(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<V
 }
 
 /// `v` is a constructor: a function written in JavaScript other than an arrow function or a
-/// method, a built-in constructor, or a bound function whose target is one.
+/// method, a built-in or registered host constructor, or a bound function whose target is one.
 fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
     let mut v = v.clone();
     loop {
@@ -923,6 +924,7 @@ fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
         match func {
             Func::Closure { code, .. } => return Ok(!code.arrow && !code.method),
             Func::Native { constructor, .. } => return Ok(constructor),
+            Func::Data { read: ArgRead::Hosted, .. } => return Ok(v.as_object().is_some_and(|o| interp.is_host_constructor(o))),
             Func::Bound { target, .. } => {
                 interp.use_fuel()?;
                 v = Value::Object(target);
