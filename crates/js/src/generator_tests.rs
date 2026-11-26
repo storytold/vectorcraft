@@ -185,6 +185,13 @@ fn generator_methods_and_the_generator_objects() {
 }
 
 #[test]
+fn a_bound_generator_function_inherits_from_the_targets_prototype() {
+    truth("function* g() {} var b = g.bind(null); Object.getPrototypeOf(b) === Object.getPrototypeOf(g) && b.constructor !== Function");
+    truth("function* g(a) { yield a; } g.bind(null, 3)().next().value === 3");
+    truth("function f() {} Object.getPrototypeOf(f.bind(null)) === Function.prototype");
+}
+
+#[test]
 fn yield_is_an_identifier_outside_generators_in_sloppy_code() {
     truth("var yield = 1; yield + 1 === 2");
     truth("function f(yield) { return yield; } f(3) === 3");

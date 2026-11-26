@@ -672,6 +672,10 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let Some(target) = this.as_object() else { return Err(interp.type_error("the value bind was called on is not a function")) };
     let bound_this = arg(args, 0);
     let bound_args: Rc<[Value]> = args.get(1..).unwrap_or_default().into();
+    // With ECMAScript 2015 the bound function inherits from the target's prototype, read before
+    // `length` and `name` (ECMA-262 2020 section 9.4.1.3 step 2), so a bound generator function
+    // inherits from %GeneratorFunction.prototype%.
+    let target_proto = interp.heap.object(target).and_then(|o| o.proto);
     // A host function's `length` is an ordinary property a script can set, so it is converted
     // to an integer first, as later editions specify. With ECMAScript 2015 only an own `length` is
     // read (ECMA-262 2020 section 19.2.3.2 step 4), so an inherited getter does not run.
@@ -685,7 +689,7 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     // Adding 0 turns a negative zero into 0.
     let length = (target_length - bound_args.len() as f64).max(0.0) + 0.0;
     if interp.options.es2015 {
-        return bind_es2015(interp, target, bound_this, bound_args, length);
+        return bind_es2015(interp, target, target_proto, bound_this, bound_args, length);
     }
     interp.reserve_heap(OBJECT_BYTES + prop_bytes(&["length", "caller", "arguments"]) + BOUND_ARG_BYTES * bound_args.len())?;
     let proto = interp.intrinsics.function_proto;
@@ -707,9 +711,10 @@ fn prop_bytes(names: &[&str]) -> usize {
 
 /// The rest of `Function.prototype.bind` with [`crate::Options::es2015`] (ECMA-262 2020 section
 /// 19.2.3.2): the bound function's `length` is configurable, its `name` is `bound ` and the
-/// target's `name` when that is a string (read after `length`, so a getter for it runs). It keeps
-/// the `caller` and `arguments` that throw, as without the option.
-fn bind_es2015(interp: &mut Interp, target: ObjId, bound_this: Value, bound_args: Rc<[Value]>, length: f64) -> JsResult<Value> {
+/// target's `name` when that is a string (read after `length`, so a getter for it runs), and its
+/// prototype is `proto`, the target's. It keeps the `caller` and `arguments` that throw, as
+/// without the option.
+fn bind_es2015(interp: &mut Interp, target: ObjId, proto: Option<ObjId>, bound_this: Value, bound_args: Rc<[Value]>, length: f64) -> JsResult<Value> {
     let target_name = match interp.get_from(target, &key("name"), &Value::Object(target))? {
         Value::String(s) => s,
         _ => Str::from(""),
@@ -725,9 +730,8 @@ fn bind_es2015(interp: &mut Interp, target: ObjId, bound_this: Value, bound_args
     crate::string_builtins::charge_units(interp, name_len)?;
     let mut units: Vec<u16> = "bound ".encode_utf16().collect();
     units.extend_from_slice(&target_units);
-    let proto = interp.intrinsics.function_proto;
     let class = Class::Function(Func::Bound { target, this: bound_this, args: bound_args.clone() });
-    let f = interp.heap.alloc_object(Object::new(class, Some(proto)));
+    let f = interp.heap.alloc_object(Object::new(class, proto));
     interp.heap.bytes = interp.heap.bytes.saturating_add(BOUND_ARG_BYTES * bound_args.len() + string_bytes(name_len));
     interp.define(f, key("length"), Prop::Data { value: Value::Number(length), flags: CONFIGURABLE })?;
     interp.define(f, key("name"), Prop::Data { value: Value::String(Str::from_units(units)), flags: CONFIGURABLE })?;
