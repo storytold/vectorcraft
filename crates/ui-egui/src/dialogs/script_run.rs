@@ -408,6 +408,11 @@ pub(crate) fn with_host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost,
     Some(app.dialogs()?.with(|host| f(host, &ctx)))
 }
 
+/// Whether the question asked on quitting with a script running is open.
+pub(crate) fn asking_to_close(app: &VectorcraftApp) -> bool {
+    with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false)
+}
+
 /// Whether a dialog is open or waits to open: a script's dialog opens only over nothing.
 pub(crate) fn busy(app: &VectorcraftApp) -> bool {
     app.any_dialog_open() || with_host(app, |host, _| !host.is_empty()).unwrap_or(false)
@@ -578,19 +583,41 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         None => {}
     }
+    answer_close(app, close);
+    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
+        choose(app);
+    }
+}
+
+/// Takes the answer to the quit question given between two queued runs, before the next run
+/// starts. True when it stopped the runs.
+pub(crate) fn answer_close_between_runs(app: &mut VectorcraftApp) -> bool {
+    let Some(close) = with_host(app, |host, _| host.take::<CloseQuestion>()).flatten() else {
+        return false;
+    };
+    answer_close(app, Some(close));
+    !app.session.script_running()
+}
+
+/// With Stop as the answer to the quit question, stops the run, or between two queued runs, the
+/// runs not yet started.
+fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuestion as StackDialog>::Result>>) {
     let startup = app.session.startup_script_running();
+    // Between two queued runs: none runs, and the report is the last run's.
+    let between = app.session.script_running() && app.session.script_name().is_none();
     if let Some(DialogResult::Ok(answer)) = close
         && answer.choice == PromptChoice::Proceed
         && app.session.script_abandon()
     {
-        let error = app.session.script_failure_text().unwrap_or_default();
-        crate::script_runs::ended_with_error(app, startup, error);
+        if between {
+            crate::script_runs::stopped_between_runs(app);
+        } else {
+            let error = app.session.script_failure_text().unwrap_or_default();
+            crate::script_runs::ended_with_error(app, startup, error);
+        }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
         app.sync_views();
-    }
-    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
-        choose(app);
     }
 }
 

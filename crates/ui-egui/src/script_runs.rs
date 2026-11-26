@@ -18,6 +18,10 @@ pub fn poll(app: &mut VectorcraftApp) {
     if ask(app) {
         return;
     }
+    // Between two queued runs, the next one waits for the answer to the quit question.
+    if app.session.script_name().is_none() && (script_run::asking_to_close(app) || script_run::answer_close_between_runs(app)) {
+        return;
+    }
     let name = app.session.script_name().unwrap_or_default();
     let startup = app.session.startup_script_running();
     let Some(result) = app.session.script_pump() else {
@@ -211,5 +215,20 @@ pub(crate) fn failed(app: &mut VectorcraftApp, error: String) {
         app.status("The script was stopped and its changes were undone");
     } else {
         app.status(error);
+    }
+}
+
+/// Shows that the runs `script.startup.run` queued were stopped between two of them, before the
+/// next one started. The message shows first, before the round's notes ([`end_round`]).
+pub(crate) fn stopped_between_runs(app: &mut VectorcraftApp) {
+    let message = "The scripts waiting to run were not run";
+    let mut notes = vec![message.to_string()];
+    notes.append(&mut app.ui.startup_notes);
+    if notes.len() == 1 {
+        // Notes an earlier round left for the same message are not this round's.
+        app.ui.status_notes = None;
+        app.status(message);
+    } else {
+        show_notes(app, notes);
     }
 }

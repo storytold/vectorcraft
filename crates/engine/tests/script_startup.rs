@@ -346,6 +346,39 @@ fn in_the_app_a_stop_between_two_runs_stops_the_run_that_starts_next() {
 }
 
 #[test]
+fn a_startup_script_refused_before_it_begins_is_in_the_script_console() {
+    let _f = fresh();
+    let dir = tmp_dir("refused");
+    write(&dir, "a.jsx", "vc.log(1);");
+    let mut s = session(&dir);
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    let r = s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
+    let error = r["failed"][0]["error"].as_str().unwrap().to_string();
+    assert!(error.contains("undo group"), "{r}");
+    assert_eq!(started(&s), ["a.jsx"]);
+    assert_eq!(console(&s, "error"), [format!("a.jsx: {error}")]);
+}
+
+#[test]
+fn in_the_app_abandoning_between_two_runs_drops_the_queued_runs() {
+    let _f = fresh();
+    let dir = tmp_dir("app-abandon-between");
+    write(&dir, "a.jsx", "vc.log(1);");
+    write(&dir, "b.jsx", "vc.log(2);");
+    let mut s = session(&dir);
+    s.script_frames = true;
+    let then = json!({"source": "vc.log(3);", "name": "chosen"});
+    s.execute("script.startup.run", &json!({"reason": "menu", "then": then})).unwrap();
+    assert_eq!((0..10_000).find_map(|_| s.script_pump()).unwrap().unwrap()["ok"], true, "a.jsx ends");
+    assert!(s.script_running() && s.script_name().is_none(), "b.jsx waits for the next pump");
+    assert!(s.script_abandon(), "the queued runs are stopped");
+    assert!(!s.script_running());
+    assert!(s.script_pump().is_none());
+    assert_eq!(started(&s), ["a.jsx"]);
+}
+
+#[test]
 fn in_the_app_startup_scripts_that_cannot_start_are_in_the_reply() {
     let _f = fresh();
     let dir = tmp_dir("app-unread");

@@ -417,7 +417,7 @@ impl Session {
         self.startup_loading = Some(vectorcraft_plugins::safe_mode::loading(&item));
         let locale = script::dollar::ui_locale(self.ui_language.as_deref().unwrap_or(&self.prefs.interface_language));
         let request = script::Request {
-            name,
+            name: name.clone(),
             name_given: false,
             file: Some(path.to_string_lossy().into_owned()),
             checked_real: Some(real),
@@ -427,9 +427,15 @@ impl Session {
             locale,
             answers: vec![],
         };
+        let runs = self.script_runs;
         self.script_start(request).map_err(|e| {
             self.startup_ended();
-            e.to_string()
+            let message = e.to_string();
+            // A run refused before it began, such as with an undo group open, has no console entry yet.
+            if self.script_runs == runs {
+                self.note_unread(&name, &message);
+            }
+            message
         })
     }
 

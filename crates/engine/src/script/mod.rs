@@ -1919,13 +1919,15 @@ impl Session {
     }
 
     /// Stops the running script at once and puts everything back, with the report of a stopped run
-    /// ([`Self::script_report`]). False with none running.
+    /// ([`Self::script_report`]). Between two runs `script.startup.run` queued, the queued runs are
+    /// not started, and the report stays the last run's. False with none running or queued.
     pub fn script_abandon(&mut self) -> bool {
         // The runs queued after it are not started.
+        let queued = !self.script_queue.is_empty();
         self.script_queue.clear();
         self.script_queue_scope = None;
         self.startup_ended();
-        let Some(key) = self.script_key.take() else { return false };
+        let Some(key) = self.script_key.take() else { return queued };
         let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
             self.script_gone(key, console::Ending::Stopped);
             return true;

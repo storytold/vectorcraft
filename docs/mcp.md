@@ -3310,7 +3310,8 @@ disabled, truncated, unreadable}`, with `then` holding `script.run`'s reply. In 
 reply is `{reason, skipped: false, running, queued, failed, disabled, truncated, unreadable}`, with `failed` naming
 the runs that could not start before the first one did. Each run then reports as a `script.run` in the app does, the
 next one starts at the frame after, and a later run that cannot start, the chosen script included, is named in the
-status bar. Stop (`script.stop`) asked for between two runs stops the run that starts next. Under `--automation-read-root` it reads the folder only when the folder lies inside a
+status bar. Stop (`script.stop`) asked for between two runs stops the run that starts next. In the app, stopping the runs from
+the prompt shown on quitting, between two runs, drops the runs not yet started, and the status bar says so. While that prompt is open, the next run does not start. Under `--automation-read-root` it reads the folder only when the folder lies inside a
 read root. With the preference on, `ui.runScript` and `ui.runInstalledScript` still return `script.run`'s reply,
 or its error when the chosen script cannot start, and add `startup` holding the `script.startup.run` reply. While a
 startup script runs before the chosen script, that reply is `{running: true, queued: true}`, and a chosen script that
