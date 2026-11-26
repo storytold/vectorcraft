@@ -130,6 +130,10 @@ pub struct GestureTool {
     /// A release where the pointer last dragged to would close the stroke because it ends near
     /// its start (Close Paths When Ends Are Within): the cursor shows the closing ring.
     near_start: bool,
+    /// The stroke has gone farther than Close Paths When Ends Are Within from where it would close
+    /// (its start, or the other end of the path it continues): only then can it close there, so
+    /// the ring doesn't show while a stroke is still leaving its start.
+    left_start: bool,
     /// A release where the pointer last dragged to would connect the continued path to another
     /// selected path's open end (`finish`): the cursor shows the continuation cursor.
     connects: bool,
@@ -894,6 +898,7 @@ impl GestureTool {
             active: false,
             began: false,
             near_start: false,
+            left_start: false,
             connects: false,
             extend: None,
             close_to: None,
@@ -1533,11 +1538,28 @@ impl GestureTool {
         })
     }
 
+    /// Where a stroke ending near it closes: the other end of the path it continues, or its start.
+    fn close_target(&self) -> Option<Point> {
+        match self.extend {
+            Some(_) => self.close_to,
+            None => self.points.first().copied(),
+        }
+    }
+
+    /// Notes that the stroke has reached `at`: past Close Paths When Ends Are Within from where it
+    /// would close, it has left its start (`left_start`).
+    fn note_leaving(&mut self, cx: &ToolContext, at: Point) {
+        if !self.left_start && self.close_target().is_some_and(|t| t.distance(at) > cx.tol(self.close_within)) {
+            self.left_start = true;
+        }
+    }
+
     /// Does a stroke that ends at `end` end near its start (Close Paths When Ends Are Within, off
     /// at 0 pixels)? A stroke continuing a selected path ends near that path's other end, a
     /// straight line too; a new straight line never closes, as it would run back over itself.
+    /// A stroke that hasn't yet gone farther than that distance from there never ends near it.
     fn ends_near_start(&self, cx: &ToolContext, end: Point) -> bool {
-        if self.close_within <= 0.0 {
+        if self.close_within <= 0.0 || !self.left_start {
             return false;
         }
         let tol = cx.tol(self.close_within);
@@ -1704,6 +1726,7 @@ impl Tool for GestureTool {
                 self.active = true;
                 self.began = false;
                 self.near_start = false;
+                self.left_start = false;
                 self.connects = false;
                 // Alt switches the Pencil when its toggle is on, the Blob Brush always, and the
                 // Paintbrush when the press has a selected path.
@@ -1785,6 +1808,7 @@ impl Tool for GestureTool {
                     // follows the point `finish` will test.
                     let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.grid_snaps(cx));
                     let release_end = kept.unwrap_or(end);
+                    self.note_leaving(cx, release_end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     self.connects = self.connects_at(cx, release_end).is_some();
                     if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) {
@@ -1793,6 +1817,7 @@ impl Tool for GestureTool {
                     return vec![];
                 }
                 self.push(p, ev);
+                self.note_leaving(cx, end);
                 self.near_start = self.release_closes_near_start(cx, end);
                 self.connects = self.connects_at(cx, end).is_some();
                 if !self.draws_path() || self.smoothing {

@@ -2118,6 +2118,41 @@ fn close_paths_within_0_leaves_a_stroke_that_ends_at_its_start_open() {
     }
 }
 
+/// A stroke that hasn't yet gone farther than Close Paths When Ends Are Within from its start
+/// shows no closing ring and stays open at the release; once it has, coming back shows the ring
+/// and the release closes it.
+#[test]
+fn a_stroke_still_leaving_its_start_does_not_close() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let none = Mods::default();
+    let tools = [("pencil", Cursor::Pencil, Cursor::PencilClose), ("paintbrush", Cursor::Paintbrush, Cursor::PaintbrushClose)];
+    for (tool, own, closing) in tools {
+        let mut t = GestureTool::new(tool);
+        t.set_option("closeWithin", &json!(15.0));
+        let mut at = |k, x, y| {
+            let acts = t.pointer(&cx, &PointerEvent::new(k, x, y));
+            (acts, t.cursor(&cx, Point::new(x, y), none))
+        };
+        at(PointerKind::Down, 310.0, 330.0);
+        for (x, y) in [(316.0, 334.0), (321.0, 330.0), (316.0, 324.0), (313.0, 333.0)] {
+            assert_eq!(at(PointerKind::Drag, x, y).1, own, "{tool}: still within the distance of the start");
+        }
+        let (acts, _) = at(PointerKind::Up, 313.0, 333.0);
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{tool}: {acts:?}") };
+        assert_eq!(v["closed"], json!(false), "{tool}: a stroke that never left its start stays open");
+        at(PointerKind::Down, 310.0, 330.0);
+        at(PointerKind::Drag, 316.0, 334.0);
+        at(PointerKind::Drag, 360.0, 350.0);
+        assert_eq!(at(PointerKind::Drag, 318.0, 335.0).1, closing, "{tool}: back near the start after leaving it");
+        let (acts, _) = at(PointerKind::Up, 318.0, 335.0);
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{tool}: {acts:?}") };
+        assert_eq!(v["closed"], json!(true), "{tool}: the release closes it");
+    }
+}
+
 /// While a stroke is drawn back near its start, the cursor shows the closing ring when a
 /// release there closes the path (Close Paths When Ends Are Within), and the tool's own cursor
 /// away from the start, at 0 pixels and after the release.
