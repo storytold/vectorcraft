@@ -561,6 +561,21 @@ mod tests {
         assert_eq!((pa["detail"].as_f64(), pb["detail"].as_f64()), (Some(3.0), Some(8.0)), "each keeps its untouched value");
     }
 
+    /// Zig Zag's Ridges per segment and Roughen's Detail are counts: their rows show no percent sign, while Size
+    /// with Relative, a share of the object's size, shows one.
+    #[test]
+    fn zig_zag_ridges_and_roughen_detail_show_no_percent_sign() {
+        use craft::ui::runtime::env::UnitKind;
+        let app = app();
+        for (effect, key) in [("distort.zigZag", "ridges"), ("distort.roughen", "detail")] {
+            let cx = EffectCx::new(&app, effect, false);
+            let rows = super::super::effect_rows::distort(&cx, &DialogFields::new());
+            let unit = |k: &str| rows.iter().find(|p| p.key == k).map(|p| p.unit);
+            assert_eq!(unit(key), Some(None), "{effect} {key}");
+            assert_eq!(unit("size"), Some(Some(UnitKind::Percent)), "{effect} size");
+        }
+    }
+
     /// The lists the dialogs draw hold the values the effect's parameter documentation lists, in
     /// its order; Rasterize's Color Model names the document's mode first.
     #[test]

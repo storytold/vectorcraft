@@ -544,6 +544,9 @@ impl VectorcraftApp {
         if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+        // A `prefs.reset` run in this frame outside `Self::run` (a script's, say): the pass that follows draws the
+        // reset rows.
+        prefs_dialog::apply_prefs_resets(self);
     }
 
     /// The canvas panel's body: the document tabs, then the canvas (a pane for each document while
