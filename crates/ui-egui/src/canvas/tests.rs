@@ -1613,6 +1613,89 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     }
 }
 
+/// A Pen drag over a frame the worker drew draws each move's curve into that frame, here, in the
+/// frame of the move: once the press's frame arrives from the worker, every move shows the
+/// document's revision and queues nothing on the worker. When the frame shown drew effect rasters
+/// from before their objects moved, when a part drawn here would have differed from it, or when
+/// the part's share of the whole frame's time is over 8 ms, the next move renders on the worker,
+/// and the moves after the worker's frame are drawn here again. A frame of an older revision on
+/// its way does not hold a move back.
+#[test]
+fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for i in 0..60 {
+        let (x, y) = (f64::from(i % 10) * 40.0, f64::from(i / 10) * 50.0);
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 30, "height": 30})).unwrap();
+    }
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.canvas.worker_started = true; // the first frame renders on this thread
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let (worker, mut side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
+    app.canvas.last_ms = 50.0;
+    app.select_tool("pen");
+    let revision = |app: &VectorcraftApp| Some(app.session.active().unwrap().revision);
+    let shown = |app: &VectorcraftApp| app.canvas.key.as_ref().map(|k| k.revision);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let mut at = app.canvas_view().unwrap().to_screen(Point::new(105.0, 155.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, true)]);
+    assert!(shown(&app) < revision(&app), "the press's frame, the first of the drag, renders on the worker");
+    assert!(side.render());
+    let mut drag = |app: &mut VectorcraftApp| {
+        at += vec2(9.0, 5.0);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    };
+    for step in 0..6 {
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "move {step}: the curve is drawn in its own frame");
+        assert!(side.jobs.try_recv().is_err(), "move {step}: nothing is queued on the worker");
+    }
+    for case in ["moved", "differs", "slow"] {
+        match case {
+            "moved" => app.canvas.moved = true,
+            "differs" => app.canvas.worker_parts = true,
+            _ => app.canvas.last_ms = 10_000.0,
+        }
+        drag(&mut app);
+        assert!(shown(&app) < revision(&app), "{case}: the move is not drawn here");
+        assert!(side.render(), "{case}: the move renders on the worker");
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "{case}: after the worker's frame, the next move is drawn here");
+        assert!(!app.canvas.worker_parts, "{case}");
+    }
+    // A worker's frame that drew art in a way that depends on its size: the move after it renders
+    // on the worker too.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    let job = side.jobs.try_iter().last().expect("the move is on the worker");
+    let done = crate::render_worker::render(&mut side.renderer, &mut side.kept, job);
+    side.done.send(crate::render_worker::Done { ms: 50.0, view_sized: true, ..done }).unwrap();
+    drag(&mut app);
+    assert!(app.canvas.worker_parts, "the frame shown drew art that depends on its size");
+    assert!(shown(&app) < revision(&app) && side.render(), "the move after it renders on the worker");
+    drag(&mut app);
+    assert_eq!(shown(&app), revision(&app), "after the next worker frame, the move is drawn here");
+    // A frame on its way of an older revision: the next move is drawn here, and that frame is not
+    // shown when it arrives.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "a frame is on its way");
+    app.canvas.worker_parts = false;
+    for late in [false, true] {
+        if late {
+            assert!(side.render());
+        }
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "drawn here, the frame on its way arrived: {late}");
+    }
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    app.canvas.worker = None;
+}
+
 /// The frame after an interaction renders without `interacting` also when the interaction
 /// leaves the document as it was (#1257): here a drag back to where it started.
 #[test]
@@ -1777,7 +1860,9 @@ fn cached_frames_keep_their_scale() {
         // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed
+            .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false, view_sized: false })
+            .unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -1917,7 +2002,9 @@ fn a_pan_fills_the_area() {
     // The fill arrives; the next frame draws it, and asks for no other fill.
     let img = app.canvas.renderer.render(&fill_job.doc, fill_job.w, fill_job.h, fill_job.view, &fill_job.opts);
     let (doc, opts) = (fill_job.doc, fill_job.opts);
-    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, pixels) = frame(&mut app);
     assert!(fill_jobs.try_recv().is_err(), "the fill covers the canvas");
     assert_eq!(app.canvas.key.as_ref(), Some(&old), "the last frame is still shown");
@@ -1962,11 +2049,15 @@ fn a_pan_fills_the_area() {
     app.view_mut().unwrap().center = Point::new(250.0, 150.0);
     // That fill finishes after the worker's frame: it is taken and not kept.
     let img = app.canvas.renderer.render(&next.doc, next.w, next.h, next.view, &next.opts);
-    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     // The worker's frame arrives: it covers the canvas, and the fill is no longer drawn or kept.
     let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
     let expected = job.key.clone();
-    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
+    completed
+        .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, _) = frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame is shown");
     assert!(app.canvas.fill.is_none() && meshes.iter().all(|m| m.texture_id != fill_tex), "the fill is dropped");
@@ -5043,6 +5134,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5066,6 +5158,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5088,6 +5181,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5110,6 +5204,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -5170,7 +5265,16 @@ fn the_contour_bar_sets_corners_and_bakes() {
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
-    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0, reused: false }
+    crate::render_worker::Done {
+        key: job.key.clone(),
+        doc: job.doc.clone(),
+        opts: job.opts.clone(),
+        img,
+        ms: 40.0,
+        moved: 0,
+        reused: false,
+        view_sized: false,
+    }
 }
 
 /// A job for the render worker to pan over a document of `doc`: a view at 100% moved by `(dx, dy)`
@@ -5636,7 +5740,8 @@ fn a_pan_after_the_settling_frame() {
         let job = jobs.try_recv().unwrap_or_else(|_| panic!("{name}: the canvas asks for a frame"));
         let f = render_job(&mut r, &mut kept, &job);
         assert_eq!(f.reused, copies, "{name}");
-        let done = crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img: f.img, ms: 40.0, moved: f.moved, reused: f.reused };
+        let (key, doc, opts, img) = (job.key, job.doc, job.opts, f.img);
+        let done = crate::render_worker::Done { key, doc, opts, img, ms: 40.0, moved: f.moved, reused: f.reused, view_sized: f.view_sized };
         done_tx.send(done).unwrap();
     };
     frame(&mut app, 1.0);
