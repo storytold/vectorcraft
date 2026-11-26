@@ -131,6 +131,13 @@ impl Node {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
     }
 
+    /// Whether a view that hides template layers (`templates`) or guides (`guides`) leaves this
+    /// object out: a template layer while templates are hidden, or a path made into a guide while
+    /// guides are hidden. The canvas draws ruler guides apart from the art.
+    pub fn hidden_by_view(&self, templates: bool, guides: bool) -> bool {
+        (templates && self.is_template()) || (guides && matches!(self.kind, NodeKind::Path { guide: true, .. }))
+    }
+
     /// The art objects of this container: its children, looking through sublayers, which are not
     /// objects (bottom first). With `editable`, only the visible, unlocked objects in visible,
     /// unlocked, non-template sublayers.

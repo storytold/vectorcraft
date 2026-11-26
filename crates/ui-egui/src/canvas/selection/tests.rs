@@ -243,7 +243,7 @@ fn the_key_object_has_its_own_outline() {
     let ids = app.session.active().unwrap().selection.objects.clone();
     app.run("select.key", json!({"id": curve.0})).unwrap();
     let st = app.session.active().unwrap();
-    let want = node_outline(st.doc.node(curve).unwrap(), &st.doc.symbol_boxes());
+    let want = node_outline(st.doc.node(curve).unwrap(), &st.doc.symbol_boxes(), ViewHides::default());
     let color = c32(st.doc.layer_color(curve));
     let out = outlines(&app, st);
     let key = out.iter().find(|o| o.color == color).and_then(|o| o.key.as_ref()).unwrap();
@@ -331,7 +331,11 @@ fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
         let st = app.session.active().unwrap();
         let key = outlines(&app, st).into_iter().find_map(|o| o.key).unwrap();
         assert_eq!(key.elements(), frame_of(corners(&app, id)).as_slice(), "the key object's outline of {id:?}");
-        assert_eq!(outline_of(st, id).unwrap().path.elements(), frame_of(corners(&app, id)).as_slice(), "the hover outline of {id:?}");
+        assert_eq!(
+            outline_of(st, id, ViewHides::default()).unwrap().path.elements(),
+            frame_of(corners(&app, id)).as_slice(),
+            "the hover outline of {id:?}"
+        );
     }
 }
 
@@ -356,8 +360,9 @@ fn the_overlay_limit_counts_crossing_lines_only_where_they_are_drawn() {
     let count = OVERLAY_MAX_ANCHORS / 6;
     let linked = vec![image(Some(vectorcraft_doc::LinkInfo { path: "/a.png".into(), ..Default::default() })); count];
     let embedded = vec![image(None); count];
-    assert!(!too_many_anchors(&linked) && too_many_marks(&linked), "linked images");
-    assert!(!too_many_anchors(&embedded) && !too_many_marks(&embedded), "embedded images");
+    let all = ViewHides::default();
+    assert!(!too_many_anchors(&linked, all) && too_many_marks(&linked, all), "linked images");
+    assert!(!too_many_anchors(&embedded, all) && !too_many_marks(&embedded, all), "embedded images");
 }
 
 /// A selected group outlines, marks and crosses only the members the canvas draws: a hidden member and a linked image
@@ -385,7 +390,7 @@ fn a_selected_group_leaves_its_hidden_members_unmarked() {
         let st = app.session.active().unwrap();
         let outlined: Vec<Vec<PathEl>> = outlines(app, st).into_iter().flat_map(|o| o.paths).map(|p| p.elements().to_vec()).collect();
         let anchored = marks(app).paths.iter().map(|p| p.anchor_count()).collect::<Vec<_>>();
-        let hovered = outline_of(st, group).map(|h| h.path.elements().to_vec());
+        let hovered = outline_of(st, group, ViewHides::of(app)).map(|h| h.path.elements().to_vec());
         (outlined, anchored, hovered)
     };
     let both = shown(&mut app, &[]);
@@ -394,6 +399,87 @@ fn a_selected_group_leaves_its_hidden_members_unmarked() {
     assert_ne!(both, without, "the marks show every member");
     assert_eq!(without.1, vec![4, 4], "the anchors of the two visible members");
     assert_eq!(with_hidden, without, "hidden members are not marked");
+}
+
+/// A selected group leaves out a member made into a guide while the guides are hidden, as the canvas does: its
+/// outlines, anchors and hover outline are the same as with that member deleted. With the guides shown, the guide is
+/// marked too.
+#[test]
+fn a_selected_group_leaves_out_its_guides_while_guides_are_hidden() {
+    let mut app = blank();
+    let path = id_of(&app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let guide = id_of(&app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 40, "height": 40})).unwrap());
+    app.run("select.set", json!({"ids": [guide.0]})).unwrap();
+    app.run("view.guides.make", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [path.0, guide.0]})).unwrap();
+    let group = id_of(&app.run("object.group", json!({})).unwrap());
+    assert!(
+        matches!(app.session.active().unwrap().doc.node(guide).map(|n| &n.kind), Some(NodeKind::Path { guide: true, .. })),
+        "the group holds a guide"
+    );
+    // With the group selected: the boxes of its outline paths, the paths that show anchors, and its hover outline's box.
+    let shown = |app: &mut VectorcraftApp| {
+        app.run("select.set", json!({"ids": [group.0]})).unwrap();
+        let st = app.session.active().unwrap();
+        let outlined: Vec<vectorcraft_geom::Rect> = outlines(app, st).into_iter().flat_map(|o| o.paths).map(|p| p.bounding_box()).collect();
+        let anchored = marks(app).paths.iter().map(|p| p.anchor_count()).collect::<Vec<_>>();
+        let hovered = outline_of(st, group, ViewHides::of(app)).map(|h| h.path.bounding_box());
+        (outlined, anchored, hovered)
+    };
+    let both = shown(&mut app);
+    app.run("view.guides", json!({})).unwrap();
+    assert!(!app.ui.view.guides_shown(), "the guides are hidden");
+    let guides_hidden = shown(&mut app);
+    app.run("view.guides", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [guide.0]})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    let without = shown(&mut app);
+    assert_eq!(both.1.len(), 2, "with the guides shown, the guide shows its anchors too: {both:?}");
+    assert_ne!(both, without, "with the guides shown, the guide is marked");
+    assert_eq!(guides_hidden, without, "with the guides hidden, only the path is marked");
+}
+
+/// A selected layer leaves out the art of a template sublayer while View › Hide Template is on, and a group a guide
+/// while the guides are hidden: their outlines and the overlay's point limit count only what the canvas draws.
+#[test]
+fn the_marks_leave_out_template_layers_and_guides_the_view_hides() {
+    use super::super::outline::{node_outline, too_many_anchors, too_many_marks};
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, LayerColor, Node};
+    use vectorcraft_geom::SubPath;
+    let rect = |id: u64, r: vectorcraft_geom::Rect| Node::path(NodeId(id), vectorcraft_geom::shapes::rectangle(r), Appearance::default());
+    let path = Arc::new(rect(2, vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0)));
+    let points: Vec<Point> = (0..=OVERLAY_MAX_ANCHORS).map(|i| Point::new(i as f64, 0.0)).collect();
+    let mut many = Node::path(NodeId(3), PathData::single(SubPath::polyline(&points, false)), Appearance::default());
+    let mut template = Node::layer(NodeId(4), "Template", LayerColor::Preset(1));
+    if let NodeKind::Layer { template: on, children, .. } = &mut template.kind {
+        *on = true;
+        children.push(Arc::new(many.clone()));
+    }
+    let mut layer = Node::layer(NodeId(5), "Layer", LayerColor::Preset(0));
+    if let Some(children) = layer.children_mut() {
+        children.extend([Arc::new(template), path.clone()]);
+    }
+    if let NodeKind::Path { guide, .. } = &mut many.kind {
+        *guide = true;
+    }
+    let group = Node::group(NodeId(6), vec![Arc::new(many), path.clone()]);
+    let doc = vectorcraft_doc::Document::new(300.0, 300.0);
+    let symbols = doc.symbol_boxes();
+    let alone = node_outline(&path, &symbols, ViewHides::default()).bounding_box();
+    let mut wrong = vec![];
+    for (n, what, hides) in [
+        (&layer, "a layer with a template sublayer", ViewHides { templates: true, guides: false }),
+        (&group, "a group with a guide", ViewHides { templates: false, guides: true }),
+    ] {
+        for (hides, hidden) in [(ViewHides::default(), false), (hides, true)] {
+            let outline = node_outline(n, &symbols, hides).bounding_box();
+            if (outline == alone) != hidden || too_many_anchors([n], hides) == hidden || too_many_marks([n], hides) == hidden {
+                wrong.push(format!("{what}, hidden by the view: {hidden}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "the marks count only what the view draws: {wrong:?}");
 }
 
 /// The overlay's limit counts the points of the members the highlight outlines: a hidden member of a group, a blend, a
@@ -430,7 +516,7 @@ fn the_overlay_limit_leaves_out_hidden_members() {
             children.extend([Arc::new(sublayer), few.clone()]);
         }
         for (n, what) in [(&group, "a group"), (&blend, "a blend"), (&repeat, "a repeat"), (&intertwine, "an intertwine"), (&layer, "a layer")] {
-            if too_many_anchors([n]) != visible || too_many_marks([n]) != visible {
+            if too_many_anchors([n], ViewHides::default()) != visible || too_many_marks([n], ViewHides::default()) != visible {
                 wrong.push(format!("{what}, member visible: {visible}"));
             }
         }

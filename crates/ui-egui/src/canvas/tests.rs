@@ -11,7 +11,7 @@ use super::artboards::names_an_artboard;
 use super::cursor::still_wait;
 use super::fill::{fill_view, polygon_area};
 use super::marks::{HiddenMarks, thread_overlays};
-use super::outline::{node_outline, walk_drawn};
+use super::outline::{ViewHides, node_outline, walk_drawn};
 use super::raster::{frame_view, pixel_region, placed_changes, placed_key_at, placed_since, poll_worker};
 use super::*;
 use crate::CacheKey;
@@ -31,9 +31,13 @@ fn shaper_selection_highlights_only_the_visible_result() {
     let g = st.doc.node(st.selection.objects[0]).unwrap();
     assert!(g.extras().shaper.is_some());
     let symbols = st.doc.symbol_boxes();
-    let bounds = node_outline(g, &symbols).bounding_box();
+    let bounds = node_outline(g, &symbols, ViewHides::default()).bounding_box();
     assert!((bounds.x0 - 100.0).abs() < 0.01 && (bounds.x1 - 200.0).abs() < 0.01, "{bounds:?}");
-    assert_eq!(node_outline(st.doc.node(line).unwrap(), &symbols).bounding_box().x0, 50.0, "an isolated original still shows its full outline");
+    assert_eq!(
+        node_outline(st.doc.node(line).unwrap(), &symbols, ViewHides::default()).bounding_box().x0,
+        50.0,
+        "an isolated original still shows its full outline"
+    );
 }
 
 #[test]
@@ -50,7 +54,7 @@ fn a_symbol_instance_is_outlined_around_its_art() {
             inst = Some(n);
         }
     });
-    assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
+    assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes(), ViewHides::default()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
 }
 
 /// One headless canvas frame on an 800 × 600 window.
@@ -4537,18 +4541,18 @@ fn live_trace_selection_highlight_excludes_the_retained_source_rectangle() {
     for view in TraceView::ALL {
         group.extras_mut().trace = Some(Box::new(json!({"view":view.id()})));
         let mut visited = vec![];
-        walk_drawn(&group, &mut |n| visited.push(n.id));
+        walk_drawn(&group, ViewHides::default(), &mut |n| visited.push(n.id));
         assert_eq!(visited.contains(&NodeId(2)), view.shows_source());
         let want = if view.shows_source() {
             vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0)
         } else {
             vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0)
         };
-        assert_eq!(node_outline(&group, &symbols).bounding_box(), want);
+        assert_eq!(node_outline(&group, &symbols, ViewHides::default()).bounding_box(), want);
     }
     // Without a trace the image is an ordinary hidden member, which the canvas does not draw.
     group.extras_mut().trace = None;
-    assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0));
+    assert_eq!(node_outline(&group, &symbols, ViewHides::default()).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0));
     // A hidden path sent to the back of a trace is not its source image, in any view.
     let mut path =
         Node::path(NodeId(4), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default());
@@ -4557,7 +4561,11 @@ fn live_trace_selection_highlight_excludes_the_retained_source_rectangle() {
     let mut group = Node::group(NodeId(1), vec![Arc::new(path), Arc::new(art)]);
     for view in TraceView::ALL {
         group.extras_mut().trace = Some(Box::new(json!({"view":view.id()})));
-        assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0), "{view:?}");
+        assert_eq!(
+            node_outline(&group, &symbols, ViewHides::default()).bounding_box(),
+            vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0),
+            "{view:?}"
+        );
     }
 }
 
@@ -4580,7 +4588,7 @@ fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
     };
     let doc = vectorcraft_doc::Document::new(300.0, 300.0);
     let symbols = doc.symbol_boxes();
-    let contours = |n: &Node| node_outline(n, &symbols).elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count();
+    let contours = |n: &Node| node_outline(n, &symbols, ViewHides::default()).elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count();
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Compound { children: children(), rule: FillRule::EvenOdd })), 2, "a compound path");
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Blend { children: children(), spec: Default::default() })), 1, "a blend");
     assert_eq!(contours(&Node::group(NodeId(1), children())), 1, "a group");
