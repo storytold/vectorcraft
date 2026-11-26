@@ -6524,7 +6524,12 @@ and `layerRows`, the rows highlighted in the panel.
   set|add|toggle}` is Shift-click (a range) and Ctrl/Cmd-click (toggle). Selecting art makes its layer current.
   Without `ids`, the panel commands below act on the highlighted rows, else on the current layer.
 - **Selection column**: `layer.selectAll {id, add?}` selects a row's visible, unlocked art (a layer's sublayers'
-  too); `add` (Shift) adds it, or removes it when it's all selected. Alt-click on a layer's or sublayer's name runs
+  too); `add` (Ctrl/Cmd, or Shift before any square was clicked) adds it, or removes it when it's all selected.
+  `layer.selectAll {range: [id…], add?}` is a Shift-click on a square after another was clicked: the art of every
+  row listed from the last square clicked to this one, across sublayers and groups, leaving out hidden and locked
+  rows; Shift+Ctrl/Cmd adds it to the selection. A range does not move where the next Shift-click starts.
+  `layer.selectHighlighted {add?}` (the panel menu's Select Art of Highlighted Rows) selects the art of the highlighted rows by the
+  same rules. Neither is an undo step, and the highlighted rows stay. Alt-click on a layer's or sublayer's name runs
   `layer.selectAll {id}` and then `layer.setCurrent {id}`.
 - **Eye and lock**: `layer.setProps {ids?, visible?, locked?, name?}` for any rows, plus Layer Options for layers:
   `template` (also locks the layer and dims its images to 50% unless given), `printable`, `preview` (off: the layer
