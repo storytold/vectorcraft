@@ -425,7 +425,8 @@ capability model proposed for PhotoCraft plug-ins
 - `api` is the plug-in API level the manifest is written for: `1` (the default); `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
   symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); or `3`, which
-  adds `context` ([document information](#document-information)). A higher one is refused. `plugin.list` and
+  adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)) and `context`
+  ([document information](#document-information)). A higher one is refused. `plugin.list` and
   `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which
   a filter that lists `inputs` must list in `permissions`, so installing it asks the user to grant them. `context` is
   not a permission either: it is read under `doc.read` in the same way, and the install prompt says that the plug-in
@@ -671,11 +672,17 @@ the module's start function, in a run that isn't a filter's run on a document, o
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
-- `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of
+- `inputs` (filters at `api` 2 or later): the kinds of object besides paths and compound paths the filter reads, any of
   `"type"`, `"image"` and `"symbolInstance"`, each at most once (`"inputs": ["type", "image"]`). Left out or `[]`, the
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
   another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
   installed, and so is `api` 2 on hosts from before it.
+- `writes` (filters at `api` 3 only): the kinds among `inputs` the filter may change ([writing type, images and
+  symbols](#writing-type-images-and-symbols)), each at most once (`"writes": ["type"]`). Left out or `[]`, everything
+  the filter reads stays read-only. An unknown, repeated or wrongly typed entry, a kind `inputs` doesn't list, `writes`
+  on another kind, below `api` 3, or without `doc.write` in `permissions`, is refused when the plug-in is installed.
+  Hosts from before `api` 3 refuse the manifest. A host at `api` 3 that doesn't read `writes` installs the filter,
+  ignores the key and keeps everything the filter reads read-only, so an output that changes those objects is refused.
 - `context` (filters, and live effects with `commands`, at `api` 3 only): the parts of the active document a run reads
   in `_context.document`, any of `"settings"`, `"artboards"`, `"layers"` and `"swatches"`, each at most once
   (`"context": ["artboards", "layers"]`). Left out or `[]`, a run gets none, as before. An unknown, repeated or wrongly
@@ -810,7 +817,7 @@ every attribute:
             "runs": [{"text": "Hello\nthere", "style": {"font_family": "Source Sans 3", "size": 12}}],
             "paragraphs": [{"justify": "Left"}, {"justify": "Center"}]},
    "truncated": false},
-  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "pixelSize": [2, 1],
+  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "opacity": 1, "pixelSize": [2, 1],
    "colorMode": "rgb", "linked": false, "pixelsOmitted": false, "pixelsBase64": "AAAegGQAHoA="},
   {"id": 19, "type": "symbolInstance", "bounds": [100, 0, 110, 10], "transform": [1, 0, 0, 1, 100, 0],
    "symbolId": "Star", "overrides": {}}
@@ -824,7 +831,7 @@ every attribute:
   true` and empty `runs` and `paragraphs`. The runs and paragraphs of all the type in one input take at most 16 MiB
   of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
   `truncated: true` too.
-- An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
+- An image (`"image"`): `opacity` is its opacity, 0 to 1; `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An image whose corners Perspective Distort or Free Distort moved to a shape
   that is not a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right,
   bottom right, bottom left), and its `transform` is then the affine placement nearest them, the one that matches the
@@ -844,10 +851,13 @@ every attribute:
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
 
-These objects are read only. The output must list each of them exactly once, as `{"id": 17}` alone or exactly as it
-was given (numbers compare by value, so `1` and `1.0` are the same). A changed or added field, one left out, an object
-listed twice or left out, and a new object with one of these types are refused, and the document and undo history
-stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
+Objects of a kind that the manifest's `writes` doesn't list are read only. The output must list each of them exactly
+once, as `{"id": 17}` alone or exactly as it was given (numbers compare by value, so `1` and `1.0` are the same). An
+image may leave out `opacity`, which hosts before `api` 3 don't give. An object of a kind that `writes` lists is also
+listed exactly once, and its entry may give only the fields it changes ([writing type, images and
+symbols](#writing-type-images-and-symbols)). An output deletes the paths and compound paths it leaves out
+([output](#output)), but none of these objects. A changed or added field, one left out, an object listed twice or left
+out, and a new object with one of these types are refused, and the document and undo history stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
 object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
 characters. New objects listed after one of them go just above it.
 
@@ -860,6 +870,61 @@ that doesn't fit fails it with `plug-in exceeded its memory budget (the selectio
 the objects after it are written. An output lists at most 100,000 objects, so a run given more than 100,000 of these
 objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
 toward the 64 MiB output cap.
+
+### Writing type, images and symbols
+
+A filter at `api` 3 whose manifest lists some of its `inputs` kinds in `writes`, with `doc.write` in its
+`permissions`, may change the objects of those kinds it is given. It returns such an object as `{"id": 17}` alone,
+exactly as given, or with the fields it changes; a field it leaves out keeps its value. Each kind takes these fields:
+
+| Kind | Fields a filter may change |
+|------|----------------------------|
+| `type` | `name`, `transform`, `text.runs`, `text.paragraphs` |
+| `image` | `name`, `transform`, `opacity` |
+| `symbolInstance` | `name`, `transform`, `symbolId` |
+
+```json
+{"objects": [
+  {"id": 17, "text": {"runs": [{"text": "Goodbye", "style": {"font_family": "Source Sans 3", "size": 14}}]}},
+  {"id": 18, "transform": [2, 0, 0, 2, 50, 60], "opacity": 0.5},
+  {"id": 19, "symbolId": "Moon"}
+]}
+```
+
+- `name` is a string, or `null` for no name.
+- `transform` is six finite numbers, each within ±4,000,000, that don't flatten the object to a line. The object moves
+  by the change from its given transform, so an image's distorted corners move with it.
+- `text.runs` replaces the type's runs: each is `{text, style, inline?}` with the character attributes as the native
+  file stores them, and an attribute the host doesn't know is refused, as is a key of a fill or stroke that its `type`
+  doesn't read. There is at least one run, at most 4,096, at most 4,096 paragraphs, and at most 256 KiB of UTF-8 text;
+  the runs written in one output take at most 16 MiB. Every number in every run's style is
+  checked against the range `charStyle.new` keeps it to, including a style one of the type's runs already has: size
+  0.1 to 1296 pt, leading 0.1 to 5000 pt, tracking and kerning -1000 to 10000, horizontal and vertical scale 1 to
+  10000 %, baseline shift -1296 to 1296 pt, rotation -360 to 360°, and the ranges `docs/mcp.md` gives for
+  `charStyle.new` for the East Asian, Warichu and stroke attributes. A style that none of the type's runs has also needs a font family of 1 to 256
+  printable characters, and fills and strokes that a path's appearance would take. Inline graphics stay where they
+  were: the runs keep each `inline` run as it was given, in the same order. The characters of threaded type, and of
+  type with ruby, can't change, though their attributes can. The runs and paragraphs of type given with
+  `truncated: true` can't change.
+- `text.paragraphs` holds one paragraph style per paragraph of the new text, each checked as `paraStyle.new` checks
+  its attributes: indents and space before and after within ±1296 pt, the Hyphenation and Justification options in
+  their ranges, at most 256 tab stops at 0 to 100,000 pt, and a custom Kinsoku set only by the name of one of the
+  document's sets, whose characters the paragraph takes. A `text.paragraphs` list returned as it was given next to
+  changed `text.runs` must also hold one style per paragraph of the new text. With `text.runs` alone, each paragraph keeps its style when
+  the number of paragraphs stays the same. When runs add or join paragraphs, the host matches the old and new
+  paragraphs by their text: a paragraph whose text is unchanged keeps its style, changed paragraphs take the styles of
+  the paragraphs they replace in order, and a paragraph added between others takes the style of the one before it (of
+  the next one at the start), without a list number. Apart from the paragraphs both texts start and end with, when
+  the old paragraphs times the new ones pass 262,144, the host pairs them in order instead.
+- `opacity` is a number from 0 to 1.
+- `symbolId` names a symbol in the document. An instance that shows another symbol loses its overrides, as Replace
+  Symbol does.
+
+Every other field, including `type`, `bounds`, `text.kind` and an image's pixels, stays read-only, and objects of these
+kinds can't be added or left out. A changed read-only field or a value out of range refuses the whole output, naming
+the object and the field (`objects[2] (id 18).opacity: must be a number from 0 to 1`), and the document and undo history
+stay as they were. The changes of one run are one undo step, with the type laid out again; an output that changes
+nothing records no undo step. The host never reads or gives a linked image's file when a filter writes.
 
 ### Document information
 
@@ -948,7 +1013,9 @@ For an **object filter**, the output is the new state of the input objects:
 - An object without an `id` is new and needs a `path`. It goes just above the object listed before it, or, listed
   before any input object, just below the first one listed after it. New objects take a path's defaults: no fills or
   strokes, full opacity.
-- Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
+- Input paths and compound paths missing from the output are deleted; type, images and symbol instances can't be left
+  out ([reading type, images and symbols](#reading-type-images-and-symbols)). The order of the input objects themselves
+  doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
 - `guide: true` makes the object a guide, as View › Guides › Make Guides does (a compound path's members become
   guide paths), and `guide: false` a plain path again; `locked: true` locks it and `locked: false` unlocks it. Objects
@@ -1102,7 +1169,7 @@ per change of their input, parameters or paints (results are cached), not per fr
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
   that make type, images, layers or artboards, and placed importer files that stay linked to their file.
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
-  [`inputs`](#reading-type-images-and-symbols)).
+  it returns), filters that add or delete type, images or symbol instances or change their pixels and other fields
+  (a filter at `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
 - Scripts can't run object filters (`plugin.*` commands are refused there), so a script doesn't change what Apply
   Last Filter runs.

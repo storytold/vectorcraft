@@ -4718,6 +4718,118 @@ fn read_only_kind_field_and_omission_refuse_without_undo() {
     assert!(e.contains("`inputs` needs `api` 2"), "{e}");
 }
 
+/// A filter at `api` 3 that lists type, images and symbol instances in `writes` changes a type
+/// object's characters, an image's transform and opacity and the symbol an instance shows, as one
+/// undo step that undo takes back and redo gives again, and the changes are kept when the document
+/// is saved and opened. An echo records no undo step; a refused write, and a write by a filter that
+/// lists the kinds in `inputs` alone, leave the document and the history as they were.
+#[test]
+fn a_filter_that_writes_type_images_and_instances_is_one_undo_step() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeKind, Symbol};
+    use vectorcraft_geom::Affine;
+    let mut s = session();
+    let r = rect(&mut s, 10.0, "#ff0000");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
+    let (mut image, mut inst) = (NodeId(0), NodeId(0));
+    s.edit("Set up", |d, _| {
+        for name in ["Sun", "Moon"] {
+            let art = Arc::new(Node::path(d.alloc_id(), triangle(), Appearance::default()));
+            d.symbols.push(Symbol { name: name.into(), art, dynamic: false });
+        }
+        let layer = d.layers[0].id;
+        let im = vectorcraft_doc::ImageObject {
+            key: "none".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((100.0, 20.0)),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+        image = d.insert(Some(layer), usize::MAX, n).unwrap();
+        let n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Sun".into(), xf: Affine::translate((200.0, 20.0)) });
+        inst = d.insert(Some(layer), usize::MAX, n).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let manifest = |id: &str, writes: &str| {
+        format!(
+            r#"{{"id":"{id}","name":"Revise","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"inputs":["type","image","symbolInstance"]{writes}}}"#
+        )
+    };
+    let all = r#","writes":["type","image","symbolInstance"]"#;
+    let put = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let p = |id: &str| json!({"id": id, "ids": [r.0, t.0, image.0, inst.0]});
+    let style = match &node(&s, t).kind {
+        NodeKind::Text(x) => serde_json::to_value(&x.runs[0].style).unwrap(),
+        _ => panic!("type"),
+    };
+    let edits = json!({"objects": [
+        {"id": r.0},
+        {"id": t.0, "text": {"runs": [{"text": "Bye now", "style": style}]}},
+        {"id": image.0, "transform": [2, 0, 0, 2, 50, 60], "opacity": 0.25},
+        {"id": inst.0, "symbolId": "Moon"},
+    ]});
+    let writer = "test.engine.writes.revise";
+    let listed = put(&mut s, &tpl::returning(&manifest(writer, all), &edits.to_string()));
+    assert_eq!((&listed["api"], &listed["writes"]), (&json!(3), &json!(["type", "image", "symbolInstance"])));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    assert_eq!(run(&mut s, "plugin.run", p(writer))["ids"], json!([r.0, t.0, image.0, inst.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let check = |d: &vectorcraft_doc::Document| {
+        let NodeKind::Text(x) = &d.node(t).unwrap().kind else { panic!("type") };
+        assert_eq!(x.plain_text(), "Bye now");
+        let NodeKind::Image(im) = &d.node(image).unwrap().kind else { panic!("image") };
+        assert_eq!((im.xf, d.node(image).unwrap().opacity), (Affine::new([2.0, 0.0, 0.0, 2.0, 50.0, 60.0]), 0.25));
+        assert!(
+            matches!(&d.node(inst).unwrap().kind, NodeKind::SymbolInstance { symbol, xf } if symbol == "Moon" && *xf == Affine::translate((200.0, 20.0)))
+        );
+    };
+    let after = s.doc().unwrap().doc.clone();
+    check(&after);
+    assert!(matches!(&after.node(t).unwrap().kind, NodeKind::Text(x) if x.cached_bounds.is_some()), "the type is laid out again");
+    assert_eq!(s.doc().unwrap().selection.objects, [r, t, image, inst]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers);
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(s.doc().unwrap().doc.layers, after.layers);
+    check(&vectorcraft_format::load(&vectorcraft_format::save(&after, false)).unwrap());
+    // An echo changes nothing and records no undo step.
+    let echo = "test.engine.writes.echo";
+    put(&mut s, &tpl::module(&manifest(echo, all), tpl::ECHO, "", 1));
+    let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    run(&mut s, "plugin.run", p(echo));
+    assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "an echo records no undo step");
+    // Refused writes leave the document and the history as they were, also when a valid change
+    // comes before the refused one.
+    let bad = "test.engine.writes.bad";
+    let retyped = json!({"id": t.0, "text": {"runs": [{"text": "Hello again", "style": style}]}});
+    for (writes, output, says) in [
+        (
+            all,
+            json!({"objects": [{"id": r.0}, retyped, {"id": image.0}, {"id": inst.0, "symbolId": "Nowhere"}]}),
+            format!("objects[3] (id {}).symbolId: 'Nowhere' is not a symbol in this document", inst.0),
+        ),
+        (
+            all,
+            json!({"objects": [{"id": r.0}, {"id": t.0}, {"id": image.0, "opacity": 1.5}, {"id": inst.0}]}),
+            format!("objects[2] (id {}).opacity: must be a number from 0 to 1", image.0),
+        ),
+        ("", edits.clone(), format!("objects[1] (id {}): read-only field 'text.kind' changed", t.0)),
+    ] {
+        put(&mut s, &tpl::returning(&manifest(bad, writes), &output.to_string()));
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("plugin.run", &p(bad)).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+        assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "{output}");
+    }
+}
+
 /// The manifest of a filter at `api` 3 with id `id` that asks for the document information
 /// `context` (a JSON list), with `doc.read` and `doc.write`, and `rest` (keys after a comma, or
 /// nothing).
@@ -4878,6 +4990,73 @@ fn the_document_context_is_capped_and_its_rows_cost_instructions() {
     })
     .unwrap();
     refused(&mut s);
+}
+
+/// A filter that writes type, run while typing is in progress: the plug-in is given the typed
+/// text, so an echo keeps it, with Real-time Drawing on and off. An output that is refused leaves
+/// the document and the history as they were; with Real-time Drawing on the typing stays in
+/// progress, and off it is kept as its own step before the plug-in is given its input.
+#[test]
+fn a_filter_that_writes_type_is_given_the_typing_in_progress() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let manifest = |id: &str| {
+        format!(
+            r#"{{"id":"{id}","name":"Retype","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"inputs":["type"],"writes":["type"]}}"#
+        )
+    };
+    let put = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
+    };
+    let plain = |s: &Session, t: NodeId| match &node(s, t).kind {
+        NodeKind::Text(x) => x.plain_text(),
+        _ => panic!("type"),
+    };
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let typing = |real_time: bool| {
+        let mut s = session();
+        s.prefs.real_time_drawing = real_time;
+        let v = ViewInfo::default();
+        let t = NodeId(run(&mut s, "text.create", json!({"x": 100, "y": 100, "text": "A", "size": 20}))["id"].as_u64().unwrap());
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        s.tool_text("B", v).unwrap();
+        assert_eq!(plain(&s, t), if real_time { "AB" } else { "A" }, "real time {real_time}");
+        (s, t)
+    };
+    let bang = "test.engine.writes.typing.bang";
+    let bad = "test.engine.writes.typing.bad";
+    for real_time in [false, true] {
+        // The plug-in adds "!" to the text it is given: "AB" or, given only "A", "A".
+        let (mut s, t) = typing(real_time);
+        let style = match &node(&s, t).kind {
+            NodeKind::Text(x) => serde_json::to_value(&x.runs[0].style).unwrap(),
+            _ => panic!("type"),
+        };
+        let retyped = |text: &str| json!({"objects": [{"id": t.0, "text": {"runs": [{"text": text, "style": style}]}}]}).to_string();
+        put(&mut s, &tpl::when_given_else(&manifest(bang), tpl::Given::Input, r#""AB""#, &retyped("AB!"), &retyped("A!")));
+        run(&mut s, "plugin.run", json!({"id": bang, "ids": [t.0]}));
+        assert_eq!(plain(&s, t), "AB!", "real time {real_time}: the plug-in is given the typed text");
+        let steps = labels(&s);
+        assert_eq!(steps[steps.len() - 2..], ["Typing", "Retype"], "real time {real_time}");
+
+        let (mut s, t) = typing(real_time);
+        put(&mut s, &tpl::returning(&manifest(bad), &json!({"objects": [{"id": t.0, "transform": [0, 0, 0, 0, 0, 0]}]}).to_string()));
+        let undo = labels(&s);
+        let e = s.execute("plugin.run", &json!({"id": bad, "ids": [t.0]})).unwrap_err().to_string();
+        assert!(e.contains("transform: flattens the object to a line or a point"), "{e}");
+        assert_eq!(plain(&s, t), "AB", "real time {real_time}");
+        if real_time {
+            assert_eq!(labels(&s), undo, "the refused output leaves the history as it was");
+            assert!(s.in_interaction(), "and the typing in progress");
+        } else {
+            assert_eq!(labels(&s)[undo.len()..], ["Typing"], "only the typing is kept");
+        }
+    }
 }
 
 /// A run past its memory budget fails before the plug-in starts, with the document and undo
@@ -6397,12 +6576,14 @@ fn deferred_move(s: &mut Session) -> NodeId {
     r
 }
 
-/// The rectangle a run that hands back what it is given left during [`deferred_move`]: moved, with
-/// the interaction ended and the move the last undo step, since the run changed nothing.
+/// The rectangle an echoing run during [`deferred_move`] left: moved, with the interaction ended and
+/// the move the last undo step, since the run handed the rectangle back as it was and so records
+/// none.
 fn assert_moved_once(s: &Session, r: NodeId) {
     assert!(!s.in_interaction());
     assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
-    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Move"));
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["Move", "Rectangle"]);
 }
 
 /// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
