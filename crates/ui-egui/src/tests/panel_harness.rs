@@ -276,6 +276,12 @@ impl Panel {
         self.fixture.by_label(name).is_some()
     }
 
+    /// Whether the latest frame shows a node of `role` named `name`, where nodes of other roles share the name.
+    pub(crate) fn shows_role(&self, name: &str, role: craft::ui::contract::Role) -> bool {
+        let tree = self.fixture.tree();
+        self.fixture.by_role(role).into_iter().any(|t| tree.name_of(t.node) == Some(name))
+    }
+
     /// Whether some of the control named `name` can be seen in the latest frame.
     pub(crate) fn in_view(&self, name: &str) -> bool {
         self.fixture.visible(&self.look(name)).is_some()

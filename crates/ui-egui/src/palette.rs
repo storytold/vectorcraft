@@ -159,13 +159,18 @@ impl Draft {
             let name = format!("{path} › {label}");
             return if self.keyed { format!("{name} ({})", self.id) } else { name };
         }
-        // A built-in effect's label translates by its effect id first, as the Effect menu's does.
+        // A built-in effect's label translates by its effect id first, as the Effect menu's does. A
+        // filter or live-effect plug-in's name and submenu are the ones its translations give in `lang`.
         let label = match self.id.strip_prefix("effect:") {
-            _ if !self.translates => self.label.as_str(),
+            _ if !self.translates => crate::dialogs::plugin::item_label_in(&self.id, lang.code()).unwrap_or(self.label.as_str()),
             Some(effect) => crate::i18n::tr_id(lang, effect, &self.label),
             None => crate::i18n::tr(lang, &self.label),
         };
-        let name = if self.path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &self.path)) };
+        let path = match self.translates {
+            true => std::borrow::Cow::Borrowed(self.path.as_str()),
+            false => std::borrow::Cow::Owned(crate::dialogs::plugin::item_group_in(&self.id, &self.path, lang.code())),
+        };
+        let name = if path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &path)) };
         if self.keyed { format!("{name} ({})", self.id) } else { name }
     }
 
@@ -1968,7 +1973,8 @@ mod tests {
     }
 
     /// A filter whose name the UI language translates shows the translation, English included, and
-    /// a search for the manifest's own name still finds it.
+    /// a search for the manifest's own name still finds it; in German, so does a search for its
+    /// English translation.
     #[test]
     fn a_translated_filter_is_found_by_its_manifest_name() {
         use vectorcraft_plugins::wat as tpl;
@@ -1979,19 +1985,21 @@ mod tests {
         );
         vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
         let app = app_on(Session::new());
+        let key = format!("plugin:{id}");
         let found = |lang: Lang| {
             crate::i18n::set_current(lang);
-            let found =
-                entries(&app, lang).iter().find(|e| id_of(e) == format!("plugin:{id}")).map(|e| (e.label().as_str().to_string(), haystack(e)));
+            let found = entries(&app, lang).iter().find(|e| id_of(e) == key).map(|e| (e.label().as_str().to_string(), haystack(e)));
+            let by_english = ranked(&built_for(&app), "smooth edges").contains(&key);
             crate::i18n::set_current(Lang::EN);
-            found
+            (found, by_english)
         };
         let (de, en) = (found(Lang::from_code("de").unwrap()), found(Lang::EN));
         vectorcraft_plugins::registry::remove(id);
-        for (found, name) in [(de, "Kanten polieren"), (en, "Smooth Edges")] {
+        for ((found, by_english), name) in [(de, "Kanten polieren"), (en, "Smooth Edges")] {
             let (shown, haystack) = found.expect("the filter is a result");
             assert!(shown.ends_with(name), "{shown}");
             assert!(haystack.contains("polish edges"), "{haystack}");
+            assert!(by_english, "a search for the English translation finds {name}");
         }
     }
 

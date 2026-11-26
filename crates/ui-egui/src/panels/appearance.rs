@@ -949,7 +949,9 @@ fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option
         if rows.is_empty() { stored_params(&effect, &values) } else { rows }
     };
     let fields = fields_of(&params, &values);
-    let (name, id) = (effect_label(&e.id), e.id.clone());
+    // A plug-in effect's editor is named as its row is, by the plug-in's name in the UI language.
+    let name = crate::dialogs::plugin::effect_name(&e.id).unwrap_or_else(|| effect_label(&e.id));
+    let id = e.id.clone();
     move |ui| {
         if free_distort {
             // The button keeps its own name: the label says what it edits.

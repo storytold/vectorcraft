@@ -214,6 +214,34 @@ fn a_plug_in_effect_s_editor_follows_its_manifest() {
     panel.app().run("plugin.remove", json!({"id": "test.ui.inlinekeys"})).unwrap();
 }
 
+/// A plug-in effect's editor is named by the plug-in's name in the UI language, as its row is.
+#[test]
+fn a_plug_in_effect_s_editor_is_named_in_the_ui_language() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.ui.inlinename";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Hatch","version":"1","kind":"effect","params":{{"width":{{"type":"number","min":0,"max":10,"default":1,"label":"Width"}}}},
+            "translations":{{"de":{{"name":"Schraffur"}}}}}}"#
+    );
+    let src = tpl::module(&manifest, tpl::ECHO, "", 1);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap();
+    app.run("effect.apply", json!({"effect": format!("plugin.{id}")})).unwrap();
+    app.ui.appearance_panel.open.insert(RowKey::Effect(0));
+    let mut panel = Panel::new(app, show);
+    let group = craft::ui::contract::Role::GROUP;
+    let en = panel.shows_role("Hatch", group);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    panel.frame();
+    let de = (panel.shows_role("Schraffur", group), panel.shows_role("Hatch", group));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    panel.app().run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(en, "the editor in English");
+    assert_eq!(de, (true, false), "the editor in German");
+}
+
 /// Glass with a loaded texture lists Loaded Texture in its Texture menu, as its dialog does.
 #[test]
 fn the_effect_editor_lists_a_loaded_glass_texture() {

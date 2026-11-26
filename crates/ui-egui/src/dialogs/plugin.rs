@@ -94,6 +94,38 @@ pub(crate) fn effect_item_label(e: &vectorcraft_effects::EffectInfo) -> &'static
     }
 }
 
+/// The menu label of plug-in item `key` (`plugin:<filter id>` or `effect:<effect id>`) in language
+/// `code`, as [`object_menu`] and [`effect_menu`] show it in that language; `None` for any other key
+/// or a plug-in that is not installed.
+pub(crate) fn item_label_in(key: &str, code: &str) -> Option<&'static str> {
+    let m = item_plugin(key)?;
+    let m = m.manifest();
+    Some(label(&m.shown_name(code), !m.params.is_empty()))
+}
+
+/// Menu path `group` of plug-in item `key` ([`item_label_in`]) with its plug-in's submenu, the
+/// segment after Object › Plug-ins or Effect › Plug-ins, named in language `code`; `group` as it
+/// is for an item without a submenu.
+pub(crate) fn item_group_in(key: &str, group: &str, code: &str) -> String {
+    let mut parts: Vec<String> = group.split(" › ").map(str::to_string).collect();
+    if parts.get(1).is_some_and(|p| p == "Plug-ins")
+        && let (Some(plugin), Some(submenu)) = (item_plugin(key), parts.get_mut(2))
+    {
+        *submenu = plugin.manifest().shown_name(code);
+    }
+    parts.join(" › ")
+}
+
+/// The plug-in of item `key` (`plugin:<filter id>` or `effect:<effect id>`), if it is installed.
+fn item_plugin(key: &str) -> Option<Arc<Plugin>> {
+    let id = match (key.strip_prefix("plugin:"), key.strip_prefix("effect:")) {
+        (Some(id), _) => id,
+        (_, Some(effect)) => vectorcraft_plugins::effect::plugin_id(effect)?,
+        _ => return None,
+    };
+    registry::get(id)
+}
+
 /// A menu label for plug-in `name`: with an ellipsis when it opens a dialog.
 fn label(name: &str, has_params: bool) -> &'static str {
     let dots = if has_params && !name.ends_with('…') { "…" } else { "" };
