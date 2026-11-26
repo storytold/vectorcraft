@@ -27,10 +27,12 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, (native, ui_zoom): (f32,
 }
 
 /// A 512 × 512 pt document shown at `native` device pixels a point and UI Scaling `ui_zoom`, with a
-/// controlled render worker, and the receiver of the frames it is asked to render.
+/// controlled render worker, and the receiver of the frames it is asked to render. Display Print
+/// Size at 100% Zoom is off, so 100% is one document point per screen point.
 fn shown(native: f32, ui_zoom: f32) -> (VectorcraftApp, egui::Context, std::sync::mpsc::Receiver<crate::render_worker::Job>) {
     let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     app.run("file.new", json!({"width": 512, "height": 512})).unwrap();
     // The app's frames zoom the interface by the preference.
     app.session.prefs.ui_scaling = f64::from(ui_zoom);

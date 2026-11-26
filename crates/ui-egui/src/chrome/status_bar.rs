@@ -20,7 +20,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = next {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
     }
-    let print = app.session.prefs.display_print_size;
+    let print = app.print_ppi();
     let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let cur = crate::panels::artboards::selected(app, nab);
     // PLAN: assumed Artboard::rect has `width()` and `height()`.
@@ -310,14 +310,21 @@ fn date_time_now() -> (String, u64) {
 }
 
 /// The status message in the interface language. While it is the error of the last script run
-/// and that error's message is text the script supplied, that text is shown as it is and only the
-/// words around it are translated.
+/// and that error's message is text the script supplied, or a plug-in run's notice
+/// ([`crate::state::UiState::status_kept`]), that text is shown as it is and only the words around
+/// it are translated.
 pub(crate) fn status_message(app: &VectorcraftApp) -> String {
     let status = app.ui.status.as_str();
+    let is = |before: &str, kept: &str, after: &str| status.strip_prefix(before).and_then(|rest| rest.strip_suffix(after)) == Some(kept);
     if let Some((before, kept, after)) = app.session.script_authored_failure()
-        && status.strip_prefix(before.as_str()).and_then(|rest| rest.strip_suffix(after.as_str())) == Some(kept)
+        && is(&before, kept, &after)
     {
         return crate::i18n::msg_keeping(&before, kept, &after);
+    }
+    if let Some((before, kept, after)) = &app.ui.status_kept
+        && is(before, kept, after)
+    {
+        return crate::i18n::msg_keeping(before, kept, after);
     }
     crate::i18n::msg(status)
 }
