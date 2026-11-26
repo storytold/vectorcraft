@@ -2,7 +2,8 @@ use craft::behavior::IconId;
 use craft::keymap::Mods;
 use craft::layers::ui::panel::MenuTarget; // PLAN: assumed path of craft-layers' panel types
 use craft::layers::ui::tree::LayerRowKey;
-use craft::ui::contract::{Entry, ListDrag};
+use craft::ui::contract::{Entry, ListDrag, Show as _};
+use craft::ui::display::{Elide, Text};
 use craft::ui::menu::{MenuRow, PanelRow};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
@@ -120,6 +121,7 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
         } else {
             command("layer.locate", json!({}), tl!("Locate Object"), has_sel)
         },
+        command("layer.selectHighlighted", json!({}), tl!("Select Art of Highlighted Rows"), !rows.is_empty()),
         save_selection(app),
         Item::Separator,
         command("layer.merge", json!({}), tl!("Merge Selected"), rows.len() >= 2),
@@ -450,8 +452,9 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
             .enabled(locate_ok),
     ];
     let count = crate::i18n::tn(tree.doc().layers.len() as u64, "{n} Layer", "{n} Layers").to_string();
+    // The count is a unit of the footer's row, centred on its buttons' line in the text ink.
     let (output, _) = FooterBar::actions(actions).at_start(0).show_footer_leading(ui, |ui, _| {
-        ui.weak(&count);
+        Text::new(count.clone()).elide(Elide::End).show(ui);
     });
     // The footer runs twice per pass: the sizing pass measures it and must report nothing.
     if ui.is_sizing_pass() {

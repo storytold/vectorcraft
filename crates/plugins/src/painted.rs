@@ -127,8 +127,8 @@ pub enum Scope {
 }
 
 /// Parses and checks a painted result: `{"objects": [...]}`, or `{"error": "message"}` when the
-/// plug-in declined. `rule` is the fill rule a piece without `fillRule` takes. Any other top-level
-/// key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
+/// plug-in declined. `rule` is the fill rule a piece without `fillRule` takes. A top-level `notice`
+/// is ignored. Any other top-level key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
 /// range or a paint of the wrong form refuses the whole result, naming the field.
 pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> {
     decode_with(bytes, scope, rule, None)
@@ -143,8 +143,8 @@ pub fn decode_with(bytes: &[u8], scope: Scope, rule: FillRule, looks: Option<Che
         return Err(e);
     }
     let top = v.as_object().ok_or_else(|| out_err("output", "expected {\"objects\": [...]}"))?;
-    if let Some(k) = top.keys().find(|k| !matches!(k.as_str(), "objects" | "error")) {
-        return Err(out_err(k, "a painted live effect returns only `objects`"));
+    if let Some(k) = top.keys().find(|k| !matches!(k.as_str(), "objects" | "error" | "notice")) {
+        return Err(out_err(k, "a painted live effect returns only `objects` and `notice`"));
     }
     let objects = top.get("objects").and_then(Value::as_array).ok_or_else(|| out_err("objects", "expected {\"objects\": [...]}"))?;
     if objects.len() > MAX_OBJECTS {

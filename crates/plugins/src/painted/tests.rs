@@ -161,6 +161,21 @@ fn faults_refuse_the_whole_result_by_field() {
     assert_eq!(declined, Error::Failed("nothing to do".into()));
 }
 
+/// A top-level `notice` is ignored, as a filter-only key a live effect may hand back; other
+/// unknown top-level keys still refuse the result.
+#[test]
+fn a_notice_is_ignored_and_other_top_level_keys_refused() {
+    let ok = json!({"path": square(), "fills": [red()]});
+    let decode_top = |top: Value| decode(&serde_json::to_vec(&top).unwrap(), Scope::Object, FillRule::NonZero);
+    let pieces = decode_top(json!({"objects": [ok], "notice": "Done"})).unwrap();
+    assert_eq!(pieces.len(), 1);
+    assert_eq!(decode_top(json!({"objects": [ok], "notice": 12})).unwrap().len(), 1);
+    for key in ["note", "notices", "message"] {
+        let e = decode_top(json!({"objects": [ok], key: "Done"})).unwrap_err().to_string();
+        assert!(e.contains(&format!("{key}:")) && e.contains("returns only `objects` and `notice`"), "{key}: {e}");
+    }
+}
+
 /// A key a paint does not have, at any level of it, refuses the result and is named; it is not
 /// dropped.
 #[test]

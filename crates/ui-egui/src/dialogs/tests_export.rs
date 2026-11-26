@@ -206,6 +206,67 @@ fn export_as_png_picks_the_file_then_shows_png_options() {
     assert_eq!(&written.borrow()[0].1[16..20], 120u32.to_be_bytes(), "60 pt at 144 ppi");
 }
 
+/// PNG Options' pixel size is in the window's accessibility tree, and it follows the resolution.
+#[test]
+fn png_options_name_the_pixel_size_in_the_accessibility_tree() {
+    let (mut app, _) = app(1);
+    app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
+    let sizes = |app: &mut VectorcraftApp| -> Vec<String> {
+        super::tests::settle(app);
+        let out = super::tests::frame(app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().filter_map(|(_, node)| node.label()).filter(|label| label.ends_with(" px")).map(str::to_owned).collect()
+    };
+    let at_72 = sizes(&mut app);
+    assert_eq!(at_72, ["60 × 40 px"]);
+    set(&mut app, "ppi", json!(144));
+    assert_eq!(sizes(&mut app), ["120 × 80 px"]);
+}
+
+/// The role and name of each node of the window's accessibility tree, in a frame drawn once the dialogs have settled.
+fn access_names(app: &mut VectorcraftApp) -> Vec<(egui::accesskit::Role, String)> {
+    super::tests::settle(app);
+    let out = super::tests::frame(app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    nodes.iter().filter_map(|(_, node)| node.label().map(|label| (node.role(), label.to_owned()))).collect()
+}
+
+/// The hints under Export As, DXF Options and EPS Options, the words of the DXF scale row and the HP-GL pen numbers
+/// are in the window's accessibility tree, and the HP-GL pen error is announced as an alert.
+#[test]
+fn export_dialogs_name_their_hints_rows_and_errors_in_the_accessibility_tree() {
+    let names = |app: &mut VectorcraftApp| -> Vec<String> { access_names(app).into_iter().map(|(_, name)| name).collect() };
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png", "useArtboards": false})).unwrap();
+    let shown = names(&mut app);
+    assert!(shown.iter().any(|n| n == "The bounds of the visible art."), "{shown:?}");
+    cancel(&mut app);
+
+    crate::menus::invoke(&mut app, "ui.dxfOptionsDialog", json!({}));
+    let shown = names(&mut app);
+    for word in ["=", "Units"] {
+        assert!(shown.iter().any(|n| n == word), "{word} is not named in {shown:?}");
+    }
+    assert!(shown.iter().any(|n| n.starts_with("Type becomes outlines")), "{shown:?}");
+    cancel(&mut app);
+
+    crate::menus::invoke(&mut app, "ui.epsOptionsDialog", json!({}));
+    let shown = names(&mut app);
+    assert!(shown.iter().any(|n| n.starts_with("Transparency is flattened with the preset.")), "{shown:?}");
+    cancel(&mut app);
+
+    app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+    set(&mut app, "pens", json!(["#ff0000", "#000000"]));
+    set(&mut app, "__penError", json!("The pens could not be listed."));
+    let shown = access_names(&mut app);
+    assert!(shown.iter().any(|(_, n)| n == "2"), "the second pen's number is not named in {shown:?}");
+    assert!(
+        shown.iter().any(|(role, n)| *role == egui::accesskit::Role::Alert && n.contains("The pens could not be listed.")),
+        "the pen error is not an alert in {shown:?}"
+    );
+}
+
 /// File › Export › Export As PNG… exports the artboard in use, not the first (#5502), and each
 /// artboard the Artboard tool has selected, one file each.
 #[test]

@@ -52,7 +52,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     if tool == "box3d" {
         let shapes: [Choice; 6] =
             [("box3d", "3D Box"), ("rectangle", "Rectangle"), ("ellipse", "Ellipse"), ("polygon", "Polygon"), ("star", "Star"), ("spiral", "Spiral")]
-                .map(|(id, label)| (id, label, shape_icon(id)));
+                .map(|(id, label)| (id, label, icon_for_shape(id)));
         if let Some(shape) = choice(ui, "Shape", &active_shape, &shapes) {
             app.run("tool.setOption", json!({ "key": "shape", "value": shape })).ok();
         }
@@ -309,7 +309,7 @@ fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, ac
         end_deg = a1;
         mode = mode_str(arc_mode);
     }
-    let kinds: [Choice; 2] = [("polygon", "Polygon", shape_icon("polygon")), ("star", "Star", shape_icon("star"))];
+    let kinds: [Choice; 2] = [("polygon", "Polygon", icon_for_shape("polygon")), ("star", "Star", icon_for_shape("star"))];
     match choice(ui, "Shape", if is_star { "star" } else { "polygon" }, &kinds) {
         Some("star") => apply_shape(app, &[("polyIsStar", json!(true))], json!({ "isStar": true, "spokeRatio": spoke })),
         Some(_) => apply_shape(app, &[("polyIsStar", json!(false))], json!({ "isStar": false })),
@@ -410,7 +410,7 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sele
 }
 
 /// The toolbar icon of the shape tool `id`, so the Control bar's shape buttons show the same icon.
-fn shape_icon(id: &str) -> &'static str {
+fn icon_for_shape(id: &str) -> &'static str {
     vectorcraft_tools::tool_info(id).map_or("square-dashed", |t| crate::icons::tool_icon(t.icon))
 }
 
@@ -428,7 +428,7 @@ mod tests {
     use craft::behavior::IconId;
     use craft::ui::primitives::{has_icon, register_app_icons};
 
-    use super::shape_icon;
+    use super::icon_for_shape;
 
     /// The Control bar's shape buttons look their icons up by tool id; an id that names no tool
     /// would show the placeholder instead of the toolbar's icon.
@@ -437,9 +437,9 @@ mod tests {
         register_app_icons(&crate::icons::APP_ICONS);
         for id in ["box3d", "rectangle", "ellipse", "polygon", "star", "spiral"] {
             let tool = vectorcraft_tools::tool_info(id).unwrap_or_else(|| panic!("{id} is a tool"));
-            assert_eq!(shape_icon(id), crate::icons::tool_icon(tool.icon), "{id}");
-            assert!(has_icon(&IconId::new(shape_icon(id))), "{id}'s icon {} isn't an icon", shape_icon(id));
+            assert_eq!(icon_for_shape(id), crate::icons::tool_icon(tool.icon), "{id}");
+            assert!(has_icon(&IconId::new(icon_for_shape(id))), "{id}'s icon {} isn't an icon", icon_for_shape(id));
         }
-        assert_eq!(shape_icon("no-such-tool"), "square-dashed");
+        assert_eq!(icon_for_shape("no-such-tool"), "square-dashed");
     }
 }

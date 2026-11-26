@@ -52,14 +52,53 @@ by its extension, and the importer lists the file's extension; when several do, 
 also one a built-in format reads (an importer that lists `svg` opens an `.svg` only this way). A damaged file of a
 built-in format reports that format's error, and the file is not handed to an importer. The importer's objects become a
 new document whose artboard is their bounds (at least 1 pt wide and high, and within ±4,000,000 pt); the document keeps
-no path, so Save asks for a name. File › Place reads only the built-in formats, and a file only an importer reads opens
-as a new document when it is dropped on the canvas. These rules are VectorCraft's own.
+no path, so Save asks for a name. A file only an importer reads opens as a new document when it is dropped on the
+canvas, unless an importer that places its files reads it (below). These rules are VectorCraft's own.
+
+An importer whose manifest has `"place": true` also places its files. `document.formats` and `plugin.list` mark it with
+`place: true`. `file.place`, `file.place.info` and `file.place.queue` read a file with it by the rules above, among the
+importers that set `place`: when no built-in format reads the file, the first such importer by id that lists its
+extension reads it, and `"importer": "plugin.<id>"` names one, which must set `place` and list the file's extension,
+also one a built-in format reads. `"params"?: {…}` holds its parameters, which take their defaults when left out. The
+importer is given at most 128 MiB of the file and `_context.mode` `"place"`, and returns its objects as it does for
+File › Open. They are placed in the open document as
+one group named after the file, in the order the importer returned them, at the place, size or object `at`, `rect`,
+`replace` and `template` give, as one undo step; guides are left out, and the group's box is the bounds of what the
+other objects draw. The file is embedded whatever `link`
+says, as a format that can't be linked is, and the reply's `linked` is `false`. A decline, invalid output, a trap or
+Cancel places nothing and leaves the document and its undo steps as they were. An importer without `place` is not used
+by File › Place, and naming it is an error. A larger file is refused from its size. With `importer`, a `path` is refused
+before any of it is read and `dataBase64` before any of it is decoded. Without `importer`, the first 64 KiB of the file
+are read or decoded first to look for a built-in format. The web's File › Place reads the picked file in the browser
+before the 128 MiB limit applies. In the app, File › Place lists a placing importer's extensions under "All placeable
+files" and a filter of its own, named after the importer. Extensions that a built-in format reads are left out of both,
+and an importer that lists only such extensions gets no filter. On the web, a dropped file that no built-in format
+reads, by its extension or its content, is placed on the canvas by the first placing importer by id that lists its
+extension (the desktop opens a dropped document, as it does an SVG); a dropped file that a built-in format reads goes
+to that format. The importer then runs with its parameters' defaults. A file placed with `importer` goes to that
+importer without the import options File › Place shows for a text file, a DXF drawing, a PDF or a PSD file. These rules
+are VectorCraft's own.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
 of numbers and colors, labelled, explained and sorted into sections as its manifest says) with a live preview; without
-parameters it runs at once. Edit › Keyboard Shortcuts lists each installed filter under Object › Plug-ins, where
+parameters it runs at once. A filter's dialog opens with the parameters that filter last ran with in the session,
+else with its defaults. Object › Plug-ins starts with **Apply Last Filter** (`plugin.applyLastFilter`), which runs
+the filter that last ran again with the same parameters on the selection, without its dialog, as one undo step, and
+**Last Filter…** (`plugin.lastFilter`), which opens that filter's dialog with those parameters, its OK running it as a
+new run. Once a filter has run they read **Apply** followed by the filter's name and the filter's name with an
+ellipsis. A run counts once it succeeds: from its menu item, its dialog's OK, a shortcut, `plugin.run` or a
+`command.batch` step (each such step in the order the batch ran them, so the last one runs again), an Action Batch (`action.batch`) step once a file or data set
+ran it, and a background run once its
+result is applied. A preview, Cancel, a failed or canceled run, a plug-in's own commands and live effects don't count,
+and neither does a batch step whose filter the batch installed when a later step of the batch installs or removes
+that same plug-in, or reloads plug-ins. Both items are grayed out with no document open, before any filter ran, and once the filter that
+ran last was removed, installed again (the same module too) or no longer takes those parameters as they are;
+installing another plug-in keeps them. They don't need a selection: a filter given no objects can still add new ones. The parameters are
+kept for the session only, for at most 64 filters. Where the two items sit, when they are grayed out and how long the
+parameters are kept are VectorCraft's own rules. Edit › Keyboard Shortcuts lists each installed filter under Object ›
+Plug-ins, where
 it can be given a shortcut (`plugin:<id>`); the shortcut stays saved while the plug-in is removed and applies again
 when it is reinstalled. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use Artboards is greyed out
@@ -659,6 +698,11 @@ the module's start function, in a run that isn't a filter's run on a document, o
   without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
   `document.open` reads a file with the importer only when `importer` names it.
+- `place` (importers only): `true` lets File › Place read the importer's files too ([using plug-ins](#using-plug-ins));
+  `false`, the default, keeps it to File › Open. A value that isn't `true` or `false`, or the key on another kind, is
+  refused when the plug-in is installed. It asks for no permission beyond `import.read`: the importer is given the file
+  and its parameters alone, and the host places what it returns. Hosts from before the key ignore it, so there the
+  importer opens its files and places none.
 - `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
   ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}, "menu"?: {…}}`. An `id` is 1–32
   characters from `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters;
@@ -877,7 +921,7 @@ counts toward the half of the memory cap that the input and the parameters share
  "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
-`mode` is `"filter"`, `"effect"`, `"export"`, `"import"` or `"command"` (a [command](#commands) run, whose
+`mode` is `"filter"`, `"effect"`, `"export"`, `"import"`, `"place"` or `"command"` (a [command](#commands) run, whose
 `command` is the command's id); `bounds` the selection's geometric bounds (a live effect: the reference box of the
 effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard under the
 selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document (`null` until
@@ -888,7 +932,8 @@ information](#document-information) asked for. A live effect's `item` says where
 the extension of the file being written (one the exporter lists) and its name without the extension (the document's name
 when the export is not given a path), which some formats keep in their header. An import's `_context` is `{"mode":
 "import", "extension": "plt", "name": "Poster"}`: the extension of the file being opened and its name without the
-extension.
+extension. A place's `_context` is the same with `"mode": "place"`; the importer is given nothing of the document the
+file is placed in.
 
 ### Output
 
@@ -944,6 +989,22 @@ under the plug-in's id, and hosts from before `documentData` keep it when they s
 document, so it can read what every plug-in keeps there, not only its own. A live effect isn't given it: its geometry
 is worked out from the object alone.
 
+To report what a run did, a filter or a plug-in command adds `notice`: one string, such as
+`{"objects": [...], "notice": "Selected 12 objects"}`. It needs no permission and no host import. Once the output is
+applied, the desktop app and the web build show it in the status bar as `Plug-in “name”: notice`, the plug-in's name
+first, and `plugin.run` and the plug-in command return it as `notice` in their result, with the plug-in's name as
+`pluginName`. The host trims the white space around it, writes control, bidirectional and line
+separator characters as `\u{202E}` escapes and cuts it at 200 characters, escapes included, ending it with `…`. Each run
+reports at most one notice, and a later status message replaces it. A plug-in step of an action or a `command.batch`
+shows its notice too; when several steps report one, the last of them shows. A `notice` that is not a string, or has no visible
+character in the part the status bar shows, refuses the whole output, and nothing changes; white space, control characters and the invisible
+characters that are not escaped (soft hyphen, zero-width and filler characters, variation selectors, tags) do not
+count as visible. A run that declines, fails, is refused, is canceled or
+finishes after the document changed shows none; an output that changes nothing still shows its notice. The status
+bar translates the words around the notice, never the notice itself. A live effect's
+`notice`, painted or not, is ignored without being checked, since the effect runs whenever its object is drawn. These limits are VectorCraft's own values. Hosts
+from before `notice` ignore it.
+
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
 object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry. A live effect
 that declares `paintOutput` returns painted pieces instead ([below](#painted-live-effects)).
@@ -962,10 +1023,10 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 ```
 
 - `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
-  ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
-  result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and `effects`,
-  [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop, a gradient's
-  placement or a freeform point does not have, such as `opacity` on a solid paint.
+  ignored, as is a top-level `notice`. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level
+  `documentData`…) refuses the result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and
+  `effects`, [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop,
+  a gradient's placement or a freeform point does not have, such as `opacity` on a solid paint.
 - `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
   painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
   a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke
@@ -1007,7 +1068,9 @@ with the export's own). A decline (`{"error": …}`), a missing `dataBase64` or 
 An **importer** returns `{"objects": [...], "warnings"?: ["…"]}`: new paths and compound paths (no `id`) in the
 filters' object form, checked as a filter's new objects are, with warnings capped as an exporter's are and shown with
 the open's own. An output with no objects, with keys other than `objects`, `warnings` and `error`, or with an object
-that fails the checks opens nothing, and neither does a decline (`{"error": …}`).
+that fails the checks opens nothing, and neither does a decline (`{"error": …}`). An importer that places its files
+returns the same output when `_context.mode` is `"place"`; an output that fails, or whose objects other than guides draw
+nothing of any width or height, places nothing.
 
 #### Opacity, blending and effects on pieces
 
@@ -1093,9 +1156,9 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, and
-  importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
-  artboards.
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
+  that make type, images, layers or artboards, and placed importer files that stay linked to their file.
 - Filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
   [`inputs`](#reading-type-images-and-symbols)).
-- Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.
+- Scripts can't run object filters (`plugin.*` commands are refused there), so a script doesn't change what Apply
+  Last Filter runs.

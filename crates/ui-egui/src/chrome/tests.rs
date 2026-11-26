@@ -500,6 +500,59 @@ fn german_script_status_preserves_authored_error_and_translates_native_error() {
     assert_eq!(app.session.script_authored_failure(), None);
 }
 
+/// A plug-in run's notice shows in the status bar after the plug-in's name once its output is
+/// applied: the words around it are translated and the notice itself never is, even when it reads
+/// like one of the app's own messages. A run whose output is refused shows no notice, and the next
+/// status message replaces the notice.
+#[test]
+fn plugin_notice_shows_after_the_plug_in_s_name_and_is_never_translated() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let install = |app: &mut crate::VectorcraftApp, id: &str, output: &str| {
+        let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), output)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module), "replace": true})).unwrap();
+    };
+    let id = "test.ui.notice";
+    install(&mut app, id, r#"{"objects":[],"notice":"invalid array length"}"#);
+    let r = app.run("plugin.run", json!({"id": id})).unwrap();
+    assert_eq!(r["notice"], json!("invalid array length"));
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    assert_eq!(super::status_bar::status_message(&app), format!("Plug-in „Test {id}“: invalid array length"));
+    // The same words as an ordinary message are translated.
+    app.status("invalid array length");
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    // An output refused for its notice shows no notice.
+    let bad = "test.ui.notice.bad";
+    install(&mut app, bad, r#"{"objects":[],"notice":"\u0007"}"#);
+    app.status("");
+    assert!(app.run("plugin.run", json!({"id": bad})).is_err());
+    assert!(!app.ui.status.starts_with("Plug-in “"), "{}", app.ui.status);
+    // A plug-in step of a batch, as an action plays it, shows its notice too.
+    app.status("");
+    app.replay("command.batch", json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A batch without a plug-in step leaves the status bar as it is.
+    app.status("kept");
+    app.run("command.batch", json!({"commands": [{"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, "kept");
+    // The notice keeps the plug-in's name when a later step of the batch removes the plug-in.
+    app.status("");
+    let run_and_remove = json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "plugin.remove", "params": {"id": id}}]});
+    app.run("command.batch", run_and_remove).unwrap();
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A name's closing ellipsis is dropped, and a name that is only an ellipsis shows the plug-in's id.
+    for (name, shown) in [("Resize…", "Resize"), (" … ", id)] {
+        let r = json!({"plugin": id, "ids": [], "notice": "done", "pluginName": name});
+        crate::plugin_runs::show_notice(&mut app, "plugin.run", &r);
+        assert_eq!(app.ui.status, format!("Plug-in “{shown}”: done"));
+    }
+    app.run("plugin.remove", json!({"id": bad})).unwrap();
+}
+
 /// The message of an open that starts with a line about its linked files lists the open's notes on
 /// hover and for screen readers, in a wide and in a narrow window. A later message leaves the list
 /// out.
@@ -733,7 +786,8 @@ fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() 
     assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)));
     bar.app().run("view.actualSize", json!({})).unwrap();
     let center = at(&mut bar).1;
-    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
+    let baseline = crate::state::zoom_baseline(bar.app().print_ppi());
+    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), baseline));
     bar.click("First Artboard");
     assert_eq!(at(&mut bar), (0, Point::new(100.0, 50.0)), "first");
     // The command also takes an index, clamped to the last artboard.
@@ -1085,7 +1139,7 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, false);
+    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, None);
     assert!(title(&s).ends_with("(RGB/Preview)"), "{}", title(&s));
     s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
     assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
@@ -1108,6 +1162,27 @@ fn only_the_outlined_documents_tab_reads_outline() {
 /// The Control bar shown alone over `app`, in a window 1600 points wide.
 fn control_shown(app: crate::VectorcraftApp) -> Shown {
     Shown::new(app, egui::vec2(1600.0, 300.0), super::control_bar)
+}
+
+/// With the Circle tool, the Control bar shows From Center unchecked; a click on it turns the option on and checks
+/// it, and a second click turns it off and unchecks it.
+#[test]
+fn the_circle_tool_s_from_center_checkbox_sets_the_option() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("circle");
+    let mut bar = control_shown(app);
+    let from_center = |bar: &Shown| bar.app().session.tool_options()["fromCenter"].clone();
+    assert_eq!(from_center(&bar), json!(false));
+    let target = bar.named("From Center");
+    assert!(!bar.checked(&target), "From Center starts unchecked");
+    for want in [true, false] {
+        bar.click("From Center").settle();
+        assert_eq!(from_center(&bar), json!(want));
+        let target = bar.named("From Center");
+        assert_eq!(bar.checked(&target), want, "the checkbox shows the option");
+    }
 }
 
 /// The Control bar's isolation button, if it shows: Isolate Selected Object, Exit Isolation Mode or Exit Symbol
