@@ -7,6 +7,7 @@
 use super::{ELEMENT_BYTES, arg, create_at, method, new_array};
 use crate::heap::{CONFIGURABLE, ENUMERABLE, Key, OBJECT_BYTES, OPEN, ObjId, Object, Prop, WRITABLE, key};
 use crate::interp::{Desc, Interp, JsResult};
+use crate::symbol::PropKey;
 use crate::value::{Str, Value};
 
 pub(super) fn install(interp: &mut Interp, object: ObjId) -> JsResult<()> {
@@ -119,6 +120,14 @@ fn names_array(interp: &mut Interp, names: Vec<Key>) -> JsResult<Value> {
     })
 }
 
+/// The object's own property keys: its names, then its Symbols (ECMA-262 11th edition, section
+/// 9.1.11).
+fn own_prop_keys(interp: &mut Interp, o: ObjId) -> JsResult<Vec<PropKey>> {
+    let mut keys: Vec<PropKey> = interp.own_keys(o)?.into_iter().map(PropKey::Str).collect();
+    keys.extend(interp.own_symbols(o)?.into_iter().map(PropKey::Sym));
+    Ok(keys)
+}
+
 /// `Object.getPrototypeOf` (section 15.2.3.2).
 fn get_prototype_of(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&arg(args, 0))?;
@@ -129,8 +138,8 @@ fn get_prototype_of(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> J
 fn get_own_property_descriptor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&arg(args, 0))?;
     interp.rooted(&[Value::Object(o)], |interp| {
-        let k = interp.to_key(&arg(args, 1))?;
-        match interp.get_own_property(o, &k)? {
+        let k = interp.to_prop_key(&arg(args, 1))?;
+        match interp.get_own_pk(o, &k)? {
             Some(p) => from_prop(interp, &p),
             None => Ok(Value::Undefined),
         }
@@ -166,10 +175,10 @@ fn create(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
 /// `Object.defineProperty` (section 15.2.3.6).
 fn define_property(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = require_object(interp, &arg(args, 0), "defineProperty")?;
-    interp.with_key(&arg(args, 1), |interp, k| {
+    interp.with_prop_key(&arg(args, 1), |interp, k| {
         let desc = to_desc(interp, &arg(args, 2))?;
         let roots = desc_values(&desc);
-        interp.rooted(&roots, |interp| interp.define_own_property(o, k, &desc, true))
+        interp.rooted(&roots, |interp| interp.define_own_pk(o, k, &desc, true))
     })?;
     Ok(Value::Object(o))
 }
@@ -189,12 +198,20 @@ fn define_all(interp: &mut Interp, o: ObjId, props: &Value) -> JsResult<()> {
     interp.temp_roots.push(Value::Object(p));
     let r = (|| {
         let mut descs = Vec::new();
-        for k in interp.own_keys(p)? {
+        let keys = own_prop_keys(interp, p)?;
+        // A getter can delete a Symbol-keyed property already read, so the Symbols stay rooted
+        // until they are defined on `o`.
+        for k in &keys {
+            if let PropKey::Sym(s) = k {
+                interp.temp_roots.push(Value::Symbol(s.clone()));
+            }
+        }
+        for k in keys {
             interp.use_fuel()?;
-            if !interp.get_own_property(p, &k)?.is_some_and(|prop| prop.enumerable()) {
+            if !interp.get_own_pk(p, &k)?.is_some_and(|prop| prop.enumerable()) {
                 continue;
             }
-            let v = interp.get_from(p, &k, &Value::Object(p))?;
+            let v = interp.get_value_pk(&Value::Object(p), &k)?;
             interp.temp_roots.push(v.clone());
             let desc = to_desc(interp, &v)?;
             interp.temp_roots.extend(desc_values(&desc));
@@ -202,7 +219,7 @@ fn define_all(interp: &mut Interp, o: ObjId, props: &Value) -> JsResult<()> {
         }
         for (k, desc) in descs {
             interp.use_fuel()?;
-            interp.define_own_property(o, k, &desc, true)?;
+            interp.define_own_pk(o, k, &desc, true)?;
         }
         Ok(())
     })();
@@ -214,9 +231,9 @@ fn define_all(interp: &mut Interp, o: ObjId, props: &Value) -> JsResult<()> {
 /// then makes the object non-extensible (sections 15.2.3.8 and 15.2.3.9).
 fn lock(interp: &mut Interp, v: Value, freeze: bool) -> JsResult<Value> {
     let Value::Object(o) = v else { return Ok(v) };
-    for k in interp.own_keys(o)? {
+    for k in own_prop_keys(interp, o)? {
         interp.use_fuel()?;
-        let Some(prop) = interp.get_own_property(o, &k)? else { continue };
+        let Some(prop) = interp.get_own_pk(o, &k)? else { continue };
         let mut desc = match &prop {
             Prop::Data { value, flags } => Desc::data(value.clone(), *flags),
             Prop::Accessor { get, set, flags } => Desc {
@@ -231,7 +248,7 @@ fn lock(interp: &mut Interp, v: Value, freeze: bool) -> JsResult<Value> {
         if freeze && desc.is_data() {
             desc.writable = Some(false);
         }
-        interp.define_own_property(o, k, &desc, true)?;
+        interp.define_own_pk(o, k, &desc, true)?;
     }
     if let Some(obj) = interp.heap.object_mut(o) {
         obj.extensible = false;
@@ -263,9 +280,9 @@ fn prevent_extensions(interp: &mut Interp, _: Value, args: &[Value], _: bool) ->
 fn locked(interp: &mut Interp, v: &Value, frozen: bool) -> JsResult<Value> {
     let Value::Object(o) = v else { return Ok(Value::Bool(true)) };
     let o = *o;
-    for k in interp.own_keys(o)? {
+    for k in own_prop_keys(interp, o)? {
         interp.use_fuel()?;
-        let Some(prop) = interp.get_own_property(o, &k)? else { continue };
+        let Some(prop) = interp.get_own_pk(o, &k)? else { continue };
         if prop.configurable() || (frozen && matches!(prop, Prop::Data { flags, .. } if flags & WRITABLE != 0)) {
             return Ok(Value::Bool(false));
         }

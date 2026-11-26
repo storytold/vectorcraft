@@ -94,6 +94,21 @@ fn a_dialog_from_a_resource_specification_takes_the_steps_of_its_window_answer()
 }
 
 #[test]
+fn a_dialog_a_handler_opens_is_listed_after_the_window_that_opened_it() {
+    let mut s = one_doc();
+    let source = format!("{FORM} bold.onClick = function () {{ alert('Bolded'); }}; vc.log(w.show());");
+    let answers = json!([
+        {"kind": "window", "value": [{"control": "Bold", "event": "click"}, {"control": "OK", "event": "click"}]},
+        {"kind": "alert", "value": "ok"},
+    ]);
+    let r = headless(&mut s, &source, answers).unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["dialogCount"], 2);
+    assert_eq!(r["dialogs"][0], json!({"kind": "window", "title": "Settings", "controls": 8, "events": 2, "answer": 1}), "{r}");
+    assert_eq!((&r["dialogs"][1]["kind"], &r["dialogs"][1]["message"]), (&json!("alert"), &json!("Bolded")), "{r}");
+}
+
+#[test]
 fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
     let mut s = one_doc();
     let before = art(&s);
@@ -114,6 +129,28 @@ fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
         assert_eq!(report["log"], json!([]), "a missing answer cannot be caught: {report}");
         assert_eq!(report["dialogs"][0]["answer"], "missing", "{report}");
     }
+}
+
+#[test]
+fn a_step_names_a_control_by_its_text_only_when_it_has_no_name() {
+    let mut s = one_doc();
+    let source = "var w = new Window('dialog'); \
+        var named = w.add('button', undefined, 'Apply', {name: 'apply'}); named.onClick = function () { vc.log('named'); }; \
+        var plain = w.add('button', undefined, 'Apply'); plain.onClick = function () { vc.log('plain'); }; \
+        w.add('button', undefined, 'OK'); w.show();";
+    let steps = window(json!([{"control": "Apply", "event": "click"}, {"control": "apply", "event": "click"}, {"control": "OK", "event": "click"}]));
+    headless(&mut s, source, steps).unwrap();
+    assert_eq!(s.script_report().unwrap()["log"], json!(["plain", "named"]));
+    let go = "var w = new Window('dialog'); w.add('button', undefined, 'Go', {name: 'go'}); w.show();";
+    let e = headless(&mut s, go, window(json!([{"control": "Go", "event": "click"}]))).unwrap_err().to_string();
+    assert!(e.contains("the dialog has no control named Go"), "{e}");
+    let help = "var w = new Window('dialog'); w.add('button', undefined, 'Help').onClick = function () { vc.log('help'); }; w.show();";
+    let e = headless(&mut s, help, window(json!([{"control": "", "event": "click"}]))).unwrap_err().to_string();
+    assert!(e.contains("the dialog has no control named"), "an empty step names no control without a name: {e}");
+    let blank = "var w = new Window('dialog'); w.add('button', undefined, 'Help').onClick = function () { vc.log('help'); }; \
+        w.add('button', undefined, '').onClick = function () { vc.log('blank'); }; w.add('button', undefined, 'OK'); w.show();";
+    headless(&mut s, blank, window(json!([{"control": "", "event": "click"}, {"control": "OK", "event": "click"}]))).unwrap();
+    assert_eq!(s.script_report().unwrap()["log"], json!(["blank"]), "an empty step names the unnamed control whose text is empty");
 }
 
 #[test]
@@ -327,6 +364,21 @@ fn sizes_and_places_are_clamped_and_the_layout_follows_the_containers() {
     }
     let (w, h) = d.size();
     assert!(w <= MAX_EXTENT && h <= MAX_EXTENT);
+}
+
+#[test]
+fn a_hidden_control_and_what_it_holds_take_no_room() {
+    let dialog = with(node("dialog", -1.0), "orientation", Data::String("row".into()));
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let a = with(node("button", 0.0), "size", pair(100.0, 20.0));
+    let hidden = with(node("group", 0.0), "visible", Data::Bool(false));
+    let inside = with(node("button", 2.0), "size", pair(400.0, 300.0));
+    let b = with(node("button", 0.0), "size", pair(50.0, 20.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog.clone(), a.clone(), hidden, inside, b.clone()])).unwrap();
+    let shown: ScriptUiDialog = scriptui::parse(&description(vec![dialog, a, b])).unwrap();
+    assert_eq!(d.size(), shown.size(), "the hidden group and the button in it leave the dialog's size as it is");
+    assert_eq!(d.nodes[4].rect.x, shown.nodes[2].rect.x, "the next control takes the hidden group's place");
+    assert!(!d.nodes[3].visible, "the button in the hidden group is hidden too");
 }
 
 #[test]

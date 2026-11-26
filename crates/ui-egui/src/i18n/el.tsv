@@ -188,6 +188,7 @@
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
 	Anti-aliasing Method	Μέθοδος εξομάλυνσης ακμών
+@id	language.name	Ελληνικά
 antiAlias	Sharp	Οξεία
 	Crisp	Καθαρή
 	Strong	Έντονη
@@ -880,6 +881,7 @@ font-technology	Variable	Μεταβλητές
 	Direct Selection Tool	Άμεση επιλογή (Direct Selection Tool)
 	Direction Handles	Λαβές κατεύθυνσης
 	Disable Auto Add/Delete	Απενεργοποίηση αυτόματης προσθήκης/διαγραφής
+	Delete Removes Anchor Points and Keeps Paths Joined	Το Delete αφαιρεί σημεία αγκύρωσης και διατηρεί τις διαδρομές ενωμένες
 	Interpolate Control Points When Moving Anchors	Παρεμβολή λαβών κατεύθυνσης κατά τη μετακίνηση σημείων αγκύρωσης
 	Disable Opacity Mask	Απενεργοποίηση μάσκας αδιαφάνειας
 	Discard	Απόρριψη
@@ -1585,6 +1587,17 @@ font-technology	Variable	Μεταβλητές
 	Graphic Styles	Στυλ γραφικών
 	Graphic Styles Options	Επιλογές στυλ γραφικών
 	Graphics	Γραφικά
+	Show Contrast	Εμφάνιση αντίθεσης
+	Contrast For	Αντίθεση για
+	Normal Text	Κανονικό κείμενο
+	Large Text	Μεγάλο κείμενο
+	Contrast Background	Φόντο αντίθεσης
+	Behind Selection	Πίσω από την επιλογή
+	Current Color	Τρέχον χρώμα
+	Pass	Επιτυχία
+	Fail	Αποτυχία
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Ελάχιστη αντίθεση κατά WCAG 2.2: κανονικό κείμενο AA 4.5:1 (1.4.3) και AAA 7:1 (1.4.6), μεγάλο κείμενο AA 3:1 και AAA 4.5:1, γραφικά και στοιχεία ελέγχου AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Το φόντο διαβάζεται στο κέντρο της επιλογής.
 	Graphics Processor	Επεξεργαστής γραφικών
 	Graphics: {adapter}	Γραφικά: {adapter}
 	Gravity	Βαρύτητα
@@ -2088,6 +2101,12 @@ font-technology	Variable	Μεταβλητές
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}· {size}· {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	η ανάλυση δεν είναι διαθέσιμη
+	estimated memory {memory}	εκτιμώμενη μνήμη {memory}
+	memory unavailable	η μνήμη δεν είναι διαθέσιμη
+	Unknown format	Άγνωστη μορφή
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2141,6 +2160,7 @@ font-technology	Variable	Μεταβλητές
 	On	Ενεργό
 	Only Web Colors	Μόνο χρώματα ιστού
 	Opacity	Αδιαφάνεια
+	Show Opacity	Εμφάνιση αδιαφάνειας
 	Opacity Mask	Μάσκα αδιαφάνειας
 	Opacity:	Αδιαφάνεια:
 	Open	Άνοιγμα
@@ -3212,6 +3232,9 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Tracing presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+file-filter	Action sets	Σύνολα ενεργειών
+file-filter	Composite fonts	Σύνθετες γραμματοσειρές
 file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
@@ -3941,6 +3964,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scale Artwork with Artboard	Κλιμάκωση σχεδίου μαζί με τον πίνακα σχεδίασης
 	Artboards: {n}	Πίνακες σχεδίασης: {n}
 	Rearrange All Artboards…	Αναδιάταξη όλων των πινάκων σχεδίασης…
+	Rearrange…	Αναδιάταξη…
+	Selected Artboards: {n}	Επιλεγμένοι πίνακες σχεδίασης: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Κάντε κλικ στον καμβά για να τοποθετήσετε τους πίνακες σχεδίασης (Esc για ακύρωση)
 	Recall Selection	Ανάκληση επιλογής
 	RECENT	ΠΡΟΣΦΑΤΑ
 	Recent Colors	Πρόσφατα χρώματα
@@ -4134,7 +4160,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Τα Επιλογή › Ίδιο › Χρώμα γεμίσματος, Χρώμα περιγράμματος και Γέμισμα και περίγραμμα βρίσκουν μόνο την ίδια απόχρωση ενός καθολικού ή σημειακού δείγματος, όχι οποιαδήποτε απόχρωσή του.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Εμφανίζει την αρχική οθόνη όταν δεν είναι ανοιχτό κανένα έγγραφο· όταν είναι ανενεργό, το παράθυρο μένει κενό μέχρι να κάνετε κλικ στην Αρχική οθόνη.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Μετρά τα αντικείμενα μαζί με τα περιγράμματα και τα εφέ που αλλάζουν το σχήμα τους για μέγεθος, θέση και στοίχιση· οι σκιές, οι λάμψεις και οι θολώσεις δεν μετρώνται.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Σε ζουμ 100%, μία ίντσα του εγγράφου καταλαμβάνει 96 στιγμές οθόνης αντί για 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Σε ζουμ 100%, μία ίντσα του εγγράφου γεμίζει μία ίντσα της οθόνης, ή 96 στιγμές οθόνης όταν το σύστημα δεν αναφέρει χρησιμοποιήσιμο μέγεθος οθόνης.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Το διπλό κλικ σε ομάδα, διαδρομή ή εικόνα με το εργαλείο Επιλογή την ανοίγει σε λειτουργία απομόνωσης.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Τα γεμίσματα και τα περιγράμματα μοτίβου μετασχηματίζονται μαζί με το γραφικό, εκτός αν ένας μετασχηματισμός ή το μενού του πλαισίου Μετασχηματισμός επιλέξει κάτι άλλο.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Οι ακτίνες των δυναμικών γωνιών κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
@@ -4145,6 +4171,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Το παρατεταμένο πάτημα ενός πλήκτρου εκτελεί το εργαλείο ή την εντολή της στήλης «Κρατήστε πατημένο» στις Συντομεύσεις πληκτρολογίου· ένα σύντομο πάτημα εκτελεί τη συνηθισμένη συντόμευσή του.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Πόσα δευτερόλεπτα πρέπει να μένει πατημένο ένα πλήκτρο πριν εκτελεστεί η συντόμευση παρατεταμένου πατήματος αντί για τη συνηθισμένη συντόμευσή του.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Το Delete αφαιρεί τα επιλεγμένα σημεία αγκύρωσης και προσαρμόζει ξανά την καμπύλη γύρω από το καθένα, αντί να ανοίγει τη διαδρομή εκεί.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Όταν μετακινείτε σημεία αγκύρωσης, κάθε καμπύλη με ένα μετακινημένο άκρο διατηρεί το σχήμα της σε σχέση με τα άκρα της.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
 	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.
@@ -5515,6 +5542,12 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	`{key}` must be a color or {_1}	το `{key}` πρέπει να είναι χρώμα ή {_1}
+@msg	the selected objects' colors differ: give `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `opacity` ή `color`
+@msg	the active fill or stroke has no color: give `color`	το ενεργό γέμισμα ή η πινελιά δεν έχει χρώμα: δώστε `color`
+@msg	the active fill or stroke is hidden: give `color`	το ενεργό γέμισμα ή η πινελιά είναι κρυφό: δώστε `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	το ενεργό γέμισμα ή η πινελιά σχεδιάζεται μέσα από μάσκα αδιαφάνειας: δώστε `color`
 @msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
@@ -6244,6 +6277,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Το πλέγμα του αντικειμένου 3D είναι ελλιπές ή περιέχει τιμή που δεν είναι αριθμός
 @msg	give one <filter> element	δώστε ένα στοιχείο <filter>
 @msg	the <filter> element needs an id, the filter's name	το στοιχείο <filter> χρειάζεται id, το όνομα του φίλτρου
 @msg	an SVG filter's id is at most {MAX_NAME} characters	το id ενός φίλτρου SVG έχει το πολύ {MAX_NAME} χαρακτήρες
@@ -7288,6 +7322,8 @@ axis	Y Axis	Άξονας Y
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…
+@msg	Plug-in “{name}”: {notice}	Πρόσθετο «{name}»: {notice}
+@msg	`notice` must be a string with visible text	το `notice` πρέπει να είναι συμβολοσειρά με ορατό κείμενο
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): πρέπει να το εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `allowHeavy: true` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
@@ -7313,11 +7349,19 @@ axis	Y Axis	Άξονας Y
 @msg	module is {_1} bytes (limit {_2})	η λειτουργική μονάδα έχει {_1} byte (όριο {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
 @msg	not JSON: {e}	δεν είναι JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} παραμέτρων
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} αποτελεσμάτων
 @msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}
 @msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON
 @msg	the module must export its linear memory as `memory`	η λειτουργική μονάδα πρέπει να εξάγει τη γραμμική της μνήμη ως `memory`
+@msg	the module must export `{name}` with the type {signature}	η λειτουργική μονάδα πρέπει να εξάγει το `{name}` με τον τύπο {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	η λειτουργική μονάδα έχει περισσότερες από μία προσαρμοσμένες ενότητες `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	προϋπολογισμός μνήμης (η αρχική μνήμη της λειτουργικής μονάδας είναι {initial} byte, όριο {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	το μανιφέστο στην προσαρμοσμένη ενότητα `{MANIFEST_SECTION}` πρέπει να δίνει `abi` ίσο με {ABI_VERSION}, την έκδοση ABI που υλοποιεί αυτός ο κεντρικός υπολογιστής
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	προϋπολογισμός πινάκων (η λειτουργική μονάδα ορίζει {count} πίνακες, ο μεγαλύτερος με {largest} στοιχεία· όριο {MAX_TABLES} πίνακες των {MAX_TABLE_ELEMENTS} στοιχείων)
+@msg	the module's table section could not be read	δεν ήταν δυνατή η ανάγνωση της ενότητας πινάκων της λειτουργικής μονάδας
 @msg	the objects to change are no longer in the document	τα αντικείμενα προς αλλαγή δεν βρίσκονται πια στο έγγραφο
 @msg	the runtime panicked	το περιβάλλον εκτέλεσης κατέρρευσε
 @msg	unexpected host trap	μη αναμενόμενη παγίδευση του κεντρικού υπολογιστή
@@ -7325,6 +7369,10 @@ axis	Y Axis	Άξονας Y
 @msg	vc_alloc returned 0 (out of memory)	η vc_alloc επέστρεψε 0 (η μνήμη εξαντλήθηκε)
 @msg	vc_alloc returned a block outside memory	η vc_alloc επέστρεψε ένα μπλοκ εκτός μνήμης
 @msg	vc_run returned error code {packed}	η vc_run επέστρεψε τον κωδικό σφάλματος {packed}
+@msg	did not finish loading within {secs} s	δεν ολοκλήρωσε τη φόρτωση μέσα σε {secs} s
+@msg	no thread was left to load it	δεν έμεινε νήμα για να το φορτώσει
+@msg	panicked while loading	κατέρρευσε κατά τη φόρτωση
+@msg	panicked while loading: {what}	κατέρρευσε κατά τη φόρτωση: {what}
 @msg	{_1} is not a file	το {_1} δεν είναι αρχείο
 @msg	{_1} is {_2} bytes (limit {_3})	το {_1} έχει {_2} byte (όριο {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} αντικείμενα (όριο {MAX_OBJECTS})
@@ -7345,6 +7393,11 @@ axis	Y Axis	Άξονας Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	τα `minItems` και `maxItems` πρέπει να είναι 0-{MAX_LIST}, το `maxItems` τουλάχιστον 1 και η προεπιλογή να έχει τόσα στοιχεία
 @msg	`name` must be a string	το `name` πρέπει να είναι συμβολοσειρά
 @msg	`opacity` must be a number	το `opacity` πρέπει να είναι αριθμός
+@msg	`opacity` must be a number from 0 to 100	το `opacity` πρέπει να είναι αριθμός από 0 έως 100
+@msg	`opacity` must be true or false	το `opacity` πρέπει να είναι true ή false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	οι χαρακτήρες κειμένου δεν έχουν δική τους αδιαφάνεια: προσθέστε γέμισμα ή περίγραμμα με την Προσθήκη νέου γεμίσματος ή την Προσθήκη νέου περιγράμματος του πίνακα Εμφάνιση
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ένα αντικείμενο επιλεγμένο σε στιγμιότυπο συμβόλου δεν έχει δική του αδιαφάνεια γεμίσματος ή περιγράμματος
+@msg	no target has that fill or stroke to take the opacity	κανένας στόχος δεν έχει αυτό το γέμισμα ή περίγραμμα για να λάβει την αδιαφάνεια
 @msg	`type` must be "path" or "compound"	το `type` πρέπει να είναι "path" ή "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	το `unit` πρέπει να έχει 1-{MAX_UNIT} εκτυπώσιμους χαρακτήρες
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	το `visibleWhen` πρέπει να αναφέρει 1 έως {MAX_CONDITION_VALUES} τιμές για το `{other}`
@@ -7363,7 +7416,7 @@ axis	Y Axis	Άξονας Y
 @msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
 @msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
 @msg	a number	αριθμός
-@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect returns only `objects` and `notice`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects` και `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
@@ -7388,6 +7441,8 @@ axis	Y Axis	Άξονας Y
 @msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει κρυφό, κλειδωμένο ή οδηγό μέλος, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει μέλος που δεν είναι διαδρομή, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
 @msg	a number >= {_1}	αριθμός >= {_1}
@@ -7466,6 +7521,8 @@ axis	Y Axis	Άξονας Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
 @msg	`paintOutput` may only be true	Το `paintOutput` μπορεί να είναι μόνο true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	το `paintOutput` ισχύει μόνο για ζωντανό εφέ (`kind` "effect") με `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	το `place` ισχύει μόνο για εισαγωγέα (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	το «{shown}» ανοίγει αρχεία αλλά δεν τα τοποθετεί: το manifest του δεν ορίζει `place`
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`
@@ -7477,6 +7534,10 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	οι πληροφορίες εγγράφου που ζητά το πρόσθετο είναι πολύ μεγάλες για να παραδοθούν: το πολύ {MAX_CONTEXT_ITEMS} πίνακες σχεδίασης, επίπεδα και δείγματα χρωμάτων σε {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	instruction budget	προϋπολογισμός εντολών
@@ -8778,6 +8839,18 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	το `spacing` πρέπει να είναι μεγαλύτερο από 0 και το πολύ {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	το `{key}` πρέπει να είναι από 0 έως {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	το `{key}` πρέπει να είναι από 0,01 έως 1000 pt
+@msg	select the banner, or mark every artboard	επιλέξτε το πανό ή σημειώστε όλους τους πίνακες σχεδίασης
+@msg	the banner has no width or height	το πανό δεν έχει πλάτος ή ύψος
+@msg	the grommet inset is too large for the banner	η απόσταση των τρουκς από την άκρη είναι πολύ μεγάλη για το πανό
+@msg	the hem is too deep for the banner	το στρίφωμα είναι πολύ βαθύ για το πανό
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	το διάστημα δημιουργεί περισσότερα από {MAX_GROMMETS} τρουκς
+@msg	there is no banner to mark	δεν υπάρχει πανό για σήμανση
+@msg	turn on at least one side	ενεργοποιήστε τουλάχιστον μία πλευρά
+@msg	with no hem and no grommets there is nothing to mark	χωρίς στρίφωμα και χωρίς τρουκς δεν υπάρχει τίποτα για σήμανση
+@msg	{saving} failed: {e}	{saving}: απέτυχε: {e}
 	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
 	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
 	Hem	Στρίφωμα

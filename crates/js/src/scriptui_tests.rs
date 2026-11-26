@@ -454,7 +454,84 @@ fn a_list_a_later_getter_changes_is_described_as_the_person_picks_from_it() {
     let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A']); var b = w.add('button', undefined, 'OK'); \
         Object.defineProperty(b, 'text', {get: function () { l.removeAll(); l.add('item', 'B'); return 'OK'; }}); \
         try { w.show(); } catch (e) { e.message }";
-    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items changed while the dialog was read".into()));
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items or a container's controls changed while the dialog was read".into()));
+}
+
+#[test]
+fn a_control_a_later_getter_removes_is_not_in_the_description() {
+    let (mut r, seen, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); var ok = w.add('button', undefined, 'OK'); var b = w.add('button', undefined, 'Go'); \
+        var gone = false; Object.defineProperty(b, 'text', {get: function () { if (!gone) { gone = true; w.remove(ok); } return 'Go'; }}); \
+        var went = 0; b.onClick = function () { went++; w.close(5); }; ok.onClick = function () { went = -1; }; [w.show(), went].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("5,1".into()), "the click at index 1 reaches Go, which the dialog still holds");
+    let seen = seen.borrow();
+    let first = nodes(&seen.descriptions[0]);
+    assert_eq!(first.len(), 2, "the removed OK button is not described");
+    assert_eq!(field(&first[1], "text"), &Data::String("Go".into()));
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'Go'); \
+        Object.defineProperty(b, 'text', {get: function () { w.add('statictext', undefined, 'more'); return 'Go'; }}); \
+        try { w.show(); } catch (e) { e.message }";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items or a container's controls changed while the dialog was read".into()));
+}
+
+#[test]
+fn a_list_s_initial_items_are_read_through_their_getters() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "var a = ['x']; Object.defineProperty(a, 0, {get: function () { return 'A'; }}); \
+        var w = new Window('dialog'); w.add('listbox', undefined, a); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    let seen = seen.borrow();
+    assert_eq!(field(&nodes(&seen.descriptions[0])[1], "items"), &Data::Array(vec![Data::String("A".into())]));
+}
+
+#[test]
+fn an_object_made_to_look_like_a_container_charges_nothing_to_the_dialog() {
+    let (mut r, _, _) = realm(Vec::new());
+    let source = format!(
+        "var w = new Window('dialog'); var fake = {{__vcKind: 'group', __vcWindow: w, __vcDepth: 0, __vcKids: []}}; \
+         fake.add = w.add; var e = ''; try {{ fake.add('button'); }} catch (x) {{ e = x.name; }} \
+         var l = w.add('listbox'); var fl = {{__vcKind: 'listbox', __vcWindow: w, __vcItems: []}}; fl.add = l.add; \
+         var f = ''; try {{ fl.add('item', 'A'); }} catch (x) {{ f = x.name; }} \
+         for (var n = 1; n < {}; n++) w.add('statictext'); [e, f, w.children.length].join()",
+        scriptui::MAX_CONTROLS
+    );
+    assert_eq!(r.run(&source).unwrap(), JsValue::String(format!("TypeError,TypeError,{}", scriptui::MAX_CONTROLS)));
+}
+
+#[test]
+fn find_element_skips_a_control_a_name_getter_removes() {
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "function heavy() { var junk = []; for (var k = 0; k < 50000; k++) junk.push({}); } \
+        var w = new Window('dialog'); var a = w.add('button'); var b = w.add('button', undefined, 'B', {name: 'b'}); \
+        Object.defineProperty(a, 'name', {get: function () { w.remove(b); b = null; heavy(); return 'a'; }}); \
+        String(w.findElement('b'))";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("null".into()));
+}
+
+#[test]
+fn a_close_that_on_close_asks_for_is_part_of_the_close_it_refuses() {
+    let (mut r, _, _) = realm(vec![close(), click(1)]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK'); var asked = 0; \
+        w.onClose = function () { asked++; if (asked == 1) { w.close(7); return false; } }; [w.show(), asked].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("1,2".into()), "the refused close waits for the click on OK");
+}
+
+#[test]
+fn a_hidden_or_disabled_ok_button_is_not_the_default_found_by_its_text() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK').enabled = false; w.add('button', undefined, 'OK').visible = false; \
+        w.add('button', undefined, 'OK'); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    assert_eq!(field(&seen.borrow().descriptions[0], "defaultElement"), &Data::Number(3.0), "the OK button that can be clicked is the default");
+}
+
+#[test]
+fn an_edit_field_that_hides_its_text_is_refused_when_shown() {
+    let (mut r, seen, _) = realm(Vec::new());
+    let source = "var w = new Window('dialog'); w.add('edittext', undefined, 'secret', {noecho: true}); try { w.show(); } catch (e) { e.message }";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: an edit field that hides its text (noecho) is not available yet".into()));
+    assert!(seen.borrow().descriptions.is_empty(), "the dialog never opens");
 }
 
 #[test]
@@ -700,6 +777,35 @@ fn a_removed_control_leaves_its_dialog() {
         JsValue::String("|0|511|remove: the control was removed from its dialog;add: the control was removed from its dialog".into()),
         "a removed group's controls no longer count toward the dialog's limit and cannot be counted off it twice"
     );
+}
+
+#[test]
+fn a_remove_that_runs_out_of_fuel_leaves_the_dialog_as_it_was() {
+    let (mut r, _, _) = realm(Vec::new());
+    r.run("var w = new Window('dialog'); var g = w.add('group'); for (var n = 0; n < 300; n++) g.add('button');").unwrap();
+    let mut failed = 0;
+    for fuel in 1..20_000 {
+        r.set_limits(Limits { fuel, ..Limits::default() });
+        if r.run("w.remove(g);").is_ok() {
+            break;
+        }
+        r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+        let state = r.run("[w.children.length, g.parent === w, g.window === w, g.children[299].window === w].join()").unwrap();
+        // The run may end after remove returned, with the group already removed.
+        if state == JsValue::String("0,false,false,false".into()) {
+            break;
+        }
+        failed += 1;
+        assert_eq!(state, JsValue::String("1,true,true,true".into()), "a remove that ended at fuel {fuel} changed the dialog");
+    }
+    assert!(failed > 300, "the runs ended inside remove's walk of the group ({failed})");
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    let v = r
+        .run(
+            "var added = 0; try { while (true) { w.add('button'); added++; } } catch (e) {} [w.children.length, g.parent, g.window, added].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("512|||512".into()), "the removed group's controls are counted off the dialog once");
 }
 
 #[test]

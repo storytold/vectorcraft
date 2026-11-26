@@ -194,10 +194,12 @@ impl ScriptUiDialog {
         self.nodes.first().map_or((0.0, 0.0), |n| (n.rect.w, n.rect.h))
     }
 
-    /// The first control whose name, or else whose text, is `control`.
+    /// The first control whose name is `control`, or else the first control without a name
+    /// whose text is `control`.
     pub fn find(&self, control: &str) -> Option<usize> {
         let by = |name: bool| {
-            self.nodes.iter().enumerate().skip(1).find(|(_, n)| if name { n.name == control } else { n.text == control }).map(|(i, _)| i)
+            let hit = |n: &UiNode| if name { !control.is_empty() && n.name == control } else { n.name.is_empty() && n.text == control };
+            self.nodes.iter().enumerate().skip(1).find(|(_, n)| hit(n)).map(|(i, _)| i)
         };
         by(true).or_else(|| by(false))
     }
@@ -564,6 +566,10 @@ fn layout(d: &mut ScriptUiDialog) {
             let [l, t, r, b] = node.margins;
             let (mut main, mut cross, mut count, mut reach) = (0.0f32, 0.0f32, 0usize, [0.0f32; 2]);
             for &k in &kids[i] {
+                // A hidden control, and everything in it, takes no room.
+                if !d.nodes[k].visible {
+                    continue;
+                }
                 if let Some(bounds) = d.nodes[k].bounds {
                     reach = [reach[0].max(bounds.x + bounds.w), reach[1].max(bounds.y + bounds.h)];
                     continue;
@@ -615,7 +621,9 @@ fn layout(d: &mut ScriptUiDialog) {
         let mut cursor = 0.0f32;
         for &k in &kids[i] {
             let kid = &d.nodes[k];
-            let rect = if let Some(bounds) = kid.bounds {
+            let rect = if !kid.visible {
+                UiRect { x, y, w: 0.0, h: 0.0 }
+            } else if let Some(bounds) = kid.bounds {
                 UiRect { x: node.rect.x + bounds.x, y: node.rect.y + bounds.y, w: bounds.w, h: bounds.h }
             } else {
                 let [w, h] = size[k];

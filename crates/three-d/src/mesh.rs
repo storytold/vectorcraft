@@ -4,33 +4,94 @@
 //!
 //! Coordinates are points with y up and z toward the viewer, about the point the solid turns about
 //! (the centre of the art's bounds; for Revolve, the axis at the profile's middle). Each face keeps
-//! its own corners and normal, so the mesh is shaded flat. Planar faces with holes (caps and the
-//! turned plane) are cut into triangles: each hole is joined to its outline by a bridge, then the
-//! outline is cut by ear clipping.
+//! its own corners. A corner takes its face's normal, with two exceptions. On a bevel, the corners
+//! two bands of one bevel share take the mean of the bands' normals, unless the bevel turns there
+//! by 60° or more or one of the bands lies flat toward the front or back. On Inflate's puffed
+//! front and back, each corner takes the surface's own normal. Planar faces with holes (caps and
+//! the turned plane) are cut into triangles: each hole is joined to its outline by a bridge, then
+//! the outline is cut by ear clipping.
+//!
+//! Every corner has texture coordinates from 0 to 1 each way, u to the right and v down, and every
+//! triangle names the part of the solid it belongs to ([`MeshPart`]):
+//!
+//! - Caps, Rotate's plane and Inflate's front and back take each corner's point in the art, before
+//!   any twist or taper, within the art's bounds. The back is not mirrored.
+//! - Extrude & Bevel's bevels and walls, and Inflate's walls, take u along each contour of the
+//!   outline from its first point (its distance over the contour's length, so its first point is
+//!   at both 0 and 1) and v across the side from the front cap's edge to the back cap's.
+//! - Revolve's side takes u around the sweep from its start and v along each contour of the
+//!   profile from its first point. Its end caps span the disk they close, and its cut sides take
+//!   each corner's profile point within the bounds of the profile.
+//!
+//! An axis with no extent (a contour of no length, art of no width) takes 0.5.
+
+use std::collections::HashMap;
 
 use vectorcraft_geom::{FillRule, PathData, Point, Rect};
 
-use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
+use crate::solid::{Attrs, Face3, Keep, extrude_faces, inflate_faces, plane_faces};
 use crate::{Extrude, Facet, Inflate, Revolve, V3, View};
 
 /// Most steps the triangulation of one solid may take: a face's ears and bridges each test the
 /// face's other corners.
 const MAX_WORK: usize = 400_000_000;
 
+/// The part of a solid a triangle of its mesh belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MeshPart {
+    /// Extrude & Bevel's front cap, Rotate's plane, and Inflate's front.
+    Front,
+    /// Extrude & Bevel's back cap, and Inflate's back, puffed or flat.
+    Back,
+    /// The walls of Extrude & Bevel and Inflate, and the side Revolve sweeps.
+    Side,
+    /// Extrude & Bevel's bevel between the front cap and the walls.
+    FrontBevel,
+    /// Extrude & Bevel's bevel between the walls and the back cap, with the bevel on both sides.
+    BackBevel,
+    /// A disk or sector closing an end of Revolve's profile.
+    Cap,
+    /// A flat side closing a Revolve sweep of less than 360°.
+    Cut,
+}
+
 /// A triangle mesh.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Mesh {
     /// Corner positions in points: x right, y up, z toward the viewer.
     pub positions: Vec<[f64; 3]>,
-    /// One unit normal for each position: the normal of the face the corner belongs to.
+    /// One unit normal for each position: the normal of the face the corner belongs to, or a
+    /// smoothed one (see the module's description).
     pub normals: Vec<[f64; 3]>,
+    /// Texture coordinates for each position, each from 0 to 1: u to the right, v down.
+    pub uvs: Vec<[f64; 2]>,
     /// Corner indices, counterclockwise seen from the side the normals point to.
     pub triangles: Vec<[u32; 3]>,
+    /// The part of the solid each triangle belongs to.
+    pub parts: Vec<MeshPart>,
 }
 
 impl Mesh {
     pub fn is_empty(&self) -> bool {
         self.triangles.is_empty()
+    }
+
+    /// Whether the lists match and hold numbers: a normal and texture coordinates for each
+    /// position, a part for each triangle, every corner index naming a position, and every
+    /// position, normal and texture coordinate finite.
+    pub fn is_consistent(&self) -> bool {
+        let n = self.positions.len();
+        let finite = self.positions.iter().chain(&self.normals).flatten().chain(self.uvs.iter().flatten()).all(|v| v.is_finite());
+        self.normals.len() == n
+            && self.uvs.len() == n
+            && self.parts.len() == self.triangles.len()
+            && self.triangles.iter().flatten().all(|&i| usize::try_from(i).is_ok_and(|i| i < n))
+            && finite
+    }
+
+    /// An error when the mesh cannot be written as it is ([`Mesh::is_consistent`]).
+    pub fn check(&self) -> Result<(), String> {
+        if self.is_consistent() { Ok(()) } else { Err("The 3D object's mesh is incomplete or holds a value that is not a number".into()) }
     }
 
     /// The smallest and largest coordinate on each axis; `None` for an empty mesh.
@@ -41,16 +102,22 @@ impl Mesh {
         }))
     }
 
-    /// The meshes of `parts` as one, in order.
-    pub fn join(parts: impl IntoIterator<Item = Mesh>) -> Mesh {
+    /// The meshes of `parts` as one, in order. An error when a mesh cannot be written as it is
+    /// ([`Mesh::check`]) or the corners would pass what a `u32` index can name.
+    pub fn join(parts: impl IntoIterator<Item = Mesh>) -> Result<Mesh, String> {
         let mut out = Mesh::default();
         for m in parts {
-            let base = out.positions.len() as u32;
+            m.check()?;
+            let base = u32::try_from(out.positions.len()).map_err(|_| too_complex())?;
+            // Every index of `m` is below its count of positions, so the shifted indices fit too.
+            base.checked_add(u32::try_from(m.positions.len()).map_err(|_| too_complex())?).ok_or_else(too_complex)?;
             out.positions.extend(m.positions);
             out.normals.extend(m.normals);
+            out.uvs.extend(m.uvs);
             out.triangles.extend(m.triangles.into_iter().map(|t| t.map(|i| i + base)));
+            out.parts.extend(m.parts);
         }
-        out
+        Ok(out)
     }
 }
 
@@ -154,6 +221,11 @@ pub(crate) fn newell(contours: &[Vec<V3>]) -> V3 {
     n
 }
 
+/// The exact position of `v`, as a key ([`Face3::corner`] matches corners exactly).
+fn key(v: V3) -> [u64; 3] {
+    [v.0.to_bits(), v.1.to_bits(), v.2.to_bits()]
+}
+
 /// From the effects' view space (y down) to the mesh's (y up).
 fn up(v: V3) -> [f64; 3] {
     [v.0, -v.1, v.2]
@@ -176,7 +248,8 @@ fn mesh_on(faces: &[Face3], surface: Option<&[(usize, [Point; 4])]>) -> Result<S
     let mut on = vec![];
     let mut work = 0usize;
     let mut cells = surface.iter().peekable();
-    for (k, (contours, normal)) in faces.iter().enumerate() {
+    for (k, face) in faces.iter().enumerate() {
+        let (contours, normal) = (&face.contours, &face.normal);
         while cells.next_if(|(i, _)| *i < k).is_some() {}
         let cell = cells.next_if(|(i, _)| *i == k).map(|(_, uv)| uv);
         // The surface point of a corner of a triangle: the point of the face's corner it is.
@@ -202,6 +275,19 @@ fn mesh_on(faces: &[Face3], surface: Option<&[(usize, [Point; 4])]>) -> Result<S
             Some([v0, v1, v2, v3]) => vec![[v0, v1, v2], [v0, v2, v3]],
             None => triangulate(contours, geometric, &mut work)?,
         };
+        // A face with many listed corners looks each one up by its position.
+        let listed = match &face.attrs {
+            Attrs::Corners(list) if list.iter().map(Vec::len).sum::<usize>() > 16 => {
+                let mut map = HashMap::new();
+                for (c, l) in contours.iter().zip(list) {
+                    for (v, data) in c.iter().zip(l) {
+                        map.entry(key(*v)).or_insert(*data);
+                    }
+                }
+                Some(map)
+            }
+            _ => None,
+        };
         for [a, b, c] in triangles {
             let (pa, pb, pc) = (up(a), up(b), up(c));
             let cross = V3(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]).cross(V3(pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]));
@@ -212,9 +298,20 @@ fn mesh_on(faces: &[Face3], surface: Option<&[(usize, [Point; 4])]>) -> Result<S
             let (pb, pc) = if turned { (pc, pb) } else { (pb, pc) };
             let (b, c) = if turned { (c, b) } else { (b, c) };
             let base = u32::try_from(out.positions.len()).map_err(|_| "The 3D object is too complex to export".to_string())?;
+            base.checked_add(2).ok_or_else(too_complex)?;
             out.positions.extend([pa, pb, pc]);
-            out.normals.extend([[nx, ny, nz]; 3]);
+            for v in [a, b, c] {
+                let (uv, own) = match &listed {
+                    Some(map) => map.get(&key(v)).copied().unwrap_or(([0.5, 0.5], None)),
+                    None => face.corner(v),
+                };
+                // A corner's own normal, when it has a usable one, else the face's.
+                let own = own.map(V3::unit).filter(|m| m.dot(*m) > 0.5 && [m.0, m.1, m.2].iter().all(|x| x.is_finite()));
+                out.normals.push(own.map_or([nx, ny, nz], up));
+                out.uvs.push(uv);
+            }
             out.triangles.push([base, base + 1, base + 2]);
+            out.parts.push(face.part);
             if track {
                 on.push(point(a).zip(point(b)).zip(point(c)).map(|((a, b), c)| [a, b, c]));
             }
@@ -497,3 +594,5 @@ fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize, keep_straight
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_attributes;

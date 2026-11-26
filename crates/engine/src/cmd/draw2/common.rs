@@ -236,22 +236,27 @@ impl PenRecord {
     }
 }
 
-/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`, with
-/// `sizeVariation` in points, 0..1000): the stroke's pen pressure along it and the variation, `None`
-/// for Fixed (the default), no variation or a stroke without pressure (a mouse), which keeps the
-/// size. A `sizeVariation` outside its range is an error with Fixed too.
-pub(super) fn size_pressure(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+/// Blob Brush and Eraser Tool Options' Size set to Pressure (`sizeMode: "pressure"`) or, for the
+/// Blob Brush, Stylus Wheel (`sizeMode: "stylusWheel"`), with `sizeVariation` in points, 0..1000:
+/// the stroke's pen pressure or airbrush finger wheel along it (0..1, the size less the variation
+/// at 0 and plus it at 1) and the variation. `None` for Fixed (the default), no variation or a
+/// stroke without that reading (a mouse, a pen without a wheel), which keeps the size. A
+/// `sizeVariation` outside its range is an error with Fixed too.
+pub(super) fn size_profile(p: &Value, samples: &[Sample], cmd: &str) -> Result<Option<(PressureProfile, f64)>> {
+    const MODES: &str = "\"fixed\", \"pressure\" or \"stylusWheel\"";
     let variation = ranged(p, "sizeVariation", 0.0, SIZE_VARIATIONS, cmd)?;
-    match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
-        None | Some(Ok("fixed")) => Ok(None),
-        Some(Ok("pressure")) => Ok(stroke_pressure(samples).filter(|_| variation > 0.0).map(|prof| (prof, variation))),
-        Some(Ok(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not `{other}`"))),
-        Some(Err(other)) => Err(bad(cmd, format!("sizeMode is \"fixed\" or \"pressure\", not {other}"))),
-    }
+    let read = match p.get("sizeMode").filter(|v| !v.is_null()).map(|v| v.as_str().ok_or(v)) {
+        None | Some(Ok("fixed")) => return Ok(None),
+        Some(Ok("pressure")) => stroke_pressure(samples),
+        Some(Ok("stylusWheel")) => stroke_wheel(samples),
+        Some(Ok(other)) => return Err(bad(cmd, format!("sizeMode is {MODES}, not `{other}`"))),
+        Some(Err(other)) => return Err(bad(cmd, format!("sizeMode is {MODES}, not {other}"))),
+    };
+    Ok(read.filter(|_| variation > 0.0).map(|prof| (prof, variation)))
 }
 
-/// The area a stroke along `spine` covers with Size set to Pressure: as wide at each point as
-/// [`vectorcraft_tools::draw2::pressure_size`] gives for the pressure `prof` records there, with
+/// The area a stroke along `spine` covers with Size set to Pressure or Stylus Wheel: as wide at
+/// each point as [`vectorcraft_tools::draw2::pressure_size`] gives for the reading `prof` records there, with
 /// round ends and joins, its overlaps united into one outline.
 pub(super) fn pressure_region(spine: &PathData, size: f64, variation: f64, prof: &PressureProfile) -> Result<PathData> {
     let widest = size + variation;
