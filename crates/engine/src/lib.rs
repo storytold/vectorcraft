@@ -347,6 +347,7 @@ pub struct Session {
     /// The file access scope of the request that queued [`Self::script_queue`], in which each queued
     /// run starts and is read.
     pub(crate) script_queue_scope: Option<file_access::ScopeHandle>,
+    pub(crate) script_queue_then: Option<script::Request>,
     /// While a startup script runs: the launch marker's entry naming it
     /// ([`vectorcraft_plugins::safe_mode::loading`]).
     pub(crate) startup_loading: Option<vectorcraft_plugins::safe_mode::Loading>,

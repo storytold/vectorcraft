@@ -187,6 +187,7 @@ pub(crate) fn refused_text(id: &str) -> String {
 }
 
 /// A request to run a script.
+#[derive(Clone)]
 pub(crate) struct Request {
     /// The run's name; unless `name_given`, a `#script` line in the script replaces it.
     pub name: String,
@@ -1951,6 +1952,7 @@ impl Session {
         let queued = !self.script_queue.is_empty();
         self.script_queue.clear();
         self.script_queue_scope = None;
+        self.script_queue_then = None;
         self.startup_ended();
         let Some(key) = self.script_key.take() else { return queued };
         let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {

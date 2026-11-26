@@ -3498,7 +3498,9 @@ The rest of this section is VectorCraft's own rules:
 
 `script.startup.run {reason: launch|menu, then?, maxFuel?}` runs the folder now. `then` holds `script.run`'s
 parameters for a script that runs after the startup scripts. A `then` that `script.run` would refuse, such as a
-missing file or one larger than 8 MiB, ends the request with `script.run`'s error before any startup script runs.
+missing file, one larger than 8 MiB, or source that fails to compile, ends the request with `script.run`'s error
+before any startup script runs. Compilation does not execute the chosen script. The chosen script runs the source
+read before startup scripts begin, including when a startup script removes the installed file.
 `maxFuel` limits each startup script's instructions
 (from 1 to 100,000,000,000, default 1,000,000,000). It returns `{reason, skipped: true, why}` with `why` set to `off`,
 `safeMode` or `noFolder` when nothing runs, and otherwise `{reason, skipped: false, ran, failed: [{name, error}],

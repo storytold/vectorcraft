@@ -294,6 +294,56 @@ fn a_chosen_script_that_cannot_start_is_refused_before_any_startup_script_runs()
 }
 
 #[test]
+fn a_chosen_script_with_invalid_syntax_is_refused_before_startup_scripts_run() {
+    let _f = fresh();
+    let dir = tmp_dir("invalid-chosen-syntax");
+    write(&dir, "a.jsx", "vc.log('startup ran');");
+    for frames in [false, true] {
+        let mut s = session(&dir);
+        s.script_frames = frames;
+        let result = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "var = ;"}}));
+        assert!(result.is_err(), "frames={frames}: {result:?}");
+        assert!(!s.script_running());
+        assert!(started(&s).is_empty(), "no startup script ran, frames={frames}");
+        assert!(s.take_startup_failures().is_empty());
+    }
+}
+
+#[test]
+fn an_installed_chosen_script_runs_the_text_read_before_startup_scripts() {
+    let _f = fresh();
+    for frames in [false, true] {
+        let dir = tmp_dir(if frames { "chosen-snapshot-sliced" } else { "chosen-snapshot-sync" });
+        let data = dir.join("data");
+        let startup = dir.join("startup");
+        let entry = write(&startup, "a.jsx", "");
+        let real = std::fs::canonicalize(&entry).unwrap();
+        let key = vectorcraft_plugins::permissions::sha256_hex(real.to_string_lossy().as_bytes());
+        let installed = data.join(&key[..16]);
+        let chosen = write(&installed, "chosen.jsx", "vc.log('chosen');");
+        let quoted = serde_json::to_string(&chosen.to_string_lossy()).unwrap();
+        write(&startup, "a.jsx", &format!("Folder.userData; if (!new File({quoted}).remove()) throw 'remove failed';"));
+        let mut s = session(&startup);
+        s.attach_script_data(data);
+        s.attach_scripts_dir(installed);
+        s.script_frames = frames;
+        s.execute("script.startup.run", &json!({"reason": "menu", "then": {"path": chosen, "installed": true}})).unwrap();
+        for _ in 0..10_000 {
+            if !s.script_running() {
+                break;
+            }
+            if let Some(result) = s.script_pump() {
+                result.unwrap();
+            }
+        }
+        assert!(!s.script_running());
+        assert!(s.take_startup_failures().is_empty());
+        assert_eq!(started(&s), ["a.jsx", "chosen.jsx"]);
+        assert!(!chosen.exists());
+    }
+}
+
+#[test]
 fn in_the_app_a_stopped_startup_script_keeps_its_report_until_the_next_pump_starts_the_queued_run() {
     let _f = fresh();
     let dir = tmp_dir("app-stop");
