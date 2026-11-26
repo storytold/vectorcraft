@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, SRGB};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
@@ -374,11 +374,12 @@ fn converting_to_rgb_turns_cmyk_into_rg() {
 fn an_unknown_destination_is_refused() {
     let d = doc(ColorMode::Rgb, &[Color::BLACK]);
     let set: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": "No Such Press"}})).unwrap();
-    assert!(matches!(set.check(), Err(PdfError::BadSetting(m)) if m.contains("No Such Press")));
+    let profiles = ActiveProfiles::default();
+    assert!(matches!(set.check(&profiles), Err(e) if e.message.contains("No Such Press")));
     assert!(export(&d, &PdfOptions { settings: set, ..Default::default() }).is_err());
     // Not converting, the destination doesn't matter.
     let set: PdfSettings = serde_json::from_value(json!({"output": {"destination": "No Such Press"}})).unwrap();
-    assert_eq!(set.check(), Ok(()));
+    assert!(set.check(&profiles).is_ok());
 }
 
 #[test]
@@ -525,7 +526,7 @@ fn the_output_intent_embeds_its_profile_and_trapped_is_written() {
         assert!(r.warnings.is_empty(), "{:?}", r.warnings);
         output_intent(&r.bytes, password, |oi| {
             assert_eq!(oi.get::<Name<'_>>(b"S").unwrap().as_ref(), b"GTS_PDFX");
-            let text = |k: &[u8]| oi.get::<craft_pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
+            let text = |k: &[u8]| oi.get::<craft::pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
             assert_eq!(text(b"OutputCondition").unwrap(), b"Coated (press)");
             assert_eq!(text(b"RegistryName").unwrap(), b"http://example.com");
             // Non-ASCII text is UTF-16 with its byte order mark.

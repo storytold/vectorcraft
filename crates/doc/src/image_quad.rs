@@ -238,6 +238,19 @@ impl Node {
         Some(bp)
     }
 
+    /// The two lines from corner to corner of this image's frame, which cross a linked image in
+    /// Outline mode without Document Setup → Show Images in Outline Mode. `None` for anything that
+    /// is not an image.
+    pub fn image_cross(&self) -> Option<BezPath> {
+        let q = self.image_corners()?;
+        let mut bp = BezPath::new();
+        bp.move_to(q[0]);
+        bp.line_to(q[2]);
+        bp.move_to(q[1]);
+        bp.line_to(q[3]);
+        Some(bp)
+    }
+
     /// The map from this image's pixel space to the page: projective for a distorted image, its
     /// transform otherwise. `None` for anything that is not an image.
     pub fn image_map(&self) -> Option<Homography> {

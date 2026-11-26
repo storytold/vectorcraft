@@ -109,7 +109,9 @@ impl Interrupt {
     }
 }
 
-/// A value passed between a script and the host. An object is given by its class name.
+/// A value passed between a script and the host. An object is given by its class name, and a
+/// Symbol by its description; a Symbol the host passes in is a new Symbol each time, and one a
+/// host function returns in a realm without [`Options::es2015`] throws a `TypeError`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsValue {
     Undefined,
@@ -118,6 +120,7 @@ pub enum JsValue {
     Number(f64),
     String(String),
     Object(String),
+    Symbol(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -215,6 +218,19 @@ impl Realm {
         self.interp.reset_gc_threshold();
     }
 
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.set_es2015(es2015);
+        }
+    }
+
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
     pub fn interrupt(&self) -> Interrupt {
         Interrupt(self.interp.interrupt.clone())
@@ -263,6 +279,23 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.error_mark = None;
+        // The first run with ECMAScript 2015 names the built-in functions; a run whose heap has no
+        // room for the names ends with the heap limit, and the next run tries again.
+        if interp.options.es2015
+            && let Err(e) = crate::builtins::es2015_names(interp)
+        {
+            return match self.outcome(Err(e)) {
+                Err(e) => Err(e),
+                Ok(_) => Err(RunError {
+                    kind: RunErrorKind::Internal,
+                    message: "the built-in function names could not be set".into(),
+                    line: 0,
+                    column: 0,
+                    authored: false,
+                }),
+            };
+        }
+        let interp = &mut self.interp;
         let strict = interp.options.strict;
         interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;
@@ -297,6 +330,9 @@ impl Realm {
         interp.constructing = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
@@ -436,6 +472,12 @@ impl Realm {
         self.interp.locator = Some(locate);
     }
 
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
@@ -522,6 +564,16 @@ impl Realm {
         }
     }
 
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
     /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
     /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught
@@ -542,6 +594,18 @@ impl Realm {
     /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

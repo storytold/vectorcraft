@@ -257,7 +257,7 @@ All 57 approximated Photoshop-style raster filters are available. The Effect Gal
 **What's missing:**
 - reliable exchange of .ai files (layer structure in real files; the editing copy a save writes keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), leaves out other objects' effects other than geometry effects, and writes live objects as their art);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
-- 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
+- the rest of 3D and Materials (base and Adobe Substance materials, shadows from lights after the first, ray-traced rendering, Turntable; see [docs/three-d.md](docs/three-d.md));
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.
@@ -287,7 +287,9 @@ signed and published. Every bundled asset is listed with its licence in [`ASSETS
 |---|---|---|
 | x64 (64-bit Intel/AMD) | `vectorcraft-<ver>-windows-x64.msi` | `vectorcraft-<ver>-windows-x64-portable.zip` |
 | arm64 (Snapdragon and other ARM PCs) | `vectorcraft-<ver>-windows-arm64.msi` | `vectorcraft-<ver>-windows-arm64-portable.zip` |
-| x86 (32-bit) | `vectorcraft-<ver>-windows-x86.msi` | `vectorcraft-<ver>-windows-x86-portable.zip` |
+
+For 32-bit Windows, [VectorCraft v0.22.0](https://github.com/storytold/vectorcraft/releases/tag/v0.22.0)
+was the last release with both an x86 MSI and portable ZIP.
 
 Installers and executables are code-signed.
 
@@ -306,13 +308,18 @@ Installers and executables are code-signed.
 | Flatpak | `vectorcraft-<ver>-linux-x86_64.flatpak` | `vectorcraft-<ver>-linux-aarch64.flatpak` | Sandboxed; `flatpak install --user <file>` |
 | Debian/Ubuntu | `vectorcraft-<ver>-linux-x86_64.deb` | `vectorcraft-<ver>-linux-aarch64.deb` | |
 | Fedora/RHEL/openSUSE | `vectorcraft-<ver>-linux-x86_64.rpm` | `vectorcraft-<ver>-linux-aarch64.rpm` | |
+| Arch Linux | `vectorcraft-<ver>-linux-x86_64.pkg.tar.zst` | `vectorcraft-<ver>-linux-aarch64.pkg.tar.zst` | |
 | Tarball | `vectorcraft-<ver>-linux-x86_64.tar.gz` | `vectorcraft-<ver>-linux-aarch64.tar.gz` | Unpack anywhere |
+
+RISC-V (riscv64) packages are `vectorcraft-<ver>-linux-riscv64.deb`,
+`vectorcraft-<ver>-linux-riscv64.rpm`, and `vectorcraft-<ver>-linux-riscv64.tar.gz`.
 
 ### FreeBSD
 
 | Build | File |
 |---|---|
 | x86_64 | `vectorcraft-<ver>-freebsd-x86_64.tar.gz` |
+| aarch64 (ARM64) | `vectorcraft-<ver>-freebsd-aarch64.tar.gz` |
 
 ### Web (WebAssembly)
 

@@ -24,7 +24,7 @@
 //! true value for; every entry takes fuel.
 
 use crate::HostItem;
-use crate::builtins::{arg, constructor, data, method, native, pausable_method, put_at};
+use crate::builtins::{accessor_native, arg, constructor, data, method, native, pausable_method, put_at};
 use crate::heap::{CONFIGURABLE, Class, HIDDEN, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
 use crate::value::{Value, index_key};
@@ -312,6 +312,12 @@ fn name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
 
 fn display_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     parsed(i, &this, "displayName", "display")
+}
+
+/// `localizedName`: the same decoded name as `displayName`; VectorCraft does not look up a name the
+/// system shows in another language.
+fn localized_name(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    parsed(i, &this, "localizedName", "display")
 }
 
 fn path(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -1011,10 +1017,10 @@ places!(
 
 /// Defines the accessor `name` on `on`, not enumerable, as the help pages' objects have them.
 fn accessor(i: &mut Interp, on: ObjId, name: &'static str, get: NativeFn, set: Option<NativeFn>) -> JsResult<()> {
-    let g = native(i, name, get, 0, NativeKind::Plain, false)?;
+    let g = accessor_native(i, "get ", name, get, 0)?;
     i.rooted(&[Value::Object(g)], |i| {
         let s = match set {
-            Some(f) => Some(native(i, name, f, 1, NativeKind::Plain, false)?),
+            Some(f) => Some(accessor_native(i, "set ", name, f, 1)?),
             None => None,
         };
         i.define(on, key(name), Prop::Accessor { get: Some(g), set: s, flags: CONFIGURABLE })
@@ -1029,6 +1035,7 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     accessor(i, proto, "relativeURI", relative_uri, None)?;
     accessor(i, proto, "name", name, None)?;
     accessor(i, proto, "displayName", display_name, None)?;
+    accessor(i, proto, "localizedName", localized_name, None)?;
     accessor(i, proto, "path", path, None)?;
     accessor(i, proto, "parent", parent, None)?;
     accessor(i, proto, "exists", exists, None)?;

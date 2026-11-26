@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Script File Permissions",
             [],
             None,
-            "{} the file access people allowed scripts with Always in a file dialog, kept in Script Grants.json next to the settings: each for one script file with one text and the files it includes (their SHA-256), so a changed or moved script, or a changed included file, has none, and with the SHA-256 of each source the run that kept it evaluated (files $.evalFile ran, strings given to eval and Function; at most 256), so a run loses it before it evaluates other code, or when its named engine holds code the grant was not kept for; at most 4096 → {grants: [{script: the script file's path, sha256, code: [SHA-256 of each evaluated source, of its UTF-16 code units in little-endian order], path: the file or folder allowed, write: it may be written, folder: the grant is a folder's, with everything in it (a file's grant is its own path only)}], file: the grants file's path | null (a session without a settings folder, and the web)}",
+            "{} the file access people allowed scripts with Always in a file dialog, kept in Script Grants.json next to the settings: each for one script file with one text and the files it includes (their SHA-256), so a changed or moved script, or a changed included file, has none, and with the SHA-256 of each source the run that kept it evaluated (files $.evalFile ran, strings given to eval and Function; at most 256), so a run loses it before it evaluates other code, or when its named engine holds code the grant was not kept for; at most 4096 → {grants: [{script: the script file's path, sha256, code: [SHA-256 of each evaluated source, of its UTF-16 code units in little-endian order], path: the file or folder allowed, write: it may be written, folder: the grant is a folder's, with everything in it (a file's grant is its own path only)}], file: the grants file's path | null (a session without a settings folder, and the web)}; a missing grants file lists none, and one that is there but cannot be read, is too large, is not a grants file of this version or holds no list of grants, or whose lock cannot be taken, is an error (a grant in it that is not well formed is left out)",
             always,
             grants
         ),
@@ -371,7 +371,8 @@ fn grants(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(dir) = s.script_data_dir() else { return Ok(json!({"grants": [], "file": null})) };
     let file = dir.with_file_name(script::files::GRANTS_FILE);
     // A script or a granted path outside the automation read roots is named by its file name alone.
-    let mut grants = script::files::stored_grants(dir);
+    let mut grants =
+        script::files::stored_grants(dir).map_err(|e| EngineError::Other(format!("the script file permissions could not be read: {e}")))?;
     for g in &mut grants {
         for key in ["script", "path"] {
             if let Some(name) = g[key].as_str().and_then(hidden_name) {

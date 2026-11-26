@@ -14,12 +14,12 @@
 //! query every frame does not push out the commands before it.
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use vectorcraft_engine::cmd::clipboard::Flavour;
-
-use crate::sysclip::{ClipboardRead, SystemClipboard};
+// PLAN: crates/ui-egui/Cargo.toml needs craft-platform with its `clipboard` feature (hub-w1).
+use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
 
 /// How many different command ids [`Beacon::recent_commands`] keeps.
 pub const RECENT_COMMANDS: usize = 8;
@@ -371,40 +371,48 @@ impl Drop for ActivityGuard<'_> {
     }
 }
 
-/// A [`SystemClipboard`] whose calls are marked on [`BEACON`] as clipboard activity. The desktop
+/// A [`ClipboardBackend`] whose calls are marked on [`BEACON`] as clipboard activity. The desktop
 /// app wraps the clipboard the interface thread uses; the background probe's own clipboard stays
 /// unmarked.
-pub struct Marked(pub Box<dyn SystemClipboard>);
+pub struct Marked(pub Box<dyn ClipboardBackend>);
 
-impl SystemClipboard for Marked {
-    fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+impl ClipboardBackend for Marked {
+    fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
         let _mark = BEACON.activity(Activity::ClipboardWrite);
-        self.0.write(flavours)
+        self.0.write(flavors)
     }
 
-    fn holds_ours(&mut self) -> bool {
+    fn read(&mut self, mimes: &[&str], limit: u64) -> Result<Option<Flavor>, ClipboardError> {
         let _mark = BEACON.activity(Activity::ClipboardRead);
-        self.0.holds_ours()
+        self.0.read(mimes, limit)
     }
 
-    fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
+    fn read_image(&mut self, limit: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
         let _mark = BEACON.activity(Activity::ClipboardRead);
-        self.0.read(mimes)
+        self.0.read_image(limit)
     }
 
-    fn has(&mut self, mimes: &[&'static str]) -> bool {
+    fn read_files(&mut self, limit: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+        let _mark = BEACON.activity(Activity::ClipboardRead);
+        self.0.read_files(limit)
+    }
+
+    fn has(&mut self, mimes: &[&str]) -> bool {
         let _mark = BEACON.activity(Activity::ClipboardRead);
         self.0.has(mimes)
     }
 
-    fn read_deferred(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
+    fn read_later(&mut self, mimes: &[&str], limit: u64) -> Result<Option<Box<dyn FnOnce() -> Option<Flavor> + Send>>, ClipboardError> {
         let _mark = BEACON.activity(Activity::ClipboardRead);
-        self.0.read_deferred(mimes)
+        self.0.read_later(mimes, limit)
     }
 
-    fn change_count(&mut self) -> Option<u64> {
-        let _mark = BEACON.activity(Activity::ClipboardRead);
-        self.0.change_count()
+    fn readable_any_time(&self) -> bool {
+        self.0.readable_any_time()
+    }
+
+    fn offer(&mut self, flavors: Vec<Flavor>) {
+        self.0.offer(flavors);
     }
 }
 
@@ -525,7 +533,7 @@ mod tests {
             let input = egui::RawInput { viewport_id: id, viewports, events: events.take(), ..Default::default() };
             ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)).textures_delta.clear();
         });
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_embed_viewports(false);
         watch_input(&B, &ctx);
         let child = egui::ViewportId::from_hash_of("floating panel");
@@ -569,7 +577,7 @@ mod tests {
             let input = egui::RawInput { viewport_id: id, viewports, ..Default::default() };
             ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)).textures_delta.clear();
         });
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_embed_viewports(false);
         watch_input(&B, &ctx);
         let child = egui::ViewportId::from_hash_of("floating panel");
@@ -622,32 +630,52 @@ mod tests {
                 self.0.lock().unwrap().push(BEACON.sample().activity);
             }
         }
-        impl SystemClipboard for Probe {
-            fn write(&mut self, _: &[Flavour]) -> Result<(), String> {
+        impl ClipboardBackend for Probe {
+            fn write(&mut self, _: &[Flavor]) -> Result<usize, ClipboardError> {
                 self.see();
-                Ok(())
+                Ok(0)
             }
-            fn holds_ours(&mut self) -> bool {
+            fn read(&mut self, _: &[&str], _: u64) -> Result<Option<Flavor>, ClipboardError> {
+                self.see();
+                Ok(None)
+            }
+            fn read_image(&mut self, _: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+                self.see();
+                Ok(None)
+            }
+            fn read_files(&mut self, _: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+                self.see();
+                Ok(None)
+            }
+            fn has(&mut self, _: &[&str]) -> bool {
                 self.see();
                 false
             }
-            fn read(&mut self, _: &[&'static str]) -> Option<Flavour> {
+            fn read_later(&mut self, _: &[&str], _: u64) -> Result<Option<Box<dyn FnOnce() -> Option<Flavor> + Send>>, ClipboardError> {
                 self.see();
-                None
-            }
-            fn has(&mut self, _: &[&'static str]) -> bool {
-                self.see();
-                false
+                Ok(None)
             }
         }
         let seen = Seen::default();
         let mut m = Marked(Box::new(Probe(seen.clone())));
         let _ = m.write(&[]);
-        let _ = m.read(&[]);
+        let _ = m.read(&[], 0);
+        let _ = m.read_image(0);
+        let _ = m.read_files(0);
         let _ = m.has(&[]);
-        let _ = m.holds_ours();
+        let _ = m.read_later(&[], 0);
         assert_eq!(BEACON.sample().activity, Activity::None);
-        assert_eq!(*seen.lock().unwrap(), vec![Activity::ClipboardWrite, Activity::ClipboardRead, Activity::ClipboardRead, Activity::ClipboardRead]);
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![
+                Activity::ClipboardWrite,
+                Activity::ClipboardRead,
+                Activity::ClipboardRead,
+                Activity::ClipboardRead,
+                Activity::ClipboardRead,
+                Activity::ClipboardRead
+            ]
+        );
     }
 
     #[test]

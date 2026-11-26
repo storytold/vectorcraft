@@ -237,6 +237,68 @@ fn pf_outline_dedups_shared_edges() {
     assert!(close(len, 70.0, 1e-9), "len {len}");
 }
 
+/// Outline follows Precision: two bars whose left edges cross a square's top edge 0.00005 pt apart
+/// leave a piece of that length between the crossings at the default precision, and none at 10 pt,
+/// where the two crossings are one junction.
+#[test]
+fn pf_outline_joins_junctions_closer_than_the_precision() {
+    let s = vec![shape(rect(0.0, 0.0, 100.0, 100.0), 1), shape(rect(50.0, 90.0, 10.0, 20.0), 2), shape(rect(50.00005, 95.0, 4.99995, 10.0), 3)];
+    let shortest = |r: &[Shape]| r.iter().map(|s| s.path.length()).fold(f64::INFINITY, f64::min);
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let at_default = pathfinder_with(PathfinderOp::Outline, &s, DEFAULT_PRECISION);
+    assert_eq!(at_default, pathfinder(PathfinderOp::Outline, &s));
+    assert!(shortest(&at_default) < 1e-4, "{at_default:?}");
+    let coarse = pathfinder_with(PathfinderOp::Outline, &s, 10.0);
+    assert!(shortest(&coarse) > 1e-3, "{coarse:?}");
+    assert!(coarse.len() < at_default.len(), "{} pieces at 10 pt, {} at the default", coarse.len(), at_default.len());
+    assert!(close(length(&coarse), length(&at_default), 1e-6), "{} against {}", length(&coarse), length(&at_default));
+}
+
+/// Outline at a tenth of the size and a tenth of the precision gives the same pieces at a tenth of
+/// the length: crossings 0.05 pt apart on a 1,000 pt square at 10 pt, and 0.005 pt apart on a 100 pt
+/// square at 1 pt, stay two junctions in both.
+#[test]
+fn pf_outline_scales_with_the_art_and_the_precision_together() {
+    let art = |k: f64| {
+        vec![
+            shape(rect(0.0, 0.0, 1000.0 * k, 1000.0 * k), 1),
+            shape(rect(500.0 * k, 900.0 * k, 100.0 * k, 200.0 * k), 2),
+            shape(rect(500.05 * k, 950.0 * k, 49.95 * k, 100.0 * k), 3),
+        ]
+    };
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let large = pathfinder_with(PathfinderOp::Outline, &art(1.0), 10.0);
+    let small = pathfinder_with(PathfinderOp::Outline, &art(0.1), 1.0);
+    assert_eq!(large.len(), small.len(), "{large:?}\n{small:?}");
+    assert!(close(length(&large) / 10.0, length(&small), 1e-6), "{} against {}", length(&large), length(&small));
+    let pieces = |r: &[Shape], k: f64| {
+        let mut l: Vec<f64> = r.iter().map(|s| s.path.length() / k).collect();
+        l.sort_by(f64::total_cmp);
+        l
+    };
+    let (a, b) = (pieces(&large, 1.0), pieces(&small, 0.1));
+    assert!(a.iter().zip(&b).all(|(x, y)| close(*x, *y, 1e-6)), "{a:?} against {b:?}");
+}
+
+/// Two boundaries that are close only at their start, end and middle stay two edges at 10 pt: an
+/// ellipse 0.005 pt inside a circle at its rightmost and leftmost points, and 30 pt inside it at
+/// the top and bottom. Two copies of one boundary are still one edge at that precision.
+#[test]
+fn pf_outline_keeps_boundaries_that_differ_between_their_ends_at_coarse_precision() {
+    let ellipse = |rx: f64, ry: f64| PathData::from_bezpath(&kurbo::Ellipse::new((100.0, 100.0), (rx, ry), 0.0).to_path(1e-4));
+    let s = vec![shape(ellipse(50.0, 50.0), 1), shape(ellipse(49.995, 20.0), 2)];
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let expected = s[0].path.length() + s[1].path.length();
+    for precision in [DEFAULT_PRECISION, 10.0] {
+        let r = pathfinder_with(PathfinderOp::Outline, &s, precision);
+        assert_eq!(r.len(), 2, "{precision} pt: {r:?}");
+        assert!(close(length(&r), expected, 1e-6), "{precision} pt: {} against {expected}", length(&r));
+    }
+    let copies = vec![shape(ellipse(50.0, 50.0), 1), shape(ellipse(50.0, 50.0), 2)];
+    let r = pathfinder_with(PathfinderOp::Outline, &copies, 10.0);
+    assert!(close(length(&r), copies[0].path.length(), 1e-6), "{r:?}");
+}
+
 #[test]
 fn regions_and_region_at() {
     let s = stack();
@@ -740,6 +802,74 @@ fn smooth_level_0_keeps_a_closed_paths_start_corner_within_tolerance() {
     let s = smooth_level(&p, 0.0);
     let moved = one_way_distance(&p, &s).max(one_way_distance(&s, &p));
     assert!(moved <= limit, "level 0 moved the path by {moved} pt, more than {limit} pt: {:?}", s.subpaths[0].anchors[0]);
+}
+
+/// Twice the area `sp` encloses, from 16 points along each segment: positive when it runs
+/// counterclockwise in y-up terms.
+fn signed_area(sp: &SubPath) -> f64 {
+    let pts: Vec<Point> = (0..sp.segment_count()).flat_map(|i| (0..16).map(move |k| sp.segment(i).eval(f64::from(k) / 16.0))).collect();
+    (0..pts.len()).map(|i| pts[i].to_vec2().cross(pts[(i + 1) % pts.len()].to_vec2())).sum()
+}
+
+/// A D of 41 corner points round (0, 0): the arc of radius 100 from (100, 0) up to (0, 100), the
+/// straight side down to (0, -100), and the arc back. It starts in the middle of its arc, and its
+/// first corner is at the top.
+fn d_shape() -> SubPath {
+    let at = |deg: f64| Point::new(100.0 * deg.to_radians().cos(), 100.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20).map(|i| at(4.5 * f64::from(i))).chain((0..20).map(|i| at(-90.0 + 4.5 * f64::from(i)))).collect();
+    SubPath::polyline(&pts, true)
+}
+
+/// Object › Path › Simplify starts a closed path where it started, though the refit runs from the
+/// first corner: on the D, the refit starts within the tolerance of the old start, runs the same way
+/// round, and has fewer anchors.
+#[test]
+fn simplify_keeps_a_closed_paths_start() {
+    let sp = d_shape();
+    let path = PathData::single(sp.clone());
+    let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 1.0 + 1e-9, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+    assert!(one_way_distance(&path, &s).max(one_way_distance(&s, &path)) <= 1.0 + 1e-6);
+}
+
+/// Object › Path › Smooth starts a closed path near where it started, though the refit runs from the
+/// point where the path turns back: a round loop of radius 50 with a needle out to (250, 0), which
+/// starts on the far side of the loop at (-50, 0).
+#[test]
+fn smooth_keeps_a_closed_paths_start() {
+    let at = |deg: f64| Point::new(50.0 * deg.to_radians().cos(), 50.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20)
+        .map(|i| at(180.0 + 8.95 * f64::from(i)))
+        .chain([Point::new(250.0, 0.0)])
+        .chain((0..20).map(|i| at(1.0 + 8.95 * f64::from(i))))
+        .collect();
+    let sp = SubPath::polyline(&pts, true);
+    let path = PathData::single(sp.clone());
+    let s = smooth_level(&path, SMOOTH_AUTO_LEVEL);
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 5.0, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+}
+
+/// A refit with only one anchor fewer than the closed path gets no anchor split in to keep its
+/// start: it starts at its anchor nearest the old start. A rectangle with a straight point at
+/// (30, 0) simplifies to its four corners, starting at (0, 0).
+#[test]
+fn simplify_starts_at_the_nearest_anchor_rather_than_add_one_back() {
+    let pts = [(30.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0), (0.0, 0.0)].map(|(x, y)| Point::new(x, y));
+    let path = PathData::single(SubPath::polyline(&pts, true));
+    let want = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)].map(|(x, y)| Point::new(x, y));
+    for straight_lines in [false, true] {
+        let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, straight_lines, ..Default::default() });
+        let got: Vec<Point> = s.subpaths[0].anchors.iter().map(|a| a.p).collect();
+        assert_eq!(got, want, "straight_lines {straight_lines}");
+    }
 }
 
 #[test]
