@@ -690,7 +690,10 @@ fn blob_brush_alt_switches_to_the_smooth_tool() {
     let acts = drag_held(&mut t, &cx, &stroke, alt);
     assert!(acts[..acts.len() - 1].iter().all(|a| a.is_empty()), "{acts:?}");
     let v = smoothed(&acts).unwrap_or_else(|| panic!("{acts:?}"));
-    assert_eq!(v, json!({"points": [[50.0, 150.0], [150.0, 150.0], [250.0, 160.0]], "radius": cx.tol(12.0), "fidelity": cx.tol(SMOOTH_FIDELITY)}));
+    assert_eq!(
+        v,
+        json!({"points": [[50.0, 150.0], [150.0, 150.0], [250.0, 160.0]], "radius": cx.tol(12.0), "fidelity": cx.tol(SMOOTH_FIDELITY), "smoothness": SMOOTH_SMOOTHNESS})
+    );
     // Mid-drag the cursor stays the Smooth tool's when Alt is let go, and the line is thin with
     // no length label.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
@@ -1780,6 +1783,50 @@ fn alt_smoothing_uses_the_smooth_tools_fidelity() {
         // Drawing keeps the tool's own Fidelity; Smooth's setting stays out of its options.
         assert_eq!(t.options()["fidelity"], json!(10.0), "{id}");
         assert!(t.options().get("smoothFidelity").is_none(), "{id}");
+    }
+}
+
+/// The Smooth tool sends Smooth Tool Options' Smoothness (50% until it is set) with each drag, and
+/// an Alt smoothing drag with the Pencil, Paintbrush or Blob Brush sends the one the engine gives it
+/// (`smoothSmoothness`). A value that is not a number from 0 to 100 is refused and sets nothing.
+#[test]
+fn smooth_drags_send_the_smoothness() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let pts = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let smoothness = |acts: &[Vec<Action>]| match acts.last().and_then(|a| a.first()) {
+        Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["smoothness"].as_f64(),
+        a => panic!("expected path.smoothRegion, got: {a:?}"),
+    };
+    let mut t = GestureTool::new("smooth");
+    assert_eq!(t.options()["smoothness"], json!(50.0));
+    assert_eq!(smoothness(&drag(&mut t, &cx, &pts, Mods::default())), Some(50.0));
+    for bad in [json!(-1), json!(100.5), json!("30"), json!(true)] {
+        assert_eq!(t.check_option("smoothness", &bad), Err("`smoothness` must be a number from 0 to 100".into()), "{bad}");
+        t.set_option("smoothness", &bad);
+        assert_eq!(t.options()["smoothness"], json!(50.0), "{bad}");
+    }
+    for ok in [0.0, 75.0, 100.0] {
+        assert_eq!(t.check_option("smoothness", &json!(ok)), Ok(()));
+        t.set_option("smoothness", &json!(ok));
+        assert_eq!(smoothness(&drag(&mut t, &cx, &pts, Mods::default())), Some(ok));
+    }
+    let alt = Mods { alt: true, ..Default::default() };
+    for (id, alt_smooth) in [("pencil", true), ("blobBrush", false), ("paintbrush", false)] {
+        let mut t = GestureTool::new(id);
+        t.set_option("altSmooth", &json!(alt_smooth));
+        assert_eq!(smoothness(&drag_held(&mut t, &cx, &pts, alt)), Some(50.0), "{id}");
+        assert_eq!(t.check_option("smoothSmoothness", &json!(101)), Err("`smoothSmoothness` must be a number from 0 to 100".into()), "{id}");
+        t.set_option("smoothSmoothness", &json!(101));
+        t.set_option("smoothness", &json!(20.0));
+        assert_eq!(smoothness(&drag_held(&mut t, &cx, &pts, alt)), Some(50.0), "{id}: only smoothSmoothness sets it");
+        t.set_option("smoothSmoothness", &json!(20.0));
+        assert_eq!(smoothness(&drag_held(&mut t, &cx, &pts, alt)), Some(20.0), "{id}");
+        assert!(t.options().get("smoothness").is_none() && t.options().get("smoothSmoothness").is_none(), "{id}");
     }
 }
 

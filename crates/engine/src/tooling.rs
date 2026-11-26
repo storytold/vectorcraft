@@ -524,12 +524,17 @@ impl Session {
                 }
             }
         }
-        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity
+        // and Smoothness.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
             && wanted("smooth")
-            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+            && let Some(saved) = prefs.tool_settings.get("smooth")
         {
-            t.set_option("smoothFidelity", v);
+            for (key, alt) in [("fidelity", "smoothFidelity"), ("smoothness", "smoothSmoothness")] {
+                if let Some(v) = saved.get(key) {
+                    t.set_option(alt, v);
+                }
+            }
         }
     }
 

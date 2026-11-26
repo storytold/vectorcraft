@@ -4,7 +4,7 @@
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
 //! Fields: `tool`; `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, points for the
-//! Blob Brush), `fill` (Pencil and
+//! Blob Brush), `smoothness` (percent, 0 to 100; Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
@@ -45,8 +45,9 @@ pub const KIND: &str = "freehandOptions";
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 18] = [
+const KEYS: [&str; 19] = [
     "fidelity",
+    "smoothness",
     "angle",
     "angleMode",
     "angleVariation",
@@ -225,6 +226,12 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
                 tl!("A lower value follows the stroke closely; a higher one gives fewer points and smoother curves."),
             )
             .full_width(),
+        );
+    }
+    if has("smoothness") {
+        // The Smooth tool's Smoothness: a slider from 0% to 100% with the field at its end, in whole percent.
+        rows.push(
+            Param::new("smoothness", tl!("Smoothness:"), ParamKind::range(0.0, 100.0, 50.0, SliderScale::Linear)).decimals(0).unit(UnitKind::Percent),
         );
     }
     if eraser {

@@ -1802,6 +1802,64 @@ fn smooth_region_refits_at_the_tolerance_sent_at_any_zoom() {
     }
 }
 
+/// A line from (100, 200) to (400, 200) jagged by up to 6 pt either way, the same every time.
+fn jagged_line_anchors() -> Vec<serde_json::Value> {
+    let mut seed = 7u64;
+    (0..=60)
+        .map(|i| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0;
+            json!({"x": 100.0 + f64::from(i) * 5.0, "y": 200.0 + 6.0 * noise})
+        })
+        .collect()
+}
+
+/// The path a `path.smoothRegion` drag along [`jagged_line_anchors`] leaves with `smoothness` (left
+/// out for null), and the mean distance of its points from the line y = 200.
+fn smoothed_jagged_line(smoothness: serde_json::Value) -> (PathData, f64) {
+    let mut s = session();
+    let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+    let drag: Vec<_> = (0..=64).map(|i| json!([90.0 + f64::from(i) * 5.0, 200.0])).collect();
+    s.execute("path.smoothRegion", &json!({"points": drag, "radius": 12, "fidelity": 2.5, "smoothness": smoothness})).unwrap();
+    let p = path(&s, id);
+    let samples = smooth_test_samples(&p);
+    let off = samples.iter().map(|q| (q.y - 200.0).abs()).sum::<f64>() / samples.len() as f64;
+    (p, off)
+}
+
+/// Smooth Tool Options' Smoothness: the higher it is, the smoother the path a drag leaves, from
+/// 0% to 100%. Left out, a drag smooths at 50%.
+#[test]
+fn a_higher_smoothness_leaves_a_smoother_path() {
+    let original = {
+        let mut s = session();
+        let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+        let samples = smooth_test_samples(&path(&s, id));
+        samples.iter().map(|q| (q.y - 200.0).abs()).sum::<f64>() / samples.len() as f64
+    };
+    let offs: Vec<f64> = [0.0, 25.0, 50.0, 75.0, 100.0].iter().map(|&x| smoothed_jagged_line(json!(x)).1).collect();
+    assert!(offs[0] < original, "even 0% refits within Fidelity: {offs:?}, {original} before");
+    assert!(offs.windows(2).all(|w| w[1] < w[0]), "each step up smooths more: {offs:?}");
+    assert_eq!(smoothed_jagged_line(json!(null)).0, smoothed_jagged_line(json!(50)).0, "left out is 50%");
+}
+
+/// `path.smoothRegion` refuses a Smoothness outside 0% to 100% and changes nothing.
+#[test]
+fn smooth_region_refuses_a_smoothness_outside_0_to_100() {
+    let mut s = session();
+    let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+    let drag = json!({"points": [[90, 200], [250, 200], [410, 200]], "radius": 12, "fidelity": 2.5});
+    for x in [json!(-1), json!(-0.001), json!(100.5), json!(101), json!(1e300)] {
+        refuses_with(&mut s, "path.smoothRegion", &with(&drag, json!({"smoothness": x})), "`smoothness` must be from 0 to 100");
+    }
+    for x in [json!(0), json!(100)] {
+        let before = path(&s, id);
+        s.execute("path.smoothRegion", &with(&drag, json!({"smoothness": x}))).unwrap_or_else(|e| panic!("smoothness {x}: {e}"));
+        assert_ne!(path(&s, id), before, "smoothness {x} smoothed nothing");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
 /// A drag of the Smooth tool along a line jagged by up to 6 pt leaves no corner between a curve and
 /// a line: every anchor between the path's ends turns by at most 1°.
 #[test]
@@ -3484,7 +3542,7 @@ fn smooth_and_join_refuse_a_reach_or_fidelity_outside_its_range() {
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
-/// width, radius, fidelity or tolerance given as text or as another value that is not a number, and change
+/// width, radius, fidelity, smoothness or tolerance given as text or as another value that is not a number, and change
 /// nothing; null is read as the key left out.
 #[test]
 fn drawing_commands_refuse_a_size_given_as_text() {
@@ -3499,6 +3557,7 @@ fn drawing_commands_refuse_a_size_given_as_text() {
         ("path.eraseSegments", "width"),
         ("path.smoothRegion", "radius"),
         ("path.smoothRegion", "fidelity"),
+        ("path.smoothRegion", "smoothness"),
         ("path.joinScrub", "tolerance"),
         ("path.blob", "size"),
         ("path.blob", "fidelity"),

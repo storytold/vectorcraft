@@ -7251,7 +7251,7 @@ in `path.convertAnchor`; `t` in `path.insertAnchor`; `fidelity` and the `within`
 `brush.freehand`, which runs it); `size`, `sizeVariation`, `angle`, `angleVariation`, `roundness` and
 `roundnessVariation` in `path.eraseRegion`;
 `size`, `sizeVariation`, `angle`, `roundness` and `fidelity` in `path.blob`; `width` in `path.eraseSegments`;
-`radius` and `fidelity` in `path.smoothRegion`; `tolerance` in `path.joinScrub`; `dx` and `dy` in `path.moveAnchors`;
+`radius`, `fidelity` and `smoothness` in `path.smoothRegion`; `tolerance` in `path.joinScrub`; `dx` and `dy` in `path.moveAnchors`;
 and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key left out. `path.convertAnchor` refuses
 an `x` without a `y`, or a `y` without an `x`, with "x and y must be given together". `path.freehand`,
 `path.curvature`, `path.knife`, `path.eraseRegion`, `path.eraseSegments`, `path.smoothRegion`, `path.joinScrub` and
@@ -7400,6 +7400,14 @@ way round, no more than an eighth of its length), measured along the path howeve
 own, and the corner keeps its place and the directions the path arrives and leaves along, on every call and at any
 `fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
 threshold is VectorCraft's own value.
+
+`path.smoothRegion`'s `smoothness` (0 to 100, 50 when left out) sets how strongly the path is smoothed before it is
+refitted within `fidelity`: each point is averaged with the stretch of path around it, over a stretch that grows in
+proportion to `smoothness`, so a higher value leaves a smoother path. At 0 the path is only refitted within
+`fidelity`, and 100 averages over twice the stretch that 50 does. A `smoothness` outside 0 to 100 is refused with
+"`smoothness` must be from 0 to 100" and changes nothing. The default and the way the percentage scales the smoothing
+are VectorCraft's own. The Smooth tool sends its Smooth Tool Options' Smoothness (`tool.setOption {tool: "smooth",
+key: "smoothness"}`, 0 to 100, 50 by default) with each drag.
 
 `path.smoothRegion` keeps a subpath's result only when it is smoother. It measures the subpath and the result along
 lines between points on each curved segment, spaced about `step` apart along the segment's control polygon, where
@@ -13910,8 +13918,9 @@ The second call returns the error ``tool `smooth`: `fidelity` must be a number f
 
 The Pencil's, the Paintbrush's and the Smooth tool's `fidelity` is in screen pixels: the tools send `path.freehand` and
 `path.smoothRegion` the option divided by the zoom, so a stroke keeps as many points and a Smooth drag smooths as much
-at any zoom. The Smooth tool's `fidelity` (0.05 to 100 px, 2.5 by default) is also the one an Alt smoothing drag with
-the Pencil, Paintbrush or Blob Brush uses. The Blob Brush's `fidelity` is in points.
+at any zoom. The Smooth tool's `fidelity` (0.05 to 100 px, 2.5 by default) and `smoothness` (0 to 100, 50 by default)
+are also the ones an Alt smoothing drag with the Pencil, Paintbrush or Blob Brush uses. The Blob Brush's `fidelity` is
+in points.
 
 `tool.options {tool}` opens what double-clicking the tool's button opens (its params doc lists every tool), in the
 desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`): `diameter` and `pathLength` (pt),
