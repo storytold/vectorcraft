@@ -837,18 +837,25 @@ fn big_tiff_tags(bytes: &[u8]) -> Vec<(u16, u16, u32, u16)> {
 }
 
 /// Frames of the app's own window (`app.ui_ctx`, where its dialogs are) with the accessibility
-/// tree, input events and a clock; each frame runs the dialog layer's pump after it.
+/// tree, input events and a clock; each frame runs the dialog layer's pump after it. The window is
+/// 1280 by 900 unless `sized` gives another size.
 #[derive(Default)]
 pub(super) struct Window {
     time: f64,
+    size: Option<egui::Vec2>,
 }
 
 impl Window {
+    /// A window of `size` instead of the default 1280 by 900.
+    fn sized(size: egui::Vec2) -> Self {
+        Self { size: Some(size), ..Self::default() }
+    }
+
     fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
         let ctx = app.ui_ctx.clone().expect("a test app has a window");
         ctx.enable_accesskit();
         self.time += 0.1;
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, self.size.unwrap_or(egui::vec2(1280.0, 900.0)));
         let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
         // The window's frame with the app's frame input, as the hosts run it: the controls' commands reach the app.
         let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
@@ -1443,22 +1450,12 @@ fn the_format_rows_fit_the_right_column_at_the_default_and_least_window_sizes() 
     // The default window, then the least size the desktop app's window takes.
     for (size, default) in [(egui::vec2(1280.0, 900.0), true), (egui::vec2(800.0, 500.0), false)] {
         let (mut app, _) = app(2, false);
-        let ctx = app.ui_ctx.clone().expect("a test app has a window");
-        ctx.enable_accesskit();
-        let mut time = 0.0;
-        let mut frame = |app: &mut VectorcraftApp| {
-            time += 0.1;
-            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
-            let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() };
-            let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
-            super::host::pump(app, &ctx);
-            out
-        };
-        frame(&mut app);
+        let mut w = Window::sized(size);
+        w.run(&mut app, vec![]);
         open(&mut app);
         set(&mut app, "formats", rows.clone());
-        frame(&mut app);
-        let out = frame(&mut app);
+        w.run(&mut app, vec![]);
+        let out = w.run(&mut app, vec![]);
         let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
         let rect = |n: &egui::accesskit::Node| {
             n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
