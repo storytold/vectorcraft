@@ -89,9 +89,9 @@ fn a_script_that_ends_well_passes() {
 fn a_failure_gives_its_kind_and_place() {
     let r = result(&mut session(), &source("var a = 1;\nvar = ;"));
     assert_eq!((r["ok"].clone(), r["kind"].clone(), r["line"].clone()), (json!(false), json!("syntax"), json!(2)));
-    let r = result(&mut session(), &source("var d = app.activeDocument;"));
+    let r = result(&mut session(), &source("var d = undefinedHost.activeDocument;"));
     assert_eq!(r["kind"], "thrown");
-    assert!(r["message"].as_str().unwrap().starts_with("ReferenceError: app"), "{r}");
+    assert!(r["message"].as_str().unwrap().starts_with("ReferenceError: undefinedHost"), "{r}");
     let r = result(&mut session(), &source("while (true) {}"));
     assert_eq!(r["kind"], "limit");
     assert!(r["fuelUsed"].as_u64().unwrap() <= FUEL);

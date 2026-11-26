@@ -528,13 +528,18 @@ fn art_rows(object: bool) -> Vec<Param> {
     rows
 }
 
-/// The direction of the art along the stroke: a segment per direction in [`DIRECTIONS`] order.
+/// The direction of the art along the stroke: an arrow segment per direction in [`DIRECTIONS`] order,
+/// named by its tooltip.
 fn direction_row() -> Param {
-    // PLAN: the arrows are text until sh.S5's `APP_ICONS` names its arrow icons (with the tooltips Left to Right, Right to Left, Top to Bottom, Bottom to Top); a screen reader reads each segment as its glyph.
-    let arrows = ["→", "←", "↓", "↑"];
+    let arrows = [
+        ("dc-arrow-right", tl!("Left to Right")),
+        ("dc-arrow-left", tl!("Right to Left")),
+        ("dc-arrow-down", tl!("Top to Bottom")),
+        ("dc-arrow-up", tl!("Bottom to Top")),
+    ];
     Param::custom("direction", tl!("Direction"), move |ui, f, _| {
         let current = DIRECTIONS.iter().position(|d| *d == parse_field::<Direction>(f, "direction")).unwrap_or(0);
-        let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, arrow)| Entry::new(i, *arrow)).collect();
+        let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, (icon, tip))| Entry::new(i, *tip).icon(IconId::new(icon))).collect();
         let shown = Segmented::new(tl!("Direction"), Bind::given(current), &entries).show(ui);
         if let Some(dir) = shown.value().and_then(|i| DIRECTIONS.get(*i)) {
             f.set("direction", id_of(dir));

@@ -105,8 +105,9 @@ proptest = { workspace = true }
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 # How many times an open reads a PDF.
 vectorcraft-pdf = { workspace = true, features = ["read-count"] }
-# How many times the symbol list is read to find symbols by name.
-vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }
+# How many times the symbol list is read to find symbols by name, and how many objects are
+# measured against locked artboards.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count", "locked-artboard-count"] }
 wat = { workspace = true }
 # Zstandard streams for the Illustrator editing data fuzz tests.
 ruzstd = { workspace = true }

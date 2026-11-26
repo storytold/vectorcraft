@@ -267,6 +267,8 @@ pub(crate) enum Class {
     /// A module namespace object (ECMA-262 2015 section 9.4.6): its own properties are the
     /// module's exports, read live from the bindings they name.
     ModuleNamespace(Box<ModuleExports>),
+    /// An object of a class a host defined ([`crate::host_classes`]).
+    Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
 }
@@ -335,7 +337,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
