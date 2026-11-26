@@ -66,12 +66,13 @@ impl View {
         (View::SmallList, "Small List View"),
         (View::LargeList, "Large List View"),
     ];
-    /// The browser's view and thumbnail zoom this mode stands for.
+    /// The browser's view and thumbnail zoom this mode stands for: thumbnails of about 12, 16 and 32 points on the
+    /// 48-point large thumbnail, the 11, 15.5 and 30 point tiles of production.
     pub(crate) fn preset(self) -> (PresetView, f64) {
         match self {
-            View::SmallThumb => (PresetView::Grid, 0.5),
-            View::MediumThumb => (PresetView::Grid, 0.75),
-            View::LargeThumb => (PresetView::Grid, 1.0),
+            View::SmallThumb => (PresetView::Grid, 0.25),
+            View::MediumThumb => (PresetView::Grid, 1.0 / 3.0),
+            View::LargeThumb => (PresetView::Grid, 2.0 / 3.0),
             View::SmallList => (PresetView::List, 0.5),
             View::LargeList => (PresetView::List, 1.0),
         }
@@ -760,6 +761,14 @@ fn popup(ui: &mut Ui, label: &'static str, opener: Option<&Response>, mut body: 
     }
 }
 
+// The footer's actions, in order.
+const LIBRARIES: usize = 0;
+const KINDS: usize = 1;
+const EDIT: usize = 2;
+const DELETE: usize = 3;
+const NEW: usize = 4;
+const NEW_GROUP: usize = 5;
+
 /// The panel's footer: Swatch Libraries, Show Swatch Kinds, Edit Color Group or Swatch Options, New Color Group, New
 /// Swatch and Delete. Alt-click on Delete deletes without asking; Cmd/Ctrl-click on New Swatch makes a spot color, and
 /// Cmd/Ctrl+Shift-click a global process color. Swatches dragged from the list and dropped on New Swatch are
@@ -778,31 +787,32 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
         _ => true,
     };
     let rows_drag = move |d: &PanelDrag| held && matches!(d, PanelDrag::Paint { rows: Some(_), .. });
-    // The first action sits at the end edge.
     let edit = if group.is_some() {
         FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
     } else {
         FooterAction::new(icon("dc-options"), tl!("Swatch Options")).enabled(opts.is_some())
     };
+    // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
+    // and New Color Group before it.
     let actions = [
+        FooterAction::new(icon("library"), SwatchLibraries::MENU).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
+        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
+        edit,
         FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
             .enabled(!del.is_empty())
             .takes_drops_disabled(del.is_empty())
             .accepts_drops::<PanelDrag>(rows_drag),
         FooterAction::new(icon("dc-new-item"), tl!("New Swatch")).accepts_drops::<PanelDrag>(rows_drag),
         FooterAction::new(icon("dc-folder"), tl!("New Color Group")),
-        edit,
-        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
-        FooterAction::new(icon("library"), SwatchLibraries::MENU).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
     ];
-    let out = FooterBar::actions(actions).show_footer(ui);
+    let out = FooterBar::actions(actions).at_start(EDIT + 1).show_footer(ui);
     match out.picked {
-        Some(0) if !del.is_empty() => actions::delete(app, del, out.mods.alt),
-        Some(1) => actions::new_swatch(app, &sel, out.mods),
-        Some(2) => {
+        Some(DELETE) if !del.is_empty() => actions::delete(app, del, out.mods.alt),
+        Some(NEW) => actions::new_swatch(app, &sel, out.mods),
+        Some(NEW_GROUP) => {
             app.run("ui.newColorGroup", json!({"swatches": del})).ok();
         }
-        Some(3) => match (group, opts) {
+        Some(EDIT) => match (group, opts) {
             (Some(g), _) => actions::edit_group(app, &g),
             (None, Some(n)) => {
                 app.run("ui.swatchOptions", json!({"name": n})).ok();
@@ -815,19 +825,19 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Some(drag) = drop.payload::<PanelDrag>()
     {
         match drop.index {
-            0 => dnd::on_footer_drop(app, dnd::FooterTarget::Delete, drag),
-            1 => dnd::on_footer_drop(app, dnd::FooterTarget::New, drag),
+            DELETE => dnd::on_footer_drop(app, dnd::FooterTarget::Delete, drag),
+            NEW => dnd::on_footer_drop(app, dnd::FooterTarget::New, drag),
             _ => {}
         }
     }
-    popup(ui, tl!("Show Swatch Kinds"), out.responses.get(4), |ui| {
+    popup(ui, tl!("Show Swatch Kinds"), out.responses.get(KINDS), |ui| {
         for (k, label) in Kind::ALL {
             if item(ui, label, true, Some(k == kind)) {
                 app.ui.swatches_panel.kind = k;
             }
         }
     });
-    popup(ui, tl!("Swatch Libraries"), out.responses.get(5), |ui| {
+    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| {
         ui.set_min_width(200.0);
         library_panel::library_menu::<SwatchLibraries>(app, ui);
     });

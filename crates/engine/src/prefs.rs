@@ -61,6 +61,9 @@ pub struct Prefs {
     /// the curve around each one, instead of deleting them with their segments. Off (the default),
     /// Clear opens the path there.
     pub delete_keeps_paths_joined: bool,
+    /// General › Double-Click Adds Anchor Points: on, a plain double-click on a path segment with
+    /// Direct Selection adds an anchor there. Off (the default), the double-click adds nothing.
+    pub double_click_adds_anchor_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
@@ -90,6 +93,8 @@ pub struct Prefs {
     /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
     /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
     pub artboard_update_while_dragging: bool,
+    /// General › Display Print Size at 100% Zoom (on by default): 100% shows an inch of the
+    /// document in an inch of the display. A preferences file without the key reads as on.
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -486,6 +491,7 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             interpolate_control_points: false,
             delete_keeps_paths_joined: false,
+            double_click_adds_anchor_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_tool_cards: false,
@@ -499,7 +505,7 @@ impl Default for Prefs {
             type_glyph_bounds: false,
             fade_region_outside_artboard: true,
             artboard_update_while_dragging: true,
-            display_print_size: false,
+            display_print_size: true,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,

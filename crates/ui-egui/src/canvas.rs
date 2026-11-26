@@ -50,6 +50,7 @@ pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 pub(crate) use rulers::{general_lengths, stroke_lengths};
+pub use selection::HoverObjectKey;
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
 pub(crate) use tool_adapter::{busy_tool, in_gesture, pose_on_page, tool_enter};
@@ -146,9 +147,19 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     // A measuring run applies no view request: the view, its request and its fit wait for the pass
     // that shows the canvas.
     let measuring = craft::ui::runtime::measure::active(ui.ctx());
-    let Some(view) = doc_windows::view_mut(app, win) else { return false };
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
-    let refit = !view.fitted || (presenting && view.rect != area);
+    let refits = |v: &crate::state::View| !v.fitted || (presenting && v.rect != area);
+    // The view command this pass runs, made for the display the window is on (Display Print Size at 100% Zoom).
+    let command = doc_windows::view(app, win)
+        .filter(|_| !measuring)
+        .and_then(|v| v.request.map(|(r, _)| r.command()).or_else(|| refits(v).then_some(ViewCommands::FitArtboard)));
+    if let Some(command) = command {
+        app.before_view_command(win, command);
+    }
+    let ppp = ui.ctx().pixels_per_point();
+    let scheme = crate::app::view::zoom_scheme(app.print_ppi_of(Some(win)), ppp / ui.ctx().zoom_factor());
+    let Some(view) = doc_windows::view_mut(app, win) else { return false };
+    let refit = refits(view);
     let (request, moved) = if measuring {
         (view.request, view.moved)
     } else {
@@ -164,6 +175,16 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     }
     let mut cv = view.canvas(scaling, area);
     let given = cv;
+    // A zoom percentage (Actual Size) counts from the density of the display that shows this
+    // window: it runs here with that display's zoom stops, which the canvas's own may not be.
+    let mut moved = moved;
+    if let Some(request) = queued.first().copied().filter(|r| crate::app::view::fits_window(r.command()) == Some(false)) {
+        let layers = move || bounds;
+        if request.command().apply(&mut cv, &target, Some(&layers), ppp, &scheme) && matches!(request, ViewRequest::Command(_)) {
+            moved = Some(ViewMove::Ease(given));
+        }
+        queued.clear();
+    }
     let (x, y, zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
         Some(rulers::strips(zero, kind))
@@ -221,6 +242,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         view.fitted |= refit;
         // An edit of the compass or a scroll bar reaches the next pass, which stops a running ease.
         view.moved = jumped.then_some(ViewMove::Jump);
+    }
+    if let Some(command) = command {
+        app.after_view_command(win, command);
     }
     if kind == BodyKind::Pane || presenting {
         return pressed;
@@ -332,7 +356,7 @@ fn grids(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win) {
     if let Some((grid, in_back)) = app.session.documents().get(win.0).and_then(|st| grid::document_grid(app, st)) {
         let _ = if in_back { grid.picture() } else { grid }.show_at(ui, space.view.rect);
     }
-    if let Some(grid) = grid::pixel_grid(app) {
+    if let Some(grid) = grid::pixel_grid(app, app.print_ppi_of(Some(win))) {
         let _ = grid.show_at(ui, space.view.rect);
     }
 }

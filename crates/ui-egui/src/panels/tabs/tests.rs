@@ -759,6 +759,80 @@ fn an_x_typed_past_the_next_stop_keeps_the_stop_selected() {
     assert_eq!(app.ui.tabs_panel.stop, 0);
 }
 
+/// The undo steps of the active document.
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// A position typed in the X field of a paragraph with no stops adds a stop there with the chosen
+/// alignment, keeps its hundredths of a point, picks it, and is one undo step.
+#[test]
+fn typing_x_into_a_paragraph_without_stops_adds_and_selects_a_stop() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty());
+    app.ui.tabs_panel.align = TabAlign::Right;
+    app.ui.tabs_panel.stop = 3;
+    let before = undo_steps(&app);
+    type_position(&mut app, 36.47);
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| (s.position, s.align)).collect::<Vec<_>>(), [(36.47, TabAlign::Right)]);
+    assert_eq!(app.ui.tabs_panel.stop, 0);
+    assert_eq!(undo_steps(&app), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty());
+}
+
+/// In vertical type the position field is Y, and a position typed there for a paragraph with no
+/// stops adds a stop.
+#[test]
+fn typing_y_into_vertical_type_without_stops_adds_a_stop() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "vertical": true})).unwrap();
+    type_position(&mut app, 48.0);
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| (s.position, s.align)).collect::<Vec<_>>(), [(48.0, TabAlign::Left)]);
+}
+
+/// A first stop past 100,000 pt adds no stop and records no undo step. A negative position adds
+/// the stop at 0 pt.
+#[test]
+fn a_refused_first_stop_adds_nothing_and_records_no_undo() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
+    let before = undo_steps(&app);
+    type_position(&mut app, 200000.0);
+    assert!(current(&app).unwrap().1.is_empty());
+    assert_eq!(undo_steps(&app), before);
+    type_position(&mut app, -5.0);
+    assert_eq!(stop_positions(&app), [0.0]);
+    assert_eq!(undo_steps(&app), before + 1);
+}
+
+/// With the Selection tool on two texts, a first stop typed for the shown text, which has no
+/// stops, becomes every selected text's stops in one undo step, replacing the other text's stop.
+#[test]
+fn typing_the_first_stop_over_mixed_paragraphs_uses_the_displayed_list() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let a = id(app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 60}})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "c\td", "area": {"width": 250, "height": 60}})).unwrap());
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("text.tabs.set", json!({"stops": [{"position": 90}]})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(current(&app).unwrap().0.id.0, a);
+    let before = undo_steps(&app);
+    type_position(&mut app, 25.0);
+    for text in [a, b] {
+        assert_eq!(text_of(&app, text).para_at(0).tabs.iter().map(|s| s.position).collect::<Vec<_>>(), [25.0], "text {text}");
+    }
+    assert_eq!(undo_steps(&app), before + 1);
+}
+
 /// The panel menu's Repeat Tab, Delete Tab and Clear All Tabs can be chosen while the text has
 /// tab stops and show no check mark. Repeat Tab and Delete Tab act on the stop selected on the
 /// ruler, and Clear All Tabs removes every stop.

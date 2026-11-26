@@ -192,3 +192,28 @@ fn export_physical_units_writes_unit_suffixes() {
     let back = import(&s).unwrap();
     assert_eq!(back.units, Unit::Millimeters);
 }
+
+/// The `width` of `svg`'s root as a length in points, read by the SVG and CSS absolute units
+/// (96 px per inch). `None` when it has no unit an SVG reader takes as physical.
+fn root_width_in_points(svg: &str) -> Option<f64> {
+    let start = svg.find("<svg")?;
+    let w = svg[start..].split("width=\"").nth(1)?.split('"').next()?;
+    let (points_per_unit, number) = [("mm", 72.0 / 25.4), ("cm", 72.0 / 2.54), ("in", 72.0), ("pc", 12.0), ("pt", 1.0)]
+        .into_iter()
+        .find_map(|(suffix, pt)| w.strip_suffix(suffix).map(|v| (pt, v)))?;
+    number.parse::<f64>().ok().map(|v| v * points_per_unit)
+}
+
+#[test]
+fn every_physical_document_unit_exports_its_printed_size() {
+    // 100 inches by 50: feet, yards, meters, Q and Ha have no SVG unit of their own.
+    for unit in [Unit::Feet, Unit::FeetInches, Unit::Yards, Unit::Meters, Unit::Q, Unit::Ha, Unit::Inches, Unit::Millimeters] {
+        let mut d = Document::new(7200.0, 3600.0);
+        d.units = unit;
+        let s = export(&d, &ExportOptions::default());
+        let width = root_width_in_points(&s).unwrap_or_else(|| panic!("{unit:?}: no physical width in {s}"));
+        assert!((width - 7200.0).abs() < 0.01, "{unit:?}: {width} pt in {s}");
+        let back = import(&s).unwrap();
+        assert!(close_rect(back.artboards[0].rect, d.artboards[0].rect), "{unit:?}: {:?}", back.artboards[0].rect);
+    }
+}

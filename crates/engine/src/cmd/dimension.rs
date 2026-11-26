@@ -88,11 +88,13 @@ fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
     }
     let a = if source.is_none() || p.get("a").is_some() { point(p, "a")? } else { Point::ZERO };
     let b = if source.is_none() || p.get("b").is_some() { point(p, "b")? } else { Point::new(1.0, 0.0) };
-    let vertex = if mode == DimensionMode::Angular && (source.is_none() || matches!(source, Some(DimensionSource::Points { .. }))) {
-        point(p, "vertex")?
-    } else {
-        Point::ZERO
+    // Resolution supplies a linked vertex. An explicit coordinate is still checked when given.
+    let read_vertex = match &source {
+        None => true,
+        Some(DimensionSource::Points { vertex, .. }) => vertex.is_none() || p.get("vertex").is_some(),
+        _ => false,
     };
+    let vertex = if mode == DimensionMode::Angular && read_vertex { point(p, "vertex")? } else { Point::ZERO };
     let orientation = orientation(p, mode)?.unwrap_or_default();
     let mut d = Dimension {
         mode,

@@ -44,6 +44,8 @@ const EDITING: &str = "editing";
 const MISSING: &str = "missing";
 const ACTION: &str = "__action";
 const LISTING: &str = "__list";
+/// The rows the filter list shows before it scrolls.
+const LIST_ROWS: u16 = 7;
 
 /// The dialog's heading.
 fn heading() -> String {
@@ -169,6 +171,7 @@ fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::p
         let out = List::<String>::new(heading())
             .select(SelectMode::Single)
             .activate(ActivateOn::DoubleClick)
+            .max_rows(LIST_ROWS)
             .selection(Bind::bound(&mut selection))
             .show_items(ui, &rows, &mut |key, icx| match rows.0.get(icx.at) {
                 Some((_, Kind::Missing)) => ListRow::new(key.clone()).ink(RowInk::Dimmed),
@@ -488,6 +491,18 @@ mod tests {
         let fx = effects(&app, id);
         assert_eq!((fx.len(), fx[0].params["name"].as_str()), (1, Some("Shift")));
         assert!(open_dialogs(&app).is_empty());
+    }
+
+    #[test]
+    fn the_dialog_draws_its_filters_and_buttons() {
+        let mut app = app();
+        rect(&mut app);
+        let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        crate::menus::invoke(&mut p.app(), "ui.svgFilterDialog", json!({}));
+        p.frame();
+        for name in [DEFAULT_FILTERS[0].name, "New", "OK", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn");
+        }
     }
 
     #[test]

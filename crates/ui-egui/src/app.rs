@@ -6,10 +6,10 @@ use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
-use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, QuietHeader, SectionRhythm};
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, MoveBandCursor, QuietHeader, SectionRhythm};
 use craft::ui::docking::IconGroupSeparator;
 use craft::ui::list::{CommandHighlight, ThumbRows};
-use craft::ui::menu::MenuTitlePad;
+use craft::ui::menu::MenuTitleLook;
 use craft::ui::patterns::form_dialogs::PresetCardLook;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
@@ -19,7 +19,7 @@ use craft::ui::sections::{DialogButtonLook, QuietTitleRow};
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
 use craft::ui::style::TrackFill;
-use craft::ui::tabs::DocumentTabLook;
+use craft::ui::tabs::{DocumentTabLook, TabCloseLook};
 use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
@@ -48,8 +48,12 @@ pub(crate) mod view;
 
 pub use fonts::MAX_RECENT_FONTS;
 
-/// VectorCraft as the framework's services know it: the settings folder, the name and the version.
-const APP_INFO: AppInfo = AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") };
+/// VectorCraft as the framework's services know it: the settings id, the name and the version.
+/// A nightly build gives its own name and feed version; the id stays the stable one, since the
+/// runtime keys a theme's `[apps.<id>]` pins on it.
+fn app_info() -> AppInfo {
+    AppInfo { id: crate::os_window::SETTINGS_APP_ID, name: crate::os_window::name(), version: crate::os_window::version() }
+}
 
 /// Monotonic seconds of the app's clock, which recovery, the clipboard look and the frame rate
 /// count in.
@@ -98,7 +102,7 @@ impl VectorcraftApp {
             }
         };
         // PLAN: the hosts (hub-w3) replace `host` with the one they build (files, settings, jobs); every frame installs it through `frame_input`.
-        let host = Arc::new(Host::builder(APP_INFO).i18n(i18n::shared()).build());
+        let host = Arc::new(Host::builder(app_info()).i18n(i18n::shared()).build());
         Self {
             session,
             ui: UiState::default(),
@@ -129,6 +133,7 @@ impl VectorcraftApp {
                 find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
+                text_nodes: Default::default(),
                 momentary: None,
                 selection_box: None,
                 selection_bounds: None,
@@ -140,6 +145,7 @@ impl VectorcraftApp {
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 view_moved: None,
+                hover_object: None,
                 grab: None,
                 carry_target: None,
                 last_drag: None,
@@ -179,6 +185,7 @@ impl VectorcraftApp {
             titlebar_inset: 0.0,
             last_effect: None,
             last_pathfinder: None,
+            last_filters: Default::default(),
             character_focus: None,
             run_count: 0,
             channel: None,
@@ -376,7 +383,8 @@ impl VectorcraftApp {
             self.host = Arc::new(self.host.with_lang(lang));
         }
         let native_ppp = self.ui_ctx.as_ref().map_or(1.0, |ctx| ctx.pixels_per_point() / ctx.zoom_factor());
-        let root = root_env(&self.session.prefs, native_ppp);
+        // The canvas steps through the zoom stops of the current window's display.
+        let root = root_env(&self.session.prefs, native_ppp, self.print_ppi());
         FrameInput::new(root).commands(menus::model::command_input(self)).host(self.host.clone())
     }
 
@@ -435,6 +443,9 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // A document that moved between the main window and a floating OS window, or opened, takes
+        // the density of the display that shows it.
+        self.settle_screen_ppi_if_changed();
         self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
@@ -504,6 +515,18 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
+        // Plug-ins loading on other threads since launch install as their loads finish; until then
+        // the host keeps coming back to look again, and once more when the last one installs, for
+        // what waits for them. They install after the control requests are drained, so the frame
+        // after the last one opens the files held for them (the desktop app does that before this
+        // pass) before a control request waiting for them runs.
+        if self.session.plugins_loading() {
+            if self.session.poll_plugin_loads() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            } else {
+                ctx.request_repaint();
+            }
+        }
         // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
         // for it (one a background run's result can bring) doesn't open it early.
         if ctx.current_pass_index() == 0
@@ -674,15 +697,16 @@ impl VectorcraftApp {
 }
 
 /// The root values the preferences give every frame: the theme, the interface scale (UI Scaling
-/// over the display's `native_ppp`), Show Tool Tips, the zoom stops and which drags scrub a value
-/// (Scrub Numeric Fields: the side label only, or nothing).
-pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> RootEnv {
+/// over the display's `native_ppp`), Show Tool Tips, the zoom stops (100% at `print` screen points
+/// to an inch, [`crate::state::print_ppi`]) and which drags scrub a value (Scrub Numeric Fields: the
+/// side label only, or nothing).
+pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print: Option<f64>) -> RootEnv {
     let (theme, mode, accent) = theme::root_theme(prefs);
     // A hand-edited preferences file must not scale the interface to nothing.
     let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.sizes = theme::app_sizes();
-    root.values.set(view::zoom_scheme(prefs, native_ppp));
+    root.values.set(view::zoom_scheme(print, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
     // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
     // whole and lengths to a thousandth of a point (357.114 pt).
@@ -723,10 +747,14 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(ThumbRows::Tight);
     // The Layers Objects search field fills the filter bar up to its Filter button, as production's did.
     root.values.set(ObjectsSearch::Fill);
-    // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
-    root.values.set(MenuTitlePad::Control);
+    // The menu bar's titles are production's egui buttons: a push button high, 2 points beside the text, rounded.
+    root.values.set(MenuTitleLook::Button);
+    // The title bar and the panel headers keep the arrow, over the menu titles too, as production's did.
+    root.values.set(MoveBandCursor::Arrow);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
     root.values.set(DocumentTabLook::Semibold);
+    // A document tab's × is a small glyph that brightens under the pointer, with no fill, as production drew it.
+    root.values.set(TabCloseLook::Glyph);
     // A collapsed panel column's icon groups stand apart by a hairline, as production drew them.
     root.values.set(IconGroupSeparator::Rule);
     // New Document's preset cards show blank paper on a flat card, as production drew them.

@@ -251,7 +251,8 @@ fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Result<(), Strin
             select(app, next.as_deref().unwrap_or("Default"));
         }
         Action::Import => {
-            let request = PickRequest::open("tracingPresets").filter("Tracing presets", TRACE_PRESET_EXTS);
+            let name = file_asks::filter_name(crate::i18n::current(), "Tracing presets");
+            let request = PickRequest::open("tracingPresets").filter(name, TRACE_PRESET_EXTS);
             // The answer, or its failure, reaches the status bar from the continuation; nothing is pending here.
             let _ = file_asks::ask(app, request, Owner::Free, picked);
         }
