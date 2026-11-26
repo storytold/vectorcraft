@@ -30,6 +30,9 @@ impl VectorcraftApp {
     }
 
     pub(crate) fn drain_inbox(&mut self) {
+        if self.session.plugin_calls_open() {
+            return;
+        }
         fn take(q: Option<&Inbox>) -> Vec<(String, Vec<u8>)> {
             q.map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default()
         }

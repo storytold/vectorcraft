@@ -1095,6 +1095,33 @@ fn on_the_web_the_progress_window_shows_the_run_that_holds_the_documents_first()
     app.run("plugin.cancelRuns", json!({})).unwrap();
 }
 
+#[test]
+fn browser_file_inboxes_wait_for_a_run_that_holds_the_documents() {
+    let (mut app, _fake) = web_app();
+    let id = "test.ui.web.held.file.inbox";
+    install_caller(&mut app, id, TRIANGLE);
+    let bytes = vectorcraft_format::save(&app.session.doc().unwrap().doc, true);
+    let incoming = crate::services::Inbox::default();
+    let page = crate::services::Inbox::default();
+    app.services.inbox = Some(incoming.clone());
+    app.services.page_inbox = Some(page.clone());
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    let before = app.session.documents().len();
+    let active = app.session.active().unwrap().uid;
+    incoming.lock().unwrap().push(("Incoming.vectorcraft".into(), bytes.clone()));
+    page.lock().unwrap().push(("Page.vectorcraft".into(), bytes));
+    app.drain_inbox();
+    assert_eq!(app.session.documents().len(), before);
+    assert_eq!(app.session.active().unwrap().uid, active);
+    assert_eq!(incoming.lock().unwrap().len(), 1);
+    assert_eq!(page.lock().unwrap().len(), 1);
+    app.run("plugin.cancelRuns", json!({})).unwrap();
+    app.drain_inbox();
+    assert_eq!(app.session.documents().len(), before + 2);
+    assert!(incoming.lock().unwrap().is_empty());
+    assert!(page.lock().unwrap().is_empty());
+}
+
 /// While a script runs, a worker run still gets its request and its time budget still ends it, and
 /// no other run starts in a worker.
 #[test]
