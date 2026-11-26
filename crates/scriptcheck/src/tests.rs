@@ -616,6 +616,32 @@ fn setting_a_folders_length_or_flags_does_not_write() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 9, 11, 13, 14, 15, 16][..]));
 }
 
+/// A Folder object has none of the File object's `open`, `read`, `readch`, `readln`, `write`,
+/// `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, so calling them on `new Folder(…)`, a
+/// `Folder` place or a variable holding one reads, writes and asks nothing. On `Folder(…)`, which
+/// gives a File object when the path names a file, and on `Folder.current` they still count, and the
+/// Folder object's own `create`, `remove`, `getFiles` and `selectDlg` count on any of them.
+#[test]
+fn file_only_calls_on_a_folder_do_nothing() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "d.write(s); d.writeln(s); d.copy(q); d.createAlias(q);\n",
+        "d.open('w'); d.read(); d.readch(); d.readln();\n",
+        "Folder.temp.write(s); (new Folder(q)).copy(q);\n",
+        "d.openDlg(); Folder.desktop.saveDlg();\n",
+        "Folder(p).write(s);\n",
+        "Folder.current.copy(q);\n",
+        "d.create(); d.getFiles(); d.selectDlg();\n",
+        "var g = Folder(p); g.open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[6, 7, 8][..])]);
+    assert_eq!(lines("file.write"), [6, 7, 8]);
+    assert_eq!(lines("file.read"), [8, 9]);
+    assert_eq!(lines("file.dialog"), [8]);
+}
+
 /// A File object assigned to a function's own variable, its parameter or a `catch` block's
 /// parameter ends with them; one assigned to an outer variable stays. Such a variable or parameter
 /// starts without what the outer variable of the same name was assigned.
@@ -1548,6 +1574,13 @@ fn application_methods_are_features_not_members() {
 }
 
 #[test]
+fn e4x_and_the_xml_object_need_only_the_language() {
+    let r = report("var x = <a><b/></a>;\nvar y = new XML(s);\nfor each (var v in x.b) {}\n");
+    assert!(feature(&r, "e4x").is_some() && feature(&r, "xml").is_some());
+    assert_eq!(r.needs, [Need::Language]);
+}
+
+#[test]
 fn type_names_compared_or_created_are_listed() {
     let r = report(concat!(
         "if (item.typename == 'AcmeShape') {}\n",
@@ -1577,6 +1610,18 @@ fn menu_commands_are_counted_with_their_lines() {
     assert_eq!(strings, [("acmecopyall", 3, &[1, 2, 6][..]), ("acmeA", 1, &[3][..])]);
     assert_eq!(r.menu_dynamic, 2);
     assert_eq!(feature(&r, "menuCommand").map(|f| f.count), Some(6));
+}
+
+#[test]
+fn a_menu_command_string_with_a_trailing_comma_is_listed() {
+    let r = report(concat!(
+        "app.executeMenuCommand('acmecopyall',);\n",
+        "app.executeMenuCommand('acmecopyall', n);\n",
+        "app.executeMenuCommand('acmecopyall',\n",
+    ));
+    let strings: Vec<(&str, usize, &[usize])> = r.menu_strings.iter().map(|s| (s.value.as_str(), s.count, s.lines.as_slice())).collect();
+    assert_eq!(strings, [("acmecopyall", 1, &[1][..])]);
+    assert_eq!(r.menu_dynamic, 2);
 }
 
 #[test]

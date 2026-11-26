@@ -27,7 +27,8 @@
 //! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
 //! are read from, and the places its `File` and `Folder` objects read and write, inside the roots.
 //! [`ScriptGate`] holds the same places for the commands the script runs with `vc.run`, with the
-//! files of the open documents.
+//! files of the open documents, and for reading, the files the documents open when the run began
+//! link to, each as the person last left the document.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -233,6 +234,14 @@ fn with_gate_reads_exempt<T>(exempt: bool, f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// `scope`, or for a thread without one, the `process` roots in force now (none: unconfined).
+fn resolved(scope: Option<Scope>, process: Option<&Arc<AutomationRoots>>) -> Scope {
+    scope.unwrap_or_else(|| match process {
+        Some(r) => Scope::Confined(r.clone()),
+        None => Scope::Unconfined,
+    })
+}
+
 /// This thread's scope, with the gate of the script command it runs, to carry to work it hands to
 /// another thread ([`ScopeHandle::run`]).
 #[derive(Clone, Debug)]
@@ -242,6 +251,15 @@ impl ScopeHandle {
     /// The scope of the calling thread.
     pub fn capture() -> Self {
         Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
+    }
+
+    /// [`ScopeHandle::capture`], except that a thread with no scope of its own takes the process's
+    /// roots as they are now ([`confine_process`]): work captured before the process is confined
+    /// stays unconfined on the thread that runs it, as it would have been had it run on the calling
+    /// thread at once.
+    pub fn capture_now() -> Self {
+        let scope = resolved(SCOPE.with(|s| s.borrow().clone()), PROCESS.get());
+        Self(Some(scope), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
 
     /// Run `f` in the captured scope.
@@ -283,19 +301,56 @@ impl ScopeHandle {
 
 /// What a command a running script runs (`vc.run`) may read and write: the places the script's
 /// `File` and `Folder` objects may ([`ScriptScope`]), and the files the documents open in the app
-/// were opened from or saved to. The automation roots apply as well. A path refused by its name
-/// alone ([`ScriptScope::refused_by_name`]) is refused here too.
+/// were opened from or saved to by the person ([`crate::DocState::as_person_left`]). Reading, and
+/// only reading, the files the documents link to as the person left them when the run began is
+/// allowed as well ([`ScriptGate::linked`]). The automation roots apply as well. A path refused by
+/// its name alone ([`ScriptScope::refused_by_name`]) is refused here too.
 #[derive(Clone, Debug)]
 pub(crate) struct ScriptGate {
     pub(crate) read: ScriptScope,
     pub(crate) write: ScriptScope,
-    /// The paths of the open documents' files, as the documents hold them.
+    /// The paths of the open documents' files, as the documents held them when the person last
+    /// opened or saved them. A document a script's command opened has none here.
     pub(crate) documents: Vec<String>,
+    /// The files the documents link to as the person left them when the run began: readable, not
+    /// writable.
+    pub(crate) linked: LinkedFiles,
     /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
     pub(crate) also: Option<Arc<ScriptGate>>,
 }
 
+/// The files the commands a script runs may only read because the documents open when the run
+/// began link to them as the person left them ([`ScriptGate::linked`]).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LinkedFiles {
+    /// The real paths of the files, as they were when the run's first command was run, sorted. A
+    /// path that leads to another file now is not one of them.
+    files: Arc<[PathBuf]>,
+}
+
+impl LinkedFiles {
+    /// Is `real`, a real path, one of the files?
+    fn has(&self, real: &Path) -> bool {
+        self.files.binary_search_by(|f| f.as_path().cmp(real)).is_ok()
+    }
+}
+
 impl ScriptGate {
+    /// The real paths of the files at `paths` that are files now, each once, for
+    /// [`ScriptGate::linked`]. A path refused by its name alone, and one that cannot be resolved,
+    /// is left out.
+    pub(crate) fn real_files(paths: impl IntoIterator<Item = String>) -> LinkedFiles {
+        let mut real: Vec<PathBuf> = paths
+            .into_iter()
+            .filter(|p| !ScriptScope::refused_by_name(Path::new(p)))
+            .filter_map(|p| resolve(&p).ok())
+            .filter(|p| p.is_file())
+            .collect();
+        real.sort();
+        real.dedup();
+        LinkedFiles { files: real.into() }
+    }
+
     /// This gate with `next` at the end of its chain of `also` gates, so a path must pass every
     /// gate already in the chain as well as `next`.
     fn followed_by(&self, next: Arc<ScriptGate>) -> ScriptGate {
@@ -318,7 +373,8 @@ impl ScriptGate {
                 Access::Read => self.read.allows(&real) || self.write.allows(&real),
                 Access::Write => self.write.allows(&real),
             };
-            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real))
+            let linked = matches!(access, Access::Read) && self.linked.has(&real) && !self.read.keeps_out(&real);
+            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || linked
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -360,6 +416,11 @@ fn check_gate(path: &str, access: Access) -> Result<(), String> {
         return Ok(());
     }
     GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
+}
+
+/// Whether this thread runs a command a script runs ([`with_script_gate`]).
+pub(crate) fn in_script_command() -> bool {
+    GATE.with(|g| g.borrow().is_some())
 }
 
 /// The roots in force on this thread, if any.
@@ -628,7 +689,13 @@ impl ScriptScope {
     pub(crate) fn allows(&self, real: &Path) -> bool {
         (self.files.iter().any(|f| inside(real, f) && real.components().count() == f.components().count())
             || self.roots.iter().any(|r| inside(real, r)))
-            && !self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
+            && !self.keeps_out(real)
+    }
+
+    /// Is the real path `real` in a folder kept out ([`ScriptScope::fence`]), and not in a place
+    /// left open there?
+    fn keeps_out(&self, real: &Path) -> bool {
+        self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
     }
 
     /// The scope of a script run from a file in the folder whose real path, with its links already
@@ -928,8 +995,13 @@ mod tests {
     #[test]
     fn a_narrowed_scope_keeps_the_script_gates_of_both() {
         let (base, _) = folders("narrowed-gate");
-        let gate =
-            |dir: &str| ScriptGate { read: ScriptScope::of_folder(&base.join(dir)), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate = |dir: &str| ScriptGate {
+            read: ScriptScope::of_folder(&base.join(dir)),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: LinkedFiles::default(),
+            also: None,
+        };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
             let narrowed = match gate_here {
@@ -952,7 +1024,13 @@ mod tests {
     #[test]
     fn a_scope_narrowed_several_times_keeps_every_gate() {
         let (base, _) = folders("narrowed-thrice");
-        let gate = |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate = |dir: &Path| ScriptGate {
+            read: ScriptScope::of_folder(dir),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: LinkedFiles::default(),
+            also: None,
+        };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
         let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
@@ -964,6 +1042,114 @@ mod tests {
         assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
         let fourth = narrow(third, gate(&base));
         assert_eq!(reads(&fourth), (true, false), "and after a fourth");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A file an open document linked to when the run began is readable through the gate; its path
+    /// written with `..`, writing it, a file next to it and a file that was not there when the gate
+    /// was made are not allowed, and the automation roots still apply.
+    #[test]
+    fn a_gate_reads_only_the_linked_files_it_was_given() {
+        let (base, roots) = folders("linked");
+        let (secret, other) = (base.join("outside/secret.svg"), base.join("outside/other.svg"));
+        std::fs::write(&other, "<svg/>").unwrap();
+        let later = base.join("outside/later.svg");
+        let linked = ScriptGate::real_files([s(secret.clone()), s(later.clone()), s(base.join("outside"))]);
+        assert_eq!(linked.files.len(), 1, "a missing file and a folder are left out: {linked:?}");
+        let gate =
+            ScriptGate { read: ScriptScope::of_folder(&base.join("in")), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        std::fs::write(&later, "<svg/>").unwrap();
+        let (read, write) =
+            (|p: &Path| gate.check(&s(p.to_path_buf()), Access::Read).is_ok(), |p: &Path| gate.check(&s(p.to_path_buf()), Access::Write).is_ok());
+        assert!(read(&secret));
+        assert!(!read(&base.join("outside/../outside/secret.svg")), "a path with `..` is refused by its name");
+        assert!(!write(&secret), "linked files are not written");
+        assert!(!read(&other), "a file next to a linked one");
+        assert!(!read(&later), "a file made after the gate");
+        assert!(!read(&base.join("outside")), "the linked file's folder");
+        let g = gate.clone();
+        assert!(confine(Some(&roots), || with_script_gate(g, || check_read(&s(secret.clone())).is_err())), "the roots apply first");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A linked file in a folder the script's scope keeps out, such as the settings folder, is not
+    /// read through the gate; one in a place left open there is.
+    #[test]
+    fn a_gate_reads_no_linked_file_in_a_folder_kept_out() {
+        let (base, _) = folders("linked-fenced");
+        let (kept, open) = (base.join("outside/kept.svg"), base.join("outside/open/a.svg"));
+        std::fs::create_dir_all(base.join("outside/open")).unwrap();
+        std::fs::write(&kept, "<svg/>").unwrap();
+        std::fs::write(&open, "<svg/>").unwrap();
+        let real = |p: &Path| resolve(&s(p.to_path_buf())).unwrap();
+        let mut read = ScriptScope::of_folder(&base.join("in"));
+        read.fence(real(&base.join("outside")), &[real(&base.join("outside/open"))]);
+        let gate = ScriptGate {
+            read,
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: ScriptGate::real_files([s(kept.clone()), s(open.clone())]),
+            also: None,
+        };
+        assert!(gate.check(&s(kept), Access::Read).is_err(), "in the folder kept out");
+        assert!(gate.check(&s(open), Access::Read).is_ok(), "in a place left open");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A path read through the linked files gives no access to the file it leads to after it is
+    /// pointed elsewhere by a link in one of its folders.
+    #[test]
+    fn a_path_read_through_a_linked_file_gives_nothing_once_it_leads_elsewhere() {
+        let (base, _) = folders("linked-redirected");
+        #[cfg(unix)]
+        let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
+        #[cfg(windows)]
+        let made = |target: &Path, link: &Path| std::os::windows::fs::symlink_dir(target, link).is_ok();
+        #[cfg(not(any(unix, windows)))]
+        let made = |_: &Path, _: &Path| false;
+        let (first, second, via) = (base.join("outside/first"), base.join("outside/second"), base.join("outside/via"));
+        for dir in [&first, &second] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("a.svg"), "<svg/>").unwrap();
+        }
+        // Windows needs Developer Mode or elevation to make links: nothing to test without them.
+        if !made(&first, &via) {
+            eprintln!("skipped: symbolic links can't be made here");
+            let _ = std::fs::remove_dir_all(base);
+            return;
+        }
+        let (doc, elsewhere) = (s(via.join("a.svg")), s(second.join("a.svg")));
+        let gate = ScriptGate {
+            read: ScriptScope::default(),
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: ScriptGate::real_files([doc.clone()]),
+            also: None,
+        };
+        assert!(gate.check(&doc, Access::Read).is_ok(), "read through the linked file");
+        std::fs::remove_dir(&via).or_else(|_| std::fs::remove_file(&via)).unwrap();
+        assert!(made(&second, &via));
+        for (path, access) in [(&doc, Access::Read), (&doc, Access::Write), (&elsewhere, Access::Read), (&elsewhere, Access::Write)] {
+            assert!(gate.check(path, access).is_err(), "{path} {access:?}");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A link to a linked file read through the gate counts only while it leads to that file.
+    #[cfg(unix)]
+    #[test]
+    fn a_gate_refuses_a_link_that_now_leads_elsewhere() {
+        let (base, _) = folders("linked-moved");
+        let (secret, other, link) = (base.join("outside/secret.svg"), base.join("outside/other.svg"), base.join("outside/link.svg"));
+        std::fs::write(&other, "<svg/>").unwrap();
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+        let linked = ScriptGate::real_files([s(link.clone())]);
+        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        assert!(gate.check(&s(link.clone()), Access::Read).is_ok() && gate.check(&s(secret.clone()), Access::Read).is_ok());
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&other, &link).unwrap();
+        assert!(gate.check(&s(link.clone()), Access::Read).is_err(), "the link leads to another file now");
+        assert!(gate.check(&s(other), Access::Read).is_err());
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -1163,6 +1349,24 @@ mod tests {
         assert!(r.is_err());
         assert_eq!(check_read(&outside), Ok(()), "restored after a panic");
         assert_eq!(confine(None, || check_read(&outside)), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// Work captured with [`ScopeHandle::capture_now`] before the process is confined stays
+    /// unconfined when it runs after; work captured with [`ScopeHandle::capture`] is confined then.
+    #[test]
+    fn a_scope_captured_now_stays_unconfined_after_the_process_is_confined() {
+        if !crate::tests::in_own_process("file_access::tests::a_scope_captured_now_stays_unconfined_after_the_process_is_confined") {
+            return;
+        }
+        let (base, roots) = folders("captured-process");
+        let outside = s(base.join("outside/secret.svg"));
+        let (now, plain) = std::thread::spawn(|| (ScopeHandle::capture_now(), ScopeHandle::capture())).join().unwrap();
+        assert!(confine_process(roots));
+        assert_eq!(now.run(|| check_read(&outside)), Ok(()), "captured now, before the process was confined");
+        assert!(plain.run(|| check_read(&outside)).is_err(), "captured plainly, run after the process was confined");
+        let later = std::thread::spawn(ScopeHandle::capture_now).join().unwrap();
+        assert!(later.run(|| check_read(&outside)).is_err(), "captured now, after the process was confined");
         let _ = std::fs::remove_dir_all(base);
     }
 
