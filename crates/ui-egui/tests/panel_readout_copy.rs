@@ -2,41 +2,52 @@
 //! These frames prove host clipboard intent; they do not access the OS clipboard.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::cell::Cell;
 use std::io::Cursor;
-use std::rc::Rc;
-use std::sync::{Arc, mpsc};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
+use craft::platform::clipboard::{Clipboard, ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
 use craft::ui::runtime::frame::take_output;
 use craft::ui::shell::embed;
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
-use vectorcraft_engine::cmd::clipboard::Flavour;
-use vectorcraft_ui_egui::{Services, SystemClipboard, VectorcraftApp, background};
+use vectorcraft_ui_egui::{Services, VectorcraftApp, background};
 
 const COPIED: &str = "Copied the value";
 const LENGTH: &str = "234 pt";
 
-struct Board(Rc<Cell<usize>>);
+struct Board(Arc<Mutex<Vec<Vec<Flavor>>>>);
 
-impl SystemClipboard for Board {
-    fn write(&mut self, _: &[Flavour]) -> Result<(), String> {
-        self.0.set(self.0.get() + 1);
-        Ok(())
+impl ClipboardBackend for Board {
+    fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
+        self.0.lock().unwrap().push(flavors.to_vec());
+        Ok(0)
     }
 
-    fn holds_ours(&mut self) -> bool {
+    fn read(&mut self, _: &[&str], _: u64) -> Result<Option<Flavor>, ClipboardError> {
+        Ok(None)
+    }
+
+    fn read_image(&mut self, _: u64) -> Result<Option<ClipboardImage>, ClipboardError> {
+        Ok(None)
+    }
+
+    fn read_files(&mut self, _: usize) -> Result<Option<Vec<PathBuf>>, ClipboardError> {
+        Ok(None)
+    }
+
+    fn has(&mut self, _: &[&str]) -> bool {
         false
     }
 
-    fn read(&mut self, _: &[&'static str]) -> Option<Flavour> {
-        None
+    fn owns(&mut self) -> Option<bool> {
+        Some(false)
     }
 
-    fn has(&mut self, _: &[&'static str]) -> bool {
-        false
+    fn readable_any_time(&self) -> bool {
+        true
     }
 }
 
@@ -220,9 +231,9 @@ fn panel_readout_existing_label_keyboard_and_art_copy_remain_independent() {
     assert_eq!(a.snapshot(), before);
 }
 
-fn hold_art_formats(a: &mut App) -> (Rc<Cell<usize>>, mpsc::Sender<()>) {
-    let writes = Rc::new(Cell::new(0));
-    a.app.services.system_clipboard = Some(Box::new(Board(writes.clone())));
+fn hold_art_formats(a: &mut App) -> (Arc<Mutex<Vec<Vec<Flavor>>>>, mpsc::Sender<()>) {
+    let offers = Arc::new(Mutex::new(Vec::new()));
+    a.app.clipboard = Clipboard::new(Board(offers.clone()));
     a.app.services.write_shared = Some(Arc::new(|_: &str, _: &[u8]| Err("no fixture file writes".into())));
     let (hold, held) = mpsc::channel();
     background::run(
@@ -239,20 +250,29 @@ fn hold_art_formats(a: &mut App) -> (Rc<Cell<usize>>, mpsc::Sender<()>) {
     .unwrap();
     a.app.run("edit.copy", json!({})).unwrap();
     assert!(!a.app.session.clipboard.is_empty(), "ordinary art Copy really queued its formats");
-    assert_eq!(writes.get(), 0, "the existing worker holds those formats");
-    (writes, hold)
+    assert!(offers.lock().unwrap().is_empty(), "the existing worker holds those formats");
+    (offers, hold)
 }
 
 #[test]
 fn panel_readout_document_value_copies_once_with_feedback_and_cancels_pending_art() {
     let mut a = App::new();
     let out = a.document_category("Objects");
-    let (writes, hold) = hold_art_formats(&mut a);
+    let (offers, hold) = hold_art_formats(&mut a);
     let before = a.snapshot();
-    copy_at(&mut a, painted(&out, LENGTH).0.center(), LENGTH);
+    let release = a.tap(painted(&out, LENGTH).0.center());
+    let commit = a.deadline();
+    let copied = a.frame(vec![]);
+    let expected = vec![vec![Flavor::text(LENGTH)]];
+    assert_eq!(*offers.lock().unwrap(), expected, "one actual host offer contains the complete readout text");
+    assert!(copies(&release).is_empty() && copies(&commit).is_empty() && copies(&copied).is_empty(), "the injected host handles this copy without duplicate fallback output");
+    assert_eq!(visible_text_count(&copied, COPIED), 1, "one actual nonmodal confirmation is painted");
+    assert_eq!(a.snapshot(), before, "readout copy leaves document, selection and history intact");
+    assert!(copies(&a.frame(vec![])).is_empty(), "no fallback copy on the next frame");
+    assert_eq!(*offers.lock().unwrap(), expected, "an idle frame adds no host offer");
     drop(hold);
     background::wait_all(&mut a.app);
-    assert_eq!(writes.get(), 0, "unwritten art formats cannot replace the new readout text");
+    assert_eq!(*offers.lock().unwrap(), expected, "unwritten art formats cannot append an SVG, PDF, image or text offer over the readout");
     assert_eq!(a.snapshot(), before);
     let next = a.frame(vec![]);
     assert_eq!(visible_text_count(&next, COPIED), 1, "no duplicate confirmation was queued");
