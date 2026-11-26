@@ -107,6 +107,9 @@ pub struct CanvasCache {
     /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
     /// which gives back a selection tool Cmd lent.
     pub escaped_press: bool,
+    /// The host's Caps Lock state at the last canvas pass, which `VectorcraftApp::follow_caps_lock` compares with the
+    /// next reading; `None` before the first pass.
+    pub host_caps_lock: Option<bool>,
     /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
     /// commit came first in production: the field's own commit later in the pass has nothing left to run.
     pub committed_preview: bool,
