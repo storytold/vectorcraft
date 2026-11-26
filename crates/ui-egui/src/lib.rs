@@ -273,6 +273,8 @@ pub struct VectorcraftApp {
     pub(crate) missing_font_edit_token: Option<u64>,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
+    /// The document whose settings the open Document Setup dialog edits.
+    pub(crate) document_setup_source: Option<u64>,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
     /// step however many values it sets.
     pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
