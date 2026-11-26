@@ -731,6 +731,7 @@ impl Interp {
     pub(crate) fn take_unhandled(&mut self) -> (Vec<crate::Rejection>, usize) {
         let rejected = std::mem::take(&mut self.promises.rejected);
         let mut out = Vec::new();
+        let mut attribution = Vec::new();
         let mut count = 0;
         for p in rejected {
             let (reason, site) = match self.heap.object(p).map(|o| &o.class) {
@@ -748,7 +749,17 @@ impl Interp {
                 message.truncate(cut);
                 message.push('…');
             }
-            let authored = self.thrown_by_script(&reason);
+            let authored = if let Some(object) = reason.as_object() {
+                if let Some((_, authored)) = attribution.iter().find(|(seen, _)| *seen == object) {
+                    *authored
+                } else {
+                    let authored = self.thrown_by_script(&reason);
+                    attribution.push((object, authored));
+                    authored
+                }
+            } else {
+                self.thrown_by_script(&reason)
+            };
             let (tag, (line, column)) = site.map_or((crate::UNKNOWN_SOURCE, (0, 0)), |(code, pc)| (code.source.tag, code.line_column(pc)));
             out.push(crate::Rejection { message, line, column, tag, authored });
         }

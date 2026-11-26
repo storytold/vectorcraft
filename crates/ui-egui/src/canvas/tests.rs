@@ -3599,7 +3599,10 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     // Cancel: nothing is edited, and the document, its undo history and the selection stay.
     let (before, undo, selected) =
         (node(&app), app.session.doc().unwrap().history.undo.len(), app.session.active().unwrap().selection.objects.clone());
+    let cancelled_token = app.missing_font_edit_token.expect("the question's edit token");
     answer(&mut app, false);
+    // A delayed approval for the cancelled question can no longer start an edit.
+    app.session.set_tool_option("missingFontEdit", &json!({"token": cancelled_token, "ok": true}));
     timed(&mut app, 1.5, vec![]);
     assert_eq!(app.session.tool_options()["editing"], json!(null));
     assert!(!app.session.tool_wants_text());
@@ -3609,6 +3612,16 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     // A new double-click asks again; OK edits with the caret where the type was clicked.
     double_click(&mut app, 3.0);
     assert!(asking(&app), "asked again");
+    let replaced_token = app.missing_font_edit_token;
+    // A Type press sent through automation can replace the prompt before the user answers.
+    let view = app.view_info();
+    let point = Point::new(b.x0 + b.width() * 0.25, b.center().y);
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, point.x, point.y), view);
+    }
+    assert_ne!(app.missing_font_edit_token, replaced_token);
+    crate::dialogs::host::pump(&mut app, &ctx);
+    assert!(asking(&app), "the replacement question is open");
     answer(&mut app, true);
     timed(&mut app, 3.5, vec![]);
     assert!(!asking(&app));
