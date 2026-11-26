@@ -902,6 +902,8 @@ pub(super) struct RatioKey {
     pub(super) under: Under,
     /// The picked gradient mesh points, which the active tool keeps without a revision.
     pub(super) mesh_points: Vec<(NodeId, Vec<usize>)>,
+    /// Whether the Live Paint Bucket paints, which gives the proxies its paints without a revision.
+    pub(super) bucket: bool,
     /// The Contrast For category, which the closest passing colors are for.
     pub(super) category: Category,
 }
@@ -1217,6 +1219,7 @@ fn measure(app: &VectorcraftApp, panel: &mut WheelUi) -> Measured {
         black_on_screen: app.session.prefs.black_on_screen.clone(),
         under: under(),
         mesh_points: app.session.fill_mesh_points(),
+        bucket: app.session.bucket_paints(),
         category,
     };
     match (&panel.ratio, &panel.backdrop) {
