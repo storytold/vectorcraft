@@ -32,7 +32,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let key = "group";
     let group = match p.get(key) {
         Some(Value::String(g)) => g.clone(),
-        None | Some(Value::Null) => crate::panels::swatches::sole_selected_group(app).ok_or("missing `group`")?,
+        None | Some(Value::Null) => {
+            crate::panels::swatches::sole_selected_group(app).ok_or("select a color group in the Swatches panel, or pass group")?
+        }
         Some(_) => return Err(format!("`{key}` must be a string")),
     };
     let st = app.session.active().ok_or("no document open")?;

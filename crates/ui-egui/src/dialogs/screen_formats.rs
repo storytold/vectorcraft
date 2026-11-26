@@ -374,9 +374,10 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
     let one = rows.len() == 1;
     let first = settings_format(&rows);
     let shown = Stack::new().show(ui, |ui, _| {
-        Row::new().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+        // The buttons end at the right edge; a column too narrow for them puts them on more lines.
+        Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
             Text::new(tl!("Formats:")).shade(Shade::Muted).show(ui);
-            Row::new().show(ui, |ui, _| {
+            Row::new().wrap(true).show(ui, |ui, _| {
                 for (id, label) in PLATFORMS {
                     if Button::new(tl!(label)).selected(preset == id).id_salt(id).show(ui).clicked() {
                         platform = Some(id);

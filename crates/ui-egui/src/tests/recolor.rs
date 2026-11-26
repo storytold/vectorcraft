@@ -276,6 +276,25 @@ fn the_dialog_reduces_previews_and_applies_as_one_undo_step() {
     assert_eq!(colors(&mut r.app()), 5);
 }
 
+/// Enter in the field that has the focus is OK: the color group is made with the name typed, and the dialog closes.
+#[test]
+fn enter_in_a_field_is_ok() {
+    let mut r = open(app(), json!({"colors": ["#ff8000", "#0080ff"]}));
+    r.settled();
+    r.set("groupName", json!("Enter Group")).unwrap();
+    r.settled();
+    r.click_label("Color Group:");
+    r.settled();
+    assert!(r.focused().is_some(), "a field of the dialog has the focus");
+    let groups = r.app().session.doc().unwrap().doc.swatch_groups.len();
+    key(&mut r, Key::Enter);
+    assert!(!r.is_open(), "Enter closes Recolor Artwork");
+    let app = r.app();
+    let doc = &app.session.doc().unwrap().doc;
+    assert_eq!(doc.swatch_groups.len(), groups + 1, "Enter makes the color group, as OK does");
+    assert_eq!(doc.swatch_groups.last().map(|g| g.name.as_str()), Some("Enter Group"));
+}
+
 #[test]
 fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
     let mut app = app();
@@ -1316,6 +1335,37 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         tap(&mut r, "Cancel");
         assert_eq!(colors(&mut r.app()), 2, "Recolor Cancel restores the original artwork");
     }
+}
+
+/// A Color Picker opened over the dialog, on its color models, has the Color Swatches button that
+/// switches it to the swatches.
+#[test]
+fn a_picker_over_the_dialog_offers_the_color_swatches_view() {
+    let mut r = edit(&["#ff0000", "#0000ff"]);
+    let at = marker(&r, 0);
+    right_click(&mut r, at);
+    tap(&mut r, "Color Picker");
+    assert!(picker(&r).is_some(), "the marker's Color Picker opens the picker");
+    assert!(has(&r, "Color Swatches"), "the picker has the Color Swatches button");
+    tap(&mut r, "Color Swatches");
+    assert!(has(&r, "Color Models"), "the button switches the picker to its swatches");
+}
+
+/// Pick from Swatches opens the picker on its swatches, showing the library that Limit to Library
+/// limits the rows to.
+#[test]
+fn pick_from_swatches_shows_the_limit_to_library_library() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let lib = library_of(&mut app, &[json!({"name": "Lib Teal", "color": "#008080"}), json!({"name": "Lib Plum", "color": "#8e4585"})]);
+    let mut r = assign(app, json!({"library": lib}));
+    assert_eq!(field(&r, "limitTo"), json!(lib));
+    let at = rect(&r, "New 1").center();
+    right_click(&mut r, at);
+    tap(&mut r, "Pick from Swatches");
+    assert!(picker(&r).is_some(), "Pick from Swatches opens the Color Picker");
+    assert!(has(&r, "Color Models"), "the picker shows its swatches, with the button back to the color models");
+    assert!(has(&r, "Lib Teal") && has(&r, "Lib Plum"), "the swatches are the Limit to Library library's");
 }
 
 /// Undo Changes and Redo Changes step back and forward through the dialog's own color edits, and

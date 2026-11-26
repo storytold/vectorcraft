@@ -62,6 +62,23 @@ pub enum LimitKind {
     Unbroken,
     /// A host function ended the run ([`crate::HostError::Abort`]).
     Host,
+    /// More promise jobs were waiting to run than a run may queue.
+    Jobs,
+}
+
+/// A promise the last run rejected that still had no rejection handler when the run ended
+/// ([`Realm::unhandled_rejections`]). `line` and `column` are where it was rejected: the `throw`,
+/// or the call to its reject function or `Promise.reject`; they are 0 when that is not known.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rejection {
+    /// The reason, described as an uncaught exception's message is.
+    pub message: String,
+    pub line: u32,
+    pub column: u32,
+    /// The source tag of the code `line` and `column` are in ([`Realm::error_tag`]).
+    pub tag: u32,
+    /// `message` is text the script supplied ([`RunError::authored`]).
+    pub authored: bool,
 }
 
 /// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
@@ -177,6 +194,8 @@ pub struct Realm {
     /// before the first script, for a script the realm did not compile, and once the tags are used
     /// up.
     script_tag: u32,
+    /// The unhandled rejections of the last run that ended successfully, and how many there were.
+    rejections: (Vec<Rejection>, usize),
 }
 
 impl Default for Realm {
@@ -194,7 +213,7 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: UNKNOWN_SOURCE }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: UNKNOWN_SOURCE, rejections: (Vec::new(), 0) }
     }
 
     /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
@@ -221,6 +240,14 @@ impl Realm {
     pub fn set_limits(&mut self, limits: Limits) {
         self.interp.limits = limits;
         self.interp.reset_gc_threshold();
+    }
+
+    /// Gives a realm made without [`Options::es2015`] the `Promise` that option adds, for its next
+    /// runs; a realm that has it already is left as it is. It does not take it away again, and it
+    /// does not add the option's other built-ins (`Symbol` and the iterators). Call it between
+    /// runs.
+    pub fn add_es2015(&mut self) {
+        crate::builtins::promise::add_to(&mut self.interp);
     }
 
     /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
@@ -252,17 +279,18 @@ impl Realm {
         let _ = interp.define(global, key(name), Prop::Data { value: Value::Object(o), flags: HIDDEN });
     }
 
-    /// Runs `source` as a script in the global environment and returns its completion value (the
-    /// value of the last expression statement that ran). A realm whose built-ins could not be
-    /// installed runs nothing and gives an internal error.
+    /// Runs `source` as a script in the global environment, then the promise jobs it queued, and
+    /// returns its completion value (the value of the last expression statement that ran). A realm
+    /// whose built-ins could not be installed runs nothing and gives an internal error.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let code = self.compile(source)?;
-        let result = self.interp.run_global(code, false);
+        let result = self.interp.run_global(code, false).and_then(|v| self.interp.drain_jobs(v));
         self.outcome(result)
     }
 
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
+        self.end();
         self.reset_run()?;
         let interp = &mut self.interp;
         let strict = interp.options.strict;
@@ -289,7 +317,9 @@ impl Realm {
     /// has [`Realm::script_tag`] as its source's tag, and each module loaded after it the next tag,
     /// in the order `load` first gave their sources, as the sources an evaluator gives during a run
     /// take theirs. A realm without [`Options::es2015`] runs no module: that is a syntax error.
+    /// A paused or waiting run ends before loading; its globals remain available.
     pub fn start_module(&mut self, key: &str, source: &str, limits: ModuleLimits, load: &mut ModuleLoader<'_>) -> Result<(), RunError> {
+        self.end();
         self.reset_run()?;
         if !self.interp.options.es2015 {
             let message = "modules need ECMAScript 2015; this script runs ECMAScript 5".to_string();
@@ -323,18 +353,20 @@ impl Realm {
         }
     }
 
-    /// Runs the module `key` with `source` to its end ([`Realm::start_module`]) and returns
-    /// `undefined`.
+    /// Runs the module `key` with `source` to its end ([`Realm::start_module`]), drains its queued
+    /// Promise jobs, and returns `undefined`.
     pub fn run_module(&mut self, key: &str, source: &str, limits: ModuleLimits, load: &mut ModuleLoader<'_>) -> Result<JsValue, RunError> {
         self.start_module(key, source, limits, load)?;
-        let result = self.interp.execute();
+        let result = self.interp.execute().and_then(|value| self.interp.drain_jobs(value));
         self.outcome(result)
     }
 
     /// Readies the realm for a run: its state from the last run cleared and its fuel filled.
     fn reset_run(&mut self) -> Result<(), RunError> {
         self.script_tag = UNKNOWN_SOURCE;
+        self.rejections = (Vec::new(), 0);
         let interp = &mut self.interp;
+        interp.end_jobs(false);
         if let Some(message) = &interp.install_error {
             return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0, authored: false });
         }
@@ -391,11 +423,15 @@ impl Realm {
         interp.constructing = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
+        interp.end_jobs(result.is_ok());
         if let Some(es2015) = interp.next_es2015.take() {
             interp.set_es2015(es2015);
         }
         match result {
-            Ok(v) => Ok(interp.to_js_value(&v)),
+            Ok(v) => {
+                self.rejections = interp.take_unhandled();
+                Ok(interp.to_js_value(&v))
+            }
             Err(Abrupt::Throw(v)) => {
                 let message = interp.describe(&v);
                 let authored = interp.thrown_by_script(&v);
@@ -405,6 +441,11 @@ impl Realm {
             Err(Abrupt::Limit(LimitKind::Host)) => {
                 let message = interp.host_abort.take().unwrap_or_else(|| format!("limit reached: {:?}", LimitKind::Host));
                 Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column, authored: false })
+            }
+            Err(Abrupt::Limit(LimitKind::Jobs)) => {
+                let max = interp.promises.max_jobs;
+                let message = format!("limit reached: Jobs (more than {max} promise jobs were waiting to run)");
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Jobs), message, line, column, authored: false })
             }
             Err(Abrupt::Limit(kind)) => {
                 Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column, authored: false })
@@ -425,12 +466,14 @@ impl Realm {
     /// Runs the script begun with [`Realm::start`] for about `slice` units of fuel (at least one
     /// instruction), and pauses where it can resume: between two instructions of the script's own
     /// code. A getter, a built-in's callback or another nested run has native frames under it, so
-    /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. Once this has returned
+    /// it runs on to its end, for at most [`Realm::set_unbroken_fuel`] more. After the script's code
+    /// ends, the slices run the promise jobs it queued, pausing between jobs and inside a callback
+    /// written in JavaScript, and the run is done once the queue is empty. Once this has returned
     /// [`Progress::Done`] or an error, the run is over. While a host function's call waits for its
     /// result ([`Realm::waits`]), the run does not advance: this gives an internal error.
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
-        if interp.frames.is_empty() {
+        if !interp.running() {
             return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0, authored: false });
         }
         if interp.waiting {
@@ -446,7 +489,7 @@ impl Realm {
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
         interp.fuel = cap;
         interp.in_slice = true;
-        let r = interp.execute_slice(cap - slice.min(cap));
+        let r = interp.execute_run_slice(cap - slice.min(cap));
         interp.in_slice = false;
         let used = cap - interp.fuel;
         interp.fuel = total - used;
@@ -461,7 +504,28 @@ impl Realm {
 
     /// Is a run begun with [`Realm::start`] still going?
     pub fn is_running(&self) -> bool {
-        !self.interp.frames.is_empty()
+        self.interp.running()
+    }
+
+    /// The promises the last run rejected that still had no rejection handler when it ended
+    /// successfully, in the order they were rejected: the first 20 of them. Empty after a run that
+    /// ended with an error, and until a run ends.
+    pub fn unhandled_rejections(&self) -> &[Rejection] {
+        &self.rejections.0
+    }
+
+    /// How many unhandled rejections the last run that ended successfully had, the ones
+    /// [`Realm::unhandled_rejections`] leaves out included.
+    pub fn unhandled_rejection_count(&self) -> usize {
+        self.rejections.1
+    }
+
+    /// Which source the code with tag `tag` is, as [`Realm::error_source`] gives it for an error.
+    pub fn source_of(&self, tag: u32) -> u32 {
+        match tag {
+            UNKNOWN_SOURCE => UNKNOWN_SOURCE,
+            tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
+        }
     }
 
     /// Ends a run begun with [`Realm::start`] where it is, paused or waiting for a host function's
@@ -544,10 +608,7 @@ impl Realm {
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
     /// includes code from an earlier script and from the sources given during its run.
     pub fn error_source(&self) -> u32 {
-        match self.interp.error_tag {
-            UNKNOWN_SOURCE => UNKNOWN_SOURCE,
-            tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
-        }
+        self.source_of(self.interp.error_tag)
     }
 
     /// The source tag of the code the last error's `line` and `column` are in, which stays the same

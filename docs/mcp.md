@@ -1222,6 +1222,8 @@ the art below it inside the object, groups and layer around it, the object's row
 the background when `against` or `opacity` is given;
 inside an object, group or layer that isolates its blending, the modes blend only with the art it holds);
 `opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
+While the active tool paints with the proxy's color (the Live Paint Bucket, the Shape Builder's fill), that color is
+drawn the same way, and the selected objects' opacities and blend modes do not apply.
 `against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
 selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
 images included; template layers and guides left out, as exports leave them out; the artboard's white where nothing
@@ -1484,6 +1486,13 @@ WebP file: `quality` runs from 0 to 100 (default 90, VectorCraft's own value), a
 a larger file. A lossy file keeps the alpha exactly when some pixels are not opaque. A WebP `quality` above 100, or one
 that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
 or in `settings.webp`.
+
+GIF and PNG-8 exports take Save for Web's `transparencyDither` (`none`, the default, `diffusion`, `pattern` or `noise`)
+and `transparencyDitherAmount` (0 to 100, default 100) next to `dither` and `ditherAmount`, and they change the file as
+in `document.exportForWeb`: with `transparency` on, some partly transparent pixels become transparent and the rest keep
+their color, and without `transparency` the keys do not change the file. For GIF and PNG-8 an unknown method, or an
+amount that is not a whole number from 0 to 100, is refused; other formats do not read the keys, and the warnings name
+them. GIF and PNG-8 Options show both as Transparency Dither and its amount, disabled while Transparency is off.
 
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
@@ -2710,7 +2719,9 @@ Every script, `.js`, `.jsx` or `source`, also reads ECMAScript for XML (E4X, ECM
 https://ecma-international.org/publications-and-standards/standards/ecma-357/): XML and XMLList literals, the `..`,
 `.@`, `.*`, `.()` and `::` selectors, `for each`, `default xml namespace`, and the global `XML`, `XMLList`,
 `Namespace`, `QName`, `isXMLName` and `setDefaultXMLNamespace`, as the XML object pages describe them
-(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/).
+(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file or a module also has
+`Promise` (described below); a `.jsx` file and a `source` string that runs as a script do not, except that a named engine
+(`#targetengine`) has `Promise` from its first `.js` or module run and keeps it for every later run, as it keeps its globals.
 
 A `path` that ends in `.mjs` (in any case) runs as an ECMAScript 2015 module
 (https://262.ecma-international.org/6.0/#sec-modules): strict mode code with the forms above (optional chains and `??`
@@ -2743,6 +2754,9 @@ names the specifier.
   `export *` passes on every name but `default`, and `export * as ns from` passes on a namespace.
 - A module's top-level names stay in the module, `this` is `undefined` at its top, it has no preprocessor lines,
   and `import()` is a syntax error. `vc`, `$` and the other globals are there as in a script.
+- In the host API, `Realm::run_module` drains queued Promise jobs before returning, as sliced module execution does.
+  `Realm::start_module` and `Realm::run_module` end a paused or waiting run before loading replacement source,
+  including when that source fails to compile. Existing globals remain available.
 - Module files count against the limits of `#include` files: 8 MiB a file, 32 MiB of source in all, 64 files
   besides the script, imports 16 deep and 1,024 paths looked up. These limits are VectorCraft's own.
 
@@ -2759,8 +2773,20 @@ through `$`:
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection` (assigning it sets the active document's selection), `app.coordinateSystem` and
-  `app.getIsFileOpen(path)`. A script may name the application's members without `app.`, as
+  `app.selection` (assigning it sets the active document's selection), `app.coordinateSystem`,
+  `app.getIsFileOpen(path)` and `app.executeMenuCommand(name)`. `executeMenuCommand` runs the command of a menu item
+  on the active document, as the type definitions at https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts
+  describe the method, and takes these names from the list at
+  https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510:
+  `selectall` (`select.all`), `deselectall` (`select.none`), `group` (`object.group`), `ungroup`
+  (`object.ungroup`), `makeMask` (`object.clippingMask.make`), `releaseMask` (`object.clippingMask.release`),
+  `compoundPath` (`object.compoundPath.make`) and `noCompoundPath` (`object.compoundPath.release`), and
+  `Fit Artboard to artwork bounds` (https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee), which runs
+  `artboard.fitToArt` on the active artboard. Names are matched exactly. Any other name throws an error that names
+  it, and a name that is not a string throws a `TypeError`. VectorCraft's own rule: a menu item that is not
+  available, with no document open, nothing selected that it acts on, or a locked active artboard or one with no art
+  for `Fit Artboard to artwork bounds`, does nothing and adds no undo step. An available menu item runs its command,
+  and an error that command returns throws. A script may name the application's members without `app.`, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
   describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
   assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
@@ -2888,6 +2914,27 @@ through `$`:
   open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+In a `.js` script, `Promise` follows ECMA-262 11th edition section 25.6
+(https://262.ecma-international.org/11.0/#sec-promise-objects): the constructor, `then`, `catch`, `finally`,
+`Promise.resolve`, `reject`, `all`, `allSettled` and `race`. `Promise.any` is not provided. These are VectorCraft's
+own rules:
+
+- The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
+  the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
+  A promise still pending when no job is left stays pending, and the run ends.
+- The jobs run on the run's fuel and limits, and each job takes 1 unit of fuel. A chain of callbacks that never ends
+  stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
+  `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
+  `script.stop` drops the jobs still waiting, and the documents go back as for any failed run.
+- `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
+  item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
+  statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+- A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
+  report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
+  rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
+  all of them, and the Script Console shows an error line for each, as in
+  `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
 
 The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
 `arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
@@ -3101,7 +3148,8 @@ VectorCraft sets these limits itself:
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`, with
+`unhandledRejections` and `unhandledRejectionCount` as well when a `.js` script left rejected promises unhandled. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the
@@ -3948,36 +3996,23 @@ the window's edge.
 
 ## Docking toolbars made with New Toolbar
 
-A toolbar made with New Toolbar floats when it is made. `window.toolbar.dock {name, side?, order?}` (Dock to Left and
-Dock to Right in the context menu of the toolbar's title bar, remote mode, `invoke_menu`) docks it in a lane along the
-window's left or right edge. On the left, the lane is right of the Tools panel when the Tools panel is docked at the
-window's edge. With Keep Tools Beside the Canvas on and the Tools panel docked on the left, the lane is right of the
-Tools panel beside the canvas, and dropping a title bar on the Tools panel or on the lane docks the toolbar there. `side` is `left` or `right` (`start` and `end` also work); without it, the toolbar docks at the edge it
-docked at last, or at the left the first time. Toolbars docked at one edge stack from the top. `order` is the
-toolbar's place in that stack, 0 at the top, from 0 to the number of other toolbars docked there; without it, the
-toolbar goes at the end, or stays where it is when it is already docked at that edge. Each toolbar takes an equal
-share of the lane's height and its tools scroll in it, and the lane is as wide as its widest toolbar. When the lane
-is too short to give each toolbar 88 points of height, the stack wraps into more columns, left to right, and the lane
-widens, so no toolbar covers another. A lane takes at most half the width the canvas and panels would have (beside
-the canvas, it also leaves the canvas at least 200 points, and the canvas keeps room for one column); when that
-many columns still give a toolbar less than 88 points, the toolbars in those columns show only their title bars, which
-still float, dock and show the context menu. A column too short for all of its title bars shows as many as fit, and
-the mouse wheel over the column scrolls through the others, one toolbar per notch.
-`window.toolbar.float {name, x?, y?}` (Float Toolbar in the same menu) floats it with its top-left corner at `x`, `y`
-in screen points, or where it floated last when both are omitted. Both commands answer
-`{toolbar, floating, side, order, pos}`: `side` is the edge the toolbar docks at (while it floats, the edge it docked
-at last), `order` its place in that edge's stack (null while it floats) and `pos` where it floats (while it is docked,
-where it floated last). A missing or unknown name, a `side` other than left or right, an `order` that is not a whole
-number in range, or only one of `x` and `y` is an error and changes nothing. `window.toolbar.list` reports `floating`,
-`side` and `order` for each toolbar.
+A toolbar made with New Toolbar floats when it is made. `window.toolbar.dock {name, side?, order?}` (remote mode,
+`invoke_menu`) docks it as a column of the dock along the window's left or right edge, and a hidden toolbar shows.
+`side` is `left` or `right` (`start` and `end` also work); without it, the toolbar docks at the edge it docks at
+now, else at the edge of the docked panel it left when it floated or was hidden, else at the left. `order` is the
+place of the toolbar's column in that edge's dock, 0 at the window's edge, from 0 to the number of the dock's other
+columns; without it, the toolbar docks as the innermost column, or stays where it is when it already docks at that
+edge. `window.toolbar.float {name, x?, y?}` floats it with its top-left corner at `x`, `y` in window points, each
+from -1000000 to 1000000. When both are omitted, the dock floats it as it floats a panel, and a toolbar that floats
+already stays where it is. Both commands answer `{toolbar, floating, side, order, pos}`: `side` is the edge the
+toolbar docks at (while it floats or is hidden, the edge `window.toolbar.dock` uses without `side`), `order` its
+column's place in that edge's dock (null while it floats) and `pos` its top-left corner while it floats (null while it
+is docked). A missing or unknown name, a `side` other than left or right, an `order` that is not a whole number in
+range, or only one of `x` and `y` is an error and changes nothing. `window.toolbar.list` reports `floating`, `side`
+and `order` for each toolbar.
 
-With the pointer, dropping a floating toolbar's title bar on the window's left or right edge, or on that edge's lane,
-docks it at the end of that edge's stack; the target lights up while the title bar is dragged over it. Dragging a
-docked toolbar's title bar out of its lane floats it under the pointer. Escape, or the window losing focus, during
-the drag puts the toolbar back where it was. Hiding a docked toolbar keeps its place, renaming it keeps its place, a
-copy made with Manage Toolbars' + floats, and deleting one closes up the stack. Placement is kept with the workspace.
-Toolbars saved before docking existed load floating. The lanes, the edge targets and the stacking are VectorCraft's
-own layout rules.
+Dragging the toolbar's title bar also docks and floats it. Placement is kept with the
+workspace. These are VectorCraft's own layout rules.
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
@@ -4170,7 +4205,8 @@ Copy) and `object.transformAgain`, also when no object is selected, in one undo 
 guide transforms as the line `view.guides.release` makes of it, and the default origin is the center of the selected
 objects' box and those lines together. A guide that ends up vertical or horizontal stays a ruler guide at its new
 place: a turn of 180° keeps it, and a turn of 90° makes a horizontal guide vertical. A guide at any other angle
-becomes a guide path along its line, on the guide's layer, and is selected as one. Locked or hidden guides do not
+becomes a guide path along its line, on the guide's layer, and is selected as one; the reply's `ids` list it after
+the transformed objects. Locked or hidden guides do not
 transform, nor do guides when `ids` is given or `objects` is false. `object.rotate` with `absolute` and only ruler
 guides selected is an error, as guides have no bounding box angle.
 
@@ -5042,9 +5078,13 @@ already walks Image Trace. Short agent entry points:
   `replace` is true. Every preset in the file is checked first, and a file with a built-in preset's or `Custom`'s name,
   two presets of one name, a preset without a name or `params`, settings `imageTrace.presets.save` refuses, or a newer
   `version` changes nothing. In the app, opening a `.vctracepresets` file (File › Open, a drop, or the file picked
-  for Import… on the web) imports it as Import… does. Also in the app,
-  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog,
-  and `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
+  for Import… on the web) imports it as Import… does. Also in the app, the Image Trace panel's Preset row has a Manage
+  presets menu. Its Save as New Preset… and Rename… (a saved preset; also F2 on the picker) open a name field in the
+  row, which starts with the first free "Tracing Preset N" for a new preset and with the preset's name for a rename.
+  Enter or OK runs `imageTrace.presets.save` (with the panel's settings for a new preset, with `newName` for a rename),
+  and Escape or Cancel saves nothing. A built-in preset's name, `Custom` or another saved preset's name shows a message
+  under the field and keeps it open. Its Delete (a saved preset) runs `imageTrace.presets.delete`.
+  `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
   and the saved ones, with the selected preset's settings. Its New… (from the selected preset) and Edit… (a saved
   preset) open an editor with the Image Trace panel's settings; OK saves with `imageTrace.presets.save` and Cancel saves
   nothing, and a built-in preset's name, `Custom` or another saved preset's name keeps the editor open. Delete selects
@@ -8260,7 +8300,8 @@ the Direct Selection tool those of any path. `rectanglesOnly: true` sets them on
 alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
 selection, so an action that records them acts on the rectangles selected when it plays). Several objects each with their own corners are one call:
 `items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind. Double-clicking one with Direct Selection opens Corners (`ui.corners {id?, corners?}`,
-dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`). Double-clicking a selected live shape's corner
+dialog `corners`: `kind`, `radii`, `radius`, a percentage of each corner's own maximum while `radii` is `relative`; OK runs
+`object.setLiveShape`, as one undo step for corners whose maximums differ). Double-clicking a selected live shape's corner
 widget with the Selection tool shows and selects the Transform panel, as the Rectangle, Rounded Rectangle, Ellipse,
 Polygon and Star tools do. With the headless backend, the `pointer_gesture` reply carries `{"panel": "transform"}` in its
 `requests`; the desktop app runs `window.panel.activate {"panel": "transform"}` instead, and its reply has no `requests`. The tool, the selection and the document stay as they are, and
@@ -8425,6 +8466,13 @@ required field and it is not one of the commands left out below. A field is opti
 Commands listed this way include `type.fractionalWidths`, `type.systemLayout`, `object.setPixelAligned`,
 `links.embed`, `links.update`, `object.slice.delete`, `artboard.switchOrientation`, `artboard.distributeSpacing`,
 `appearance.targetContents` and `paint.invert`.
+
+They also list these UI commands, which have no menu bar item and no default shortcut and whose params are all
+optional: `ui.newSwatch`, `ui.newColorGroup`, `ui.colorGroupOptions`, `ui.newBrush`, `ui.brushOptions`,
+`ui.layerOptions`, `ui.corners`, `ui.placementOptionsDialog`, `ui.relinkDialog`, `ui.perspectivePlane`,
+`ui.bulletsAndNumbering`, `ui.missingFontsDialog` and `ui.findFontsInFolder`. A key assigned to one runs it with no
+params, as `{}` does: it opens the dialog for the selection or the current item, or the status bar shows why it cannot,
+for example "no brush selected".
 
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
@@ -9330,6 +9378,14 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
 ```
+
+Reset Preferences also sets the dialog's `__smartGuides`, `__snapToGrid` and `__taskBar` fields to their defaults
+(`__taskBar` takes the value the current workspace was saved with). A category's own reset sets the field of that
+category (Smart Guides, Guides & Grid or General), and File Handling's also resets the app chosen for Edit Original.
+`prefs.reset` run while Preferences is open shows the values it reset in the dialog. In the app, `prefs.reset` also resets Smart Guides,
+Snap to Grid and Enable Contextual Task Bar when it resets every category or their category (Smart Guides, Guides &
+Grid and General), and the app chosen for Edit Original when it resets every category or File Handling. A `category`
+left out or `null` resets every category, and one that is not a string is an error.
 
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
@@ -10396,8 +10452,13 @@ copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SV
 formats and they are published when they are ready. While that thread has a save, an export, a print or a recovery
 copy to finish, Copy and Cut make and publish them at once. When another Copy or Cut, or a copy of text in
 VectorCraft, comes first, they are dropped. Pasting what VectorCraft copied keeps the lossless internal clipboard,
-also before its formats are published. While a text field or the Type tool has the keyboard, the app waits for
-them. Windows carries every format both ways and pastes a bitmap from PNG, else
+also before its formats are published. When the formats could not be written (another app held the clipboard open
+or refused the write), every Paste takes the internal clipboard until another app copies something, and a paste
+into a text field or type takes the copy's text, or nothing when the formats have no text. The app notices that
+copy only when it changes the clipboard's text, so Paste reads the system clipboard when it held only a picture, or
+nothing that could be read, at the failed write. Once a paste has read the changed text, the older text coming back
+does not restore the copy. While a
+text field or the Type tool has the keyboard, the app waits for them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes
@@ -13720,8 +13781,10 @@ its features turned off, distinct from unset.
 not a global swatch of the document, a stroke weight outside 0 to 4000000, more than 256 feature tags and an
 OpenType feature tag the shaper does not know, unless the style or the text it is made from already has that value.
 They also reject a size outside 0.1 to 1296, explicit leading outside 0.1 to 5000, horizontal or vertical scale
-outside 1 to 10000, and baseline shift or Tate-chu-yoko offsets outside -1296 to 1296. `leading: null` keeps
-Auto leading. An invalid value leaves the style, its text, and Undo history unchanged.
+outside 1 to 10000, baseline shift or Tate-chu-yoko offsets outside -1296 to 1296, tracking or kerning
+outside -1000 to 10000, rotation outside -360 to 360, a stroke miter limit outside 1 to 500, a
+stroke dash length outside 0 to 4000000 or offset outside -4000000 to 4000000, Small Caps outside 1 to 200 and a
+variable font axis setting that is not a number. `leading: null` keeps Auto leading. An invalid value leaves the style, its text, and Undo history unchanged.
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
@@ -13853,9 +13916,16 @@ transforms and names included: pixels and runs that don't fit come the same way,
 fit makes `plugin.run` return a memory-budget error naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
-each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter, or a live effect with commands, at plug-in API level 3
-whose manifest lists `context` (`settings`, `artboards`, `layers`, `swatches`; `context` in its `plugin.list` entry)
+each of them as `{"id": …}` or exactly as given (an image may leave out `opacity`), otherwise `plugin.run` returns an
+error naming the object and the field, and the document and undo history are unchanged. A filter at plug-in API level 3 whose manifest also lists some of
+those kinds in `writes` (with `doc.write`; `writes` in its `plugin.list` entry) may return an object of such a kind with
+only the fields it changes: its name and `transform`, type's `text.runs` (at most 4,096 runs and 4,096 paragraphs, and
+fills and strokes with only the keys their `type` reads) and `text.paragraphs` (one style per paragraph of the new text,
+also when returned as given next to changed runs), an image's `opacity` and
+an instance's `symbolId`, which must name a symbol in the document. Any other changed field, or a value out of range,
+makes `plugin.run` return an error naming the object and the field, with nothing changed (docs/plugins.md, "Writing
+type, images and symbols"). An output that changes nothing records no undo step. A filter, or a live effect with
+commands, at plug-in API level 3 whose manifest lists `context` (`settings`, `artboards`, `layers`, `swatches`; `context` in its `plugin.list` entry)
 also lists `doc.read` in its `permissions`, and each filter or command run is given those parts of the active document in
 `_context.document`, with or without a selection: the document's name without its folder, color mode, units, active
 artboard size, bleed and raster effects resolution; every artboard's id, name and rectangle; every layer and sublayer
@@ -13943,13 +14013,21 @@ naming the permissions needed. With `VECTORCRAFT_NO_PREFS` set there is no store
 flag lasts for that session only. In other sessions the approval, or a `grant` accepted under the flag, is kept with the module's
 hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
 same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
-with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
+with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. A
+`grants.json` that does not carry VectorCraft's MAC for its folder, or is at another generation than the one the key
+store keeps for the folder, such as an earlier copy put back (see [plug-ins](plugins.md#grants-file-integrity)), grants
+nothing, and its plug-ins have `needsApproval: true` again. When the system key store can't be reached, an
+approval lasts for that session only and the file is left as it is. `plugin.remove`
 forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
 need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
 grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
-`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed.
-When the plug-in's settings and cache can't be moved back from their `.removed` folder then either, the error names
-that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed;
+so does a `plugin.remove` while the system key store can't be reached, also when `grants.json` is missing or doesn't
+name the plug-in. When `plugin.remove` can't delete an installed plug-in's stored module, it returns an error naming
+the file, and the plug-in stays installed with its grant kept in the store. For an id that isn't installed,
+`plugin.remove` also deletes the module stored for it that didn't
+load and returns `{removed}`. When the plug-in's settings and cache can't be moved back from their `.removed` folder
+then either, the error names that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
@@ -14390,9 +14468,10 @@ The new path takes the current fill, stroke and stroke weight (`fill` and `strok
 above the front-most object along the area (one whose outline touches the area's outline, or that covers it) and is
 selected. When a group, Live Paint group, Shaper group or clipping group holds that object, the new path goes above the
 outermost group in its layer, not inside it, and the group keeps its members. In isolation mode only the paths in
-the isolated layer or group bound areas, for the tool's hover and click and for the command (with `ids`, only the
-paths of the listed objects that are in it), and the new path goes inside the isolated layer or group, directly above
-the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
+the isolated layer or group bound areas, for the tool's hover and click and for the command. With `ids`, the paths
+of the listed objects that are in it bound areas, and all of its paths do when `ids` lists the isolated layer or group
+or a layer or group that holds it; the other listed objects are ignored. The new path goes inside the isolated layer
+or group, directly above the object in it that holds that path. No area is found while the isolated object is not a layer or group (a path
 or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or
 Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or
 inside an envelope. A point in no enclosed area is the error "Fill Area: no enclosed area under the pointer" and records no undo
@@ -15507,7 +15586,7 @@ Commands:
 - `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
   defaults for the values not given) and redraws it in place. With `reference` (0 to 8 on the 9-point grid of the
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
-  keeps its place, as with the Transform panel's W and H; otherwise the shape's center stays. Snapping to the pixel
+  keeps its place, as with the Transform panel's W and H; with `center`, the shape's center moves to it; otherwise the shape's center stays. Snapping to the pixel
   grid and an attachment to a path apply after that, as they do for the Transform panel's W and H, and can move the
   point. A `reference` outside 0 to 8 is an error. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
   `null` when snapping to the pixel grid left a plain path).

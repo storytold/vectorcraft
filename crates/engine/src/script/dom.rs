@@ -772,6 +772,62 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -1303,6 +1359,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1317,7 +1374,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1376,6 +1433,11 @@ fn items_length(h: &Host, a: &[Data]) -> Answer {
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
     items_doc(h, a)?;
     Ok(text("PageItems"))
+}
+
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
@@ -2085,6 +2147,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
@@ -2148,7 +2211,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));

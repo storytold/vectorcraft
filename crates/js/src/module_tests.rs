@@ -11,6 +11,64 @@ fn es() -> Realm {
     realm
 }
 
+#[test]
+fn synchronous_and_sliced_modules_drain_promise_jobs() {
+    let source = "out.push('body'); Promise.resolve().then(function () { out.push('resolved'); }); \
+                  Promise.reject('rejected').catch(function (e) { out.push(e); });";
+    for sliced in [false, true] {
+        let mut realm = es();
+        let mut load = loader(&[]);
+        if sliced {
+            realm.start_module("main.mjs", source, ModuleLimits::default(), &mut load).unwrap();
+            loop {
+                match realm.advance(100).unwrap() {
+                    Progress::Paused => {}
+                    Progress::Done(value) => {
+                        assert_eq!(value, JsValue::Undefined);
+                        break;
+                    }
+                }
+            }
+        } else {
+            assert_eq!(realm.run_module("main.mjs", source, ModuleLimits::default(), &mut load).unwrap(), JsValue::Undefined);
+        }
+        assert_eq!(realm.run("out.join('|')").unwrap(), JsValue::String("body|resolved|rejected".into()), "sliced={sliced}");
+    }
+}
+
+#[test]
+fn starting_a_module_discards_a_paused_script() {
+    for (sliced, invalid) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut realm = es();
+        realm.start("out.push('old');").unwrap();
+        assert_eq!(realm.advance(1).unwrap(), Progress::Paused);
+        let mut load = loader(&[]);
+        let source = if invalid { "var = ;" } else { "out.push('new');" };
+        if invalid {
+            let result = if sliced {
+                realm.start_module("main.mjs", source, ModuleLimits::default(), &mut load)
+            } else {
+                realm.run_module("main.mjs", source, ModuleLimits::default(), &mut load).map(drop)
+            };
+            assert!(result.is_err());
+            assert!(!realm.is_running(), "sliced={sliced}");
+            assert_eq!(realm.run("out.join('|')").unwrap(), JsValue::String(String::new()));
+            continue;
+        }
+        if sliced {
+            realm.start_module("main.mjs", source, ModuleLimits::default(), &mut load).unwrap();
+            loop {
+                if let Progress::Done(_) = realm.advance(100).unwrap() {
+                    break;
+                }
+            }
+        } else {
+            realm.run_module("main.mjs", source, ModuleLimits::default(), &mut load).unwrap();
+        }
+        assert_eq!(realm.run("out.join('|')").unwrap(), JsValue::String("new".into()), "sliced={sliced}");
+    }
+}
+
 /// A loader over `files`: each specifier is its own key, given with its source the first time.
 fn loader(files: &[(&str, &str)]) -> impl FnMut(&str, &str) -> Result<LoadedModule, LoadError> + use<> {
     let map: HashMap<String, String> = files.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();

@@ -32,16 +32,18 @@ use std::path::Path;
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Outcome as _, Show as _};
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
+use craft::ui::layout_components::Stack;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
+use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
@@ -65,6 +67,8 @@ pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a 
 
 /// The note the file dialog shows when the person picked more files than a script is given.
 const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files picked after them were left out";
+/// The height of the Script File Access prompt's list of picked files before it scrolls, in points.
+const PICKED_LIST_HEIGHT: f32 = 120.0;
 
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
@@ -82,6 +86,11 @@ crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KI
 /// The tag of the warning: the params `script.run` takes once the warning is answered.
 struct RunWarning {
     params: Value,
+    /// The automation roots in force when asked: the script runs under them, and under any in force
+    /// when the warning is answered.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the script runs as automation.
+    automated: bool,
 }
 
 /// What a script's `alert`, `confirm` or `prompt` dialog answers with.
@@ -353,7 +362,12 @@ impl StackDialog for ScriptFiles {
             }
             let rows = |ui: &mut Ui| paths.iter().for_each(|path| drop(Text::new(shown_text(path, false)).show(ui)));
             if paths.len() > 1 {
-                egui::ScrollArea::vertical().id_salt("script-picked").max_height(120.0).show(ui, rows);
+                Stack::new()
+                    .label(tl!("Picked files"))
+                    .scroll(Scroll::vertical())
+                    .room_height(PICKED_LIST_HEIGHT)
+                    .id_salt("script-picked")
+                    .show(ui, |ui, _| rows(ui));
             } else {
                 rows(ui);
             }
@@ -474,7 +488,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         .dont_show_again()
         .button(PromptChoice::Proceed, tl!("Run"))
         .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(RunWarning { params });
+        .tag(RunWarning { params, scope: ScopeHandle::capture(), automated: app.automation_asked() });
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
 }
@@ -561,10 +575,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        if let Err(e) = stored.and_then(|()| app.run("script.run", params).map(drop)) {
+        let run = |app: &mut VectorcraftApp| app.run("script.run", params).map(drop);
+        let automated = automated || app.automation_asked();
+        if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
             app.status(e);
         }
     }

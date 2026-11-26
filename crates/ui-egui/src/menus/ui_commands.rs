@@ -659,19 +659,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.dock",
         "Dock Toolbar",
         "",
-        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` in the lane along the window's left or right edge (omitted: the edge it docked at last, the left at first), as Dock to Left and Dock to Right in its title bar's context menu and dropping its title bar on that edge do; `order` is its place in that edge's stack, 0 at the top (omitted: the end, or where it is when it is docked at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}",
+        "{name: string, side?: left|right, order?: int} dock the toolbar made with New Toolbar called `name` as a column of the dock along the window's left or right edge (omitted: the edge it docks at, else the edge it docked at last, the left at first), as dragging its title bar to that edge does; a hidden toolbar shows; `order` is its column's place in that edge's dock, 0 at the window's edge (omitted: the innermost, or where it is when it docks at that edge already); a bad `side` or `order` is an error and changes nothing; returns {toolbar, floating, side, order, pos}, `pos` its top-left corner while it floats (else null)",
     ),
     (
         "window.toolbar.float",
         "Float Toolbar",
         "",
-        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in screen points (both or neither; omitted: where it floated last), as Float Toolbar in its title bar's context menu and dragging its title bar out of its lane do; returns {toolbar, floating, side, order, pos}",
+        "{name: string, x?: number, y?: number} float the toolbar made with New Toolbar called `name` with its top-left corner at x, y in window points (both or neither, each from -1000000 to 1000000; omitted: where the dock floats a panel, and a floating toolbar stays where it is), as dragging its title bar out of the dock does; a hidden toolbar shows; returns {toolbar, floating, side, order, pos}",
     ),
     (
         "window.toolbar.list",
         "List Toolbars",
         "",
-        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its place in that edge's stack while docked (else null)",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
@@ -1526,7 +1526,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.corners",
         "Corners…",
         "",
-        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget with Direct Selection opens it too): OK runs object.setLiveShape",
+        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radii (relative|absolute), radius (pt, or with relative radii a percentage of each corner's own maximum); double-clicking a corner widget with Direct Selection opens it too): OK runs object.setLiveShape, as one command.batch undo step when relative radii give the corners different lengths",
     ),
     (
         "ui.simplifyAuto",

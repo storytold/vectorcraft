@@ -1696,24 +1696,31 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
 /// `e`, the error `realm` raised in the run of `host`, at the line and column of the file it is in,
 /// with that file's name unless it is the run's own script.
 fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<str>>) {
-    let map = |m: &include::SourceMap| {
-        let (index, file, line, column) = m.locate(e.line, e.column);
-        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
-    };
     // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
     // file's place.
     if let Some((file, line, column)) = realm.error_mark().and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
         return (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, Some(file));
     }
+    placed(host, e, realm.error_source(), realm.error_tag())
+}
+
+/// `e`, raised at its line and column of the source `source` with tag `tag` ([`Realm::source_of`]
+/// and [`Realm::error_tag`]), at the line and column of the file it is in, with that file's name
+/// unless it is the run's own script.
+fn placed(host: &Host, e: &RunError, source: u32, tag: u32) -> (RunError, Option<Arc<str>>) {
+    let map = |m: &include::SourceMap| {
+        let (index, file, line, column) = m.locate(e.line, e.column);
+        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
+        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
+    };
     if e.line == 0 {
         return (e.clone(), None);
     }
     // An error in code from a source whose map is not at hand, such as code that `eval` compiled,
     // is given without a place.
     let unplaced = || (RunError { line: 0, column: 0, ..e.clone() }, None);
-    match realm.error_source() {
+    match source {
         0 => {
             let (e, index, file) = map(&host.script_map.borrow());
             (e, (index > 0).then_some(file))
@@ -1730,7 +1737,7 @@ fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<st
         // `$.evalFile` gave. A script given as text is named by that run's name.
         _ => {
             let kept = host.kept_maps.as_ref().map(|k| k.borrow());
-            match kept.as_ref().and_then(|k| k.get(realm.error_tag())) {
+            match kept.as_ref().and_then(|k| k.get(tag)) {
                 Some(kept) => {
                     let (e, index, file) = map(&kept.map);
                     let file = match &kept.script {
@@ -2084,7 +2091,7 @@ impl Session {
         // from its first run, and they act for the run that calls them.
         let fresh = realm.is_none();
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
-        // code the way the script does.
+        // code the way the script does. Its realm has `Promise`; a kept realm retains it.
         let es2015 = request.module || include::es2015_script(request.file.as_deref());
         let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
@@ -2093,6 +2100,9 @@ impl Session {
             Some(mut realm) => {
                 realm.set_limits(limits);
                 realm.set_es2015(es2015);
+                if es2015 {
+                    realm.add_es2015();
+                }
                 realm
             }
             None => {
@@ -2404,6 +2414,11 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        let rejections = rejections_report(host, &job.realm);
+        if let (false, Some(o)) = (rejections.is_empty(), report.as_object_mut()) {
+            o.insert("unhandledRejections".into(), Value::Array(rejections));
+            o.insert("unhandledRejectionCount".into(), json!(job.realm.unhandled_rejection_count()));
+        }
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());
@@ -2449,6 +2464,29 @@ const NO_RUN: &str = "this function's script run has ended";
 const DROP_MAIN: &str = "the main script engine is new for each run and is never kept, so it cannot be dropped";
 const NO_ENGINES_ON_WEB: &str = "named script engines (#targetengine) are not available on the web";
 const ENGINE_BUSY: &str = "the script engine is in use by another run";
+const UNHANDLED_REJECTION: &str = "unhandled promise rejection";
+const UNHANDLED_REJECTIONS: &str = "unhandled promise rejections";
+
+/// The promises `realm`'s run rejected and left without a handler, each with its reason and, when
+/// known, the line, column and file it was rejected at.
+fn rejections_report(host: &Host, realm: &Realm) -> Vec<Value> {
+    let mut out = Vec::new();
+    for r in realm.unhandled_rejections() {
+        let e = RunError { kind: RunErrorKind::Thrown, message: r.message.clone(), line: r.line, column: r.column, authored: r.authored };
+        let (e, file) = placed(host, &e, realm.source_of(r.tag), r.tag);
+        let mut o = json!({
+            "message": e.message,
+            "messageOrigin": if e.authored { "script" } else { "built-in" },
+            "line": e.line,
+            "column": e.column,
+        });
+        if let (Some(file), Some(map)) = (file, o.as_object_mut()) {
+            map.insert("file".into(), json!(&*file));
+        }
+        out.push(o);
+    }
+    out
+}
 
 /// The report of a run that failed; `file` is the included file the error is in.
 fn failure_report(name: &str, e: &RunError, file: Option<&str>, host: &Host, fuel_left: u64, fuel_used: u64) -> Value {
@@ -2528,6 +2566,18 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
     }
     if report["ok"] == false {
         each_line(&error_text(&host.name, report), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+    }
+    if let Some(rejections) = report["unhandledRejections"].as_array() {
+        for r in rejections {
+            let mut placed = r.clone();
+            placed["message"] = json!(format!("{UNHANDLED_REJECTION}: {}", r["message"].as_str().unwrap_or_default()));
+            each_line(&error_text(&host.name, &placed), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        }
+        let more = report["unhandledRejectionCount"].as_u64().unwrap_or(0).saturating_sub(rejections.len() as u64);
+        if more > 0 {
+            let text = format!("{}: {more} more {UNHANDLED_REJECTIONS}", host.name);
+            each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        }
     }
     let timing = clock().is_some();
     let ms = millis(host.run_nanos.get());

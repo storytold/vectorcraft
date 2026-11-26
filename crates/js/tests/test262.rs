@@ -43,6 +43,12 @@
 //! `annexb-language-failures.txt` and `annexb-builtins-failures.txt`). A suite without
 //! `test/annexB/` skips them; a folder there with no test to parse or run fails them.
 //!
+//! Another test runs the tests under `test/built-ins/Promise` in realms with `Options::es2015`:
+//! those whose feature tags name only `Promise`, `Promise.allSettled` and
+//! `Promise.prototype.finally`, whose code parses and uses only the built-ins present. `async` tests
+//! run with the suite's `doneprintHandle.js` and pass when they print the completion line. Its
+//! failures go to `promise-failures.txt`.
+//!
 //! Another test runs the tests of `Symbol`, `Object.getOwnPropertySymbols` and the iterators of
 //! arrays and strings (the folders [`SYMBOL_BUILT_INS`] names) in a realm with
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
@@ -370,7 +376,7 @@ fn parse_check(source: &str, meta: &Meta, strict: bool) -> Result<(), String> {
 
 /// Globals and method names the interpreter does not provide yet: a test that names one, in its
 /// own source or in a harness file it includes, is skipped.
-const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+const MISSING_BUILTINS: &str = "String Number Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
     WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
     match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
 
@@ -1093,6 +1099,145 @@ fn run_annex_b(dir: &Path) {
     }
     println!("test262 Annex B built-ins failures: {}", path.display());
     assert_eq!(panicked, 0, "the interpreter panicked; see the Annex B failure files in {}", dir.display());
+}
+
+/// The feature tags a `test/built-ins/Promise` test may carry and still run: `Promise`,
+/// `Promise.allSettled` and `Promise.prototype.finally`.
+const PROMISE_FEATURES: &[&str] = &["Promise", "Promise.allSettled", "Promise.prototype.finally"];
+
+#[test]
+fn promise_builtins_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Promise: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_promise(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs one `test/built-ins/Promise` test in a new realm with [`Options::es2015`] and a global
+/// `print` that collects its output; an `async` test passes when it prints
+/// `Test262:AsyncTestComplete`.
+fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool) -> Result<(), String> {
+    let options = Options { es2015: true, ..Options::default() };
+    let mut realm = Realm::with_options(options, Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    let printed = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
+    let out = printed.clone();
+    realm.define_function("print", move |args| {
+        let line = match args.first() {
+            Some(JsValue::String(s)) => s.clone(),
+            Some(other) => format!("{other:?}"),
+            None => String::new(),
+        };
+        out.borrow_mut().push_str(&line);
+        out.borrow_mut().push('\n');
+        Ok(JsValue::Undefined)
+    });
+    let result = realm.run(script);
+    if asynchronous && result.is_ok() && negative_type.is_none() {
+        let printed = printed.borrow();
+        return if printed.contains("Test262:AsyncTestComplete") && !printed.contains("Test262:AsyncTestFailure") {
+            Ok(())
+        } else {
+            Err(format!("printed {:?}", printed.trim()))
+        };
+    }
+    match (result, negative_type) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
+        (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
+            realm.bind_last_thrown("__thrown");
+            match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
+                Ok(JsValue::Bool(true)) => Ok(()),
+                _ => Err(format!("threw {} (line {}); a {t} was expected", e.message, e.line)),
+            }
+        }
+        (Err(e), _) => Err(format!("{:?}: {} (line {}, column {})", e.kind, e.message, e.line, e.column)),
+    }
+}
+
+/// Runs the tests under `test/built-ins/Promise` whose feature tags are all in
+/// [`PROMISE_FEATURES`], whose code parses as ES5 and uses only the built-ins present, as sloppy
+/// and strict code as [`run_tests`] does, `async` tests included. Prints the counts and writes the
+/// failures to `promise-failures.txt` beside the suite.
+fn run_promise(dir: &Path) {
+    let root = or_fail(inside(dir, "test/built-ins/Promise"));
+    assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+    // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let done = harness("doneprintHandle.js");
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Promise $DONE print"]);
+    let mut groups: std::collections::BTreeMap<String, RunCounts> = std::collections::BTreeMap::new();
+    let (mut files, mut other_features) = (0usize, 0usize);
+    for path in or_fail(test_files(&root)) {
+        files += 1;
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.features.iter().any(|f| !PROMISE_FEATURES.contains(&f.as_str())) {
+            other_features += 1;
+            continue;
+        }
+        let asynchronous = meta.flags.iter().any(|f| f == "async");
+        let tags = if meta.features.is_empty() { "no feature tag".to_string() } else { meta.features.join(", ") };
+        let counts = groups.entry(format!("{tags}, {}", if asynchronous { "async" } else { "sync" })).or_default();
+        let negative_parse = matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution"));
+        if negative_parse || meta.flags.iter().any(|f| f == "module") {
+            counts.skipped += 1;
+            continue;
+        }
+        let mut includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if asynchronous {
+            includes.push_str(&done);
+            includes.push('\n');
+        }
+        if parse(&source, &Options::default()).is_err() || needs_missing_builtin(&[&source, &includes], &missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            match std::panic::catch_unwind(|| run_promise_one(&script, negative_type.as_deref(), asynchronous)) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    let mut all = RunCounts::default();
+    for (group, counts) in &groups {
+        println!("test262 built-ins/Promise, {group}: {}.", counts.summary());
+        all.tests += counts.tests;
+        all.skipped += counts.skipped;
+        all.passed += counts.passed;
+        all.failed += counts.failed;
+        all.panicked += counts.panicked;
+        all.failures.push_str(&counts.failures);
+    }
+    let report = dir.join("promise-failures.txt");
+    if let Err(e) = std::fs::write(&report, &all.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 built-ins/Promise through the interpreter: {files} files, {other_features} with other feature tags left out; {}. Failures: {}",
+        all.summary(),
+        report.display()
+    );
+    assert!(all.tests > 0, "no Promise tests ran under {}", root.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", report.display());
 }
 
 /// The folders of the tests of `Symbol`, Symbol-keyed properties and the iterators of arrays and

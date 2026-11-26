@@ -55,10 +55,35 @@ pub(crate) fn internal<T>(message: &str) -> JsResult<T> {
 
 /// The hash an error the interpreter throws keeps of its description ([`Interp::throw`]).
 fn description_hash(text: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::hash::DefaultHasher::new();
-    text.hash(&mut h);
+    let mut h = DescriptionHash::default();
+    h.text(text);
     h.finish()
+}
+
+/// A [`description_hash`] fed the description's code units a run at a time, so a long string is
+/// hashed without being copied.
+#[derive(Default)]
+struct DescriptionHash(std::hash::DefaultHasher);
+
+impl DescriptionHash {
+    fn units(&mut self, units: &[u16]) {
+        use std::hash::Hasher;
+        for &u in units {
+            self.0.write_u16(u);
+        }
+    }
+
+    fn text(&mut self, text: &str) {
+        use std::hash::Hasher;
+        for u in text.encode_utf16() {
+            self.0.write_u16(u);
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        use std::hash::Hasher;
+        self.0.finish()
+    }
 }
 
 /// The kinds of error object the engine throws.
@@ -358,6 +383,8 @@ pub(crate) struct Interp {
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
     pub(crate) strict_writes: bool,
+    /// `Promise` and the run's promise job queue ([`crate::builtins::promise`]).
+    pub(crate) promises: crate::builtins::promise::Promises,
     /// The well-known Symbols, `Symbol.for`'s registry and the objects that go with them, in a
     /// realm with [`crate::Options::es2015`].
     pub(crate) symbols: crate::symbol::Symbols,
@@ -629,6 +656,7 @@ impl Interp {
             finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
+            promises: crate::builtins::promise::Promises::default(),
             symbols: crate::symbol::Symbols::default(),
         };
         // With `Options::es2015`, the first run names the built-in functions, under the limits
@@ -680,7 +708,7 @@ impl Interp {
         let Value::Object(o) = v else { return true };
         let Some(Class::Error(Some(hash))) = self.heap.object(*o).map(|o| &o.class) else { return true };
         let hash = *hash;
-        description_hash(&self.describe(v)) != hash
+        self.describe_hash(*o) != hash
     }
 
     pub(crate) fn type_error(&mut self, message: &str) -> Abrupt {
@@ -858,6 +886,7 @@ impl Interp {
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
         self.drop_left_finally_sites(self.stack.len());
+        self.promises.forget_handled(&self.heap);
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -894,13 +923,20 @@ impl Interp {
         }
         self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
         roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
+        self.promises.add_roots(&mut roots);
         self.heap.collect(&roots);
         crate::host_classes::forget_collected(&mut self.host_objects, &self.heap, &self.host_classes);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
-        self.heap.bytes =
-            self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get()).saturating_add(self.symbols.registry_bytes());
+        let queued = self.promises.queue_bytes();
+        self.heap.bytes = self
+            .heap
+            .bytes
+            .saturating_add(self.held_bytes)
+            .saturating_add(self.held.now.get())
+            .saturating_add(self.symbols.registry_bytes())
+            .saturating_add(queued);
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -2045,9 +2081,10 @@ impl Interp {
             _ => {}
         }
         if !self.object(id)?.extensible {
-            // A name that an object of a host class with an indexer lacks is read with the indexer
-            // first, so assigning it throws what reading it throws.
-            if array_index(&k).is_none()
+            // A name that an object of a host class with an indexer lacks, and its prototypes lack
+            // too, is read with the indexer first, so assigning it throws what reading it throws.
+            if inherited.is_none()
+                && array_index(&k).is_none()
                 && let Some(f) = self.host_indexer(id)?
             {
                 self.host_index(&f, id, Self::indexer_key(&k), false)?;
@@ -3378,6 +3415,21 @@ impl Interp {
         r
     }
 
+    /// Starts a call to `f` with no frame running, for a promise job: a native or host function
+    /// runs now and gives `Some` with its result, and a function written in JavaScript gets a
+    /// boundary frame that the caller runs, and gives `None`. A host function called here cannot
+    /// wait for its result, since no script code is running; a function written in JavaScript
+    /// runs as the script's own code does.
+    pub(crate) fn start_call(&mut self, f: Value, this: Value, args: Vec<Value>) -> JsResult<Option<Value>> {
+        self.reentry += 1;
+        let prepared = self.prepare_call(f, this, args);
+        self.reentry -= 1;
+        match prepared? {
+            Prepared::Done(v) => Ok(Some(v)),
+            Prepared::Closure(entry) => self.enter_function(entry, None, true).map(|()| None),
+        }
+    }
+
     fn call_rooted(&mut self, f: Value, this: Value, args: Vec<Value>, saved: usize) -> JsResult<Value> {
         match self.prepare_call(f, this, args)? {
             Prepared::Done(v) => Ok(v),
@@ -4334,9 +4386,15 @@ impl Interp {
     /// A description of a thrown value that runs no JavaScript: `Name: message` for an error,
     /// the text of a primitive.
     pub(crate) fn describe(&mut self, v: &Value) -> String {
-        let Value::Object(o) = v else { return self.primitive_to_str(v).to_rust_string() };
+        self.describe_prefix(v, usize::MAX)
+    }
+
+    /// [`Interp::describe`] with each string it reads cut to its first `max_units` code units
+    /// before it is copied.
+    pub(crate) fn describe_prefix(&mut self, v: &Value, max_units: usize) -> String {
+        let Value::Object(o) = v else { return self.primitive_to_str(v).prefix_to_rust_string(max_units) };
         let data = |interp: &Self, k: &str| match interp.find_property(*o, &key(k)) {
-            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s.to_rust_string()),
+            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s.prefix_to_rust_string(max_units)),
             _ => None,
         };
         match (data(self, "name"), data(self, "message")) {
@@ -4345,6 +4403,26 @@ impl Interp {
             (None, Some(m)) => m,
             (None, None) => format!("[object {}]", self.heap.object(*o).map_or("Object", |o| o.class.name())),
         }
+    }
+
+    /// The [`description_hash`] of the text [`Interp::describe`] gives for the object `o`, read
+    /// along its strings without copying them.
+    fn describe_hash(&self, o: ObjId) -> u64 {
+        let data = |k: &str| match self.find_property(o, &key(k)) {
+            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s),
+            _ => None,
+        };
+        let mut h = DescriptionHash::default();
+        match (data("name"), data("message")) {
+            (Some(n), Some(m)) if m.len() != 0 => {
+                n.for_each_chunk(|c| h.units(c));
+                h.text(": ");
+                m.for_each_chunk(|c| h.units(c));
+            }
+            (Some(s), _) | (None, Some(s)) => s.for_each_chunk(|c| h.units(c)),
+            (None, None) => h.text(&format!("[object {}]", self.heap.object(o).map_or("Object", |o| o.class.name()))),
+        }
+        h.finish()
     }
 }
 
