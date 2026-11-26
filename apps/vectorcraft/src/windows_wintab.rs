@@ -386,12 +386,11 @@ impl Readings {
     /// The wheel for a pointer message of the pen with the pointer id `pen` at the message time
     /// `time` with its `eraser` end, if the cursor it comes from is an airbrush: the one cursor whose
     /// latest packet is within [`MAX_SKEW_MS`] of the message, or, for the pen that took the
-    /// readings, the one cursor read since they started afresh, however long ago its last packet
-    /// came (a pen held still sends none). `None` when no cursor, or more than one, is that recent,
-    /// or the cursor has read only 0 since the readings started afresh, or another pen's message
-    /// read a wheel first since then, or the pen read another cursor's wheel since then. The same
-    /// pen's turn to its other end starts them afresh first; another pen's message with another end
-    /// does not.
+    /// readings, the latest packet of the cursor whose wheel it read, however long ago it came (a
+    /// pen held still sends none) and whatever other cursors were read since. `None` when no cursor,
+    /// or more than one, is that recent, or the cursor has read only 0 since the readings started
+    /// afresh, or another pen's message read a wheel first since then. The same pen's turn to its
+    /// other end starts them afresh first; another pen's message with another end does not.
     fn wheel_for(&mut self, time: u32, pen: u32, eraser: bool) -> Option<f32> {
         if self.pen.is_some_and(|p| p != pen) {
             return None;
@@ -408,18 +407,18 @@ impl Readings {
                 self.ends.push((pen, eraser));
             }
         }
-        let r = match self.list.as_slice() {
-            [one] if self.pen == Some(pen) => one,
-            list => {
-                let mut near_time = list.iter().filter(|r| near(time, r.time));
-                let r = near_time.next()?;
-                if near_time.next().is_some() {
-                    return None;
-                }
-                r
+        let r = if self.pen == Some(pen) {
+            let cursor = self.cursor?;
+            self.list.iter().find(|r| r.cursor == cursor)?
+        } else {
+            let mut near_time = self.list.iter().filter(|r| near(time, r.time));
+            let r = near_time.next()?;
+            if near_time.next().is_some() {
+                return None;
             }
+            r
         };
-        if !r.moved || self.cursor.is_some_and(|c| c != r.cursor) {
+        if !r.moved {
             return None;
         }
         let wheel = r.axis?.wheel(r.raw)?;
@@ -1237,12 +1236,13 @@ mod tests {
         assert_eq!(r.wheel_at(1010, false), Some(0.25));
         assert_eq!(r.wheel_at(1000 - MAX_SKEW_MS, false), Some(0.25), "a packet read just after the message");
         assert_eq!(r.wheel_at(60_000, false), Some(0.25), "a pen held still before it presses sends no packet");
+        r.forget();
         r.packet(packet(1, 1000), AXIS, u32::MAX - 5);
         r.packet(packet(2, 500), None, u32::MAX);
         assert_eq!(r.wheel_at(10, false), None, "two cursors at once, across the clock's wrap");
+        assert_eq!(r.wheel_at(9000, false), None, "neither recent");
         r.packet(packet(1, 1000), AXIS, 5000);
         assert_eq!(r.wheel_at(5010, false), Some(1.0), "the recent one of two");
-        assert_eq!(r.wheel_at(9000, false), None, "neither recent");
         r.forget();
         r.packet(packet(2, 500), None, 100);
         assert_eq!(r.wheel_at(100, false), None, "a cursor without a wheel");
@@ -1257,9 +1257,13 @@ mod tests {
         assert_eq!(r.wheel_at(1000, false), Some(0.25));
         // Another tablet's airbrush moves while the pen is held still.
         r.packet(packet(2, 750), AXIS, 5000);
-        assert_eq!(r.wheel_at(5010, false), None, "the other cursor's wheel");
+        assert_eq!(r.wheel_at(5010, false), Some(0.25), "its own cursor's wheel, not the other's");
+        assert_eq!(r.wheel_at(9000, false), Some(0.25), "however old both packets are");
         r.packet(packet(1, 500), AXIS, 6000);
         assert_eq!(r.wheel_at(6010, false), Some(0.5), "its own cursor again");
+        r.packet(Packet { status: TPS_PROXIMITY, ..packet(1, 500) }, AXIS, 6100);
+        r.packet(packet(2, 750), AXIS, 6105);
+        assert_eq!(r.wheel_at(6110, false), None, "its own cursor left; the other's is not taken");
         r.forget();
         r.packet(packet(2, 750), AXIS, 7000);
         assert_eq!(r.wheel_at(7010, false), Some(0.75), "after the readings started afresh");
