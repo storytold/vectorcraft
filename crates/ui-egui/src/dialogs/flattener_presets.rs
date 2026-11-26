@@ -90,10 +90,7 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
             Ok(app.session.flattener_presets().get(above).map(|p| p.name.clone()))
         }
         ManagerEvent::Action(ManagerAction::Import) => preset_manager::import(app, KEY, "flattener.presets.import", "Flattener presets", PRESET_EXTS),
-        ManagerEvent::Action(ManagerAction::Export) => {
-            crate::io::save_command_output(app, "flattener.presets.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
-            Ok(None)
-        }
+        ManagerEvent::Action(ManagerAction::Export) => preset_manager::export(app, "flattener.presets.export", PRESET_FORMAT, current),
         // A new name that is taken or a built-in one is refused by the command.
         ManagerEvent::Rename(name) if name.trim() == current => Ok(None),
         ManagerEvent::Rename(name) => Ok(select(app.run("flattener.presets.save", json!({ "name": current, "newName": name }))?)),
@@ -216,6 +213,8 @@ mod tests {
         let picker = crate::tests::picks::scripted(&mut app);
         open(&mut app, Some("Mine"));
         press(&mut app, ManagerAction::Export);
+        // The save panel suggests the preset's name.
+        assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Mine.vcflattener"));
         // The answered save panel writes the file in the next frame.
         picker.answer_saved(&file, None);
         frame(&mut app);

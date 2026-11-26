@@ -156,18 +156,36 @@ pub(super) fn full_layers(doc: &Document, sel: &HashSet<NodeId>) -> HashSet<Node
 /// whether the click moves the anchor to `id`: every click but a Shift range.
 pub(super) fn target_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
     if mods.shift
-        && let Some(start) = anchor.or(tree.state().selection.target)
+        && let Some(range) = anchor.or(tree.state().selection.target).and_then(|start| listed_range(tree, filter, start, id))
     {
-        let order = listed_nodes(tree, filter);
-        let at = |k: NodeId| order.iter().position(|r| *r == k);
-        if let (Some(i), Some(j)) = (at(start), at(id)) {
-            let range: Vec<u64> = order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect();
-            let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
-            return (("layer.target".into(), params), false);
-        }
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.target".into(), params), false);
     }
     let params = if mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
     (("layer.target".into(), params), true)
+}
+
+/// The `layer.selectAll` of a click with `mods` on the selection square of `id`. A plain click selects the row's art.
+/// Shift selects the art of every row `filter` lists from `anchor` (the last square clicked) to it, and Shift+Ctrl/Cmd
+/// adds that art to the selection. With no anchor listed, Shift adds the row's art or removes it when it is all
+/// selected, and so does Ctrl/Cmd. With it, whether the click moves the anchor to `id`: every click but a Shift range.
+pub(super) fn art_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
+    if mods.shift
+        && let Some(range) = anchor.and_then(|start| listed_range(tree, filter, start, id))
+    {
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.selectAll".into(), params), false);
+    }
+    let params = if mods.shift || mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
+    (("layer.selectAll".into(), params), true)
+}
+
+/// The rows `filter` lists from `start` to `end`, both included, top-down; `None` when either is not listed.
+fn listed_range(tree: &DocLayers<'_>, filter: &LayerFilter, start: NodeId, end: NodeId) -> Option<Vec<u64>> {
+    let order = listed_nodes(tree, filter);
+    let at = |k: NodeId| order.iter().position(|r| *r == k);
+    let (i, j) = (at(start)?, at(end)?);
+    Some(order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect())
 }
 
 /// The layer, group and object rows the panel over `tree` lists under `filter`, top-down: the children of open rows,
