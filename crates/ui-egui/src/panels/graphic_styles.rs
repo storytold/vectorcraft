@@ -56,6 +56,13 @@ use crate::panel_drag::PanelDrag;
 /// A style of the panel: its name, which is unique in a document.
 pub(crate) type StyleKey = String;
 
+/// A document's graphic style dragged out to the canvas.
+#[derive(Clone, Debug)]
+pub(crate) struct StyleDrag {
+    pub(crate) document: u64,
+    pub(crate) name: StyleKey,
+}
+
 /// The panel's views (`ui.panelView {panel: "graphicStyles", view}`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -516,6 +523,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .selection(Bind::bound(&mut panel.selection))
                     .view_lock(view.preset_view())
                     .reorder(PresetReorder::items())
+                    .drag_payload(move |drag: &ListDrag<StyleKey>| Some(StyleDrag { document: uid, name: drag.grabbed.clone() }))
                     .empty(tl!("Select styled art and click New Graphic Style."))
                     .row_items(items)
                     .tip(|ui, key| large_tip(app, &thumbs, ui, key))
@@ -1088,6 +1096,24 @@ mod tests {
 
     fn names(app: &VectorcraftApp) -> Vec<String> {
         app.session.active().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect()
+    }
+
+    #[test]
+    fn a_dragged_graphic_style_carries_the_source_document_to_the_canvas() {
+        use craft::ui::runtime::drag;
+        use craft::ui::testing::Fixture;
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Dragged Style"})).unwrap();
+        let document = app.session.active().unwrap().uid;
+        let app = RefCell::new(app);
+        let mut fixture = Fixture::new(move |ui| show(&mut app.borrow_mut(), ui));
+        fixture.room(egui::vec2(300.0, 600.0)).settle();
+        let from = fixture.by_label("Dragged Style").unwrap().center();
+        fixture.drag_hold_at(from, egui::vec2(0.0, 40.0));
+        let carried = drag::active::<StyleDrag>(fixture.ctx()).expect("the Graphic Styles browser supplies the canvas payload");
+        assert_eq!(carried.document, document);
+        assert_eq!(carried.name, "Dragged Style");
     }
 
     fn doc(app: &VectorcraftApp) -> Document {
