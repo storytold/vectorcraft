@@ -2109,6 +2109,24 @@ fn set_active_artboard_index_is_reported_without_an_undo_step() {
     assert!(r.get("activeArtboards").is_none());
 }
 
+/// Choosing the artboard that is active only by default keeps that artboard: one inserted before it
+/// moves it to the next index, and the report gives that index.
+#[test]
+fn choosing_the_default_active_artboard_keeps_it_when_one_is_inserted_before() {
+    let (mut s, _, _) = doc();
+    assert_eq!(s.active().unwrap().active_artboard, None);
+    let first = s.active().unwrap().doc.artboards[0].id;
+    let r = run(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.setActiveArtboardIndex(0); A.insert([800, 300, 900, 100], 0);\
+         vc.log(A.getActiveArtboardIndex());",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 1}]));
+    assert_eq!(s.active().unwrap().active_artboard, Some(first));
+}
+
 #[test]
 fn the_report_gives_the_active_artboard_the_run_leaves() {
     let (mut s, _, _) = doc();
@@ -2191,6 +2209,21 @@ fn has_selected_artwork_keeps_the_rest_of_the_selection() {
     let sel = &s.active().unwrap().selection;
     assert!(sel.objects.contains(&a) && sel.objects.contains(&b));
     assert_eq!(sel.guides.len(), 1);
+}
+
+/// The selection limit counts only the art an assignment would add: a layer with nothing to add
+/// changes nothing beside a selection already at the limit, and one with art to add throws.
+#[test]
+fn has_selected_artwork_checks_the_limit_only_for_art_it_adds() {
+    let (mut s, a, _) = doc();
+    run(&mut s, "app.activeDocument.layers.add();").unwrap();
+    // A selection of 10,001 entries, as the limit counts them.
+    s.active_mut().unwrap().selection.objects = vec![a; 10_001];
+    run(&mut s, "var l = app.activeDocument.layers[0]; l.hasSelectedArtwork = true;").unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(s.active().unwrap().selection.objects.len(), 10_001);
+    s.active_mut().unwrap().selection.objects = vec![a; 10_000];
+    let e = failure(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = true;");
+    assert!(e.contains("at most 10000"), "{e}");
 }
 
 #[test]

@@ -297,29 +297,30 @@ fn layer_has_selected(h: &Host, a: &[Data]) -> Answer {
 fn layer_set_has_selected(h: &Host, a: &[Data]) -> Answer {
     let on = boolean(arg(a, 1), "hasSelectedArtwork")?;
     let (doc, id) = this_layer(h, a)?;
-    let (ids, total) = with_doc(h, doc, |_, st| {
+    let (ids, over) = with_doc(h, doc, |_, st| {
         let inside = |o: &NodeId| st.doc.ancestry(*o).is_some_and(|a| a.contains(&id));
         let selected = &st.selection.objects;
         if !on {
-            return (selected.iter().copied().filter(inside).collect::<Vec<_>>(), 0);
+            return (selected.iter().copied().filter(inside).collect::<Vec<_>>(), false);
         }
         let locks = st.doc.locked_artboards();
         let art = st.doc.node(id).map(|n| n.layer_art(true)).unwrap_or_default();
         let mut have: std::collections::HashSet<NodeId> = selected.iter().copied().collect();
         let mut ids = Vec::new();
         for o in art {
-            if selected.len() + ids.len() > MAX_LISTED {
-                break;
+            if have.contains(&o) || !crate::cmd::select::is_selectable(&st.doc, st.isolation, &locks, o) {
+                continue;
             }
-            if !have.contains(&o) && crate::cmd::select::is_selectable(&st.doc, st.isolation, &locks, o) {
-                have.insert(o);
-                ids.push(o);
+            // Only art that would be added counts toward the limit.
+            if selected.len() + ids.len() >= MAX_LISTED {
+                return (ids, true);
             }
+            have.insert(o);
+            ids.push(o);
         }
-        let total = selected.len() + ids.len();
-        (ids, total)
+        (ids, false)
     });
-    if total > MAX_LISTED {
+    if over {
         return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects")));
     }
     if ids.is_empty() {
@@ -1291,16 +1292,19 @@ fn boards_active(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `setActiveArtboardIndex(index)`: the artboard becomes the view's active one. Nothing in the
-/// document changes, and no command runs.
+/// document changes, and no command runs. The artboard is kept by its id even when it is already
+/// active only as the fallback (no artboard chosen yet), so an artboard inserted before it later
+/// in the run moves it to the next index instead of taking its place.
 fn boards_set_active(h: &Host, a: &[Data]) -> Answer {
     let doc = boards_doc(h, a)?;
     let (len, now) = with_doc(h, doc, |_, st| (st.doc.artboards.len(), active_artboard(st)));
     let i = board_index_arg(arg(a, 1), len, "index")?;
-    if i != now {
+    {
         let mut s = h.session.borrow_mut();
         let st = s.document_mut(doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         st.active_artboard = st.doc.artboards.get(i).map(|ab| ab.id);
-        drop(s);
+    }
+    if i != now {
         let mut moved = h.dom.active_artboards.borrow_mut();
         if !moved.contains(&doc.uid) {
             moved.push(doc.uid);
