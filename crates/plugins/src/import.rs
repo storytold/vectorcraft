@@ -298,6 +298,17 @@ pub fn decode_with(bytes: &[u8], kinds: &[OutputKind]) -> Result<Imported> {
         };
         (objects, layers, artboards)
     };
+    for (i, object) in objects.iter().enumerate() {
+        if let ImportObject::Path(path) = object {
+            let at = format!("objects[{i}]");
+            if path.id.is_some() {
+                return Err(out_err(&at, "an importer returns new paths without `id`"));
+            }
+            if path.path.is_none() {
+                return Err(out_err(&at, "an imported path must include its geometry in `path`"));
+            }
+        }
+    }
     if objects.is_empty() && layers.is_empty() && artboards.is_empty() {
         return Err(Error::Output("the importer returned no objects".into()));
     }
@@ -581,11 +592,12 @@ fn decode_artboards(v: &Value) -> Result<Vec<OutArtboard>> {
         let r = o.get("rect").and_then(Value::as_array).filter(|r| r.len() == 4).ok_or_else(wrong)?;
         let n: Vec<f64> = r.iter().map(Value::as_f64).collect::<Option<_>>().ok_or_else(wrong)?;
         let (x, y, w, h) = (n[0], n[1], n[2], n[3]);
+        let (x1, y1) = (x + w, y + h);
         let inside = |v: f64| v.is_finite() && v.abs() <= MAX_COORD;
-        if !(w > 0.0 && h > 0.0 && inside(x) && inside(y) && inside(x + w) && inside(y + h)) {
+        if !(w > 0.0 && h > 0.0 && x1 > x && y1 > y && inside(x) && inside(y) && inside(x1) && inside(y1)) {
             return Err(wrong());
         }
-        boards.push(OutArtboard { name, rect: Rect::new(x, y, x + w, y + h) });
+        boards.push(OutArtboard { name, rect: Rect::new(x, y, x1, y1) });
     }
     Ok(boards)
 }
@@ -666,6 +678,35 @@ mod tests {
         let mut v = rich();
         edit(&mut v);
         decode_with(v.to_string().as_bytes(), ALL)
+    }
+
+    #[test]
+    fn importer_output_rejects_filter_only_path_updates() {
+        let square: Value = serde_json::from_str(SQUARE).unwrap();
+        let mut identified = square.clone();
+        identified["id"] = json!(3);
+        for object in [json!({"id": 3}), json!({"type": "path"}), identified] {
+            let output = json!({"objects": [object]});
+            for kinds in [&[OutputKind::Type][..], &[][..]] {
+                assert!(decode_with(output.to_string().as_bytes(), kinds).is_err(), "{kinds:?}: {output}");
+            }
+        }
+        let mut untyped = square.clone();
+        untyped.as_object_mut().unwrap().remove("type");
+        for object in [square, untyped] {
+            let output = json!({"objects": [object]});
+            for kinds in [&[OutputKind::Type][..], &[][..]] {
+                assert!(decode_with(output.to_string().as_bytes(), kinds).is_ok(), "{kinds:?}: {output}");
+            }
+        }
+    }
+
+    #[test]
+    fn importer_output_rejects_artboards_with_collapsed_endpoints() {
+        for rect in [[1_000_000.0, 0.0, 1e-12, 10.0], [0.0, 1_000_000.0, 10.0, 1e-12]] {
+            assert!(rich_with(|v| v["artboards"][0]["rect"] = json!(rect)).is_err(), "{rect:?}");
+        }
+        assert!(rich_with(|v| v["artboards"][0]["rect"] = json!([3_999_999.0, 3_999_999.0, 1.0, 1.0])).is_ok());
     }
 
     /// An importer listing every output kind returns type, an embedded image, paths, layers and

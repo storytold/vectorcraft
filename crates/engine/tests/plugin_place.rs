@@ -58,6 +58,38 @@ fn state(s: &mut Session) -> (usize, usize, usize, Value) {
     (d.history.undo.len(), d.history.redo.len(), d.doc.layers.len(), content)
 }
 
+#[test]
+fn placing_importer_checks_the_transformed_bounds_before_editing() {
+    let image = json!({"objects": [{
+        "type": "image", "pixelSize": [1, 1], "pixelsBase64": vectorcraft_format::base64_encode(&[255, 0, 0, 255]),
+        "transform": [20, 0, 0, 10, 0, 0],
+    }]})
+    .to_string();
+    for (index, output, half_width) in [(0, ART, 50.0), (1, image.as_str(), 10.0)] {
+        let mut s = with_document();
+        let mut manifest: Value = serde_json::from_str(&placing(&format!("test.place.canvas{index}"), r#"["tpc"]"#)).unwrap();
+        if index == 1 {
+            manifest["api"] = json!(4);
+            manifest["outputKinds"] = json!(["image"]);
+        }
+        install(&mut s, &tpl::returning(&manifest.to_string(), output));
+        let importer = format!("plugin.test.place.canvas{index}");
+        let before = state(&mut s);
+        for at in [[4_000_000.0, 400.0], [-4_000_000.0, 400.0], [400.0, 4_000_000.0], [400.0, -4_000_000.0]] {
+            for template in [false, true] {
+                assert!(
+                    place(&mut s, "Art.tpc", b"?", json!({"at": at, "template": template, "importer": importer})).is_err(),
+                    "{index}: {at:?}, template: {template}"
+                );
+                assert_eq!(state(&mut s), before);
+            }
+        }
+        let inside = place(&mut s, "Art.tpc", b"?", json!({"at": [4_000_000.0 - half_width, 400.0], "importer": importer}));
+        assert!(inside.is_ok(), "{index}: {inside:?}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before.0 + 1);
+    }
+}
+
 /// A placed group: its name, the names of its children, and its bounds as `(x0, y0, x1, y1)`.
 type Placed = (Option<String>, Vec<Option<String>>, (f64, f64, f64, f64));
 

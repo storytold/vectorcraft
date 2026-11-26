@@ -13944,9 +13944,13 @@ and `file.place.queue` take `importer?: "plugin.<id>"` (one that sets `place` an
 `params?`, and without `importer` a file no built-in format reads goes to the first such importer by id that lists its
 extension. The importer is given at most 128 MiB of the file (a larger file is refused from its size, with `importer`
 before any of it is read or decoded, and without it after its first 64 KiB are read or decoded)
-and `_context.mode` `"place"`; its objects, guides left out, are placed as one group named after the file, in the order
-it returned them, as one undo step, embedded whatever `link` says (`linked: false`). `plugin.run` of an importer is
-an error that names `document.open`. In the app, File › Open With lists the installed importers, and
+and `_context.mode` `"place"`; its visible layers' objects, or all objects when it returns no layers, are placed
+as one group named after the file, in the order it returned them, with guides omitted, as one undo step,
+embedded whatever `link` says (`linked: false`). `plugin.run` of an importer is
+an error that names `document.open`. Placement rejects transformed art beyond ±4,000,000 pt on either axis,
+including template placement, before changing the document. An importer returns new paths with geometry and
+without object IDs. An artboard's positive width and height must produce distinct finite endpoints within the canvas.
+In the app, File › Open With lists the installed importers, and
 `file.openWith {importer, path?, params?}` opens `path`, or a file picked among the importer's extensions, with one (on
 the web it opens File › Open's picker) and adds it to Open Recent. With `path` the reply is `document.open`'s result;
 on the desktop a picked file is read off the UI thread and the reply is `{background: true, status}`, and

@@ -1243,12 +1243,15 @@ error names the kind. An importer that lists no kinds is read as before, and the
   `locked` (default `false`) and `objects`, the indexes of its objects in `objects` in increasing order. Every object
   is in exactly one layer, and a layer may hold none. Without `layers`, every object goes in one layer.
 - `artboards` (kind `artboard`): 1–100 artboards, each with a `name` used once and a `rect`, `[x, y, width, height]`
-  with a width and height above 0, within ±4,000,000. They replace the one artboard around the art.
+  with a width and height above 0. Each computed endpoint must differ from its origin and remain within
+  ±4,000,000. They replace the one artboard around the art.
 - A `name` (of type, an image, a layer or an artboard) and a font's family and style are each 1–256 characters, not
   only spaces, without control characters or characters that change the direction of text.
 - An output whose `objects` is empty opens as a blank document when it has `layers` or `artboards`.
 - To place (`_context.mode` `"place"`), the objects of the visible layers are placed in one group with their type and
-  images, the objects of hidden layers are left out, and `artboards` are left out.
+  images, the objects of hidden layers are left out, and `artboards` are left out. Without layers, all objects are
+  placed. Transformed art beyond ±4,000,000 pt on either axis is rejected before the edit, including template placement.
+- Imported paths require `path` geometry and cannot include an `id`, at every plug-in API level.
 
 ## Writing a plug-in in Rust
 

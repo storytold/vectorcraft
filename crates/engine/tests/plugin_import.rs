@@ -472,9 +472,13 @@ fn rich_output() -> Value {
 }
 
 /// The active document's layers (name, shown, locked, kinds of its objects), its artboards (name
-/// and rectangle), its type (text, family, size, fill) and the RGBA of its first image.
+/// and rectangle), its type (text, family, size, fill), the RGBA of its first image, and the transforms
+/// of its text and images.
 #[allow(clippy::type_complexity)]
-fn structure(s: &Session) -> (Vec<(String, bool, bool, Vec<&'static str>)>, Vec<(String, [f64; 4])>, Vec<(String, String, f64, String)>, Vec<u8>) {
+fn structure(
+    s: &Session,
+) -> (Vec<(String, bool, bool, Vec<&'static str>)>, Vec<(String, [f64; 4])>, Vec<(String, String, f64, String)>, Vec<u8>, Vec<(&'static str, [f64; 6])>)
+{
     let d = &s.doc().unwrap().doc;
     let kind = |n: &vectorcraft_doc::Node| match &n.kind {
         vectorcraft_doc::NodeKind::Text(_) => "type",
@@ -488,21 +492,25 @@ fn structure(s: &Session) -> (Vec<(String, bool, bool, Vec<&'static str>)>, Vec<
         .map(|l| (l.name.clone().unwrap_or_default(), l.visible, l.locked, l.children().unwrap().iter().map(|c| kind(c)).collect()))
         .collect();
     let boards = d.artboards.iter().map(|a| (a.name.clone(), [a.rect.x0, a.rect.y0, a.rect.x1, a.rect.y1])).collect();
-    let (mut types, mut pixels) = (Vec::new(), Vec::new());
+    let (mut types, mut pixels, mut transforms) = (Vec::new(), Vec::new(), Vec::new());
     d.walk(|n| match &n.kind {
         vectorcraft_doc::NodeKind::Text(t) => {
+            transforms.push(("type", t.xf.as_coeffs()));
             let st = &t.runs[0].style;
             let text: String = t.runs.iter().map(|r| r.text.as_str()).collect();
             types.push((text, st.font_family.clone(), st.size, serde_json::to_string(&st.fill).unwrap()));
         }
-        vectorcraft_doc::NodeKind::Image(_) if pixels.is_empty() => {
+        vectorcraft_doc::NodeKind::Image(im) => {
+            transforms.push(("image", im.xf.as_coeffs()));
             // Read back through the filter input's own decoder, not the importer's.
-            let o = vectorcraft_plugins::objects::encode_read_only(d, n).unwrap();
-            pixels = vectorcraft_format::base64_decode(o["pixelsBase64"].as_str().unwrap()).unwrap();
+            if pixels.is_empty() {
+                let o = vectorcraft_plugins::objects::encode_read_only(d, n).unwrap();
+                pixels = vectorcraft_format::base64_decode(o["pixelsBase64"].as_str().unwrap()).unwrap();
+            }
         }
         _ => {}
     });
-    (layers, boards, types, pixels)
+    (layers, boards, types, pixels, transforms)
 }
 
 /// An importer at API level 4 that lists every output kind opens editable type, an embedded image,
@@ -525,6 +533,7 @@ fn an_api_4_importer_opens_type_images_layers_and_artboards() {
     assert_eq!(opened.1, [("Front".to_string(), [0.0, 0.0, 200.0, 100.0]), ("Back".to_string(), [220.0, 0.0, 420.0, 100.0])]);
     assert_eq!(opened.2, [("Hello\nWorld".to_string(), "No Such Family Q9617".to_string(), 24.0, blue)]);
     assert_eq!(opened.3, PIXELS);
+    assert_eq!(opened.4, [("image", [10.0, 0.0, 0.0, 10.0, 0.0, 100.0]), ("type", [1.0, 0.0, 0.0, 1.0, 10.0, 40.0])]);
     // The type is laid out at the place the transform gives: its first baseline starts at (10, 40).
     let d = &s.doc().unwrap().doc;
     let words = d.layers[1].children().unwrap()[0].clone();
@@ -571,7 +580,7 @@ fn rich_output_that_fails_its_checks_changes_nothing() {
     rich_echo(&mut s, "test.richboards", r#"["artboard"]"#);
     let blank = json!({"objects": [], "artboards": [{"name": "Only", "rect": [0, 0, 50, 60]}]});
     open(&mut s, "Blank.trc", blank.to_string().as_bytes(), json!({"importer": "plugin.test.richboards"})).unwrap();
-    let (layers, boards, types, _) = structure(&s);
+    let (layers, boards, types, _, _) = structure(&s);
     assert_eq!((layers.len(), layers[0].3.len(), boards, types.len()), (1, 0, vec![("Only".to_string(), [0.0, 0.0, 50.0, 60.0])], 0));
 }
 
