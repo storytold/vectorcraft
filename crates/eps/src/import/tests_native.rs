@@ -5509,6 +5509,26 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
 
+/// Point type that isn't aligned left is matched with the page's type where it draws: right-aligned
+/// type ends at its anchor and centered type lies round it, so the page's type there is theirs and
+/// nothing is noted as left out. (The box of type that isn't laid out yet runs right from its
+/// anchor, past the page's type.)
+#[test]
+fn right_aligned_and_centered_point_type_takes_the_pages_type_where_it_draws() {
+    // "Hi there" in 14 point Helvetica is about 49 points wide. The anchors are 90 and 50 across the
+    // art; the page draws the line so that it ends at the first and lies round the second.
+    for (align, anchor, at) in [(1, 8231.5, 41.0), (2, 8191.5, 25.5)] {
+        let doc = text_document(&[("Hi there\r", align, (anchor, 8180.0), (0.0, 0.0), 0.0)]);
+        let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+        let page = format!("0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont {at} 61.5 moveto (Hi there) show");
+        let r = import(&eps(&page, &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art"], "{align}: {:?}", r.warnings);
+        let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+        assert_eq!(texts, ["Hi there"], "{align}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| crate::is_loss(w)), "{align}: {:?}", r.warnings);
+    }
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.
