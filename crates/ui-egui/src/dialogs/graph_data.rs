@@ -18,6 +18,7 @@
 //! empties it).
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use craft::behavior::{EditEvent, NumberCodec};
 use craft::host::{PickRequest, Picked};
@@ -395,8 +396,12 @@ fn can_import(app: &VectorcraftApp) -> bool {
     file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()
 }
 
-/// Import Data's answer: a tab-separated text file's rows into the sheet.
-fn import(app: &mut VectorcraftApp, picked: Picked) -> Result<Value, String> {
+/// Import Data's answer: a tab-separated text file's rows into the sheet that asked for it.
+fn import(app: &mut VectorcraftApp, owner: &Arc<()>, picked: Picked) -> Result<Value, String> {
+    let Some(dialogs) = app.dialogs() else { return Ok(Value::Null) };
+    if !dialogs.with(|host| host.get::<GraphDataDialog>().is_some_and(|d| Arc::ptr_eq(&d.import_owner, owner))) {
+        return Ok(Value::Null);
+    }
     let bytes = match picked {
         Picked::Paths(paths) => {
             let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else { return Ok(Value::Null) };
@@ -420,15 +425,14 @@ fn import(app: &mut VectorcraftApp, picked: Picked) -> Result<Value, String> {
         return Err("the file is larger than 1 MB".into());
     }
     let grid = grid_from_text(&decode(&bytes));
-    if let Some(dialogs) = app.dialogs() {
-        dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
-    }
+    dialogs.with(|host| host.get_mut::<GraphDataDialog>().filter(|d| Arc::ptr_eq(&d.import_owner, owner)).map(|d| d.replace(grid)));
     Ok(Value::Null)
 }
 
 /// What the window asked of the app since the last [`pump`].
 struct Asks {
     graph: Option<u64>,
+    import_owner: Arc<()>,
     apply: Option<Sheet>,
     actions: Vec<Action>,
 }
@@ -444,7 +448,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             d.take_asks()
         })
     });
-    let Some(Asks { graph, apply: filed, actions }) = asked else { return };
+    let Some(Asks { graph, import_owner, apply: filed, actions }) = asked else { return };
     if let Some(sheet) = filed {
         if let Err(e) = apply(app, &sheet, graph) {
             app.status(e);
@@ -455,7 +459,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         match action {
             Action::Import => {
                 let request = PickRequest::open("document").filter("Text", &["txt", "tsv", "csv"]);
-                file_asks::ask(app, request, Owner::Document, import);
+                let owner = import_owner.clone();
+                file_asks::ask(app, request, Owner::Document, move |app, picked| import(app, &owner, picked));
             }
             Action::Revert => match graph_grid(app, graph) {
                 Ok(grid) => {
@@ -636,6 +641,8 @@ fn body(ui: &mut egui::Ui, values: &mut Sheet, pane: &mut Pane<'_>) -> bool {
 /// sheet for [`pump`], which sends it to the graph and keeps the window open.
 pub(crate) struct GraphDataDialog {
     id: DialogId,
+    /// Identifies this opening even when another Graph Data dialog reuses `id`.
+    import_owner: Arc<()>,
     sheet: Sheet,
     state: GridState,
     entry: Entry,
@@ -658,6 +665,7 @@ impl GraphDataDialog {
         load(&sheet, &state, &mut entry);
         GraphDataDialog {
             id: dialog_id(KIND),
+            import_owner: Arc::new(()),
             sheet,
             state,
             entry,
@@ -672,7 +680,7 @@ impl GraphDataDialog {
 
     /// Everything the window asked since the last call, once.
     fn take_asks(&mut self) -> Asks {
-        Asks { graph: self.graph, apply: self.held.take(), actions: std::mem::take(&mut self.actions) }
+        Asks { graph: self.graph, import_owner: self.import_owner.clone(), apply: self.held.take(), actions: std::mem::take(&mut self.actions) }
     }
 
     /// The pump sent Apply's sheet to the graph; the window stays open and Apply is ready again.
@@ -712,7 +720,6 @@ impl StackDialog for GraphDataDialog {
             .ok_label(tl!("Apply"))
             .ok_enabled(!held.is_waiting())
             .accept_stays_open(true)
-            .enter_confirms(false)
             // The sheet owns the scroll; the controls above it stay in view.
             .collection_body(true)
             .shaped(|dialog| dialog.initial_focus(Initial::Default))
@@ -961,6 +968,37 @@ mod tests {
     }
 
     #[test]
+    fn graph_data_import_keeps_late_answers_out_of_a_reopened_sheet() {
+        let (mut app, _) = app_with(",first\nQ1,1", "column");
+        let files = Arc::new(ScriptedFiles::held());
+        app.services.read = Some(Box::new(|_| Err("this picker answers with bytes".into())));
+        app.host.with_files(files.clone()).install(app.ui_ctx.as_ref().unwrap());
+        app.host = Arc::new(app.host.with_files(files.clone()));
+        open(&mut app).unwrap();
+        let mut h = harness(app);
+        h.run_steps(4);
+        h.get_by_label("Import Data…").click();
+        h.run_steps(3);
+        assert_eq!(files.open(), 1);
+
+        let app = h.state_mut();
+        let ctx = app.ui_ctx.as_ref().unwrap().clone();
+        app.dialogs().unwrap().with(|host| host.cancel::<GraphDataDialog>(&ctx));
+        app.run("graph.create", json!({"type": "column", "x": 20, "y": 20, "width": 100, "height": 100, "csv": ",second\nQ2,2"})).unwrap();
+        open(app).unwrap();
+        let series = |h: &Harness| read(h.state(), |d| cell_of(&d.sheet.grid, 0, 1));
+        assert!(files.answer(Picked::Contents(vec![("first.txt".into(), b"\tstale\nQ1\t7".to_vec())])).is_some());
+        h.run_steps(4);
+        assert_eq!(series(&h), "second");
+
+        h.get_by_label("Import Data…").click();
+        h.run_steps(3);
+        assert!(files.answer(Picked::Contents(vec![("second.txt".into(), b"\timported\nQ2\t8".to_vec())])).is_some());
+        h.run_steps(4);
+        assert_eq!(series(&h), "imported");
+    }
+
+    #[test]
     fn transpose_and_switch_xy() {
         assert_eq!(transpose(&g(&[&["", "a", "b"], &["Q1", "1", "2"]])), g(&[&["", "Q1"], &["a", "1"], &["b", "2"]]));
         assert_eq!(shown("3.14159", Some(2)), "3.14");
@@ -1013,6 +1051,41 @@ mod tests {
         app.dialogs().expect("a window").with(|host| host.cancel::<GraphDataDialog>(&ctx));
         super::super::tools::open_tool_dialog(app, "graphData", json!({}));
         assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())));
+    }
+
+    /// Enter in the entry box and in the sheet moves the picked cell down and applies nothing. Enter in a field that
+    /// does not use it is Apply: the graph is redrawn and the window stays open.
+    #[test]
+    fn enter_moves_in_the_entry_box_and_the_sheet_and_applies_elsewhere() {
+        let (mut app, id) = app_with(",a,b\nQ1,1,2\nQ2,3,4\nQ3,5,6", "column");
+        let before = data(&mut app, id);
+        open(&mut app).unwrap();
+        set_field(&app, "sel", json!([1, 1])).unwrap();
+        let mut h = harness(app);
+        h.run_steps(4);
+        // The entry box.
+        h.get_by_label("Cell Value").click();
+        h.run_steps(2);
+        edit(h.state(), |d| d.entry.text = "9".into());
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(read(h.state(), |d| (active(&d.state), cell_of(&d.sheet.grid, 1, 1))), ((2, 1), "9".to_string()), "Enter moves down");
+        assert_eq!(data(h.state_mut(), id), before, "Enter in the entry box applies nothing");
+        // The sheet.
+        h.get_by_label("Q1").click();
+        h.run_steps(2);
+        assert_eq!(read(h.state(), |d| active(&d.state)), (1, 0), "the click picks the cell");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(read(h.state(), |d| active(&d.state)), (2, 0), "Enter moves down in the sheet");
+        assert_eq!(data(h.state_mut(), id), before, "Enter in the sheet applies nothing");
+        // A field that does not use Enter.
+        h.get_by_label("Column Width").click();
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(4);
+        assert_eq!(data(h.state_mut(), id)["rows"][0][0], json!(9.0), "Enter applies the sheet");
+        assert!(h.state().dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())), "the window stays open");
     }
 
     #[test]

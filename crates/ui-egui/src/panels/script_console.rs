@@ -17,14 +17,15 @@ use vectorcraft_engine::script::console::{Console, ConsoleLine, Ending, Entry};
 use craft::behavior::{DisplayOrder, IconId, ItemSource};
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Bind, ScrollAnchor, Show, ShowCollection};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, LeastWidth, Props as _, ScrollAnchor, Show, ShowCollection, ShowContainer, Sizing, clicked};
+use craft::ui::layout::RowAlign;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, RowInk};
 use craft::ui::menu::PanelRow;
 use craft::ui::notices::Notice;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::FooterBar;
-use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::style::TypeRole;
 
 use crate::VectorcraftApp;
@@ -165,9 +166,26 @@ pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
 pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let any = !app.session.script_console().lines().is_empty();
     let selected = selected_range(app).is_some();
-    for (id, title, on) in [(COMMANDS[0], tl!("Clear"), any), (COMMANDS[1], tl!("Copy Selected"), selected), (COMMANDS[2], tl!("Copy All"), any)] {
+    for (id, title, on) in buttons(any, selected) {
         states.set(CommandRef::new(id), CommandState::new().enabled(on).title(title));
     }
+}
+
+fn buttons(any: bool, selected: bool) -> [(&'static str, &'static str, bool); 3] {
+    [(COMMANDS[0], tl!("Clear"), any), (COMMANDS[1], tl!("Copy Selected"), selected), (COMMANDS[2], tl!("Copy All"), any)]
+}
+
+fn footer(ui: &mut Ui, buttons: [(&'static str, &'static str, bool); 3]) -> Option<&'static str> {
+    let mut picked = None;
+    Row::new().fill_width().align(RowAlign::End).wrap(true).show(ui, |ui, _| {
+        for (id, title, on) in buttons {
+            let button = Button::new(title).id_salt(id).least_width(LeastWidth::DialogButton).enabled(on);
+            if clicked(&button.show(ui)) {
+                picked = Some(id);
+            }
+        }
+    });
+    picked
 }
 
 /// What the panel's menu model depends on, for the menu cache's key.
@@ -189,31 +207,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     selection.items.retain(held);
     selection.lead = selection.lead.take().filter(held);
     selection.anchor = selection.anchor.take().filter(held);
-    if let Some(n) = notice(c) {
-        Notice::new(Tone::Info, n).show(ui);
-    }
-    List::<u64>::new(tl!("Script Console")).scroll_anchor(ScrollAnchor::End).selection(Bind::bound(&mut app.ui.script_console_selection)).show_items(
-        ui,
-        &Lines { start, count },
-        &mut |key, icx| {
-            let line = key.checked_sub(start).and_then(|at| c.lines().get(at as usize));
-            let Some(line) = line else { return ListRow::new(String::new()) };
-            let row = ListRow::new(shown(line)).role(TypeRole::Mono).state(icx.row.clone());
-            match line.entry {
-                Entry::Error(_) => row.icon(IconSpec::svg(IconId::new("error"))).tone(Tone::Bad),
-                Entry::Start | Entry::End(_) | Entry::Report { .. } => row.ink(RowInk::Muted),
-                Entry::Output(_) | Entry::Log(_) => row,
-            }
-        },
-    );
-    let picked = FooterBar::buttons([
-        FooterButton::new(tl!("Clear"), DialogRole::Other).enabled(count > 0),
-        FooterButton::new(tl!("Copy Selected"), DialogRole::Other).enabled(selected_range(app).is_some()),
-        FooterButton::new(tl!("Copy All"), DialogRole::Other).enabled(count > 0),
-    ])
-    .show_footer(ui)
-    .picked;
-    if let Some(id) = picked.and_then(|at| COMMANDS.get(at)) {
+    let buttons = buttons(count > 0, !selection.items.is_empty());
+    let mut picked = None;
+    Stack::new().fill().footer(|ui, _| picked = footer(ui, buttons).or(picked)).show(ui, |ui, _| {
+        if let Some(n) = notice(c) {
+            Notice::new(Tone::Info, n).show(ui);
+        }
+        List::<u64>::new(tl!("Script Console"))
+            .sizing(Sizing::Fill)
+            .scroll_anchor(ScrollAnchor::End)
+            .selection(Bind::bound(&mut *selection))
+            .show_items(ui, &Lines { start, count }, &mut |key, icx| {
+                let line = key.checked_sub(start).and_then(|at| c.lines().get(at as usize));
+                let Some(line) = line else { return ListRow::new(String::new()) };
+                let row = ListRow::new(shown(line)).role(TypeRole::Mono).state(icx.row.clone());
+                match line.entry {
+                    Entry::Error(_) => row.icon(IconSpec::svg(IconId::new("error"))).tone(Tone::Bad),
+                    Entry::Start | Entry::End(_) | Entry::Report { .. } => row.ink(RowInk::Muted),
+                    Entry::Output(_) | Entry::Log(_) => row,
+                }
+            });
+    });
+    if let Some(id) = picked {
         run_ui(app, id, json!({}));
     }
 }

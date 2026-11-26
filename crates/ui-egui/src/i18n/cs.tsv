@@ -669,6 +669,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft obecný CMYK (podobný SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft natíraný CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft nenatíraný CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Starší Macintosh RGB (gama 1,8)
 	Internet Standard RGB (sRGB)	Standardní internetové RGB (sRGB)
 	Monitor RGB	RGB monitoru
@@ -7542,6 +7544,35 @@ axis	Y Axis	osa Y
 @msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
 @msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
+@msg	only a filter declares `writes`	`writes` deklaruje pouze filtr
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` uvádí neznámý druh objektu `{shown}`: použijte type, image nebo symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` uvádí `{shown}` dvakrát
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` uvádí `{shown}`, který `inputs` neuvádí
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` vyžaduje `api` {WRITES_API} nebo vyšší
+@msg	`writes` needs the permission `doc.write`	`writes` vyžaduje oprávnění `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} není text, obraz ani instance symbolu
+@msg	the text of type given as `truncated` can't be changed	text objektu předaného jako `truncated` nelze změnit
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	musí být seznam nejvýše {MAX_INPUT_RUNS} položek
+@msg	type needs at least one run	text potřebuje alespoň jeden úsek
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtů textu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} odstavců (limit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	více než {MAX_INPUT_TEXT_TOTAL} bajtů textu v celém výstupu
+@msg	unknown key '{k}'	neznámý klíč '{k}'
+@msg	must be a list of 6 numbers	musí být seznam 6 čísel
+@msg	a number is out of range (limit ±{MAX_COORD})	číslo je mimo rozsah (limit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	zplošťuje objekt na čáru nebo bod
+@msg	an object flattened to a line or a point can't be placed again	objekt zploštělý na čáru nebo bod nelze znovu umístit
+@msg	must be a number from 0 to 1	musí být číslo od 0 do 1
+@msg	must be the name of a symbol	musí být název symbolu
+@msg	'{shown}' is not a symbol in this document	'{shown}' není symbol v tomto dokumentu
+@msg	a run must be {{"text", "style", "inline"?}}	úsek musí být {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` obsahuje znak vložené grafiky
+@msg	inline graphics can't be added, removed, reordered or changed	vloženou grafiku nelze přidávat, odebírat, přeřazovat ani měnit
+@msg	the characters of threaded type can't be changed	znaky zřetězeného textu nelze změnit
+@msg	the characters of type with ruby can't be changed	znaky textu s ruby nelze změnit
+@msg	expected {count} paragraph styles, one per paragraph	očekáváno {count} stylů odstavců, jeden na každý odstavec
+@msg	the document has no Kinsoku set named '{shown}'	dokument nemá sadu Kinsoku s názvem '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	musí mít 1-{MAX_FAMILY} tisknutelných znaků
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Číst objekty, které dostane, a nastavení, pracovní plochy, vrstvy a vzorky dokumentu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musí uvádět různé oddíly: settings, artboards, layers nebo swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` je pro filtr nebo živý efekt s `commands`, s `api` 3 nebo vyšším a s oprávněním `doc.read`
@@ -10803,6 +10834,11 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Fold Angle	Úhel skladu
+	Set Fold Angle…	Nastavit úhel skladu…
+	Set Fold Angle	Nastavit úhel skladu
+	Reset Fold Angle	Obnovit úhel skladu
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	vyberte linii bigu, částečného řezu nebo perforace, která není zamčená ani skrytá
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Místo popisku zobrazí kartu s tím, co dělá nástroj z panelu a co dělají jeho klávesy; vyžaduje Zobrazovat popisky nástrojů.
 	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.

@@ -166,7 +166,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     };
     w.state = state;
     if let Some(request) = out.pick_color {
-        w.nested.open(ColorPickerDialog::from_request(request));
+        w.nested.open(ColorPickerDialog::from_request(request).swatch_view(crate::dialogs::color_picker::swatch_view(app)));
     }
     if out.closed.is_none() {
         app.prefs = Some(w);
@@ -322,6 +322,70 @@ pub(crate) fn imported(app: &mut VectorcraftApp, touch_workspace: bool) {
     if let Some(w) = app.prefs.as_mut() {
         w.refresh(&prefs);
     }
+}
+
+/// The default of each UI-only row ([`UI_FIELDS`]), by key. Enable Contextual Task Bar takes the value the current
+/// workspace was saved with, so a reset leaves the workspace as it was saved.
+fn default_ui_fields(ui: &crate::UiState) -> [(&'static str, bool); 3] {
+    let first = crate::UiState::default();
+    let task_bar = crate::workspaces::saved_task_bar(ui);
+    [("__smartGuides", first.view.smart_guides), ("__snapToGrid", first.view.snap_to_grid), ("__taskBar", task_bar)]
+}
+
+/// After `prefs.reset`, alone or as a batch step, of every category or of one: the UI-only rows ([`UI_FIELDS`]) and
+/// the Edit Original app of the categories it reset take their defaults too, and an open Preferences window shows
+/// the reset values. Returns whether any reset was pending.
+pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) -> bool {
+    let mut w = app.prefs.take();
+    let any = apply_prefs_resets_to(app, w.as_deref_mut());
+    if app.prefs.is_none() {
+        app.prefs = w;
+    }
+    any
+}
+
+/// [`apply_prefs_resets`] with the open window `w`, which is out of `app` while it draws or applies.
+fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindow>) -> bool {
+    let resets = app.session.take_prefs_resets();
+    if resets.is_empty() {
+        return false;
+    }
+    let in_reset = |category: &str| resets.iter().any(|r| r.is_none_or(|c| c == category));
+    for (key, value) in default_ui_fields(&app.ui) {
+        if !UI_FIELDS.iter().any(|&(k, c, _)| k == key && in_reset(c)) {
+            continue;
+        }
+        match key {
+            "__smartGuides" => app.ui.view.smart_guides = value,
+            "__snapToGrid" => app.ui.view.snap_to_grid = value,
+            _ => app.ui.task_bar = value,
+        }
+        // The window shows the reset row, so OK keeps it.
+        if let Some(w) = w.as_deref_mut() {
+            w.draft.set(key, &value);
+        }
+    }
+    // And the reset preferences, the groups with a reset of every category; Units ▸ General then leaves the open
+    // document's units alone on OK.
+    if let Some(w) = w {
+        let every = resets.contains(&None);
+        let prefs = app.session.prefs.to_json();
+        for (k, v) in prefs.as_object().into_iter().flatten() {
+            let reset = spec(k).map_or(every && PREF_GROUPS.contains(&k.as_str()), |s| in_reset(s.category));
+            if reset && w.draft.get::<Value>(k).is_some() {
+                w.draft.set(k, v);
+                if k == "unitsGeneral" {
+                    w.reset_units = v.as_str().map(str::to_string);
+                }
+            }
+        }
+        w.sync_strings();
+    }
+    // The Edit Original row shows the app's Edit Original choice.
+    if spec("editOriginalSystemDefaults").is_some_and(|s| in_reset(s.category)) {
+        crate::original_editor::reset_saved(app);
+    }
+    true
 }
 
 #[cfg(test)]

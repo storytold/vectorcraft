@@ -307,6 +307,7 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
         let snap = ParamKind::number(Some(snap_lo), Some(snap_hi), tangent_circle_tool::SNAP_PX, 1.0, 2);
         return vec![
             Param::new("radius", tl!("Radius"), kind).length(lengths),
+            Param::new("addPoints", tl!(tangent_circle_tool::ADD_POINTS), ParamKind::bool(false)),
             Param::new("center", tl!("Circle Center"), ParamKind::bool(true)),
             Param::new("radii", tl!("Circle Radii Lines"), ParamKind::bool(true)),
             Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),

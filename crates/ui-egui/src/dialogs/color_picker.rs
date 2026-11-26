@@ -6,7 +6,8 @@
 //! `artboard.setProps {index, color}`.
 //!
 //! A command dialog's colour row raises a `ColorRequest`; [`pump`] opens a picker over that dialog
-//! and answers the row with its OK. The OK for a Save for Web colour table cell shifts the cell's
+//! and answers the row with its OK. Every picker has the Color Swatches view; one over Recolor
+//! Artwork shows the library that Limit to Library limits to. The OK for a Save for Web colour table cell shifts the cell's
 //! colour in the table instead ([`super::save_for_web::take_palette_pick`]).
 //!
 //! Fields agents set with `ui.dialog.set`: the framework picker's (`color`, `mode`, `webColors`,
@@ -104,7 +105,7 @@ pub(crate) fn open_picker(app: &VectorcraftApp) -> Option<DialogId> {
 
 /// The document's swatches and the swatch libraries as the picker's Color Swatches view: solid
 /// colours only, tints as their colour.
-fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
+pub(crate) fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
     let solid = |swatches: &[vectorcraft_color::Swatch]| -> Vec<(Label, Srgba)> {
         swatches.iter().filter_map(|s| Some((Label::from(s.name.clone()), srgba(&s.paint.color()?)))).collect()
     };
@@ -122,6 +123,15 @@ fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
         libraries.push(PickerLibrary::new(Label::from(lib.name.clone()), swatches));
     }
     PickerSwatches::new(libraries, tl!("Open a document to see its swatches."))
+}
+
+/// The index in [`swatch_view`]'s libraries of the library a Limit to Library key names
+/// (`"document"` or a library id); `None` when the view does not list it.
+fn library_index(app: &VectorcraftApp, limit: &str) -> Option<usize> {
+    if limit == swatchlib::DOCUMENT_SWATCHES {
+        return Some(0);
+    }
+    colour_libraries(app).iter().position(|lib| lib.id == limit).map(|i| i + 1)
 }
 
 /// The working CMYK profile as the picker's CMYK converter, so its CMYK fields follow the document's
@@ -204,8 +214,20 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     while let Some((parent, request)) = dialogs.with(|h| h.take_color_request()) {
         let start = request.color.unwrap_or(Srgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 });
         let key = request.key.clone();
-        let child = ColorPickerDialog::from_request(request).eyedropper(true).add_to_swatches(false).gamut(gamut(app)).working_rgb(WorkingRgb);
+        let library = super::recolor::limit_to(&dialogs, parent).and_then(|limit| library_index(app, &limit));
+        let child = ColorPickerDialog::from_request(request)
+            .eyedropper(true)
+            .add_to_swatches(false)
+            .gamut(gamut(app))
+            .working_rgb(WorkingRgb)
+            .swatch_view(swatch_view(app));
         let id = dialogs.with(|h| h.open_child(child, parent));
+        // Over Recolor Artwork, the swatches view shows the library that Limit to Library limits to.
+        if let Some(i) = library
+            && let Err(e) = dialogs.with(|h| h.set_json_field(ctx, id, "library", json!(i)))
+        {
+            app.status(e);
+        }
         app.color_dialogs.pickers.push(Open { id, target: Target::Answer { parent, key }, start, keep: false, preview: LivePreview::default() });
     }
     let busy = app.screen_pick.busy();

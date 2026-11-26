@@ -604,6 +604,35 @@
 @msg	`inputs` lists `{shown}` twice	`inputs` mencantumkan `{shown}` dua kali
 @msg	`inputs` needs `api` 2 or later	`inputs` memerlukan `api` 2 atau lebih baru
 @msg	`inputs` needs the permission `doc.read`	`inputs` memerlukan izin `doc.read`
+@msg	only a filter declares `writes`	hanya filter yang mendeklarasikan `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` menyebut jenis objek yang tidak dikenal `{shown}`: gunakan type, image atau symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` mencantumkan `{shown}` dua kali
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` mencantumkan `{shown}`, yang tidak dicantumkan `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` memerlukan `api` {WRITES_API} atau lebih baru
+@msg	`writes` needs the permission `doc.write`	`writes` memerlukan izin `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} bukan teks, gambar, atau instans simbol
+@msg	the text of type given as `truncated` can't be changed	teks dari objek teks yang diberikan sebagai `truncated` tidak dapat diubah
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	harus berupa daftar berisi paling banyak {MAX_INPUT_RUNS} entri
+@msg	type needs at least one run	teks memerlukan setidaknya satu potongan
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte teks (batas {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraf (batas {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	lebih dari {MAX_INPUT_TEXT_TOTAL} byte teks di seluruh keluaran
+@msg	unknown key '{k}'	kunci tidak dikenal '{k}'
+@msg	must be a list of 6 numbers	harus berupa daftar 6 angka
+@msg	a number is out of range (limit ±{MAX_COORD})	sebuah angka di luar rentang (batas ±{MAX_COORD})
+@msg	flattens the object to a line or a point	memipihkan objek menjadi garis atau titik
+@msg	an object flattened to a line or a point can't be placed again	objek yang dipipihkan menjadi garis atau titik tidak dapat ditempatkan lagi
+@msg	must be a number from 0 to 1	harus berupa angka dari 0 sampai 1
+@msg	must be the name of a symbol	harus berupa nama simbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' bukan simbol di dokumen ini
+@msg	a run must be {{"text", "style", "inline"?}}	potongan harus berupa {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` berisi karakter grafik sebaris
+@msg	inline graphics can't be added, removed, reordered or changed	grafik sebaris tidak dapat ditambahkan, dihapus, diurutkan ulang, atau diubah
+@msg	the characters of threaded type can't be changed	karakter teks beruntun tidak dapat diubah
+@msg	the characters of type with ruby can't be changed	karakter teks dengan ruby tidak dapat diubah
+@msg	expected {count} paragraph styles, one per paragraph	diharapkan {count} gaya paragraf, satu per paragraf
+@msg	the document has no Kinsoku set named '{shown}'	dokumen tidak memiliki set Kinsoku bernama '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	harus berupa 1-{MAX_FAMILY} karakter yang dapat dicetak
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Membaca objek yang diberikan kepadanya, serta pengaturan, artboard, lapisan, dan sampel warna dokumen
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` harus mencantumkan bagian yang berbeda: settings, artboards, layers, atau swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` untuk filter, atau efek langsung dengan `commands`, pada `api` 3 atau lebih baru dengan izin `doc.read`
@@ -1287,6 +1316,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	CMYK generik VectorCraft (mirip SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK kertas berlapis VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK kertas tanpa lapisan VectorCraft (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	RGB Macintosh lama (Gamma 1.8)
 	Internet Standard RGB (sRGB)	RGB standar Internet (sRGB)
 	Monitor RGB	RGB monitor
@@ -8672,6 +8703,11 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Fold Angle	Sudut lipat
+	Set Fold Angle…	Atur sudut lipat…
+	Set Fold Angle	Atur sudut lipat
+	Reset Fold Angle	Atur ulang sudut lipat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	pilih garis lekuk, garis potong sebagian, atau garis perforasi yang tidak terkunci dan tidak tersembunyi
 	Check	Periksa
 	Check Fold Lines	Periksa garis lipat
 @msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.

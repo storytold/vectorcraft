@@ -772,6 +772,62 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -1303,6 +1359,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
     // The document is read once for every object: nothing changes it while the list is checked.
     let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
     let locks = d.locked_artboards();
@@ -1317,7 +1374,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if seen.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1376,6 +1433,11 @@ fn items_length(h: &Host, a: &[Data]) -> Answer {
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
     items_doc(h, a)?;
     Ok(text("PageItems"))
+}
+
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
@@ -1537,16 +1599,23 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
-/// is hidden or locked. Its name and note may still change.
-fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+/// Refuses appearance, place, stacking order and size changes in hidden or locked layers and on
+/// locked artboards. Names and notes may still change.
+fn refuse_protected_edit(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+        let why = if d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)) {
+            Some("a layer it is in is hidden or locked")
+        } else if on_locked_artboard(h, st, item.id) {
+            Some("it is on a locked artboard")
+        } else {
+            None
+        };
+        why.map(|why| (d.node(item.id).and_then(typename).unwrap_or("page item"), why))
     });
     match refused {
-        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        Some((name, why)) => Err(HostError::Error(format!("Cannot edit {name} {}: {why}", item.id.0))),
         None => Ok(()),
     }
 }
@@ -1557,7 +1626,7 @@ fn item_hidden(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1567,7 +1636,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1595,7 +1664,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
         (now, keeps_other)
     });
     if now.is_none() || keeps_other {
-        refuse_in_closed_layer(h, item)?;
+        refuse_protected_edit(h, item)?;
     }
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
@@ -1679,7 +1748,8 @@ fn item_height(h: &Host, a: &[Data]) -> Answer {
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
@@ -1716,7 +1786,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
@@ -1962,7 +2033,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused, and so is an object in a hidden or locked layer.
+/// compound path is refused. The item must be selectable and outside hidden or locked layers and
+/// locked artboards.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -1975,7 +2047,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
@@ -2085,6 +2158,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
@@ -2148,7 +2222,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));

@@ -7164,6 +7164,35 @@ axis	Y Axis	Asse Y
 @msg	`inputs` lists `{shown}` twice	`inputs` elenca `{shown}` due volte
 @msg	`inputs` needs `api` 2 or later	`inputs` richiede `api` 2 o successivo
 @msg	`inputs` needs the permission `doc.read`	`inputs` richiede l’autorizzazione `doc.read`
+@msg	only a filter declares `writes`	solo un filtro dichiara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` indica un tipo di oggetto sconosciuto `{shown}`: usa type, image o symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` elenca `{shown}` due volte
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` elenca `{shown}`, che `inputs` non elenca
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` richiede `api` {WRITES_API} o successivo
+@msg	`writes` needs the permission `doc.write`	`writes` richiede l’autorizzazione `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} non è testo, né un’immagine né un’istanza di simbolo
+@msg	the text of type given as `truncated` can't be changed	il testo di un oggetto di testo fornito come `truncated` non può essere modificato
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	deve essere un elenco di al massimo {MAX_INPUT_RUNS} voci
+@msg	type needs at least one run	il testo richiede almeno un segmento
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte di testo (limite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragrafi (limite {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	più di {MAX_INPUT_TEXT_TOTAL} byte di testo nell’intero output
+@msg	unknown key '{k}'	chiave sconosciuta '{k}'
+@msg	must be a list of 6 numbers	deve essere un elenco di 6 numeri
+@msg	a number is out of range (limit ±{MAX_COORD})	un numero è fuori intervallo (limite ±{MAX_COORD})
+@msg	flattens the object to a line or a point	riduce l’oggetto a una linea o a un punto
+@msg	an object flattened to a line or a point can't be placed again	un oggetto ridotto a una linea o a un punto non può essere ricollocato
+@msg	must be a number from 0 to 1	deve essere un numero da 0 a 1
+@msg	must be the name of a symbol	deve essere il nome di un simbolo
+@msg	'{shown}' is not a symbol in this document	'{shown}' non è un simbolo di questo documento
+@msg	a run must be {{"text", "style", "inline"?}}	un segmento deve essere {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` contiene il carattere di una grafica in linea
+@msg	inline graphics can't be added, removed, reordered or changed	le grafiche in linea non possono essere aggiunte, rimosse, riordinate o modificate
+@msg	the characters of threaded type can't be changed	i caratteri del testo concatenato non possono essere modificati
+@msg	the characters of type with ruby can't be changed	i caratteri del testo con ruby non possono essere modificati
+@msg	expected {count} paragraph styles, one per paragraph	attesi {count} stili paragrafo, uno per paragrafo
+@msg	the document has no Kinsoku set named '{shown}'	il documento non ha alcun set kinsoku denominato '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	deve avere 1-{MAX_FAMILY} caratteri stampabili
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Leggere gli oggetti che riceve, e le impostazioni, le tavole da disegno, i livelli e i campioni del documento
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` deve elencare sezioni distinte: settings, artboards, layers o swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` vale per un filtro, o un effetto dinamico con `commands`, con `api` 3 o successiva e l’autorizzazione `doc.read`
@@ -10479,6 +10508,11 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Fold Angle	Angolo di piega
+	Set Fold Angle…	Imposta angolo di piega…
+	Set Fold Angle	Imposta angolo di piega
+	Reset Fold Angle	Reimposta angolo di piega
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleziona una linea di cordonatura, di taglio parziale o di perforazione che non sia bloccata né nascosta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra una scheda con ciò che fanno uno strumento della barra e i suoi tasti al posto della descrizione; richiede Mostra descrizioni comandi.
 	Selects whole objects and groups to move, resize or rotate them.	Seleziona oggetti e gruppi interi per spostarli, ridimensionarli o ruotarli.

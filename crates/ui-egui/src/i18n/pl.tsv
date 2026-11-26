@@ -7397,6 +7397,35 @@ axis	Y Axis	Oś Y
 @msg	`inputs` lists `{shown}` twice	`inputs` wymienia `{shown}` dwa razy
 @msg	`inputs` needs `api` 2 or later	`inputs` wymaga `api` 2 lub nowszego
 @msg	`inputs` needs the permission `doc.read`	`inputs` wymaga uprawnienia `doc.read`
+@msg	only a filter declares `writes`	tylko filtr deklaruje `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` wymienia nieznany rodzaj obiektu `{shown}`: użyj type, image lub symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` wymienia `{shown}` dwa razy
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` wymienia `{shown}`, którego nie wymienia `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` wymaga `api` {WRITES_API} lub nowszego
+@msg	`writes` needs the permission `doc.write`	`writes` wymaga uprawnienia `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} nie jest tekstem, obrazem ani wystąpieniem symbolu
+@msg	the text of type given as `truncated` can't be changed	nie można zmienić tekstu obiektu tekstowego przekazanego jako `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	musi być listą co najwyżej {MAX_INPUT_RUNS} pozycji
+@msg	type needs at least one run	tekst potrzebuje co najmniej jednego fragmentu
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtów tekstu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} akapitów (limit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	ponad {MAX_INPUT_TEXT_TOTAL} bajtów tekstu w całym wyniku
+@msg	unknown key '{k}'	nieznany klucz '{k}'
+@msg	must be a list of 6 numbers	musi być listą 6 liczb
+@msg	a number is out of range (limit ±{MAX_COORD})	liczba spoza zakresu (limit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	spłaszcza obiekt do linii lub punktu
+@msg	an object flattened to a line or a point can't be placed again	obiektu spłaszczonego do linii lub punktu nie można ponownie umieścić
+@msg	must be a number from 0 to 1	musi być liczbą od 0 do 1
+@msg	must be the name of a symbol	musi być nazwą symbolu
+@msg	'{shown}' is not a symbol in this document	'{shown}' nie jest symbolem w tym dokumencie
+@msg	a run must be {{"text", "style", "inline"?}}	fragment musi mieć postać {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` zawiera znak grafiki w wierszu
+@msg	inline graphics can't be added, removed, reordered or changed	grafik w wierszu nie można dodawać, usuwać, zmieniać ich kolejności ani modyfikować
+@msg	the characters of threaded type can't be changed	nie można zmienić znaków tekstu wątkowego
+@msg	the characters of type with ruby can't be changed	nie można zmienić znaków tekstu z ruby
+@msg	expected {count} paragraph styles, one per paragraph	oczekiwano {count} stylów akapitowych, po jednym na akapit
+@msg	the document has no Kinsoku set named '{shown}'	dokument nie ma zestawu kinsoku o nazwie '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	musi mieć 1-{MAX_FAMILY} drukowalnych znaków
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Odczytywać obiekty, które otrzymuje, oraz ustawienia, obszary kompozycji, warstwy i próbki dokumentu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musi wymieniać różne sekcje: settings, artboards, layers lub swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dotyczy filtra albo efektu na żywo z `commands`, z `api` 3 lub nowszym i z uprawnieniem `doc.read`
@@ -10668,6 +10697,11 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Fold Angle	Kąt zgięcia
+	Set Fold Angle…	Ustaw kąt zgięcia…
+	Set Fold Angle	Ustaw kąt zgięcia
+	Reset Fold Angle	Resetuj kąt zgięcia
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	zaznacz linię bigowania, nacięcia lub perforacji, która nie jest zablokowana ani ukryta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Zamiast podpowiedzi pokazuje kartę z tym, co robią narzędzie z paska i jego klawisze; wymaga opcji Pokaż podpowiedzi.
 	Selects whole objects and groups to move, resize or rotate them.	Zaznacza całe obiekty i grupy, aby je przesuwać, skalować lub obracać.

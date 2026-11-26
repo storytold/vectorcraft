@@ -120,6 +120,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                worker_parts: false,
                 reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
@@ -150,6 +151,7 @@ impl VectorcraftApp {
                 carry_target: None,
                 last_drag: None,
                 escaped_press: false,
+                host_caps_lock: None,
                 committed_preview: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
@@ -230,6 +232,7 @@ impl VectorcraftApp {
             shortcuts_dialog: None,
             shortcut_overrides: Default::default(),
             told: Default::default(),
+            missing_font_edit_token: None,
             held: Default::default(),
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
@@ -443,6 +446,11 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // With no document open too, so closing the last one stops the host reading the wheel. A
+        // held press, whose previews change the document each frame, keeps what it was told.
+        if self.canvas.grab.is_none() {
+            crate::stylus::sync_wheel_use(self);
+        }
         // A document that moved between the main window and a floating OS window, or opened, takes
         // the density of the display that shows it.
         self.settle_screen_ppi_if_changed();
@@ -542,6 +550,9 @@ impl VectorcraftApp {
         if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+        // A `prefs.reset` run in this frame outside `Self::run` (a script's, say): the pass that follows draws the
+        // reset rows.
+        prefs_dialog::apply_prefs_resets(self);
     }
 
     /// The canvas panel's body: the document tabs, then the canvas (a pane for each document while
@@ -696,14 +707,18 @@ impl VectorcraftApp {
     }
 }
 
+/// Use the same supported scale for the interface and the canvas. Invalid saved values fall back to 100%.
+fn applied_ui_scaling(saved: f64) -> f32 {
+    if saved.is_finite() && saved > 0.0 { saved.clamp(0.75, 2.0) as f32 } else { 1.0 }
+}
+
 /// The root values the preferences give every frame: the theme, the interface scale (UI Scaling
 /// over the display's `native_ppp`), Show Tool Tips, the zoom stops (100% at `print` screen points
 /// to an inch, [`crate::state::print_ppi`]) and which drags scrub a value (Scrub Numeric Fields: the
 /// side label only, or nothing).
 pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print: Option<f64>) -> RootEnv {
     let (theme, mode, accent) = theme::root_theme(prefs);
-    // A hand-edited preferences file must not scale the interface to nothing.
-    let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
+    let scaling = applied_ui_scaling(prefs.ui_scaling);
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(print, native_ppp));

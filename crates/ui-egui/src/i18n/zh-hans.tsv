@@ -6212,6 +6212,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 通用 CMYK (类 SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft 涂布纸 CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft 非涂布纸 CMYK (FOGRA52)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%
@@ -7374,6 +7376,35 @@ axis	Y Axis	Y 轴
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了两次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+@msg	only a filter declares `writes`	只有滤镜才能声明 `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` 列出了未知的对象类型 `{shown}`：请使用 type、image 或 symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` 列出了两次 `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` 列出了 `{shown}`，但 `inputs` 未列出它
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` 需要 `api` {WRITES_API} 或更高
+@msg	`writes` needs the permission `doc.write`	`writes` 需要权限 `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} 不是文字、图像或符号实例
+@msg	the text of type given as `truncated` can't be changed	作为 `truncated` 给出的文字对象的文本不能更改
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	必须是最多 {MAX_INPUT_RUNS} 个条目的列表
+@msg	type needs at least one run	文字至少需要一个文本段
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	文本 {bytes} 字节（上限 {MAX_INPUT_TEXT}）
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落 {paragraphs} 个（上限 {MAX_INPUT_RUNS}）
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	整个输出中的文本超过 {MAX_INPUT_TEXT_TOTAL} 字节
+@msg	unknown key '{k}'	未知键 '{k}'
+@msg	must be a list of 6 numbers	必须是 6 个数字的列表
+@msg	a number is out of range (limit ±{MAX_COORD})	有数字超出范围（上限 ±{MAX_COORD}）
+@msg	flattens the object to a line or a point	会把对象压扁成一条线或一个点
+@msg	an object flattened to a line or a point can't be placed again	已压扁成线或点的对象无法重新放置
+@msg	must be a number from 0 to 1	必须是 0 到 1 之间的数字
+@msg	must be the name of a symbol	必须是符号的名称
+@msg	'{shown}' is not a symbol in this document	'{shown}' 不是此文档中的符号
+@msg	a run must be {{"text", "style", "inline"?}}	文本段必须是 {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` 含有随文图形的字符
+@msg	inline graphics can't be added, removed, reordered or changed	随文图形不能添加、删除、重新排序或更改
+@msg	the characters of threaded type can't be changed	串接文本的字符不能更改
+@msg	the characters of type with ruby can't be changed	带注音的文字的字符不能更改
+@msg	expected {count} paragraph styles, one per paragraph	应有 {count} 个段落样式，每个段落一个
+@msg	the document has no Kinsoku set named '{shown}'	文档中没有名为 '{shown}' 的 Kinsoku 集
+@msg	must be 1-{MAX_FAMILY} printable characters	必须是 1-{MAX_FAMILY} 个可打印字符
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	读取交给它的对象，以及文档的设置、画板、图层和色板
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必须列出互不相同的部分：settings、artboards、layers 或 swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 仅适用于 `api` 3 或更高、具有权限 `doc.read` 的滤镜或带 `commands` 的实时效果
@@ -10678,6 +10709,11 @@ breakText	Glyphs	字形
 	No objects are selected.	未选择任何对象。
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
+	Fold Angle	折叠角度
+	Set Fold Angle…	设置折叠角度…
+	Set Fold Angle	设置折叠角度
+	Reset Fold Angle	重置折叠角度
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	请选择未锁定且未隐藏的压痕线、半切线或打孔线
 	Check	检查
 	Check Fold Lines	检查折线
 @msg	No cut lines are in the selection.	所选内容中没有切割线。

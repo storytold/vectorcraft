@@ -7239,6 +7239,35 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	only a filter declares `writes`	`writes` を宣言できるのはフィルターだけです
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`writes` lists `{shown}` twice	`writes` に `{shown}` が 2 回指定されています
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` に指定された `{shown}` は `inputs` に指定されていません
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` には `api` {WRITES_API} 以上が必要です
+@msg	`writes` needs the permission `doc.write`	`writes` には権限 `doc.write` が必要です
+@msg	{_1} is not type, an image or a symbol instance	{_1} はテキスト、画像、シンボルインスタンスのいずれでもありません
+@msg	the text of type given as `truncated` can't be changed	`truncated` として渡されたテキストの文字列は変更できません
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	{MAX_INPUT_RUNS} 項目以下のリストにしてください
+@msg	type needs at least one run	テキストには 1 つ以上のランが必要です
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	テキストが {bytes} バイトあります (上限 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落が {paragraphs} 個あります (上限 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	出力全体のテキストが {MAX_INPUT_TEXT_TOTAL} バイトを超えています
+@msg	unknown key '{k}'	不明なキー '{k}'
+@msg	must be a list of 6 numbers	6 つの数値のリストにしてください
+@msg	a number is out of range (limit ±{MAX_COORD})	数値が範囲外です (上限 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	オブジェクトが線または点につぶれます
+@msg	an object flattened to a line or a point can't be placed again	線または点につぶれたオブジェクトは配置し直せません
+@msg	must be a number from 0 to 1	0 から 1 までの数値にしてください
+@msg	must be the name of a symbol	シンボルの名前にしてください
+@msg	'{shown}' is not a symbol in this document	'{shown}' はこのドキュメントのシンボルではありません
+@msg	a run must be {{"text", "style", "inline"?}}	ランは {{"text", "style", "inline"?}} にしてください
+@msg	`text` holds the character of an inline graphic	`text` にインライングラフィックの文字が含まれています
+@msg	inline graphics can't be added, removed, reordered or changed	インライングラフィックは追加、削除、並べ替え、変更できません
+@msg	the characters of threaded type can't be changed	スレッドテキストの文字は変更できません
+@msg	the characters of type with ruby can't be changed	ルビのあるテキストの文字は変更できません
+@msg	expected {count} paragraph styles, one per paragraph	段落スタイルは段落ごとに 1 つ、計 {count} 個必要です
+@msg	the document has no Kinsoku set named '{shown}'	ドキュメントに '{shown}' という名前の禁則処理セットはありません
+@msg	must be 1-{MAX_FAMILY} printable characters	印刷可能な 1-{MAX_FAMILY} 文字にしてください
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	渡されたオブジェクトと、ドキュメントの設定、アートボード、レイヤー、スウォッチの読み取り
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` には重複しないセクションを指定してください: settings、artboards、layers、swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` は、`api` 3 以降で権限 `doc.read` を持つフィルターまたは `commands` のあるライブ効果専用です
@@ -10541,6 +10570,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ツールバーのツールとそのキーの働きを、ヒントの代わりにカードで表示。ツールヒントを表示がオンのときに使用
 	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。
