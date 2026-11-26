@@ -754,8 +754,10 @@ fn caps_lock_gives_drawing_tools_the_crosshair() {
 }
 
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
-/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it). Every other drawing tool shows a
-/// crosshair either way, and the Type tool and the Scissors over no path keep theirs.
+/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it), or for the Pencil and the Paintbrush the
+/// precise cross.
+/// Every other drawing tool shows a crosshair either way, and the Type tool and the Scissors over no path keep
+/// theirs.
 #[test]
 fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -813,7 +815,8 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     }
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
     for (tool, _) in own {
-        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
+        let precise = if matches!(tool, "pencil" | "paintbrush") { Cursor::PreciseCross } else { Cursor::Crosshair };
+        assert_eq!(cursor(&mut s, tool).precise(), precise, "{tool} on");
     }
     for tool in always {
         assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
@@ -849,8 +852,9 @@ fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
     }
 }
 
-/// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors, and Use Precise Cursors
-/// turns those into a crosshair too (the canvas applies `Cursor::precise`).
+/// With Alt held while drawing, the Pencil and the Paintbrush show their closing cursors. Use Precise Cursors
+/// (the canvas applies `Cursor::precise`) keeps the Pencil's, a crosshair with the closing badge, and turns the
+/// Paintbrush's into the precise cross.
 #[test]
 fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
     use vectorcraft_tools::{Cursor, Mods, PointerEvent, PointerKind};
@@ -866,7 +870,8 @@ fn alt_shows_the_pencil_and_paintbrush_closing_cursors() {
             s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 300.0), ViewInfo::default()).unwrap();
             let shown = s.cursor(at, alt, ViewInfo::default());
             assert_eq!(shown, c, "{tool}, precise {precise}");
-            assert_eq!(shown.precise(), Cursor::Crosshair, "{tool}");
+            let precise = if tool == "pencil" { c } else { Cursor::PreciseCross };
+            assert_eq!(shown.precise(), precise, "{tool}");
             s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 300.0), ViewInfo::default()).unwrap();
         }
     }

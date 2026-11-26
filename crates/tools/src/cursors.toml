@@ -654,6 +654,7 @@ shown_when = [
     "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
     "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
     "The Pencil tool while a stroke continuing a selected open path, freehand or a straight line, is drawn to within Close Paths When Ends Are Within of that path's other end: releasing the mouse button there closes the path.",
+    "With Use Precise Cursors on (or Caps Lock) it shows as well: it is a crosshair already, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
@@ -663,6 +664,7 @@ id = "PencilStraight"
 group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone.",
+    "With Use Precise Cursors on (or Caps Lock) it shows as well: it is a crosshair already, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a short level-line badge, where PencilClose has its ring."
@@ -673,9 +675,20 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool over an end of a selected open path, within Edit Selected Paths, before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press continues the path from that end, freehand, or with a straight line when Shift or Alt is held.",
     "The Pencil tool while a stroke continuing a selected path ends within Edit Selected Paths of an open end of another path selected at the press: releasing the mouse button connects the two.",
+    "With Use Precise Cursors on (or Caps Lock) it shows as well: it is a crosshair already, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a short badge line rising to the right, where PencilClose has its ring (the stroke carries on from the path)."
+
+[[cursor]]
+id = "PreciseCross"
+group = "Drawing and editing tools"
+shown_when = [
+    "The Pencil tool with Use Precise Cursors on (or Caps Lock), where the Pencil and PencilNew cursors show without it: before a press that draws a new path, while a stroke is drawn, and over a selected path the press would redraw.",
+    "The Paintbrush tool with Use Precise Cursors on (or Caps Lock), in place of Paintbrush and PaintbrushClose. With Alt held over a path the Smooth tool can act on, Smooth's precise cursor (the Crosshair) shows instead.",
+]
+hotspot = "The centre, where the arms would meet."
+look = "Four arms around an open centre, like the Crosshair's but turned 45°, with no badge, so it differs at a glance from the crosshair that PencilClose, PencilContinue and PencilStraight keep."
 
 [[cursor]]
 id = "Paintbrush"
@@ -689,6 +702,7 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Paintbrush tool with Alt held while drawing, or before a press when no path is selected that the Smooth tool can act on (with one selected, Smooth shows): releasing the mouse button with Alt still held closes the path.",
     "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+    "With Use Precise Cursors on (or Caps Lock), PreciseCross shows instead, with no badge.",
 ]
 hotspot = "The bristle tip."
 look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClose."

@@ -87,6 +87,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/cursors/cursor-pen-curvature.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/cursors/cursor-pen-join.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/cursors/cursor-pen-new.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
+| `assets/cursors/cursor-precise-cross.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/cursors/cursor-reshape-segment.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/fonts/Inter-Medium.ttf` | Rasmus Andersson / The Inter Project Authors | https://github.com/rsms/inter | OFL-1.1 (`assets/fonts/OFL-Inter.txt`) | Open-source typeface, not product iconography or artwork |
 | `assets/fonts/Inter-Regular.ttf` | Rasmus Andersson / The Inter Project Authors | https://github.com/rsms/inter | OFL-1.1 (`assets/fonts/OFL-Inter.txt`) | Open-source typeface, not product iconography or artwork |
