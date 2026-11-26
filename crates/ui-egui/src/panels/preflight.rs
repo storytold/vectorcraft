@@ -302,7 +302,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn results(app: &mut VectorcraftApp, ui: &mut Ui, report: &Value) {
     let rows = PreflightRows::new(report);
     let pending = Pending::default();
-    let out = FindingsList::new("Findings").show_items(ui, &rows, &mut |key, icx| match rows.entries.get(*key as usize) {
+    let out = FindingsList::new(tl!("Findings")).show_items(ui, &rows, &mut |key, icx| match rows.entries.get(*key as usize) {
         Some(Entry_::Heading(c)) => heading_row(&rows.checks[*c], &pending),
         Some(Entry_::Finding(f)) => finding_row(*key, &rows.findings[*f], &icx.words::<FindingsWords>(), &pending),
         None => ListRow::new(String::new()),

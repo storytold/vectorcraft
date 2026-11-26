@@ -188,8 +188,13 @@ impl Panel {
     /// the name (a slider beside its number box).
     pub(crate) fn drag_hold_role(&mut self, name: &str, role: craft::ui::contract::Role, by: Vec2) {
         self.frame();
-        let target = self.look_role(name, role);
-        self.fixture.drag_hold_at(target.center(), by);
+        let from = self.look_role(name, role).center();
+        self.drag_hold_between(from, from + by);
+    }
+
+    /// Drags from `from` to `to`, keeping the button down for another input before release.
+    pub(crate) fn drag_hold_between(&mut self, from: Pos2, to: Pos2) {
+        self.fixture.drag_hold_at(from, to - from);
         self.after();
     }
 
@@ -267,6 +272,21 @@ impl Panel {
     /// A right click on the control named `name`.
     pub(crate) fn secondary_click(&mut self, name: &str) {
         let at = self.find(name).center();
+        self.secondary_click_at(at);
+    }
+
+    /// Right-clicks the zero-based control of `role`, including rows with identical names.
+    pub(crate) fn secondary_click_nth(&mut self, role: craft::ui::contract::Role, index: usize) {
+        self.frame();
+        let at = self.look_nth(role, index).center();
+        self.secondary_click_at(at);
+    }
+
+    fn look_nth(&self, role: craft::ui::contract::Role, index: usize) -> Target {
+        self.fixture.by_role(role).into_iter().nth(index).unwrap_or_else(|| panic!("no {role:?} at {index} in {:?}", self.names()))
+    }
+
+    fn secondary_click_at(&mut self, at: Pos2) {
         let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE };
         self.frame_with(vec![Event::PointerMoved(at)]);
         self.frame_with(vec![button(true)]);
@@ -372,6 +392,11 @@ impl Panel {
     /// Whether the control named `name` has the focus.
     pub(crate) fn focused(&self, name: &str) -> bool {
         self.fixture.tree().focused_key() == self.look(name).node
+    }
+
+    /// Whether the zero-based control of `role` has focus, including rows with identical names.
+    pub(crate) fn focused_nth(&self, role: craft::ui::contract::Role, index: usize) -> bool {
+        self.fixture.tree().focused_key() == self.look_nth(role, index).node
     }
 }
 

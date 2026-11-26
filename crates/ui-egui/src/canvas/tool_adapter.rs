@@ -577,8 +577,13 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     }
     // Once a frame, before its press, which then uses the new tool; a held press (its grab) waits for the frame after
     // the release, and a pointer over another window for the pointer to come in.
-    if ui.ctx().current_pass_index() == 0 && app.canvas.grab.is_none() && ui.input(|i| i.pointer.has_pointer()) {
-        crate::stylus::sync_eraser_tool(app);
+    if ui.ctx().current_pass_index() == 0
+        && app.canvas.grab.is_none()
+        && ui.input(|i| i.pointer.has_pointer())
+        && crate::stylus::sync_eraser_tool(app)
+    {
+        // Before the press, which holds what the host was told about the wheel until its release.
+        crate::stylus::sync_wheel_use(app);
     }
     // A press on the canvas that a view tool takes (a middle-button pan, a held Space's Hand) counts as a press
     // elsewhere for the clicks the tool's double-click or triple-click compares.

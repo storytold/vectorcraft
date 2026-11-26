@@ -10484,6 +10484,11 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Fold Angle	Кут згину
+	Set Fold Angle…	Задати кут згину…
+	Set Fold Angle	Задати кут згину
+	Reset Fold Angle	Скинути кут згину
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	виділіть лінію біговки, надрізу або перфорації, яка не закріплена й не прихована
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Замість підказки показує картку з тим, що роблять інструмент панелі та його клавіші; потрібно Показувати підказки.
 	Selects whole objects and groups to move, resize or rotate them.	Виділяє об’єкти й групи цілком, щоб переміщувати, масштабувати або обертати їх.
