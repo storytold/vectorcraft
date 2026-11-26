@@ -7067,6 +7067,7 @@ axis	Y Axis	Y축
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	매니페스트의 이름: {name}
 	Version: {version}	버전: {version}
 	Install “{name}” in place of the plug-in with the same ID?	같은 ID의 플러그인 대신 “{name}”을(를) 설치하시겠습니까?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	이 파일은 이전에 이 ID로 설치된 플러그인이 아닙니다. 이 ID에 보관된 설정과 캐시를 받습니다.
@@ -7134,6 +7135,11 @@ axis	Y Axis	Y축
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”에 출력에 필요한 `{p}` 권한이 부여되지 않았습니다. 아무것도 변경되지 않았습니다
 @msg	a heavy filter runs in the background, so it can't declare `commands`	무거운 필터는 백그라운드에서 실행되므로 `commands`를 선언할 수 없습니다
 @msg	at most {MAX_COMMANDS} `commands`	`commands`는 최대 {MAX_COMMANDS}개입니다
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations`에는 언어를 최대 {MAX_LANGUAGES}개까지 지정할 수 있습니다
+@msg	{at} gives two options the same label	{at}에서 두 옵션에 같은 레이블을 지정했습니다
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at}은(는) `de`나 `pt-BR` 같은 언어 코드가 아니거나 앞에서 지정한 코드를 반복합니다
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at}은(는) 방향 문자나 줄 구분 문자 없이 인쇄 가능한 문자 1-{max}자여야 합니다
+@msg	{at} names or translates something the manifest doesn't declare	{at}은(는) 매니페스트가 선언하지 않은 항목을 지정하거나 번역합니다
 @msg	command {name} is declared twice	명령 {name}이(가) 두 번 선언되었습니다
 @msg	command {name}: `label` must be 1-64 printable characters	명령 {name}: `label`은 인쇄 가능한 문자 1-64자여야 합니다
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	명령 {name}: a-z 0-9 _로 이루어지고 문자로 시작하는 1-{MAX_COMMAND_ID}자 ID를 사용하세요

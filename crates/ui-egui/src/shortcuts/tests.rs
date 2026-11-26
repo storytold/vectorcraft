@@ -1831,6 +1831,7 @@ fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
         group: "Object › Plug-ins".into(),
         is_tool: false,
         shows_key: false,
+        english: None,
     };
     let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
     let (filter, command) = (crate::shortcut_editor::shown_name(&entry("plugin:a.b")), crate::shortcut_editor::shown_name(&entry("object.group")));

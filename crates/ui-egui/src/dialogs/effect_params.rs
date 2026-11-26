@@ -173,11 +173,12 @@ pub(crate) fn heading(cx: &EffectCx) -> String {
 }
 
 /// The effect's name in the UI language: the catalog may carry it with or without its trailing
-/// ellipsis. A plug-in effect's name is shown as it is.
+/// ellipsis. A plug-in effect's name is the plug-in's in the UI language
+/// ([`super::plugin::effect_name`]).
 pub(crate) fn label(id: &str) -> String {
     let name = vectorcraft_effects::effect_info(id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string());
     if vectorcraft_plugins::effect::plugin_id(id).is_some() {
-        return name;
+        return super::plugin::effect_name(id).unwrap_or(name);
     }
     let dotted = format!("{name}…");
     let shown = tl!(&dotted);

@@ -1163,11 +1163,11 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     // A heavy plug-in is installed once a person agrees.
     if plugin.manifest().budget == Budget::Heavy && !allow_heavy {
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
+        let name = permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME);
         return Err(bad(
             C,
             format!(
-                "“{}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants",
-                plugin.manifest().name
+                "“{name}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants"
             ),
         ));
     }
@@ -1309,6 +1309,10 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if !refused.is_empty() {
             v["refusedCommands"] = json!(refused);
+        }
+        let translations = &plugin.manifest().translations;
+        if !translations.is_empty() {
+            v["translations"] = serde_json::to_value(translations).unwrap_or(Value::Null);
         }
         v
     })
@@ -1884,7 +1888,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has), refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module) and translations?: {language: {name?, params?, groups?, commands?}} (the manifest's translations as declared, when it gives any)",
             always,
             inspect
         ),

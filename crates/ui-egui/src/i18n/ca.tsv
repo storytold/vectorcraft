@@ -7860,6 +7860,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Nom al manifest: {name}
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
@@ -7927,6 +7928,11 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` dona com a màxim {MAX_LANGUAGES} idiomes
+@msg	{at} gives two options the same label	{at} dona la mateixa etiqueta a dues opcions
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} no és un codi d’idioma com `de` o `pt-BR`, o en repeteix un de donat abans
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} ha de tenir 1-{max} caràcters imprimibles, sense caràcters de direcció ni separadors de línia
+@msg	{at} names or translates something the manifest doesn't declare	{at} anomena o tradueix alguna cosa que el manifest no declara
 @msg	command {name} is declared twice	l’ordre {name} està declarada dues vegades
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra

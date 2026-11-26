@@ -6719,6 +6719,7 @@ axis	Y Axis	Y osa
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instalirati „{name}”, koji traži ove dozvole?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Naziv u manifestu: {name}
 	Version: {version}	Verzija: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalirati „{name}” umjesto dodatka s istim ID-om?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ova datoteka nije dodatak ranije instaliran s ovim ID-om. Dobija postavke i predmemoriju sačuvane za taj ID.

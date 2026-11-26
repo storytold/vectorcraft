@@ -220,7 +220,7 @@ pub fn names(permissions: &[Permission]) -> Vec<&'static str> {
 
 /// Is `c` a character that changes the direction text is laid out in, or a line or paragraph
 /// separator, which a prompt must not let a manifest string use to disguise itself?
-fn is_bidi_or_separator(c: char) -> bool {
+pub(crate) fn is_bidi_or_separator(c: char) -> bool {
     matches!(c, '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{2028}' | '\u{2029}')
 }
 

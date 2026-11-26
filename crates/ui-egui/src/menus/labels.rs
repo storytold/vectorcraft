@@ -92,11 +92,17 @@ fn slot_label(app: &VectorcraftApp, id: &str) -> Option<String> {
     Some(text)
 }
 
+/// The name Last Effect gives effect `e`: its Effect menu label, a plug-in's name in the UI language
+/// as Effect › Plug-ins shows it ([`crate::dialogs::plugin::effect_item_label`]).
+fn last_effect_name(e: &str) -> &str {
+    vectorcraft_effects::effect_info(e).map(|i| crate::dialogs::plugin::effect_item_label(&i)).unwrap_or(e)
+}
+
 /// The labels that follow the last effect, the envelope being edited, the history and the perspective grid.
 fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> {
     let text: String = match id {
         "effect.last" => match &app.last_effect {
-            Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
+            Some((e, _)) => format!("Last Effect: {}", last_effect_name(e)),
             None => label.into(),
         },
         // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
@@ -152,7 +158,8 @@ pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
         )
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::builtins().iter().any(|w| w.name.eq_ignore_ascii_case(label.trim())))
-        || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
+        || (matches!(id, "effect.apply" | "effect.dialog")
+            && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label || crate::dialogs::plugin::effect_item_label(e) == label))
 }
 
 /// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter, an
@@ -190,8 +197,10 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "window.toolbarAdvanced" => crate::i18n::tr(lang, label).to_string(),
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
-                let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
-                fmt(tl!("Last Effect: {name}"), &[("name", crate::i18n::tr_id(lang, e, name))])
+                // A plug-in's name is already in the UI language from its translations.
+                let name = last_effect_name(e);
+                let name = if vectorcraft_plugins::effect::plugin_id(e).is_some() { name } else { crate::i18n::tr_id(lang, e, name) };
+                fmt(tl!("Last Effect: {name}"), &[("name", name)])
             }
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },

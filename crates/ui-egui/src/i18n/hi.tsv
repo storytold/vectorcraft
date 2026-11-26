@@ -6641,6 +6641,7 @@ arrowhead	Feather	पंख
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	मैनिफ़ेस्ट में नाम: {name}
 	Version: {version}	संस्करण: {version}
 	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
@@ -6704,6 +6705,11 @@ arrowhead	Feather	पंख
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
 @msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
 @msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` अधिकतम {MAX_LANGUAGES} भाषाएँ देता है
+@msg	{at} gives two options the same label	{at} दो विकल्पों को एक ही लेबल देता है
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} `de` या `pt-BR` जैसा भाषा कोड नहीं है, या पहले दिए गए कोड को दोहराता है
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} में 1-{max} मुद्रण योग्य वर्ण होने चाहिए, दिशा या पंक्ति-विभाजक वर्णों के बिना
+@msg	{at} names or translates something the manifest doesn't declare	{at} ऐसी चीज़ का नाम लेता है या अनुवाद करता है जिसे मैनिफ़ेस्ट घोषित नहीं करता
 @msg	command {name} is declared twice	कमांड {name} दो बार घोषित है
 @msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो

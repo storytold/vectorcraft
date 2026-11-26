@@ -737,6 +737,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	»{name}« fik ikke tildelt `{p}`, som dets output kræver: intet blev ændret
 @msg	a heavy filter runs in the background, so it can't declare `commands`	et tungt filter kører i baggrunden, så det kan ikke angive `commands`
 @msg	at most {MAX_COMMANDS} `commands`	højst {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` angiver højst {MAX_LANGUAGES} sprog
+@msg	{at} gives two options the same label	{at} giver to valgmuligheder samme etiket
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} er ikke en sprogkode som `de` eller `pt-BR`, eller gentager en, der er angivet før
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} skal være 1-{max} tegn, der kan udskrives, uden retnings- eller linjeskilletegn
+@msg	{at} names or translates something the manifest doesn't declare	{at} navngiver eller oversætter noget, som manifestet ikke erklærer
 @msg	command {name} is declared twice	kommandoen {name} er erklæret to gange
 @msg	command {name}: `label` must be 1-64 printable characters	kommandoen {name}: `label` skal være 1-64 tegn, der kan udskrives
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommandoen {name}: brug et id på 1-{MAX_COMMAND_ID} tegn fra a-z 0-9 _, der starter med et bogstav
@@ -9638,6 +9643,7 @@ axis	Y Axis	Y-akse
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installér »{name}«, som beder om disse rettigheder?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Navn i manifestet: {name}
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installér »{name}« i stedet for det plug-in, der har samme id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Denne fil er ikke det plug-in, der før var installeret med dette id. Den får de indstillinger og den cache, der er gemt for dette id.

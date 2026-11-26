@@ -7056,6 +7056,7 @@ axis	Y Axis	Y-Achse
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	„{name}“ installieren, das diese Berechtigungen verlangt?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Name im Manifest: {name}
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}“ anstelle des Plug-ins mit derselben ID installieren?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Diese Datei ist nicht das Plug-in, das vorher mit dieser ID installiert war. Sie erhält die Einstellungen und den Cache, die für diese ID gespeichert sind.
@@ -7123,6 +7124,11 @@ axis	Y Axis	Y-Achse
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ wurde `{p}` nicht gewährt, das seine Ausgabe braucht: Es wurde nichts geändert
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ein schwerer Filter läuft im Hintergrund und kann daher keine `commands` deklarieren
 @msg	at most {MAX_COMMANDS} `commands`	höchstens {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` gibt höchstens {MAX_LANGUAGES} Sprachen an
+@msg	{at} gives two options the same label	{at} gibt zwei Optionen dieselbe Beschriftung
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} ist kein Sprachcode wie `de` oder `pt-BR` oder wiederholt einen zuvor angegebenen
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} muss 1-{max} druckbare Zeichen lang sein, ohne Schreibrichtungs- oder Zeilentrennzeichen
+@msg	{at} names or translates something the manifest doesn't declare	{at} benennt oder übersetzt etwas, das das Manifest nicht deklariert
 @msg	command {name} is declared twice	der Befehl {name} ist doppelt deklariert
 @msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt

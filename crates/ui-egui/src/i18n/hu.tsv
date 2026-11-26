@@ -7458,6 +7458,7 @@ axis	Y Axis	Y tengely
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}
+	Manifest name: {name}	Név a manifestben: {name}
 	Version: {version}	Verzió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Telepíted a(z) „{name}” bővítményt az azonos azonosítójú bővítmény helyére?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ez a fájl nem az a bővítmény, amely korábban ezzel az azonosítóval volt telepítve. Megkapja az ehhez az azonosítóhoz tárolt beállításokat és gyorsítótárat.
@@ -7525,6 +7526,11 @@ axis	Y Axis	Y tengely
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
 @msg	a heavy filter runs in the background, so it can't declare `commands`	a nehéz szűrő a háttérben fut, ezért nem deklarálhat `commands` értéket
 @msg	at most {MAX_COMMANDS} `commands`	legfeljebb {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	a `translations` legfeljebb {MAX_LANGUAGES} nyelvet adhat meg
+@msg	{at} gives two options the same label	{at} két lehetőségnek ugyanazt a címkét adja
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} nem olyan nyelvkód, mint a `de` vagy a `pt-BR`, vagy egy korábban megadottat ismétel
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} 1-{max} nyomtatható karakter lehet, irány- és sorelválasztó karakterek nélkül
+@msg	{at} names or translates something the manifest doesn't declare	{at} olyasmit nevez meg vagy fordít, amit a manifest nem deklarál
 @msg	command {name} is declared twice	a(z) {name} parancs kétszer van deklarálva
 @msg	command {name}: `label` must be 1-64 printable characters	{name} parancs: a `label` 1-64 nyomtatható karakter legyen
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} parancs: használj 1-{MAX_COMMAND_ID} karakteres, a-z 0-9 _ karakterekből álló, betűvel kezdődő azonosítót

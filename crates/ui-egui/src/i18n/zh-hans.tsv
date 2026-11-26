@@ -7305,6 +7305,7 @@ axis	Y Axis	Y 轴
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
+	Manifest name: {name}	清单中的名称：{name}
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
@@ -7372,6 +7373,11 @@ axis	Y Axis	Y 轴
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型滤镜在后台运行，因此不能声明 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 个 `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` 最多给出 {MAX_LANGUAGES} 种语言
+@msg	{at} gives two options the same label	{at} 为两个选项给出了相同的标签
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} 不是 `de` 或 `pt-BR` 这样的语言代码，或重复了前面给出的代码
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} 必须为 1-{max} 个可打印字符，且不含方向字符或行分隔符
+@msg	{at} names or translates something the manifest doesn't declare	{at} 指定或翻译了清单未声明的内容
 @msg	command {name} is declared twice	命令 {name} 声明了两次
 @msg	command {name}: `label` must be 1-64 printable characters	命令 {name}：`label` 必须是 1-64 个可打印字符
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	命令 {name}：请使用由 a-z 0-9 _ 组成、以字母开头的 1-{MAX_COMMAND_ID} 个字符的 ID

@@ -9578,6 +9578,7 @@ axis	Y Axis	Y ღერძი
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	დავაყენოთ „{name}“, რომელიც ამ ნებართვებს ითხოვს?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	სახელი მანიფესტში: {name}
 	Version: {version}	ვერსია: {version}
 	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
@@ -9645,6 +9646,11 @@ axis	Y Axis	Y ღერძი
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
 @msg	a heavy filter runs in the background, so it can't declare `commands`	მძიმე ფილტრი ფონურ რეჟიმში მუშაობს, ამიტომ მას არ შეუძლია `commands`-ის გამოცხადება
 @msg	at most {MAX_COMMANDS} `commands`	მაქსიმუმ {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` იძლევა მაქსიმუმ {MAX_LANGUAGES} ენას
+@msg	{at} gives two options the same label	{at} ორ ვარიანტს ერთსა და იმავე წარწერას აძლევს
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} არ არის ენის კოდი, როგორიცაა `de` ან `pt-BR`, ან იმეორებს ადრე მოცემულ კოდს
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} უნდა იყოს 1-{max} დასაბეჭდი სიმბოლო, მიმართულების და ხაზის გამყოფი სიმბოლოების გარეშე
+@msg	{at} names or translates something the manifest doesn't declare	{at} ასახელებს ან თარგმნის რაღაცას, რასაც მანიფესტი არ აცხადებს
 @msg	command {name} is declared twice	ბრძანება {name} ორჯერაა გამოცხადებული
 @msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება

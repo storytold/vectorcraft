@@ -7095,6 +7095,7 @@ axis	Y Axis	Ось Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Имя в манифесте: {name}
 	Version: {version}	Версия: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Установить «{name}» вместо модуля с тем же ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Этот файл не является модулем, установленным ранее с этим ID. Он получит настройки и кэш, сохранённые для этого ID.
@@ -7162,6 +7163,11 @@ axis	Y Axis	Ось Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	тяжёлый фильтр выполняется в фоне, поэтому не может объявлять `commands`
 @msg	at most {MAX_COMMANDS} `commands`	не более {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` задаёт не более {MAX_LANGUAGES} языков
+@msg	{at} gives two options the same label	{at} даёт двум вариантам одинаковую подпись
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} не является кодом языка вроде `de` или `pt-BR` или повторяет код, заданный ранее
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} должен содержать 1-{max} печатных символов без символов направления текста и разделителей строк
+@msg	{at} names or translates something the manifest doesn't declare	{at} называет или переводит то, что манифест не объявляет
 @msg	command {name} is declared twice	команда {name} объявлена дважды
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` должен содержать 1-64 печатаемых символа
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: используйте id из 1-{MAX_COMMAND_ID} символов a-z 0-9 _, начинающийся с буквы

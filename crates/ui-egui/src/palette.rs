@@ -13,7 +13,7 @@ use craft::ui::patterns::panels::{CommandPalette, PanelWords};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::Env;
 
-use crate::i18n::Lang;
+use crate::i18n::{Lang, LangExt as _};
 use crate::{VectorcraftApp, menus};
 
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
@@ -111,6 +111,13 @@ struct Draft {
     label: String,
     /// Does the label translate? An installed filter plug-in's name does not.
     translates: bool,
+    /// Is this a plug-in command, whose label and plug-in name come from the plug-in's own
+    /// translations?
+    plugin_command: bool,
+    /// For a filter or live-effect plug-in item whose path and label give the plug-in's name in the
+    /// UI language from its translations: the path and label with the manifest's own text, which a
+    /// query also matches ([`Draft::plain`]).
+    own: Option<(String, String)>,
     id: String,
     /// Has [`distinct_names`] given the result its [`context`]?
     in_context: bool,
@@ -120,20 +127,73 @@ struct Draft {
 
 impl Draft {
     fn new(path: &str, label: &str, id: String) -> Draft {
-        Draft { path: path.to_string(), label: label.to_string(), translates: true, id, in_context: false, keyed: false }
+        Draft {
+            path: path.to_string(),
+            label: label.to_string(),
+            translates: true,
+            plugin_command: false,
+            own: None,
+            id,
+            in_context: false,
+            keyed: false,
+        }
     }
 
     /// The name in `lang`: the path's segments and the label translate on their own, and the id
     /// follows in parentheses when the result shows it.
     fn name(&self, lang: crate::i18n::Lang) -> String {
-        // A built-in effect's label translates by its effect id first, as the Effect menu's does.
+        // A plug-in command shows its label and its plug-in's name as its menu item does.
+        if self.plugin_command
+            && let Some((plugin, command)) = vectorcraft_engine::cmd::plugin::command_of(&self.id)
+        {
+            let m = plugin.manifest();
+            // A command placed in another menu keeps that menu's path, and its label names the plug-in.
+            let placed = vectorcraft_engine::cmd::plugin::placed_menu(&plugin, &command).is_some();
+            let path = if self.in_context || placed {
+                shown_label(lang, &self.path)
+            } else {
+                let top = self.path.rsplit_once(" › ").map_or("", |(top, _)| top);
+                format!("{} › {}", shown_label(lang, top), m.shown_name(lang.code()))
+            };
+            let label = if placed { m.shown_command_menu_label(&command, lang.code()) } else { m.shown_command_label(&command, lang.code()) };
+            let name = format!("{path} › {label}");
+            return if self.keyed { format!("{name} ({})", self.id) } else { name };
+        }
+        // A built-in effect's label translates by its effect id first, as the Effect menu's does. A
+        // filter or live-effect plug-in's name and submenu are the ones its translations give in `lang`.
         let label = match self.id.strip_prefix("effect:") {
-            _ if !self.translates => self.label.as_str(),
+            _ if !self.translates => crate::dialogs::plugin::item_label_in(&self.id, lang.code()).unwrap_or(self.label.as_str()),
             Some(effect) => crate::i18n::tr_id(lang, effect, &self.label),
             None => crate::i18n::tr(lang, &self.label),
         };
-        let name = if self.path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &self.path)) };
+        let path = match self.translates {
+            true => std::borrow::Cow::Borrowed(self.path.as_str()),
+            false => std::borrow::Cow::Owned(crate::dialogs::plugin::item_group_in(&self.id, &self.path, lang.code())),
+        };
+        let name = if path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &path)) };
         if self.keyed { format!("{name} ({})", self.id) } else { name }
+    }
+
+    /// The English name a query matches: a plug-in item that shows a translated name by the
+    /// manifest's own text ([`Draft::own`]), a plug-in command by its plug-in's own name and its own
+    /// label, and any other result by its name in English.
+    fn plain(&self) -> String {
+        if self.plugin_command
+            && let Some((plugin, command)) = vectorcraft_engine::cmd::plugin::command_of(&self.id)
+        {
+            use vectorcraft_plugins::permissions;
+            if vectorcraft_engine::cmd::plugin::placed_menu(&plugin, &command).is_some() {
+                return format!("{} › {}", self.path, command.menu_label(&plugin.manifest().name));
+            }
+            let own = permissions::display_text(plugin.manifest().name.trim(), permissions::MAX_SHOWN_NAME);
+            let top = self.path.rsplit_once(" › ").map_or("", |(top, _)| top);
+            return format!("{top} › {own} › {}", command.shown_label());
+        }
+        match &self.own {
+            Some((path, label)) if path.is_empty() => label.clone(),
+            Some((path, label)) => format!("{path} › {label}"),
+            None => self.name(crate::i18n::Lang::EN),
+        }
     }
 }
 
@@ -156,8 +216,11 @@ pub(crate) fn listed_engine_commands() -> impl Iterator<Item = &'static vectorcr
 /// plug-in command, UI command, tool, panel and Effect menu item.
 fn drafts() -> Vec<Draft> {
     let mut out = vec![];
-    for c in listed_engine_commands().chain(vectorcraft_engine::cmd::plugin::command_specs()) {
+    for c in listed_engine_commands() {
         out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string()));
+    }
+    for c in vectorcraft_engine::cmd::plugin::command_specs() {
+        out.push(Draft { plugin_command: true, ..Draft::new(&c.menu.join(" › "), c.label, c.id.to_string()) });
     }
     // `plugin.dialog` runs nothing without an id: [`named_drafts`] lists each filter instead. A
     // script of the Scripts folder runs from File › Scripts, by its path. The palette's own toggle
@@ -180,9 +243,12 @@ fn drafts() -> Vec<Draft> {
     }
     // An Effect menu item runs what its item runs; a live-effect plug-in's name does not translate.
     for e in crate::shortcut_editor::effect_items().iter() {
+        let plugin = vectorcraft_plugins::effect::plugin_id(&e.effect).is_some();
+        let id = format!("effect:{}", e.effect);
         out.push(Draft {
-            translates: vectorcraft_plugins::effect::plugin_id(&e.effect).is_none(),
-            ..Draft::new(&e.group, &e.label, format!("effect:{}", e.effect))
+            translates: !plugin,
+            own: if plugin { crate::shortcut_editor::own_plugin_text_of(&id) } else { None },
+            ..Draft::new(&e.group, &e.label, id)
         });
     }
     out
@@ -266,9 +332,10 @@ fn distinct_names(drafts: &mut [Draft], langs: &[crate::i18n::Lang]) {
 }
 
 /// A palette label in `lang`: each `›`-separated menu segment and the command label translate on
-/// their own.
+/// their own, except a plug-in's name and items after Object › Plug-ins or Effect › Plug-ins
+/// ([`crate::dialogs::plugin::translate_path`]).
 fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
-    label.split(" › ").map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ")
+    crate::dialogs::plugin::translate_path(label, |s| crate::i18n::tr(lang, s))
 }
 
 /// The label of the item of the menu bar that runs result `id`, English `menu_item`, in `lang`,
@@ -298,11 +365,10 @@ fn item_label(lang: crate::i18n::Lang, id: &str, menu_item: &str) -> String {
 /// translated ([`distinct_names`]).
 fn named_drafts(lang: Lang) -> Vec<Draft> {
     let mut drafts = drafts();
-    drafts.extend(
-        crate::shortcut_editor::filter_items()
-            .iter()
-            .map(|f| Draft { translates: false, ..Draft::new(&f.group, &f.label, format!("plugin:{}", f.id)) }),
-    );
+    drafts.extend(crate::shortcut_editor::filter_items().iter().map(|f| {
+        let id = format!("plugin:{}", f.id);
+        Draft { translates: false, own: crate::shortcut_editor::own_plugin_text_of(&id), ..Draft::new(&f.group, &f.label, id) }
+    }));
     distinct_names(&mut drafts, &[Lang::EN, lang]);
     drafts
 }
@@ -536,7 +602,11 @@ fn entries(app: &VectorcraftApp, lang: Lang) -> Vec<HelpEntry> {
         .map(|(d, params)| {
             let home = homes.get(&d.id);
             let shown = d.name(lang);
-            let path = shown_label(lang, &d.path);
+            // A plug-in command's path names its plug-in as the menu does ([`Draft::name`]).
+            let path = match shown.rsplit_once(" › ") {
+                Some((path, _)) if d.plugin_command && !d.in_context => path.to_string(),
+                _ => shown_label(lang, &d.path),
+            };
             // A row with a home shows its label without the menu path in front of it. A path that
             // makes the name distinct ([`distinct_names`]) stays, unless the row's home shows that
             // same path or it is the Tools in front of a tool's name, which the tool's toolbar shows.
@@ -548,15 +618,21 @@ fn entries(app: &VectorcraftApp, lang: Lang) -> Vec<HelpEntry> {
             };
             let segments: Vec<String> = if d.path.is_empty() { Vec::new() } else { path.split(" › ").map(str::to_string).collect() };
             let wrapped = WRAPPED.iter().find(|(_, ui)| *ui == d.id).map(|(engine, _)| (*engine).to_string());
+            // A plug-in item is also found by its manifest's own text ([`Draft::plain`]).
+            let (english, plain) = (d.name(Lang::EN), d.plain());
             let entry = HelpEntry::new(crate::keymap::command_of(&d.id), label)
-                .with_english(d.name(Lang::EN))
+                .with_english(plain.clone())
                 .with_path(segments)
                 .with_home(home_text(app, d, home))
                 .with_icon(IconSpec::svg(IconId::new(kind_of(&d.id).0)))
                 .with_ids(std::iter::once(d.id.clone()).chain(wrapped))
                 .with_tie_order(tie_order(&d.id, home.is_some()));
-            let description = description(params);
-            if description.is_empty() { entry } else { entry.with_words(description) }
+            // The name in English matches too where the manifest's own text differs from it.
+            let mut words = description(params);
+            if english != plain {
+                words = if words.is_empty() { english } else { format!("{words}\n{english}") };
+            }
+            if words.is_empty() { entry } else { entry.with_words(words) }
         })
         .collect()
 }
@@ -803,8 +879,6 @@ mod tests {
     use serde_json::json;
     use vectorcraft_engine::Session;
     use vectorcraft_testkit::fixtures::Fixture;
-
-    use crate::i18n::LangExt as _;
 
     /// An app over `session` in a window of its own with its menu model built, in English.
     fn app_on(session: Session) -> VectorcraftApp {
@@ -1850,6 +1924,100 @@ mod tests {
         }
         vectorcraft_plugins::registry::remove(one);
         vectorcraft_plugins::registry::remove(two);
+    }
+
+    /// A plug-in command's result shows its label and its plug-in's name in the language the
+    /// plug-in translates them into, and the manifest's own text in a language it doesn't.
+    #[test]
+    fn a_plugin_command_result_shows_the_plugins_translation() {
+        use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.UI.palette_translated";
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Groom","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Expand Rim"}}],
+                "translations":{{"de":{{"name":"Pflegen","commands":{{"grow":{{"label":"Erweitern"}}}}}}}}}}"#
+        );
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let key = format!("plugin.{id}.grow");
+        let shown = |code: &str| {
+            let lang = Lang::from_code(code).unwrap();
+            (name_of(&names(lang), &key), crate::i18n::tr(lang, "Object"), crate::i18n::tr(lang, "Plug-ins"))
+        };
+        let (de, fr) = (shown("de"), shown("fr"));
+        vectorcraft_plugins::registry::remove(id);
+        assert_eq!(de.0, format!("{} › {} › Pflegen › Erweitern", de.1, de.2));
+        assert_eq!(fr.0, format!("{} › {} › Groom › Expand Rim", fr.1, fr.2));
+    }
+
+    /// A plug-in command whose plug-in translates its name and label into English shows the
+    /// translation, and a search for the manifest's own text still finds it.
+    #[test]
+    fn a_plugin_command_with_english_translations_is_found_by_its_own_text() {
+        use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.UI.palette_english_command";
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Trim Pack","version":"1","kind":"filter","commands":[{{"id":"shave","label":"Shave Ends"}}],
+                "translations":{{"en":{{"name":"Trimmer","commands":{{"shave":{{"label":"Cut Tips"}}}}}}}}}}"#
+        );
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let key = format!("plugin.{id}.shave");
+        crate::i18n::set_current(Lang::EN);
+        let app = app_on(Session::new());
+        let found = entries(&app, Lang::EN).iter().find(|e| id_of(e) == key).map(|e| (e.label().as_str().to_string(), haystack(e)));
+        vectorcraft_plugins::registry::remove(id);
+        let (shown, haystack) = found.expect("the command is a result");
+        assert!(shown.ends_with("Cut Tips"), "{shown}");
+        assert!(haystack.contains("trimmer"), "{haystack}");
+        assert!(haystack.contains("trim pack › shave ends"), "{haystack}");
+    }
+
+    /// A filter whose name the UI language translates shows the translation, English included, and
+    /// a search for the manifest's own name still finds it; in German, so does a search for its
+    /// English translation.
+    #[test]
+    fn a_translated_filter_is_found_by_its_manifest_name() {
+        use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.UI.palette_translated_filter";
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Polish Edges","version":"1","kind":"filter","translations":{{"de":{{"name":"Kanten polieren"}},"en":{{"name":"Smooth Edges"}}}}}}"#
+        );
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let app = app_on(Session::new());
+        let key = format!("plugin:{id}");
+        let found = |lang: Lang| {
+            crate::i18n::set_current(lang);
+            let found = entries(&app, lang).iter().find(|e| id_of(e) == key).map(|e| (e.label().as_str().to_string(), haystack(e)));
+            let by_english = ranked(&built_for(&app), "smooth edges").contains(&key);
+            crate::i18n::set_current(Lang::EN);
+            (found, by_english)
+        };
+        let (de, en) = (found(Lang::from_code("de").unwrap()), found(Lang::EN));
+        vectorcraft_plugins::registry::remove(id);
+        for ((found, by_english), name) in [(de, "Kanten polieren"), (en, "Smooth Edges")] {
+            let (shown, haystack) = found.expect("the filter is a result");
+            assert!(shown.ends_with(name), "{shown}");
+            assert!(haystack.contains("polish edges"), "{haystack}");
+            assert!(by_english, "a search for the English translation finds {name}");
+        }
+    }
+
+    /// A plug-in's name in the path of its own item, in the submenu a plug-in with commands gets,
+    /// stays as the plug-in gives it where it matches text the app translates ("Open" in German).
+    #[test]
+    fn a_plugin_submenu_name_is_not_translated_by_the_app() {
+        use vectorcraft_plugins::wat as tpl;
+        let _names = crate::tests::SHARED_PLUGIN_NAMES.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.UI.palette_submenu_name";
+        let manifest = format!(r#"{{"id":"{id}","name":"Open","version":"1","kind":"filter","commands":[{{"id":"go","label":"Go"}}]}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let de = Lang::from_code("de").unwrap();
+        let shown = names(de).into_iter().find(|(i, _)| *i == format!("plugin:{id}")).map(|(_, n)| n);
+        vectorcraft_plugins::registry::remove(id);
+        assert_ne!(crate::i18n::tr(de, "Open"), "Open", "German translates the app's Open");
+        let path = format!("{} › {}", crate::i18n::tr(de, "Object"), crate::i18n::tr(de, "Plug-ins"));
+        assert_eq!(shown, Some(format!("{path} › Open › Open")));
     }
 
     /// The home English result `id` shows with the app's current layout.

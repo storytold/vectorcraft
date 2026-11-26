@@ -11,6 +11,7 @@ use vectorcraft_plugins::wat as tpl;
 use super::tests_export::fields;
 use super::tests_plugin_export::top;
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 /// A filter whose parameters use every presentation key.
 fn manifest(id: &str) -> String {
@@ -33,9 +34,14 @@ type Harness = egui_kittest::Harness<'static, VectorcraftApp>;
 
 /// The dialog of plug-in `id` in a window running whole app frames.
 fn harness(id: &str) -> Harness {
+    harness_of(id, &manifest(id))
+}
+
+/// The dialog of plug-in `id`, installed from `manifest`, in a window running whole app frames.
+fn harness_of(id: &str, manifest: &str) -> Harness {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let wasm = wat::parse_str(tpl::module(&manifest(id), tpl::ECHO, "", 1)).unwrap();
+    let wasm = wat::parse_str(tpl::module(manifest, tpl::ECHO, "", 1)).unwrap();
     app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
     let mut fonts = false;
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
@@ -139,4 +145,100 @@ fn the_help_button_opens_the_parameter_s_page() {
     h.state_mut().ui.answering_control = false;
     assert!(opened(&h).is_empty(), "nothing opened for automation");
     remove(&mut h, id);
+}
+
+/// A row of a plug-in's dialog as shown: its key, its label and its choices' (value, label) pairs.
+type ShownRow = (String, String, Vec<(String, String)>);
+
+/// A plug-in's dialog shows the text its manifest's `translations` give in the UI language (the
+/// heading, a label, a group heading and a choice's label) and its own text in any other language;
+/// the choice still passes its value. Plug-in text with a right-to-left override is shown escaped.
+#[test]
+fn plugin_dialogs_show_the_plugins_text_in_the_ui_language() {
+    let id = "test.dialogs.translated";
+    // The override as a JSON escape in the manifest.
+    let rlo = format!("\\u{:04X}", 0x202E);
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Tidy","kind":"filter","params":{{
+            "mode":{{"type":"choice","options":["soft","hard"],"label":"Mode","group":"Shape","help":"How hard."}},
+            "flip":{{"type":"bool","label":"Flip{rlo}txt"}}}},
+            "commands":[{{"id":"grow","label":"Grow","params":{{"by":{{"type":"number","min":0,"max":10,"default":2,"label":"By"}}}}}}],
+            "translations":{{"de":{{"name":"Aufräumen","params":{{"mode":{{"label":"Modus","options":{{"soft":"Weich"}}}}}},
+                "groups":{{"Shape":"Form"}},"commands":{{"grow":{{"label":"Wachsen","params":{{"by":{{"label":"Um"}}}}}}}}}}}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let installed = vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    // The rows' labels, section headings and choice labels in `lang`, as (key, label, choices).
+    let shown = |lang: &str, m: &vectorcraft_plugins::Manifest| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).expect("language registered"));
+        let rows = super::form::plugin_params(m, &Map::new());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        rows.iter()
+            .map(|p| {
+                let choices: Vec<(String, String)> = match &p.kind {
+                    craft::ui::patterns::form_dialogs::ParamKind::Choice { options, .. } => {
+                        options.iter().map(|(v, l)| (v.clone(), l.as_str().to_string())).collect()
+                    }
+                    _ => Vec::new(),
+                };
+                (p.key.clone(), p.label.as_str().to_string(), choices)
+            })
+            .collect::<Vec<_>>()
+    };
+    let label = |rows: &[ShownRow], key: &str| rows.iter().find(|r| r.0 == key).map(|r| r.1.clone()).unwrap_or_else(|| panic!("no row for {key}"));
+    let sections = |rows: &[ShownRow]| rows.iter().filter(|r| r.0.starts_with("section:")).map(|r| r.1.clone()).collect::<Vec<_>>();
+    let choices = |rows: &[ShownRow]| rows.iter().find(|r| r.0 == "mode").map(|r| r.2.clone()).unwrap_or_default();
+    let m = installed.manifest();
+    let (de, en) = (shown("de", m), shown("en", m));
+    assert_eq!((label(&de, "mode"), sections(&de)), ("Modus".to_string(), vec!["Form".to_string()]));
+    assert_eq!(choices(&de), [("soft".to_string(), "Weich".to_string()), ("hard".to_string(), "hard".to_string())], "values stay");
+    assert_eq!((label(&en, "mode"), sections(&en)), ("Mode".to_string(), vec!["Shape".to_string()]));
+    assert_eq!(choices(&en), [("soft".to_string(), "soft".to_string()), ("hard".to_string(), "hard".to_string())]);
+    assert_eq!(label(&de, "flip"), "Flip\\u{202E}txt");
+    assert!(!de.iter().chain(&en).any(|r| r.1.contains('\u{202E}')), "the override is never shown as one");
+    // The heading follows the language it is drawn in, for the filter and for its command.
+    let command = format!("plugin.{id}.grow");
+    let heading = |lang: &str, command: Option<&str>, gone: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let shown = super::plugin::heading(id, command, gone);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        shown
+    };
+    assert_eq!((heading("de", None, "Tidy"), heading("en", None, "Tidy")), ("Aufräumen".to_string(), "Tidy".to_string()));
+    assert_eq!((heading("de", Some(&command), "Grow"), heading("fr", Some(&command), "Grow")), ("Wachsen".to_string(), "Grow".to_string()));
+    let grow = m.for_command(m.command("grow").unwrap());
+    assert_eq!(label(&shown("de", &grow), "by"), "Um");
+    vectorcraft_plugins::registry::remove(id);
+    assert_eq!(heading("de", None, "Tidy"), "Tidy", "the manifest's own name once the plug-in is gone");
+}
+
+/// A change of the UI language while a plug-in's dialog is open shows its rows in the new
+/// language, and the values set before stay.
+#[test]
+fn an_open_plugin_dialog_follows_a_change_of_language() {
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    let id = "test.ui.fields.relabel";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Relabel","version":"1","kind":"filter","params":{{
+        "size":{{"type":"number","min":1,"max":9,"default":3,"label":"Size"}}}},
+        "translations":{{"de":{{"params":{{"size":{{"label":"Größe"}}}}}}}}}}"#
+    );
+    let mut h = harness_of(id, &manifest);
+    let labels = |h: &Harness| {
+        let dialog = h.get_by_role(egui::accesskit::Role::Dialog);
+        (dialog.query_all_by_label_contains("Size").count() > 0, dialog.query_all_by_label_contains("Größe").count() > 0)
+    };
+    assert_eq!(labels(&h), (true, false));
+    set(&mut h, "size", json!(7)).unwrap();
+    h.state_mut().session.prefs.interface_language = "de".into();
+    h.run_steps(2);
+    let shown = labels(&h);
+    let rows = super::form::plugin_params(vectorcraft_plugins::registry::get(id).unwrap().manifest(), &Map::new());
+    let dialogs = h.state().dialogs().unwrap();
+    let values = dialogs.with(|host| host.get::<HostedParamDialog>().map(|d| super::form::json_of(&rows, d.fields())));
+    h.state_mut().session.prefs.interface_language = "en".into();
+    h.run_steps(2);
+    remove(&mut h, id);
+    assert_eq!(shown, (false, true), "the label in German");
+    assert_eq!(values.unwrap()["size"].as_f64(), Some(7.0), "the value set before");
 }

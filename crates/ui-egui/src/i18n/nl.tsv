@@ -582,6 +582,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” heeft `{p}` niet gekregen, wat de uitvoer ervan nodig heeft: er is niets gewijzigd
 @msg	a heavy filter runs in the background, so it can't declare `commands`	een zwaar filter wordt op de achtergrond uitgevoerd, dus kan het geen `commands` declareren
 @msg	at most {MAX_COMMANDS} `commands`	maximaal {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` geeft maximaal {MAX_LANGUAGES} talen
+@msg	{at} gives two options the same label	{at} geeft twee opties hetzelfde label
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} is geen taalcode zoals `de` of `pt-BR`, of herhaalt een eerder gegeven code
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} moet 1-{max} afdrukbare tekens zijn, zonder richtings- of regelscheidingstekens
+@msg	{at} names or translates something the manifest doesn't declare	{at} noemt of vertaalt iets wat het manifest niet declareert
 @msg	command {name} is declared twice	opdracht {name} is twee keer gedeclareerd
 @msg	command {name}: `label` must be 1-64 printable characters	opdracht {name}: `label` moet uit 1-64 afdrukbare tekens bestaan
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	opdracht {name}: gebruik een id van 1-{MAX_COMMAND_ID} tekens uit a-z 0-9 _ die met een letter begint
@@ -9476,6 +9481,7 @@ axis	Y Axis	Y-as
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	„{name}” installeren, dat om deze machtigingen vraagt?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Naam in het manifest: {name}
 	Version: {version}	Versie: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.

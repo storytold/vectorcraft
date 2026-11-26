@@ -7126,6 +7126,7 @@ axis	Y Axis	Y 軸
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
 	ID: {id}	ID：{id}
+	Manifest name: {name}	資訊清單中的名稱：{name}
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安裝「{name}」來取代具有相同 ID 的增效模組嗎？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此檔案不是先前以此 ID 安裝的增效模組。它會取得為該 ID 保存的設定和快取。
@@ -7193,6 +7194,11 @@ axis	Y Axis	Y 軸
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
 @msg	a heavy filter runs in the background, so it can't declare `commands`	重型濾鏡在背景執行，因此不能宣告 `commands`
 @msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 個 `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` 最多提供 {MAX_LANGUAGES} 種語言
+@msg	{at} gives two options the same label	{at} 為兩個選項提供了相同的標籤
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} 不是 `de` 或 `pt-BR` 這類語言代碼，或重複了前面提供的代碼
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} 必須為 1-{max} 個可列印字元，且不含方向字元或行分隔字元
+@msg	{at} names or translates something the manifest doesn't declare	{at} 指定或翻譯了資訊清單未宣告的內容
 @msg	command {name} is declared twice	指令 {name} 宣告了兩次
 @msg	command {name}: `label` must be 1-64 printable characters	指令 {name}：`label` 必須是 1-64 個可列印字元
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	指令 {name}：請使用由 a-z 0-9 _ 組成、以字母開頭的 1-{MAX_COMMAND_ID} 個字元的 ID

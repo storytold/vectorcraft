@@ -7372,6 +7372,7 @@ axis	Y Axis	Eixo Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instalar “{name}”, que pede estas permissões?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Nome no manifesto: {name}
 	Version: {version}	Versão: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalar “{name}” no lugar do plug-in com o mesmo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este arquivo não é o plug-in instalado antes com este ID. Ele recebe as configurações e o cache guardados para esse ID.
@@ -7439,6 +7440,11 @@ axis	Y Axis	Eixo Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” não recebeu `{p}`, de que sua saída precisa: nada foi alterado
 @msg	a heavy filter runs in the background, so it can't declare `commands`	um filtro pesado é executado em segundo plano, então não pode declarar `commands`
 @msg	at most {MAX_COMMANDS} `commands`	no máximo {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` dá no máximo {MAX_LANGUAGES} idiomas
+@msg	{at} gives two options the same label	{at} dá o mesmo rótulo a duas opções
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} não é um código de idioma como `de` ou `pt-BR`, ou repete um dado antes
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} deve ter 1-{max} caracteres imprimíveis, sem caracteres de direção ou separadores de linha
+@msg	{at} names or translates something the manifest doesn't declare	{at} nomeia ou traduz algo que o manifesto não declara
 @msg	command {name} is declared twice	o comando {name} está declarado duas vezes
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve ter 1-64 caracteres imprimíveis
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: use um id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que comece com uma letra

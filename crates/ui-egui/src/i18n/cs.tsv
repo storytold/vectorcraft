@@ -7473,6 +7473,7 @@ axis	Y Axis	osa Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Název v manifestu: {name}
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
@@ -7540,6 +7541,11 @@ axis	Y Axis	osa Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ nedostal `{p}`, které jeho výstup potřebuje: nic se nezměnilo
 @msg	a heavy filter runs in the background, so it can't declare `commands`	těžký filtr běží na pozadí, takže nemůže deklarovat `commands`
 @msg	at most {MAX_COMMANDS} `commands`	nejvýše {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` uvádí nejvýše {MAX_LANGUAGES} jazyků
+@msg	{at} gives two options the same label	{at} dává dvěma možnostem stejný popisek
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} není kód jazyka jako `de` nebo `pt-BR`, nebo opakuje kód uvedený dříve
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} musí mít 1-{max} tisknutelných znaků, bez znaků směru textu a oddělovačů řádků
+@msg	{at} names or translates something the manifest doesn't declare	{at} pojmenovává nebo překládá něco, co manifest nedeklaruje
 @msg	command {name} is declared twice	příkaz {name} je deklarován dvakrát
 @msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem

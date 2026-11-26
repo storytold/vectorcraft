@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
 
+use crate::i18n::LangExt as _;
 use crate::{VectorcraftApp, dialogs, io, menus};
 
 const DESATURATE: &[u8] = include_bytes!("../../../plugins/tests/fixtures/desaturate.wasm");
@@ -776,4 +777,223 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     approve(&mut h);
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// The approval names a plug-in whose manifest translates its name in the UI language and also
+/// gives the manifest's own name, both escaped; a language without a translation shows the
+/// manifest's name alone. What OK installs stays bound to the id and hash shown.
+#[test]
+fn the_install_approval_shows_the_translated_and_the_manifests_own_name() {
+    let mut h = window(app());
+    let id = "test.ui.translated_approval";
+    let manifest = json!({"id": id, "name": "Tidy", "version": "1", "kind": "filter", "permissions": ["doc.read"],
+        "translations": {"de": {"name": "Aufräumen"}}})
+    .to_string();
+    let bytes = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let ask = |h: &mut Window, lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let r = h.state_mut().run("ui.installPlugin", json!({ "dataBase64": data }));
+        let pending = h.state().pending_plugin_install.as_ref().map(|p| (p.message.clone(), p.detail.clone(), p.params["hash"].clone()));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        step(h);
+        answer(h, false);
+        assert_eq!(r.unwrap()["pending"], dialogs::plugin::INSTALL_KIND);
+        pending.unwrap()
+    };
+    let (message, detail, shown_hash) = ask(&mut h, "de");
+    assert!(message.contains("Aufräumen") && !message.contains("Tidy"), "{message}");
+    assert!(detail.contains("ID: test.ui.translated_approval"), "{detail}");
+    assert!(detail.contains("Tidy"), "the manifest's own name: {detail}");
+    assert!(!detail.contains("Aufräumen"), "{detail}");
+    assert_eq!(shown_hash, json!(hash));
+    let (message, detail, _) = ask(&mut h, "en");
+    assert_eq!(message, "Install “Tidy”, which asks for these permissions?");
+    assert_eq!(detail.lines().next(), Some("ID: test.ui.translated_approval"));
+    assert_eq!(detail.lines().nth(1), Some("Version: 1"), "no second name line: {detail}");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+}
+
+/// The label of each item of `items`, a submenu's as `name ›` followed by its items'.
+fn menu_labels(items: &[menus::Node]) -> Vec<String> {
+    items
+        .iter()
+        .flat_map(|it| match it {
+            menus::Node::Item(i) => vec![i.label.clone()],
+            menus::Node::Heading(label) => vec![label.clone()],
+            menus::Node::Submenu { label, children, .. } => std::iter::once(format!("{label} ›")).chain(menu_labels(children)).collect(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+/// Object › Plug-ins, Effect › Plug-ins and File › Open With name a plug-in and its commands in the
+/// UI language when its manifest's `translations` give them: German text in German, `pt` text for
+/// Brazilian Portuguese without its own, and the manifest's own text in any other language.
+#[test]
+fn plugin_menus_show_the_plugins_names_in_the_ui_language() {
+    let mut app = app();
+    let (filter, effect, importer) = ("test.ui.translated.filter", "test.ui.translated.effect", "test.ui.translated.importer");
+    let translations = r#""translations":{"de":{"name":"Aufräumen","commands":{"grow":{"label":"Wachsen"}}},"pt":{"name":"Arrumar"}}"#;
+    let filter_manifest = format!(
+        r#"{{"id":"{filter}","name":"Tidy","kind":"filter","commands":[{{"id":"grow","label":"Grow","params":{{"by":{{"type":"bool"}}}}}}],{translations}}}"#
+    );
+    let effect_manifest = format!(
+        r#"{{"id":"{effect}","name":"Wobble","kind":"effect","params":{{"on":{{"type":"bool"}}}},"translations":{{"de":{{"name":"Wackeln"}}}}}}"#
+    );
+    let importer_manifest =
+        format!(r#"{{"id":"{importer}","name":"Plotter","kind":"importer","extensions":["tpx"],"translations":{{"de":{{"name":"Zeichner"}}}}}}"#);
+    for manifest in [filter_manifest, effect_manifest, importer_manifest] {
+        let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    }
+    let shown = |lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).expect("language registered"));
+        let effects = dialogs::plugin::effect_menu().map(|m| menu_labels(&[m])).unwrap_or_default();
+        let all = [menu_labels(&dialogs::plugin::object_menu()), effects, menu_labels(&dialogs::plugin::open_with_menu())].concat();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        all
+    };
+    let de = shown("de");
+    for label in ["Aufräumen ›", "Aufräumen", "Wachsen…", "Wackeln…", "Zeichner…"] {
+        assert!(de.contains(&label.to_string()), "{label} in German: {de:?}");
+    }
+    // Other tests' plug-ins may be installed meanwhile: only this test's names are checked.
+    for label in ["Tidy ›", "Tidy", "Grow…", "Wobble…", "Plotter…"] {
+        assert!(!de.contains(&label.to_string()), "{label} in German: {de:?}");
+    }
+    let pt_br = shown("pt-br");
+    assert!(pt_br.contains(&"Arrumar ›".to_string()) && pt_br.contains(&"Grow…".to_string()), "pt, then the manifest: {pt_br:?}");
+    for lang in ["en", "fr"] {
+        let other = shown(lang);
+        for label in ["Tidy ›", "Grow…", "Wobble…", "Plotter…"] {
+            assert!(other.contains(&label.to_string()), "{label} in {lang}: {other:?}");
+        }
+    }
+    // A German item is still the plug-in's own name, not text a catalog translates, and Keyboard
+    // Shortcuts lists the filter and its command as the menu does, in the language it is shown in.
+    let grow = format!("plugin.{filter}.grow");
+    let rows = |lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let names = menus::shows_a_name("effect.dialog", "Wackeln…");
+        let row = |key: &str| crate::shortcut_editor::entry(key).map(|e| (e.label.clone(), e.group.clone()));
+        let rows = (names, row(&grow), row(&format!("plugin:{filter}")));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        rows
+    };
+    let (names, command, own) = rows("de");
+    assert!(names);
+    assert_eq!(command, Some(("Wachsen".to_string(), "Object › Plug-ins › Aufräumen".to_string())));
+    assert_eq!(own.map(|r| r.0), Some("Aufräumen".to_string()));
+    let (_, command, _) = rows("en");
+    assert_eq!(command, Some(("Grow".to_string(), "Object › Plug-ins › Tidy".to_string())));
+    // Last Effect names the effect as Effect › Plug-ins does.
+    app.last_effect = Some((vectorcraft_plugins::effect::effect_id(effect), json!({})));
+    let last = |lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let shown = (menus::display_label(&app, "effect.last", "Last Effect…"), menus::dynamic_label(&app, "effect.last", "Last Effect…"));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        shown
+    };
+    let (de, de_dynamic) = last("de");
+    assert!(de.contains("Wackeln…") && de_dynamic == "Last Effect: Wackeln…", "{de} / {de_dynamic}");
+    assert_eq!(last("en"), ("Last Effect: Wobble…".to_string(), "Last Effect: Wobble…".to_string()));
+    app.last_effect = None;
+    for id in [filter, effect, importer] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
+/// A command placed in another menu shows its label and its plug-in's name in the UI language there
+/// and in Keyboard Shortcuts, and the manifest's own text in a language the plug-in does not
+/// translate.
+#[test]
+fn a_placed_plugin_command_shows_the_plugins_translation() {
+    let mut app = app();
+    let id = "test.ui.translated.placed";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Ridge","api":2,"version":"1","kind":"filter","commands":[{{"id":"low","label":"Low Area","menu":{{"path":["Object","Clipping Mask"]}}}}],"translations":{{"de":{{"name":"Grat","commands":{{"low":{{"label":"Tiefe Fläche"}}}}}}}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    let low = vectorcraft_engine::cmd::plugin::command_id(id, "low");
+    let shown = |app: &VectorcraftApp, lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let item = menus::menu_entries(app).into_iter().find(|e| e.command.as_deref() == Some(low.as_str())).map(|e| (e.path, e.label));
+        let row = crate::shortcut_editor::entry(&low).map(|e| (e.group, e.label));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        (item, row)
+    };
+    let (de, en) = (shown(&app, "de"), shown(&app, "en"));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    // Other tests count the items of Select and View: this one places its command in a menu no other test uses.
+    let menu = || vec!["Object".to_string(), "Clipping Mask".to_string()];
+    assert_eq!(de.0, Some((menu(), "Tiefe Fläche (Grat)".to_string())));
+    assert_eq!(de.1, Some(("Object › Clipping Mask".to_string(), "Tiefe Fläche (Grat)".to_string())));
+    assert_eq!(en.0, Some((menu(), "Low Area (Ridge)".to_string())));
+    assert_eq!(en.1, Some(("Object › Clipping Mask".to_string(), "Low Area (Ridge)".to_string())));
+}
+
+/// Last Effect shows a live-effect plug-in's translated name as the plug-in gives it, even where it
+/// matches text the app translates: "Open" in German stays "Open".
+#[test]
+fn last_effect_leaves_a_plugins_translated_name_as_it_gives_it() {
+    let mut app = app();
+    let effect = "test.ui.translated.last_effect";
+    let manifest = format!(r#"{{"id":"{effect}","name":"Unseal","kind":"effect","translations":{{"de":{{"name":"Open"}}}}}}"#);
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    app.last_effect = Some((vectorcraft_plugins::effect::effect_id(effect), json!({})));
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    crate::i18n::set_current(de);
+    let shown = menus::display_label(&app, "effect.last", "Last Effect…");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    app.last_effect = None;
+    app.run("plugin.remove", json!({"id": effect})).unwrap();
+    assert_ne!(crate::i18n::tr(de, "Open"), "Open", "German translates the app's Open");
+    assert_eq!(shown, crate::i18n::fmt(crate::i18n::tr(de, "Last Effect: {name}"), &[("name", "Open")]));
+}
+
+/// Keyboard Shortcuts shows a plug-in command's label and its plug-in's name as the plug-in gives
+/// them, even where they match text the app translates: in German, a command labeled "Open" of a
+/// plug-in named "Close" keeps both, as in its menu.
+#[test]
+fn keyboard_shortcuts_leave_a_plugin_commands_text_as_the_plugin_gives_it() {
+    let mut app = app();
+    let id = "test.ui.untranslated.command";
+    let manifest = format!(r#"{{"id":"{id}","name":"Close","kind":"filter","commands":[{{"id":"go","label":"Open"}}]}}"#);
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    let shown = crate::shortcut_editor::entry(&format!("plugin.{id}.go")).map(|e| crate::shortcut_editor::shown_name(&e));
+    let expected = format!("{} › {} › Close › Open", crate::i18n::t("Object"), crate::i18n::t("Plug-ins"));
+    assert_ne!((crate::i18n::t("Open"), crate::i18n::t("Close")), ("Open", "Close"), "German translates both as app text");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert_eq!(shown, Some(expected));
+}
+
+/// A filter's and an importer's menu item show their names as prompts do, a right-to-left override
+/// escaped, as a filter with commands already showed its submenu.
+#[test]
+fn plugin_menu_items_escape_bidirectional_characters() {
+    let mut app = app();
+    let (filter, importer) = ("test.ui.bidi.filter", "test.ui.bidi.importer");
+    // The override as a JSON escape in the manifest.
+    let rlo = format!("\\u{:04X}", 0x202E);
+    for manifest in [
+        format!(r#"{{"id":"{filter}","name":"Flip{rlo}txt.exe","kind":"filter"}}"#),
+        format!(r#"{{"id":"{importer}","name":"Read{rlo}fdp.exe","kind":"importer","extensions":["rdx"]}}"#),
+    ] {
+        let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    }
+    let labels = [menu_labels(&dialogs::plugin::object_menu()), menu_labels(&dialogs::plugin::open_with_menu())].concat();
+    assert!(labels.contains(&"Flip\\u{202E}txt.exe".to_string()), "{labels:?}");
+    assert!(labels.contains(&"Read\\u{202E}fdp.exe…".to_string()), "{labels:?}");
+    assert!(!labels.iter().any(|l| l.contains('\u{202E}')), "{labels:?}");
+    for id in [filter, importer] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
 }

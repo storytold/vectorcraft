@@ -16,6 +16,7 @@ use vectorcraft_plugins::{registry, wat as tpl};
 
 use super::plugins::{approve, window};
 use crate::dialogs::plugin::InstallPrompt;
+use crate::i18n::LangExt as _;
 use crate::{VectorcraftApp, dialogs, export_progress, plugin_runs};
 
 /// An app with a new 200 × 200 pt document.
@@ -133,6 +134,38 @@ fn installing_a_heavy_filter_asks_first() {
     answer(&mut h, false);
     assert!(registry::get(id).is_none());
     assert!(h.state().pending_plugin_install.is_none());
+}
+
+/// The heavy-budget question gives the filter's ID and file SHA-256, and also the manifest's own
+/// name when the name it asks with is a translation.
+#[test]
+fn the_heavy_budget_question_shows_the_id_hash_and_manifest_name() {
+    let mut h = window(app());
+    let id = "test.ui.heavy.translated";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Route","version":"1","kind":"filter","budget":"heavy","translations":{{"de":{{"name":"Fräsen"}}}}}}"#);
+    let bytes = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let ask = |h: &mut Harness<'static, VectorcraftApp>, lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let r = h.state_mut().run("ui.installPlugin", json!({ "dataBase64": data }));
+        let pending = h.state().pending_plugin_install.as_ref().map(|p| (p.message.clone(), p.detail.clone()));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        frame(h);
+        answer(h, false);
+        assert_eq!(r.unwrap()["pending"], dialogs::plugin::INSTALL_KIND);
+        pending.unwrap()
+    };
+    let (message, detail) = ask(&mut h, "de");
+    assert!(message.contains("Fräsen") && !message.contains("Route"), "{message}");
+    for shown in [id, "Route", hash.as_str()] {
+        assert!(detail.contains(shown), "{shown}: {detail}");
+    }
+    let (message, detail) = ask(&mut h, "en");
+    assert_eq!(message, "Install “Route”, which asks for a heavy budget?");
+    assert!(detail.starts_with(&format!("ID: {id}\nFile SHA-256: {hash}\n\n")), "no second name line: {detail}");
+    assert!(registry::get(id).is_none());
 }
 
 /// The dialog has no Preview; OK closes it and the filter runs in the background, the status bar

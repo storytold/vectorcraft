@@ -353,11 +353,12 @@ pub fn effect_label(id: &str) -> String {
 }
 
 /// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
-/// effect's id wins over the plain row of its English label), a plug-in's as it is.
+/// effect's id wins over the plain row of its English label), a plug-in's by the name the plug-in
+/// gives in the UI language ([`crate::dialogs::plugin::effect_name`]).
 pub(crate) fn shown_effect_label(id: &str) -> String {
     match catalog().iter().find(|c| c.0 == id) {
         Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
-        None => effect_label(id),
+        None => crate::dialogs::plugin::effect_name(id).unwrap_or_else(|| effect_label(id)),
     }
 }
 
@@ -948,7 +949,9 @@ fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option
         if rows.is_empty() { stored_params(&effect, &values) } else { rows }
     };
     let fields = fields_of(&params, &values);
-    let (name, id) = (effect_label(&e.id), e.id.clone());
+    // A plug-in effect's editor is named as its row is, by the plug-in's name in the UI language.
+    let name = crate::dialogs::plugin::effect_name(&e.id).unwrap_or_else(|| effect_label(&e.id));
+    let id = e.id.clone();
     move |ui| {
         if free_distort {
             // The button keeps its own name: the label says what it edits.
@@ -1777,8 +1780,11 @@ fn effects_move(
 /// their Effect-menu submenu; a pick opens the effect dialog.
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
-    let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    // Built-in effects in the UI language; a plug-in's by the name it gives.
+    let plugins: Vec<_> = vectorcraft_effects::plugin_effects()
+        .into_iter()
+        .map(|e| (e.id.to_string(), crate::dialogs::plugin::effect_item_label(&e).trim_end_matches('…').to_string(), catalog_entry(e).2))
+        .collect();
+    // Built-in effects in the UI language; a plug-in's by the name it gives in it.
     let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
     for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());

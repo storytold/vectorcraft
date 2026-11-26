@@ -1878,6 +1878,7 @@
 	Max Ascender	મહત્તમ એસેન્ડર
 	ICF Top/Right	ICF ઉપર/જમણે
 	ID: {id}	ID: {id}
+	Manifest name: {name}	મેનિફેસ્ટમાં નામ: {name}
 	Identify Objects By	ઑબ્જેક્ટ્સ આ રીતે ઓળખો
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	જો ડ્રોઇંગ ટેબ્લેટની પેન દોરતી ન હોય, તો X11 (XWayland) વિકલ્પ પસંદ કરો.
 	Ignore	અવગણો

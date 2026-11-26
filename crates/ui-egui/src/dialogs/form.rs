@@ -14,6 +14,8 @@ use craft::ui::value_drag::SliderScale;
 use serde_json::{Map, Value, json};
 use vectorcraft_plugins::{Manifest, Param as PluginParam, ParamSpec};
 
+use crate::i18n::LangExt as _;
+
 /// The fields of the form dialogs ([`grid_params`]) that are distances, by dialog kind.
 fn lengths(kind: &str) -> &'static [&'static str] {
     match kind {
@@ -283,11 +285,42 @@ fn text_row(
     .opens_with(start)
 }
 
-/// The row of the plug-in parameter `key`, without its visibility.
-fn plugin_row(key: &str, p: &PluginParam) -> Param {
+/// The UI language's code, which a plug-in's translations are looked up under.
+fn plugin_lang() -> &'static str {
+    crate::i18n::current().code()
+}
+
+/// Plug-in text `s` as a dialog shows it: each line with its control and bidirectional characters
+/// escaped ([`vectorcraft_plugins::permissions::display_text`]), so a label or help can't reorder
+/// the text around it.
+fn plugin_text(s: &str) -> String {
+    let lines: Vec<String> =
+        s.split('\n').map(|l| vectorcraft_plugins::permissions::display_text(l, vectorcraft_plugins::dialog::MAX_HELP)).collect();
+    lines.join("\n")
+}
+
+/// Parameter `k`'s `label` in manifest `m`, in the UI language as dialogs show it ([`plugin_text`]);
+/// `None` when it gives none.
+pub(crate) fn plugin_param_label(m: &Manifest, k: &str) -> Option<String> {
+    m.param_label_in(k, plugin_lang()).map(plugin_text)
+}
+
+/// Parameter `k`'s `help` in manifest `m`, in the UI language as dialogs show it.
+pub(crate) fn plugin_param_help(m: &Manifest, k: &str) -> Option<String> {
+    m.param_help_in(k, plugin_lang()).map(plugin_text)
+}
+
+/// The label of value `option` of choice `k` in manifest `m`, in the UI language as dialogs show it.
+pub(crate) fn plugin_option_label(m: &Manifest, k: &str, option: &str) -> String {
+    plugin_text(m.option_label_in(k, option, plugin_lang()))
+}
+
+/// The row of the plug-in parameter `key` of manifest `m`, without its visibility. Its label, help and choices are
+/// the plug-in's text in the UI language ([`vectorcraft_plugins::translations`]), escaped as [`plugin_text`] shows it.
+fn plugin_row(m: &Manifest, key: &str, p: &PluginParam) -> Param {
     let unit_text = p.ui.unit.as_deref().unwrap_or_default();
     let unit = unit_kind(unit_text);
-    let base = p.ui.label.clone().unwrap_or_else(|| humanize(key));
+    let base = plugin_param_label(m, key).unwrap_or_else(|| humanize(key));
     let base = base.trim_end_matches(':');
     // A unit the framework has no kind for stays in the label, so the plug-in's own unit is still shown.
     let name = Label::from(if unit.is_none() && !unit_text.is_empty() { format!("{base} ({unit_text})") } else { base.to_owned() });
@@ -318,7 +351,7 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
         }
         ParamSpec::Bool { default } => Param::new(key, name, ParamKind::bool(*default)),
         ParamSpec::Choice { options, default } => {
-            let entries = options.iter().map(|o| (o.clone(), Label::from(o.clone()))).collect();
+            let entries = options.iter().map(|o| (o.clone(), Label::from(plugin_option_label(m, key, o)))).collect();
             Param::new(key, name, ParamKind::choice(entries, default.clone()))
         }
         ParamSpec::Text { default, max_length } => text_row(
@@ -345,8 +378,8 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
     if let Some(unit) = unit {
         row = row.unit(unit);
     }
-    if let Some(help) = &p.ui.help {
-        row = row.tooltip(help.clone());
+    if let Some(help) = plugin_param_help(m, key) {
+        row = row.tooltip(help);
     }
     if let Some(url) = &p.ui.help_url {
         row = row.help_link(url.clone());
@@ -355,9 +388,9 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
 }
 
 /// A plug-in's parameter rows from its manifest (the filter, live effect and exporter dialogs): a row each, labelled
-/// as the manifest says (else from the parameter's name), with its help on the label and on a help button that opens
-/// its page ([`open_help`]). Parameters outside any group come first, then each group as a section that folds
-/// ([`Manifest::sections`]).
+/// as the manifest says in the UI language (else from the parameter's name), with its help on the label and on a help
+/// button that opens its page ([`open_help`]). Parameters outside any group come first, then each group as a section
+/// that folds ([`Manifest::sections`]), headed by the group's text in the UI language.
 ///
 /// A parameter whose `visibleWhen` the values don't meet is hidden by its row, as [`Manifest::visible`] decides it:
 /// shown only when every parameter it names is itself shown, so a row carries its own conditions and those of the
@@ -381,11 +414,11 @@ pub(crate) fn plugin_params(manifest: &Manifest, _fields: &Map<String, Value>) -
     let mut rows = Vec::new();
     for (group, members) in manifest.sections() {
         if let Some(group) = group {
-            rows.push(Param::group(Label::from(group.to_owned())));
+            rows.push(Param::group(Label::from(plugin_text(manifest.group_in(group, plugin_lang())))));
         }
         for (key, p) in members {
             let when = conditions.remove(key.as_str()).unwrap_or_default();
-            rows.push(when.into_iter().fold(plugin_row(key, p), |row, (other, allowed)| row.visible_when_in(other, allowed)));
+            rows.push(when.into_iter().fold(plugin_row(manifest, key, p), |row, (other, allowed)| row.visible_when_in(other, allowed)));
         }
     }
     rows
@@ -491,7 +524,6 @@ pub(super) fn humanized(k: &str) -> String {
 #[cfg(test)]
 mod plugin_field_tests {
     use super::*;
-    use crate::i18n::LangExt as _;
 
     /// [`json_of`] reads back what [`fields_of`] took in: numbers as the command reads them, a flag pair as a bool,
     /// unknown keys through, UI-only keys dropped.

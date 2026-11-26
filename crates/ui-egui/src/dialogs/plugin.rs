@@ -46,6 +46,7 @@ use vectorcraft_plugins::{Budget, Kind, Manifest, Plugin, permissions, registry}
 use super::form;
 use super::preview::LivePreview;
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 use crate::menus::{Sep, c, cp, placeholder, sub};
 
 /// The key of the hosted dialog of plug-in filters.
@@ -56,6 +57,75 @@ const CMD: &str = "plugin.run";
 /// Object › Plug-ins' disabled row while no filter plug-in is installed.
 pub const NO_FILTERS: &str = "No filter plug-ins installed";
 
+/// The UI language's code, which a plug-in's translations are looked up under
+/// ([`vectorcraft_plugins::translations`]): plug-in text comes from the plug-in, never from the
+/// app's catalogs.
+fn lang() -> &'static str {
+    crate::i18n::current().code()
+}
+
+/// Menu path `path` (English, `›`-separated) with each segment put through `tr`, except the
+/// segments after Object › Plug-ins or Effect › Plug-ins: those are a plug-in's name and its items,
+/// already in the UI language from the plug-in's translations.
+pub(crate) fn translate_path<'a>(path: &'a str, tr: impl Fn(&'a str) -> &'a str) -> String {
+    let parts: Vec<&str> = path.split(" › ").collect();
+    let plugin = matches!(parts.as_slice(), ["Object" | "Effect", "Plug-ins", _, ..]);
+    parts.iter().enumerate().map(|(i, s)| if plugin && i >= 2 { s } else { tr(s) }).collect::<Vec<_>>().join(" › ")
+}
+
+/// Plug-in `id`'s name in the UI language as menus show it, without a trailing ellipsis (`None`
+/// while no such plug-in is installed).
+pub(crate) fn shown_name(id: &str) -> Option<String> {
+    registry::get(id).map(|p| p.manifest().shown_name(lang()).trim_end_matches('…').to_string())
+}
+
+/// The name of live effect `effect` (an effect id) in the UI language when a plug-in gives it
+/// ([`shown_name`]); `None` for a built-in effect.
+pub(crate) fn effect_name(effect: &str) -> Option<String> {
+    vectorcraft_plugins::effect::plugin_id(effect).and_then(shown_name)
+}
+
+/// Effect › Plug-ins' label for live effect `e`: its plug-in's name in the UI language, with an
+/// ellipsis when it opens a dialog ([`label`]); the catalog's label once the plug-in is gone.
+pub(crate) fn effect_item_label(e: &vectorcraft_effects::EffectInfo) -> &'static str {
+    match vectorcraft_plugins::effect::plugin_id(e.id).and_then(registry::get) {
+        Some(p) => label(&p.manifest().shown_name(lang()), !p.manifest().params.is_empty()),
+        None => e.label,
+    }
+}
+
+/// The menu label of plug-in item `key` (`plugin:<filter id>` or `effect:<effect id>`) in language
+/// `code`, as [`object_menu`] and [`effect_menu`] show it in that language; `None` for any other key
+/// or a plug-in that is not installed.
+pub(crate) fn item_label_in(key: &str, code: &str) -> Option<&'static str> {
+    let m = item_plugin(key)?;
+    let m = m.manifest();
+    Some(label(&m.shown_name(code), !m.params.is_empty()))
+}
+
+/// Menu path `group` of plug-in item `key` ([`item_label_in`]) with its plug-in's submenu, the
+/// segment after Object › Plug-ins or Effect › Plug-ins, named in language `code`; `group` as it
+/// is for an item without a submenu.
+pub(crate) fn item_group_in(key: &str, group: &str, code: &str) -> String {
+    let mut parts: Vec<String> = group.split(" › ").map(str::to_string).collect();
+    if parts.get(1).is_some_and(|p| p == "Plug-ins")
+        && let (Some(plugin), Some(submenu)) = (item_plugin(key), parts.get_mut(2))
+    {
+        *submenu = plugin.manifest().shown_name(code);
+    }
+    parts.join(" › ")
+}
+
+/// The plug-in of item `key` (`plugin:<filter id>` or `effect:<effect id>`), if it is installed.
+fn item_plugin(key: &str) -> Option<Arc<Plugin>> {
+    let id = match (key.strip_prefix("plugin:"), key.strip_prefix("effect:")) {
+        (Some(id), _) => id,
+        (_, Some(effect)) => vectorcraft_plugins::effect::plugin_id(effect)?,
+        _ => return None,
+    };
+    registry::get(id)
+}
+
 /// A menu label for plug-in `name`: with an ellipsis when it opens a dialog.
 fn label(name: &str, has_params: bool) -> &'static str {
     let dots = if has_params && !name.ends_with('…') { "…" } else { "" };
@@ -65,7 +135,7 @@ fn label(name: &str, has_params: bool) -> &'static str {
 /// A filter or live effect `plugin`'s item `own`, as the menu lists it: alone, or for a plug-in
 /// with commands of its own, a submenu named after it holding `own` and then its commands. Each
 /// command runs its command id (`plugin.<id>.<command>`), with an ellipsis when it has parameters,
-/// whose dialog [`open_command`] opens.
+/// whose dialog [`open_command`] opens. Names and labels are in the UI language.
 fn with_commands(plugin: &Plugin, own: Node) -> Node {
     let m = plugin.manifest();
     if m.commands.is_empty() {
@@ -74,9 +144,9 @@ fn with_commands(plugin: &Plugin, own: Node) -> Node {
     let mut items = vec![own, Sep];
     items.extend(m.commands.iter().map(|command| {
         let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
-        c(label(&command.shown_label(), !command.params.is_empty()), id)
+        c(label(&m.shown_command_label(command, lang()), !command.params.is_empty()), id)
     }));
-    sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
+    sub(registry::intern(&m.shown_name(lang())), items)
 }
 
 /// Moves each plug-in command whose manifest's `menu` names another menu
@@ -106,7 +176,7 @@ pub fn place_commands(tree: &mut [(&'static str, Vec<Node>)]) {
                 menu.iter().find(|it| is_anchor(it, anchor_key(a))).and_then(own_key).map(str::to_string)
             });
             let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &command.id));
-            let item = c(label(&command.menu_label(&m.name), !command.params.is_empty()), id);
+            let item = c(label(&m.shown_command_menu_label(command, lang()), !command.params.is_empty()), id);
             match spots.iter_mut().find(|s| s.0 == place.path && s.1 == after) {
                 Some(s) => s.2.push(item),
                 None => spots.push((place.path, after, vec![item])),
@@ -190,13 +260,16 @@ fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
     }
 }
 
-/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Object › Plug-ins: the installed object filters by their names in the UI language (each with
+/// its commands, if it has any), then Install Plug-in… and Reload Plug-ins.
 pub fn object_menu() -> Vec<Node> {
     let mut items: Vec<Node> = registry::list()
         .iter()
         .filter(|p| p.manifest().kind == Kind::Filter)
-        .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
+        .map(|p| {
+            let m = p.manifest();
+            with_commands(p, cp(label(&m.shown_name(lang()), !m.params.is_empty()), "plugin.dialog", json!({ "id": p.id() })))
+        })
         .collect();
     if items.is_empty() {
         items.push(placeholder(NO_FILTERS));
@@ -208,11 +281,15 @@ pub fn object_menu() -> Vec<Node> {
 /// File › Open With's disabled row while no importer plug-in is installed.
 pub const NO_IMPORTERS: &str = "No importer plug-ins installed";
 
-/// File › Open With: the installed importers (`file.openWith {importer}`), each by its name.
+/// File › Open With: the installed importers (`file.openWith {importer}`), each by its name in the
+/// UI language.
 pub fn open_with_menu() -> Vec<Node> {
     let items: Vec<Node> = vectorcraft_plugins::import::installed()
         .iter()
-        .map(|p| cp(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
+        .map(|p| {
+            let importer = vectorcraft_plugins::export::format_id(p.id());
+            cp(label(&p.manifest().shown_name(lang()), true), "file.openWith", json!({ "importer": importer }))
+        })
         .collect();
     if items.is_empty() { vec![placeholder(NO_IMPORTERS)] } else { items }
 }
@@ -223,9 +300,10 @@ pub fn effect_menu() -> Option<Node> {
     let items: Vec<Node> = vectorcraft_effects::plugin_effects()
         .into_iter()
         .map(|e| {
+            let label = effect_item_label(&e);
             let own = match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
-                true => cp(e.label, "effect.apply", json!({ "effect": e.id })),
-                false => cp(e.label, "effect.dialog", json!({ "effect": e.id })),
+                true => cp(label, "effect.apply", json!({ "effect": e.id })),
+                false => cp(label, "effect.dialog", json!({ "effect": e.id })),
             };
             match vectorcraft_plugins::effect::plugin_id(e.id).and_then(registry::get) {
                 Some(plugin) => with_commands(&plugin, own),
@@ -299,7 +377,12 @@ impl Opened {
 
 /// How a hosted plug-in dialog looks.
 struct Look {
-    /// The heading: the plug-in's or command's label, as it is (plug-in text is never translated).
+    /// The plug-in the dialog is for.
+    plugin: String,
+    /// The plug-in command the dialog is for (`plugin.<plug-in id>.<command id>`); `None` for the
+    /// plug-in's own dialog.
+    command: Option<String>,
+    /// The heading once the plug-in or command is gone: its manifest's own text ([`Look::heading`]).
     title: String,
     /// The plug-in's description, drawn above the rows.
     description: String,
@@ -311,17 +394,44 @@ struct Look {
     ok: Option<&'static str>,
 }
 
+impl Look {
+    /// The heading ([`heading`]), read each time the dialog is built so a change of language shows at once.
+    fn heading(&self) -> String {
+        heading(&self.plugin, self.command.as_deref(), &self.title)
+    }
+}
+
+/// The heading of the dialog of plug-in `plugin`, or of its command `command`
+/// (`plugin.<plug-in id>.<command id>`): the command's label, else the plug-in's name, in the UI language as menus
+/// show it; `gone` once the plug-in or command is no longer installed.
+pub(super) fn heading(plugin: &str, command: Option<&str>, gone: &str) -> String {
+    let shown = match command {
+        None => shown_name(plugin),
+        Some(c) => vectorcraft_engine::cmd::plugin::command_of(c).map(|(p, c)| p.manifest().shown_command_label(&c, lang())),
+    };
+    shown.unwrap_or_else(|| gone.to_string())
+}
+
 /// The builder of a hosted plug-in dialog over its values: the rows of `all` whose parameter is
-/// shown for the values (`m.visible`), after the description.
+/// shown for the values (`m.visible`), after the description. The rows are made again in the UI
+/// language when it changes while the dialog is open; the field values stay as they are.
 fn build(key: &'static str, m: Manifest, all: Arc<[Param]>, look: Look) -> impl for<'b> Fn(&'b mut DialogFields) -> ParamDialog<'b> + Send + 'static {
+    let rows_in = std::sync::Mutex::new((lang(), all));
     move |fields| {
+        let all = {
+            let mut made = rows_in.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if made.0 != lang() {
+                *made = (lang(), form::plugin_params(&m, &m.defaults()).into());
+            }
+            Arc::clone(&made.1)
+        };
         let shown = m.visible(&form::json_of(&all, fields));
         let mut rows = Vec::with_capacity(all.len() + 1);
         if !look.description.is_empty() {
             rows.push(Param::read_only_text("description", "", look.description.clone()).full_width());
         }
         rows.extend(all.iter().filter(|p| shown.contains(p.key.as_str())).cloned());
-        let mut dialog = ParamDialog::new(key, look.title.clone(), Cow::Owned(rows)).previews(look.previews);
+        let mut dialog = ParamDialog::new(key, look.heading(), Cow::Owned(rows)).previews(look.previews);
         if let Some(ok) = look.ok {
             dialog = dialog.ok_label(ok.into());
         }
@@ -384,7 +494,15 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 fn open_filter(app: &mut VectorcraftApp, plugin: &Plugin, m: Manifest, command: Option<String>, heading: String) -> Result<(), String> {
     let own = plugin.manifest();
     let light = own.budget == Budget::Light;
-    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: !light, ok: None };
+    let look = Look {
+        plugin: plugin.id().to_string(),
+        command: command.clone(),
+        title: heading.clone(),
+        description: own.description.clone(),
+        previews: light,
+        note: !light,
+        ok: None,
+    };
     let instance = command.as_deref().unwrap_or(plugin.id()).to_string();
     let (id, params) = open_hosted(app, KIND, &instance, m, look)?;
     let kind = Opened::Filter {
@@ -451,6 +569,8 @@ pub const IMPORT_KIND: &str = "pluginImport";
 pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
     let m = plugin.manifest();
     let look = Look {
+        plugin: plugin.id().to_string(),
+        command: None,
         title: m.name.trim_end_matches('…').to_string(),
         description: m.description.clone(),
         previews: false,
@@ -469,6 +589,8 @@ pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
 pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
     let m = plugin.manifest();
     let look = Look {
+        plugin: plugin.id().to_string(),
+        command: None,
         title: m.name.trim_end_matches('…').to_string(),
         description: m.description.clone(),
         previews: false,

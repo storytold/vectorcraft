@@ -7473,6 +7473,7 @@ axis	Y Axis	Y-axel
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Namn i manifestet: {name}
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
@@ -7536,6 +7537,11 @@ axis	Y Axis	Y-axel
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ett tungt filter körs i bakgrunden, så det kan inte deklarera `commands`
 @msg	at most {MAX_COMMANDS} `commands`	högst {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` anger högst {MAX_LANGUAGES} språk
+@msg	{at} gives two options the same label	{at} ger två alternativ samma etikett
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} är inte en språkkod som `de` eller `pt-BR`, eller upprepar en som angetts tidigare
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} måste vara 1-{max} utskrivbara tecken, utan riktnings- eller radavgränsartecken
+@msg	{at} names or translates something the manifest doesn't declare	{at} namnger eller översätter något som manifestet inte deklarerar
 @msg	command {name} is declared twice	kommandot {name} deklareras två gånger
 @msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav

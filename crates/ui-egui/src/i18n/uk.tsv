@@ -7077,6 +7077,7 @@ axis	Y Axis	Вісь Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Назва в маніфесті: {name}
 	Version: {version}	Версія: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
@@ -7144,6 +7145,11 @@ axis	Y Axis	Вісь Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
 @msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
 @msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` задає щонайбільше {MAX_LANGUAGES} мов
+@msg	{at} gives two options the same label	{at} дає двом варіантам однаковий підпис
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} не є кодом мови на кшталт `de` чи `pt-BR` або повторює код, заданий раніше
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} має містити 1-{max} друкованих символів без символів напрямку тексту й розділювачів рядків
+@msg	{at} names or translates something the manifest doesn't declare	{at} називає або перекладає те, чого маніфест не оголошує
 @msg	command {name} is declared twice	команду {name} оголошено двічі
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери

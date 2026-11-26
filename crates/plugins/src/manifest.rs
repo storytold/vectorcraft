@@ -6,6 +6,7 @@ use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
 use crate::permissions::{self, API_LEVEL, CONTEXT_API, INPUTS_API, PROGRESS_API, Permission};
+use crate::translations::Translations;
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -484,6 +485,10 @@ pub struct Manifest {
     /// lists any ([`Manifest::validate`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command_allowlist: Vec<String>,
+    /// Its name, command labels and parameter text in other languages, shown in place of the
+    /// manifest's own when the UI is in one of them ([`crate::translations`]).
+    #[serde(default, skip_serializing_if = "Translations::is_empty")]
+    pub translations: Translations,
 }
 
 impl Manifest {
@@ -521,13 +526,15 @@ impl Manifest {
             paint_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
+            translations: Translations::default(),
         }
     }
 
     /// The manifest command `c` runs with: this one with `c`'s label as its name and `c`'s
-    /// parameters as its own, so dialogs show them and [`Manifest::resolve_params`] checks them.
+    /// parameters as its own, so dialogs show them and [`Manifest::resolve_params`] checks them,
+    /// and with `c`'s text in each language as its translations.
     pub fn for_command(&self, c: &Command) -> Manifest {
-        Manifest { name: c.label.clone(), params: c.params.clone(), commands: Vec::new(), ..self.clone() }
+        Manifest { name: c.label.clone(), params: c.params.clone(), commands: Vec::new(), translations: self.command_translations(c), ..self.clone() }
     }
 
     /// The command with id `id`.
@@ -604,7 +611,8 @@ impl Manifest {
         }
         self.validate_params()?;
         self.validate_commands()?;
-        self.validate_allowlist()
+        self.validate_allowlist()?;
+        self.validate_translations()
     }
 
     /// `commandAllowlist` lists at most [`MAX_ALLOWED_COMMANDS`] distinct command ids

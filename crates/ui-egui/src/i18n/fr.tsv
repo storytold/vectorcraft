@@ -7469,6 +7469,7 @@ axis	Y Axis	Axe Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
 	ID: {id}	ID : {id}
+	Manifest name: {name}	Le manifeste le nomme {name}
 	Version: {version}	Version : {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
@@ -7536,6 +7537,11 @@ axis	Y Axis	Axe Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
 @msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
 @msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` donne au plus {MAX_LANGUAGES} langues
+@msg	{at} gives two options the same label	{at} donne le même libellé à deux options
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} n’est pas un code de langue comme `de` ou `pt-BR`, ou répète un code donné avant
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} doit compter 1-{max} caractères imprimables, sans caractères de direction ni séparateurs de ligne
+@msg	{at} names or translates something the manifest doesn't declare	{at} nomme ou traduit quelque chose que le manifeste ne déclare pas
 @msg	command {name} is declared twice	la commande {name} est déclarée deux fois
 @msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre

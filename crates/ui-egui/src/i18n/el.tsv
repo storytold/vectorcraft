@@ -7463,6 +7463,7 @@ axis	Y Axis	Άξονας Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Να εγκατασταθεί το «{name}», που ζητά αυτά τα δικαιώματα;
 	ID: {id}	Αναγνωριστικό: {id}
+	Manifest name: {name}	Όνομα στο manifest: {name}
 	Version: {version}	Έκδοση: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Να εγκατασταθεί το «{name}» στη θέση του πρόσθετου με το ίδιο αναγνωριστικό;
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Αυτό το αρχείο δεν είναι το πρόσθετο που ήταν εγκατεστημένο πριν με αυτό το αναγνωριστικό. Παίρνει τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό το αναγνωριστικό.
@@ -7530,6 +7531,11 @@ axis	Y Axis	Άξονας Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	στο «{name}» δεν παραχωρήθηκε το `{p}`, που χρειάζεται η έξοδός του: δεν άλλαξε τίποτα
 @msg	a heavy filter runs in the background, so it can't declare `commands`	ένα βαρύ φίλτρο εκτελείται στο παρασκήνιο, οπότε δεν μπορεί να δηλώνει `commands`
 @msg	at most {MAX_COMMANDS} `commands`	το πολύ {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	το `translations` δίνει το πολύ {MAX_LANGUAGES} γλώσσες
+@msg	{at} gives two options the same label	το {at} δίνει την ίδια ετικέτα σε δύο επιλογές
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	το {at} δεν είναι κωδικός γλώσσας όπως `de` ή `pt-BR`, ή επαναλαμβάνει έναν που δόθηκε πριν
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	το {at} πρέπει να έχει 1-{max} εκτυπώσιμους χαρακτήρες, χωρίς χαρακτήρες κατεύθυνσης ή διαχωρισμού γραμμών
+@msg	{at} names or translates something the manifest doesn't declare	το {at} ονομάζει ή μεταφράζει κάτι που το manifest δεν δηλώνει
 @msg	command {name} is declared twice	η εντολή {name} δηλώνεται δύο φορές
 @msg	command {name}: `label` must be 1-64 printable characters	εντολή {name}: το `label` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	εντολή {name}: χρησιμοποιήστε αναγνωριστικό 1-{MAX_COMMAND_ID} χαρακτήρων από a-z 0-9 _ που αρχίζει με γράμμα

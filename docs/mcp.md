@@ -13630,6 +13630,9 @@ The preference `pluginInstructionBudget` (`normal`, the default, or `large`; `pr
 sets the instructions every object filter run gets: Large gives a light filter 250 M instructions instead of 50 M,
 plus 4,000 per input byte either way, with its 60 s time budget unchanged; a heavy filter keeps its own budget with
 either value. The next `plugin.run` or plug-in command uses the value set ([plug-ins](plugins.md#instruction-budget-preference)).
+A manifest's `translations` ([plug-ins](plugins.md#translations)) change only the text the app shows: `plugin.list`,
+`plugin.info` and plug-in command entries keep the manifest's own names and labels, and `plugin.inspect` and
+`plugin.info`'s `manifest` give `translations` as declared.
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,

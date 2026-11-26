@@ -7364,6 +7364,7 @@ axis	Y Axis	Y ос
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Име в манифеста: {name}
 	Version: {version}	Версия: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Да се инсталира ли „{name}“ на мястото на приставката със същия ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Този файл не е приставката, инсталирана преди с този ID. Той получава настройките и кеша, пазени за този ID.

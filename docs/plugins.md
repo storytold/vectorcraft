@@ -233,8 +233,8 @@ an importer an import's). Each of its runs gets 1 G instructions (20 times a lig
 and 300 s (`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns
 how much there is only once the run has ended.
 
-- **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, and install it once the
-  user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
+- **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, with its ID and file
+  SHA-256, and install it once the user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
   and refuses `allowHeavy` from a request except in a session started with `vectorcraft-cli --allow-plugin-grants`
   (`plugin.inspect` shows the budget beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed
   again at startup. The Additional Plug-ins Folder skips heavy filters with a note in its report, since loading a folder
@@ -663,6 +663,7 @@ the module's start function, in a run that isn't a filter's run on a document, o
   it): the ids of the commands the filter may [call](#command-calls), at most 256, each once (`"commandAllowlist":
   ["select.all", "object.move"]`). An id is 1–128 characters from `A-Z a-z 0-9 . _ -` that starts with a letter, with
   no empty part between dots. A malformed list is refused when the module is installed, and the error names the id.
+- `translations`: the plug-in's text in other languages ([Translations](#translations)).
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults are also clamped
@@ -693,6 +694,53 @@ declares them still installs there:
 A hidden parameter still goes to the plug-in with its value: what the dialog showed never changes a run. The
 filter, live-effect and exporter dialogs use all of these keys. The Appearance panel's editor of a plug-in effect's
 parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the parameters without sections or help buttons.
+Dialogs and menus show plug-in text with control and bidirectional characters escaped (`\u{202E}`).
+
+#### Translations
+
+`translations` gives the plug-in's text in other languages, keyed by language code. The app shows the text for its
+interface language (Preferences › User Interface). Text a language leaves out comes from the same code without its
+last part (`pt-BR`, then `pt`; `zh-Hant-TW`, then `zh-Hant`, then `zh`) and then from the manifest's own text. Codes
+match without regard to case.
+
+```json
+"translations": {
+  "de": {
+    "name": "Pfade aufräumen",
+    "params": {"mode": {"label": "Modus", "help": "Weich rundet die Ecken.", "options": {"soft": "Weich", "hard": "Hart"}}},
+    "groups": {"Shape": "Form"},
+    "commands": {"grow": {"label": "Vergrößern", "params": {"by": {"label": "Um"}}}}
+  },
+  "pt": {"name": "Arrumar caminhos"},
+  "pt-BR": {"name": "Organizar caminhos"}
+}
+```
+
+| Key | What it translates |
+|---|---|
+| `name` | The plug-in's name in Object › Plug-ins, Effect › Plug-ins, File › Open With, Edit › Keyboard Shortcuts, the command palette, the Appearance panel and dialog headings (1–64 characters). |
+| `params` | By parameter name: its `label` (also for a parameter that gives none), `help` (only where the parameter gives one; line breaks allowed) and `options`, the label of each choice by the value it passes (1–64 characters each). |
+| `groups` | By the `group` the parameters give: the section's heading. The section stays the same section in every language. |
+| `commands` | By command id: its `label` and its parameters' text, as `params` gives it. |
+
+The text is only shown. Command ids, parameter names and choice values are the same in every language, the plug-in
+is given the values it declared, and `plugin.list`, `plugin.info` and errors use the manifest's own `name` and labels;
+`plugin.inspect` and `plugin.info` give `translations` as declared. The install approval names the plug-in in the UI
+language and, when that name is a translation, also shows the manifest's own name under its ID; what the approval
+grants is still bound to the ID and file hash it shows.
+
+A manifest gives at most 16 languages, inside its 64 KiB limit. Installing refuses the following, with an error that
+names the key (such as `translations.de.params.mode.label`):
+
+- a code that is not a language of 2 or 3 letters followed by parts of 2–8 letters and digits after a `-` (at most 35
+  characters), or a language given twice;
+- text longer than the field it translates allows, empty text, or text with a control character (a line break
+  outside `help`), a character that changes the direction text runs in (`U+202A`–`U+202E`, `U+2066`–`U+2069`,
+  `U+200E`, `U+200F`, `U+061C`) or a line or paragraph separator;
+- a parameter, choice value, group or command the manifest doesn't declare, `options` on a parameter that isn't a
+  choice, two options of a choice with the same label, or a key not listed above.
+
+Hosts from before `translations` ignore it and show the manifest's own text.
 
 ### Input
 

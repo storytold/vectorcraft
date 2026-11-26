@@ -619,6 +619,11 @@
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” tidak diberi `{p}`, yang diperlukan keluarannya: tidak ada yang diubah
 @msg	a heavy filter runs in the background, so it can't declare `commands`	filter berat berjalan di latar belakang, sehingga tidak dapat mendeklarasikan `commands`
 @msg	at most {MAX_COMMANDS} `commands`	paling banyak {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` memberikan paling banyak {MAX_LANGUAGES} bahasa
+@msg	{at} gives two options the same label	{at} memberikan label yang sama untuk dua opsi
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} bukan kode bahasa seperti `de` atau `pt-BR`, atau mengulang kode yang diberikan sebelumnya
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} harus berisi 1-{max} karakter yang dapat dicetak, tanpa karakter arah atau pemisah baris
+@msg	{at} names or translates something the manifest doesn't declare	{at} menamai atau menerjemahkan sesuatu yang tidak dideklarasikan manifes
 @msg	command {name} is declared twice	perintah {name} dideklarasikan dua kali
 @msg	command {name}: `label` must be 1-64 printable characters	perintah {name}: `label` harus berupa 1-64 karakter yang dapat dicetak
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	perintah {name}: gunakan id sepanjang 1-{MAX_COMMAND_ID} karakter dari a-z 0-9 _ yang diawali huruf
@@ -7421,6 +7426,7 @@ axis	Y Axis	Sumbu Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instal “{name}”, yang meminta izin berikut?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Nama di manifes: {name}
 	Version: {version}	Versi: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.

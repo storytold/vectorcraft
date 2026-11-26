@@ -7124,6 +7124,7 @@ axis	Y Axis	Trục Y
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Cài đặt “{name}”, plug-in yêu cầu các quyền này?
 	ID: {id}	ID: {id}
+	Manifest name: {name}	Tên trong manifest: {name}
 	Version: {version}	Phiên bản: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
@@ -7191,6 +7192,11 @@ axis	Y Axis	Trục Y
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” chưa được cấp `{p}`, quyền mà đầu ra của nó cần: không có gì thay đổi
 @msg	a heavy filter runs in the background, so it can't declare `commands`	bộ lọc nặng chạy ở chế độ nền nên không thể khai báo `commands`
 @msg	at most {MAX_COMMANDS} `commands`	tối đa {MAX_COMMANDS} `commands`
+@msg	`translations` gives at most {MAX_LANGUAGES} languages	`translations` chỉ định tối đa {MAX_LANGUAGES} ngôn ngữ
+@msg	{at} gives two options the same label	{at} đặt cùng một nhãn cho hai tùy chọn
+@msg	{at} is not a language code such as `de` or `pt-BR`, or repeats one given before it	{at} không phải mã ngôn ngữ như `de` hoặc `pt-BR`, hoặc lặp lại mã đã cho trước đó
+@msg	{at} must be 1-{max} printable characters, without direction or line-separator characters	{at} phải có 1-{max} ký tự in được, không có ký tự định hướng hoặc ký tự phân cách dòng
+@msg	{at} names or translates something the manifest doesn't declare	{at} đặt tên hoặc dịch một thứ mà manifest không khai báo
 @msg	command {name} is declared twice	lệnh {name} được khai báo hai lần
 @msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
