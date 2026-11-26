@@ -515,3 +515,36 @@ fn revert_confirmation_never_discards_another_drawings_changes() {
     let _ = std::fs::remove_dir_all(d);
     assert_eq!(result, (count, true), "the second drawing must retain its unsaved edits");
 }
+
+#[test]
+fn acknowledging_import_loss_does_not_overwrite_the_source_with_another_drawing() {
+    let d = dir("lossy-drawing-switch");
+    let path = d.join("source.vectorcraft").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(path.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    rect(&mut app);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let params = json!({"path": path, "options": {"compress": true}});
+    assert_eq!(app.run("file.saveAs", params.clone()).unwrap()["pending"], confirm::KIND);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    answer_top(&mut app, true);
+    crate::background::wait_all(&mut app);
+    let after_switch = std::fs::read(&path).unwrap();
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.saveAs", params).unwrap();
+    answer_top(&mut app, true);
+    crate::background::wait_all(&mut app);
+    let after_original = std::fs::read(&path).unwrap();
+    let _ = std::fs::remove_dir_all(d);
+    assert!(after_switch == saved, "drawing B must never overwrite A's file");
+    assert!(after_original != saved, "approval in drawing A must still save A");
+}
