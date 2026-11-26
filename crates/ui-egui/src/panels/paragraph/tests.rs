@@ -751,7 +751,6 @@ fn bar_names(app: &mut VectorcraftApp) -> Vec<String> {
 /// #5372: with type selected the Control bar shows a Paragraph section: the Paragraph: link and the
 /// Align left, Align center and Align right buttons (the justifying four are in the panel the link
 /// opens); with no type selected it shows none of them.
-// PLAN: the trimming order as the bar narrows (toggles out before the link, ch.K30) is chrome-w16's `Row::fit_rank` and is tested with its fixture.
 #[test]
 fn the_control_bar_shows_its_paragraph_section_for_selected_type_only() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

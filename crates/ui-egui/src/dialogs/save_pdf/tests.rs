@@ -1015,3 +1015,23 @@ fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
         assert!(!is_open(&app), "{bad}");
     }
 }
+
+/// The number and length fields of the sections that name them: the page range, the bleed sides and the font
+/// subset threshold.
+#[test]
+fn the_range_bleed_and_subset_fields_are_named() {
+    let (mut app, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    let sections: [(&str, &[&str]); 3] =
+        [("general", &["Range"]), ("marks", &["Offset", "Top", "Bottom", "Left", "Right"]), ("advanced", &["Subset fonts below"])];
+    for (section, expected) in sections {
+        set_field(&app, "section", json!(section));
+        pump(&mut app);
+        let ctx = app.ui_ctx.clone().expect("a UI context");
+        let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+        let names = super::super::tests_print::field_names(&out);
+        for name in expected {
+            assert!(names.iter().any(|n| n == name), "{section}: {name} in {names:?}");
+        }
+    }
+}

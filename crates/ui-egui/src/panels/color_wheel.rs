@@ -927,7 +927,7 @@ fn ratio_answer(app: &mut VectorcraftApp, panel: &mut WheelUi, pinned: Option<Co
         black_on_screen: app.session.prefs.black_on_screen.clone(),
         under: under(),
         mesh_points: app.session.fill_mesh_points(),
-        bucket: app.session.bucket_paints(),
+        bucket: app.session.tool_paints(!app.session.fill_active),
     };
     match &panel.ratio {
         Some((k, r)) if *k == key => r.clone(),

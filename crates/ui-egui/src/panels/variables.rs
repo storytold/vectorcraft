@@ -20,7 +20,7 @@ use craft::ui::contract::{
     Bind, CollectionEvent, ColumnEvent, ColumnSort, ColumnSpec, PopupKind, Props as _, SelectMode, Show as _, ShowCollection as _,
     ShowContainer as _, Trigger, Validity,
 };
-use craft::ui::display::{Icon, Shade, Text};
+use craft::ui::display::{Divider, Icon, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow};
@@ -278,7 +278,7 @@ struct Picked {
     has_selection: bool,
     /// Unbind needs a bound object under the selection, not just any selection.
     selection_bound: bool,
-    /// Make Text Dynamic needs exactly one type object: a text variable only drives type.
+    /// Make Text Dynamic needs one type object without an existing text variable.
     single_type: bool,
     /// Make Image Dynamic needs exactly one image object.
     single_image: bool,
@@ -289,7 +289,15 @@ struct Picked {
 fn picked(st: &vectorcraft_engine::DocState) -> Picked {
     let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
     let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
-    let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
+    let single_type = match selected.as_slice() {
+        [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) => st
+            .doc
+            .variables
+            .bindings
+            .get(&NodeId(*one))
+            .is_none_or(|bound| !st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text && bound.contains(&v.name))),
+        _ => false,
+    };
     let single_image = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Image(_))));
     let selection_graph = !selected.is_empty() && selected.iter().all(|id| st.doc.node(NodeId(*id)).is_some_and(|n| n.extras().graph.is_some()));
     Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type, single_image, selection_graph }
@@ -408,6 +416,8 @@ enum Act {
     Rename(String, String),
     /// A click on a variable's row.
     Click(String),
+    /// A context request highlights its variable without changing the canvas selection.
+    Highlight(String),
     /// A double click on a variable's row: Variable Options for it.
     Options(String),
 }
@@ -422,10 +432,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rows = cached_rows(&mut app.canvas, st, xml_id);
     let states = row_states(st);
     let sort = st.variables_sort;
+    let doc_uid = st.uid;
     let (mut acts, mut pressed) = (Vec::new(), None);
     Stack::new().fill().footer(|ui, _| pressed = footer(ui, &states)).show(ui, |ui, _| {
         data_set_bar(ui, &rows.sets, &mut acts);
-        variable_table(ui, &rows.vars, sort, &states, &mut acts);
+        variable_table(ui, &rows.vars, sort, &states, doc_uid, &mut acts);
         Text::new(tl!("Data Sets")).role(TypeRole::Heading).show(ui);
         data_set_list(ui, &rows.sets, &mut acts);
     });
@@ -441,6 +452,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Act::Click(name) => {
                 let bound = rows.vars.iter().find(|v| v.name == name).map(|v| v.bound.clone()).unwrap_or_default();
                 click_row(app, &name, &bound);
+            }
+            Act::Highlight(name) => {
+                app.run("variable.highlight", json!({"variable": name})).ok();
             }
             Act::Options(name) => {
                 crate::dialogs::variables::open(app, "variable.rename", Some(&name));
@@ -492,7 +506,7 @@ fn data_set_bar(ui: &mut Ui, sets: &[SetRow], acts: &mut Vec<Act>) {
 
 /// The variables under their three sortable columns: a row's kind, its name and what it drives.
 /// A click highlights the row and selects what it drives; a double click opens Variable Options.
-fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &RowStates, acts: &mut Vec<Act>) {
+fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &RowStates, doc_uid: u64, acts: &mut Vec<Act>) {
     let columns = vec![
         ColumnSpec::new(TYPE, tl!("Type"), ColumnWidth::Controls(1.0)).icon(IconId::new("arrow-up-down")).tip(tl!("Type")).sortable(),
         ColumnSpec::new(NAME, tl!("Variables"), ColumnWidth::fill(1.0)).sortable(),
@@ -501,6 +515,7 @@ fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &Row
     let sorted = SORTS.iter().find(|(_, by)| *by == sort.by).map(|(key, _)| ColumnSort::new(key.clone(), sort.descending));
     let by_name: HashMap<&str, &VarRow> = vars.iter().map(|v| (v.name.as_str(), v)).collect();
     let out = Table::<String>::new(tl!("Variables"), columns)
+        .id(ui.scope_id().with(("variables-table", doc_uid)))
         .select(SelectMode::Single)
         .sort(sorted)
         .empty(tl!("None"))
@@ -514,20 +529,68 @@ fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &Row
                 .cell(OBJECT, row.object.clone())
                 .cell_muted(OBJECT)
         });
+    let opening_menu = out.events.iter().any(|event| matches!(event, CollectionEvent::ContextMenu(_)));
+    if let Some(request) = &out.menu
+        && let Some(row) = by_name.get(request.key.as_str())
+    {
+        variable_menu(ui, &out.response, row, states, acts);
+    }
     for event in out.events {
         match event {
+            CollectionEvent::ContextMenu(request) => acts.push(Act::Highlight(request.key)),
             CollectionEvent::Column(ColumnEvent::Sort { key, descending, .. }) => {
                 if let Some((_, by)) = SORTS.iter().find(|(column, _)| *column == key) {
                     acts.push(Act::Run("variable.sort", json!({"by": by.id(), "descending": descending})));
                 }
             }
-            CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => acts.extend(keys.into_iter().next().map(Act::Click)),
+            CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } if !opening_menu => {
+                acts.extend(keys.into_iter().next().map(Act::Click));
+            }
             // A click on the highlighted row changes no selection, and still selects what it drives.
-            CollectionEvent::Picked { key, .. } => acts.push(Act::Click(key)),
+            CollectionEvent::Picked { key, .. } if !opening_menu => acts.push(Act::Click(key)),
             CollectionEvent::Activate(name) if !states.locked => acts.push(Act::Options(name)),
             _ => {}
         }
     }
+}
+
+/// A variable's item menu, retained by the table by key and scoped to its document.
+/// Row actions name their target explicitly; dynamic actions use the canvas selection.
+fn variable_menu(ui: &mut Ui, opener: &egui::Response, row: &VarRow, states: &RowStates, acts: &mut Vec<Act>) {
+    Menu::context(row.name.clone(), opener).id(opener.id.with("variable-row-menu")).show(ui, |ui, _| {
+        for id in [
+            SELECT_BOUND,
+            "variable.rename",
+            UNBIND,
+            "",
+            "variable.makeTextDynamic",
+            "variable.makeVisibilityDynamic",
+            "variable.makeImageDynamic",
+            "variable.makeGraphDynamic",
+            "",
+            DELETE_VARIABLE,
+        ] {
+            if id.is_empty() {
+                Divider::horizontal().show(ui);
+                continue;
+            }
+            let enabled = match id {
+                SELECT_BOUND => !row.bound.is_empty(),
+                "variable.rename" | DELETE_VARIABLE => !states.locked,
+                UNBIND => !row.bound.is_empty() && !states.locked,
+                _ => states.enabled(id),
+            };
+            if MenuItem::new(title(id, states.locked)).enabled(enabled).show(ui).ran {
+                acts.push(match id {
+                    SELECT_BOUND => Act::Run("select.set", json!({"ids": row.bound})),
+                    "variable.rename" => Act::Options(row.name.clone()),
+                    UNBIND => Act::Run("variable.unbind", json!({"ids": row.bound, "variable": row.name})),
+                    DELETE_VARIABLE => Act::Run("variable.delete", json!({"names": [row.name]})),
+                    _ => Act::Run(id, json!({})),
+                });
+            }
+        }
+    });
 }
 
 /// The data sets, the active one selected; a row the art has drifted from is in italics, so an edit
@@ -741,9 +804,14 @@ mod tests {
 
         /// Clicks the center of `node`.
         fn click(&mut self, app: &mut VectorcraftApp, node: &egui::accesskit::Node) {
-            use egui::{Event, Modifiers, PointerButton};
-            let pos = center(node);
-            let (button, none) = (PointerButton::Primary, Modifiers::default());
+            self.click_button(app, node, egui::PointerButton::Primary);
+        }
+
+        fn click_button(&mut self, app: &mut VectorcraftApp, node: &egui::accesskit::Node, button: egui::PointerButton) {
+            use egui::{Event, Modifiers};
+            let b = node.bounds().expect("bounds");
+            let pos = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+            let none = Modifiers::default();
             self.frame(app, vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: none }]);
             self.frame(app, vec![Event::PointerButton { pos, button, pressed: false, modifiers: none }]);
             self.frame(app, vec![]);
@@ -754,6 +822,222 @@ mod tests {
     fn center(node: &egui::accesskit::Node) -> egui::Pos2 {
         let b = node.bounds().expect("bounds");
         egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+    }
+
+    fn open_row_menu(d: &mut Driver, app: &mut VectorcraftApp, name: &str) -> Vec<egui::accesskit::Node> {
+        let nodes = d.nodes(app);
+        let row = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::ListItem && n.label() == Some(name)).expect("variable row");
+        d.click_button(app, &row.1, egui::PointerButton::Secondary);
+        d.nodes(app).into_iter().filter(|(id, _)| !nodes.iter().any(|(before, _)| before == id)).map(|(_, n)| n).collect()
+    }
+
+    fn menu_button(nodes: &[egui::accesskit::Node], label: &str) -> egui::accesskit::Node {
+        nodes.iter().find(|n| n.role() == egui::accesskit::Role::MenuItem && n.label().is_some_and(|s| s.trim() == label)).expect(label).clone()
+    }
+
+    #[test]
+    fn right_click_highlights_row_and_select_bound_object_uses_it() {
+        let mut app = app_with_data();
+        app.run("variable.define", json!({"name": "Other", "kind": "visibility"})).unwrap();
+        app.run("variable.highlight", json!({"variable": "Other"})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        let st = app.session.active().unwrap();
+        assert_eq!(highlighted_row(st).as_deref(), Some("Name"));
+        assert!(st.selection.objects.is_empty(), "right click must preserve canvas selection");
+        let bound = st.doc.variables.objects_of("Name");
+        app.run("variable.highlight", json!({"variable": "Other"})).unwrap();
+        d.click(&mut app, &menu_button(&nodes, "Select Bound Object"));
+        assert_eq!(app.session.active().unwrap().selection.objects, bound);
+    }
+
+    #[test]
+    fn keyboard_opens_focused_row_menu_without_changing_canvas_selection() {
+        use egui::{Event, Key, Modifiers};
+        let mut app = app_with_data();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut d = Driver::new();
+        let nodes = d.nodes(&mut app);
+        let table_id = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Table).unwrap().0;
+        let key = |key, modifiers| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        for _ in 0..20 {
+            if d.ctx.memory(|m| m.focused()).is_some_and(|id| id.value() == table_id.0) {
+                break;
+            }
+            d.frame(&mut app, vec![key(Key::Tab, Modifiers::NONE)]);
+            d.frame(&mut app, vec![]);
+        }
+        assert!(d.ctx.memory(|m| m.focused()).is_some_and(|id| id.value() == table_id.0), "Tab must focus the variable table");
+        // The table owns keyboard focus; Down establishes its focused row before requesting its menu.
+        d.frame(&mut app, vec![key(Key::ArrowDown, Modifiers::NONE)]);
+        d.frame(&mut app, vec![key(Key::F10, Modifiers::SHIFT)]);
+        let nodes = d.nodes(&mut app).into_iter().map(|(_, n)| n).collect::<Vec<_>>();
+        assert!(!menu_button(&nodes, "Select Bound Object").is_disabled());
+        assert_eq!(highlighted_row(app.session.active().unwrap()).as_deref(), Some("Name"));
+        assert_eq!(app.session.active().unwrap().selection.objects, selected);
+        d.frame(&mut app, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(!d.nodes(&mut app).iter().any(|(_, n)| n.role() == egui::accesskit::Role::MenuItem));
+    }
+
+    #[test]
+    fn context_menu_deletes_clicked_variable_in_one_undo_step() {
+        let mut app = app_with_data();
+        app.run("variable.define", json!({"name": "Other", "kind": "visibility"})).unwrap();
+        app.run("variable.highlight", json!({"variable": "Other"})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        // A command can change the highlight while this row's menu remains open.
+        app.run("variable.highlight", json!({"variable": "Other"})).unwrap();
+        app.run("variable.sort", json!({"by": "name", "descending": true})).unwrap();
+        d.frame(&mut app, vec![]);
+        d.click(&mut app, &menu_button(&nodes, "Delete Variable"));
+        let st = app.session.active().unwrap();
+        assert!(st.doc.variables.variable("Name").is_none());
+        assert!(st.doc.variables.variable("Other").is_some());
+        assert_eq!(undo_steps(&app), before + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.variables.variable("Name").is_some());
+        assert!(!app.session.active().unwrap().doc.variables.objects_of("Name").is_empty());
+    }
+
+    #[test]
+    fn context_menu_unbinds_only_clicked_variable() {
+        let mut app = app_with_data();
+        let bound = app.session.active().unwrap().doc.variables.objects_of("Name");
+        app.run("variable.define", json!({"name": "Visible", "kind": "visibility"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Visible", "ids": [bound[0].0]})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        d.click(&mut app, &menu_button(&nodes, "Unbind Variable"));
+        let st = app.session.active().unwrap();
+        assert!(st.doc.variables.objects_of("Name").is_empty());
+        assert_eq!(st.doc.variables.objects_of("Visible"), bound);
+        assert_eq!(undo_steps(&app), before + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Name"), bound);
+    }
+
+    #[test]
+    fn context_menu_unbinds_both_group_and_nested_object() {
+        let mut app = app_with_data();
+        let text = app.session.active().unwrap().doc.variables.objects_of("Name")[0];
+        let rect = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [text.0, rect]})).unwrap();
+        let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("variable.define", json!({"name": "Visible", "kind": "visibility"})).unwrap();
+        // Bind separately so both the group and its child have the variable.
+        for id in [group, text.0] {
+            app.run("variable.bind", json!({"variable": "Visible", "ids": [id]})).unwrap();
+        }
+        assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Visible").len(), 2);
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Visible");
+        d.click(&mut app, &menu_button(&nodes, "Unbind Variable"));
+        assert!(app.session.active().unwrap().doc.variables.objects_of("Visible").is_empty());
+        assert_eq!(undo_steps(&app), before + 1);
+        assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Name"), vec![text]);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Visible").len(), 2);
+    }
+
+    #[test]
+    fn context_menu_cannot_act_on_same_named_variable_in_another_document() {
+        use egui::accesskit::{Action, ActionRequest, TreeId};
+        for label in ["Delete Variable", "Unbind Variable"] {
+            let mut app = app_with_data();
+            let original = app.session.active().unwrap().doc.variables.clone();
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+            let text = app.run("text.create", json!({"x": 10, "y": 40, "text": "Alice"})).unwrap()["id"].clone();
+            app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+            app.run("variable.bind", json!({"variable": "Name", "ids": [text]})).unwrap();
+            let other = app.session.active().unwrap().doc.variables.clone();
+            assert!(app.session.set_active(0));
+            let mut d = Driver::new();
+            let nodes = open_row_menu(&mut d, &mut app, "Name");
+            let action = menu_button(&nodes, label);
+            let target_node = d
+                .nodes(&mut app)
+                .into_iter()
+                .find(|(_, n)| n.role() == egui::accesskit::Role::MenuItem && n.label() == action.label())
+                .expect("the open menu action")
+                .0;
+            assert!(app.session.set_active(1));
+            assert!(!d.nodes(&mut app).iter().any(|(id, _)| *id == target_node), "{label}: the old menu carried over");
+            // A queued accessibility click must not dispatch the old menu action in the new document.
+            d.frame(
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(ActionRequest {
+                    action: Action::Click,
+                    target_node,
+                    target_tree: TreeId::ROOT,
+                    data: None,
+                })],
+            );
+            assert_eq!(app.session.active().unwrap().doc.variables, other, "{label}: changed the second document");
+            assert!(app.session.set_active(0));
+            assert_eq!(app.session.active().unwrap().doc.variables, original, "{label}: changed the first document");
+        }
+    }
+
+    #[test]
+    fn context_menu_make_text_dynamic_requires_text_without_a_text_binding() {
+        let mut app = app_with_data();
+        let text = app.session.active().unwrap().doc.variables.objects_of("Name")[0];
+        app.run("select.set", json!({"ids": [text.0]})).unwrap();
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        assert!(menu_button(&nodes, "Make Text Dynamic").is_disabled());
+        assert!(!menu_button(&nodes, "Make Visibility Dynamic").is_disabled());
+        d.frame(
+            &mut app,
+            vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        );
+        app.run("variable.unbind", json!({"ids": [text.0], "variable": "Name"})).unwrap();
+        app.run("variable.define", json!({"name": "Visible", "kind": "visibility"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Visible", "ids": [text.0]})).unwrap();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        assert!(!menu_button(&nodes, "Make Text Dynamic").is_disabled(), "visibility bindings do not prevent a text variable");
+        let before = undo_steps(&app);
+        d.click(&mut app, &menu_button(&nodes, "Make Text Dynamic"));
+        let vars = &app.session.active().unwrap().doc.variables;
+        let bound = vars.bindings.get(&text).unwrap();
+        assert!(bound.contains("Visible"));
+        assert_eq!(vars.variables.iter().filter(|v| v.kind == VariableKind::Text && bound.contains(&v.name)).count(), 1);
+        assert_eq!(undo_steps(&app), before + 1);
+    }
+
+    #[test]
+    fn context_menu_disables_edits_when_locked_and_selection_actions_when_empty() {
+        let mut app = app_with_data();
+        app.run("variable.lock", json!({})).unwrap();
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        assert!(!menu_button(&nodes, "Select Bound Object").is_disabled());
+        for label in [
+            "Variable Options…",
+            "Unbind Variable",
+            "Make Text Dynamic",
+            "Make Visibility Dynamic",
+            "Make Image Dynamic",
+            "Make Graph Dynamic",
+            "Delete Variable",
+        ] {
+            assert!(menu_button(&nodes, label).is_disabled(), "{label}");
+        }
+        let mut app = app_with_data();
+        app.run("variable.define", json!({"name": "Unbound", "kind": "visibility"})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let nodes = open_row_menu(&mut Driver::new(), &mut app, "Unbound");
+        for label in
+            ["Select Bound Object", "Unbind Variable", "Make Text Dynamic", "Make Visibility Dynamic", "Make Image Dynamic", "Make Graph Dynamic"]
+        {
+            assert!(menu_button(&nodes, label).is_disabled(), "{label}");
+        }
+        assert!(!menu_button(&nodes, "Delete Variable").is_disabled());
     }
 
     fn set_names(app: &mut VectorcraftApp) -> Vec<String> {
@@ -900,7 +1184,7 @@ mod tests {
         check(&app, &nothing_picked, "with nothing selected or highlighted");
         app.run("select.set", json!({"ids": [t]})).unwrap();
         app.run("variable.highlight", json!({"variable": "Name"})).unwrap();
-        check(&app, &[("variable.makeTextDynamic", true), (UNBIND, true), (DELETE_VARIABLE, true), (SELECT_BOUND, true)], "on the bound text");
+        check(&app, &[("variable.makeTextDynamic", false), (UNBIND, true), (DELETE_VARIABLE, true), (SELECT_BOUND, true)], "on the bound text");
         app.run("variable.lock", json!({})).unwrap();
         let locked =
             [("variable.makeTextDynamic", false), ("variable.define", false), ("variable.rename", false), (DELETE_VARIABLE, false), (UNBIND, true)];
