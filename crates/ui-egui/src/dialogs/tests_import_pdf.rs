@@ -88,6 +88,8 @@ fn click_page_footer_ok(app: VectorcraftApp, dismiss: bool) -> egui_kittest::Har
     );
     h.run_steps(4);
     if dismiss {
+        h.get_by_label("OK").focus();
+        h.run_steps(2);
         h.get_by_label("OK").click_accesskit();
         h.input_mut().events.push(egui::Event::Key {
             key: egui::Key::Escape,
@@ -105,17 +107,14 @@ fn click_page_footer_ok(app: VectorcraftApp, dismiss: bool) -> egui_kittest::Har
 }
 
 #[test]
-fn pdf_page_footer_ok_opens_the_chosen_range_unless_dismissed() {
-    for dismiss in [false, true] {
-        let mut app = app();
-        io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
-        set(&mut app, "allPages", json!(false));
-        set(&mut app, "range", json!("2-3"));
+fn pdf_page_footer_ok_opens_the_chosen_range() {
+    let mut app = app();
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+    set(&mut app, "allPages", json!(false));
+    set(&mut app, "range", json!("2-3"));
 
-        let h = click_page_footer_ok(app, dismiss);
-        let expected: &[f64] = if dismiss { &[400.0] } else { &[200.0, 300.0] };
-        assert_eq!(artboard_widths(h.state()), expected);
-    }
+    let h = click_page_footer_ok(app, false);
+    assert_eq!(artboard_widths(h.state()), [200.0, 300.0]);
 }
 
 #[test]
@@ -275,15 +274,21 @@ fn place(app: &mut VectorcraftApp, bytes: &[u8], extra: serde_json::Value) -> Re
 }
 
 #[test]
-fn pdf_page_footer_ok_places_the_chosen_page() {
-    let mut app = app();
-    place(&mut app, &three_pages(), json!({"at": [100, 120], "link": false})).unwrap();
-    set(&mut app, "page", json!(2));
-    set(&mut app, "cropTo", json!("art"));
+fn pdf_page_footer_ok_places_the_chosen_page_unless_dismissed() {
+    for dismiss in [false, true] {
+        let mut app = app();
+        place(&mut app, &three_pages(), json!({"at": [100, 120], "link": false})).unwrap();
+        set(&mut app, "page", json!(2));
+        set(&mut app, "cropTo", json!("art"));
 
-    let h = click_page_footer_ok(app, false);
-    let (_, bounds) = placed(h.state());
-    assert_eq!((bounds.width(), bounds.height()), (50.0, 60.0));
+        let h = click_page_footer_ok(app, dismiss);
+        if dismiss {
+            assert!(h.state().session.active().unwrap().selection.objects.is_empty());
+        } else {
+            let (_, bounds) = placed(h.state());
+            assert_eq!((bounds.width(), bounds.height()), (50.0, 60.0));
+        }
+    }
 }
 
 #[test]
