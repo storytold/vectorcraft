@@ -2897,6 +2897,9 @@ own rules:
   rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
   all of them, and the Script Console shows an error line for each, as in
   `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
+  `all` and `race` preserve an input rejection's known location. Calling a saved reject function from script uses
+  that call's location. For rejections from code compiled by `eval` or `Function`, the `script.run` report omits
+  `file` and sets `line` and `column` to 0.
 
 The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
 `arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
