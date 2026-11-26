@@ -286,6 +286,8 @@ pub struct VectorcraftApp {
     pub(crate) three_d: panels::three_d::Model,
     /// The open export option dialogs and what runs after each.
     pub(crate) export_dialogs: dialogs::export_host::ExportDialogs,
+    /// The drawing the open Package dialog saves and collects.
+    pub(crate) package_document: Option<u64>,
     /// Save for Web's renders and colour table.
     pub(crate) web_export: dialogs::save_for_web::WebExport,
     /// The Flattener Preview panel's model.
