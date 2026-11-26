@@ -1329,6 +1329,24 @@ fn scoped_remove_all_refuses_art_on_a_locked_artboard() {
     assert_eq!(out, vec![json!(0)]);
 }
 
+/// `removeAll()` on a compound path's `pathItems` deletes its paths and keeps the compound path,
+/// empty, as `remove()` on its last path does.
+#[test]
+fn removing_all_the_paths_of_a_compound_path_keeps_the_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = layer_order(&s)[0];
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var c = app.activeDocument.compoundPathItems[0]; c.pathItems.removeAll(); vc.log([c.typename, c.pathItems.length, app.activeDocument.compoundPathItems.length]);",
+    );
+    assert_eq!(out, vec![json!(["CompoundPathItem", 0, 1])]);
+    assert!(s.active().unwrap().doc.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
+    assert_eq!(undo_steps(&s), steps + 1);
+}
+
 #[test]
 fn move_and_duplicate_refuse_art_on_a_locked_artboard() {
     let (mut s, a, b) = doc();

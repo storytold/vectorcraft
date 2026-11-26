@@ -726,7 +726,7 @@ fn art_remove_all(h: &Host, a: &[Data], kind: Kind) -> Answer {
         return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
-        on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+        on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "keepEmpty": true})))?;
     }
     Ok(Data::Undefined)
 }
