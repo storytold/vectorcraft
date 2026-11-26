@@ -8323,6 +8323,17 @@ and those shape tools: hidden widgets are not drawn, and those tools do not answ
 on them. `on`, when given and not `null`, must be `true` or `false` and sets the state; without it, or with `null`, the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
+In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
+Direct Selection, while a corner is selected or one live rectangle or polygon is selected) opens the Corners pop-up for the picked corners of every selected path:
+the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
+hold no corner is left out. The pop-up has the corner kind, the radius (blank while the picked corners differ) and the
+rounding, Relative or Absolute (`relativeRadii`, which applies to each path as a whole; neither is chosen while the
+paths differ). A path without Live Corners is Absolute: Relative leaves it, an ellipse or a line as it is, with no
+undo step. Editing a path's anchors (for example `path.moveAnchors`) ends its Live Corners, so it is Absolute again.
+With Relative rounding, a radius is
+compared as the fraction it stores (its share of the corner's maximum, at most all of it), so typing the radius
+shown again adds no undo step. The Corner Radius field beside the link sets the same corners. Each change runs one
+`object.setLiveShape` with `items`, one undo step, and the corners that were not picked keep their radius and kind.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}
