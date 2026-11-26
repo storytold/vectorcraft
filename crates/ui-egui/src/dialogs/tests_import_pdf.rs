@@ -1,6 +1,7 @@
 //! The Import PDF dialog: opening and placing multi-page and password-protected PDFs.
 
 use craft::ui::dialog::{HeldOk, StackDialog};
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
@@ -70,6 +71,50 @@ fn three_pages() -> Vec<u8> {
 
 fn artboard_widths(app: &VectorcraftApp) -> Vec<f64> {
     app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect()
+}
+
+fn click_page_footer_ok(app: VectorcraftApp, dismiss: bool) -> egui_kittest::Harness<'static, VectorcraftApp> {
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::testing::install(ui.ctx());
+                return;
+            }
+            app.dialogs().unwrap().with(|host| host.run(ui));
+            super::import_pdf::pump(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    if dismiss {
+        h.get_by_label("OK").focus();
+        h.run_steps(2);
+        h.get_by_label("OK").click_accesskit();
+        h.input_mut().events.push(egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+    } else {
+        h.get_by_label("OK").click();
+    }
+    h.run_steps(4);
+    assert!(!is_open(h.state()));
+    h
+}
+
+#[test]
+fn pdf_page_footer_ok_opens_the_chosen_range() {
+    let mut app = app();
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+    set(&mut app, "allPages", json!(false));
+    set(&mut app, "range", json!("2-3"));
+
+    let h = click_page_footer_ok(app, false);
+    assert_eq!(artboard_widths(h.state()), [200.0, 300.0]);
 }
 
 #[test]
@@ -226,6 +271,24 @@ fn place(app: &mut VectorcraftApp, bytes: &[u8], extra: serde_json::Value) -> Re
         o.extend(e);
     }
     crate::place::run(app, &p)
+}
+
+#[test]
+fn pdf_page_footer_ok_places_the_chosen_page_unless_dismissed() {
+    for dismiss in [false, true] {
+        let mut app = app();
+        place(&mut app, &three_pages(), json!({"at": [100, 120], "link": false})).unwrap();
+        set(&mut app, "page", json!(2));
+        set(&mut app, "cropTo", json!("art"));
+
+        let h = click_page_footer_ok(app, dismiss);
+        if dismiss {
+            assert!(h.state().session.active().unwrap().selection.objects.is_empty());
+        } else {
+            let (_, bounds) = placed(h.state());
+            assert_eq!((bounds.width(), bounds.height()), (50.0, 60.0));
+        }
+    }
 }
 
 #[test]

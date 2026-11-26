@@ -182,8 +182,13 @@ impl Panel {
     /// the name (a slider beside its number box).
     pub(crate) fn drag_hold_role(&mut self, name: &str, role: craft::ui::contract::Role, by: Vec2) {
         self.frame();
-        let target = self.look_role(name, role);
-        self.fixture.drag_hold_at(target.center(), by);
+        let from = self.look_role(name, role).center();
+        self.drag_hold_between(from, from + by);
+    }
+
+    /// Drags from `from` to `to`, keeping the button down for another input before release.
+    pub(crate) fn drag_hold_between(&mut self, from: Pos2, to: Pos2) {
+        self.fixture.drag_hold_at(from, to - from);
         self.after();
     }
 

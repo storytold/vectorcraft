@@ -28,6 +28,7 @@ pub(crate) mod command;
 pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
+pub mod curvature_circle_options;
 pub mod custom_dictionary;
 pub mod dimension;
 mod document_setup;
