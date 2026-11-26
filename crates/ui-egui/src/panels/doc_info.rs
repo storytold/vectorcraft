@@ -31,13 +31,25 @@ pub struct DocInfoView {
 }
 
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
-/// stays as it is.
-pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
+/// stays as it is. Whether the value was clicked to copy it: a click with no key held, other than
+/// the second or third click of a double or triple click.
+pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
+    let mut clicked = false;
     Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
-        // The value can be selected and copied (#8432).
-        SelectableText::new(label.to_string(), &value).show(ui);
+        // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
+        // and a Shift-click extends the selection, so neither copies.
+        let shown = SelectableText::new(label.to_string(), value).show(ui);
+        clicked = shown.contains_pointer()
+            && ui.input(|i| {
+                let primary = egui::PointerButton::Primary;
+                i.pointer.button_clicked(primary)
+                    && !i.pointer.button_double_clicked(primary)
+                    && !i.pointer.button_triple_clicked(primary)
+                    && i.modifiers.is_none()
+            });
     });
+    clicked
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
@@ -64,6 +76,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let DocInfoView { selection_only: sel_only, category } = app.ui.doc_info.clone();
+    let mut copy = None;
     Stack::new().show(ui, |ui, _| {
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
@@ -92,11 +105,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
-                    row(ui, super::label_or_name(label, !named.contains(&k)), shown);
+                    if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
+                        copy = Some(shown);
+                    }
                 }
             }
         }
     });
+    if let Some(text) = copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
+    }
 }
 
 /// A Brushes row's value in the interface language: the brush's type (`Art Brush`), or that the
