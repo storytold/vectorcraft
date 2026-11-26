@@ -743,6 +743,20 @@ fn the_status_bar_rotation_box_shows_the_view_angle() {
     assert_eq!(bar.tree().value_of(rotation.node), Some("-45°"));
 }
 
+#[test]
+fn the_status_bar_rotation_picker_requires_a_document_view() {
+    let mut bar = status_readout_app();
+    bar.app().run("file.close", json!({})).unwrap();
+    assert!(bar.app().view().is_none());
+    bar.settle().click("Rotation").settle();
+    assert!(bar.find("-45°").is_none(), "the picker stays closed without a view");
+
+    bar.app().run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    bar.settle().click("Rotation").settle();
+    bar.click("-45°").settle();
+    assert_eq!(bar.app().view().map(|v| v.rotation), Some(-45.0));
+}
+
 /// While background work runs the status bar shows it where the message was, with the count of the jobs after the
 /// first, and the message of the work's result takes the same place when it ends. Screen readers find the progress.
 #[test]
