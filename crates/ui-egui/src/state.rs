@@ -156,9 +156,15 @@ impl View {
     /// Takes the view the canvas reports back, the inverse of [`Self::canvas`].
     pub fn set_canvas(&mut self, view: &CanvasView, ui_scaling: f32) {
         self.center = view.center;
-        self.zoom = view.zoom * f64::from(ui_scaling);
+        self.zoom = Self::zoom_of_canvas(view, ui_scaling);
         self.rotation = view.rotation;
         self.rect = view.rect;
+    }
+
+    /// The zoom [`Self::zoom`] holds for the canvas view `view` at `ui_scaling`, the inverse of the
+    /// zoom in [`Self::canvas`]: the zoom `view.setZoom` and the View menu set and the status bar shows.
+    pub fn zoom_of_canvas(view: &CanvasView, ui_scaling: f32) -> f64 {
+        view.zoom * f64::from(ui_scaling)
     }
 }
 

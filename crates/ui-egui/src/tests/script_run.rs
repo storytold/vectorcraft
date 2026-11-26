@@ -103,6 +103,46 @@ fn a_run_goes_frame_by_frame_and_is_one_undo_step() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The warning automation asked while confined to a folder: Run runs the script as automation's,
+/// with that folder still the only place it may read.
+#[test]
+fn the_warning_runs_the_script_under_the_access_it_was_asked_with() {
+    let mut app = app();
+    let (inside, outside) = (folder("scope-in"), folder("scope-out"));
+    let path = outside.join("draw.js");
+    std::fs::write(&path, DRAW).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::file_asks::as_automated(&mut app, true, |app| {
+            menus::run_ui_command(app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+        })
+    });
+    assert!(confirm(&mut app, KIND));
+    assert!(app.ui.status.contains("outside the read root"), "the script outside the folder is refused: {}", app.ui.status);
+    assert!(!app.session.script_running());
+    finish(&mut app);
+    assert_eq!(objects(&app), 0);
+    let _ = std::fs::remove_dir_all(&inside);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
+/// The warning a person asked, answered by automation confined to a folder: the script runs with
+/// that folder still the only place it may read.
+#[test]
+fn the_warning_answered_under_narrower_access_keeps_it() {
+    let mut app = app();
+    let (inside, outside) = (folder("narrow-in"), folder("narrow-out"));
+    let path = outside.join("draw.js");
+    std::fs::write(&path, DRAW).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    assert!(vectorcraft_engine::file_access::confine(roots.as_ref(), || confirm(&mut app, KIND)));
+    assert!(app.ui.status.contains("outside the read root"), "the script outside the folder is refused: {}", app.ui.status);
+    assert!(!app.session.script_running());
+    let _ = std::fs::remove_dir_all(&inside);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
 #[test]
 fn do_not_show_again_is_remembered_and_the_script_still_runs() {
     let mut app = app();
@@ -540,6 +580,42 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     choose(&mut app, &picker, &refs);
     assert_eq!(picked(&app), given[..2048]);
     assert_eq!(files_fields(&app).unwrap()["leftOut"], true);
+    cancel(&mut app, PICKER_KIND);
+    finish(&mut app);
+}
+
+/// With two files picked, the file dialog lists them in a scrolled group named Picked files.
+#[test]
+fn a_scripts_file_dialog_lists_several_picked_files_in_a_named_group() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "File.openDialog('Pick', '', true);" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let given = vec!["/picked/a.txt".to_string(), "/picked/b.txt".to_string()];
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(given, true, false))).unwrap();
+    frame(&app, vec![]);
+    let out = frame(&app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    let groups: Vec<_> =
+        update.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::Group).filter_map(|(_, node)| node.label()).collect();
+    assert!(groups.contains(&"Picked files"), "a group named Picked files: {groups:?}");
+    let nodes: std::collections::HashMap<_, _> = update.nodes.iter().map(|(id, node)| (*id, node)).collect();
+    let (_, group) = update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == egui::accesskit::Role::Group && node.label() == Some("Picked files"))
+        .expect("the Picked files group");
+    let mut texts = Vec::new();
+    let mut pending = group.children().to_vec();
+    while let Some(id) = pending.pop() {
+        if let Some(node) = nodes.get(&id) {
+            texts.extend(node.label().into_iter().chain(node.value()).map(str::to_owned));
+            pending.extend_from_slice(node.children());
+        }
+    }
+    for path in ["/picked/a.txt", "/picked/b.txt"] {
+        assert!(texts.iter().any(|text| text == path), "{path} is inside the Picked files group: {texts:?}");
+    }
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
 }

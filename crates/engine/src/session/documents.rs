@@ -78,6 +78,7 @@ impl Session {
             depth: 0,
             replaying: false,
             shape_drawn: false,
+            prefs_resets: Vec::new(),
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,

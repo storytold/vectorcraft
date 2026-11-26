@@ -711,6 +711,12 @@ impl Prefs {
 }
 
 impl Session {
+    /// Take the categories `prefs.reset` reset since the last call, each once, with `None` for a
+    /// reset of every category. A frontend resets the settings it keeps itself in them.
+    pub fn take_prefs_resets(&mut self) -> Vec<Option<&'static str>> {
+        std::mem::take(&mut self.prefs_resets)
+    }
+
     /// Replace the preferences and push the ones with engine-side consumers into open documents
     /// and the renderer (grid, history depth, render threads).
     pub fn apply_prefs(&mut self, mut p: Prefs) {
@@ -818,7 +824,7 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             set
         ),
-        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?} reset one category (or everything) to defaults", always, reset),
+        cmd!(query "prefs.reset", "Reset Preferences", [], None, "{category?: string} reset one category (or everything, with category left out or null) to defaults; an unknown category or one that is not a string is an error", always, reset),
         cmd!(query "prefs.list", "List Preferences", [], None, "{} → [{key, category, section, label, kind, value, …}] every preference; under automation read roots a folder preference's value outside them is null", always, list),
         cmd!(
             query "prefs.export",
@@ -1001,15 +1007,17 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn reset(s: &mut Session, p: &Value) -> Result<Value> {
-    let cat = str_param(p, "category");
-    if let Some(c) = cat
-        && !PREF_CATEGORIES.iter().any(|x| x.eq_ignore_ascii_case(c))
-    {
-        return Err(bad("prefs.reset", format!("unknown category `{c}`")));
-    }
+    let cat = text_param(p, "category", "prefs.reset")?;
+    let known = |c: &str| {
+        PREF_CATEGORIES.iter().copied().find(|x| x.eq_ignore_ascii_case(c)).ok_or_else(|| bad("prefs.reset", format!("unknown category `{c}`")))
+    };
+    let category = cat.map(known).transpose()?;
     let mut next = s.prefs.clone();
     next.reset(cat);
     s.apply_prefs(next);
+    if !s.prefs_resets.contains(&category) {
+        s.prefs_resets.push(category);
+    }
     Ok(json!({ "prefs": shown_prefs(&s.prefs) }))
 }
 

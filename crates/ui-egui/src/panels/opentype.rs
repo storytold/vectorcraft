@@ -197,6 +197,8 @@ enum Change {
     Position(usize),
     /// A checkbox row turned on or off.
     Toggle(Flag, bool),
+    /// A row menu's Reset OpenType Features: the panel menu's default.
+    Reset,
 }
 
 impl Change {
@@ -205,6 +207,7 @@ impl Change {
             Change::Figure(i) => set_figure(f, i),
             Change::Position(i) => set_position(f, i),
             Change::Toggle(flag, on) => flag.put(f, on),
+            Change::Reset => *f = OtFeatures::default(),
         }
     }
 }
@@ -286,10 +289,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     Divider::horizontal().show(ui);
     // A row whose characters differ shows a dash, and a click turns the feature on for all of them.
+    // A secondary click keeps the text selection and opens that row's menu.
     for (label, flag) in rows() {
-        let out = Checkbox::new(Bind::given(mixed(shown_flag(app, flag)))).label(label).show(ui);
+        let shown = shown_flag(app, flag);
+        let out = Checkbox::new(Bind::given(mixed(shown))).label(label).show(ui);
         if let Some(on) = out.events.committed() {
             change = Some(Change::Toggle(flag, *on));
+        }
+        // The row menu's choice is applied with the rest at the end of the pass, so the rows drawn
+        // after it still read the state the pass started with.
+        if let Some(c) = Menu::context(label, &out.response).show(ui, |ui, _| feature_row_menu(app, ui, flag, shown)).inner.flatten() {
+            change = Some(c);
         }
     }
     let sets = set_entries(app, &st);
@@ -304,9 +314,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if tracking_drops_ligatures(app) {
         Text::new(tl!("Ligatures are off while the text is tracked.")).shade(Shade::Muted).show(ui);
     }
-    if let Some(c) = change {
-        edit(app, c);
+    match change {
+        // Reset writes the default as the whole feature list, as the panel menu's entry does.
+        Some(Change::Reset) => set(app, OtFeatures::default()),
+        Some(c) => edit(app, c),
+        None => {}
     }
+}
+
+/// The menu a secondary click on one feature row opens. Turn Off when the row is on
+/// (`shown` is `Some(true)`); Turn On when it is off or mixed, through the same toggle a click
+/// uses, so a mixed row turns the feature on for every character the panel acts on. Reset
+/// OpenType Features applies the panel menu's default and is enabled on the same condition.
+fn feature_row_menu(app: &VectorcraftApp, ui: &mut Ui, flag: Flag, shown: Option<bool>) -> Option<Change> {
+    let on = shown == Some(true);
+    let mut chosen = None;
+    if MenuItem::new(if on { tl!("Turn Off") } else { tl!("Turn On") }).show(ui).ran {
+        chosen = Some(Change::Toggle(flag, !on));
+    }
+    if MenuItem::new(tl!("Reset OpenType Features")).enabled(text_style(app).is_some()).show(ui).ran {
+        chosen = Some(Change::Reset);
+    }
+    chosen
 }
 
 /// Whether tracking turns off the standard ligatures of any character the panel acts on: one with
@@ -485,6 +514,7 @@ mod tests {
     use vectorcraft_doc::NodeId;
 
     use super::*;
+    use crate::tests::panel_harness::Panel;
 
     fn selected_text() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -1145,5 +1175,95 @@ mod tests {
                 _ => panic!("{label}: not text"),
             }
         }
+    }
+
+    fn row_flag(label: &str) -> Flag {
+        rows().into_iter().find(|(l, _)| *l == label).unwrap().1
+    }
+
+    #[test]
+    fn right_clicking_an_opentype_row_offers_turn_on_or_turn_off() {
+        let mut panel = Panel::new(selected_text(), show);
+        let ids = panel.app().session.active().unwrap().selection.objects.clone();
+        let before = features(&panel.app()).to_tags();
+        let undo = undo_steps(&panel.app());
+        panel.secondary_click("Standard Ligatures");
+        assert!(panel.menu_item_enabled("Turn Off"));
+        assert!(!panel.shows("Turn On"));
+        assert!(panel.menu_item_enabled("Reset OpenType Features"));
+        assert_eq!(panel.app().session.active().unwrap().selection.objects, ids);
+        assert_eq!(features(&panel.app()).to_tags(), before);
+        assert_eq!(undo_steps(&panel.app()), undo);
+        panel.click_menu_item("Turn Off");
+        panel.secondary_click("Standard Ligatures");
+        assert!(panel.menu_item_enabled("Turn On"));
+        assert!(!panel.shows("Turn Off"));
+        assert_eq!(panel.app().session.active().unwrap().selection.objects, ids);
+    }
+
+    #[test]
+    fn clicking_turn_on_sets_that_feature_in_one_undo_step() {
+        let off = OtFeatures { ligatures: false, swash: true, ..OtFeatures::default() };
+        let mut app = selected_text();
+        set(&mut app, off);
+        let mut by_check = Panel::new(app, show);
+        by_check.click("Standard Ligatures");
+        let mut app = selected_text();
+        set(&mut app, off);
+        let before = features(&app).to_tags();
+        let undo = undo_steps(&app);
+        let mut panel = Panel::new(app, show);
+        panel.secondary_click("Standard Ligatures");
+        panel.click_menu_item("Turn On");
+        assert_eq!(undo_steps(&panel.app()), undo + 1);
+        assert_eq!(features(&panel.app()).to_tags(), features(&by_check.app()).to_tags());
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(features(&panel.app()).to_tags(), before);
+    }
+
+    #[test]
+    fn turn_on_preserves_the_mixed_character_range_and_undo_restores_its_runs() {
+        let mut app = selected_text();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let id = app.run("text.create", json!({"x": 0, "y": 20, "text": "abcd"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "features": ["frac"]})).unwrap();
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 3}));
+        let range = Some((NodeId(id.as_u64().unwrap()), 1, 3));
+        assert_eq!(text_editing(&app), range);
+        assert_eq!(shown_flag(&app, row_flag("Fractions")), None);
+        let before = run_features(&mut app, &id, 4);
+        let undo = undo_steps(&app);
+        let mut panel = Panel::new(app, show);
+        panel.secondary_click("Fractions");
+        assert_eq!(text_editing(&panel.app()), range);
+        assert_eq!(run_features(&mut panel.app(), &id, 4), before);
+        panel.click_menu_item("Turn On");
+        assert_eq!(run_features(&mut panel.app(), &id, 4), [("a".into(), Value::Null), ("bc".into(), json!(["frac"])), ("d".into(), Value::Null)]);
+        assert_eq!(undo_steps(&panel.app()), undo + 1);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(run_features(&mut panel.app(), &id, 4), before);
+    }
+
+    #[test]
+    fn clicking_reset_opentype_features_clears_the_rows() {
+        let custom = OtFeatures { ligatures: false, fractions: true, swash: true, ..OtFeatures::default() };
+        let mut by_flyout = selected_text();
+        set(&mut by_flyout, custom);
+        run(&mut by_flyout, RESET, &json!({})).unwrap().unwrap();
+        let mut app = selected_text();
+        set(&mut app, custom);
+        let before = features(&app).to_tags();
+        let undo = undo_steps(&app);
+        let mut panel = Panel::new(app, show);
+        panel.secondary_click("Fractions");
+        panel.click_menu_item("Reset OpenType Features");
+        assert_eq!(undo_steps(&panel.app()), undo + 1);
+        assert_eq!(features(&panel.app()).to_tags(), features(&by_flyout).to_tags());
+        assert_eq!(shown_flag(&panel.app(), row_flag("Standard Ligatures")), Some(true));
+        assert_eq!(shown_flag(&panel.app(), row_flag("Fractions")), Some(false));
+        assert_eq!(shown_flag(&panel.app(), row_flag("Swash")), Some(false));
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(features(&panel.app()).to_tags(), before);
     }
 }

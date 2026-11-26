@@ -716,6 +716,33 @@ fn the_status_bar_show_choice_is_checked_and_saved() {
     );
 }
 
+/// The status bar's Rotation box shows the view's angle: a preset angle shows its row's label, an angle between the
+/// presets shows rounded to a whole degree, and a pick from the list still turns the view.
+#[test]
+fn the_status_bar_rotation_box_shows_the_view_angle() {
+    let mut bar = status_readout_app();
+    let rotation = |bar: &mut Shown, angle: f64| {
+        bar.app().run("view.rotate", json!({ "angle": angle })).unwrap();
+        let rotation = bar.settle().find("Rotation").unwrap_or_else(|| panic!("the status bar has the Rotation box"));
+        let value = bar.tree().value_of(rotation.node).map(str::to_owned);
+        (rotation, value)
+    };
+    for (angle, shown) in [(17.0, "17°"), (37.4, "37°"), (-0.3, "0°"), (-122.6, "-123°")] {
+        let (_, value) = rotation(&mut bar, angle);
+        assert_eq!(value.as_deref(), Some(shown), "the box at {angle}°");
+        assert!(bar.texts().iter().any(|t| t.text == shown), "the box draws {shown}");
+    }
+    let (_, value) = rotation(&mut bar, 45.0);
+    assert_eq!(value.as_deref(), Some("45°"));
+    // From an angle between the presets, the list still turns the view to the row picked.
+    let (opener, _) = rotation(&mut bar, 17.0);
+    bar.click_on(&opener).settle();
+    bar.click("-45°").settle();
+    assert_eq!(bar.app().view().map(|v| v.rotation), Some(-45.0));
+    let rotation = bar.find("Rotation").unwrap_or_else(|| panic!("the status bar has the Rotation box"));
+    assert_eq!(bar.tree().value_of(rotation.node), Some("-45°"));
+}
+
 /// While background work runs the status bar shows it where the message was, with the count of the jobs after the
 /// first, and the message of the work's result takes the same place when it ends. Screen readers find the progress.
 #[test]
@@ -804,6 +831,28 @@ fn set_zoom_100_matches_actual_size_with_display_print_size() {
     app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
     app.run("view.setZoom", json!({"zoom": 100})).unwrap();
     assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12);
+}
+
+/// At UI Scaling 150% the zoom field shows the zoom `view.setZoom` set, and a zoom typed into it is the zoom the view
+/// gets, as at 100%: 200% gives the view the zoom `view.setZoom` gives for 200%.
+#[test]
+fn the_zoom_field_sets_the_typed_zoom_at_any_ui_scaling() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.session.prefs.ui_scaling = 1.5;
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0));
+    app.run("view.setZoom", json!({"zoom": 200})).unwrap();
+    let wanted = app.view().unwrap().zoom;
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    let mut bar = crate::tests::panel_harness::Panel::new(app, super::status_bar);
+    assert!((bar.ctx().zoom_factor() - 1.5).abs() < 1e-6, "the interface is zoomed by UI Scaling");
+    let shown = |bar: &crate::tests::panel_harness::Panel| bar.value("Zoom").unwrap_or_default();
+    assert!(shown(&bar).starts_with("100"), "the field shows the zoom view.setZoom set: {}", shown(&bar));
+    bar.type_into("Zoom", "200");
+    let zoom = bar.app().view().unwrap().zoom;
+    assert!((zoom - wanted).abs() < 1e-9, "typing 200% gives the zoom of view.setZoom 200%: {zoom}, not {wanted}");
+    assert!(shown(&bar).starts_with("200"), "the field shows the typed zoom: {}", shown(&bar));
 }
 
 /// Read the painted coordinates while checking that drawing never changes the source
@@ -2549,6 +2598,26 @@ fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
         assert!(!s[5] || s[1], "the Align buttons show only with the Paragraph group: {s:?}");
     }
     assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
+}
+
+/// With type selected, the Paragraph group's Align left, Align center and Align right buttons leave the Control bar
+/// before its Paragraph: link: some width shows the link without them, and no width shows them without the link.
+#[test]
+fn the_paragraph_link_stays_on_the_control_bar_after_its_align_buttons_leave() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Paragraph:", "Align left", "Align center", "Align right"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(s[1..].iter().all(|shown| *shown == s[1]), "the three Align buttons show or go together: {s:?}");
+        assert!(!s[1] || s[0], "the Align buttons show only with the Paragraph: link: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Paragraph: link without the Align buttons");
 }
 
 /// With area type selected, its vertical alignment buttons leave the Control bar before Opacity and the Style group,

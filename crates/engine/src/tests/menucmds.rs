@@ -4644,6 +4644,47 @@ fn a_ruler_guide_rotates_with_the_selected_art() {
     assert!(!guides(&s)[0].0, "the vertical guide is horizontal now: {:?}", guides(&s));
 }
 
+/// The reply to a transform lists the guide paths it makes of ruler guides: for a guide alone,
+/// with a copy, beside selected art and beside direct-selected anchors.
+#[test]
+fn a_transform_replies_with_the_guide_paths_it_makes() {
+    fn reply_ids(r: &Value) -> Vec<NodeId> {
+        r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect()
+    }
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    // A copy keeps the ruler guide and adds a guide path, the only new object.
+    let r = s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    let [copy] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert_eq!(reply_ids(&r), vec![copy]);
+    // Without a copy the guide becomes a guide path.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert_ne!(path, copy);
+    assert_eq!(reply_ids(&r), vec![path]);
+    // With art selected, the reply lists the art and then the guide path.
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [mixed] = paths[..] else { panic!("the guide path is selected with the art") };
+    assert_eq!(reply_ids(&r), vec![a, mixed]);
+    // With direct-selected anchors, the guide path joins the reply too.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let anchored: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [made] = anchored[..] else { panic!("the guide path is selected with the path") };
+    assert!(line_ends(&s, made).1, "it is a guide path");
+    assert!(reply_ids(&r).contains(&made), "{r}");
+}
+
 #[test]
 fn ruler_guides_and_lock() {
     let mut s = session();
