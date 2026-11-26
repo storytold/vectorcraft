@@ -435,7 +435,10 @@ fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec
                     ],
                 ),
                 Sep,
-                sub("Plug-ins", [crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat()),
+                sub(
+                    "Plug-ins",
+                    [crate::dialogs::plugin::last_filter_menu(), crate::addons::plugin_menu(), crate::dialogs::plugin::object_menu()].concat(),
+                ),
             ],
         ),
         (

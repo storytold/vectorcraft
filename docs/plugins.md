@@ -83,7 +83,22 @@ In the app, installed filters appear under **Object › Plug-ins**, next to **In
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
 of numbers and colors, labelled, explained and sorted into sections as its manifest says) with a live preview; without
-parameters it runs at once. Edit › Keyboard Shortcuts lists each installed filter under Object › Plug-ins, where
+parameters it runs at once. A filter's dialog opens with the parameters that filter last ran with in the session,
+else with its defaults. Object › Plug-ins starts with **Apply Last Filter** (`plugin.applyLastFilter`), which runs
+the filter that last ran again with the same parameters on the selection, without its dialog, as one undo step, and
+**Last Filter…** (`plugin.lastFilter`), which opens that filter's dialog with those parameters, its OK running it as a
+new run. Once a filter has run they read **Apply** followed by the filter's name and the filter's name with an
+ellipsis. A run counts once it succeeds: from its menu item, its dialog's OK, a shortcut, `plugin.run` or a
+`command.batch` step (each such step in the order the batch ran them, so the last one runs again), an Action Batch (`action.batch`) step once a file or data set
+ran it, and a background run once its
+result is applied. A preview, Cancel, a failed or canceled run, a plug-in's own commands and live effects don't count,
+and neither does a batch step whose filter the batch installed when a later step of the batch installs or removes
+that same plug-in, or reloads plug-ins. Both items are grayed out with no document open, before any filter ran, and once the filter that
+ran last was removed, installed again (the same module too) or no longer takes those parameters as they are;
+installing another plug-in keeps them. They don't need a selection: a filter given no objects can still add new ones. The parameters are
+kept for the session only, for at most 64 filters. Where the two items sit, when they are grayed out and how long the
+parameters are kept are VectorCraft's own rules. Edit › Keyboard Shortcuts lists each installed filter under Object ›
+Plug-ins, where
 it can be given a shortcut (`plugin:<id>`); the shortcut stays saved while the plug-in is removed and applies again
 when it is reinstalled. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use Artboards is greyed out
@@ -1089,4 +1104,5 @@ per change of their input, parameters or paints (results are cached), not per fr
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
   it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
   [`inputs`](#reading-type-images-and-symbols)).
-- Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.
+- Scripts can't run object filters (`plugin.*` commands are refused there), so a script doesn't change what Apply
+  Last Filter runs.

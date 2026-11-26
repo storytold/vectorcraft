@@ -150,7 +150,7 @@ pub fn describe(p: &Plugin) -> Value {
 
 /// The plug-in's own parameters from command params: `params` if given, else the top-level keys
 /// minus the ones the command itself uses.
-fn plugin_params(p: &Value) -> Value {
+pub fn plugin_params(p: &Value) -> Value {
     if let Some(v) = p.get("params") {
         return v.clone();
     }

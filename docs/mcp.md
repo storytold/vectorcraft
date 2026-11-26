@@ -13759,7 +13759,14 @@ A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may repor
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
 under its id. With a desktop app connected, `plugin.dialog` runs such a filter (one without a `commandAllowlist`) in the
 background when it runs at once or OK runs it with Preview off, and returns `{background: true, status}`;
-`plugin.cancelRuns` stops it. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
+`plugin.cancelRuns` stops it. With a desktop app connected, `plugin.applyLastFilter {}` (Object › Plug-ins › Apply
+Last Filter) runs the object filter whose `plugin.run` last succeeded in the app's session again on the selection, with
+the same parameters and without a dialog, and returns `plugin.run`'s result, or `{background: true, status}` for a
+filter that runs in the background; `plugin.lastFilter {}` (Last Filter…) opens its dialog with those parameters
+instead. Both return an error with no document open, before a filter ran and once that filter was removed, installed
+again (the same module too) or no longer takes the parameters as they are; `plugin.dialog {id}` opens a filter's dialog with the
+parameters it last ran with. A plug-in's own commands and live effects don't change what they run. A plug-in that
+lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
 (VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
 size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
 `{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that

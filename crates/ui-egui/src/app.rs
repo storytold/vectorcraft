@@ -185,6 +185,7 @@ impl VectorcraftApp {
             titlebar_inset: 0.0,
             last_effect: None,
             last_pathfinder: None,
+            last_filters: Default::default(),
             character_focus: None,
             run_count: 0,
             channel: None,

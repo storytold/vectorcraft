@@ -385,6 +385,10 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        // A filter may take no objects and add new ones, so no selection is needed.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
+            app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()
+        }
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
