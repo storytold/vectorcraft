@@ -2695,6 +2695,9 @@ vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
 `script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+
+In an ES2015 realm, `Symbol.for` lookups and insertions take fuel for the key's code units. A registered description
+shares the key's existing string buffer.
 File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
 describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
