@@ -14,6 +14,7 @@ use craft::ui::form::Field;
 use craft::ui::list::{List, ListRow};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
+use craft::ui::primitives::SubmitKey;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::text::TextField;
@@ -41,6 +42,7 @@ pub(crate) struct SvgInteractivityPanel {
 pub(crate) struct Info {
     has: bool,
     events: Option<Vec<(String, String)>>,
+    script_target: Option<egui::IdSalt>,
 }
 
 /// What [`info`] was read for: (document uid, revision, selection size, first and last selected object).
@@ -75,7 +77,12 @@ pub(crate) fn info(app: &mut VectorcraftApp) -> Info {
     let events = r["events"]
         .as_array()
         .map(|a| a.iter().filter_map(|e| Some((e["event"].as_str()?.to_string(), e["script"].as_str()?.to_string()))).collect::<Vec<_>>());
-    let v = Info { has: r["ids"].as_array().is_some_and(|a| !a.is_empty()), events };
+    let mut targets: Vec<u64> = r["ids"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+    targets.sort_unstable();
+    let has = !targets.is_empty();
+    // The editor's draft belongs to the actual targets, even if the selection is reordered.
+    let script_target = has.then(|| egui::IdSalt::new((key.0, targets)));
+    let v = Info { has, events, script_target };
     app.canvas.svg_info = Some((key, v.clone()));
     v
 }
@@ -101,7 +108,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let shown = script.unwrap_or_default();
     let mut typed = None;
     Field::new(caption("JavaScript:")).show(ui, |ui, _| {
-        let out = TextField::new(caption("JavaScript:"), Bind::given(shown.to_string())).lines(3).id_salt(event).enabled(info.has).show(ui);
+        let out = TextField::new(caption("JavaScript:"), Bind::given(shown.to_string()))
+            .lines(3)
+            .submits()
+            .submit_key(SubmitKey::Enter)
+            .id_salt((event, info.script_target))
+            .enabled(info.has)
+            .show(ui);
         typed = out.events.committed().filter(|js| js.as_str() != shown).cloned();
     });
     let source = keyed(events, |(e, _): &(String, String)| e.clone());
@@ -176,8 +189,64 @@ mod tests {
     use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
 
+    #[test]
+    fn script_draft_does_not_follow_the_editor_to_other_artwork() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        for name in ["First", "Second"] {
+            app.run("file.new", json!({ "name": name, "width": 100, "height": 100 })).unwrap();
+            run(&mut app, "shape.rectangle", json!({ "x": 0, "y": 0, "width": 50, "height": 50 }));
+        }
+        let mut panel = Panel::new(app, show);
+        let field = caption("JavaScript:");
+        let multiline = craft::ui::contract::Role::MULTILINE_TEXT_INPUT;
+        let doc = panel.app().session.active().unwrap().uid;
+        panel.click_role(field, multiline);
+        panel.type_text("1;");
+        assert_eq!(panel.value_role(field, multiline).as_deref(), Some("1;"));
+
+        panel.app().run("window.nextDocument", json!({})).unwrap();
+        panel.frame();
+        assert_ne!(panel.app().session.active().unwrap().uid, doc);
+        assert_eq!(panel.value_role(field, multiline).as_deref(), Some(""));
+        assert_eq!(run(&mut panel.app(), "svgInteractivity.info", json!({}))["events"], json!([]));
+
+        panel.click_role(field, multiline);
+        panel.type_text("2;");
+        let first = panel.app().session.active().unwrap().selection.objects[0].0;
+        let second = run(&mut panel.app(), "shape.ellipse", json!({ "x": 0, "y": 0, "width": 10, "height": 20 }))["id"].clone();
+        panel.frame();
+        assert_eq!(panel.value_role(field, multiline).as_deref(), Some(""));
+        assert_eq!(run(&mut panel.app(), "svgInteractivity.info", json!({}))["events"], json!([]));
+
+        run(&mut panel.app(), "select.set", json!({ "ids": [first, second] }));
+        panel.frame();
+        panel.click_role(field, multiline);
+        panel.type_text("3;");
+        run(&mut panel.app(), "select.set", json!({ "ids": [second, first] }));
+        panel.frame();
+        assert_eq!(panel.value_role(field, multiline).as_deref(), Some("3;"));
+    }
+
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
+    }
+
+    #[test]
+    fn enter_applies_the_event_script_and_shift_enter_adds_a_line() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        let mut panel = Panel::new(app, show);
+
+        panel.click_role(caption("JavaScript:"), craft::ui::contract::Role::MULTILINE_TEXT_INPUT);
+        panel.type_text("1;");
+        panel.key(egui::Key::Enter, egui::Modifiers::SHIFT);
+        panel.type_text("2;");
+        let events = |app: &mut VectorcraftApp| run(app, "svgInteractivity.info", json!({}))["events"].clone();
+        assert_eq!(events(&mut panel.app()), json!([]), "the script is still a draft");
+
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(events(&mut panel.app()), json!([{"event": SVG_EVENTS[0], "script": "1;\n2;"}]));
     }
 
     // (Only names and scripts are checked: they are shown as they are, while tests running
