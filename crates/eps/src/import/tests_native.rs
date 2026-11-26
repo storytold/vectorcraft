@@ -8599,24 +8599,3 @@ fn ai_duplicate_visible_name_does_not_lock_multiple_from_single_private_node() {
     assert!(!r1.locked, "ambiguous duplicate visible name does not receive private lock");
     assert!(!r2.locked, "second duplicate visible name remains unlocked");
 }
-
-#[test]
-fn ai_wrapped_group_places_lock_only_on_wrapper_group_not_children() {
-    let text = "1 A\n0 0.5 0 0 0 Xy\n(Styled Text) 10 50 Tt\n0 A";
-    let art = native(&layer("Live", true, text));
-    let (doc, _notes, read) = crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, true, 1.0);
-    assert!(read);
-    for layer in &doc.layers {
-        if let Some(kids) = layer.children() {
-            for kid in kids {
-                if kid.locked
-                    && let Some(subkids) = kid.children()
-                {
-                    for sub in subkids {
-                        assert!(!sub.locked, "inner child of locked wrapper group must not be locked");
-                    }
-                }
-            }
-        }
-    }
-}
