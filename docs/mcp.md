@@ -2880,6 +2880,8 @@ In a `.js` script, `Promise` follows ECMA-262 11th edition section 25.6
 `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. `Promise.any` is not provided. These are VectorCraft's
 own rules:
 
+- `Promise.prototype[Symbol.toStringTag]` is `"Promise"` when Symbols are available. The property is configurable,
+  non-enumerable and non-writable. Promise instances also report `[object Promise]` in engines without Symbols.
 - The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
   the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
   A promise still pending when no job is left stays pending, and the run ends.

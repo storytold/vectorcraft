@@ -30,7 +30,9 @@ use std::rc::Rc;
 use super::{arg, constructor, create_at, method, native, new_array};
 use crate::LimitKind;
 use crate::bytecode::Code;
-use crate::heap::{BOUND_ARG_BYTES, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key};
+use crate::heap::{
+    BOUND_ARG_BYTES, CONFIGURABLE, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key,
+};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::string_builtins::flat_charged;
 use crate::value::Value;
@@ -258,6 +260,9 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     let object_proto = interp.intrinsics.object_proto;
     let proto = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
     interp.promises.proto = Some(proto);
+    if let Some(tag) = interp.well_known(|w| &w.to_string_tag) {
+        interp.define_sym(proto, tag, Prop::Data { value: Value::str("Promise"), flags: CONFIGURABLE })?;
+    }
     let ctor = native(interp, "Promise", promise_ctor, 1, NativeKind::Plain, true)?;
     interp.promises.ctor = Some(ctor);
     constructor(interp, "Promise", ctor, proto)?;
