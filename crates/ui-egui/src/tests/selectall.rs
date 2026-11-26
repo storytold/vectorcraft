@@ -382,7 +382,8 @@ fn copy_and_cut_copy_the_text_selected_in_a_panel_label() {
 
 /// #8432: a click on a Document Info value copies the whole value and says so in the status bar, and
 /// leaves the art. A double click copies it once, and a drag across the value or a Shift-click on
-/// it copies nothing.
+/// it copies nothing. The click's own position and keys count, not where the pointer and the keys
+/// are at the end of its frame.
 #[test]
 fn a_click_on_a_document_info_value_copies_it() {
     let mut a = App::new();
@@ -408,11 +409,48 @@ fn a_click_on_a_document_info_value_copies_it() {
     assert!(copies(&mut a, drag).is_empty(), "a drag selects and copies nothing");
     a.time += 1.0;
     let shift = Event::ModifiersChanged(Modifiers::SHIFT);
+    let shift_click =
+        |at: Pos2, pressed: bool| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::SHIFT };
     let extended = copies(
         &mut a,
-        vec![vec![shift, Event::PointerMoved(at)], vec![click(at, true)], vec![click(at, false)], vec![Event::ModifiersChanged(Modifiers::NONE)]],
+        vec![
+            vec![shift.clone(), Event::PointerMoved(at)],
+            vec![shift_click(at, true)],
+            vec![shift_click(at, false)],
+            vec![Event::ModifiersChanged(Modifiers::NONE)],
+        ],
     );
     assert!(extended.is_empty(), "a Shift-click copies nothing");
+    a.time += 1.0;
+    // Shift let go in the frame of the release: the click was still a Shift-click.
+    let let_go = copies(
+        &mut a,
+        vec![
+            vec![shift, Event::PointerMoved(at)],
+            vec![shift_click(at, true)],
+            vec![shift_click(at, false), Event::ModifiersChanged(Modifiers::NONE)],
+            vec![],
+        ],
+    );
+    assert!(let_go.is_empty(), "a Shift-click copies nothing when Shift is let go in the same frame");
+    a.time += 1.0;
+    // Released on the length, then moved onto the Paths count in the same frame.
+    let there = text_rect(&out, "2").center();
+    let moved =
+        copies(&mut a, vec![vec![Event::PointerMoved(at)], vec![click(at, true)], vec![click(at, false), Event::PointerMoved(there)], vec![]]);
+    assert_eq!(moved, [length], "a click copies the value it was released on, not the one the pointer moved to");
+    a.time += 1.0;
+    // A click on the Paths count, then a drag across the length, in one frame.
+    let (from, to) = (text_rect(&out, length).left_center() + vec2(1.0, 0.0), text_rect(&out, length).right_center() - vec2(1.0, 0.0));
+    let both = copies(
+        &mut a,
+        vec![
+            vec![Event::PointerMoved(there)],
+            vec![click(there, true), click(there, false), Event::PointerMoved(from), click(from, true), Event::PointerMoved(to), click(to, false)],
+            vec![],
+        ],
+    );
+    assert!(!both.iter().any(|t| t == length), "a drag after a click in the same frame does not copy the dragged value");
 }
 
 /// Drag across a label in a window of its own (a floating panel's), selecting its text there. The

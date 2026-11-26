@@ -40,14 +40,21 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
         // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
         // and a Shift-click extends the selection, so neither copies.
         let shown = SelectableText::new(label.to_string(), value).show(ui);
-        clicked = shown.contains_pointer()
-            && ui.input(|i| {
-                let primary = egui::PointerButton::Primary;
-                i.pointer.button_clicked(primary)
-                    && !i.pointer.button_double_clicked(primary)
-                    && !i.pointer.button_triple_clicked(primary)
-                    && i.modifiers.is_none()
+        // The click's own position and keys: a move or a key change after the release in the same
+        // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
+        // copies nothing, since the click flags below do not say which release they describe.
+        let area = shown.interact_rect.intersect(ui.clip_rect());
+        let primary = egui::PointerButton::Primary;
+        let release = ui.input(|i| {
+            let mut releases = i.events.iter().filter_map(|e| match e {
+                egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
+                _ => None,
             });
+            let release = releases.next().filter(|_| releases.next().is_none());
+            let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
+            release.filter(|_| single)
+        });
+        clicked = release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
     });
     clicked
 }
