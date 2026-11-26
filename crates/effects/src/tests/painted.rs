@@ -808,6 +808,47 @@ fn copied_piece_shadows_leave_later_fill_geometry_pending() {
 }
 
 #[test]
+fn returned_piece_shadows_follow_later_row_copying_transforms() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.row.ownshadow";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Returned row shadows","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "effects": [{"id": "stylize.dropShadow", "params": {"x": 3.0, "y": 4.0}}]}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    for stroke in [false, true] {
+        for transform in [
+            json!({"copies": 1, "moveH": 40.0, "rotate": 90.0}),
+            json!({"copies": 1, "moveH": 40.0, "scaleH": 200, "scaleV": 200}),
+            json!({"copies": 0, "moveH": 40.0, "rotate": 90.0}),
+            json!({"copies": 0, "moveH": 40.0, "scaleH": 200, "scaleV": 200}),
+        ] {
+            let copies = transform["copies"].as_u64().unwrap() as usize;
+            let mut source = Node::path(NodeId(9), path.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 2.0));
+            let row = source.appearance.items.iter_mut().find(|item| item.is_fill() != stroke).unwrap();
+            row.effects_mut().extend([
+                Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+                Effect { id: "distort.transform".into(), params: transform, visible: true },
+            ]);
+            let art = reshape(None, &source, None).unwrap();
+            assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+            let mut shadows = vec![];
+            art.walk(&mut |node| {
+                shadows
+                    .extend(node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.to_string()))
+            });
+            assert_eq!(shadows.len(), copies + 1, "stroke={stroke}: {shadows:?}");
+            if copies > 0 {
+                assert_ne!(shadows[0], shadows[1], "stroke={stroke}");
+            } else {
+                assert_ne!(shadows[0], json!({"x": 3.0, "y": 4.0}).to_string(), "stroke={stroke}");
+            }
+        }
+    }
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
 fn returned_piece_shadows_follow_later_source_copying_transforms() {
     let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
     let id = "test.effects.returned.own.shadow";
@@ -831,6 +872,90 @@ fn returned_piece_shadows_follow_later_source_copying_transforms() {
         assert_eq!(shadows.len(), 2, "{shadows:?}");
         assert_ne!(shadows[0], shadows[1]);
     }
+}
+
+#[test]
+fn returned_piece_row_copies_charge_the_transform_once() {
+    let path = drawn_share(0.3, 0.0);
+    let cost = Budget::of(&path);
+    assert!(Budget::EFFECTS.fits(cost.plus(cost)));
+    let id = "test.effects.returned.copycharge";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Copy charge","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let module = wat::parse_str(tpl::returning(&manifest, &json!({"objects": [{"path": path, "opacity": 0.5}]}).to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut source =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    source.appearance.items.iter_mut().find(|row| row.is_fill()).unwrap().effects_mut().extend([
+        Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveH": 40.0}), visible: true },
+    ]);
+    let art = reshape(None, &source, None).unwrap();
+    assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+    let mut paths = 0;
+    art.walk(&mut |node| {
+        if node.path_data().is_some() && node.appearance.items.iter().any(crate::paints) {
+            paths += 1;
+        }
+    });
+    assert_eq!(paths, 2);
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
+fn a_lifted_row_shadow_follows_the_later_rotation() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.liftedrotation";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Lifted rotation","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "opacity": 0.5}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut source = Node::path(NodeId(9), path, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    source.appearance.items.iter_mut().find(|row| row.is_fill()).unwrap().effects_mut().extend([
+        Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveH": 40.0}), visible: true },
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"rotate": 90.0}), visible: true },
+    ]);
+    let art = reshape(None, &source, None).unwrap();
+    let mut shadows = vec![];
+    art.walk(&mut |node| {
+        shadows.extend(node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.clone()));
+    });
+    assert_eq!(shadows.len(), 1);
+    assert_ne!(shadows[0], json!({"x": 3.0, "y": 4.0}));
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
+fn successive_row_copies_keep_later_shadows_in_order() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.liftedorder";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Lifted order","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "opacity": 0.5}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut source = Node::path(NodeId(9), path, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    source.appearance.items.iter_mut().find(|row| row.is_fill()).unwrap().effects_mut().extend([
+        Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveH": 40.0}), visible: true },
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveV": 40.0}), visible: true },
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 7.0, "y": 8.0}), visible: true },
+    ]);
+    let art = reshape(None, &source, None).unwrap();
+    let mut shadows = vec![];
+    art.walk(&mut |node| {
+        let effects: Vec<_> =
+            node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.clone()).collect();
+        if !effects.is_empty() {
+            shadows.push(effects);
+        }
+    });
+    assert_eq!(shadows, vec![vec![json!({"x": 3.0, "y": 4.0}), json!({"x": 7.0, "y": 8.0})]]);
+    vectorcraft_plugins::registry::remove(id);
 }
 
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's

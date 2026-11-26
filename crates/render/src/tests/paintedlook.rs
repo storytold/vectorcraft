@@ -159,6 +159,97 @@ fn later_painted_pieces_keep_the_earlier_piece_transparency_as_a_group() {
 }
 
 #[test]
+fn later_source_copies_composite_each_returned_piece_opacity() {
+    for stage in ["object", "fill", "stroke"] {
+        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyopacity.{stage}"), 1.0, false, false, stage, false);
+    }
+}
+
+#[test]
+fn later_source_copies_keep_source_opacity_outside_returned_pieces() {
+    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.outer", 0.5, true, false, "object", false);
+}
+
+#[test]
+fn later_source_copies_keep_source_mask_outside_returned_pieces() {
+    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.mask", 1.0, true, true, "object", false);
+}
+
+#[test]
+fn later_row_blur_applies_once_to_the_copied_painted_pieces() {
+    for stage in ["fill", "stroke"] {
+        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyblur.{stage}"), 1.0, false, false, stage, true);
+    }
+}
+
+fn assert_copied_piece_opacity(id: &str, source_opacity: f32, shadow: bool, mask: bool, stage: &str, row_blur: bool) {
+    let mut look = json!({"opacity": 0.5});
+    if shadow {
+        look["effects"] = json!([{"id": "stylize.dropShadow", "params": {"x": 50.0, "y": 0.0, "blur": 0.0}}]);
+    }
+    if stage == "stroke" {
+        let mut result: serde_json::Value = serde_json::from_str(&output(120.0, &look)).unwrap();
+        let piece = result["objects"][0].as_object_mut().unwrap();
+        let red = piece.remove("fills").unwrap()[0].clone();
+        piece.insert("strokes".into(), json!([{"paint": red, "width": 4.0}]));
+        let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(id), &result.to_string())).unwrap();
+        vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    } else {
+        install(id, look);
+    }
+    let mut actual = document(id, 0.0);
+    let source = actual.layers[0].children().unwrap().last().unwrap().id;
+    actual.node_mut(source).unwrap().opacity = source_opacity;
+    if mask {
+        let art = Node::path(
+            actual.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.5, 0.5, 0.5)), Paint::None, 0.0),
+        );
+        actual.node_mut(source).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    }
+    actual.node_mut(source).unwrap().appearance.effects.push(Effect {
+        id: "distort.transform".into(),
+        params: json!({"copies": 1, "moveH": 0.0}),
+        visible: true,
+    });
+    if stage != "object" {
+        let node = actual.node_mut(source).unwrap();
+        let effects = std::mem::take(&mut node.appearance.effects);
+        if stage == "stroke" {
+            node.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 4.0).into();
+        }
+        let row = node.appearance.items.iter_mut().find(|row| row.is_fill() == (stage == "fill")).unwrap();
+        row.effects_mut().extend(effects);
+        if row_blur {
+            row.effects_mut().push(Effect { id: "blur.gaussian".into(), params: json!({"radius": 4.0}), visible: true });
+        }
+    }
+    let mut expected = actual.clone();
+    let mut children = vec![];
+    for _ in 0..2 {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let appearance = if stage == "stroke" { Appearance::basic(Paint::None, red, 4.0) } else { Appearance::basic(red, Paint::None, 0.0) };
+        let mut child = Node::path(expected.alloc_id(), square_at(120.0), appearance);
+        child.opacity = 0.5;
+        children.push(std::sync::Arc::new(child));
+    }
+    let mut group = Node::group(source, children);
+    group.opacity = source_opacity;
+    group.extras_mut().mask = expected.node(source).unwrap().extras().mask.clone();
+    if row_blur {
+        group.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: json!({"radius": 4.0}), visible: true });
+    }
+    *expected.node_mut(source).unwrap() = group;
+    let x = if stage == "stroke" || row_blur { 120.0 } else { 130.0 };
+    let got = pixel(&actual, x, 50.0);
+    let want = pixel(&expected, x, 50.0);
+    assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 8), "{got:?} != {want:?}");
+    assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
 fn later_painted_pieces_keep_the_earlier_piece_blur_on_their_group() {
     for stage in ["object", "fill", "stroke"] {
         let first = format!("test.render.paintedlook.blur.{stage}");

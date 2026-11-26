@@ -1923,7 +1923,7 @@ impl Step<'_> {
             && self.painted
             && copies > 0
             && options.objects
-            && following_raster_in_art(art)
+            && separately_copied_painted_art(art)
         {
             let overhead = used.minus(copy_cost(art));
             let mut copies_art = Node::group(art.id, vec![Arc::new(art.clone())]);
@@ -2393,10 +2393,14 @@ fn contents_raster(effects: &[Effect]) -> bool {
     effects.iter().any(|e| crate::raster::follows(&e.id))
 }
 
-fn following_raster_in_art(art: &Node) -> bool {
+fn separately_copied_painted_art(art: &Node) -> bool {
     let mut found = false;
     art.walk(&mut |node| {
-        found |= node.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id))
+        found |= node.opacity != 1.0
+            || node.blend != Default::default()
+            || node.isolate
+            || node.extras().mask.is_some()
+            || node.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id))
             || node.appearance.items.iter().any(follows_row_raster);
     });
     found
@@ -2521,21 +2525,37 @@ fn copy_cost(n: &Node) -> Budget {
 
 /// What the geometry effects of `leaf` (with geometry `path`) and of its fills and strokes add to
 /// what `path` costs when it is drawn.
-fn effects_cost(leaf: &Node, path: &PathData) -> Budget {
+fn effects_cost(leaf: &Node, path: &PathData, kept: Kept) -> Budget {
     let none = Budget { anchors: 0, lines: 0 };
-    let items: Vec<&AppearanceItem> = leaf.appearance.items.iter().filter(|i| crate::paints(i) && crate::has_geometry(i.effects())).collect();
+    let mut items = vec![];
+    let mut plain = false;
+    for item in leaf.appearance.items.iter().filter(|item| crate::paints(item)) {
+        let mut effects: std::borrow::Cow<'_, [Effect]> = std::borrow::Cow::Borrowed(item.effects());
+        if let Some((_, keep)) = kept {
+            for (index, effect) in item.effects().iter().enumerate() {
+                if effect.visible && is_geometry(&effect.id) && !keep(index) {
+                    effects.to_mut()[index].visible = false;
+                }
+            }
+        }
+        if crate::has_geometry(&effects) {
+            items.push((item, effects));
+        } else {
+            plain = true;
+        }
+    }
     if items.is_empty() && !crate::has_geometry(&leaf.appearance.effects) {
         return none;
     }
     let Some(bounds) = path.bounds() else { return none };
     let ctx = GeomContext { seed: leaf.id.0, ..GeomContext::of(leaf) };
     let own = crate::apply_geometry_with(&leaf.appearance.effects, path, bounds, &ctx);
-    let item_cost = |i: &&AppearanceItem| {
+    let item_cost = |(item, effects): &(&AppearanceItem, std::borrow::Cow<'_, [Effect]>)| {
         let b = own.bounds()?;
-        Some(Budget::of(&crate::apply_geometry_with(i.effects(), &own, b, &ctx.item(i))))
+        Some(Budget::of(&crate::apply_geometry_with(effects, &own, b, &ctx.item(item))))
     };
     // The object's geometry is drawn as it is only by what has no geometry effect of its own.
-    let plain = items.is_empty() || leaf.appearance.items.iter().any(|i| crate::paints(i) && !crate::has_geometry(i.effects()));
+    let plain = items.is_empty() || plain;
     let base = if plain { Budget::of(&own) } else { none };
     base.plus(items.iter().filter_map(item_cost).fold(none, Budget::plus)).minus(Budget::of(path))
 }
@@ -2606,7 +2626,7 @@ fn copy_art_charged(art: &mut Node, m: Affine, copies: usize, scaling: vectorcra
 /// each copy, before its cost is counted ([`keep_listed`]). Returns what the copies cost, the
 /// original included.
 fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, budget: Budget, kept: Kept) -> Budget {
-    let mut made = Budget::of(path).plus(effects_cost(leaf, path));
+    let mut made = Budget::of(path).plus(effects_cost(leaf, path, kept));
     let mut placements: Vec<Arc<Node>> = vec![Arc::new(leaf.clone())];
     let mut xf = Affine::IDENTITY;
     for _ in 0..copies {
@@ -2620,7 +2640,7 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
         copy.transform(xf, scaling);
         keep_listed(&mut copy, kept);
         // Each copy's own geometry effects make a different amount, as the copy and its effects scale.
-        let mut cost = Budget::of(&moved).plus(effects_cost(&copy, &moved));
+        let mut cost = Budget::of(&moved).plus(effects_cost(&copy, &moved, kept));
         // Each copy carries the art of its linked masks, moved with it.
         each_linked_mask(&copy, true, 0, &mut |_, m| cost = cost.plus(art_cost(m)));
         if !budget.fits(made.plus(cost)) || !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
@@ -3140,6 +3160,8 @@ fn transform_piece(
     // The pieces of a painted run are counted so, and so is the first path an effect makes of one
     // that was: the paths of a Transform effect's copies share their original's share.
     let mut shares = vec![painted; leaf_count(p)];
+    let mut later_raster: Vec<(Vec<usize>, usize)> = vec![];
+    let mut raster_groups: HashSet<Vec<usize>> = HashSet::new();
     for j in 0..count {
         let Some(bounds) = p.geometric_bounds() else { break };
         let from = held.min(j);
@@ -3148,7 +3170,14 @@ fn transform_piece(
         let at = PieceStage { j, from, outer, seed, bounds, doc, stage };
         // Stage `j` on `leaf`, a path `used` counts at `piece_cost` when `share`: whether `used`
         // counts each path it became so, or `None` when it stays as it was.
-        let mut on_leaf = |leaf: &mut Node, share: bool| -> Option<Vec<bool>> {
+        let lifts = |e: &Effect| {
+            if e.id != "distort.transform" {
+                return false;
+            }
+            let params = merged_params(&e.id, &e.params);
+            crate::distort::transform_map(bounds, &params, seed).1 > 0 && !crate::distort::TransformOptions::of(&params).reach_appearance()
+        };
+        let mut on_leaf = |leaf: &mut Node, share: bool, location: &[usize]| -> Option<Vec<bool>> {
             let effect = |item: &AppearanceItem| item.effects().get(j).filter(|e| e.visible && is_geometry(&e.id)).cloned();
             let items = &leaf.appearance.items;
             let first = items.first()?;
@@ -3166,6 +3195,10 @@ fn transform_piece(
                 let before = if painted { counted } else { geometry };
                 let room = max.minus(used.minus(before));
                 let made = piece_stage(leaf, &e, &at, (&appearance, 0), room)?;
+                if lifts(&e) && leaf.children().is_some() && !(0..location.len()).any(|depth| raster_groups.contains(&location[..depth])) {
+                    raster_groups.insert(location.to_vec());
+                    later_raster.push((location.to_vec(), j + 1));
+                }
                 *used = used.minus(before).plus(made);
                 return Some((0..leaf_count(leaf)).map(|k| painted || (share && k == 0)).collect());
             }
@@ -3211,13 +3244,15 @@ fn transform_piece(
             // Each placing gives the paths, whether `used` counts each of the paths they hold at
             // `piece_cost` (all of a painted run's, and the first of any other result's), and what
             // the art then spends.
-            let mut split = |reserve: bool| -> Option<(Vec<Node>, Vec<bool>, Budget)> {
+            let mut split = |reserve: bool| -> Option<(Vec<Node>, Vec<bool>, Budget, Vec<usize>)> {
                 let mut spent = base;
                 let mut out: Vec<Node> = vec![];
                 let mut counts: Vec<bool> = vec![];
+                let mut lifted = vec![];
                 for (k, (item, ran)) in appearance.items.iter().zip(runs.iter_mut()).enumerate() {
                     let room = if reserve && k + 1 < n { max.minus(spent).minus(one) } else { max.minus(spent) };
                     let e = effect(item);
+                    let lift = e.as_ref().is_some_and(lifts);
                     let paints = e.as_ref().is_some_and(|e| painted_plugin(e).is_some());
                     // Does `sub` stay on the path of the result before it, at no cost?
                     let merges = |sub: &Node| out.last().is_some_and(|last| same_path(last, sub));
@@ -3306,16 +3341,29 @@ fn transform_piece(
                         _ => {
                             spent = spent.plus(cost);
                             counts.extend((0..leaf_count(&sub)).map(|k| all || k == 0));
+                            if lift && sub.children().is_some() {
+                                lifted.push(out.len());
+                            }
                             out.push(sub);
                         }
                     }
                     #[cfg(test)]
                     HELD_PEAK.with(|p| p.set(p.get().at_least(kept_cost)));
                 }
-                Some((out, counts, spent))
+                Some((out, counts, spent, lifted))
             };
-            let (mut out, counts, spent) = split(false).or_else(|| split(true))?;
+            let (mut out, counts, spent, lifted) = split(false).or_else(|| split(true))?;
             *used = spent;
+            for index in lifted {
+                let mut path = location.to_vec();
+                if out.len() != 1 {
+                    path.push(index);
+                }
+                if !(0..path.len()).any(|depth| raster_groups.contains(&path[..depth])) {
+                    raster_groups.insert(path.clone());
+                    later_raster.push((path, j + 1));
+                }
+            }
             *leaf = match out.len() {
                 1 => out.pop().unwrap_or_else(|| leaf.clone()),
                 _ => Node::group(leaf.id, out.into_iter().map(Arc::new).collect()),
@@ -3324,14 +3372,20 @@ fn transform_piece(
         };
         let mut next: Vec<bool> = vec![];
         let mut visited = 0;
-        for_each_leaf(p, &mut |leaf| {
+        for_each_leaf_at(p, &mut vec![], &mut |leaf, location| {
             let share = shares.get(visited).copied().unwrap_or(false);
             visited += 1;
-            next.extend(on_leaf(leaf, share).unwrap_or_else(|| vec![share]));
+            next.extend(on_leaf(leaf, share, location).unwrap_or_else(|| vec![share]));
         });
         shares = next;
         if holds {
             held = held.max(j);
+        }
+    }
+    for (path, after) in later_raster.into_iter().rev() {
+        let group = path.into_iter().try_fold(&mut *p, |node, index| node.children_mut()?.get_mut(index).map(Arc::make_mut));
+        if let Some(group) = group {
+            lift_later_raster(group, after);
         }
     }
     for_each_leaf(p, &mut |leaf| {
@@ -3417,14 +3471,29 @@ fn piece_stage(leaf: &mut Node, e: &Effect, at: &PieceStage, (appearance, index)
         return paint_piece(leaf, &item, (appearance, index), (plugin, &params), at.bounds, room, at.doc, Some(at.stage));
     }
     let copied = copies_carry(item.effects(), e, at);
-    if reaches_appearance(e) || copied {
+    let own_raster = e.id == "distort.transform" && leaf.appearance.effects.iter().any(|effect| effect.visible && crate::raster::follows(&effect.id));
+    let own_composite =
+        e.id == "distort.transform" && (leaf.opacity != 1.0 || leaf.blend != Default::default() || leaf.isolate || leaf.extras().mask.is_some());
+    if reaches_appearance(e) || copied || own_raster || own_composite {
         let params = merged_params(&e.id, &e.params);
         let (_, copies) = crate::distort::transform_map(at.bounds, &params, at.seed);
         let options = crate::distort::TransformOptions::of(&params);
         let map = crate::distort::transform_affine(at.bounds, &params, at.seed);
         let j = at.j;
         let keep = |k: usize| k > j || (k < j && !options.objects);
-        let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, copied, Some((item.effects(), &keep)));
+        let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room, copied || own_raster, Some((item.effects(), &keep)));
+        if moved && options.objects && own_raster {
+            let step = map.with_translation(vectorcraft_geom::Vec2::ZERO);
+            if copies == 0 {
+                crate::raster::follow_contents(&mut leaf.appearance.effects, step, Affine::IDENTITY);
+            } else if let Some(children) = leaf.children_mut() {
+                let mut placement = Affine::IDENTITY;
+                for child in children.iter_mut().rev() {
+                    crate::raster::follow_contents(&mut Arc::make_mut(child).appearance.effects, placement, Affine::IDENTITY);
+                    placement *= step;
+                }
+            }
+        }
         if moved && copied {
             // Each copy's raster effects before the Transform effect follow that copy's map. The
             // Transform effects before it have already moved them, so each run between two of
@@ -4170,6 +4239,20 @@ fn for_each_leaf(n: &mut Node, f: &mut dyn FnMut(&mut Node)) {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children.iter_mut() {
                 for_each_leaf(Arc::make_mut(c), f);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn for_each_leaf_at(n: &mut Node, path: &mut Vec<usize>, f: &mut dyn FnMut(&mut Node, &[usize])) {
+    match &mut n.kind {
+        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => f(n, path),
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            for (index, child) in children.iter_mut().enumerate() {
+                path.push(index);
+                for_each_leaf_at(Arc::make_mut(child), path, f);
+                path.pop();
             }
         }
         _ => {}
