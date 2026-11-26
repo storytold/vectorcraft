@@ -6,6 +6,7 @@ use egui::{Key, Modifiers, Pos2, pos2, vec2};
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::tests::panel_harness::{Place, Shown, floated};
 
 #[test]
 fn dropped_colours_recolour_or_add_an_opaque_stop() {
@@ -366,103 +367,20 @@ fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
 
 // ---------- the panel in the app window ----------
 
-/// Where the panel is shown in the app window.
-#[derive(Clone, Copy, Debug)]
-enum Place {
-    /// Docked in its column.
-    Docked,
-    /// Floating, this many points wide.
-    Floating(f32),
-}
-
-/// The Gradient panel as one frame of the app window drew it.
-struct Shown {
-    /// The panel's body.
-    body: egui::Rect,
-    /// The name and rect of every named node in the body.
-    nodes: Vec<(String, egui::Rect)>,
-    /// Each catalog string asked for, as the panel's language shows it.
-    names: Vec<(&'static str, String)>,
-}
-
-impl Shown {
-    /// The rects of the nodes named `name` (a catalog string asked for).
-    fn rects(&self, name: &str) -> Vec<egui::Rect> {
-        let shown = self.names.iter().find(|(asked, _)| *asked == name).map_or(name, |(_, shown)| shown.as_str());
-        let found: Vec<egui::Rect> = self.nodes.iter().filter(|(label, _)| label == shown).map(|(_, r)| *r).collect();
-        assert!(!found.is_empty(), "the panel shows no {shown:?}");
-        found
-    }
-
-    /// The nodes that reach past either side of the body, each with its rect.
-    fn past(&self, nodes: impl IntoIterator<Item = (String, egui::Rect)>) -> Vec<String> {
-        let outside = |r: &egui::Rect| r.left() < self.body.left() - 0.5 || r.right() > self.body.right() + 0.5;
-        nodes.into_iter().filter(|(_, r)| outside(r)).map(|(name, r)| format!("{name} at {r:?}")).collect()
-    }
-
-    /// The vertical middles of the nodes named `names`.
-    fn middles(&self, names: &[&str]) -> Vec<f32> {
-        names.iter().flat_map(|name| self.rects(name)).map(|r| r.center().y).collect()
-    }
-}
-
 /// A selected gradient stop: the panel shows its Color row.
 fn select_a_stop(app: &mut VectorcraftApp) {
     app.run("paint.setFill", json!({"gradient": {}})).unwrap();
     app.run("gradient.selectStop", json!({"index": 1})).unwrap();
 }
 
-/// The Gradient panel shown at `place` in the whole app window (1440 by 900 pt) over a selected rectangle that
-/// `setup` paints, drawn in `lang`, with the catalog strings `names` as `lang` shows them.
-fn shown(lang: &str, place: Place, setup: fn(&mut VectorcraftApp), names: &[&'static str]) -> Shown {
-    use egui::accesskit::{Node, NodeId, Role};
+/// The Gradient panel shown at `place` in the whole app window over a selected rectangle that `setup` paints, drawn
+/// in `lang`, with the catalog strings `names` as `lang` shows them. The Gradient Fill box is always asked for, so a
+/// docked panel is found by it.
+fn shown(lang: &str, place: Place, setup: fn(&mut VectorcraftApp), names: &[&str]) -> Shown {
     let mut app = super::super::tests_appearance::app_with_rect();
     setup(&mut app);
-    app.session.prefs.interface_language = lang.into();
-    app.run("window.panel", json!({ "panel": "gradient" })).unwrap();
-    match place {
-        Place::Docked => app.run("window.panel.dock", json!({ "panel": "gradient" })).unwrap(),
-        Place::Floating(width) => {
-            app.run("window.panel.float", json!({ "panel": "gradient", "x": 520, "y": 120, "width": width, "height": 700 })).unwrap()
-        }
-    };
-    app.run("window.panel.activate", json!({ "panel": "gradient" })).unwrap();
-    let ctx = crate::testing::ui_context();
-    ctx.enable_accesskit();
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0));
-    let mut nodes: Vec<(NodeId, Node)> = Vec::new();
-    for at in 1..=8 {
-        let input = egui::RawInput { time: Some(f64::from(at) * 0.1), screen_rect: Some(screen), ..Default::default() };
-        let out = crate::testing::app_frame(&mut app, &ctx, input);
-        nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
-    }
-    // The frames set the language from the preference; the names are looked up in it before English is put back.
-    let names: Vec<(&'static str, String)> = names.iter().map(|name| (*name, crate::i18n::t(name).to_owned())).collect();
-    let fill = crate::i18n::t("Gradient Fill").to_owned();
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let rect =
-        |node: &Node| node.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)));
-    let by_id: std::collections::HashMap<NodeId, &Node> = nodes.iter().map(|(id, n)| (*id, n)).collect();
-    let under = |root: NodeId| {
-        let mut found = Vec::new();
-        let mut todo = vec![root];
-        while let Some(id) = todo.pop() {
-            let Some(node) = by_id.get(&id) else { continue };
-            if let (Some(label), Some(r)) = (node.label(), rect(node)) {
-                found.push((label.to_owned(), r));
-            }
-            todo.extend(node.children().iter().copied());
-        }
-        found
-    };
-    // The panel's body: the tab panel that holds the Gradient Fill box.
-    let (body, nodes) = nodes
-        .iter()
-        .filter(|(_, n)| n.role() == Role::TabPanel)
-        .filter_map(|(id, n)| Some((rect(n)?, under(*id))))
-        .find(|(_, named)| named.iter().any(|(l, _)| *l == fill))
-        .unwrap_or_else(|| panic!("no Gradient panel at {place:?} in {lang}"));
-    Shown { body, nodes, names }
+    let asked: Vec<&str> = names.iter().copied().chain(["Gradient Fill"]).collect();
+    floated(app, "gradient", lang, place, &asked)
 }
 
 /// Docked, every control of the panel stays inside its column, with a solid fill (the panel shows its notice) and
@@ -500,9 +418,9 @@ fn the_gradient_rows_wrap_in_a_narrow_panel() {
         "Delete Stop",
     ];
     for lang in ["en", "fr"] {
-        let asked: Vec<&'static str> = names.iter().copied().chain(["Freeform Gradient"]).collect();
+        let asked: Vec<&str> = names.iter().copied().chain(["Freeform Gradient"]).collect();
         let panel = shown(lang, Place::Floating(crate::panel_docking::PANEL_MIN_WIDTH), select_a_stop, &asked);
-        let past = panel.past(names.iter().flat_map(|name| panel.rects(name).into_iter().map(|r| (name.to_string(), r))));
+        let past = panel.past_named(&names);
         assert!(past.is_empty(), "past the panel in {lang}: {past:?}");
         for freeform in panel.rects("Freeform Gradient") {
             let inside = freeform.left() >= panel.body.left() - 0.5 && freeform.right() <= panel.body.right() + TYPE_OVERFLOW + 0.5;
