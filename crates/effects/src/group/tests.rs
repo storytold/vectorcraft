@@ -196,6 +196,49 @@ fn shape_modes_follow_the_pathfinder_panel() {
     assert_eq!(div.len(), 3);
 }
 
+/// An Intersect effect draws nothing when a group member's art has no area left at the effect's
+/// precision, and so do Minus Back when that group is in front and Subtract when it is at the
+/// back. Add, and Subtract with the group in front, leave such a member out.
+#[test]
+fn intersect_with_a_group_that_collapses_at_its_precision_draws_nothing() {
+    let thin_pair = |width: f64| {
+        let bar = |id: u64, x: f64| {
+            let fill = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+            Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 10.0, x + width, 30.0)), fill))
+        };
+        Node::group(NodeId(5), vec![bar(3, 10.0), bar(4, 50.0)])
+    };
+    let with_precision = |front: Node, effect: &str| {
+        let mut g = square_and(Some(front), effect);
+        g.appearance.effects[0].params = serde_json::json!({"precision": 1.0});
+        g
+    };
+    let int = results(&with_precision(thin_pair(0.5), "pathfinder.intersect"));
+    assert!(int.is_empty(), "{int:#?}");
+    // Bars wider than the precision keep their area.
+    let int = results(&with_precision(thin_pair(2.0), "pathfinder.intersect"));
+    let total: f64 = int.iter().map(|n| area(n)).sum();
+    assert!((total - 80.0).abs() < 1.0, "{total}: {int:#?}");
+    // Add keeps the square alone.
+    let add = results(&with_precision(thin_pair(0.5), "pathfinder.add"));
+    assert_eq!(add.len(), 1);
+    assert!((area(&add[0]) - 10_000.0).abs() < 1.0, "{add:#?}");
+    // Minus Back cuts the square from the empty group in front, and Subtract cuts nothing from
+    // the square.
+    let minus_back = results(&with_precision(thin_pair(0.5), "pathfinder.minusBack"));
+    assert!(minus_back.is_empty(), "{minus_back:#?}");
+    let subtract = results(&with_precision(thin_pair(0.5), "pathfinder.subtract"));
+    assert_eq!(subtract.len(), 1);
+    assert!((area(&subtract[0]) - 10_000.0).abs() < 1.0, "{subtract:#?}");
+    // With the group at the back, Subtract cuts the square from it and leaves nothing.
+    let mut back = with_precision(thin_pair(0.5), "pathfinder.subtract");
+    if let NodeKind::Group { children, .. } = &mut back.kind {
+        children.reverse();
+    }
+    let subtract = results(&back);
+    assert!(subtract.is_empty(), "{subtract:#?}");
+}
+
 /// Divide and Outline draw no piece of a member without fill or stroke, the same as when such
 /// pieces are left out.
 #[test]
@@ -260,6 +303,25 @@ fn outline_strokes_a_compound_shapes_area_in_its_fill() {
                 }
             }
         }
+    }
+}
+
+/// Outline of a compound shape with no fill gives the edges no paint of their own when Remove
+/// Unpainted Artwork is off. The shape's own appearance strokes the result, so the shape's stroke
+/// is not copied onto the edges.
+#[test]
+fn outline_of_an_unfilled_compound_shape_adds_no_stroke() {
+    let mut g = compound_shape(ShapeMode::Add);
+    let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+    if let Some(AppearanceItem::Stroke(s)) = a.items.last_mut() {
+        s.opacity = 0.5;
+    }
+    g.appearance = a.into();
+    g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({"removeUnpainted": false}), visible: true });
+    let out = pathfinder_children(None, &g, None).unwrap();
+    assert!(!out.is_empty(), "{out:#?}");
+    for n in &out {
+        assert!(!n.appearance.items.iter().any(paints), "{n:#?}");
     }
 }
 

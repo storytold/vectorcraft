@@ -634,32 +634,38 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             if !matches!(t.kind, TextKind::Point) {
                 continue;
             }
-            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            // The frame is worked out in line space, where the lines are; vertical type turns it
-            // into text space with the lines.
-            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
-            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
-            // Across, the frame spans the lines as they are aligned: from their starts to their ends
-            // without the tracking after their last characters (`LineInfo::trailing`), not to the
-            // ink, which tracking can pull past an advance. Area type aligns them alike.
-            let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
-            if x0.is_finite() && x1.is_finite() && x0 <= x1 {
-                (b.x0, b.x1) = (x0, x1);
-            }
-            // Line breaking counts that tracking: the slack holds the most of it.
-            let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
-            let size = t.first_style().size;
-            // A little slack on the right so the text doesn't rewrap.
-            let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
-            let slack = size * 0.5 + trailing;
-            let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
-            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
-            t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
-            refresh_bounds(t);
+            point_to_area(t);
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Point type `t` turned into area type in a frame around its lines, with a little slack where its
+/// alignment leaves room, so the text stays where it is and does not rewrap.
+pub(super) fn point_to_area(t: &mut TextObject) {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    // The frame is worked out in line space, where the lines are; vertical type turns it
+    // into text space with the lines.
+    let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+    let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
+    // Across, the frame spans the lines as they are aligned: from their starts to their ends
+    // without the tracking after their last characters (`LineInfo::trailing`), not to the
+    // ink, which tracking can pull past an advance. Area type aligns them alike.
+    let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
+    if x0.is_finite() && x1.is_finite() && x0 <= x1 {
+        (b.x0, b.x1) = (x0, x1);
+    }
+    // Line breaking counts that tracking: the slack holds the most of it.
+    let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
+    let size = t.first_style().size;
+    // A little slack on the right so the text doesn't rewrap.
+    let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
+    let slack = size * 0.5 + trailing;
+    let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
+    let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
+    t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
+    refresh_bounds(t);
 }
 
 /// How `slack` added to point type's lines in a frame is shared before and after them: where the

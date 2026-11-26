@@ -2,6 +2,9 @@ use super::*;
 use crate::{Gradient, GradientPaint, GradientStop};
 use proptest::prelude::*;
 
+const ASE_COLOR: u16 = 0x0001;
+const ASE_GROUP_END: u16 = 0xC002;
+
 #[test]
 fn gpl_blank_name_keeps_fallback() {
     let blank = "GIMP Palette\nName: \nColumns: 0\n#\n  1   2   3\tx\n";
@@ -699,4 +702,53 @@ proptest! {
             prop_assert_eq!(back.len(), lib.iter().filter(|w| f.holds(&w.paint)).count(), "{:?}", f);
         }
     }
+}
+
+#[test]
+fn shared_gpl_adapter_uses_app_color_conversion() {
+    let colors = [Color::cmyk(0.2, 0.4, 0.6, 0.1), Color::lab(55.0, 30.0, -25.0), Color::gray(0.3)];
+    let lib = SwatchLibrary {
+        name: "Managed".into(),
+        swatches: colors
+            .iter()
+            .enumerate()
+            .map(|(i, &color)| Swatch { name: format!("Color {i}"), paint: Paint::solid(color), global: false, spot: false })
+            .collect(),
+        groups: vec![],
+    };
+    let mut expected = String::from("GIMP Palette\nName: Managed\nColumns: 0\n#\n");
+    for (i, color) in colors.iter().enumerate() {
+        let [r, g, b, _] = color.to_rgba8(1.0);
+        expected.push_str(&format!("{r:3} {g:3} {b:3}\tColor {i}\n"));
+    }
+    assert_eq!(write(&lib, PaletteFormat::Gpl).unwrap(), expected.as_bytes());
+    assert!(to_cms_palette(&lib, true).swatches.iter().all(|w| matches!(w.color, PaletteColor::Rgb { .. })));
+    assert!(matches!(to_cms_palette(&lib, false).swatches[0].color, PaletteColor::Cmyk { .. }));
+    assert!(matches!(to_cms_palette(&lib, false).swatches[1].color, PaletteColor::Lab { .. }));
+}
+
+#[test]
+fn typed_palette_errors_keep_app_wording() {
+    let cases = [
+        (PaletteError::UnsupportedFormat, "not a supported palette (.gpl, .ase, or .acb)"),
+        (PaletteError::TruncatedAse, "the swatch exchange file is cut short"),
+        (PaletteError::TruncatedAcb, "the color book is cut short"),
+        (
+            PaletteError::AseWriteEntryLimit { limit: 3, entries: 4 },
+            "VectorCraft reads at most 3 colors and groups from a swatch exchange file, and this library has 4",
+        ),
+        (PaletteError::AseReadEntryLimit { limit: 3 }, "the swatch exchange file holds more than 3 colors and groups"),
+        (PaletteError::AseBlockCount, "too many swatch exchange blocks"),
+        (PaletteError::AseBlockLength, "a swatch exchange block is too long"),
+        (PaletteError::AseNameLength, "a swatch exchange name is too long"),
+        (PaletteError::AseVersion { major: 2, minor: 3 }, "swatch exchange version 2.3 isn't supported (only 1.x)"),
+        (PaletteError::AcbVersion { version: 2 }, "color book version 2 isn't supported (only 1)"),
+        (PaletteError::AcbEntryLimit { limit: 3 }, "the color book holds more than 3 colors"),
+        (PaletteError::AcbColorSpace { space: 5 }, "color books in color space 5 aren't supported (only RGB, CMYK and Lab)"),
+        (PaletteError::AcbNameBytes { limit: 64 << 20 }, "the color book's names take more than 64 MB"),
+    ];
+    for (error, expected) in cases {
+        assert_eq!(palette_error(error), expected);
+    }
+    assert_eq!(read_bytes(b"8BCB\0\x01\0\0\0\0\0\x03\0x", "fallback").unwrap_err(), "the color book is cut short");
 }

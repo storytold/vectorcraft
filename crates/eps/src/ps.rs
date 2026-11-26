@@ -3,7 +3,10 @@
 
 use vectorcraft_geom::{BezPath, FillRule};
 
-pub(crate) use craft_ps::write::{bytes, deflate, inflate, matrix, num, push_num, push_num_places, push_nums, string, written};
+pub(crate) use craft_ps::write::{
+    LineCap, LineJoin, ShadingKind, bytes, deflate, inflate, matrix, num, push_image_array_ref, push_inline_image, push_line_style, push_num,
+    push_num_places, push_nums, push_reusable_image_ref, push_reusable_image_resource, push_shading, string, written,
+};
 
 /// The procedures the page uses, in `VCdict`.
 pub(crate) const PROLOG: &str = "/VCdict 64 dict def
@@ -120,5 +123,31 @@ mod tests {
         assert_eq!(places(f64::from(0.4f32), 7), "0.4");
         assert_eq!(places(2.5, 7), "2.5");
         assert_eq!(places(f64::NAN, 7), "0");
+    }
+
+    #[test]
+    fn shared_scene_syntax_preserves_vc_names_and_shading() {
+        let mut line = String::new();
+        super::push_line_style(&mut line, 3.0, super::LineCap::Square, super::LineJoin::Round, 4.0, Some((&[5.0, 1.5], 0.5)));
+        assert_eq!(line, "3 w 2 J 1 j 4 M [5 1.5] 0.5 d\n");
+
+        let mut shading = String::new();
+        super::push_shading(
+            &mut shading,
+            super::ShadingKind::Axial,
+            "/DeviceCMYK",
+            &[0.0, 0.0, 100.0, 0.0],
+            4,
+            &[(0.0, vec![0.0, 1.0, 1.0, 0.0]), (1.0, vec![1.0, 0.0, 1.0, 0.0])],
+        );
+        assert!(shading.contains("/ShadingType 2 /ColorSpace /DeviceCMYK"));
+        assert!(shading.ends_with(">> shfill\n"));
+
+        let mut inline = String::new();
+        super::push_inline_image(&mut inline, "VCsrc", "", "<< /ImageType 1", "/FlateDecode", "image", "~>\n");
+        assert_eq!(
+            inline,
+            "{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType 1\n/DataSource VCsrc /FlateDecode filter >> image\nVCsrc flushfile } exec\n~>\n"
+        );
     }
 }

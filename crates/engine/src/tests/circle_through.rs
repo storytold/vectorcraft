@@ -123,6 +123,63 @@ fn two_points_are_the_ends_of_a_diameter() {
     assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
 }
 
+/// With `center`, the circle is centered there and its edge passes through the one point in
+/// `points`: from the bottom-right corner (200, 200) of a 100 pt square through its top-left
+/// corner (100, 100), the radius is the square's diagonal, in one undo step. A point on the center
+/// and a circle past the canvas are refused, and so is a `center` (null included) or `points` that
+/// is not one `[x, y]` pair of finite numbers; nothing is drawn and no undo step is recorded.
+#[test]
+fn a_center_and_a_point_on_the_edge_give_the_circle() {
+    let mut s = session();
+    let undo = undo_len(&s);
+    let out = s.execute(C, &json!({"center": [200, 200], "points": [[100, 100]]})).unwrap();
+    let r = 100.0 * std::f64::consts::SQRT_2;
+    assert_eq!((out["cx"].as_f64(), out["cy"].as_f64()), (Some(200.0), Some(200.0)), "{out}");
+    assert!((out["radius"].as_f64().unwrap() - r).abs() < 1e-12, "{out}");
+    let id = id_of(&out);
+    assert!(bounds_are(&s, id, vectorcraft_geom::Rect::new(200.0 - r, 200.0 - r, 200.0 + r, 200.0 + r)));
+    assert!(farthest_from_path(&s, id, &[Point::new(100.0, 100.0)]) < r * 3e-4);
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    assert_eq!(undo_len(&s), undo + 1);
+    let (undo, count) = (undo_len(&s), object_count(&s));
+    let e = s.execute(C, &json!({"center": [30, 30], "points": [[30, 30]]})).unwrap_err().to_string();
+    assert!(e.contains("the point in `points` is on `center`"), "{e}");
+    // Past the canvas, and finite coordinates whose distance overflows to infinity.
+    for (center, point) in [(json!([0, 0]), json!([4_100_000, 0])), (json!([-1e308, -1e308]), json!([1e308, 1e308]))] {
+        let e = s.execute(C, &json!({ "center": center, "points": [point] })).unwrap_err().to_string();
+        assert!(e.contains("result would exceed the canvas"), "{center} {point}: {e}");
+    }
+    for (center, points) in [
+        (json!([0, 0]), json!([[10, 0], [0, 10]])),
+        (json!([0, 0]), json!([])),
+        (json!([0, 0]), Value::Null),
+        (json!([0, 0]), json!([[10, "0"]])),
+        (json!([0]), json!([[10, 0]])),
+        (json!("0,0"), json!([[10, 0]])),
+        (json!([0, 0, 1]), json!([[10, 0]])),
+        (Value::Null, json!([[10, 0]])),
+        (Value::Null, json!([[10, 0], [20, 0]])),
+    ] {
+        let e = s.execute(C, &json!({ "center": center, "points": points })).unwrap_err().to_string();
+        assert!(e.contains("`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`"), "{center} {points}: {e}");
+    }
+    assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
+}
+
+/// A circle so small beside its coordinates that its left and right edges round to the same
+/// number (radius 10⁻¹¹ pt at x = 1,048,576, where doubles step by about 2.3 × 10⁻¹⁰) is refused,
+/// from a center and on a diameter alike; nothing is drawn and no undo step is recorded.
+#[test]
+fn a_circle_with_no_width_at_document_precision_is_refused() {
+    let mut s = session();
+    let (undo, count) = (undo_len(&s), object_count(&s));
+    for p in [json!({"center": [1_048_576, 0], "points": [[1_048_576, 1e-11]]}), json!({"points": [[1_048_576, 0], [1_048_576, 2e-11]]})] {
+        let e = s.execute(C, &p).unwrap_err().to_string();
+        assert!(e.contains("the circle is too small to draw at these coordinates"), "{p}: {e}");
+    }
+    assert_eq!((undo_len(&s), object_count(&s)), (undo, count));
+}
+
 /// Points that are not two or three pairs of finite numbers are an error, not a fallback.
 #[test]
 fn malformed_points_are_refused() {
@@ -204,6 +261,35 @@ fn the_circle_is_not_moved_onto_the_pixel_grid() {
     assert!(!node(&s, id).extras().pixel_aligned);
 }
 
+/// `anchors: "points"` puts an anchor exactly at each point, with one more on each half of a
+/// diameter's circle; the circle is a plain path, not pixel-aligned, and one undo step. Any other
+/// `anchors` value is an error and draws nothing.
+#[test]
+fn anchors_at_the_points_puts_an_anchor_at_each_point() {
+    let mut s = session();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let undo = undo_len(&s);
+    let points = [Point::new(0.3, 0.2), Point::new(80.6, 0.1), Point::new(0.4, 60.7)];
+    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
+    let id = id_of(&s.execute(C, &json!({ "points": pairs, "anchors": "points" })).unwrap());
+    let n = node(&s, id);
+    let anchors: Vec<Point> = n.path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert!(points.iter().all(|p| anchors.contains(p)), "{anchors:?}");
+    assert!(matches!(n.kind, NodeKind::Path { live: None, .. }), "{:?}", n.kind);
+    assert!(!n.extras().pixel_aligned);
+    assert_eq!(undo_len(&s), undo + 1);
+    let id = id_of(&s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": "points" })).unwrap());
+    let anchors: Vec<Point> = node(&s, id).path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(anchors.len(), 4, "{anchors:?}");
+    assert_eq!((anchors[0], anchors[2]), (Point::new(0.0, 0.0), Point::new(100.0, 0.0)));
+    let (count, undo) = (object_count(&s), undo_len(&s));
+    for bad in [json!("corners"), json!(true), json!(4), Value::Null] {
+        let e = s.execute(C, &json!({ "points": [[0, 0], [100, 0]], "anchors": bad })).unwrap_err().to_string();
+        assert!(e.contains("`anchors` must be one of standard, points"), "{e}");
+    }
+    assert_eq!((object_count(&s), undo_len(&s)), (count, undo));
+}
+
 fn view() -> ViewInfo {
     ViewInfo { smart_guides: false, ..ViewInfo::default() }
 }
@@ -212,6 +298,28 @@ fn click(s: &mut Session, mods: Mods, x: f64, y: f64) {
     for k in [PointerKind::Down, PointerKind::Up] {
         s.pointer(&PointerEvent::new(k, x, y).with_mods(mods), view()).unwrap();
     }
+}
+
+/// The Circle tool with From Center set through `tool.setOption`: a click on the center and a
+/// click on the edge draw the circle, in one undo step. `fromCenter` must be true or false, and
+/// the tool has no other option; a refused value changes nothing.
+#[test]
+fn the_circle_tool_draws_from_its_center() {
+    let mut s = session();
+    s.select_tool("circle", view()).unwrap();
+    let e = s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": "yes"})).unwrap_err();
+    assert!(e.contains("`fromCenter` must be true or false"), "{e}");
+    assert!(s.set_tool_option_cmd(&json!({"key": "radius", "value": 5})).is_err());
+    assert_eq!(s.tool_options()["fromCenter"], json!(false));
+    s.set_tool_option_cmd(&json!({"key": "fromCenter", "value": true})).unwrap();
+    assert_eq!(s.tool_options()["fromCenter"], json!(true));
+    let undo = undo_len(&s);
+    click(&mut s, Mods::default(), 200.0, 200.0);
+    click(&mut s, Mods::default(), 100.0, 100.0);
+    assert_eq!(undo_len(&s), undo + 1);
+    let id = *s.doc().unwrap().selection.objects.first().unwrap();
+    let r = 100.0 * std::f64::consts::SQRT_2;
+    assert!(bounds_are(&s, id, vectorcraft_geom::Rect::new(200.0 - r, 200.0 - r, 200.0 + r, 200.0 + r)));
 }
 
 /// With the Ellipse tool, three Shift-clicks draw the circle through the three points, in one

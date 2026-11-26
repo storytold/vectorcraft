@@ -74,10 +74,16 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
-    /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
-    /// Eyedropper's sample into a stop of the bucket's gradient): their paint commands change the
-    /// colors the bucket paints with ([`Session::bucket_paints`]).
-    pub(crate) back_to_bucket: bool,
+    /// While tool actions that end by switching back to a tool that paints with the chosen colors
+    /// are applied (the Eyedropper's sample into a stop of the Live Paint Bucket's gradient), and
+    /// while a tool such a tool lent is deactivated as it goes back, that tool's id: their paint
+    /// commands change the colors it paints with ([`Session::tool_paints`]).
+    pub(crate) back_to_painter: Option<&'static str>,
+    /// Whose gradient the stop was on when the Eyedropper was last armed to sample into one
+    /// (`tool.setOption {stop}`), when it was the gradient a tool paints with
+    /// ([`Session::painting_tool`]); None for a stop of the selection's paint. A pick armed for
+    /// such a stop samples only into a stop selected on that gradient, and otherwise ends.
+    pub(crate) stop_pick: Option<cmd::gradient::StopOwner>,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
     held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,
@@ -106,6 +112,19 @@ pub struct Session {
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
+    /// Direct Selection or Group Selection, whichever was chosen last: the one Cmd lends the
+    /// Selection tool. None until one is chosen.
+    pub(crate) last_part_selection_tool: Option<&'static str>,
+    /// The selection tool Cmd lent the last press, which also takes the double-click or
+    /// triple-click that follows it, with the uid of the document and the id of the tool it was
+    /// lent from: a follow-up in another document, after a tool switch (also one back to the same
+    /// tool) or after the tool starts afresh is not lent. None when the press was not lent.
+    pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
+    /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
+    /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
+    /// the document state, active tool and keys it was found for. None when it was last asked
+    /// without Cmd.
+    pub(crate) hover_lent: Option<(tooling::HoverKey, Option<&'static str>)>,
     pub(crate) last_view: ViewInfo,
     /// The selection tools' measurements for the active document as it is: a pointer move or a
     /// cursor asked for again over an unchanged document and selection measures nothing again.
@@ -153,6 +172,9 @@ pub struct Session {
     pub(crate) pending_paint: Option<Paint>,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
+    /// The graph designs of the documents loaded as swatch libraries (Window → Swatch Libraries →
+    /// Other Library…), for the Graph Column and Graph Marker dialogs; not saved.
+    pub graph_design_libraries: cmd::swatchlib::DesignLibraries,
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
     /// was selected on: read it with [`Session::selected_freeform_point`].
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
@@ -164,6 +186,8 @@ pub struct Session {
     pub brush_libraries: cmd::brushlib::Libraries,
     /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
     pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The custom bevels of the bevels file (`threeD.bevels.*`); none without one.
+    pub bevels: cmd::bevels::Bevels,
     /// The id each loaded library outside a request's read roots has been shown under, by its own id
     /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
     shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
@@ -184,6 +208,11 @@ pub struct Session {
     /// Where the plug-ins `plugin.install` installs are kept; `None`: only for the process
     /// ([`Session::attach_plugin_store`]).
     plugin_dir: Option<std::path::PathBuf>,
+    /// Plug-in loads running on worker threads, oldest first ([`Session::poll_plugin_loads`]).
+    plugin_loads: std::collections::VecDeque<store::PluginLoad>,
+    /// Whether the loads of the stored plug-ins and of the plug-ins folder go on after the call
+    /// that starts them ([`Session::load_plugins_in_background`]).
+    plugin_loads_in_background: bool,
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
@@ -229,6 +258,11 @@ pub struct Session {
     /// The running top-level query command changed the selection and is journaled like any other
     /// command ([`Session::journal_query`]).
     journal_query: bool,
+    /// The running top-level command changed only the paint defaults, as the Live Paint Bucket
+    /// or `defaultsOnly: true` has a paint command do, when new art would have taken this
+    /// appearance (none: nothing selected): unless a later batch step changes it, the selection's
+    /// appearance does not replace the defaults afterwards ([`Session::inherit_new_art`]).
+    pub(crate) defaults_only_ran: Option<Option<cmd::newart::NewArtSource>>,
     /// From `edit.undoGroup.begin` to `edit.undoGroup.end`: the name of the undo step (`None`: after
     /// its first edit). Each document opened or created meanwhile opens an undo group of its own
     /// ([`Session::add_document`]). `None` otherwise.
@@ -314,6 +348,9 @@ pub struct Session {
     /// The warnings of the previews that settling an interaction applied, while a top-level command
     /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
     settled_warnings: Option<Vec<String>>,
+    /// The interaction a command from outside the tool set aside while it runs
+    /// ([`Session::outside_interaction`]).
+    held_interaction: Option<HeldInteraction>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// The images Remove Background decoded during the interaction's preview steps, emptied when
@@ -426,13 +463,13 @@ mod session;
 pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
-pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
-pub use doc_state::{DocState, OpenRows, RecalledSelection};
+pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_plugin_loads, waits_for_tool_edit};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
-pub(crate) use interaction::PreviewCopies;
+pub(crate) use interaction::{HeldInteraction, PreviewCopies};
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
 pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;

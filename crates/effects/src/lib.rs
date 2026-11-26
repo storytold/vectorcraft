@@ -89,19 +89,19 @@ pub use raster::{
     without_geometry,
 };
 pub use reshape::{
-    SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_copied_row_raster, has_gradient_copies,
-    has_instance_row_raster, has_item_geometry, has_painted_effects, has_transform_art, has_transform_copies, has_transform_options, image_paint,
-    instance_as_art, needs_outline, outer_effects, outline_art, outline_text, paint_type_piece, reshape,
+    SYMBOL_ART_MAX_NODES, add_instance_row_effects_to_parts, expand_outlined, follows_image_pixels, gives_image_shape, has_copied_row_raster,
+    has_gradient_copies, has_instance_row_raster, has_item_geometry, has_painted_effects, has_transform_art, has_transform_copies,
+    has_transform_options, image_paint, instance_as_art, needs_outline, outer_effects, outline_art, outline_text, paint_type_piece, reshape,
 };
 pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
 };
 pub use solids::{
-    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, MeshGraphics, RENDER, RENDER_MODES,
-    ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options, classic_shading,
-    extrude_options, graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d, mapped_graphics,
-    mesh_graphics_art, missing_symbol, names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe, solid_art,
-    solid_art_in, takes_graphics, three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as,
+    BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, MeshGraphics,
+    RENDER, RENDER_MODES, ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options,
+    classic_shading, extrude_options, graphic_bounds, graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d,
+    mapped_graphics, mesh_graphics_art, missing_symbol, names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, renders_wireframe,
+    solid_art, solid_art_in, takes_graphics, three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as,
     three_d_wireframe_in, validate_solid, validate_solid_in, validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in,
     validate_three_d_params, view_options, with_graphic,
 };
@@ -116,8 +116,8 @@ pub use solids::{
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
-pub use vectorcraft_three_d::Mesh;
 pub use vectorcraft_three_d::PlanarFace;
+pub use vectorcraft_three_d::{BevelProfile, Mesh, MeshPart};
 pub use warp::{WARP_NET, WarpNet, WarpStyle, map_version, warp_point, warp_version};
 
 mod catalog;

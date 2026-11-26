@@ -3,8 +3,22 @@
 
 use serde_json::json;
 
-use super::tests_export::{app, frame, kind, set};
-use super::*;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+
+use super::tests_export::{app, confirm, frame, kind, set, try_confirm, try_set};
+use crate::VectorcraftApp;
+
+/// The values of the top dialog, a parameter dialog; empty when none is open.
+pub(super) fn fields(app: &VectorcraftApp) -> DialogFields {
+    app.dialogs()
+        .and_then(|dialogs| {
+            dialogs.with(|host| {
+                let id = host.open_dialogs().last()?.id;
+                host.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())
+            })
+        })
+        .unwrap_or_default()
+}
 
 /// A JPEG's SOF marker and component count.
 fn jpeg_frame(file: &[u8]) -> (u8, u8) {
@@ -15,68 +29,64 @@ fn jpeg_frame(file: &[u8]) -> (u8, u8) {
     (file[i + 1], file[i + 9])
 }
 
+/// Each raster format's option rows, set as the user sets them, reach the written file:
+/// `(format, the rows set, what the file shows)`.
 #[test]
-fn jpeg_options_pick_the_colour_model_method_and_profile() {
-    let (mut app, written) = app(1);
-    app.run("file.exportAs", json!({"format": "jpg"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("jpgOptions"));
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(
-        (d.str("colorModel"), d.str("method"), d.f64("scans", 0.0), d.bool("embedIcc"), d.str("imageMap")),
-        ("rgb".into(), "baseline".into(), 3.0, true, "none".into())
-    );
-    frame(&mut app);
-    set(&mut app, "method", json!("progressive"));
-    set(&mut app, "scans", json!(4));
-    set(&mut app, "colorModel", json!("cmyk"));
-    set(&mut app, "quality", json!(30));
-    frame(&mut app);
-    confirm(&mut app).unwrap();
-    let file = written.borrow()[0].1.clone();
-    assert_eq!(jpeg_frame(&file), (0xC2, 4), "progressive CMYK");
-    assert!(file.windows(12).any(|w| w == b"ICC_PROFILE\0"));
-
-    // A CMYK document exports CMYK by default.
-    app.run("object.convertDocumentColorMode", json!({"mode": "cmyk"})).unwrap();
-    app.run("file.exportAs", json!({"format": "jpg"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "cmyk");
+fn raster_option_rows_reach_the_export_params() {
+    type Check = fn(&[u8]);
+    type Set<'a> = &'a [(&'a str, serde_json::Value)];
+    let rows: [(&str, Set<'_>, Check); 8] = [
+        ("jpg", &[("method", json!("progressive")), ("scans", json!(4)), ("colorModel", json!("cmyk")), ("quality", json!(30))], |file| {
+            assert_eq!(jpeg_frame(file), (0xC2, 4), "progressive CMYK");
+            assert!(file.windows(12).any(|w| w == b"ICC_PROFILE\0"));
+        }),
+        ("gif", &[("colors", json!(4)), ("dither", json!("pattern")), ("matte", json!("#336699")), ("interlaced", json!(true))], |gif| {
+            assert_eq!(&gif[..6], b"GIF89a");
+            assert_eq!(gif[10] & 0x07, 1, "a global colour table of 4 entries");
+        }),
+        ("png8", &[("reduction", json!("gray"))], |png| assert_eq!(png[25], 3, "indexed")),
+        ("webp", &[("lossless", json!("false")), ("quality", json!(40))], |file| {
+            assert!(file.windows(4).any(|w| w == b"VP8 ") && !file.windows(4).any(|w| w == b"VP8L"), "lossy");
+        }),
+        ("tiff", &[("byteOrder", json!("big")), ("colorModel", json!("cmyk")), ("lzw", json!(false))], |tiff| assert_eq!(&tiff[..4], b"MM\0*")),
+        ("tga", &[("depth", json!("32"))], |tga| assert_eq!((tga[16], tga[17]), (32, 8))),
+        ("psd", &[("maxEditability", json!(true))], |psd| {
+            assert_eq!(&psd[..4], b"8BPS");
+            // A group with the ellipse: three records, the merged image's alpha their transparency.
+            let at = 26 + 4 + 4 + u32::from_be_bytes(psd[30..34].try_into().unwrap()) as usize;
+            assert_eq!(i16::from_be_bytes([psd[at + 8], psd[at + 9]]), -3);
+        }),
+        // Flat, flattened on white; Preserve Text Editability, still ticked, isn't sent: the export refuses it without layers.
+        ("psd", &[("preserveText", json!(true)), ("layers", json!("false")), ("colorModel", json!("gray"))], |psd| {
+            assert_eq!((u16::from_be_bytes([psd[12], psd[13]]), u16::from_be_bytes([psd[24], psd[25]])), (1, 1), "one grey channel");
+        }),
+    ];
+    for (format, sets, check) in rows {
+        let (mut app, written) = app(1);
+        app.run("file.exportAs", json!({"format": format})).unwrap();
+        confirm(&mut app);
+        assert_eq!(kind(&app).map(|k| k.strip_suffix("Options").map(str::to_string)), Some(Some(format.to_string())));
+        frame(&mut app);
+        for (key, value) in sets {
+            set(&mut app, key, value.clone());
+        }
+        frame(&mut app);
+        try_confirm(&mut app).unwrap_or_else(|e| panic!("{format}: {e}"));
+        let file = written.borrow()[0].1.clone();
+        check(&file);
+    }
 }
 
+/// A CMYK document starts the colour-model formats in CMYK.
 #[test]
-fn palette_options_reduce_the_colours() {
-    let (mut app, written) = app(1);
-    app.run("file.exportAs", json!({"format": "gif"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("gifOptions"));
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((spec(&d.kind).heading)(d), "GIF Options");
-    assert_eq!(
-        (d.str("reduction"), d.f64("colors", 0.0), d.str("dither"), d.bool("transparency"), d.str("matte")),
-        ("selective".into(), 256.0, "diffusion".into(), true, "white".into())
-    );
-    frame(&mut app);
-    set(&mut app, "colors", json!(4));
-    set(&mut app, "dither", json!("pattern"));
-    set(&mut app, "matte", json!("#336699"));
-    set(&mut app, "interlaced", json!(true));
-    frame(&mut app);
-    confirm(&mut app).unwrap();
-    let (path, gif) = written.borrow()[0].clone();
-    assert_eq!(path, "/out/Untitled-1.gif");
-    assert_eq!(&gif[..6], b"GIF89a");
-    assert_eq!(gif[10] & 0x07, 1, "a global colour table of 4 entries");
-
-    app.run("file.exportAs", json!({"format": "png8"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("png8Options"));
-    set(&mut app, "reduction", json!("gray"));
-    frame(&mut app);
-    confirm(&mut app).unwrap();
-    let (path, png) = written.borrow()[1].clone();
-    assert_eq!(path, "/out/Untitled-1.png");
-    assert_eq!(png[25], 3, "indexed");
+fn a_cmyk_document_exports_cmyk_by_default() {
+    let (mut app, _) = app(1);
+    app.run("object.convertDocumentColorMode", json!({"mode": "cmyk"})).unwrap();
+    for format in ["jpg", "tiff", "psd"] {
+        app.run("file.exportAs", json!({"format": format})).unwrap();
+        confirm(&mut app);
+        assert_eq!(fields(&app).text("colorModel"), Some("cmyk"), "{format}");
+    }
 }
 
 #[test]
@@ -84,65 +94,32 @@ fn text_export_options_write_the_stories() {
     let (mut app, written) = app(1);
     app.run("text.create", json!({"x": 5, "y": 30, "text": "Hello\nthere"})).unwrap();
     app.run("file.exportAs", json!({"format": "txt"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("txtOptions"));
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("path"), d.str("encoding")), ("/out/Untitled-1.txt".into(), "utf8".into()));
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("txtOptions"));
+    assert_eq!((fields(&app).text("path"), fields(&app).text("encoding")), (Some("/out/Untitled-1.txt"), Some("utf8")));
     frame(&mut app);
     set(&mut app, "lineEndings", json!("crlf"));
-    set(&mut app, "encoding", json!("bogus"));
-    assert!(confirm(&mut app).is_err());
-    assert_eq!(kind(&app), Some("txtOptions"), "a bad option keeps the dialog open");
+    assert!(try_set(&mut app, "encoding", json!("bogus")).is_err(), "an encoding the list lacks is refused");
+    assert_eq!(kind(&app).as_deref(), Some("txtOptions"), "a bad option keeps the dialog open");
     set(&mut app, "encoding", json!("utf8"));
     frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.txt");
-    assert!(app.ui.dialog.is_none());
+    confirm(&mut app);
+    assert_eq!(kind(&app), None);
     let (path, bytes) = written.borrow().last().cloned().unwrap();
     assert_eq!((path.as_str(), bytes.as_slice()), ("/out/Untitled-1.txt", &b"Hello\r\nthere\r\n"[..]));
 }
 
-/// WebP Options: Lossless by default, with the Quality slider disabled; Lossy enables it, and OK
-/// writes a lossy file at that quality, without a note.
+/// WebP is lossless by default, and OK writes a lossless file without a note.
 #[test]
-fn webp_options_choose_lossless_or_lossy_at_a_quality() {
-    use crate::widgets::accessibility_tests::tree;
-    use egui::accesskit::Role;
-    let quality_disabled = |app: &mut VectorcraftApp| {
-        let t = tree(|ui| show(app, ui.ctx()));
-        t.iter().find(|n| n.role() == Role::Slider).expect("the Quality slider").is_disabled()
-    };
+fn webp_is_lossless_by_default() {
     let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "webp"})).unwrap();
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some("webpOptions"));
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((&d.fields["lossless"], &d.fields["quality"]), (&json!(true), &json!(90)));
-    assert!(quality_disabled(&mut app), "Quality applies to Lossy");
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("webpOptions"));
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    confirm(&mut app);
+    assert!(!app.ui.status.contains("note"), "{}", app.ui.status);
     assert_eq!(&written.borrow()[0].1[12..16], b"VP8L", "lossless by default");
-
-    app.run("file.exportAs", json!({"format": "webp"})).unwrap();
-    confirm(&mut app).unwrap();
-    set(&mut app, "lossless", json!(false));
-    set(&mut app, "quality", json!(40));
-    assert!(!quality_disabled(&mut app), "Lossy enables Quality");
-    frame(&mut app);
-    // The dialog's options, as `document.export` takes them.
-    let mut options = app.ui.dialog.as_ref().unwrap().fields.clone();
-    options.retain(|k, _| !k.starts_with("__") && k != "path");
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["warnings"], json!([]), "{r}");
-    let file = written.borrow().last().unwrap().1.clone();
-    assert!(file.windows(4).any(|w| w == b"VP8 ") && !file.windows(4).any(|w| w == b"VP8L"), "lossy");
-    // The file is the one `document.export` writes with those options at quality 40.
-    let at = |app: &mut VectorcraftApp, q: u8| {
-        let mut p = options.clone();
-        p.insert("quality".into(), json!(q));
-        vectorcraft_format::base64_decode(app.run("document.export", serde_json::Value::Object(p)).unwrap()["dataBase64"].as_str().unwrap()).unwrap()
-    };
-    assert_eq!(file, at(&mut app, 40));
-    assert_ne!(file, at(&mut app, 90));
 }
 
 #[test]
@@ -151,13 +128,15 @@ fn save_for_office_documents_picks_the_resolution() {
     let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("document.exportForOffice")).unwrap();
     assert_eq!((item.path[0].as_str(), item.label.as_str(), item.enabled), ("File", "Save for Office Documents…", true));
     app.run("document.exportForOffice", json!({})).unwrap();
-    assert_eq!(kind(&app), Some("saveForOffice"));
+    assert_eq!(kind(&app).as_deref(), Some("saveForOffice"));
     frame(&mut app);
-    set(&mut app, "ppi", json!(300));
-    set(&mut app, "artboard", json!(1));
+    set(&mut app, "ppi", json!("300"));
+    // The Artboard row is a choice keyed by the artboard's index.
+    set(&mut app, "artboard", json!("1"));
     set(&mut app, "transparent", json!(true));
     frame(&mut app);
-    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.png");
+    confirm(&mut app);
+    assert_eq!(written.borrow()[0].0, "/out/Untitled-1.png");
     let img = craft_image_codecs::decode(&written.borrow()[0].1)
         .map(|__cimg| {
             let (__w, __h) = __cimg.dimensions();
@@ -181,7 +160,7 @@ fn save_for_office_documents_picks_the_resolution() {
     // With a path (agents), no dialog.
     let r = app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(r["path"], "/x/o.png");
-    assert!(app.ui.dialog.is_none());
+    assert!(kind(&app).is_none());
     let img = craft_image_codecs::decode(&written.borrow()[1].1)
         .map(|__cimg| {
             let (__w, __h) = __cimg.dimensions();

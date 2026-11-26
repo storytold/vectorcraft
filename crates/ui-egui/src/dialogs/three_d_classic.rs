@@ -1,873 +1,573 @@
-//! The own controls of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) in the
-//! compact 3D dialog: the extrude and bevel options, or the revolve options, on the Object tab
-//! (Rotate (Classic) has none), and the surface with its lighting sphere, lights, highlight, blend
-//! steps, shading color and Preserve Spot Colors on the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D
-//! effect shares; the classic effects add the track cube to it ([`track_cube`]).
+//! The own rows of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) in the 3D dialog: the
+//! extrude and bevel rows or the revolve rows of the Object page (Rotate (Classic) has none), the Lighting page's
+//! surface rows, and the Map Art page with its surface outline on the artboard. Position (presets, rotation,
+//! perspective) is the page every 3D effect shares; the classic effects add the track cube to it ([`super::track_cube`]).
 
-use egui::{Color32, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
+use craft::behavior::CanvasView;
+use craft::behavior::geometry::quad::{BoxAllow, BoxRules, BoxState, Parts, ScaleRule};
+use craft::behavior::kurbo::{BezPath, Point, Rect, Size, Vec2};
+use craft::draw::ui::transform::{RotateZone, TransformBox};
+use craft::theme::Srgba;
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::canvas::Canvas;
+use craft::ui::canvas::{CanvasSpace, canvas_space};
+use craft::ui::canvas_controls::SelectionOutline;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Picture, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::list::ThumbAspect;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::ContentPainterCx;
+use craft::ui::runtime::env::{Env, UnitKind};
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::style::DataColor;
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
+use egui::{Color32, Response, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MapSurface, SurfaceMap};
+use vectorcraft_effects::{
+    CLASSIC_EXTRUDE, CLASSIC_ROTATE, GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MAX_MAPS, SurfaceMap,
+};
 
-use super::revolve::{c3, choice, heading, label, light_list, light_record, number, reset_dot, selected_light, store_selected, toggle};
-use crate::state::Dialog;
-use crate::theme::Tokens;
+use super::revolve::{Place, bevel_row, c3, light_editor};
+use super::three_d::{Data, with_fields};
+use super::track_cube::{SHADE_DARK, SHADE_LIGHT};
+use crate::VectorcraftApp;
 
-/// Depth and cap, then the bevel: its shape, its height and whether it is added around the shape
-/// or carved into it.
-pub(super) fn object_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    heading(ui, tl!("Object"));
-    number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
-    choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
-    ui.add_space(10.0);
-    heading(ui, c3("Bevel"));
-    choice(ui, d, "bevel", tl!("Bevel Shape"), &options("bevel"));
-    ui.add_enabled_ui(d.str("bevel") != "none", |ui| {
-        number(ui, d, "bevelHeight", tl!("Height"), (1.0, 100.0), "", 1, Some(unit));
-        toggle(ui, d, "bevelInside", tl!("Bevel Inside"), false);
-    });
-    map_art_button(ui, d);
-}
-
-/// The field of [`Dialog::fields`] that is true while the dialog shows Map Art in place of its
-/// tabs. It is UI state and never enters the effect's parameters.
-pub(super) const MAP_ART_OPEN: &str = "__mapArt";
 /// The field that holds the number of the surface Map Art shows.
 const MAP_SURFACE: &str = "__mapSurface";
+/// The dialog's page field and the value that shows Map Art.
+const PAGE: &str = "__page";
+const MAP_PAGE: &str = "mapArt";
+/// The field of the custom shading colour, `#rrggbb` text.
+const SHADING_CUSTOM: &str = "shadingCustom";
+/// Keys of the map rows; they hold no value of their own: `set_map_value` writes the number into `mapArt`.
+const MAP_KEYS: [&str; 5] = ["mapX", "mapY", "mapScaleX", "mapScaleY", "mapRotation"];
+const MAP_SYMBOL: &str = "mapSymbol";
+/// The Map Art page's rows of the shown surface's map: views of `mapArt`, never effect parameters.
+pub(super) const MAP_ROWS: [&str; 6] = [MAP_SYMBOL, MAP_KEYS[0], MAP_KEYS[1], MAP_KEYS[2], MAP_KEYS[3], MAP_KEYS[4]];
 
-/// Map Art…, which opens [`map_art_controls`]. The 3D and Materials panel has no such button.
-fn map_art_button(ui: &mut egui::Ui, d: &mut Dialog) {
-    if d.bool("__panel") {
-        return;
+/// The unit of the general-unit length rows.
+fn length_unit(unit: Unit) -> UnitKind {
+    crate::canvas::rulers::unit_kind(unit)
+}
+
+/// Where the rows show: the 3D and Materials panel marks its fields with `__panel`.
+fn place_of(fields: &DialogFields) -> Place {
+    if fields.bool("__panel") == Some(true) { Place::Panel } else { Place::Dialog }
+}
+
+/// The values of classic 3D effect `effect`'s `key` as the choice rows list them, (value, label).
+fn options_of(effect: &str, key: &str) -> Vec<(&'static str, &'static str)> {
+    super::effect_params::own_choices(effect, key, false).unwrap_or_default().into_iter().map(|(label, value)| (value, label)).collect()
+}
+
+/// `options_of` as the options of a choice row.
+fn choice_row(effect: &str, key: &str, label: &'static str) -> Param {
+    let options = options_of(effect, key).into_iter().map(|(value, label)| (value.to_string(), label.into())).collect();
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get(key).and_then(Value::as_str).map(str::to_string));
+    Param::new(key, label, ParamKind::choice(options, default)).resettable()
+}
+
+/// A slider row over `range` with the effect's default.
+fn range_row(effect: &str, key: &str, label: &'static str, range: (f64, f64), unit: Option<UnitKind>, decimals: u32) -> Param {
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get(key).and_then(Value::as_f64)).unwrap_or(range.0);
+    let row = Param::new(key, label, ParamKind::range(range.0, range.1, default, SliderScale::Linear)).decimals(decimals).resettable();
+    match unit {
+        Some(unit) => row.unit(unit),
+        None => row,
     }
-    ui.add_space(10.0);
-    if ui.button(tl!("Map Art…")).clicked() {
-        d.fields.insert(MAP_ART_OPEN.into(), json!(true));
-    }
 }
 
-/// Is Map Art open in the dialog?
-pub(super) fn map_art_open(d: &Dialog) -> bool {
-    d.bool(MAP_ART_OPEN) && vectorcraft_effects::takes_map_art(&d.str("__effect"))
+/// A Boolean row with the effect's default.
+fn toggle_row(effect: &str, key: &str, label: &'static str) -> Param {
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get(key).and_then(Value::as_bool)).unwrap_or(false);
+    Param::new(key, label, ParamKind::bool(default)).resettable()
 }
 
-/// The numbered surfaces of the first selected object with the dialog's effect and settings
-/// ([`vectorcraft_effects::map_surfaces_with`]), kept until the object, the document or a setting
-/// that shapes the solid changes.
-fn surfaces(app: &crate::VectorcraftApp, ctx: &egui::Context, d: &Dialog) -> Option<std::sync::Arc<Vec<MapSurface>>> {
-    use std::hash::{Hash, Hasher};
-    let st = app.session.active()?;
-    let id = *st.selection.objects.first()?;
-    let effect = d.str("__effect");
-    // The maps themselves do not change the surfaces.
-    let mut p = super::form::params(d);
-    if let Some(m) = p.as_object_mut() {
-        for key in [MAP_ART, MAP_SHADE, MAP_INVISIBLE] {
-            m.remove(key);
-        }
-    }
-    let item = d.fields.get("__item").and_then(Value::as_u64).map(|i| i as usize);
-    // The effect being edited, when the dialog edits one already on the object.
-    let index = d.fields.get("__index").and_then(Value::as_u64).map(|i| i as usize);
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    (st.uid, id.0, item, index, &effect, p.to_string(), st.revision).hash(&mut hasher);
-    let key = hasher.finish();
-    let cache = egui::Id::unique("map-art-surfaces");
-    if let Some((at, kept)) = ctx.data(|m| m.get_temp::<(u64, std::sync::Arc<Vec<MapSurface>>)>(cache))
-        && at == key
-    {
-        return Some(kept);
-    }
-    let listed = std::sync::Arc::new(vectorcraft_effects::map_surfaces_with(Some(&st.doc), st.doc.node(id)?, (item, index), &effect, &p)?);
-    ctx.data_mut(|m| m.insert_temp(cache, (key, listed.clone())));
-    Some(listed)
+/// The Cap row: its two ids are the JSON booleans the effect stores.
+fn cap_row(effect: &str) -> Param {
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get("cap").and_then(Value::as_bool)).unwrap_or(true);
+    Param::new(
+        "cap",
+        c3("Cap"),
+        ParamKind::radio(vec![("true".into(), c3("Solid").into()), ("false".into(), c3("Hollow").into())], Some(default.to_string())),
+    )
+    .resettable()
 }
 
-/// The dialog's maps, read as the effect reads them.
-fn maps_of(d: &Dialog) -> Vec<SurfaceMap> {
-    vectorcraft_effects::surface_maps(&json!({ MAP_ART: d.fields.get(MAP_ART).cloned().unwrap_or(Value::Null) }))
-}
-
-/// The surface Map Art shows, from 1, among `count` surfaces.
-fn shown_surface(d: &Dialog, count: usize) -> usize {
-    (d.f64(MAP_SURFACE, 1.0).round().max(1.0) as usize).min(count.max(1))
-}
-
-/// Map Art: the surface (first, previous, its number, next, last, and whether the viewer sees
-/// it), the symbol mapped onto it, the surface laid out flat with the art's box to move, scale and
-/// rotate, the same values as numbers, Scale to Fit, Clear, Clear All, Shade Artwork and Invisible
-/// Geometry. Edits the effect's `mapArt`, `mapShade` and `mapInvisible` in `d.fields`, which the
-/// dialog previews and applies with its other settings. Done, beside the heading, goes back to the
-/// effect's options.
-pub(super) fn map_art_controls(app: &crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        heading(ui, tl!("Map Art"));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button(tl!("Done")).clicked() {
-                d.fields.remove(MAP_ART_OPEN);
+/// Map Art…, which shows the Map Art page. The 3D and Materials panel has no such button.
+fn map_art_button(fields: &DialogFields) -> Option<Param> {
+    (place_of(fields) == Place::Dialog).then(|| {
+        Param::custom("__mapArtOpen", "", |ui, fields, _| {
+            let button = Button::new(tl!("Map Art…")).show(ui);
+            if button.clicked() {
+                fields.set(PAGE, MAP_PAGE);
             }
-        });
-    });
-    let listed = surfaces(app, ui.ctx(), d).filter(|s| !s.is_empty());
-    let Some(listed) = listed else { return };
-    let count = listed.len();
-    let mut current = shown_surface(d, count);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        label(ui, tl!("Surface"));
-        let step = |ui: &mut egui::Ui, text: &str, tip: &str, enabled: bool| {
-            let r = ui.add_enabled(enabled, egui::Button::new(text).min_size(egui::vec2(26.0, 24.0)));
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, tip));
-            r.on_hover_text(tip).clicked()
-        };
-        let mut next = None;
-        if step(ui, "|<", tl!("First Surface"), current > 1) {
-            next = Some(1);
-        }
-        if step(ui, "<", tl!("Previous Surface"), current > 1) {
-            next = Some(current - 1);
-        }
-        let mut typed = current;
-        let field = ui.add_sized([44.0, 24.0], egui::DragValue::new(&mut typed).range(1..=count).speed(0.1));
-        field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::SpinButton, true, tl!("Surface")));
-        if field.changed() {
-            next = Some(typed);
-        }
-        ui.label(format!("/ {count}"));
-        if step(ui, ">", tl!("Next Surface"), current < count) {
-            next = Some(current + 1);
-        }
-        if step(ui, ">|", tl!("Last Surface"), current < count) {
-            next = Some(count);
-        }
-        if let Some(n) = next {
-            current = n.clamp(1, count);
-        }
-        // A light mark for a surface the viewer sees, a dark one for a hidden surface.
-        let seen = listed.get(current - 1).is_some_and(|s| s.visible);
-        let (mark, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
-        ui.painter().rect_filled(mark, 2.0, if seen { egui::Color32::from_gray(205) } else { egui::Color32::from_gray(90) });
-        if !seen {
-            crate::widgets::dim_label(ui, "Hidden");
-        }
-    });
-    d.fields.insert(MAP_SURFACE.into(), json!(current));
-    let Some(surface) = listed.get(current - 1) else { return };
-    let maps = maps_of(d);
-    let map = maps.iter().find(|m| m.surface == current).cloned();
-    let mut edited = map.clone();
-    let names: Vec<String> = app.session.active().map(|st| st.doc.symbols.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Symbol"));
-        let none = tl!("None");
-        let options: Vec<&str> = std::iter::once(none).chain(names.iter().map(String::as_str)).collect();
-        let shown = map.as_ref().map_or(none, |m| m.symbol.as_str());
-        // With every map the object takes in use, a surface without one cannot be given one.
-        let room = map.is_some() || maps.len() < vectorcraft_effects::MAX_MAPS;
-        let picked = ui.add_enabled_ui(room, |ui| crate::widgets::dropdown_names(ui, "map-art-symbol", shown, &options, 190.0)).inner;
-        if let Some(k) = picked.filter(|_| room) {
-            edited = k.checked_sub(1).and_then(|k| names.get(k)).map(|name| match &map {
-                Some(m) => SurfaceMap { symbol: name.clone(), ..m.clone() },
-                None => SurfaceMap { surface: current, symbol: name.clone(), x: 0.0, y: 0.0, scale_x: 100.0, scale_y: 100.0, rotation: 0.0 },
-            });
-        }
-    });
-    ui.add_space(6.0);
-    let art = edited.as_ref().and_then(|m| app.session.active().and_then(|st| vectorcraft_effects::graphic_bounds(&st.doc, &m.symbol)));
-    flat_view(app, ui, surface, &mut edited, art);
-    ui.add_space(6.0);
-    ui.add_enabled_ui(edited.is_some(), |ui| {
-        let shown = edited.clone().unwrap_or(SurfaceMap {
-            surface: current,
-            symbol: String::new(),
-            x: 0.0,
-            y: 0.0,
-            scale_x: 100.0,
-            scale_y: 100.0,
-            rotation: 0.0,
-        });
-        let unit = app.session.general_unit();
-        let mut fields = Dialog { kind: "mapArt".into(), fields: Default::default() };
-        fields.fields.insert("__defaults".into(), json!({"mapX": 0.0, "mapY": 0.0, "mapScaleX": 100.0, "mapScaleY": 100.0, "mapRotation": 0.0}));
-        for (key, value) in
-            [("mapX", shown.x), ("mapY", shown.y), ("mapScaleX", shown.scale_x), ("mapScaleY", shown.scale_y), ("mapRotation", shown.rotation)]
-        {
-            fields.fields.insert(key.into(), json!(value));
-        }
-        let offsets = (-vectorcraft_effects::GRAPHIC_MAX_OFFSET, vectorcraft_effects::GRAPHIC_MAX_OFFSET);
-        number(ui, &mut fields, "mapX", "X", offsets, "", 1, Some(unit));
-        number(ui, &mut fields, "mapY", "Y", offsets, "", 1, Some(unit));
-        number(ui, &mut fields, "mapScaleX", tl!("Horizontal Scale"), vectorcraft_effects::GRAPHIC_SCALE_RANGE, "%", 1, None);
-        number(ui, &mut fields, "mapScaleY", tl!("Vertical Scale"), vectorcraft_effects::GRAPHIC_SCALE_RANGE, "%", 1, None);
-        number(ui, &mut fields, "mapRotation", tl!("Rotation"), (-360.0, 360.0), "°", 1, None);
-        if let Some(m) = edited.as_mut() {
-            m.x = fields.f64("mapX", m.x);
-            m.y = fields.f64("mapY", m.y);
-            m.scale_x = fields.f64("mapScaleX", m.scale_x);
-            m.scale_y = fields.f64("mapScaleY", m.scale_y);
-            m.rotation = fields.f64("mapRotation", m.rotation);
-        }
-    });
-    let mut clear_all = false;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        if ui.add_enabled(edited.is_some() && art.is_some(), egui::Button::new(tl!("Scale to Fit"))).clicked()
-            && let (Some(m), Some(art)) = (edited.as_mut(), art)
-        {
-            let (scale_x, scale_y) = m.fitting_scales(art, (surface.width, surface.height)).unwrap_or((m.scale_x, m.scale_y));
-            *m = SurfaceMap { x: 0.0, y: 0.0, scale_x, scale_y, ..m.clone() };
-        }
-        if ui.add_enabled(edited.is_some(), egui::Button::new(tl!("Clear"))).clicked() {
-            edited = None;
-        }
-        clear_all = ui.add_enabled(!maps.is_empty(), egui::Button::new(tl!("Clear All"))).clicked();
-    });
-    ui.add_space(4.0);
-    toggle(ui, d, MAP_SHADE, tl!("Shade Artwork"), false);
-    toggle(ui, d, MAP_INVISIBLE, tl!("Invisible Geometry"), false);
-    if clear_all {
-        d.fields.insert(MAP_ART.into(), json!([]));
-    } else if edited != map {
-        let raw = json!({ MAP_ART: d.fields.get(MAP_ART).cloned().unwrap_or(Value::Null) });
-        let next = vectorcraft_effects::with_surface_map(&raw, current, edited.as_ref());
-        d.fields.insert(MAP_ART.into(), next.get(MAP_ART).cloned().unwrap_or_else(|| json!([])));
-    }
+            button.response
+        })
+        .full_width()
+    })
 }
 
-/// What a drag in the flat view changes.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Grab {
-    Move,
-    /// A handle of the art's box: -1, 0 or 1 across and down, from its center.
-    Scale(f32, f32),
-    Rotate,
-}
-
-/// A drag in the flat view: what it changes, the map as it was when the drag began and where the
-/// pointer was then.
-#[derive(Clone, Debug)]
-struct MapDrag {
-    grab: Grab,
-    from: SurfaceMap,
-    origin: egui::Pos2,
-}
-
-/// The surface laid out flat, as large as fits the view, in a light gray when the viewer sees it
-/// and a dark gray when it is hidden, with the box of the mapped art `art` (its bounds at its own
-/// size) on it: the art's thumbnail while it is not turned, its outline and its eight handles. A
-/// drag inside the box moves the art, a drag of a handle scales it about its center, and a drag
-/// just outside the box turns it.
-fn flat_view(
-    app: &crate::VectorcraftApp,
-    ui: &mut egui::Ui,
-    surface: &MapSurface,
-    map: &mut Option<SurfaceMap>,
-    art: Option<vectorcraft_geom::Rect>,
-) {
-    let t = crate::theme::Tokens::get(ui.ctx());
-    let (view, response) = ui.allocate_exact_size(egui::vec2(ui.available_width().clamp(120.0, 330.0), 150.0), egui::Sense::click_and_drag());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, tl!("Surface")));
-    ui.painter().rect_filled(view, 3.0, t.input);
-    ui.painter().rect_stroke(view, 3.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-    let (width, height) = (surface.width.max(1e-6), surface.height.max(1e-6));
-    // Screen points for each point of the surface.
-    let scale = ((f64::from(view.width()) - 28.0) / width).min((f64::from(view.height()) - 28.0) / height).max(1e-6);
-    let flat = egui::Rect::from_center_size(view.center(), egui::vec2((width * scale) as f32, (height * scale) as f32));
-    let painter = ui.painter().with_clip_rect(view.intersect(ui.clip_rect()));
-    painter.rect_filled(flat, 0.0, if surface.visible { egui::Color32::from_gray(205) } else { egui::Color32::from_gray(90) });
-    let drag_id = egui::Id::unique("map-art-drag");
-    let (Some(m), Some(art)) = (map.as_mut(), art) else {
-        ui.data_mut(|d| d.remove::<MapDrag>(drag_id));
-        return;
-    };
-    let box_of = |m: &SurfaceMap| {
-        let center = view.center() + egui::vec2((m.x * scale) as f32, (m.y * scale) as f32);
-        let half = egui::vec2((art.width() * m.scale_x / 100.0 * scale / 2.0) as f32, (art.height() * m.scale_y / 100.0 * scale / 2.0) as f32);
-        // Counterclockwise on a screen whose y runs down.
-        let (sin, cos) = (-m.rotation.to_radians() as f32).sin_cos();
-        (center, half, sin, cos)
-    };
-    let (center, half, sin, cos) = box_of(m);
-    let handles: Vec<(f32, f32)> =
-        [-1.0f32, 0.0, 1.0].iter().flat_map(|y| [-1.0f32, 0.0, 1.0].map(|x| (x, *y))).filter(|h| *h != (0.0, 0.0)).collect();
-    if response.drag_started()
-        && let Some(origin) = ui.input(|i| i.pointer.press_origin())
-    {
-        // The pointer in the box's own frame.
-        let local = egui::vec2((origin - center).x * cos + (origin - center).y * sin, -(origin - center).x * sin + (origin - center).y * cos);
-        let handle = handles.iter().copied().find(|(x, y)| (local - egui::vec2(x * half.x, y * half.y)).length() <= 7.0);
-        let grab = if let Some((x, y)) = handle {
-            Some(Grab::Scale(x, y))
-        } else if local.x.abs() <= half.x && local.y.abs() <= half.y {
-            Some(Grab::Move)
-        } else if local.x.abs() <= half.x + 18.0 && local.y.abs() <= half.y + 18.0 {
-            Some(Grab::Rotate)
-        } else {
-            None
-        };
-        match grab {
-            Some(grab) => {
-                ui.data_mut(|d| d.insert_temp(drag_id, MapDrag { grab, from: m.clone(), origin }));
-            }
-            None => ui.data_mut(|d| d.remove::<MapDrag>(drag_id)),
-        }
-    }
-    if let (Some(drag), Some(p)) = (ui.data(|d| d.get_temp::<MapDrag>(drag_id)), response.interact_pointer_pos().filter(|_| response.dragged())) {
-        let (from_center, _, from_sin, from_cos) = box_of(&drag.from);
-        let round = |v: f64, places: i32| (v * 10f64.powi(places)).round() / 10f64.powi(places);
-        let limit = vectorcraft_effects::GRAPHIC_MAX_OFFSET;
-        let (lo, hi) = vectorcraft_effects::GRAPHIC_SCALE_RANGE;
-        match drag.grab {
-            Grab::Move => {
-                m.x = round(drag.from.x + f64::from(p.x - drag.origin.x) / scale, 2).clamp(-limit, limit);
-                m.y = round(drag.from.y + f64::from(p.y - drag.origin.y) / scale, 2).clamp(-limit, limit);
-            }
-            Grab::Scale(x, y) => {
-                let v = p - from_center;
-                let local = egui::vec2(v.x * from_cos + v.y * from_sin, -v.x * from_sin + v.y * from_cos);
-                if x != 0.0 && art.width() > 0.0 {
-                    m.scale_x = round(f64::from(local.x.abs()) * 2.0 / (art.width() * scale) * 100.0, 2).clamp(lo, hi);
-                }
-                if y != 0.0 && art.height() > 0.0 {
-                    m.scale_y = round(f64::from(local.y.abs()) * 2.0 / (art.height() * scale) * 100.0, 2).clamp(lo, hi);
-                }
-            }
-            Grab::Rotate => {
-                let angle = |q: egui::Pos2| f64::from((q - from_center).y.atan2((q - from_center).x)).to_degrees();
-                // The screen's angles run clockwise.
-                let rotation = drag.from.rotation - (angle(p) - angle(drag.origin));
-                m.rotation = round((rotation + 180.0).rem_euclid(360.0) - 180.0, 1);
-            }
-        }
-    }
-    if response.drag_stopped() {
-        ui.data_mut(|d| d.remove::<MapDrag>(drag_id));
-    }
-    let (center, half, sin, cos) = box_of(m);
-    let turned_now = |v: egui::Vec2| egui::vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos);
-    if m.rotation.abs() < 0.01
-        && let Some(st) = app.session.active()
-    {
-        let keys = crate::panels::symbols::document_symbols(st);
-        let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(view));
-        inner.set_clip_rect(view.intersect(ui.clip_rect()));
-        let r = egui::Rect::from_center_size(center, half * 2.0);
-        crate::panels::symbols::art_chip(&inner, &st.doc, &keys, r, &m.symbol, art);
-    }
-    let corners: Vec<egui::Pos2> = [(-1.0f32, -1.0f32), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
-        .iter()
-        .map(|(x, y)| center + turned_now(egui::vec2(x * half.x, y * half.y)))
-        .collect();
-    painter.add(egui::Shape::closed_line(corners, egui::Stroke::new(1.0, t.accent)));
-    for (x, y) in handles {
-        let at = center + turned_now(egui::vec2(x * half.x, y * half.y));
-        let handle = egui::Rect::from_center_size(at, egui::vec2(6.0, 6.0));
-        painter.rect_filled(handle, 0.0, egui::Color32::WHITE);
-        painter.rect_stroke(handle, 0.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
-    }
-}
-
-/// While Map Art is open with Preview on, the surface it shows, outlined in red on the artboard.
-pub(super) fn surface_outline(app: &crate::VectorcraftApp, ctx: &egui::Context, d: &Dialog) {
-    if !map_art_open(d) || !d.bool("preview") {
-        return;
-    }
-    let (Some(listed), Some(xf)) = (surfaces(app, ctx, d), app.canvas_xf()) else { return };
-    let Some(surface) = listed.get(shown_surface(d, listed.len()).saturating_sub(1)) else { return };
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("map-art-outline"))).with_clip_rect(xf.rect);
-    for [a, b] in &surface.outline {
-        painter.line_segment([xf.to_screen(*a), xf.to_screen(*b)], egui::Stroke::new(1.5, egui::Color32::RED));
-    }
+/// Extrude & Bevel (Classic)'s Object page: depth and cap, then the bevel: its shape (a custom one included), its
+/// height and whether it is added around the shape or carved into it.
+pub(crate) fn object_params(data: &Data, fields: &DialogFields, effect: &str) -> Vec<Param> {
+    let unit = Some(length_unit(data.unit));
+    let shaped: Vec<&str> = options_of(effect, "bevel").into_iter().map(|(value, _)| value).filter(|v| *v != "none").collect();
+    let mut rows = vec![
+        Param::section(tl!("Object")),
+        range_row(effect, "depth", tl!("Depth"), (0.0, 2000.0), unit, 1),
+        cap_row(effect),
+        Param::section(c3("Bevel")),
+        bevel_row(data, CLASSIC_EXTRUDE, place_of(fields)),
+        range_row(effect, "bevelHeight", tl!("Height"), (1.0, 100.0), unit, 1).enabled_when_in("bevel", shaped.clone()),
+        toggle_row(effect, "bevelInside", tl!("Bevel Inside")).enabled_when_in("bevel", shaped),
+    ];
+    rows.extend(map_art_button(fields));
+    rows
 }
 
 /// Revolve (Classic)'s angle, cap and offset, and the edge of the profile's bounds the axis is at.
-pub(super) fn revolve_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    heading(ui, tl!("Object"));
-    number(ui, d, "angle", tl!("Angle"), (0.0, 360.0), "°", 1, None);
-    choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
-    number(ui, d, "offset", tl!("Offset"), (0.0, 1000.0), "", 1, Some(unit));
-    let sides: Vec<(Value, &str)> = super::effect::own_choices(CLASSIC_REVOLVE, "edge", false)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(label, value)| (json!(value), label))
-        .collect();
-    choice(ui, d, "edge", tl!("Axis side"), &sides);
-    map_art_button(ui, d);
+pub(crate) fn revolve_params(data: &Data, fields: &DialogFields, effect: &str) -> Vec<Param> {
+    let mut rows = vec![
+        Param::section(tl!("Object")),
+        range_row(effect, "angle", tl!("Angle"), (0.0, 360.0), Some(UnitKind::Degrees), 1),
+        cap_row(effect),
+        range_row(effect, "offset", tl!("Offset"), (0.0, 1000.0), Some(length_unit(data.unit)), 1),
+        choice_row(effect, "edge", tl!("Axis side")),
+    ];
+    rows.extend(map_art_button(fields));
+    rows
 }
 
-/// The surface, then for Diffuse and Plastic the lighting sphere, the lights, Ambient Light, the
-/// highlight (Plastic only, and not for Rotate (Classic), which has no Plastic surface), Blend Steps,
-/// Shading Color and Preserve Spot Colors (unavailable while Shading Color is Custom); Draw Hidden
-/// Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws every face, and Rotate
-/// (Classic)'s plane is seen from either side). The sphere shows in the dialog as well as in the panel.
-pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
-    let id = d.str("__effect");
-    let effect = if id == CLASSIC_ROTATE { CLASSIC_ROTATE } else { CLASSIC_EXTRUDE };
-    choice(ui, d, "surface", tl!("Surface"), &options_of(effect, "surface"));
-    let surface = d.str("surface");
-    ui.add_enabled_ui(surface == "diffuse" || surface == "plastic", |ui| {
-        super::revolve_lights::show(ui, d);
-        light_list(ui, d);
-        let mut selected = selected_light(d);
-        let before = light_record(&selected);
-        number(ui, &mut selected, "lightIntensity", tl!("Light Intensity"), (0.0, 100.0), "%", 1, None);
-        number(ui, &mut selected, "lightRotation", tl!("Rotation"), (-180.0, 180.0), "°", 1, None);
-        number(ui, &mut selected, "lightHeight", tl!("Height"), (0.0, 90.0), "°", 1, None);
-        toggle(ui, &mut selected, "lightBehind", tl!("Light behind the object"), false);
-        if light_record(&selected) != before {
-            store_selected(d, &selected);
+/// The surface, then for Diffuse and Plastic the lights, Ambient Light, the highlight (Plastic only, and not for
+/// Rotate (Classic), which has no Plastic surface), Blend Steps, Shading Color and Preserve Spot Colors (unavailable
+/// while Shading Color is Custom); Draw Hidden Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws
+/// every face, and Rotate (Classic)'s plane is seen from either side).
+pub(crate) fn surface_params(data: &Data, fields: &DialogFields, effect: &str) -> Vec<Param> {
+    let options = if effect == CLASSIC_ROTATE { CLASSIC_ROTATE } else { CLASSIC_EXTRUDE };
+    let lit = ["diffuse", "plastic"];
+    let is_lit = fields.text("surface").is_some_and(|s| lit.contains(&s));
+    let custom = fields.text("shadingColor") == Some("custom");
+    let unlit_off = |row: Param| row.enabled_when_in("surface", lit);
+    let mut rows = vec![
+        choice_row(options, "surface", tl!("Surface")),
+        light_editor(data, place_of(fields), true),
+        unlit_off(range_row(effect, "ambient", tl!("Ambient Light"), (0.0, 100.0), Some(UnitKind::Percent), 1)),
+    ];
+    if effect != CLASSIC_ROTATE {
+        rows.push(
+            range_row(effect, "highlightIntensity", tl!("Highlight Intensity"), (0.0, 100.0), Some(UnitKind::Percent), 1)
+                .enabled_when("surface", "plastic"),
+        );
+        rows.push(
+            range_row(effect, "highlightSize", tl!("Highlight Size"), (0.0, 100.0), Some(UnitKind::Percent), 1).enabled_when("surface", "plastic"),
+        );
+    }
+    rows.push(unlit_off(range_row(effect, "blendSteps", tl!("Blend Steps"), (1.0, 256.0), None, 0)));
+    rows.push(unlit_off(choice_row(options, "shadingColor", tl!("Shading Color"))));
+    if custom {
+        rows.push(shading_custom());
+    }
+    // One condition per row: while the surface is flat the row is off whatever the shading colour is.
+    let spot = toggle_row(effect, "preserveSpotColors", tl!("Preserve Spot Colors"));
+    let not_custom: Vec<&str> = options_of(options, "shadingColor").into_iter().map(|(v, _)| v).filter(|v| *v != "custom").collect();
+    rows.push(if is_lit { spot.enabled_when_in("shadingColor", not_custom) } else { spot.enabled_when_in("shadingColor", Vec::<&str>::new()) });
+    if effect == CLASSIC_EXTRUDE {
+        rows.push(toggle_row(effect, "drawHiddenFaces", tl!("Draw Hidden Faces")));
+    }
+    rows
+}
+
+/// The custom shading colour as the `#rrggbb` text it is stored in; black when missing or malformed.
+fn shading_color(fields: &DialogFields) -> Srgba {
+    fields.text(SHADING_CUSTOM).filter(|s| s.len() == 7).and_then(Srgba::from_hex).unwrap_or(Srgba::rgb(0.0, 0.0, 0.0))
+}
+
+/// The custom shading colour: a swatch button over the host's colour picker.
+fn shading_custom() -> Param {
+    Param::custom(SHADING_CUSTOM, tl!("Color"), |ui, fields, cx: &mut CustomContext| {
+        // The picker answers with a colour; the effect keeps text.
+        if let Some(rgb) = fields.color(SHADING_CUSTOM) {
+            fields.set(SHADING_CUSTOM, Srgba::from_rgb_array(rgb).to_hex());
         }
-        number(ui, d, "ambient", tl!("Ambient Light"), (0.0, 100.0), "%", 1, None);
-        if id != CLASSIC_ROTATE {
-            ui.add_enabled_ui(surface == "plastic", |ui| {
-                number(ui, d, "highlightIntensity", tl!("Highlight Intensity"), (0.0, 100.0), "%", 1, None);
-                number(ui, d, "highlightSize", tl!("Highlight Size"), (0.0, 100.0), "%", 1, None);
-            });
+        let color = shading_color(fields);
+        let button = Button::new(color.to_hex().to_uppercase()).show(ui); // PLAN: assumed a swatch icon via IconSpec::Swatch
+        if button.clicked() {
+            cx.pick_color(SHADING_CUSTOM, color);
         }
-        number(ui, d, "blendSteps", tl!("Blend Steps"), (1.0, 256.0), "", 0, None);
-        choice(ui, d, "shadingColor", tl!("Shading Color"), &options_of(effect, "shadingColor"));
-        let custom = d.str("shadingColor") == "custom";
-        if custom {
-            shading_custom(ui, d);
-        }
-        ui.add_enabled_ui(!custom, |ui| toggle(ui, d, "preserveSpotColors", tl!("Preserve Spot Colors"), false));
-    });
-    if id == CLASSIC_EXTRUDE {
-        toggle(ui, d, "drawHiddenFaces", tl!("Draw Hidden Faces"), false);
+        button.response
+    })
+    .opens_with("#000000")
+}
+
+/// The dialog's maps, read as the effect reads them.
+fn maps_of(fields: &DialogFields) -> Vec<SurfaceMap> {
+    vectorcraft_effects::surface_maps(&json!({ MAP_ART: json_field(fields, MAP_ART) }))
+}
+
+/// The JSON a field holds, null when it has none.
+fn json_field(fields: &DialogFields, key: &str) -> Value {
+    match fields.get(key) {
+        Some(FieldValue::Json(value)) => value.clone(),
+        _ => Value::Null,
     }
 }
 
-/// The values of Extrude & Bevel (Classic)'s `key` as the dropdowns list them, (value, label).
-fn options(key: &str) -> Vec<(Value, &'static str)> {
-    options_of(CLASSIC_EXTRUDE, key)
+/// The surface number Map Art shows, from 1.
+fn surface_number(fields: &DialogFields) -> usize {
+    fields.number(MAP_SURFACE).unwrap_or(1.0).round().max(1.0) as usize
 }
 
-/// The values of classic 3D effect `effect`'s `key` as the dropdowns list them, (value, label).
-fn options_of(effect: &str, key: &str) -> Vec<(Value, &'static str)> {
-    super::effect::own_choices(effect, key, false).unwrap_or_default().into_iter().map(|(label, value)| (json!(value), label)).collect()
+/// The surface Map Art shows, from 1, among `count` surfaces.
+fn shown_surface(fields: &DialogFields, count: usize) -> usize {
+    surface_number(fields).min(count.max(1))
 }
 
-/// The custom shading color: a color button, its hex value and its reset dot.
-fn shading_custom(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        label(ui, tl!("Color"));
-        let color = d
-            .fields
-            .get("shadingCustom")
-            .and_then(Value::as_str)
-            .filter(|s| s.len() == 7 && s.starts_with('#'))
-            .and_then(vectorcraft_color::Color::from_hex)
-            .unwrap_or(vectorcraft_color::Color::BLACK);
-        let mut rgb = color.to_rgb_uncalibrated().map(|c| (c * 255.0).round() as u8);
-        if ui.color_edit_button_srgb(&mut rgb).on_hover_text(tl!("Shading Color")).changed() {
-            d.fields.insert("shadingCustom".into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
+/// Whether a surface can take a map: with every map the object takes in use, one without a map cannot get one.
+fn has_room(maps: &[SurfaceMap], has_map: bool) -> bool {
+    has_map || maps.len() < MAX_MAPS
+}
+
+/// Writes `map` as surface `surface`'s map (none clears it) into the dialog's `mapArt`.
+fn store_map(fields: &mut DialogFields, surface: usize, map: Option<&SurfaceMap>) {
+    let raw = json!({ MAP_ART: json_field(fields, MAP_ART) });
+    let next = vectorcraft_effects::with_surface_map(&raw, surface, map);
+    fields.set(MAP_ART, FieldValue::Json(next.get(MAP_ART).cloned().unwrap_or_else(|| json!([]))));
+}
+
+/// A map with the defaults of a new one.
+fn new_map(surface: usize, symbol: String) -> SurfaceMap {
+    SurfaceMap { surface, symbol, x: 0.0, y: 0.0, scale_x: 100.0, scale_y: 100.0, rotation: 0.0 }
+}
+
+/// `v` rounded to `places` decimals and kept within `lo..=hi`.
+fn round_clamp(v: f64, places: i32, lo: f64, hi: f64) -> f64 {
+    let f = 10f64.powi(places);
+    ((v * f).round() / f).clamp(lo, hi)
+}
+
+/// What a map row or the symbol select sets: the one place a typed value reaches `mapArt`.
+fn set_map_value(fields: &mut DialogFields, key: &str, value: Value) -> Result<(), String> {
+    let surface = surface_number(fields);
+    let maps = maps_of(fields);
+    let old = maps.iter().find(|m| m.surface == surface).cloned();
+    let edited = if key == MAP_SYMBOL {
+        match value.as_str().filter(|s| !s.is_empty()) {
+            None => None,
+            Some(name) if has_room(&maps, old.is_some()) => {
+                Some(old.map_or_else(|| new_map(surface, name.to_string()), |m| SurfaceMap { symbol: name.to_string(), ..m }))
+            }
+            Some(_) => return Err("every map is in use".into()),
         }
-        ui.label(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]));
-        ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "shadingCustom", rgb != [0; 3], "#000000") {
-            d.fields.insert("shadingCustom".into(), json!("#000000"));
-        }
-    });
-}
-
-/// The settings the track cube turns, as every 3D effect names them.
-const ROTATION_KEYS: [&str; 3] = ["rotationX", "rotationY", "rotationZ"];
-/// The track cube's box side, its cube's half edge, and its ring's inner and outer radius (points).
-const CUBE_BOX: f32 = 124.0;
-const CUBE_HALF: f32 = 25.0;
-const RING_IN: f32 = 47.0;
-const RING_OUT: f32 = 60.0;
-/// How far an edge reaches for the pointer (points).
-const EDGE_REACH: f32 = 5.0;
-/// Degrees one point of pointer movement turns the cube.
-const DEGREES_PER_POINT: f64 = 0.5;
-
-/// A 3×3 rotation, rows first.
-type M3 = [[f64; 3]; 3];
-
-/// The rotation that X, Y and Z angles in degrees make, as the 3D effects apply them: X first, then
-/// Y, then Z, in view space (x right, y down, z toward the viewer).
-fn rotation(angles: [f64; 3]) -> M3 {
-    let [(sx, cx), (sy, cy), (sz, cz)] = angles.map(|a| a.to_radians().sin_cos());
-    [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx], [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx], [-sy, cy * sx, cy * cx]]
-}
-
-fn multiply(a: M3, b: M3) -> M3 {
-    std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|k| a[i][k] * b[k][j]).sum()))
-}
-
-/// The unit vector along axis `axis` (0 X, 1 Y, 2 Z).
-fn unit(axis: usize) -> [f64; 3] {
-    std::array::from_fn(|i| if i == axis { 1.0 } else { 0.0 })
-}
-
-/// A turn of `degrees` about the unit vector `axis`.
-fn turn(axis: [f64; 3], degrees: f64) -> M3 {
-    let (s, c) = degrees.to_radians().sin_cos();
-    let t = 1.0 - c;
-    let [x, y, z] = axis;
-    [
-        [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
-        [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
-        [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
-    ]
-}
-
-/// An angle as the rotation fields hold it: above -180° up to 180°, to a hundredth of a degree.
-fn tidy(degrees: f64) -> f64 {
-    let wrapped = 180.0 - (180.0 - degrees).rem_euclid(360.0);
-    (wrapped * 100.0).round() / 100.0 + 0.0
-}
-
-/// The X, Y and Z angles of rotation `m`. Of the two sets of angles that make it, the one nearest
-/// `near` (so a turn moves the fields as little as it can); with Y at ±90°, where X and Z turn about
-/// the same axis, X keeps its value from `near`.
-fn angles_of(m: M3, near: [f64; 3]) -> [f64; 3] {
-    let y = (-m[2][0]).clamp(-1.0, 1.0).asin().to_degrees();
-    let candidates = if m[2][1].hypot(m[2][2]) < 1e-9 {
-        let x = near[0];
-        let z = if y > 0.0 { x - m[0][1].atan2(m[1][1]).to_degrees() } else { (-m[0][1]).atan2(m[1][1]).to_degrees() - x };
-        [Some([x, y, z]), None]
     } else {
-        let x = m[2][1].atan2(m[2][2]).to_degrees();
-        let z = m[1][0].atan2(m[0][0]).to_degrees();
-        [Some([x, y, z]), Some([x + 180.0, 180.0 - y, z + 180.0])]
+        let n = value.as_f64().filter(|n| n.is_finite()).ok_or("not a number")?;
+        let mut m = old.ok_or("the surface has no map")?;
+        match key {
+            "mapX" => m.x = round_clamp(n, 2, -GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+            "mapY" => m.y = round_clamp(n, 2, -GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+            "mapScaleX" => m.scale_x = round_clamp(n, 2, GRAPHIC_SCALE_RANGE.0, GRAPHIC_SCALE_RANGE.1),
+            "mapScaleY" => m.scale_y = round_clamp(n, 2, GRAPHIC_SCALE_RANGE.0, GRAPHIC_SCALE_RANGE.1),
+            "mapRotation" => m.rotation = n.clamp(-360.0, 360.0),
+            _ => return Err(format!("no map value {key}")),
+        }
+        Some(m)
     };
-    let distance = |a: &[f64; 3]| a.iter().zip(near).map(|(a, b)| tidy(a - b).abs()).sum::<f64>();
-    candidates.into_iter().flatten().min_by(|a, b| distance(a).total_cmp(&distance(b))).unwrap_or(near).map(tidy)
+    store_map(fields, surface, edited.as_ref());
+    Ok(())
 }
 
-/// Where corner `i` of the cube (bit 0 for +X, bit 1 for +Y, bit 2 for +Z) is drawn.
-fn corner(m: M3, center: Pos2, i: usize) -> Pos2 {
-    let p: [f64; 3] = std::array::from_fn(|b| if i >> b & 1 == 1 { 1.0 } else { -1.0 });
-    let v: [f64; 3] = std::array::from_fn(|r| (0..3).map(|k| m[r][k] * p[k]).sum());
-    center + vec2(v[0] as f32, v[1] as f32) * CUBE_HALF
+/// A step button of the surface navigator.
+fn step(ui: &mut Ui, icon: &'static str, tip: &'static str, enabled: bool) -> bool {
+    IconButton::new(craft::behavior::IconId::new(icon)).label(tip).tooltip(tip).enabled(enabled).show(ui).clicked()
 }
 
-/// The corners of the face square to `axis` on its positive or negative side, in order round it.
-fn face_corners(axis: usize, positive: bool) -> [usize; 4] {
-    let (b, c) = (1 << ((axis + 1) % 3), 1 << ((axis + 2) % 3));
-    let side = if positive { 1 << axis } else { 0 };
-    [0, b, b | c, c].map(|k| side | k)
-}
-
-/// Does the face square to `axis` on that side face the viewer?
-fn face_visible(m: M3, axis: usize, positive: bool) -> bool {
-    m[2][axis] * if positive { 1.0 } else { -1.0 } > 1e-6
-}
-
-/// The 12 edges: (from corner, to corner, the object axis it runs along).
-fn edges() -> impl Iterator<Item = (usize, usize, usize)> {
-    (0..3).flat_map(|axis| (0..8).filter(move |i| i >> axis & 1 == 0).map(move |i| (i, i | 1 << axis, axis)))
-}
-
-/// Is the edge from corner `i` along `axis` on a face the viewer sees?
-fn edge_visible(m: M3, i: usize, axis: usize) -> bool {
-    [(axis + 1) % 3, (axis + 2) % 3].into_iter().any(|other| face_visible(m, other, i >> other & 1 == 1))
-}
-
-/// What a press on the track cube takes hold of.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Grip {
-    /// A face: a free turn, or with Shift about the screen's horizontal or vertical axis.
-    Face,
-    /// An edge: a turn about the object axis the edge runs along.
-    Edge(usize),
-    /// The ring round the cube: a turn in the plane of the screen.
-    Ring,
-}
-
-/// The z of the cross product of two screen vectors: positive when `b` is clockwise from `a`.
-fn cross(a: Vec2, b: Vec2) -> f32 {
-    a.x * b.y - a.y * b.x
-}
-
-fn segment_distance(p: Pos2, a: Pos2, b: Pos2) -> f32 {
-    let line = b - a;
-    let t = ((p - a).dot(line) / line.length_sq().max(1e-6)).clamp(0.0, 1.0);
-    p.distance(a + line * t)
-}
-
-/// What the pointer at `p` takes hold of on a cube drawn at `m` about `center`: the nearest edge
-/// within reach, else a face, else the ring, else (in the box's corners) a face's free turn.
-fn grip_at(m: M3, center: Pos2, p: Pos2) -> Grip {
-    let edge = edges()
-        .filter(|&(i, _, axis)| edge_visible(m, i, axis))
-        .map(|(i, j, axis)| (segment_distance(p, corner(m, center, i), corner(m, center, j)), axis))
-        .filter(|(distance, _)| *distance <= EDGE_REACH)
-        .min_by(|a, b| a.0.total_cmp(&b.0));
-    if let Some((_, axis)) = edge {
-        return Grip::Edge(axis);
-    }
-    let on_face = (0..3).flat_map(|axis| [(axis, true), (axis, false)]).filter(|&(axis, side)| face_visible(m, axis, side)).any(|(axis, side)| {
-        let points = face_corners(axis, side).map(|i| corner(m, center, i));
-        let sides: [f32; 4] = std::array::from_fn(|k| cross(points[(k + 1) % 4] - points[k], p - points[k]));
-        sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
-    });
-    let distance = p.distance(center);
-    if !on_face && (RING_IN - 3.0..=RING_OUT + 3.0).contains(&distance) { Grip::Ring } else { Grip::Face }
-}
-
-/// The turn in degrees, clockwise on the screen, from `from` to `to` about `center`.
-fn sweep(from: Pos2, to: Pos2, center: Pos2) -> f64 {
-    let (a, b) = (from - center, to - center);
-    if a.length() < 2.0 || b.length() < 2.0 {
-        return 0.0;
-    }
-    f64::from(cross(a, b)).atan2(f64::from(a.dot(b))).to_degrees()
-}
-
-/// A track cube gesture in progress.
-#[derive(Clone)]
-struct CubeDrag {
-    grip: Grip,
-    /// The rotation so far, kept unrounded so a long drag does not drift.
-    matrix: M3,
-    origin: Pos2,
-    last: Pos2,
-    /// With Shift, the screen axis the drag keeps to (0 X, 1 Y), chosen once it has moved 3 points.
-    lock: Option<usize>,
-    /// The settings before the gesture, which Escape puts back.
-    fields: serde_json::Map<String, Value>,
-    /// The last pass that drew the cube during the gesture.
-    pass: u64,
-    /// The cube the gesture started on. The 3D and Materials panel and a 3D dialog can each show
-    /// a cube at the same time, and only this one follows the gesture.
-    owner: Id,
-}
-
-impl CubeDrag {
-    /// Was the cube drawn in this pass or the one before? When it was not (its dialog closed, or
-    /// the Rotation tab or the panel was left during the drag), the gesture is over.
-    fn live(&self, pass: u64) -> bool {
-        self.pass.saturating_add(1) >= pass
-    }
-}
-
-/// The track cube of the dialog or panel of kind `kind`. The 3D and Materials panel and a 3D
-/// dialog can show a cube at the same time, each with its own keyboard focus.
-pub(super) fn cube_id(kind: &str) -> Id {
-    Id::unique(("three-d-track-cube", kind))
-}
-
-fn cube_drag_id() -> Id {
-    Id::unique("three-d-track-cube-drag")
-}
-
-/// Is a track cube gesture in progress?
-pub(super) fn cube_dragging(ctx: &egui::Context) -> bool {
-    let pass = ctx.cumulative_pass_nr();
-    ctx.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).is_some_and(|g| g.live(pass))
-}
-
-/// The rotation after the pointer moves from `drag.last` to `p` on a cube about `center`.
-fn drag_turn(drag: &mut CubeDrag, p: Pos2, center: Pos2, shift: bool) -> M3 {
-    let m = drag.matrix;
-    let delta = p - drag.last;
-    let (mut dx, mut dy) = (f64::from(delta.x), f64::from(delta.y));
-    match drag.grip {
-        Grip::Face => {
-            if shift {
-                let total = p - drag.origin;
-                if drag.lock.is_none() && total.length() >= 3.0 {
-                    drag.lock = Some(usize::from(total.x.abs() >= total.y.abs()));
-                }
-                match drag.lock {
-                    // Across the screen turns about its vertical (Y) axis, up and down about X.
-                    Some(1) => dy = 0.0,
-                    Some(_) => dx = 0.0,
-                    None => return m,
-                }
-            }
-            let length = dx.hypot(dy);
-            if length < 1e-9 {
-                return m;
-            }
-            // The front follows the pointer: right turns it toward +X, down toward +Y.
-            multiply(turn([-dy / length, dx / length, 0.0], length * DEGREES_PER_POINT), m)
-        }
-        Grip::Ring => multiply(turn(unit(2), sweep(drag.last, p, center)), m),
-        Grip::Edge(axis) => {
-            let w = [m[0][axis], m[1][axis], m[2][axis]];
-            let across = w[0].hypot(w[1]);
-            // An axis pointing at the viewer turns like the ring, on the side it points to.
-            let degrees =
-                if w[2].abs() > 0.9 { sweep(drag.last, p, center) * w[2].signum() } else { (dx * w[1] - dy * w[0]) / across * DEGREES_PER_POINT };
-            multiply(m, turn(unit(axis), degrees))
-        }
-    }
-}
-
-/// The track cube on the Rotation tab of Extrude & Bevel (Classic), Revolve (Classic) and Rotate
-/// (Classic): a cube drawn at the current X, Y and Z rotation (the object's front blue, its top and
-/// bottom light gray, its sides mid gray and its back dark gray) inside a ring.
-///
-/// Dragging a face turns the object freely; with Shift the turn keeps to the screen's vertical axis
-/// (a drag across) or its horizontal axis (a drag up or down), whichever the drag follows first.
-/// Dragging an edge turns it about the object axis the edge runs along (X red, Y green, Z blue; the
-/// edge takes its axis's color while hovered or dragged), and dragging in the ring turns it in the
-/// plane of the screen. Escape during a drag puts the angles back. With the keyboard focus, the
-/// arrow keys turn it about the screen's axes and Page Up and Page Down in the screen plane, 1° a
-/// press (15° with Shift). The angles go to `rotationX`, `rotationY` and `rotationZ` only when they
-/// change, and the dialog's preview applies them; OK records them as one undo step. The cube is off
-/// while a rotation setting is mixed (the 3D and Materials panel's selected effects differ).
-pub(super) fn track_cube(ui: &mut egui::Ui, d: &mut Dialog) {
-    let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
-    let mixed = ROTATION_KEYS.iter().any(|k| d.fields.get(*k).is_some_and(Value::is_null));
-    let now = ROTATION_KEYS.map(|k| d.f64(k, defaults.get(k).and_then(Value::as_f64).unwrap_or(0.0)));
-    let mut next = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let name = tl!("Track cube");
-        label(ui, name);
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(CUBE_BOX), Sense::hover());
-        let enabled = ui.is_enabled() && !mixed;
-        let id = cube_id(&d.kind);
-        let resp = ui.interact(rect, id, if enabled { Sense::click_and_drag() } else { Sense::hover() });
-        let center = rect.center();
-        let value = format!("X {:.2}°, Y {:.2}°, Z {:.2}°", now[0], now[1], now[2]);
-        resp.widget_info(|| egui::WidgetInfo {
-            current_text_value: Some(value.clone()),
-            ..egui::WidgetInfo::labeled(egui::Role::Slider, enabled, name)
-        });
-        if enabled
-            && resp.drag_started()
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
-        {
-            // A value being typed ends first; the cube then takes the keyboard focus below.
-            ui.ctx().memory_mut(|m| m.stop_text_input());
-            let matrix = rotation(now);
-            let pass = ui.ctx().cumulative_pass_nr();
-            let drag = CubeDrag {
-                grip: grip_at(matrix, center, origin),
-                matrix,
-                origin,
-                last: origin,
-                lock: None,
-                fields: d.fields.clone(),
-                pass,
-                owner: id,
-            };
-            ui.data_mut(|m| m.insert_temp(cube_drag_id(), drag));
-        }
-        if enabled && (resp.drag_started() || resp.clicked()) {
-            resp.request_focus();
-        }
-        let pass = ui.ctx().cumulative_pass_nr();
-        // A gesture on the other cube (the panel's or the dialog's) is left to that cube.
-        let mut drag = ui.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).filter(|g| g.owner == id);
-        if drag.as_ref().is_some_and(|g| !g.live(pass)) {
-            ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
-            drag = None;
-        }
-        if let Some(current) = &mut drag {
-            current.pass = pass;
-            if ui.input_mut(|i| i.consume_key(i.modifiers, egui::Key::Escape)) {
-                d.fields = current.fields.clone();
-                d.fields.remove(super::form::PREVIEWED);
-                ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
-                drag = None;
-            } else {
-                if let Some(p) = resp.interact_pointer_pos() {
-                    let shift = ui.input(|i| i.modifiers.shift);
-                    current.matrix = drag_turn(current, p, center, shift);
-                    current.last = p;
-                    next = Some(angles_of(current.matrix, now));
-                }
-                ui.data_mut(|m| m.insert_temp(cube_drag_id(), current.clone()));
-            }
-        }
-        // Only this cube's gesture ends here; the other cube may still have the release to handle.
-        if drag.is_some() && (resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down())) {
-            ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
-        }
-        if enabled && resp.has_focus() {
-            use egui::{Key, Modifiers};
-            ui.memory_mut(|m| {
-                m.set_focus_lock_filter(id, egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
-            });
-            let mut m = rotation(now);
-            let mut turned = false;
-            for (key, axis, sign) in [
-                (Key::ArrowRight, 1, 1.0),
-                (Key::ArrowLeft, 1, -1.0),
-                (Key::ArrowUp, 0, 1.0),
-                (Key::ArrowDown, 0, -1.0),
-                (Key::PageDown, 2, 1.0),
-                (Key::PageUp, 2, -1.0),
+/// The surface navigator: first, previous, the number, next, last, and "Hidden" for a surface the viewer cannot see.
+fn navigator(count: usize, seen: Vec<bool>) -> Param {
+    Param::custom(MAP_SURFACE, tl!("Surface"), move |ui, fields, _| {
+        let current = shown_surface(fields, count);
+        let mut next = None;
+        let row = Row::new().show(ui, |ui, _| {
+            // The row's body may run more than once in a pass: the last run's step applies.
+            next = None;
+            for (icon, tip, target, enabled) in [
+                ("chevrons_left", tl!("First Surface"), 1, current > 1),
+                ("chevron_left", tl!("Previous Surface"), current.saturating_sub(1), current > 1),
             ] {
-                // Shift first: a key without modifiers also matches the key with Shift.
-                for (modifiers, step) in [(Modifiers::SHIFT, 15.0), (Modifiers::NONE, 1.0)] {
-                    while ui.input_mut(|i| i.consume_key(modifiers, key)) {
-                        m = multiply(turn(unit(axis), sign * step), m);
-                        turned = true;
-                    }
+                if step(ui, icon, tip, enabled) {
+                    next = Some(target);
                 }
             }
-            if turned {
-                next = Some(angles_of(m, now));
+            let mut typed = Some(current as f64);
+            NumberField::new(tl!("Surface"), Bind::bound(&mut typed)).range(1.0..=count as f64).unit(format!("/ {count}")).show(ui);
+            if let Some(n) = typed.filter(|n| n.is_finite()).map(|n| n.round() as usize).filter(|n| *n != current) {
+                next = Some(n);
             }
+            for (icon, tip, target, enabled) in [
+                ("chevron_right", tl!("Next Surface"), current + 1, current < count),
+                ("chevrons_right", tl!("Last Surface"), count, current < count),
+            ] {
+                if step(ui, icon, tip, enabled) {
+                    next = Some(target);
+                }
+            }
+            if !seen.get(current - 1).copied().unwrap_or(true) {
+                Text::new(tl!("Hidden")).show(ui);
+            }
+        });
+        let shown = next.map_or(current, |n| n.clamp(1, count));
+        if fields.number(MAP_SURFACE) != Some(shown as f64) {
+            fields.set(MAP_SURFACE, shown as f64);
         }
-        let shown = next.unwrap_or(now);
-        let hovered = drag.as_ref().map(|g| g.grip).or_else(|| resp.hover_pos().filter(|_| enabled).map(|p| grip_at(rotation(shown), center, p)));
-        if enabled && (resp.hovered() || drag.is_some()) {
-            ui.ctx().set_cursor_icon(match (hovered, drag.is_some()) {
-                (Some(Grip::Edge(_)), _) => egui::CursorIcon::ResizeHorizontal,
-                (_, true) => egui::CursorIcon::Grabbing,
-                _ => egui::CursorIcon::Grab,
-            });
-        }
-        paint_cube(ui, rect, rotation(shown), hovered, enabled, resp.has_focus());
-        resp.on_hover_text(tl!("Drag a face, an edge or the ring to rotate. Shift turns about one screen axis."));
-    });
-    if let Some(angles) = next
-        && angles.iter().zip(now).any(|(a, b)| (a - b).abs() > 1e-9)
-    {
-        for (key, angle) in ROTATION_KEYS.into_iter().zip(angles) {
-            d.fields.insert(key.into(), json!(angle));
-        }
+        row.output
+    })
+}
+
+/// What the flat view needs of the surface and the art, owned by its row.
+#[derive(Clone)]
+struct Flat {
+    width: f64,
+    height: f64,
+    visible: bool,
+    /// The art's bounds at its own size.
+    art: Option<(f64, f64)>,
+    doc: Option<std::sync::Arc<vectorcraft_doc::Document>>,
+    revision: u64,
+}
+
+/// The art's box at 100 %, centred on the surface's centre, which is the flat view's origin.
+fn art_rect(art: (f64, f64)) -> Rect {
+    Rect::from_center_size(Point::ZERO, Size::new(art.0, art.1))
+}
+
+/// The box `map` puts the art in on the flat surface: its scales and turn about the centre, moved by the offset.
+/// `Parts::angle` runs clockwise on the screen and the map's rotation counterclockwise.
+fn map_box(map: &SurfaceMap, rect: Rect) -> BoxState {
+    let parts = Parts::new(map.scale_x / 100.0, map.scale_y / 100.0, -map.rotation, 0.0, 0.0);
+    BoxState::from_rect(rect).with_parts(rect, 0.0, parts).moved(Vec2::new(map.x, map.y))
+}
+
+/// `base` with the numbers `state` stands for, each kept to its clamp.
+fn map_of_box(state: &BoxState, rect: Rect, base: &SurfaceMap) -> SurfaceMap {
+    let parts = state.parts(rect, 0.0);
+    let centre = state.quad[0].midpoint(state.quad[2]);
+    let (lo, hi) = GRAPHIC_SCALE_RANGE;
+    SurfaceMap {
+        x: round_clamp(centre.x, 2, -GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+        y: round_clamp(centre.y, 2, -GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+        scale_x: round_clamp(parts.w * 100.0, 2, lo, hi),
+        scale_y: round_clamp(parts.h * 100.0, 2, lo, hi),
+        rotation: round_clamp((-parts.angle + 180.0).rem_euclid(360.0) - 180.0, 1, -180.0, 180.0),
+        ..base.clone()
     }
 }
 
-/// Draws the track cube at rotation `m` in `rect`, with the grip under the pointer or in hand lit.
-fn paint_cube(ui: &egui::Ui, rect: Rect, m: M3, active: Option<Grip>, enabled: bool, focused: bool) {
-    let t = Tokens::get(ui.ctx());
-    let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.4) };
-    let painter = ui.painter_at(rect);
-    let center = rect.center();
-    painter.rect_filled(rect, 2.0, t.input);
-    let ring = if active == Some(Grip::Ring) { 0.6 } else { 0.3 };
-    painter.circle_stroke(center, (RING_IN + RING_OUT) / 2.0, Stroke::new(RING_OUT - RING_IN, fade(t.axis_z.gamma_multiply(ring))));
-    // Front blue; top and bottom light, sides mid and back dark gray. Only faces turned to the
-    // viewer are drawn, and on a cube those never overlap.
-    for (axis, side) in (0..3).flat_map(|axis| [(axis, true), (axis, false)]) {
-        if !face_visible(m, axis, side) {
-            continue;
+/// The id of Map Art's Done, in the footer as Reset all is on the other pages.
+pub(crate) const MAP_DONE: &str = "mapDone";
+
+/// Map Art's Done, in the footer so it stays in view however long the page; none on the other pages.
+pub(crate) fn map_done_button(fields: &DialogFields) -> Option<(String, FooterButton)> {
+    (fields.text(PAGE) == Some(MAP_PAGE)).then(|| (MAP_DONE.to_owned(), FooterButton::new(tl!("Done"), DialogRole::Other)))
+}
+
+/// Done's press: back to the effect's first page.
+pub(crate) fn map_done(dialog: &mut HostedParamDialog, effect: &str) {
+    dialog.set_field(PAGE, FieldValue::from(if effect == CLASSIC_ROTATE { "rotation" } else { "object" }));
+}
+
+/// The surface laid out flat, as large as fits the row, in a light gray when the viewer sees it and a dark gray when
+/// it is hidden, with the box of the mapped art on it: a free transform box that moves, scales and turns the art.
+fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
+    let surface = surface_number(fields);
+    let map = maps_of(fields).into_iter().find(|m| m.surface == surface);
+    let tokens = Env::of(ui).tokens.clone();
+    let size = vec2(ui.available_width().max(tokens.size.plot.width), tokens.size.plot.height);
+    let (room, response) = ui.allocate_exact_size(size, Sense::hover());
+    let (width, height) = (flat.width.max(1e-6), flat.height.max(1e-6));
+    let margin = f64::from(tokens.space.gap.item) * 2.0;
+    let zoom = ((f64::from(room.width()) - margin) / width).min((f64::from(room.height()) - margin) / height).max(1e-6);
+    let view = CanvasView::new(room, Point::ZERO, zoom);
+    let rect = flat.art.map(art_rect);
+    let mut edited = map.clone();
+    Canvas::new(tl!("Surface")).view(view).show_at(ui, room, |ui, body| {
+        let corner = |x: f64, y: f64| view.to_screen(Point::new(x, y));
+        let page = egui::Rect::from_two_pos(corner(-width / 2.0, -height / 2.0), corner(width / 2.0, height / 2.0));
+        let fill = if flat.visible { SHADE_LIGHT } else { SHADE_DARK };
+        if let Some(space) = canvas_space(&body.env) {
+            space.paint_picture(ui.ctx(), vec![egui::Shape::rect_filled(page, 0.0, fill)]);
         }
-        let fill = match (axis, side) {
-            (2, true) => t.axis_z,
-            (2, false) => Color32::from_gray(90),
-            (1, _) => Color32::from_gray(205),
-            _ => Color32::from_gray(155),
-        };
-        let points: Vec<Pos2> = face_corners(axis, side).iter().map(|&i| corner(m, center, i)).collect();
-        painter.add(egui::Shape::convex_polygon(points, fade(fill), Stroke::NONE));
-    }
-    let colors = [t.axis_x, t.axis_y, t.axis_z];
-    for (i, j, axis) in edges() {
-        if !edge_visible(m, i, axis) {
-            continue;
+        let (Some(m), Some(rect)) = (map.as_ref(), rect) else { return };
+        let mut state = map_box(m, rect);
+        if m.rotation.abs() < 0.01
+            && let (Some(doc), Some((w, h))) = (flat.doc.as_ref(), flat.art)
+        {
+            let keys = crate::panels::symbols::document_symbols(doc, flat.revision);
+            let at = egui::Rect::from_two_pos(view.to_screen(state.quad[0]), view.to_screen(state.quad[2]));
+            let art = vectorcraft_geom::Rect::new(0.0, 0.0, w, h);
+            let paint = |cx: &ContentPainterCx<'_>, rect: egui::Rect| crate::panels::symbols::paint_symbol_art(cx, rect, doc, &keys, &m.symbol, art);
+            // Decorative: the Art box below is the surface's accessible control.
+            Picture::painter("", ThumbAspect::SQUARE, paint).show_at(ui, at);
         }
-        let lit = active == Some(Grip::Edge(axis));
-        let stroke = if lit { Stroke::new(2.5, fade(colors[axis])) } else { Stroke::new(1.0, fade(t.text_dim)) };
-        painter.line_segment([corner(m, center, i), corner(m, center, j)], stroke);
+        let rules = BoxRules::default().with_scale(ScaleRule::Free).with_aspect_linked(false).with_allow(BoxAllow::new(true, false, false));
+        TransformBox::new(tl!("Art box"), Bind::bound(&mut state), rect, 0.0)
+            .rules(rules)
+            .reference_point(false)
+            .rotate_zone(RotateZone::border(18.0))
+            .show_at(ui, body.rect);
+        let moved = map_of_box(&state, rect, m);
+        if moved != *m {
+            edited = Some(moved);
+        }
+    });
+    if edited != map {
+        store_map(fields, surface, edited.as_ref());
     }
-    let border = if focused { t.accent } else { t.input_border };
-    painter.rect_stroke(rect, 2.0, Stroke::new(1.0, border), egui::StrokeKind::Inside);
+    response
+}
+
+/// Scale to Fit, Clear and Clear All.
+fn map_actions(flat: Flat, has_map: bool, any_map: bool) -> Param {
+    Param::custom("__mapActions", "", move |ui, fields, _| {
+        let surface = surface_number(fields);
+        let map = maps_of(fields).into_iter().find(|m| m.surface == surface);
+        // The row's body may run more than once in a pass: it reports the presses, which apply after it.
+        let (mut fit, mut clear, mut clear_all) = (false, false, false);
+        let row = Row::new().show(ui, |ui, _| {
+            fit = Button::new(tl!("Scale to Fit")).enabled(has_map && flat.art.is_some()).show(ui).clicked();
+            clear = Button::new(tl!("Clear")).enabled(has_map).show(ui).clicked();
+            clear_all = Button::new(tl!("Clear All")).enabled(any_map).show(ui).clicked();
+        });
+        if let (true, Some(m), Some(art)) = (fit, map.as_ref(), flat.art) {
+            let art = vectorcraft_geom::Rect::new(0.0, 0.0, art.0, art.1);
+            let (scale_x, scale_y) = m.fitting_scales(art, (flat.width, flat.height)).unwrap_or((m.scale_x, m.scale_y));
+            store_map(fields, surface, Some(&SurfaceMap { x: 0.0, y: 0.0, scale_x, scale_y, ..m.clone() }));
+        }
+        if clear {
+            store_map(fields, surface, None);
+        }
+        if clear_all {
+            fields.set(MAP_ART, FieldValue::Json(json!([])));
+        }
+        row.output
+    })
+    .full_width()
+    // The page's maps: automation sets them whole, as the rows above edit them one surface at a time.
+    .companions([MAP_ART])
+}
+
+/// Map Art: the surface (first, previous, its number, next, last, and whether the viewer sees it), the symbol mapped
+/// onto it, the surface laid out flat with the art's box to move, scale and rotate, the same values as numbers, Scale
+/// to Fit, Clear, Clear All, Shade Artwork and Invisible Geometry. The rows edit the effect's `mapArt`, `mapShade` and
+/// `mapInvisible`, which the dialog previews and applies with its other settings; the footer's Done
+/// ([`map_done_button`]) goes back to the effect's first page. The number rows list only while the shown surface has a
+/// map.
+pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -> Vec<Param> {
+    if !vectorcraft_effects::takes_map_art(effect) {
+        return Vec::new();
+    }
+    let mut rows = Vec::new();
+    let Some(listed) = data.surfaces.as_ref().filter(|s| !s.is_empty()) else { return rows };
+    let count = listed.len();
+    let current = shown_surface(fields, count);
+    let Some(surface) = listed.get(current - 1) else { return rows };
+    rows.push(navigator(count, listed.iter().map(|s| s.visible).collect()));
+    let maps = maps_of(fields);
+    let map = maps.iter().find(|m| m.surface == current).cloned();
+    let names: Vec<String> = data.doc.as_ref().map(|d| d.symbols.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+    if has_room(&maps, map.is_some()) {
+        let entries: Vec<Entry<String>> =
+            std::iter::once(Entry::new(String::new(), tl!("None"))).chain(names.into_iter().map(|n| Entry::new(n.clone(), n))).collect();
+        let shown = map.as_ref().map(|m| m.symbol.clone()).unwrap_or_default();
+        // A custom row, so a pick and automation both write the map through `set_map_value`.
+        let symbol = Param::custom(MAP_SYMBOL, tl!("Symbol"), move |ui, fields, _| {
+            let picked = Select::new(tl!("Symbol"), Bind::given(shown.clone()), &entries).id_salt(MAP_SYMBOL).show(ui);
+            if let Some(name) = picked.value().cloned() {
+                // The select lists only what the map takes: a refusal cannot come from it.
+                let _ = set_map_value(fields, MAP_SYMBOL, json!(name));
+            }
+            picked.response
+        });
+        rows.push(symbol.on_set(set_map_value));
+    } else {
+        rows.push(Param::read_only_text(MAP_SYMBOL, tl!("Symbol"), tl!("None")));
+    }
+    let art =
+        map.as_ref().and_then(|m| data.doc.as_ref().and_then(|d| vectorcraft_effects::graphic_bounds(d, &m.symbol))).map(|r| (r.width(), r.height()));
+    let flat = Flat { width: surface.width, height: surface.height, visible: surface.visible, art, doc: data.doc.clone(), revision: data.revision };
+    let flat_row = flat.clone();
+    rows.push(Param::custom("__mapFlat", "", move |ui, fields, _| flat_view(ui, fields, &flat_row)).full_width());
+    if let Some(m) = &map {
+        let unit = Some(length_unit(data.unit));
+        let values = [m.x, m.y, m.scale_x, m.scale_y, m.rotation];
+        let labels = ["X", "Y", tl!("Horizontal Scale"), tl!("Vertical Scale"), tl!("Rotation")];
+        let bounds = [
+            (-GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+            (-GRAPHIC_MAX_OFFSET, GRAPHIC_MAX_OFFSET),
+            GRAPHIC_SCALE_RANGE,
+            GRAPHIC_SCALE_RANGE,
+            (-360.0, 360.0),
+        ];
+        let kinds = [unit, unit, Some(UnitKind::Percent), Some(UnitKind::Percent), Some(UnitKind::Degrees)];
+        for i in 0..MAP_KEYS.len() {
+            let row = Param::new(MAP_KEYS[i], labels[i], ParamKind::range(bounds[i].0, bounds[i].1, values[i], SliderScale::Linear))
+                .decimals(2)
+                .on_set(set_map_value);
+            rows.push(match kinds[i] {
+                Some(kind) => row.unit(kind),
+                None => row,
+            });
+        }
+    }
+    rows.push(map_actions(flat, map.is_some(), !maps.is_empty()));
+    rows.push(toggle_row(effect, MAP_SHADE, tl!("Shade Artwork")));
+    rows.push(toggle_row(effect, MAP_INVISIBLE, tl!("Invisible Geometry")));
+    rows
+}
+
+/// While Map Art is shown with Preview on, the surface it shows, outlined in red on the artboard.
+pub(crate) fn show_outline(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
+    let Some(surfaces) = app.three_d_dialog.as_ref().and_then(|s| s.data.read().ok().and_then(|d| d.surfaces.clone())) else { return };
+    let Some(current) = with_fields(app, |dialog| {
+        let fields = dialog.fields();
+        (fields.text(PAGE) == Some(MAP_PAGE) && fields.bool("preview") == Some(true)).then(|| shown_surface(fields, surfaces.len()))
+    })
+    .flatten() else {
+        return;
+    };
+    let Some(surface) = surfaces.get(current.saturating_sub(1)) else { return };
+    let mut path = BezPath::new();
+    for [a, b] in &surface.outline {
+        path.move_to((a.x, a.y));
+        path.line_to((b.x, b.y));
+    }
+    let paths = [path];
+    SelectionOutline::solid(tl!("Map Art surface"), &paths).color(DataColor::new(Color32::RED)).show_at(ui, space.view.rect);
 }
 
 #[cfg(test)]
-#[path = "tests_track_cube.rs"]
-mod tests;
+mod tests {
+    use super::*;
+
+    fn map(rotation: f64) -> SurfaceMap {
+        SurfaceMap { surface: 1, symbol: "S".into(), x: 10.0, y: 5.0, scale_x: 200.0, scale_y: 50.0, rotation }
+    }
+
+    #[test]
+    fn a_flat_view_box_edit_moves_scales_and_turns_the_map_within_its_clamps() {
+        let rect = art_rect((20.0, 10.0));
+        let m = map(30.0);
+        assert_eq!(map_of_box(&map_box(&m, rect), rect, &m), m, "the box and the map are one value");
+
+        let far = map_box(&m, rect).moved(Vec2::new(GRAPHIC_MAX_OFFSET * 4.0, 0.0));
+        assert_eq!(map_of_box(&far, rect, &m).x, GRAPHIC_MAX_OFFSET);
+
+        let huge = SurfaceMap { scale_x: GRAPHIC_SCALE_RANGE.1 * 2.0, ..m.clone() };
+        assert_eq!(map_of_box(&map_box(&huge, rect), rect, &huge).scale_x, GRAPHIC_SCALE_RANGE.1);
+
+        let turned = map(190.0);
+        assert_eq!(map_of_box(&map_box(&turned, rect), rect, &turned).rotation, -170.0, "a turn wraps to ±180");
+    }
+}
