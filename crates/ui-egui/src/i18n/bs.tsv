@@ -657,6 +657,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft generički CMYK (sličan SWOP-u)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft premazani CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft nepremazani CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Naslijeđeni Macintosh RGB (gama 1.8)
 	Internet Standard RGB (sRGB)	Internet standardni RGB (sRGB)
 	Monitor RGB	RGB monitora
@@ -7985,6 +7987,7 @@ shape	Open	Otvoren
 	No objects are selected.	Nijedan objekat nije odabran.
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
+	Fold Angle	Ugao savijanja
 	Set Fold Angle…	Postavi ugao savijanja…
 	Set Fold Angle	Postavi ugao savijanja
 	Reset Fold Angle	Poništi ugao savijanja

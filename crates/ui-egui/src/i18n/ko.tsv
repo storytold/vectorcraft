@@ -10471,6 +10471,7 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Fold Angle	접는 각도
 	Set Fold Angle…	접는 각도 설정…
 	Set Fold Angle	접는 각도 설정
 	Reset Fold Angle	접는 각도 재설정

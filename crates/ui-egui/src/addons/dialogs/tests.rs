@@ -248,6 +248,25 @@ fn add_on_dialogs_preview_cancel_and_run_their_command() {
 }
 
 #[test]
+fn keeping_an_add_on_preview_records_the_command_name() {
+    let mut app = two_rects();
+    let undo = undo_len(&app);
+    open_item(&mut app, "Arrange Tools", "Arrange in Grid…");
+    let id = dialog_id(&app);
+    set(&app, id, "layout", json!("row"));
+    set(&app, id, "preview", json!(true));
+    frame(&mut app);
+    assert_eq!(x0(&app, 1), 30.0, "previewed");
+    assert_eq!(undo_len(&app), undo, "the preview is still temporary");
+
+    assert!(confirm(&app, id));
+    frame(&mut app);
+    let history = &app.session.doc().unwrap().history;
+    assert_eq!(history.undo.len(), undo + 1);
+    assert_eq!(history.undo.last().unwrap().label, "Arrange in Grid");
+}
+
+#[test]
 fn opening_a_second_add_on_dialog_closes_the_first_and_rolls_back_its_preview() {
     let mut app = two_rects();
     open_item(&mut app, "Arrange Tools", "Arrange in Grid…");

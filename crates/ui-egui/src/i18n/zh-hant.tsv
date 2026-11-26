@@ -10523,6 +10523,7 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Fold Angle	摺疊角度
 	Set Fold Angle…	設定摺疊角度…
 	Set Fold Angle	設定摺疊角度
 	Reset Fold Angle	重設摺疊角度

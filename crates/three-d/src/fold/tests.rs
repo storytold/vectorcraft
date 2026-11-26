@@ -1359,6 +1359,66 @@ fn lines_of_equal_length_on_one_hinge_give_the_lowest_key_s_angle_in_any_order()
 }
 
 #[test]
+fn a_loop_folded_about_another_panel_stacks_by_the_same_tree_wherever_it_lies() {
+    // A 100 × 100 blank cut into four 50 pt squares, its creases at 0° but for the one that closes
+    // the loop about the largest panel, at 0.001°: folded about a panel on that crease, the largest
+    // panel's tree places the panels up to 0.0009 pt from where the fold's own does. The same at the
+    // origin and 3,000,000 pt to the right.
+    let own_tree = |dx: f64| {
+        let lines = |closing: Option<u64>| {
+            let crease = |a: (f64, f64), b: (f64, f64), key: u64| {
+                let mut l = crease((a.0 + dx, a.1), (b.0 + dx, b.1), key);
+                l.angle = Some(if Some(key) == closing { 0.001 } else { 0.0 });
+                l
+            };
+            vec![
+                cut(&[(dx, 0.0), (100.0 + dx, 0.0), (100.0 + dx, 100.0), (dx, 100.0)], 1),
+                crease((50.0, 0.0), (50.0, 50.0), 2),
+                crease((50.0, 50.0), (50.0, 100.0), 3),
+                crease((0.0, 50.0), (50.0, 50.0), 4),
+                crease((50.0, 50.0), (100.0, 50.0), 5),
+            ]
+        };
+        let (b, issues) = check(&lines(None));
+        assert!(issues.is_empty(), "{issues:?}");
+        let level = fold(&b[0], None, 1.0, TOL).expect("folds");
+        let closing = level.hinges.iter().position(|h| !h.tree).expect("a hinge closes the loop");
+        let key = b[0].hinges[closing].keys[0];
+        let (b, issues) = check(&lines(Some(key)));
+        assert!(issues.is_empty(), "{issues:?}");
+        let f = fold(&b[0], Some(b[0].hinges[closing].a), 1.0, TOL).expect("folds");
+        f.stack.root == f.base
+    };
+    assert!(own_tree(0.0), "the trees do not agree, so the fold's own tree");
+    assert!(own_tree(3_000_000.0), "far from the origin too");
+}
+
+#[test]
+fn small_panels_far_from_the_middle_of_the_blank_stack_by_the_fold_s_own_tree() {
+    // A 2 × 2 grid of 5 pt squares at the end of a 1,000 pt strip, the largest panel, joined to the
+    // grid's right squares. Every crease is at 0° but the one between the two left squares, at a
+    // millionth of a degree: folded about a panel on it, the strip's tree leaves that crease out
+    // and places the other square at most 0.0000001 pt from where the fold's own tree does.
+    let mut lines = vec![
+        cut(&[(0.0, 0.0), (1010.0, 0.0), (1010.0, 10.0), (0.0, 10.0)], 1),
+        crease((5.0, 0.0), (5.0, 5.0), 2),
+        crease((5.0, 5.0), (5.0, 10.0), 3),
+        crease((0.0, 5.0), (5.0, 5.0), 4),
+        crease((5.0, 5.0), (10.0, 5.0), 5),
+        crease((10.0, 0.0), (10.0, 10.0), 6),
+    ];
+    for l in &mut lines {
+        l.angle = Some(if l.key == 4 { 0.000001 } else { 0.0 });
+    }
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    let h = b[0].hinges.iter().find(|h| h.keys == [4]).expect("the left squares' hinge");
+    let f = fold(&b[0], Some(h.a), 1.0, TOL).expect("folds");
+    assert!(f.hinges.iter().zip(&b[0].hinges).any(|(fh, h)| fh.tree && h.keys == [4]));
+    assert_eq!(f.stack.root, f.base, "the trees place a panel at different turns");
+}
+
+#[test]
 fn a_negative_angle_folds_a_crease_toward_the_print() {
     let mut lines = two_panels(LineKind::Crease, 0, false, false);
     for l in lines.iter_mut().filter(|l| l.key == 2) {

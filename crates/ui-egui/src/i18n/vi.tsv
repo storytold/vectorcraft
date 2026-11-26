@@ -8604,6 +8604,7 @@ breakText	Glyphs	Glyph
 	No objects are selected.	Không có đối tượng nào được chọn.
 	Open a document to mark its fold lines.	Mở tài liệu để đánh dấu các đường gấp của nó.
 	Remove Fold Line Role	Bỏ loại đường
+	Fold Angle	Góc gấp
 	Set Fold Angle…	Đặt góc gấp…
 	Set Fold Angle	Đặt góc gấp
 	Reset Fold Angle	Đặt lại góc gấp

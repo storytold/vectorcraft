@@ -10570,6 +10570,7 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
 	Set Fold Angle…	折り角度を設定…
 	Set Fold Angle	折り角度を設定
 	Reset Fold Angle	折り角度をリセット

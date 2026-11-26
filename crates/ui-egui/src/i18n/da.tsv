@@ -3441,6 +3441,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-generisk CMYK (SWOP-lignende)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestrøget CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft ubestrøget CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Ældre Macintosh RGB (gamma 1,8)
 	Internet Standard RGB (sRGB)	Internetstandard-RGB (sRGB)
 	Monitor RGB	Skærm-RGB
@@ -10920,6 +10922,7 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Fold Angle	Foldevinkel
 	Set Fold Angle…	Angiv foldevinkel…
 	Set Fold Angle	Angiv foldevinkel
 	Reset Fold Angle	Nulstil foldevinkel

@@ -669,6 +669,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft obecný CMYK (podobný SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft natíraný CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft nenatíraný CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Starší Macintosh RGB (gama 1,8)
 	Internet Standard RGB (sRGB)	Standardní internetové RGB (sRGB)
 	Monitor RGB	RGB monitoru
@@ -10832,6 +10834,7 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Fold Angle	Úhel skladu
 	Set Fold Angle…	Nastavit úhel skladu…
 	Set Fold Angle	Nastavit úhel skladu
 	Reset Fold Angle	Obnovit úhel skladu

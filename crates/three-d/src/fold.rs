@@ -98,14 +98,17 @@ impl Panel {
 /// The hinge between panels `a` and `b` (indices into the blank's panels, `a` < `b`): the straight
 /// line from `from` to `to`, made of the lines `keys`. `straight` is false when its pieces are not on
 /// one straight line within the tolerance; `from` and `to` are then on the line through its longest
-/// piece. `angle` (degrees) is the fold angle of the kind of line its longest piece is
-/// ([`LineKind::fold_angle`]).
+/// piece. `angle` (degrees) is the fold angle ([`FoldLine::fold_angle`]) of the line with the most
+/// length in the hinge, the one with the lowest key among lines of equal length. `on` is the middle
+/// of its longest piece, a point where the two panels meet, which a hinge with gaps between its
+/// pieces may not have at the middle of `from` to `to`.
 #[derive(Clone, Debug)]
 pub struct Hinge {
     pub a: usize,
     pub b: usize,
     pub from: Point,
     pub to: Point,
+    pub on: Point,
     pub keys: Vec<u64>,
     pub straight: bool,
     pub angle: f64,
@@ -1375,7 +1378,7 @@ impl Context<'_> {
         let mut keys = self.keys(lines);
         keys.sort_unstable();
         keys.dedup();
-        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, keys, straight, angle })
+        Some(Hinge { a, b, from: p0 + d * lo, to: p0 + d * hi, on: p0.midpoint(p1), keys, straight, angle })
     }
 
     /// Creases with no hinge: outside every blank, or dividing no two panels; and creases beside a
@@ -1509,7 +1512,7 @@ pub fn base_panel(panels: &[Panel]) -> Option<usize> {
 
 mod pose;
 pub mod raster;
-pub use pose::{Folded, FoldedHinge, FoldedPanel, MAX_POLYGON_POINTS, Pose, fold, panel_at, pick, polygon};
+pub use pose::{Folded, FoldedHinge, FoldedPanel, MAX_POLYGON_POINTS, Pose, Stack, fold, panel_at, pick, polygon};
 
 #[cfg(test)]
 mod tests;

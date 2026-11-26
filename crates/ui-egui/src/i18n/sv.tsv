@@ -6817,6 +6817,8 @@ arrowhead	Feather	Fjäder
 	VectorCraft Default	VectorCraft-standard
 	VectorCraft Defaults	VectorCraft-standardvärden
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft allmän CMYK (SWOP-liknande)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestruken CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft obestruken CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft-färgrutor (.vcswatches)
 	Vertical Align	Vertikal justering
 	Vertical Area Type	Vertikal områdestext
@@ -10957,6 +10959,7 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Fold Angle	Falsvinkel
 	Set Fold Angle…	Ange falsvinkel…
 	Set Fold Angle	Ange falsvinkel
 	Reset Fold Angle	Återställ falsvinkel

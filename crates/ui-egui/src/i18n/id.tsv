@@ -1316,6 +1316,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	CMYK generik VectorCraft (mirip SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK kertas berlapis VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK kertas tanpa lapisan VectorCraft (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	RGB Macintosh lama (Gamma 1.8)
 	Internet Standard RGB (sRGB)	RGB standar Internet (sRGB)
 	Monitor RGB	RGB monitor
@@ -8701,6 +8703,7 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Fold Angle	Sudut lipat
 	Set Fold Angle…	Atur sudut lipat…
 	Set Fold Angle	Atur sudut lipat
 	Reset Fold Angle	Atur ulang sudut lipat

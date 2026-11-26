@@ -1302,6 +1302,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	Generieke VectorCraft-CMYK (SWOP-achtig)
+	VectorCraft Coated CMYK (FOGRA51)	Gestreken VectorCraft-CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Ongestreken VectorCraft-CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Verouderde Macintosh-RGB (Gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetstandaard-RGB (sRGB)
 	Monitor RGB	Monitor-RGB
@@ -10870,6 +10872,7 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Fold Angle	Vouwhoek
 	Set Fold Angle…	Vouwhoek instellen…
 	Set Fold Angle	Vouwhoek instellen
 	Reset Fold Angle	Vouwhoek herstellen

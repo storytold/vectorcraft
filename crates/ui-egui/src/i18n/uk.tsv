@@ -10484,6 +10484,7 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Fold Angle	Кут згину
 	Set Fold Angle…	Задати кут згину…
 	Set Fold Angle	Задати кут згину
 	Reset Fold Angle	Скинути кут згину
