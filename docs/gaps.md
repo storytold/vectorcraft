@@ -811,8 +811,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** the document object model for scripts and the `#engine` script directive (#1183 is
-  open). File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
+- **Missing:** the rest of the document object model for scripts (layers, artboards, paths, type and the
+  other classes) and the `#engine` script directive (#1183 is open). Scripts have `app`, the open documents, new
+  documents, each document's selection and its page items. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
   runs a script in a named engine whose globals last between runs,
   File › Scripts lists the scripts of the Scripts folder, and
   Window › Script Console shows their output, errors and run reports. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and
@@ -912,6 +913,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** importer output kinds. An importer at plug-in API level 4 whose manifest lists `outputKinds` may also
   return point type, embedded RGBA images, top-level layers and artboards; content of a kind it doesn't list, and output
   past the limits on layers, artboards, text and pixels, opens nothing. Engine and unit regressions.
+- **Done:** importer plug-ins that place files (`"place": true`). File › Place lists their files, and `file.place` reads
+  a file with one when `importer` names it or no built-in format reads the file; its objects are placed as one group,
+  embedded, as one undo step, and nothing is placed when it fails, declines or is cancelled. Engine regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a
