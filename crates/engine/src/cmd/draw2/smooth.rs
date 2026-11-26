@@ -12,9 +12,15 @@ use super::{
 // ---------- Smooth ----------
 
 /// The spread (points) of the Gaussian the Smooth tool smooths a path along its length with before
-/// refitting it, as a share of the tool's reach: a third, so each point is averaged with the stretch
-/// of path within the reach on either side of it. VectorCraft's own value.
+/// refitting it at the default Smoothness ([`SMOOTH_SMOOTHNESS`]), as a share of the tool's reach: a
+/// third, so each point is averaged with the stretch of path within the reach on either side of it.
+/// The spread grows in proportion to the Smoothness, from none at 0% to twice this at 100%.
+/// VectorCraft's own value.
 const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
+
+/// The Smoothness (percent) `path.smoothRegion` smooths with when the drag leaves it out. VectorCraft's
+/// own value.
+const SMOOTH_SMOOTHNESS: f64 = 50.0;
 
 /// The degrees by which a path must turn at an anchor, and over the tool's reach and twice its reach
 /// on either side of it, for the Smooth tool to keep the anchor as a corner ([`smooth_corners`]): a
@@ -929,7 +935,11 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     if !(lo..=hi).contains(&tol) {
         return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
     }
-    let sigma = radius * SMOOTH_SPREAD;
+    let smoothness = number_or(p, "smoothness", SMOOTH_SMOOTHNESS, C)?;
+    if !(0.0..=100.0).contains(&smoothness) {
+        return Err(bad(C, "`smoothness` must be from 0 to 100"));
+    }
+    let sigma = radius * SMOOTH_SPREAD * smoothness / SMOOTH_SMOOTHNESS;
     let st = s.doc()?;
     let mut plan = vec![];
     let (mut before, mut after) = (0, 0);
