@@ -108,7 +108,8 @@ impl Scene {
             self.app.ui(ui);
         });
         let _ = self.app.frame_input(take_output(&self.ctx));
-        self.nodes = output.platform_output.accesskit_update.as_ref().expect("AccessKit enabled").nodes.iter().map(|(_, node)| node.clone()).collect();
+        self.nodes =
+            output.platform_output.accesskit_update.as_ref().expect("AccessKit enabled").nodes.iter().map(|(_, node)| node.clone()).collect();
         output.textures_delta.clear();
     }
 
@@ -141,8 +142,11 @@ impl Scene {
     }
 
     fn popover(&self) -> Rect {
-        self.nodes.iter().find(|n| n.role() == Role::Dialog && n.label() == Some("Gradient stop"))
-            .and_then(Self::node_rect).expect("the actual native stop popover")
+        self.nodes
+            .iter()
+            .find(|n| n.role() == Role::Dialog && n.label() == Some("Gradient stop"))
+            .and_then(Self::node_rect)
+            .expect("the actual native stop popover")
     }
 
     fn editor_open(&self) -> bool {
@@ -154,8 +158,7 @@ impl Scene {
     }
 
     fn child_open(&self) -> bool {
-        overlay::top(&self.ctx).and_then(|id| overlay::entry(&self.ctx, id))
-            .is_some_and(|entry| !entry.exiting && entry.keys == OwnerClass::Menu)
+        overlay::top(&self.ctx).and_then(|id| overlay::entry(&self.ctx, id)).is_some_and(|entry| !entry.exiting && entry.keys == OwnerClass::Menu)
     }
 
     fn open_stop(&mut self) {
@@ -175,8 +178,13 @@ impl Scene {
 
     fn button(&self, label: &str) -> Rect {
         let popover = self.popover();
-        let matches: Vec<_> = self.nodes.iter().filter(|node| node.role() == Role::Button && node.label() == Some(label))
-            .filter_map(Self::node_rect).filter(|rect| rect.is_positive() && popover.contains(rect.center())).collect();
+        let matches: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|node| node.role() == Role::Button && node.label() == Some(label))
+            .filter_map(Self::node_rect)
+            .filter(|rect| rect.is_positive() && popover.contains(rect.center()))
+            .collect();
         assert_eq!(matches.len(), 1, "one actual native mode chooser {label:?}");
         matches[0]
     }
@@ -192,13 +200,17 @@ impl Scene {
     }
 
     fn mode_rows(&self) -> Vec<(String, bool, Rect)> {
-        let mut rows: Vec<_> = self.nodes.iter().filter_map(|node| {
-            let label = node.label()?;
-            if !matches!(node.role(), Role::MenuItem | Role::MenuItemRadio | Role::MenuItemCheckBox) || !MODES.contains(&label) {
-                return None;
-            }
-            Some((label.to_owned(), node.toggled() == Some(Toggled::True), Self::node_rect(node)?))
-        }).collect();
+        let mut rows: Vec<_> = self
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                let label = node.label()?;
+                if !matches!(node.role(), Role::MenuItem | Role::MenuItemRadio | Role::MenuItemCheckBox) || !MODES.contains(&label) {
+                    return None;
+                }
+                Some((label.to_owned(), node.toggled() == Some(Toggled::True), Self::node_rect(node)?))
+            })
+            .collect();
         rows.sort_by(|a, b| a.2.top().total_cmp(&b.2.top()));
         rows
     }
@@ -242,8 +254,13 @@ impl Scene {
 
     fn spectrum(&self) -> Rect {
         let popover = self.popover();
-        let found: Vec<_> = self.nodes.iter().filter(|node| node.role() == Role::Group && node.label() == Some("Color Ramp"))
-            .filter_map(Self::node_rect).filter(|rect| popover.contains(rect.center())).collect();
+        let found: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|node| node.role() == Role::Group && node.label() == Some("Color Ramp"))
+            .filter_map(Self::node_rect)
+            .filter(|rect| popover.contains(rect.center()))
+            .collect();
         assert_eq!(found.len(), 1, "the actual native Color panel spectrum");
         found[0]
     }
