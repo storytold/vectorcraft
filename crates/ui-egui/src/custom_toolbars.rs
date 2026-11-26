@@ -23,7 +23,7 @@
 use std::collections::BTreeSet;
 
 use craft::behavior::IconId;
-use craft::behavior::dock::{Action, DockEdge};
+use craft::behavior::dock::{Action, DockEdge, DockPlacement, Target};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::dialog::DialogResult;
@@ -345,6 +345,133 @@ fn set_shown(app: &mut VectorcraftApp, name: &str, show: Option<bool>) -> Result
     Ok(show)
 }
 
+// ---------- docking and floating ----------
+
+/// The window edge and column index from that edge where `panel` docks; none while it floats or is hidden.
+fn docked_at(ui: &UiState, panel: &str) -> Option<(DockEdge, usize)> {
+    panel_docking::column_of(panel_docking::layout_of(ui), panel).and_then(|(slot, _)| slot)
+}
+
+/// The window edge toolbar panel `panel` docks at: while docked, its edge; while it floats or is
+/// hidden, the edge of the docked panel the dock records it left; else the left edge.
+fn last_edge(ui: &UiState, panel: &str) -> DockEdge {
+    let ws = &ui.dock_workspace;
+    let left = ws.floated().iter().chain(ws.hidden()).find(|(p, _)| p == panel).and_then(|(_, at)| at.anchor.as_deref());
+    docked_at(ui, panel).or_else(|| left.and_then(|anchor| docked_at(ui, anchor))).map_or(DockEdge::Start, |(edge, _)| edge)
+}
+
+/// The `side` param's name of `edge`.
+fn side_name(edge: DockEdge) -> &'static str {
+    if edge == DockEdge::End { "right" } else { "left" }
+}
+
+/// Where toolbar `bar` is: `{toolbar, floating, side, order, pos}`, as `window.toolbar.dock` and
+/// `window.toolbar.float` return it.
+fn placement(app: &VectorcraftApp, bar: &str) -> Result<Value, String> {
+    let b = find(&app.ui, bar).ok_or_else(|| format!("no toolbar named `{bar}`"))?;
+    let panel = panel_id(b.id);
+    let docked = docked_at(&app.ui, &panel);
+    let pos = panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel).map(|w| [w.rect.min.x, w.rect.min.y]);
+    Ok(json!({
+        "toolbar": b.name,
+        "floating": docked.is_none(),
+        "side": side_name(last_edge(&app.ui, &panel)),
+        "order": docked.map(|(_, n)| n),
+        "pos": pos,
+    }))
+}
+
+/// `window.toolbar.dock`: docks the toolbar named `name` as a column of the dock on the `side` edge
+/// (omitted: [`last_edge`]), at column `order` from the window edge (omitted: the innermost, or where it
+/// is when it docks at that edge already). Bad params are errors and change nothing.
+fn dock(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+    let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
+    let (id, panel, name) = (bar.id, panel_id(bar.id), bar.name.clone());
+    let edge = match p.get("side") {
+        None | Some(Value::Null) => last_edge(&app.ui, &panel),
+        // `Start` and `End`, as panels take them, too.
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("left") || s.eq_ignore_ascii_case("start") => DockEdge::Start,
+        Some(Value::String(s)) if s.eq_ignore_ascii_case("right") || s.eq_ignore_ascii_case("end") => DockEdge::End,
+        Some(Value::String(s)) => return Err(format!("side is left or right, not `{s}`")),
+        Some(v) => return Err(format!("side is left or right, not `{v}`")),
+    };
+    // A panel of each other column of that edge's dock, from the window edge inwards.
+    let others: Vec<String> = panel_docking::edge_columns(panel_docking::layout_of(&app.ui), edge)
+        .iter()
+        .filter(|c| !c.panels().any(|q| *q == panel))
+        .filter_map(|c| c.panels().next().cloned())
+        .collect();
+    let order = match p.get("order") {
+        None | Some(Value::Null) => None,
+        Some(v) => match v.as_u64().and_then(|n| usize::try_from(n).ok()).filter(|&n| n <= others.len()) {
+            Some(n) => Some(n),
+            None => return Err(format!("order is a whole number from 0 to {}, not `{v}`", others.len())),
+        },
+    };
+    let here = docked_at(&app.ui, &panel).filter(|(e, _)| *e == edge).map(|(_, n)| n);
+    if here.is_none() {
+        // A new innermost column of that edge's dock; a hidden toolbar shows.
+        let hidden = !panel_docking::layout_of(&app.ui).contains(&panel);
+        app.run("window.panel.dock", json!({ "panel": panel, "side": if edge == DockEdge::End { "End" } else { "Start" } }))?;
+        shown_again(app, id, hidden);
+    }
+    let now = docked_at(&app.ui, &panel).map(|(_, n)| n);
+    if let Some(n) = order.filter(|n| Some(*n) != now) {
+        let to = match others.get(n) {
+            Some(anchor) => Target::at(anchor.clone(), DockPlacement::column(false)),
+            None => match others.last() {
+                Some(last) => Target::at(last.clone(), DockPlacement::column(true)),
+                None => return placement(app, &name),
+            },
+        };
+        let ctx = app.ui_ctx.clone();
+        panel_docking::apply(app, ctx.as_ref(), vec![Action::move_panel(panel, to)])?;
+    }
+    // A toolbar where it was asked to go shows too, which ends a Tab hide.
+    panel_docking::show_panels(app);
+    placement(app, &name)
+}
+
+/// `window.toolbar.float`: floats the toolbar named `name` with its top-left corner at `x`, `y` in
+/// window points (both or neither; neither: where the dock floats a panel, and a floating toolbar
+/// stays where it is).
+fn float(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
+    let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
+    let (id, panel, name) = (bar.id, panel_id(bar.id), bar.name.clone());
+    let coord = |k: &str| match p.get(k) {
+        None | Some(Value::Null) => Some(None),
+        Some(v) => v.as_f64().filter(|f| f.abs() <= 1e6).map(|f| Some(f as f32)),
+    };
+    let at = match (coord("x"), coord("y")) {
+        (Some(Some(x)), Some(Some(y))) => Some(pos2(x, y)),
+        (Some(None), Some(None)) => None,
+        _ => return Err("x and y must both be numbers from -1000000 to 1000000".into()),
+    };
+    let window = panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel).map(|w| w.rect);
+    let hidden = !panel_docking::layout_of(&app.ui).contains(&panel);
+    match (at, window) {
+        (Some(at), _) => panel_docking::place_floating(app, &panel, at, window.map_or(0.0, |r| r.width()))?,
+        (None, None) => {
+            app.run("window.panel.float", json!({ "panel": panel }))?;
+        }
+        (None, Some(_)) => {}
+    }
+    shown_again(app, id, hidden);
+    // A toolbar floating already shows too, which ends a Tab hide.
+    panel_docking::show_panels(app);
+    placement(app, &name)
+}
+
+/// After a command showed toolbar `id`, which was `hidden`, the groups torn off it show again, as
+/// Show Toolbar brings them back.
+fn shown_again(app: &mut VectorcraftApp, id: u32, hidden: bool) {
+    if hidden && panel_docking::layout_of(&app.ui).contains(&panel_id(id)) {
+        crate::toolbar::strips_follow(app, &Owner::Toolbar(id), true);
+    }
+}
+
 /// Opens New Toolbar: a name box whose OK is held while the name is refused, the refusal shown under
 /// the row.
 fn open_new(app: &mut VectorcraftApp) -> Result<(), String> {
@@ -464,6 +591,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let name = p.get("name").and_then(Value::as_str).ok_or("name (a toolbar's name) is required")?;
             delete(app, name).map(|_| Value::Null)
         })(),
+        "window.toolbar.dock" => dock(app, p),
+        "window.toolbar.float" => float(app, p),
         "window.toolbar.list" => {
             let layout = panel_docking::layout_of(&app.ui);
             Ok(json!(
@@ -474,7 +603,6 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                         let panel = panel_id(b.id);
                         let place = panel_docking::column_of(layout, &panel);
                         let docked = place.as_ref().and_then(|(at, _)| at.as_ref());
-                        let side = if matches!(docked, Some((DockEdge::End, _))) { "right" } else { "left" };
                         let double = place.as_ref().is_some_and(|(_, column)| column.steps == Some(2));
                         json!({
                             "name": b.name,
@@ -482,7 +610,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                             "double": double,
                             "slots": b.slots,
                             "floating": docked.is_none(),
-                            "side": side,
+                            "side": side_name(last_edge(&app.ui, &panel)),
                             "order": docked.map(|(_, n)| *n),
                         })
                     })
@@ -723,8 +851,9 @@ mod tests {
 
     /// What hides a toolbar: Window › Tools hides the Tools panel alone and a toolbar still shows, with
     /// the drawer open for it; a strip torn off a toolbar follows the toolbar and one torn off Tools
-    /// follows Tools; Tab hides the toolbar and a second Tab shows it; making, copying or showing a
-    /// toolbar while Tab hides the panels shows them again, with the other toolbars as they were
+    /// follows Tools; Tab hides the toolbar and a second Tab shows it; making, copying, showing,
+    /// docking or floating a toolbar while Tab hides the panels shows them again, with the other
+    /// toolbars as they were
     /// (VectorCraft's own rule: showing one does not turn the others off).
     #[test]
     fn a_new_toolbar_shows_without_the_tools_panel_until_tab() {
@@ -759,11 +888,15 @@ mod tests {
         assert!(!panel_docking::panels_shown(&app));
         tab(&mut app, &ctx, 2.0);
         assert!(panel_docking::panels_shown(&app) && shown(&app, "Mine"));
-        // Made, copied or shown while Tab hides the panels, a toolbar ends the hide.
+        // Made, copied, shown, docked or floated while Tab hides the panels, a toolbar ends the hide.
         for (k, (command, params)) in [
             ("window.toolbar.new", json!({"name": "Other"})),
             ("window.toolbar.duplicate", json!({"name": "Mine"})),
             ("window.toolbar.custom", json!({"name": "Other", "show": true})),
+            // Floating already, docked, then docked where it is already.
+            ("window.toolbar.float", json!({"name": "Mine"})),
+            ("window.toolbar.dock", json!({"name": "Mine"})),
+            ("window.toolbar.dock", json!({"name": "Mine"})),
         ]
         .into_iter()
         .enumerate()
@@ -977,5 +1110,123 @@ mod tests {
         sanitize(&mut many);
         assert_eq!(many.len(), MAX);
         assert_eq!(many.iter().map(|b| b.id).collect::<BTreeSet<_>>().len(), MAX, "every toolbar has an id of its own");
+    }
+
+    /// A hidden toolbar that `window.toolbar.dock` or `window.toolbar.float` shows brings back the
+    /// group torn off it, as Show Toolbar does.
+    #[test]
+    fn docking_or_floating_a_hidden_toolbar_brings_back_its_torn_off_group() {
+        let mut app = app();
+        app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": "curvature", "toolbar": "Mine", "slot": 0, "place": "group"})).unwrap();
+        app.run("window.floatTools", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+        let id = find(&app.ui, "Mine").unwrap().id;
+        let strip = strip_id(&Owner::Toolbar(id), "pen");
+        let on = |app: &VectorcraftApp| panel_docking::layout_of(&app.ui).contains(&strip);
+        assert!(on(&app));
+        for (command, params) in [
+            ("window.toolbar.dock", json!({"name": "Mine"})),
+            ("window.toolbar.float", json!({"name": "Mine"})),
+            ("window.toolbar.float", json!({"name": "Mine", "x": 40, "y": 50})),
+        ] {
+            app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
+            assert!(!on(&app), "the strip hides with its toolbar");
+            app.run(command, params.clone()).unwrap();
+            assert!(panel_docking::layout_of(&app.ui).contains(&panel_id(id)), "{command} {params} shows the toolbar");
+            assert!(on(&app), "{command} {params} brings the strip back");
+        }
+    }
+
+    /// The dock layout, to compare.
+    fn layout(app: &VectorcraftApp) -> Value {
+        serde_json::to_value(panel_docking::layout_of(&app.ui)).unwrap()
+    }
+
+    /// Where the toolbar named `name` docks: its edge and column from that edge (none: floating).
+    fn dock_place(app: &VectorcraftApp, name: &str) -> Option<(DockEdge, usize)> {
+        docked_at(&app.ui, &panel_id(find(&app.ui, name).unwrap().id))
+    }
+
+    /// `window.toolbar.dock` docks a toolbar at an edge, innermost or at the column asked for, and
+    /// `window.toolbar.float` floats it, at x, y when given; bad params and a toolbar already where
+    /// it is asked to go change nothing, and `window.toolbar.list` reports the same places.
+    #[test]
+    fn toolbars_dock_and_float_by_their_commands() {
+        let mut app = app();
+        for name in ["A", "B", "C"] {
+            app.run("window.toolbar.new", json!({ "name": name })).unwrap();
+        }
+        assert_eq!(dock_place(&app, "A"), None, "New Toolbar floats");
+        let undo = app.session.doc().map_or(0, |d| d.history.undo.len());
+        let r = app.run("window.toolbar.dock", json!({"name": "a"})).unwrap();
+        assert_eq!((&r["toolbar"], &r["floating"], &r["side"], &r["pos"]), (&json!("A"), &json!(false), &json!("left"), &Value::Null));
+        let (edge, a) = dock_place(&app, "A").unwrap();
+        assert_eq!(edge, DockEdge::Start);
+        assert_eq!(r["order"], json!(a));
+        // Each one docked after it goes inside it; one asked to go at A's column goes outside it.
+        app.run("window.toolbar.dock", json!({"name": "B", "side": "left"})).unwrap();
+        let b = dock_place(&app, "B").unwrap().1;
+        assert!(b > dock_place(&app, "A").unwrap().1, "B docks inside A");
+        let at_a = dock_place(&app, "A").unwrap().1;
+        app.run("window.toolbar.dock", json!({"name": "C", "side": "start", "order": at_a})).unwrap();
+        let [c, a, b] = ["C", "A", "B"].map(|n| dock_place(&app, n).unwrap().1);
+        assert!(c < a && a < b, "C goes outside A: {c} {a} {b}");
+        // Docked again at the edge it docks at, with no column asked for, nothing changes.
+        let before = layout(&app);
+        app.run("window.toolbar.dock", json!({"name": "A"})).unwrap();
+        app.run("window.toolbar.dock", json!({"name": "A", "side": "left", "order": a})).unwrap();
+        assert_eq!(layout(&app), before);
+        // Bad params are errors and change nothing.
+        let columns = panel_docking::edge_columns(panel_docking::layout_of(&app.ui), DockEdge::Start).len();
+        for p in [
+            json!({"name": "A", "side": "top"}),
+            json!({"name": "A", "side": 1}),
+            json!({"name": "A", "order": columns}),
+            json!({"name": "A", "order": -1}),
+            json!({"name": "A", "order": 0.5}),
+            json!({"name": "A", "order": "1"}),
+            json!({"name": "Nope"}),
+            json!({}),
+        ] {
+            assert!(app.run("window.toolbar.dock", p.clone()).is_err(), "{p}");
+        }
+        for p in [
+            json!({"name": "A", "x": 10}),
+            json!({"name": "A", "x": 1e7, "y": 0}),
+            json!({"name": "A", "x": "1", "y": 2}),
+            json!({"name": "Nope"}),
+            json!({}),
+        ] {
+            assert!(app.run("window.toolbar.float", p.clone()).is_err(), "{p}");
+        }
+        assert_eq!(layout(&app), before);
+        // The innermost column asked for: A moves inside B.
+        app.run("window.toolbar.dock", json!({"name": "A", "order": columns - 1})).unwrap();
+        assert!(dock_place(&app, "A").unwrap().1 > dock_place(&app, "B").unwrap().1);
+        // At the right edge.
+        let r = app.run("window.toolbar.dock", json!({"name": "A", "side": "RIGHT"})).unwrap();
+        assert_eq!(r["side"], json!("right"));
+        assert_eq!(dock_place(&app, "A").map(|(e, _)| e), Some(DockEdge::End));
+        // Floated, it remembers the right edge, and docks there again.
+        let r = app.run("window.toolbar.float", json!({"name": "A"})).unwrap();
+        assert_eq!((&r["floating"], &r["side"], &r["order"]), (&json!(true), &json!("right"), &Value::Null));
+        assert!(r["pos"].is_array());
+        let listed = app.run("window.toolbar.list", json!({})).unwrap();
+        let a_row = listed.as_array().unwrap().iter().find(|t| t["name"] == "A").unwrap().clone();
+        assert_eq!((&a_row["floating"], &a_row["side"]), (&json!(true), &json!("right")));
+        // Floating already, with no x, y: it stays where it is.
+        let before = layout(&app);
+        app.run("window.toolbar.float", json!({"name": "A"})).unwrap();
+        assert_eq!(layout(&app), before);
+        let r = app.run("window.toolbar.float", json!({"name": "A", "x": 300, "y": 200})).unwrap();
+        assert_eq!(r["pos"], json!([300.0, 200.0]));
+        assert_eq!(app.run("window.toolbar.dock", json!({"name": "A"})).unwrap()["side"], json!("right"));
+        // A hidden toolbar shows where it is docked or floated to.
+        app.run("window.toolbar.custom", json!({"name": "B", "show": false})).unwrap();
+        app.run("window.toolbar.float", json!({"name": "B", "x": 50, "y": 60})).unwrap();
+        assert!(panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel_id(find(&app.ui, "B").unwrap().id)).is_some());
+        // Neither command records an undo step.
+        assert_eq!(app.session.doc().map_or(0, |d| d.history.undo.len()), undo);
     }
 }
