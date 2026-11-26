@@ -1621,6 +1621,12 @@ fn preview_params(d: &Fields) -> Option<(bool, &'static str, Value)> {
     })
 }
 
+/// The Limit to Library key (`"document"` or a library id) of `parent` when it is a Recolor Artwork
+/// dialog that limits to a library: the library a Color Picker over it shows in its swatches view.
+pub(super) fn limit_to(dialogs: &craft::ui::shell::WindowDialogs, parent: DialogId) -> Option<String> {
+    dialogs.with(|host| host.get_by_id::<RecolorDialog>(parent).map(|d| d.fields.str("limitTo"))).filter(|limit| !limit.is_empty())
+}
+
 /// Runs the open dialog's live preview with `(on, command, params)`.
 fn run_preview(app: &mut VectorcraftApp, (on, cmd, params): (bool, &'static str, Value)) {
     let Some(mut live) = app.color_dialogs.recolor.as_mut().map(|open| std::mem::take(&mut open.preview)) else { return };
@@ -1851,10 +1857,7 @@ impl RecolorDialog {
         let mut preview = self.fields.bool("preview");
         let footer = ResetFooter::new(ui, None, true);
         let RecolorDialog { fields, feed, filed, ends, row_menu, .. } = self;
-        // PLAN: Enter is not OK here: a form whose OK stays open closes on Enter without reporting it as its OK
-        // (form_dialogs/form.rs:429, :534), which would close a held dialog unanswered; the forms owner makes
-        // `FormDialog` report Enter as the pick of OK when `accept_stays_open` is on.
-        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).enter_confirms(false).ok_enabled(!waiting);
+        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).ok_enabled(!waiting);
         if art {
             form = form.preview(Some(Bind::bound(&mut preview)));
         }

@@ -406,7 +406,33 @@ impl VectorcraftApp {
             shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
-            ..ViewInfo::default()
+            precise: self.precise_cursors(),
+        }
+    }
+
+    /// Whether the drawing tools show precise cursors: General › Use Precise Cursors is on, or Caps Lock is
+    /// (`Session::caps_lock`, which the canvas keeps at the host's state and `view.capsLock` sets). The canvas's pointer
+    /// and the tools' brush tips both follow it.
+    pub(crate) fn precise_cursors(&self) -> bool {
+        self.session.prefs.use_precise_cursors || self.session.caps_lock
+    }
+
+    /// Takes the host's Caps Lock state `on` when it changes: the session follows it until the next change, and a
+    /// `view.capsLock` call between changes stays in place.
+    pub(crate) fn follow_caps_lock(&mut self, on: bool) {
+        if self.canvas.host_caps_lock == Some(on) {
+            return;
+        }
+        let first_reading = self.canvas.host_caps_lock.is_none();
+        self.canvas.host_caps_lock = Some(on);
+        // A `view.capsLock` call that ran before the first reading stays in place; that reading is only the baseline.
+        if first_reading && self.session.caps_lock {
+            return;
+        }
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", serde_json::json!({ "on": on }))
+        {
+            log::error!("Could not update the Caps Lock state: {err}");
         }
     }
 }
