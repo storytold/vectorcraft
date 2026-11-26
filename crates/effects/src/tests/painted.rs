@@ -669,6 +669,43 @@ fn a_piece_s_copies_keep_separate_rotated_and_scaled_shadows() {
 }
 
 #[test]
+fn a_piece_s_copies_transform_raster_effects_on_its_fill() {
+    for transform in [json!({"copies": 1, "moveH": 40.0, "rotate": 90.0}), json!({"copies": 1, "moveH": 40.0, "scaleH": 200, "scaleV": 200})] {
+        let mut source = Node::path(
+            NodeId(9),
+            shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        source.appearance.items.iter_mut().find(|row| row.is_fill()).unwrap().effects_mut().push(Effect {
+            id: "stylize.dropShadow".into(),
+            params: json!({"x": 3.0, "y": 4.0, "blur": 2.0}),
+            visible: true,
+        });
+        let effects = vec![Effect { id: "distort.transform".into(), params: transform, visible: true }];
+        let mut ordinary = source.clone();
+        ordinary.appearance.effects = effects.clone();
+        let expected = reshape(None, &ordinary, None).unwrap();
+        let shadows = |n: &Node| {
+            let mut values = vec![];
+            n.walk(&mut |c| {
+                for row in &c.appearance.items {
+                    values.extend(row.effects().iter().filter(|e| e.id == "stylize.dropShadow").map(|e| e.params.to_string()));
+                }
+                values.extend(c.appearance.effects.iter().filter(|e| e.id == "stylize.dropShadow").map(|e| e.params.to_string()));
+            });
+            values.sort();
+            values
+        };
+        let expected = shadows(&expected);
+        assert_eq!(expected.len(), 2);
+        assert_ne!(expected[0], expected[1]);
+        let look = vectorcraft_plugins::painted::Look { effects, ..Default::default() };
+        crate::reshape::dress_piece(&mut source, &look, Budget::EFFECTS, None).unwrap();
+        assert_eq!(shadows(&source), expected);
+    }
+}
+
+#[test]
 fn copied_piece_effects_share_the_remaining_geometry_budget() {
     let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true };
     let offset = Effect { id: "path.offsetPath".into(), params: json!({"offset": 2.0}), visible: true };

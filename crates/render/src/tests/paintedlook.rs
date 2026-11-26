@@ -114,6 +114,50 @@ fn a_piece_s_geometry_effect_draws_on_it() {
     vectorcraft_plugins::registry::remove(ID);
 }
 
+#[test]
+fn later_painted_pieces_keep_the_earlier_piece_transparency_as_a_group() {
+    for stage in ["object", "fill", "stroke"] {
+        let first = format!("test.render.paintedlook.transparency.{stage}");
+        let second = format!("test.render.paintedlook.overlapping.{stage}");
+        let value: serde_json::Value = serde_json::from_str(&output(120.0, &json!({}))).unwrap();
+        let mut piece = value["objects"][0].clone();
+        if stage == "stroke" {
+            let fields = piece.as_object_mut().unwrap();
+            let red = fields.remove("fills").unwrap()[0].clone();
+            fields.insert("strokes".into(), json!([{"paint": red, "width": 4.0}]));
+        }
+        let mut transparent = piece.clone();
+        transparent["opacity"] = json!(0.5);
+        transparent["blend"] = json!("Multiply");
+        let first_output = json!({"objects": [transparent]}).to_string();
+        let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(&first), &first_output)).unwrap();
+        vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+        let result = json!({"objects": [piece.clone(), piece]}).to_string();
+        let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(&second), &result)).unwrap();
+        vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+        let mut d = document(&first, 0.0);
+        let source = d.layers[0].children().unwrap().last().unwrap().id;
+        let n = d.node_mut(source).unwrap();
+        let mut effects = std::mem::take(&mut n.appearance.effects);
+        effects.push(Effect { id: format!("plugin.{second}"), params: json!({}), visible: true });
+        if stage == "object" {
+            n.appearance.effects = effects;
+        } else {
+            if stage == "stroke" {
+                n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 4.0).into();
+            }
+            let row = n.appearance.items.iter_mut().find(|row| if stage == "fill" { row.is_fill() } else { !row.is_fill() }).unwrap();
+            row.effects_mut().extend(effects);
+        }
+        let got = pixel(&d, if stage == "stroke" { 120.0 } else { 130.0 }, 50.0);
+        assert!(near(got, [0, 0, 128]), "{stage}: {got:?}");
+        assert_eq!(vectorcraft_plugins::effect::last_error(&first), None);
+        assert_eq!(vectorcraft_plugins::effect::last_error(&second), None);
+        vectorcraft_plugins::registry::remove(&first);
+        vectorcraft_plugins::registry::remove(&second);
+    }
+}
+
 /// An unknown blending mode, a plug-in effect (this one itself) and too many effects refuse the
 /// whole result: the source draws as it is, green at its own place, with no piece, and the plug-in
 /// reports the field.

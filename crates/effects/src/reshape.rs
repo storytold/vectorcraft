@@ -2611,6 +2611,9 @@ fn paint_leaf(
     for p in pieces.iter() {
         let mut one = leaf.clone();
         one.name = None;
+        one.opacity = 1.0;
+        one.blend = Default::default();
+        one.isolate = false;
         one.appearance = vectorcraft_plugins::painted::appearance(&leaf.appearance, p).into();
         set_geometry(&mut one, p.path.clone(), p.rule);
         // The pieces' own geometry effects keep to what the pieces before them leave of the budget.
@@ -2619,6 +2622,9 @@ fn paint_leaf(
     }
     let mut g = Node::group(leaf.id, children);
     g.name = leaf.name.clone();
+    g.opacity = leaf.opacity;
+    g.blend = leaf.blend;
+    g.isolate = leaf.isolate;
     *leaf = g;
     Some(made)
 }
@@ -2674,7 +2680,15 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
         let before = art_cost(one);
         let mut art = one_piece(one);
         let mut complete = true;
-        reshape_leaves_checked(&mut art, &shape.iter().collect::<Vec<_>>(), &shape, room.plus(before), (false, false), doc, Some(&mut complete));
+        reshape_leaves_checked(
+            &mut art,
+            &shape.iter().collect::<Vec<_>>(),
+            &shape,
+            room.plus(before),
+            (false, has_copied_row_raster(&source)),
+            doc,
+            Some(&mut complete),
+        );
         #[cfg(test)]
         DRESSED.with(|d| d.set(d.get().plus(art_cost(&art))));
         extra = art_cost(&art).minus(before);
@@ -2759,12 +2773,19 @@ fn paint_piece(
             continue;
         }
         let mut one = leaf.clone();
+        one.opacity = 1.0;
+        one.blend = Default::default();
+        one.isolate = false;
         one.appearance.items = items;
         set_geometry(&mut one, p.path.clone(), p.rule);
         made = made.plus(dress_piece(&mut one, &p.look, budget.minus(made), doc)?);
         children.push(Arc::new(one));
     }
-    *leaf = Node::group(leaf.id, children);
+    let mut group = Node::group(leaf.id, children);
+    group.opacity = leaf.opacity;
+    group.blend = leaf.blend;
+    group.isolate = leaf.isolate;
+    *leaf = group;
     Some(made)
 }
 
