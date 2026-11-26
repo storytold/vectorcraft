@@ -143,7 +143,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["pencil", "smooth", "pathEraser", "join"],
             &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen", "smartPen"],
             &["curvature"],
         ],
     ),

@@ -15358,8 +15358,8 @@ than 50000 anchors as it is.
 
 Smart Pen is a built-in add-on: one tool that draws paths and edits their points, handles and segments without
 switching tools. Its commands are `addon.pen.*`; in the desktop app it lives in Object › Plug-ins › Smart Pen, in its
-panel (`window.panel {panel: "smartPen"}`) and in the Smart Pen Tool (`smartPen`), which the toolbars don't show until
-it is added from the All Tools drawer (or chosen with `tool.select`); it has no shortcut. Each gesture and each command is
+panel (`window.panel {panel: "smartPen"}`) and in the Smart Pen Tool (`smartPen`), which both shipped toolbars show in
+the Pen tool's group, after the Quick Pen (`ui.tool.list` lists it there); it has no shortcut. Each gesture and each command is
 one undo step; an edit that changes nothing makes no step. The standard Pen tool is unchanged.
 
 The tool (`smartPen`), option `next`: `"straight"` (default) or `"curved"`, the segment a click adds:
