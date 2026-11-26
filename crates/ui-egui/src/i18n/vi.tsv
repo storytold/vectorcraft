@@ -8604,6 +8604,11 @@ breakText	Glyphs	Glyph
 	No objects are selected.	Không có đối tượng nào được chọn.
 	Open a document to mark its fold lines.	Mở tài liệu để đánh dấu các đường gấp của nó.
 	Remove Fold Line Role	Bỏ loại đường
+	Fold Angle	Góc gấp
+	Set Fold Angle…	Đặt góc gấp…
+	Set Fold Angle	Đặt góc gấp
+	Reset Fold Angle	Đặt lại góc gấp
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	hãy chọn một đường cấn, đường cắt một phần hoặc đường đục lỗ không bị khóa và không bị ẩn
 	Check	Kiểm tra
 	Check Fold Lines	Kiểm tra đường gấp
 @msg	No cut lines are in the selection.	Vùng chọn không có đường cắt nào.
