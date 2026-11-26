@@ -1635,6 +1635,7 @@ font-technology	Variable	Variabla
 	Fail	Underkänd
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minsta kontrast enligt WCAG 2.2: normal text AA 4.5:1 (1.4.3) och AAA 7:1 (1.4.6), stor text AA 3:1 och AAA 4.5:1, grafik och kontroller AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Bakgrunden läses i mitten av markeringen.
+	The closest color that passes {level}: click to apply it.	Den närmaste färgen som klarar {level}: klicka för att använda den.
 	Graphics Processor	Grafikprocessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Gravitation

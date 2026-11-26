@@ -4444,6 +4444,7 @@ file-filter	Templates	템플릿
 	Fail	실패
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 최소 대비: 일반 텍스트 AA 4.5:1 (1.4.3) 및 AAA 7:1 (1.4.6), 큰 텍스트 AA 3:1 및 AAA 4.5:1, 그래픽과 컨트롤 AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	배경은 선택 영역의 중앙에서 읽습니다.
+	The closest color that passes {level}: click to apply it.	{level}을(를) 충족하는 가장 가까운 색상: 클릭하여 적용합니다.
 	Greek & Cyrillic	그리스어 및 키릴 문자
 	Hex by Column	열 기준 육각형
 	Hex by Row	행 기준 육각형

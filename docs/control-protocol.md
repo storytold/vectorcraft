@@ -241,11 +241,13 @@ its variation grid; the panel draws the same grid. `ui.colorGuideOptions` opens 
 as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches runs `swatch.new {colors: [...]}`
 (one swatch per colour, one undo step).
 
-Color Wheel contrast: `color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio of the active
-proxy's color against the color drawn behind the selection (`against: "below"`, the default) or against a given color,
-with the AA and AAA results for normal text and large text and the AA result for graphics (docs/mcp.md). The Color Wheel panel's Show
-Contrast row shows the same answer for the category picked under Contrast For; `ui.colorWheel {contrast?, contrastFor?,
-contrastBackground?}` sets the row, its category and a pinned background, and `ui.inspect` reports them as
+Color Wheel contrast: `color.contrast {color?, against?, opacity?, for?}` answers the WCAG 2 contrast ratio of the
+active proxy's color against the color drawn behind the selection (`against: "below"`, the default) or against a given
+color, with the AA and AAA results for normal text and large text and the AA result for graphics, and as `fix` the
+closest color of the same hue that meets each level of the category `for` names (docs/mcp.md). The Color Wheel panel's
+Show Contrast row shows the same answer for the category picked under Contrast For, with a chip of the fix color;
+`ui.colorWheel {contrast?, contrastFor?, contrastBackground?}` sets the row, its category and a pinned background, and
+`ui.inspect` reports them as
 `ui.color_wheel`.
 
 Color Guide Limit to Library: `ui.colorGuideLimit {library}` (a swatch library id or name, `"document"` for the

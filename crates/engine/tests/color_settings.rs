@@ -944,8 +944,7 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
 /// behind the selection, given back, answers the same ratio.
 #[test]
 fn contrast_writes_the_background_as_against_takes_it_with_another_working_space() {
-    let _g = settings();
-    let before = cms::active_settings();
+    let _g = restored_settings();
     let mut s = session();
     exec(&mut s, "edit.colorSettings", json!({"rgb": cms::WIDE_GAMUT_RGB}));
     let given = s.execute("color.contrast", &json!({"color": "#000000", "against": "#806040"}));
@@ -957,7 +956,6 @@ fn contrast_writes_the_background_as_against_takes_it_with_another_working_space
     exec(&mut s, "paint.setFill", json!({"color": "#808080"}));
     let below = s.execute("color.contrast", &json!({}));
     let again = below.as_ref().ok().and_then(|b| s.execute("color.contrast", &json!({"against": b["against"].clone()})).ok());
-    cms::set_active(&before).unwrap();
     let given = given.unwrap();
     assert_eq!(given["against"], "#806040", "{given}");
     let (below, again) = (below.unwrap(), again.unwrap());

@@ -1710,6 +1710,7 @@ file-filter	Templates	Шаблони
 	Fail	Не відповідає
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Мінімальний контраст за WCAG 2.2: звичайний текст AA 4.5:1 (1.4.3) і AAA 7:1 (1.4.6), великий текст AA 3:1 і AAA 4.5:1, графіка й елементи керування AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Фон визначається в центрі виділення.
+	The closest color that passes {level}: click to apply it.	Найближчий колір, що відповідає {level}: клацніть, щоб застосувати його.
 	Graphics Processor	Графічний процесор
 	Graphics: {adapter}	Графіка: {adapter}
 	Gravity	Гравітація

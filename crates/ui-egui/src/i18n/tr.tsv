@@ -1599,6 +1599,7 @@ font-technology	Variable	Değişken
 	Fail	Kaldı
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 en düşük kontrast: normal metin AA 4.5:1 (1.4.3) ve AAA 7:1 (1.4.6), büyük metin AA 3:1 ve AAA 4.5:1, grafikler ve denetimler AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Arka plan seçimin ortasında okunur.
+	The closest color that passes {level}: click to apply it.	{level} düzeyini karşılayan en yakın renk: uygulamak için tıklayın.
 	Graphics Processor	Grafik İşlemcisi
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Yerçekimi

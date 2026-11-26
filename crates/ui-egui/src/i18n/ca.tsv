@@ -2155,6 +2155,7 @@ digits	Malayalam	Malaiàlam
 	Fail	No supera
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contrast mínim de les WCAG 2.2: text normal AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), text gran AA 3:1 i AAA 4.5:1, gràfics i controls AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	El fons es llegeix al centre de la selecció.
+	The closest color that passes {level}: click to apply it.	El color més proper que compleix {level}: feu clic per aplicar-lo.
 	Graphics Processor	Processador gràfic
 	Graphics: {adapter}	Gràfics: {adapter}
 	Gravity	Gravetat

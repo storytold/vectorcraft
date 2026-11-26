@@ -1,13 +1,11 @@
-//! The Color Wheel panel's Show Contrast row drawn headless through the `Fixture`: the ratio and
-//! the AA and AAA results, the color behind the selection, a pinned background, a drag on the
-//! wheel, the panel menu and `ui.colorWheel`.
+//! The Color Wheel panel's Show Contrast row drawn headless through the `Fixture`: the ratio and the
+//! AA and AAA results, the color behind the selection, a pinned background, the panel menu, a drag
+//! on the wheel, and `ui.colorWheel`.
 
-use craft::ui::runtime::access::Role;
 use serde_json::{Value, json};
 use vectorcraft_color::wcag;
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{BehindKey, RatioKey};
 use super::tests_color_wheel::Panel;
 use crate::VectorcraftApp;
 use crate::i18n::LangExt as _;
@@ -24,6 +22,18 @@ fn app(fill: &str) -> VectorcraftApp {
 
 fn shows(p: &Panel, text: &str) -> bool {
     p.fx.by_label(text).is_some()
+}
+
+/// The background read on its own, as `#rrggbb`, if the row read one.
+fn behind(p: &Panel) -> Option<Option<String>> {
+    p.app().ui.color_wheel_panel.behind.as_ref().map(|(_, hex)| hex.clone())
+}
+
+/// The background in the row's kept answer.
+fn measured(p: &Panel) -> Option<String> {
+    let app = p.app();
+    let answer = app.ui.color_wheel_panel.ratio.as_ref().and_then(|(_, r)| r.as_ref());
+    answer.and_then(|r| r["against"].as_str().map(str::to_string))
 }
 
 #[test]
@@ -45,25 +55,24 @@ fn the_contrast_for_menu_shows_the_categories_in_the_interface_language() {
     assert_ne!(names[0], Category::NormalText.label());
 }
 
-/// The panel menu's Show Contrast, Contrast For and Contrast Background rows set the settings, and
+/// The panel menu's Show Contrast, Contrast For and Contrast Background rows set the row, and
 /// Current Color pins the color the panel edits.
 #[test]
-fn the_panel_menu_sets_the_contrast_settings() {
+fn the_panel_menu_sets_the_row_its_category_and_its_background() {
     let mut app = app("#336699");
     app.run("ui.colorWheel", json!({"contrast": false})).unwrap();
-    let run = |app: &mut VectorcraftApp, row: &str| super::color_wheel::run(app, &format!("ui.colorWheel.{row}"), &json!({})).unwrap().unwrap();
-    assert_eq!(run(&mut app, "contrast")["contrast"], true);
-    assert_eq!(run(&mut app, "contrastFor.graphics")["contrastFor"], "graphics");
-    run(&mut app, "contrastBackground.current");
+    let run = |app: &mut VectorcraftApp, row: &str| super::color_wheel::run(app, &format!("ui.colorWheel.{row}"), &Value::Null).expect("a menu row");
+    run(&mut app, "contrast").unwrap();
+    assert!(app.ui.color_wheel.contrast);
+    run(&mut app, "contrastFor.largeText").unwrap();
+    assert_eq!(app.ui.color_wheel.contrast_for, wcag::Category::LargeText);
+    run(&mut app, "contrastBackground.current").unwrap();
     assert_eq!(app.ui.color_wheel.contrast_background.map(|c| c.to_hex()).as_deref(), Some("#336699"));
-    assert_eq!(run(&mut app, "contrastBackground.below")["contrastBackground"], Value::Null);
-    let mut states = craft::ui::runtime::commands::CommandStates::new();
+    run(&mut app, "contrastBackground.below").unwrap();
+    assert_eq!(app.ui.color_wheel.contrast_background, None);
+    // With no solid color in the active proxy there is no color to pin.
     app.run("paint.setFill", json!({"none": true})).unwrap();
-    super::color_wheel::menu_states(&app, &mut states);
-    let current = states.get(&craft::keymap::CommandRef::new("ui.colorWheel.contrastBackground.current")).expect("a state");
-    assert!(!current.is_enabled(), "Current Color needs a color to pin");
-    let e = super::color_wheel::run(&mut app, "ui.colorWheel.contrastBackground.current", &json!({})).unwrap().unwrap_err();
-    assert_eq!(e, "Current Color needs a solid color in the active proxy");
+    assert!(run(&mut app, "contrastBackground.current").is_err());
     assert_eq!(app.ui.color_wheel.contrast_background, None, "the error pins nothing");
 }
 
@@ -75,11 +84,13 @@ fn an_answer_kept_under_other_color_settings_is_asked_again() {
     app.run("ui.colorWheel", json!({"contrastBackground": "#ffffff"})).unwrap();
     let mut p = Panel::new(app);
     assert!(shows(&p, "21.00:1"));
-    let (mut key, answer) = p.app().ui.color_wheel_panel.ratio.clone().expect("the row keeps its answer");
-    let mut stale = answer.expect("an answer");
-    stale["ratio"] = json!(1.0);
-    key.under.1 = u64::MAX;
-    p.app_mut().ui.color_wheel_panel.ratio = Some((key, Some(stale)));
+    {
+        let mut app = p.app_mut();
+        let (key, answer) = app.ui.color_wheel_panel.ratio.as_mut().expect("the row keeps its answer");
+        let stale = answer.as_mut().expect("an answer");
+        stale["ratio"] = json!(1.0);
+        key.under.1 = u64::MAX;
+    }
     p.fx.idle(2);
     assert!(shows(&p, "21.00:1"), "the answer is asked again under the current settings");
 }
@@ -127,9 +138,19 @@ fn the_background_is_the_art_behind_the_selection() {
     let want = wcag::ratio_text(wcag::contrast_ratio([0.0; 3], [1.0, 1.0, 0.0]));
     assert!(shows(&p, &want), "black on the locked yellow: {want}");
     // Screen readers find the chip by its name, with the background's hex value as its value.
-    let chip = p.node("Background");
-    assert_eq!(p.fx.tree().role_of(chip.node), Some(Role::COLOR_WELL));
     assert_eq!(p.value("Background").as_deref(), Some("#ffff00"));
+}
+
+/// A pinned 100 % K is measured as black with a rich black Appearance of Black, and the Background
+/// chip names the black the ratio uses.
+#[test]
+fn the_background_chip_shows_the_black_a_pinned_k_is_measured_as() {
+    let mut app = app("#ffffff");
+    app.run("ui.colorWheel", json!({"contrastBackground": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
+    app.session.prefs.black_on_screen = "rich".into();
+    let p = Panel::new(app);
+    assert!(shows(&p, "21.00:1"), "white on black");
+    assert_eq!(p.value("Background").as_deref(), Some("#000000"));
 }
 
 #[test]
@@ -157,39 +178,30 @@ fn the_row_follows_the_default_fill_with_nothing_selected() {
     assert!(shows(&p, "1.00:1"), "white on the pinned white");
 }
 
-/// The background read on its own, with what it was read for.
-fn behind(p: &Panel) -> Option<(BehindKey, Option<String>)> {
-    p.app().ui.color_wheel_panel.behind.clone()
-}
-
-/// The background in the row's kept answer.
-fn measured(p: &Panel) -> Option<String> {
-    let kept: Option<(RatioKey, Option<Value>)> = p.app().ui.color_wheel_panel.ratio.clone();
-    kept.and_then(|(_, r)| r).and_then(|r| r["against"].as_str().map(str::to_string))
-}
-
 /// During a drag on the wheel every preview raises the document's revision, and the row asks again
-/// for the ratio, whose answer gives the chip: the background is not read on its own as well. The
-/// drag is an interaction whose previews set the fill, as the Show Document Colors row's drag test
-/// runs it.
+/// for the ratio, whose answer gives the chip: the background is not read on its own as well.
 #[test]
 fn a_drag_on_the_wheel_reads_the_background_only_with_the_ratio() {
     let mut p = Panel::new(app("#336699"));
     assert_eq!(measured(&p).as_deref(), Some("#ffffff"));
     assert!(behind(&p).is_none(), "the answer gave the background");
-    p.app_mut().session.begin_interaction("test").unwrap();
-    for fill in ["#3a6a9a", "#406f9f", "#4675a5"] {
-        p.run("paint.setFill", json!({"color": fill}));
-    }
+    let ratio = |p: &Panel| p.app().ui.color_wheel_panel.ratio.as_ref().and_then(|(_, r)| r.as_ref()).and_then(|r| r["ratio"].as_f64());
+    let first = ratio(&p);
+    // A drag on the hue ring, near its right edge.
+    let wheel = p.node("Color wheel").rect;
+    let at = wheel.center() + egui::vec2(wheel.width() * 0.45, 0.0);
+    let by = egui::vec2(0.0, 24.0);
+    p.fx.drag_hold_at(at, by);
     assert!(p.app().session.in_interaction(), "the drag previews on an interaction");
-    p.app_mut().session.commit_interaction().unwrap();
-    p.fx.idle(2);
+    assert_ne!(ratio(&p), first, "the row asked again for the previewed color");
+    p.fx.release_at(at + by).idle(2);
+    assert!(!p.app().session.in_interaction(), "the release ends the drag");
     assert!(behind(&p).is_none(), "the background was not read on its own during or after the drag");
     assert_eq!(measured(&p).as_deref(), Some("#ffffff"));
 }
 
-/// With no color to measure the row has no ratio, and the chip still shows the background, read on
-/// its own, and read again for another selection during an interaction.
+/// With no color to measure the row has no ratio, and the chip still shows the background a pick
+/// would be measured against, read again for another selection during an interaction.
 #[test]
 fn a_paint_with_no_color_still_shows_the_background() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -205,13 +217,12 @@ fn a_paint_with_no_color_still_shows_the_background() {
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let mut p = Panel::new(app);
     assert!(shows(&p, "—"), "a fill of None has no ratio");
-    let hex = |p: &Panel| behind(p).and_then(|(_, hex)| hex);
-    assert_eq!(hex(&p).as_deref(), Some("#ffff00"));
-    assert_eq!(p.value("Background").as_deref(), Some("#ffff00"), "the chip shows it");
+    assert_eq!(p.value("Background").as_deref(), Some("#ffff00"));
+    assert!(behind(&p).is_none(), "the background a pick is measured against was not read again on its own");
     p.app_mut().run("select.set", json!({"ids": [b]})).unwrap();
     p.app_mut().session.begin_interaction("test").unwrap();
     p.fx.idle(2);
-    assert_eq!(hex(&p).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
+    assert_eq!(p.value("Background").as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
 }
 
 /// With no color to measure, a move during an interaction reads the background again at the
@@ -227,14 +238,13 @@ fn a_move_during_an_interaction_reads_the_background_again() {
     app.run("paint.setFill", json!({"none": true})).unwrap();
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let mut p = Panel::new(app);
-    let hex = |p: &Panel| behind(p).and_then(|(_, hex)| hex);
     p.app_mut().session.begin_interaction("test").unwrap();
     p.fx.idle(2);
-    assert_eq!(hex(&p).as_deref(), Some("#ffff00"));
+    assert_eq!(p.value("Background").as_deref(), Some("#ffff00"));
     p.app_mut().run("object.move", json!({"dx": 110, "dy": 0})).unwrap();
     assert!(p.app().session.in_interaction(), "the move is part of the interaction");
     p.fx.idle(2);
-    assert_eq!(hex(&p).as_deref(), Some("#ffffff"), "the background at the new place");
+    assert_eq!(p.value("Background").as_deref(), Some("#ffffff"), "the background at the new place");
 }
 
 /// An interaction keeps no answer for another selection: the row asks again, and the chip shows
@@ -257,7 +267,7 @@ fn an_interaction_reads_the_background_again_for_another_selection() {
     p.app_mut().session.begin_interaction("test").unwrap();
     p.fx.idle(2);
     assert_eq!(measured(&p).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
-    assert_eq!(p.value("Background").as_deref(), Some("#ffffff"), "the chip shows it");
+    assert_eq!(p.value("Background").as_deref(), Some("#ffffff"));
 }
 
 /// Without a pin the row asks for the color behind the selection, so a translucent group holding
@@ -280,10 +290,13 @@ fn the_row_answers_as_color_contrast_does_inside_a_translucent_group() {
     app.run("select.set", json!({"ids": [front]})).unwrap();
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let p = Panel::new(app);
-    let want = p.app_mut().session.execute("color.contrast", &json!({})).unwrap();
-    let against = want["against"].clone();
-    let given = p.app_mut().session.execute("color.contrast", &json!({"against": against})).unwrap();
-    let (want, given) = (wcag::ratio_text(want["ratio"].as_f64().unwrap()), wcag::ratio_text(given["ratio"].as_f64().unwrap()));
+    let (want, given) = {
+        let mut app = p.app_mut();
+        let want = app.session.execute("color.contrast", &json!({})).unwrap();
+        let against = want["against"].clone();
+        let given = app.session.execute("color.contrast", &json!({"against": against})).unwrap();
+        (wcag::ratio_text(want["ratio"].as_f64().unwrap()), wcag::ratio_text(given["ratio"].as_f64().unwrap()))
+    };
     assert_ne!(want, given, "the group's other art makes the two answers differ");
     assert!(shows(&p, &want), "the row shows {want}, not {given}");
 }

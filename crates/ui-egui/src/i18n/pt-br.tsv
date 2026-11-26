@@ -4136,6 +4136,7 @@ font-technology	Variable	Variáveis
 	Fail	Reprovado
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo da WCAG 2.2: texto normal AA 4.5:1 (1.4.3) e AAA 7:1 (1.4.6), texto grande AA 3:1 e AAA 4.5:1, gráficos e controles AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	O fundo é lido no centro da seleção.
+	The closest color that passes {level}: click to apply it.	A cor mais próxima que atende a {level}: clique para aplicá-la.
 	Highlight Rows	Destacar linhas
 	Highlight Variable	Destacar variável
 	Sort Variables	Ordenar variáveis

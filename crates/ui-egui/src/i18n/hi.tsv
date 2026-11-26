@@ -2629,6 +2629,7 @@ arrowhead	Feather	पंख
 	Fail	फ़ेल
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 न्यूनतम कंट्रास्ट: सामान्य टेक्स्ट AA 4.5:1 (1.4.3) और AAA 7:1 (1.4.6), बड़ा टेक्स्ट AA 3:1 और AAA 4.5:1, ग्राफ़िक्स और कंट्रोल AA 3:1 (1.4.11)।
 	The background is read at the center of the selection.	पृष्ठभूमि सिलेक्शन के केंद्र पर पढ़ी जाती है।
+	The closest color that passes {level}: click to apply it.	{level} पास करने वाला सबसे नज़दीकी रंग: लागू करने के लिए क्लिक करें।
 	Graphics Processor	ग्राफिक्स प्रोसेसर
 	Graphics: {adapter}	ग्राफिक्स: {adapter}
 	Gravity	ग्रेविटी

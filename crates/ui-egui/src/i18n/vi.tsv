@@ -1944,6 +1944,7 @@ file-filter	Templates	Mẫu
 	Fail	Không đạt
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Độ tương phản tối thiểu theo WCAG 2.2: văn bản thường AA 4.5:1 (1.4.3) và AAA 7:1 (1.4.6), văn bản lớn AA 3:1 và AAA 4.5:1, đồ họa và điều khiển AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Nền được đọc tại tâm vùng chọn.
+	The closest color that passes {level}: click to apply it.	Màu gần nhất đạt {level}: bấm để áp dụng.
 	Graphics Processor	Bộ xử lý đồ họa
 	Graphics: {adapter}	Đồ họa: {adapter}
 	Gravity	Trọng lực

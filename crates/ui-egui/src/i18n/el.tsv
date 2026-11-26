@@ -1598,6 +1598,7 @@ font-technology	Variable	Μεταβλητές
 	Fail	Αποτυχία
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Ελάχιστη αντίθεση κατά WCAG 2.2: κανονικό κείμενο AA 4.5:1 (1.4.3) και AAA 7:1 (1.4.6), μεγάλο κείμενο AA 3:1 και AAA 4.5:1, γραφικά και στοιχεία ελέγχου AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Το φόντο διαβάζεται στο κέντρο της επιλογής.
+	The closest color that passes {level}: click to apply it.	Το πλησιέστερο χρώμα που περνά το {level}: κάντε κλικ για να το εφαρμόσετε.
 	Graphics Processor	Επεξεργαστής γραφικών
 	Graphics: {adapter}	Γραφικά: {adapter}
 	Gravity	Βαρύτητα

@@ -1742,6 +1742,7 @@
 	Fail	નાપાસ
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 લઘુત્તમ કોન્ટ્રાસ્ટ: સામાન્ય ટેક્સ્ટ AA 4.5:1 (1.4.3) અને AAA 7:1 (1.4.6), મોટું ટેક્સ્ટ AA 3:1 અને AAA 4.5:1, ગ્રાફિક્સ અને નિયંત્રણો AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	પૃષ્ઠભૂમિ પસંદગીના કેન્દ્રમાં વાંચવામાં આવે છે.
+	The closest color that passes {level}: click to apply it.	{level} પાસ કરતો સૌથી નજીકનો રંગ: તેને લાગુ કરવા ક્લિક કરો.
 	Graphics Processor	ગ્રાફિક્સ પ્રોસેસર
 	Graphics: {adapter}	ગ્રાફિક્સ: {adapter}
 	Gravity	ગ્રેવિટી

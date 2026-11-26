@@ -1679,6 +1679,7 @@ file-filter	Templates	Vorlagen
 	Fail	Nicht bestanden
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Mindestkontrast nach WCAG 2.2: normaler Text AA 4.5:1 (1.4.3) und AAA 7:1 (1.4.6), großer Text AA 3:1 und AAA 4.5:1, Grafiken und Bedienelemente AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Der Hintergrund wird in der Mitte der Auswahl gemessen.
+	The closest color that passes {level}: click to apply it.	Die nächste Farbe, die {level} besteht: Klicken Sie, um sie anzuwenden.
 	Graphics Processor	Grafikprozessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Schwerkraft

@@ -2147,6 +2147,7 @@ digits	Malayalam	Malajalam
 	Fail	Ei läpäise
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2:n vähimmäiskontrastit: tavallinen teksti AA 4.5:1 (1.4.3) ja AAA 7:1 (1.4.6), suuri teksti AA 3:1 ja AAA 4.5:1, grafiikka ja säätimet AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Tausta luetaan valinnan keskeltä.
+	The closest color that passes {level}: click to apply it.	Lähin väri, joka läpäisee tason {level}: käytä sitä napsauttamalla.
 	Local Libraries	Paikalliset kirjastot
 	Add Content	Lisää sisältöä
 	Click to apply to the selected type	Käytä valittuun tekstiin napsauttamalla

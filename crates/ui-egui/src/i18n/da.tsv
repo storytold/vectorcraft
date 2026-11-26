@@ -4778,6 +4778,7 @@ digits	Malayalam	Malayalam
 	Fail	Ikke bestået
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Mindstekontrast efter WCAG 2.2: normal tekst AA 4.5:1 (1.4.3) og AAA 7:1 (1.4.6), stor tekst AA 3:1 og AAA 4.5:1, grafik og kontrolelementer AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	Baggrunden aflæses i midten af markeringen.
+	The closest color that passes {level}: click to apply it.	Den nærmeste farve, der består {level}: klik for at anvende den.
 	Local Libraries	Lokale biblioteker
 	Add Content	Tilføj indhold
 	Click to apply to the selected type	Klik for at anvende på den markerede tekst

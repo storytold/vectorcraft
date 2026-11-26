@@ -1688,6 +1688,7 @@ font-technology	Variable	Variables
 	Fail	No cumple
 	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo de WCAG 2.2: texto normal AA 4.5:1 (1.4.3) y AAA 7:1 (1.4.6), texto grande AA 3:1 y AAA 4.5:1, gráficos y controles AA 3:1 (1.4.11).
 	The background is read at the center of the selection.	El fondo se lee en el centro de la selección.
+	The closest color that passes {level}: click to apply it.	El color más cercano que cumple {level}: haga clic para aplicarlo.
 	Graphics Processor	Procesador gráfico
 	Graphics: {adapter}	Gráficos: {adapter}
 	Gravity	Gravedad

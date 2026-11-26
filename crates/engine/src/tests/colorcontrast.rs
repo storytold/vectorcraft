@@ -751,6 +751,14 @@ fn a_picked_symbol_object_is_measured_with_its_instances_stain() {
     let r = s.execute("color.contrast", &json!({"against": "#000000", "opacity": 100})).unwrap();
     let want = vectorcraft_color::wcag::contrast_ratio([0.5; 3], [0.0; 3]);
     assert!((ratio(&r) - want).abs() < 1e-3, "white stained half way to black: {r}");
+    // The fix is the color to store: the stain mixes it half way to black again, and the result
+    // just meets AA against white.
+    let r = s.execute("color.contrast", &json!({"against": "#ffffff", "opacity": 100})).unwrap();
+    assert_eq!(r["normalText"]["aa"], false, "{r}");
+    let fix = fix_color(&r["fix"]["aa"]);
+    let drawn = fix.lerp(&vectorcraft_color::Color::BLACK, 0.5).to_rgb_uncalibrated();
+    let got = vectorcraft_color::wcag::contrast_ratio(drawn, [1.0; 3]);
+    assert!((4.5..4.57).contains(&got), "{fix:?} draws {drawn:?}: {got}");
 }
 
 #[test]
@@ -851,4 +859,310 @@ fn a_fill_of_none_has_no_color_to_measure() {
     let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
     assert!(e.contains("has no color"), "{e}");
     assert!(s.execute("color.contrast", &json!({"color": "#000000"})).is_ok());
+}
+
+fn fix_color(v: &Value) -> vectorcraft_color::Color {
+    crate::cmd::color_value(v).unwrap_or_else(|| panic!("not a color: {v}"))
+}
+
+fn oklch_hue(c: &vectorcraft_color::Color) -> f64 {
+    let [_, a, b] = vectorcraft_color::libraries::to_oklab(c);
+    b.atan2(a).to_degrees()
+}
+
+#[test]
+fn a_failing_color_answers_the_closest_passing_color_of_its_hue() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78"})).unwrap();
+    assert_eq!(r["for"], "normalText");
+    let aa = fix_color(&r["fix"]["aa"]);
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#355f78"})).unwrap();
+    assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
+    let want = oklch_hue(&vectorcraft_color::Color::from_hex("#fdc96e").unwrap());
+    assert!((oklch_hue(&aa) - want).abs() < 1.0, "{} {want}", oklch_hue(&aa));
+    assert!(matches!(aa, vectorcraft_color::Color::Rgb { .. }), "an RGB color answers RGB: {aa:?}");
+    // White on #355F78 is 6.87:1 and black 3.05:1, so no color reaches AAA's 7:1.
+    assert!(r["fix"]["aaa"].is_null(), "{r}");
+    let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
+    let aaa = s.execute("color.contrast", &json!({"color": large["fix"]["aaa"], "against": "#355f78"})).unwrap();
+    assert!((4.5..4.57).contains(&ratio(&aaa)), "large text AAA is AA's 4.5:1 for normal text: {aaa}");
+}
+
+/// The canvas paints a color with 8 bits per channel, so a fix passes once rounded that way too:
+/// #777777 on white is 4.48:1, a gray of about 118.7/255 meets 4.5:1 but paints as #777777 again,
+/// and the fix has to paint as #767676 (4.54:1) or darker.
+#[test]
+fn a_fix_passes_as_the_canvas_paints_it() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#777777", "against": "#ffffff"})).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    let painted = fix.to_rgb_uncalibrated().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0);
+    let got = vectorcraft_color::wcag::contrast_ratio(painted, [1.0; 3]);
+    assert!(got >= 4.5, "{fix:?} paints as {painted:?}: {got}");
+    // The fix is the closest one: the gray one 8-bit step lighter fails.
+    let lighter = painted.map(|v| (v + 1.0 / 255.0).min(1.0));
+    assert!(vectorcraft_color::wcag::contrast_ratio(lighter, [1.0; 3]) < 4.5, "{fix:?} paints as {painted:?}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff"})).unwrap();
+    assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
+}
+
+/// The backdrop shows 100 % K alone as `color.contrast` measures it under each Appearance of Black,
+/// so the Color Wheel's contrast lines use the same color.
+#[test]
+fn the_backdrop_shows_black_as_the_appearance_of_black_setting_does() {
+    let k = vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0);
+    let cms = vectorcraft_color::cms::active();
+    let mut s = Session::new();
+    let p = json!({"color": serde_json::to_value(k).unwrap(), "against": "#ffffff"});
+    let (accurate, backdrop) = crate::cmd::contrast_measure(&s, &p).unwrap();
+    assert_ne!(backdrop.shown(&cms, &k), [0.0; 3]);
+    s.prefs.black_on_screen = "rich".into();
+    let (rich, backdrop) = crate::cmd::contrast_measure(&s, &p).unwrap();
+    assert_eq!(backdrop.shown(&cms, &k), [0.0; 3]);
+    assert!(ratio(&rich) > ratio(&accurate), "{rich} {accurate}");
+}
+
+/// A translucent fix also meets the minimum with the color, the opacity, the background and the
+/// composited pixel rounded to 8 bits per channel.
+#[test]
+fn a_translucent_fix_passes_at_eight_bits() {
+    let eight = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0;
+    let at_eight_bits = |fix: &vectorcraft_color::Color, opacity: f32, against: f32| {
+        let (a, b) = (eight(opacity), eight(against));
+        let pixel = fix.to_rgb_uncalibrated().map(|c| eight(eight(c) * a + b * (1.0 - a)));
+        vectorcraft_color::wcag::contrast_ratio(pixel, [b; 3])
+    };
+    let mut s = Session::new();
+    // A gray can pass only before rounding: #808080 at 91.1 % over black measures 4.53:1, and at
+    // 232 / 255 its pixel is #747474 (4.49:1).
+    let r = s.execute("color.contrast", &json!({"color": "#707070", "against": "#000000", "opacity": 91.1})).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(at_eight_bits(&fix, 0.911, 0.0) >= 4.5, "{fix:?}");
+    // #040404 at 195 / 255 over a gray of 137.51 / 255 measures 4.5002:1, and over 138 / 255 it is
+    // 4.4965:1.
+    let bg = 137.51 / 255.0;
+    let p = json!({"color": "#303030", "against": [bg, bg, bg], "opacity": 19500.0 / 255.0});
+    let r = s.execute("color.contrast", &p).unwrap();
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(at_eight_bits(&fix, 195.0 / 255.0, bg) >= 4.5, "{fix:?}");
+    // Black at 41.7 % over white measures 3.008:1, and its pixel at 8 bits is 2.995:1, so no gray
+    // at that opacity gets a fix.
+    let p = json!({"color": "#202020", "against": "#ffffff", "opacity": 41.7, "for": "graphics"});
+    let r = s.execute("color.contrast", &p).unwrap();
+    assert_eq!(r["graphics"]["aa"], false, "{r}");
+    assert!(r["fix"]["aa"].is_null(), "{r}");
+}
+
+#[test]
+fn a_passing_color_has_no_fix_and_graphics_have_no_aaa_fix() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": "#000000", "against": "#ffffff"})).unwrap();
+    assert_eq!(r["fix"], json!({"aa": null, "aaa": null}));
+    let g = s.execute("color.contrast", &json!({"color": "#cccccc", "against": "#ffffff", "for": "graphics"})).unwrap();
+    assert_eq!(g["for"], "graphics");
+    let fix = g["fix"].as_object().unwrap();
+    assert_eq!(fix.keys().collect::<Vec<_>>(), ["aa"], "{g}");
+    let back = s.execute("color.contrast", &json!({"color": g["fix"]["aa"], "against": "#ffffff"})).unwrap();
+    assert!((3.0..3.04).contains(&ratio(&back)), "{back}");
+    let large = s.execute("color.contrast", &json!({"color": "#fdc96e", "against": "#355f78", "for": "largeText"})).unwrap();
+    assert!(large["fix"]["aa"].is_null(), "4.49:1 meets large text AA: {large}");
+    assert!(!large["fix"]["aaa"].is_null(), "{large}");
+}
+
+#[test]
+fn a_cmyk_color_answers_a_cmyk_fix() {
+    let mut s = Session::new();
+    let r = s.execute("color.contrast", &json!({"color": {"c": 0, "m": 40, "y": 70, "k": 20}, "against": "#355f78"})).unwrap();
+    assert_eq!(r["normalText"]["aa"], false, "{r}");
+    let fix = fix_color(&r["fix"]["aa"]);
+    assert!(matches!(fix, vectorcraft_color::Color::Cmyk { .. }), "{fix:?}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#355f78"})).unwrap();
+    assert!(ratio(&back) >= 4.5, "{back}");
+}
+
+#[test]
+fn a_fix_is_drawn_at_the_same_opacity_and_none_passes_out_of_reach() {
+    let mut s = Session::new();
+    // #808080 at 50 % over white draws as a light gray: black at 50 % draws 0.5 gray, 3.98:1, which
+    // meets large text AA (3:1) but not AAA (4.5:1).
+    let p = json!({"color": "#808080", "against": "#ffffff", "opacity": 50, "for": "largeText"});
+    let r = s.execute("color.contrast", &p).unwrap();
+    assert_eq!(r["largeText"]["aa"], false, "{r}");
+    assert!(r["fix"]["aaa"].is_null(), "no gray at 50 % reaches 4.5:1: {r}");
+    let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff", "opacity": 50})).unwrap();
+    assert!((3.0..3.04).contains(&ratio(&back)), "{back}");
+}
+
+/// A square with a 50 % top fill row over locked orange, with and without a lower fill row and in a
+/// Screen group or not: isolating the object's blending leaves what a translucent Normal row draws
+/// as it is, on the canvas and in the answer, for each blend mode of the object.
+#[test]
+fn isolation_leaves_a_translucent_normal_row_as_it_draws() {
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    for blend in ["normal", "multiply", "screen", "difference", "overlay"] {
+        for fill in ["#808080", "#ffffff", "#2040a0"] {
+            for lower in [false, true] {
+                let mut s = session();
+                s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+                s.execute("paint.setFill", &json!({"color": "#ff8000"})).unwrap();
+                s.execute("object.lock", &json!({})).unwrap();
+                let n = id(s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap());
+                s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+                if lower {
+                    s.execute("appearance.addFill", &json!({})).unwrap();
+                }
+                let st = s.active().unwrap();
+                let items = &st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items;
+                let top = items.iter().rposition(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+                s.execute("appearance.setItem", &json!({"index": top, "color": fill, "opacity": 50})).unwrap();
+                s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+                s.execute("transparency.set", &json!({"item": null, "blend": blend})).unwrap();
+                if lower {
+                    s.execute("object.group", &json!({})).unwrap();
+                    s.execute("transparency.set", &json!({"blend": "screen"})).unwrap();
+                    s.execute("select.set", &json!({"ids": [n]})).unwrap();
+                }
+                let plain = s.execute("color.contrast", &json!({})).unwrap();
+                let (p, drawn) = canvas_ratio(&s, &plain);
+                s.execute("transparency.set", &json!({"item": null, "isolate": true})).unwrap();
+                let isolated = s.execute("color.contrast", &json!({})).unwrap();
+                let (q, _) = canvas_ratio(&s, &isolated);
+                let case = format!("{blend} {fill} lower row and group: {lower}");
+                assert_eq!(p, q, "the canvas draws the same: {case}");
+                assert!((ratio(&plain) - ratio(&isolated)).abs() < 1e-6, "{case}: {plain} {isolated}");
+                assert!((ratio(&plain) - drawn).abs() < 0.02, "{case}: {plain} against {drawn}");
+            }
+        }
+    }
+}
+
+/// Two squares over locked orange, each with a 50 % white top fill over a blue Multiply fill, one
+/// isolating its blending: the blue multiplies with the orange in one and draws over nothing in the
+/// other, so the white draws over different rows and there is no one answer. A given background
+/// stands for the rows below and answers.
+#[test]
+fn a_translucent_row_over_a_blending_row_in_objects_of_different_isolation_has_no_one_answer() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 180, "height": 180})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let square = |s: &mut Session, x: i32, isolate: bool| {
+        let n = id(s.execute("shape.rectangle", &json!({"x": x, "y": 50, "width": 50, "height": 100})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("appearance.addFill", &json!({})).unwrap();
+        let st = s.active().unwrap();
+        let items = &st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items;
+        let top = items.iter().rposition(|i| i.is_fill()).unwrap();
+        let lower = items.iter().position(|i| i.is_fill()).unwrap();
+        s.execute("appearance.setItem", &json!({"index": top, "color": "#ffffff", "opacity": 50})).unwrap();
+        s.execute("appearance.setItem", &json!({"index": lower, "blend": "multiply"})).unwrap();
+        s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+        if isolate {
+            s.execute("transparency.set", &json!({"item": null, "isolate": true})).unwrap();
+        }
+        n
+    };
+    let a = square(&mut s, 30, false);
+    let b = square(&mut s, 120, true);
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let ra = ratio(&s.execute("color.contrast", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    let rb = ratio(&s.execute("color.contrast", &json!({})).unwrap());
+    assert!((ra - rb).abs() > 0.1, "the white draws over different rows: {ra} {rb}");
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("the selected objects' colors differ"), "{e}");
+    s.execute("color.contrast", &json!({"against": "#000000"})).unwrap();
+    // A blending row at no opacity does not show, so the isolation no longer changes the answer.
+    for n in [a, b] {
+        let st = s.active().unwrap();
+        let lower = st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items.iter().position(|i| i.is_fill()).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [n], "index": lower, "opacity": 0})).unwrap();
+    }
+    s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+}
+
+/// A Difference square centered on the edge between locked black and white art: the art behind it
+/// is not one color where it is read, so no one color stands for it; a given background answers,
+/// and over one color the background is read as before.
+#[test]
+fn a_blend_mode_over_art_of_several_colors_has_no_one_answer() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    // Without the default stroke, which would cover the edge.
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("is not one color where it is read") && e.contains("give `against`"), "{e}");
+    let given = s.execute("color.contrast", &json!({"against": "#ffffff"})).unwrap();
+    assert!((ratio(&given) - 21.0).abs() < 1e-6, "white minus white is black: {given}");
+    // In Normal mode the color is drawn as it is, over the background read as one color.
+    s.execute("transparency.set", &json!({"blend": "normal"})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+    // Moved over the white art alone, the square blends with one color again.
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    s.execute("object.move", &json!({"dx": 40, "dy": 0})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    assert!((ratio(&r) - 21.0).abs() < 1e-3, "white minus white is black: {r}");
+}
+
+/// A Difference square over a white square in a 50 % group that isolates its blending, over the
+/// edge between black and white art: the square blends only with the white inside the group, so
+/// the art of two colors outside it, which the group draws over in Normal mode, leaves one answer.
+#[test]
+fn a_blend_mode_inside_an_isolating_group_answers_over_art_of_several_colors() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let back = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let square = id(s.execute("shape.rectangle", &json!({"x": 70, "y": 70, "width": 60, "height": 60})).unwrap());
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    s.execute("object.group", &json!({"ids": [back, square]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50, "isolate": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [square]})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+}
+
+/// With a fill of None, what a pick would be measured against is still read: the Color Wheel's
+/// contrast lines show where a solid color in its place passes.
+#[test]
+fn a_pick_for_a_fill_of_none_is_measured_against_the_background() {
+    let mut s = blended_over_red("normal");
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    assert!(s.execute("color.contrast", &json!({})).is_err(), "no color to measure");
+    let backdrop = crate::cmd::contrast_pick_backdrop(&s, &json!({})).unwrap();
+    let cms = vectorcraft_color::cms::active();
+    let black = backdrop.ratio(backdrop.shown(&cms, &vectorcraft_color::Color::rgb(0.0, 0.0, 0.0)));
+    let want = vectorcraft_color::wcag::contrast_ratio([0.0; 3], [1.0, 0.0, 0.0]);
+    assert!((black - want).abs() < 1e-3, "black over the red art: {black} against {want}");
+    assert_eq!(backdrop.against_hex(), "#ff0000");
+}
+
+#[test]
+fn for_takes_only_the_three_categories() {
+    let mut s = Session::new();
+    for bad in [json!("NormalText"), json!("aa"), json!(1), json!(true)] {
+        let e = s.execute("color.contrast", &json!({"color": "#000000", "against": "#ffffff", "for": bad})).unwrap_err().to_string();
+        assert!(e.contains("`for` must be one of normalText, largeText, graphics"), "{e}");
+    }
 }

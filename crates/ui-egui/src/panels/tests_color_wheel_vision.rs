@@ -90,8 +90,9 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let settings = |view: &str, vision: bool| {
         json!({
-            "view": view, "channel": "hue", "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "opacity": false,
-            "contrast": false, "contrastFor": "normalText", "contrastBackground": null, "vision": vision, "documentColors": false
+            "view": view, "channel": "hue", "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary",
+            "opacity": false, "contrast": false, "contrastFor": "normalText", "contrastBackground": null, "vision": vision,
+            "documentColors": false
         })
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", false));

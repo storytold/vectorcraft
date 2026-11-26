@@ -2,6 +2,7 @@
 //! the relative luminance of display sRGB with the 0.04045 threshold, the ratio
 //! (L1 + 0.05) / (L2 + 0.05) from 1 to 21, and the minimum ratios of success criteria 1.4.3
 //! (Contrast (Minimum), AA), 1.4.6 (Contrast (Enhanced), AAA) and 1.4.11 (Non-text Contrast, AA).
+//! [`closest_passing`] finds the color of the same hue nearest in lightness that meets a minimum.
 
 /// What the content in front is, which sets the ratio it needs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -87,6 +88,82 @@ pub fn ratio_text(ratio: f64) -> String {
     format!("{:.2}:1", (r * 100.0).floor() / 100.0)
 }
 
+/// The lightnesses [`closest_passing`] tests on each side before it narrows down the first that
+/// passes.
+const LIGHTNESS_SAMPLES: usize = 16;
+/// The halvings [`closest_passing`] makes of the lightness step, which leave it within 1e-9.
+const LIGHTNESS_STEPS: usize = 32;
+/// The golden-section steps [`closest_passing`] takes to find the highest ratio between samples,
+/// which leave it within 1e-7 of the step.
+const PEAK_STEPS: usize = 32;
+/// Where between `lo` and `hi` `f` is highest, by golden-section search, which finds the top of a
+/// single peak between them. `f` is called 34 times.
+pub fn peak_between(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> f64) -> f64 {
+    let g = (5f64.sqrt() - 1.0) / 2.0;
+    let (mut a, mut b) = (hi - g * (hi - lo), lo + g * (hi - lo));
+    let (mut fa, mut fb) = (f(a), f(b));
+    for _ in 0..PEAK_STEPS {
+        if fa < fb {
+            (lo, a, fa) = (a, b, fb);
+            b = lo + g * (hi - lo);
+            fb = f(b);
+        } else {
+            (hi, b, fb) = (b, a, fa);
+            a = hi - g * (hi - lo);
+            fa = f(a);
+        }
+    }
+    if fa > fb { a } else { b }
+}
+
+/// The display sRGB color closest to `srgb` whose `ratio` is at least `minimum`: the same OKLCH hue
+/// (<https://bottosson.github.io/posts/oklab/>) with the lightness raised or lowered, whichever
+/// takes the smaller step, and the chroma lowered where sRGB cannot show it, to the largest chroma
+/// below it that fits ([`crate::oklab::from_oklch`]). Each side is tested at
+/// 16 even steps up to white or black, and the step before the first that passes is narrowed down.
+/// When no step passes, the highest ratio between the neighbors of the highest step is looked for,
+/// so a color that passes only in a narrow band between white and black (as under a Difference
+/// blend) is found too. `srgb` itself when it passes, and None when nothing passes. The work is
+/// bounded: at most 167 colors are tested. The answer is the nearest passing color when the colors
+/// that pass on each side form one stretch up to white or black, as for a plain contrast ratio.
+/// When `ratio` lets colors pass in more than one stretch, a stretch that lies between two tested
+/// steps before the first passing one is missed, and a farther color can be returned.
+pub fn closest_passing(srgb: [f32; 3], minimum: f64, ratio: &dyn Fn([f32; 3]) -> f64) -> Option<[f32; 3]> {
+    let passes = |c: [f32; 3]| ratio(c) >= minimum;
+    let srgb = srgb.map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 });
+    if passes(srgb) {
+        return Some(srgb);
+    }
+    let [l, c, h] = crate::oklab::to_oklch(srgb);
+    let mut best: Option<(f64, [f32; 3])> = None;
+    for end in [1.0, 0.0] {
+        let at = |t: f64| crate::oklab::from_oklch(l + (end - l) * t, c, h).0;
+        let step = |k: usize| k as f64 / LIGHTNESS_SAMPLES as f64;
+        let ratios: Vec<f64> = (1..=LIGHTNESS_SAMPLES).map(|k| ratio(at(step(k)))).collect();
+        // `lo` fails and `hi` passes, the step before the first sample that passes.
+        let found = match ratios.iter().position(|r| *r >= minimum) {
+            Some(i) => Some((step(i), step(i + 1))),
+            None => {
+                // Every sample fails: look for a higher ratio around the highest one.
+                let top = ratios.iter().enumerate().fold((0, f64::NEG_INFINITY), |m, (i, r)| if *r > m.1 { (i, *r) } else { m }).0;
+                let (lo, hi) = (step(top), step((top + 2).min(LIGHTNESS_SAMPLES)));
+                let peak = peak_between(lo, hi, &|t| ratio(at(t)));
+                passes(at(peak)).then_some((lo, peak))
+            }
+        };
+        let Some((mut lo, mut hi)) = found else { continue };
+        for _ in 0..LIGHTNESS_STEPS {
+            let mid = (lo + hi) / 2.0;
+            if passes(at(mid)) { hi = mid } else { lo = mid }
+        }
+        let step = (end - l).abs() * hi;
+        if best.is_none_or(|(d, _)| step < d) {
+            best = Some((step, at(hi)));
+        }
+    }
+    best.map(|(_, c)| c)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +212,80 @@ mod tests {
             assert_eq!(Category::parse(c.id()), Some(c));
         }
         assert_eq!(Category::parse("NormalText"), None);
+    }
+
+    fn hue(srgb: [f32; 3]) -> f64 {
+        let [_, a, b] = crate::libraries::srgb_to_oklab(srgb);
+        b.atan2(a).to_degrees()
+    }
+
+    #[test]
+    fn the_closest_passing_color_keeps_the_hue_and_just_passes() {
+        let (fg, bg) = (hex("fdc96e"), hex("355f78"));
+        let fix = closest_passing(fg, 4.5, &|c| contrast_ratio(c, bg)).unwrap();
+        let r = contrast_ratio(fix, bg);
+        assert!((4.5..4.501).contains(&r), "{r}");
+        assert!((hue(fix) - hue(fg)).abs() < 1.0, "{} {}", hue(fix), hue(fg));
+        // A color lighter than the background gets lighter.
+        assert!(relative_luminance(fix) > relative_luminance(fg));
+    }
+
+    #[test]
+    fn the_closest_passing_gray_on_white_is_a_darker_gray() {
+        let white = [1.0; 3];
+        let fix = closest_passing(hex("777777"), 4.5, &|c| contrast_ratio(c, white)).unwrap();
+        let r = contrast_ratio(fix, white);
+        assert!((4.5..4.501).contains(&r), "{r}");
+        assert!((fix[0] - fix[1]).abs() < 1e-4 && (fix[1] - fix[2]).abs() < 1e-4, "{fix:?}");
+    }
+
+    #[test]
+    fn a_color_that_passes_only_between_white_and_black_is_found() {
+        // White drawn with Difference over mid gray: white and black both draw mid gray (1:1), and
+        // mid gray draws black, 5.3:1.
+        let gray = [0.5; 3];
+        let difference = |c: [f32; 3]| -> [f32; 3] { std::array::from_fn(|i| (c[i] - gray[i]).abs()) };
+        let fix = closest_passing([1.0; 3], 4.5, &|c| contrast_ratio(difference(c), gray)).unwrap();
+        let r = contrast_ratio(difference(fix), gray);
+        assert!((4.5..4.51).contains(&r), "{fix:?}: {r}");
+        assert!(fix[0] > 0.5, "the nearest side of mid gray from white: {fix:?}");
+    }
+
+    #[test]
+    fn a_narrow_band_between_the_samples_is_found() {
+        // Over #5A5A5A only colors within a few hundredths of it draw dark enough with Difference
+        // for 3:1 (black reaches 3.04:1), and no even step from white lands there.
+        let gray = hex("5a5a5a");
+        let difference = |c: [f32; 3]| -> [f32; 3] { std::array::from_fn(|i| (c[i] - gray[i]).abs()) };
+        let ratio = |c: [f32; 3]| contrast_ratio(difference(c), gray);
+        let fix = closest_passing([1.0; 3], 3.0, &ratio).unwrap();
+        let r = ratio(fix);
+        assert!((3.0..3.01).contains(&r), "{fix:?}: {r}");
+    }
+
+    /// Just below blue's lightness the chromas sRGB holds at blue's hue come in two stretches, so a
+    /// blue that needs a little more contrast keeps nearly all of its chroma.
+    #[test]
+    fn a_blue_that_darkens_a_little_keeps_its_chroma() {
+        let gray = hex("b8b8b8");
+        let ratio = |c: [f32; 3]| contrast_ratio(c, gray);
+        let blue = [0.0, 0.0, 1.0];
+        assert!(ratio(blue) < 4.5, "{}", ratio(blue));
+        let fix = closest_passing(blue, 4.5, &ratio).unwrap();
+        let ([_, c, h], [_, blue_c, blue_h]) = (crate::oklab::to_oklch(fix), crate::oklab::to_oklch(blue));
+        assert!(ratio(fix) >= 4.5 && (h - blue_h).abs() < 1.0, "{fix:?}");
+        assert!(c > blue_c - 0.02, "{fix:?}: chroma {c}, blue's {blue_c}");
+    }
+
+    #[test]
+    fn a_passing_color_is_its_own_closest_and_nothing_passing_is_none() {
+        let white = [1.0; 3];
+        assert_eq!(closest_passing([0.0; 3], 7.0, &|c| contrast_ratio(c, white)), Some([0.0; 3]));
+        assert_eq!(closest_passing(hex("808080"), 4.5, &|_| 1.0), None);
+        // Mid gray: AAA for normal text needs 7:1, which neither white nor black reaches.
+        let mid = hex("777777");
+        assert_eq!(closest_passing(mid, 7.0, &|c| contrast_ratio(c, mid)), None);
+        assert_eq!(closest_passing([f32::NAN; 3], 4.5, &|c| contrast_ratio(c, white)).map(|c| c.map(|v| v.is_finite())), Some([true; 3]));
     }
 
     #[test]

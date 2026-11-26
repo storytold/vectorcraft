@@ -697,13 +697,20 @@ with a slider and a percent field sets the opacity of the fill row (`paint.setFi
 (`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the first stop or point
 when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
 a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
-`{"contrast": true}` shows Show Contrast's row under the wheel or the box, `contrastFor` (`normalText`, `largeText` or
-`graphics`, which has AA only) picks the category its results are for, and `contrastBackground` (a color, or `null` for
-the color behind the selection) pins the background it measures against, as `color.contrast` below answers it.
-`{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
-or the box. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity,
-contrast, contrastFor, contrastBackground, vision, documentColors}`, and the settings are kept with the preferences.
+Keys left out keep their values, and so do keys given as `null`, except `contrastBackground`. Params that are not an object, another key or a value off
+the list return an error and change nothing. `{"contrast": true}` shows Show Contrast's row under the wheel or the
+box, `contrastFor` (`normalText`, `largeText` or `graphics`, which has AA only) picks the category its results are for, and
+`contrastBackground` (a color, or `null` for the color behind the selection) pins the background it measures against,
+as `color.contrast` below answers it. With the row shown, the wheel's square and the box's field draw lines where the
+color picked there meets AA (solid) and AAA (dashed) for the category, also when the active fill or stroke is None
+or a pattern and the row shows a dash. The lines are hidden while Alt is held, since a pick then goes to the other
+proxy. The row's first chip shows the background the ratio is measured against, so a pinned 100 % K shows as black
+with a rich black Appearance of Black. When the color fails a level and
+`color.contrast`'s `fix` has a color for the first level it fails, a chip at the end of the row shows that color; a
+click, or Enter while the chip has the focus, applies it. When that fix is `null`, the row shows no chip.
+`{"documentColors": true}` shows the row the panel menu's Show Document Colors adds
+under the wheel or the box. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity, contrast, contrastFor,
+contrastBackground, vision, documentColors}`, and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
 the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
@@ -1207,7 +1214,7 @@ panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo
 that is not a string, such as `5`, names no library and gets the same error as an unknown name; `null` or `""` sets no
 limit.
 
-`color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio
+`color.contrast {color?, against?, opacity?, for?}` answers the WCAG 2 contrast ratio
 ([definition](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)) of a color against a background, from 1 to 21, and
 whether it meets AA and AAA for normal text (4.5:1 and 7:1), large text (3:1 and 4.5:1) and graphics (3:1, AA only):
 `{ratio, against, normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}`. The results compare the unrounded
@@ -1229,15 +1236,29 @@ is drawn); a picked object of a dynamic symbol instance hides only itself, and t
 These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
 selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
 `"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending, or
-with a translucent or blending row over different shown rows below it), where hidden objects do not count, and the
+with a translucent or blending row over different shown rows below it, or over a shown row that blends in objects
+that differ in isolating their blending), where hidden objects do not count, and the
 error names `opacity` when giving it settles the difference; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
 proxy's object drawn through an opacity mask that is not disabled, its own or that of a group, layer or instance
-around it, since the mask sets how much of the color shows at each point. `against` in the
+around it, since the mask sets how much of the color shows at each point; and with `"below"`, a color drawn with a
+blend mode other than Normal (its row's, the object's, or a group's or layer's) while the art read behind it (a 1 pt
+square at the center, as each level reads it) is not one color, since the mode mixes the color with each part of
+that art in its own way. `against` in the
 answer is the background as a working RGB `#rrggbb`, the form `against` takes; the sampled background is rounded to 8
 bits, so giving it back answers the same ratio, except when `opacity` is omitted and a group or layer around the
 object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over
 rows below it: there `"below"` reads the art below each such level, and a given background stands for that art.
-Headless MCP answers it too.
+Headless MCP answers it too. The answer also has `for` (the category `for` names: `normalText`, the default,
+`largeText` or `graphics`) and `fix: {aa, aaa}` (no `aaa` for graphics): for each level of that category, the closest
+color that meets it when drawn the same way, in the model of the measured color, as the Color Wheel stores a pick. The
+closest color also meets the level with the color, the background, the art below each group or layer it is drawn
+through, the opacities, and the color and alpha each level gives rounded to 8 bits per channel. The
+search keeps the color's [OKLCH](https://bottosson.github.io/posts/oklab/) hue, raises or lowers its lightness,
+whichever takes the smaller step, and lowers its chroma where sRGB cannot show it. It tests 16 lightnesses on each
+side and narrows down the first that passes, so where the passing lightnesses on a side fall apart in more than one
+stretch (under some blend modes), a nearer passing color between two tested lightnesses can be missed. A level is
+`null` when the color already meets it, or when no lightness of the hue does (white on `#355f78` is 6.87:1, so no
+color meets 7:1 there).
 
 Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
 {colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a

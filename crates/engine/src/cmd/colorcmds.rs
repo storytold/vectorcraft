@@ -141,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Contrast",
             [],
             None,
-            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point, or a gradient mesh's first picked point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}",
+            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point, or a gradient mesh's first picked point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`), for?: normalText|largeText|graphics (default normalText: the category `fix` answers for)} (with \"below\", a color drawn with a blend mode other than Normal over art that is not one color where it is read is an error) the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}, for, fix: {aa, aaa (not for graphics)}: for each level of `for`, the closest color that meets it, drawn the same way, in the model of the measured color (as the Color Wheel stores a pick): the same OKLCH hue with the lightness raised or lowered, whichever takes the smaller step, and the chroma lowered where sRGB cannot show it, that also meets the level with the color, the background, the art below each group or layer, the opacities, and the color and alpha each level gives rounded to 8 bits per channel (16 lightnesses are tested on each side and the first that passes is narrowed down, so where the passing ones fall apart in more than one stretch, a nearer one between two tested can be missed); null when the color already meets the level, or when no lightness of its hue does}",
             always,
             contrast
         ),
@@ -1007,7 +1007,229 @@ const BELOW_SIDE: f64 = 1.0;
 /// The pixels per point [`color_below`] renders at.
 const BELOW_SCALE: f64 = 4.0;
 
+/// What `color.contrast` measures a color against: the background, and how the color is drawn over
+/// it (its row, object, groups and layer, each with its blend mode and opacity over the art below
+/// it). The Color Wheel panel's contrast lines measure many colors against one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Backdrop {
+    /// The background in display sRGB.
+    against: [f32; 3],
+    /// The background in working RGB, rounded to 8 bits, as the answer writes it.
+    written: [u8; 3],
+    /// The levels the color is drawn through, innermost first, without those that leave it as it is.
+    passes: Vec<Pass>,
+    /// The color and amount a fill stains the picked object of a dynamic symbol instance with.
+    stain: Option<(Color, f32)>,
+    /// Whether the canvas shows 100 % K alone as black (a rich black Appearance of Black).
+    rich_black: bool,
+}
+
+/// One level of a [`Backdrop`]: its blend mode and opacity, the art below it (a display sRGB color
+/// and its alpha), whether it blends without isolating or isolates its blending, and the alpha of
+/// the art below it inside the level around it, while a blending level lies further out.
+#[derive(Clone, Debug, PartialEq)]
+struct Pass {
+    blend: BlendMode,
+    opacity: f32,
+    backdrop: ([f32; 3], f32),
+    blends: bool,
+    isolate: bool,
+    inner: f32,
+}
+
+/// A color drawn through the levels so far: the color, its alpha, and the alpha of what the next
+/// level out holds drawn alone.
+type Through = ([f32; 3], f32, f32);
+
+impl Pass {
+    /// What the level draws for color and alpha `x`, drawn over the art below it: a level that
+    /// blends takes that art back out by `alone`, the alpha of what it holds drawn alone.
+    fn source(&self, x: ([f32; 3], f32), alone: f32) -> ([f32; 3], f32) {
+        if !self.blends {
+            return x;
+        }
+        if alone <= 0.0 {
+            return (x.0, 0.0);
+        }
+        let b = self.backdrop;
+        (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * b.0[i] * b.1) / alone).clamp(0.0, 1.0)), alone)
+    }
+
+    /// `d` drawn through the level. The level's opacity applies to what it holds, a level that
+    /// isolates its blending carries out the alpha of what it holds composited on its own, and the
+    /// art beside it in the level around it adds to the alpha once.
+    fn draw(&self, (color, alpha, alone): Through) -> Through {
+        let source = self.source((color, alpha), alone);
+        let drawn = if self.isolate { alpha } else { alone } * self.opacity.clamp(0.0, 1.0);
+        let (color, alpha) = composite(self.blend, source, self.opacity, self.backdrop);
+        (color, alpha, drawn + self.inner * (1.0 - drawn))
+    }
+
+    /// The level with its opacity, the art below it and its alphas passed through `q`.
+    fn with(&self, q: impl Fn(f32) -> f32) -> Pass {
+        let (color, alpha) = self.backdrop;
+        Pass { opacity: q(self.opacity), backdrop: (color.map(&q), q(alpha)), inner: q(self.inner), ..self.clone() }
+    }
+}
+
+impl Backdrop {
+    /// `c` as the measured object draws it: the picked object of a dynamic symbol instance that a
+    /// fill stains mixes its solid color towards the stain.
+    pub fn drawn_color(&self, c: &Color) -> Color {
+        match self.stain {
+            Some((stain, amount)) => c.lerp(&stain, amount),
+            None => *c,
+        }
+    }
+
+    /// The display sRGB the canvas shows for `c` drawn as the measured object draws it, through
+    /// `cms` and the Appearance of Black the backdrop was read with.
+    pub fn shown(&self, cms: &vectorcraft_color::cms::Cms, c: &Color) -> [f32; 3] {
+        shown_rgb(cms, self.rich_black, &self.drawn_color(c))
+    }
+
+    /// Display sRGB `shown`, drawn as the measured color is drawn, over the background.
+    pub fn front(&self, shown: [f32; 3]) -> [f32; 3] {
+        let (color, alpha, _) = self.passes.iter().fold((shown, 1.0f32, 1.0f32), |d, p| p.draw(d));
+        if alpha >= 1.0 { color } else { wcag::over(color, alpha, self.against) }
+    }
+
+    /// The contrast ratio of display sRGB `shown`, drawn as the measured color is drawn, against
+    /// the background.
+    pub fn ratio(&self, shown: [f32; 3]) -> f64 {
+        wcag::contrast_ratio(self.front(shown), self.against)
+    }
+
+    /// [`Backdrop::ratio`] with every value rounded to 8 bits per channel: the color, the art
+    /// below each level, the background, the opacities, and the color and alpha each level gives.
+    fn ratio_at_eight_bits(&self, shown: [f32; 3]) -> f64 {
+        let eight = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0;
+        let painted = |c: [f32; 3]| c.map(eight);
+        let against = painted(self.against);
+        let (color, alpha, _) = self.passes.iter().fold((painted(shown), 1.0f32, 1.0f32), |d, p| {
+            let (color, alpha, alone) = p.with(eight).draw(d);
+            (painted(color), eight(alpha), eight(alone))
+        });
+        let front = if alpha >= 1.0 { color } else { wcag::over(color, alpha, against) };
+        wcag::contrast_ratio(painted(front), against)
+    }
+
+    /// The background as `#rrggbb` in working RGB, the form a color param takes.
+    pub fn against_hex(&self) -> String {
+        let [r, g, b] = self.written;
+        format!("#{r:02x}{g:02x}{b:02x}")
+    }
+}
+
+/// The display sRGB the canvas shows for `c` through `cms`: with a rich black Appearance of Black,
+/// 100 % K alone shows as black.
+fn shown_rgb(cms: &vectorcraft_color::cms::Cms, rich_black: bool, c: &Color) -> [f32; 3] {
+    match *c {
+        Color::Cmyk { c, m, y, k } if rich_black && c <= 0.0 && m <= 0.0 && y <= 0.0 && k >= 1.0 => [0.0; 3],
+        _ => cms.display_rgb(c),
+    }
+}
+
+/// Display sRGB `srgb` as a color in the model of `like`, as a pick on the Color Wheel stores it:
+/// an RGB color in the working RGB space, a CMYK or Lab color converted with the color settings, a
+/// Gray color as gray.
+fn in_model_of(cms: &vectorcraft_color::cms::Cms, srgb: [f32; 3], like: &Color) -> Color {
+    let [r, g, b] = cms.srgb_to_rgb(srgb);
+    let rgb = Color::rgb(r, g, b);
+    match like {
+        Color::Rgb { .. } => rgb,
+        Color::Cmyk { .. } => {
+            let [c, m, y, k] = cms.to_cmyk(&rgb, cms.settings().intent);
+            Color::cmyk(c, m, y, k)
+        }
+        Color::Lab { .. } => {
+            let l = cms.lab(&rgb);
+            Color::lab(l.l, l.a, l.b)
+        }
+        Color::Gray { .. } => keep_model(*like, rgb),
+    }
+}
+
+/// The closest color in the model of `color` whose contrast against `backdrop` meets `minimum`
+/// ([`wcag::closest_passing`]), checked as the canvas shows it once stored (a symbol's stain
+/// included). A candidate meets it by [`Backdrop::ratio`] and also with its values rounded to 8
+/// bits per channel ([`Backdrop::ratio_at_eight_bits`]). None when `color` already meets it by
+/// [`Backdrop::ratio`], or when no lightness of its hue does.
+fn closest_passing(backdrop: &Backdrop, color: &Color, minimum: f64) -> Option<Color> {
+    let cms = vectorcraft_color::cms::active();
+    let ratio = |srgb: [f32; 3]| {
+        let shown = backdrop.shown(&cms, &in_model_of(&cms, srgb, color));
+        backdrop.ratio(shown).min(backdrop.ratio_at_eight_bits(shown))
+    };
+    if backdrop.ratio(backdrop.shown(&cms, color)) >= minimum {
+        return None;
+    }
+    let fix = wcag::closest_passing(shown_rgb(&cms, backdrop.rich_black, color), minimum, &ratio)?;
+    Some(in_model_of(&cms, fix, color))
+}
+
 fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
+    contrast_measure(s, p).map(|(answer, _)| answer)
+}
+
+/// `color.contrast`'s answer for params `p`, and what it measured the color against.
+pub fn contrast_measure(s: &Session, p: &Value) -> Result<(Value, Backdrop)> {
+    const C: &str = "color.contrast";
+    let category = match p.get("for") {
+        None | Some(Value::Null) => Category::NormalText,
+        Some(v) => {
+            let key = "for";
+            let ids: Vec<&str> = Category::ALL.iter().map(|c| c.id()).collect();
+            v.as_str().and_then(Category::parse).ok_or_else(|| bad(C, format!("`{key}` must be one of {}", ids.join(", "))))?
+        }
+    };
+    let (color, backdrop) = contrast_backdrop(s, p)?;
+    let ratio = backdrop.ratio(backdrop.shown(&vectorcraft_color::cms::active(), &color));
+    let levels = |c: Category| {
+        let (aa, aaa) = c.passes(ratio);
+        match aaa {
+            Some(aaa) => json!({ "aa": aa, "aaa": aaa }),
+            None => json!({ "aa": aa }),
+        }
+    };
+    let fix = |minimum: f64| match closest_passing(&backdrop, &color, minimum) {
+        Some(c) => serde_json::to_value(c).unwrap_or(Value::Null),
+        None => Value::Null,
+    };
+    let fixes = match category.minimums() {
+        (aa, Some(aaa)) => json!({ "aa": fix(aa), "aaa": fix(aaa) }),
+        (aa, None) => json!({ "aa": fix(aa) }),
+    };
+    let answer = json!({
+        "ratio": ratio,
+        "against": backdrop.against_hex(),
+        "normalText": levels(Category::NormalText),
+        "largeText": levels(Category::LargeText),
+        "graphics": levels(Category::Graphics),
+        "for": category.id(),
+        "fix": fixes,
+    });
+    Ok((answer, backdrop))
+}
+
+/// The color `color.contrast` measures for params `p`, as stored (before a symbol's stain), and
+/// what it measures it against.
+fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
+    let (color, backdrop) = contrast_reading(s, p, true)?;
+    let color = color.ok_or_else(|| bad("color.contrast", no_color()))?;
+    Ok((color, backdrop))
+}
+
+/// What a color picked for the active proxy would be measured against by `color.contrast` with
+/// params `p` (without `color`), also when the proxy has no color to measure (None, a pattern): the
+/// Color Wheel's contrast lines show where a pick would pass.
+pub fn contrast_pick_backdrop(s: &Session, p: &Value) -> Result<Backdrop> {
+    contrast_reading(s, p, false).map(|(_, backdrop)| backdrop)
+}
+
+/// [`contrast_backdrop`], with None for the color when the proxy has none, which is an error when
+/// `need_color`.
+fn contrast_reading(s: &Session, p: &Value, need_color: bool) -> Result<(Option<Color>, Backdrop)> {
     const C: &str = "color.contrast";
     check_numbers(p, &["opacity"], C)?;
     let opacity = match p.get("opacity").and_then(Value::as_f64) {
@@ -1019,23 +1241,28 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let below = p.get("against").is_none_or(|v| v.is_null() || v.as_str() == Some("below"));
+    let given = p.get("color").is_some_and(|v| !v.is_null());
     let (color, drawn) = match p.get("color") {
         None | Some(Value::Null) => proxy_color(s, opacity.is_some(), below).map_err(|e| bad(C, e))?,
-        Some(v) => (color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?, Drawn::default()),
+        Some(v) => (Some(color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?), Drawn::default()),
     };
+    if need_color && color.is_none() {
+        return Err(bad(C, no_color()));
+    }
     let rich_black = s.prefs.black_on_screen == "rich";
     let cms = vectorcraft_color::cms::active();
-    let shown = |c: &Color| match *c {
-        Color::Cmyk { c, m, y, k } if rich_black && c <= 0.0 && m <= 0.0 && y <= 0.0 && k >= 1.0 => [0.0; 3],
-        _ => cms.display_rgb(c),
-    };
+    let shown = |c: &Color| shown_rgb(&cms, rich_black, c);
     let to_8bit = |c: [f32; 3]| c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    // Whether the background read is one color across its pixels.
+    let mut uniform = true;
     // The background in display sRGB, and as the working RGB `#rrggbb` a given `against` reads as.
     let (against, written) = match p.get("against").filter(|_| !below) {
         None => {
             // The sample in working RGB, rounded to 8 bits: the background the answer writes is the
             // one the ratio uses, and giving it back answers the same ratio.
-            let working = to_8bit(cms.srgb_to_rgb(color_below(s, rich_black, None, &[], None).map_err(|e| bad(C, e))?.0));
+            let ((sample, _), one) = color_below(s, rich_black, None, &[], None).map_err(|e| bad(C, e))?;
+            uniform &= one;
+            let working = to_8bit(cms.srgb_to_rgb(sample));
             (cms.rgb_to_srgb(working.map(|v| f32::from(v) / 255.0)), working)
         }
         Some(v) => {
@@ -1071,60 +1298,51 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
     // then takes that art back out by the alpha of what it holds drawn alone, and blends the rest:
     // `alone` is the alpha of what the next level out holds drawn alone. Each level's opacity
     // applies to what it holds, and the art beside it in the level around it adds to the alpha once.
+    // The alphas, the art below each level and `alone` do not depend on the color, so each level
+    // is read once here and [`Backdrop::front`] draws any color through the levels.
     let blends = |a: &Step| a.blend != BlendMode::Normal && !a.isolate;
-    let mut x = (shown(&color), 1.0f32);
+    let mut passes = vec![];
+    let mut alpha = 1.0f32;
     let mut alone = 1.0f32;
+    // Whether a level so far read art that is not one color.
+    let mut mixed = false;
     for (k, step) in steps.iter().enumerate() {
-        if step.blend == BlendMode::Normal && step.opacity >= 1.0 && x.1 >= 1.0 && alone >= 1.0 {
+        if step.blend == BlendMode::Normal && step.opacity >= 1.0 && alpha >= 1.0 && alone >= 1.0 {
             continue;
         }
         let above = &steps[k + 1..];
         let scope = above.iter().find(|a| a.isolate);
         let full = above.iter().filter(|a| a.blend != BlendMode::Normal || a.opacity < 1.0).map(|a| &a.within).collect::<Vec<_>>();
         let read = |scope: Option<&Part>| color_below(s, rich_black, step.hide.as_ref(), &full, scope).map_err(|e| bad(C, e));
-        let backdrop = match scope {
-            Some(_) if !sampled => ([0.0; 3], 0.0),
-            None if !sampled => (against, 1.0),
+        let (backdrop, one) = match scope {
+            Some(_) if !sampled => (([0.0; 3], 0.0), true),
+            None if !sampled => ((against, 1.0), uniform),
             // The background itself, as the answer writes it.
-            None if step.hide.is_none() && full.is_empty() => (against, 1.0),
+            None if step.hide.is_none() && full.is_empty() => ((against, 1.0), uniform),
             _ => read(scope.map(|a| &a.within))?,
         };
         // The alpha of the art below the level inside the level around it, while a blending level
         // lies further out (none for a given background).
-        let inner = match above.first() {
-            Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => read(Some(&around.within))?.1,
-            _ => 0.0,
+        let (inner, inner_one) = match above.first() {
+            Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => {
+                let ((_, a), one) = read(Some(&around.within))?;
+                (a, one)
+            }
+            _ => (0.0, true),
         };
-        let source = if !blends(step) {
-            x
-        } else if alone <= 0.0 {
-            (x.0, 0.0)
-        } else {
-            (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * backdrop.0[i] * backdrop.1) / alone).clamp(0.0, 1.0)), alone)
-        };
-        // A level that isolates its blending carries out the alpha of what it holds composited on
-        // its own.
-        let drawn = if step.isolate { x.1 } else { alone } * step.opacity.clamp(0.0, 1.0);
-        x = composite(step.blend, source, step.opacity, backdrop);
-        alone = drawn + inner * (1.0 - drawn);
-    }
-    let front = if x.1 >= 1.0 { x.0 } else { wcag::over(x.0, x.1, against) };
-    let ratio = wcag::contrast_ratio(front, against);
-    let levels = |c: Category| {
-        let (aa, aaa) = c.passes(ratio);
-        match aaa {
-            Some(aaa) => json!({ "aa": aa, "aaa": aaa }),
-            None => json!({ "aa": aa }),
+        // A blend mode mixes the color with the art below it pixel by pixel, which one color read for
+        // art of several colors does not stand for, also when that art reaches it through the levels
+        // inside it.
+        mixed |= !one || !inner_one;
+        if mixed && step.blend != BlendMode::Normal && step.opacity > 0.0 {
+            return Err(bad(C, "the art behind the selection is not one color where it is read, and the color blends with it: give `against`"));
         }
-    };
-    let [r, g, b] = written;
-    Ok(json!({
-        "ratio": ratio,
-        "against": format!("#{r:02x}{g:02x}{b:02x}"),
-        "normalText": levels(Category::NormalText),
-        "largeText": levels(Category::LargeText),
-        "graphics": levels(Category::Graphics),
-    }))
+        let pass = Pass { blend: step.blend, opacity: step.opacity, backdrop, blends: blends(step), isolate: step.isolate, inner };
+        (_, alpha, alone) = pass.draw(([0.0; 3], alpha, alone));
+        passes.push(pass);
+    }
+    let stain = if given { None } else { stain_of(s) };
+    Ok((color, Backdrop { against, written, passes, stain, rich_black }))
 }
 
 /// An object around the proxy's object: one in the document, or a group of the picked object's
@@ -1207,7 +1425,8 @@ fn composite(mode: BlendMode, x: ([f32; 3], f32), opacity: f32, backdrop: ([f32;
 /// levels that change what they draw must be the same objects too, since the art below each one is
 /// read with that object hidden, and the object's opacity must be the same apart from its row's,
 /// since the row draws over the object's rows below it and the object over the art behind it, and a
-/// row that blends or is translucent must lie over the same shown rows.
+/// row that blends or is translucent must lie over the same shown rows, and over a lower row that
+/// blends, with the same isolation.
 fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let counts = |l: &&Level| l.blend != BlendMode::Normal || l.isolate || (!given_opacity && l.opacity < 1.0);
     let level = |x: &Level, y: &Level| {
@@ -1223,10 +1442,26 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let total = |d: &Drawn| d.opacity * d.row.map_or(1.0, |r| r.1);
     // A row that blends or lets art through draws over the rows below it, read at one point.
     let over_rows = |d: &Drawn| d.row.is_some_and(|(m, o)| m != BlendMode::Normal || o < 1.0);
+    // A lower row that blends reads the art behind the object unless the object isolates its
+    // blending, so a row drawn over it reads a backdrop that depends on the isolation. A blending
+    // row at no opacity does not show, nor does a fill row without effects under an opaque solid
+    // Normal fill row without effects, which covers the same shape (a stroke reaches outside it).
+    let plain_fill = |i: &vectorcraft_doc::AppearanceItem| i.is_fill() && i.effects().is_empty();
+    let covers = |i: &vectorcraft_doc::AppearanceItem| {
+        plain_fill(i) && i.blend() == BlendMode::Normal && i.opacity() >= 1.0 && matches!(i.paint(), Paint::Solid { .. })
+    };
+    let over_blended = |d: &Drawn| {
+        over_rows(d)
+            && d.lower
+                .iter()
+                .enumerate()
+                .any(|(k, i)| i.blend() != BlendMode::Normal && i.opacity() > 0.0 && !(plain_fill(i) && d.lower[k + 1..].iter().any(covers)))
+    };
     row(a) == row(b)
         && (given_opacity || !below || !(over_rows(a) || over_rows(b)) || a.lower == b.lower)
         && a.blend == b.blend
         && (row(a).is_none() || a.isolate == b.isolate)
+        && (given_opacity || !below || !(over_blended(a) || over_blended(b)) || a.isolate == b.isolate)
         && (given_opacity || (total(a) - total(b)).abs() < 1e-6)
         && (given_opacity || (row(a).is_none() && !below) || (a.opacity - b.opacity).abs() < 1e-6)
         && la.len() == lb.len()
@@ -1238,8 +1473,9 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
 /// it is drawn ([`Drawn`]). With `given_opacity`, the opacities of the selected objects are not
 /// compared, since the given opacity takes their place; with `below` (the background is sampled),
 /// objects in different translucent or blending groups or layers differ, since the art below each
-/// such level is read with it hidden.
-fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Color, Drawn), String> {
+/// such level is read with it hidden. The color is None when the proxy has none (None, a pattern),
+/// and the drawing is then the one a solid color in its place would have.
+fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Option<Color>, Drawn), String> {
     let stroke = !s.fill_active;
     let (fill_mixed, stroke_mixed) = s.proxy_mixed();
     if if stroke { stroke_mixed } else { fill_mixed } {
@@ -1294,20 +1530,28 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
     } else {
         drawing = source()?.unwrap_or_default();
     }
-    let no_color = || "the active fill or stroke has no color: give `color`".to_string();
-    match if stroke { stroke_paint } else { fill } {
-        Paint::Solid { color, .. } => Ok((stained(s, color), drawing)),
+    let found = match if stroke { stroke_paint } else { fill } {
+        Paint::Solid { color, .. } => Some((color, drawing.clone())),
         Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform => {
             let f = g.freeform_on(vectorcraft_geom::Rect::new(0.0, 0.0, 1.0, 1.0));
             let i = s.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
-            f.points.get(i).map(|pt| (pt.color, at(&drawing, pt.opacity))).ok_or_else(no_color)
+            f.points.get(i).map(|pt| (pt.color, at(&drawing, pt.opacity)))
         }
         Paint::Gradient(g) => {
             let i = s.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
-            g.gradient.stops.get(i).map(|st| (st.color, at(&drawing, st.opacity))).ok_or_else(no_color)
+            g.gradient.stops.get(i).map(|st| (st.color, at(&drawing, st.opacity)))
         }
-        Paint::None | Paint::Pattern { .. } => Err(no_color()),
-    }
+        Paint::None | Paint::Pattern { .. } => None,
+    };
+    Ok(match found {
+        Some((color, drawn)) => (Some(color), drawn),
+        None => (None, drawing),
+    })
+}
+
+/// The message for an active fill or stroke with no color to measure.
+fn no_color() -> String {
+    "the active fill or stroke has no color: give `color`".to_string()
 }
 
 /// `drawing` with a stop's or point's `opacity`, which applies where its paint is drawn: in its
@@ -1372,19 +1616,18 @@ fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> s
     Ok(Drawn { opacity: n.opacity, row: own.map(|o| (o.1, o.0)), blend: n.blend, isolate: n.isolate, around, lower })
 }
 
-/// `color` as the canvas draws the picked object of a dynamic symbol instance that a fill stains
-/// (`symbol_overrides::instance_art` mixes the art's solid paints towards the instance's fill);
-/// `color` itself otherwise.
-fn stained(s: &Session, color: Color) -> Color {
-    let stain = s.active().and_then(|st| {
-        let sp = st.selection.symbol_part.as_ref()?;
-        st.selected_symbol_part()?;
-        vectorcraft_doc::symbol_overrides::stain(st.doc.node(sp.instance)?)
-    });
-    match stain {
-        Some((c, amount)) => color.lerp(&c, amount.clamp(0.0, 1.0)),
-        None => color,
+/// The color and amount a fill stains the picked object of a dynamic symbol instance with
+/// (`symbol_overrides::instance_art` mixes the art's solid paints towards the instance's fill), when
+/// such an object is picked and its proxy shows a solid color.
+fn stain_of(s: &Session) -> Option<(Color, f32)> {
+    let (fill, stroke) = s.proxy_paints();
+    if !matches!(if s.fill_active { fill } else { stroke }, Paint::Solid { .. }) {
+        return None;
     }
+    let st = s.active()?;
+    let sp = st.selection.symbol_part.as_ref()?;
+    st.selected_symbol_part()?;
+    vectorcraft_doc::symbol_overrides::stain(st.doc.node(sp.instance)?).map(|(c, amount)| (c, amount.clamp(0.0, 1.0)))
 }
 
 /// The objects that draw the proxy's object `id` ([`Level`]), outermost first: its groups and
@@ -1429,14 +1672,14 @@ fn enclosing(s: &Session, id: NodeId) -> Vec<Level> {
 /// hidden in place of the selection, or for [`Part::Rows`], the proxy's row and the rows above it;
 /// the objects of `full` draw at full opacity in Normal mode; and with `scope` (a group or layer
 /// around the selection, or the proxy's objects), only the art inside it is drawn, over nothing,
-/// without artboards.
+/// without artboards. Also whether the square's pixels are all one color.
 fn color_below(
     s: &Session,
     rich_black: bool,
     hide: Option<&Part>,
     full: &[&Part],
     scope: Option<&Part>,
-) -> std::result::Result<([f32; 3], f32), String> {
+) -> std::result::Result<(([f32; 3], f32), bool), String> {
     super::has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let ids = st.selection.objects.clone();
@@ -1565,8 +1808,10 @@ fn color_below(
     let img = vectorcraft_render::Renderer::new().render_region_with(copy.as_ref().unwrap_or(&st.doc), region, BELOW_SCALE, &opts);
     let px = img.pixels.as_chunks::<4>().0;
     if px.is_empty() {
-        return Ok(if scope.is_none() { ([1.0; 3], 1.0) } else { ([0.0; 3], 0.0) });
+        return Ok((if scope.is_none() { ([1.0; 3], 1.0) } else { ([0.0; 3], 0.0) }, true));
     }
+    // Whether the pixels are one color, to within one step of 255 per channel.
+    let uniform = px.first().is_none_or(|first| px.iter().all(|p| p.iter().zip(first).all(|(a, b)| a.abs_diff(*b) <= 1)));
     // The pixels are premultiplied: the average color is their sum over their alpha's.
     let mut sum = [0.0f64; 4];
     for p in px {
@@ -1576,10 +1821,10 @@ fn color_below(
     }
     let alpha = sum[3] / (px.len() as f64 * 255.0);
     if alpha <= 0.0 {
-        return Ok(([0.0; 3], 0.0));
+        return Ok((([0.0; 3], 0.0), uniform));
     }
     let rgb = [0, 1, 2].map(|i| (sum[i] / (px.len() as f64 * 255.0) / alpha).clamp(0.0, 1.0) as f32);
-    Ok((rgb, alpha as f32))
+    Ok(((rgb, alpha as f32), uniform))
 }
 
 /// Hides fill or stroke row `item` of `n` (else its topmost row of the kind) and every row above it.
