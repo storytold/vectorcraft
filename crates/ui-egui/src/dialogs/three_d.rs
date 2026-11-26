@@ -55,6 +55,8 @@ pub(crate) struct Data {
     pub bevels_file: bool,
     /// The active document, for the symbol pictures.
     pub doc: Option<Arc<Document>>,
+    /// The document that owns the object IDs accepted by the Graphics drop target.
+    pub document_uid: Option<u64>,
     /// The active document's version.
     pub revision: u64,
     /// Whether the active document has a selection.
@@ -77,6 +79,7 @@ pub(crate) fn data(app: &VectorcraftApp, effect: Option<&str>, params: &Map<Stri
         bevels: effect.map(|e| revolve::bevel_options(app, params, e).0).unwrap_or_default(),
         bevels_file: app.session.bevels.path().is_some(),
         doc: st.map(|s| s.doc.clone()),
+        document_uid: st.map(|s| s.uid),
         revision: st.map_or(0, |s| s.revision),
         selected: st.is_some_and(|s| !s.selection.objects.is_empty()),
         surfaces: None,
