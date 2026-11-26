@@ -1222,6 +1222,8 @@ the art below it inside the object, groups and layer around it, the object's row
 the background when `against` or `opacity` is given;
 inside an object, group or layer that isolates its blending, the modes blend only with the art it holds);
 `opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
+While the active tool paints with the proxy's color (the Live Paint Bucket, the Shape Builder's fill), that color is
+drawn the same way, and the selected objects' opacities and blend modes do not apply.
 `against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
 selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
 images included; template layers and guides left out, as exports leave them out; the artboard's white where nothing
@@ -9340,6 +9342,14 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
 ```
+
+Reset Preferences also sets the dialog's `__smartGuides`, `__snapToGrid` and `__taskBar` fields to their defaults
+(`__taskBar` takes the value the current workspace was saved with). A category's own reset sets the field of that
+category (Smart Guides, Guides & Grid or General), and File Handling's also resets the app chosen for Edit Original.
+`prefs.reset` run while Preferences is open shows the values it reset in the dialog. In the app, `prefs.reset` also resets Smart Guides,
+Snap to Grid and Enable Contextual Task Bar when it resets every category or their category (Smart Guides, Guides &
+Grid and General), and the app chosen for Edit Original when it resets every category or File Handling. A `category`
+left out or `null` resets every category, and one that is not a string is an error.
 
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file

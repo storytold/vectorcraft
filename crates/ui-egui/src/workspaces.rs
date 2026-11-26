@@ -304,11 +304,23 @@ fn chrome_of(record: &WorkspaceRecord) -> WorkspaceChrome {
     chrome
 }
 
+/// Whether [`sync_touch_workspace`] with `touch_screen` switches to the Touch workspace.
+pub fn enters_touch(app: &VectorcraftApp, touch_screen: bool) -> bool {
+    app.session.prefs.touch_workspace && touch_screen && !is_current(&app.ui, TOUCH)
+}
+
+/// Whether the current workspace was saved with the Contextual Task Bar on.
+pub(crate) fn saved_task_bar(ui: &UiState) -> bool {
+    saved_record(&ui.workspaces, &ui.workspaces.set.current).task_bar
+}
+
 /// Preferences › Devices › Enable Touch Workspace (#394): on, a touch screen switches to the Touch
 /// workspace; off, or when no touch screen is reported, the workspace before that switch is
 /// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings
 /// back the one it returns to as it was left, as Window › Workspace does.
 pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
+    // A pending `prefs.reset` applies to the workspace it was run in.
+    crate::prefs_dialog::apply_prefs_resets(app);
     let auto = app.session.prefs.touch_workspace && touch_screen;
     if auto {
         if !is_current(&app.ui, TOUCH) {
