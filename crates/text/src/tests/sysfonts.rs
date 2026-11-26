@@ -997,6 +997,26 @@ fn a_search_reads_a_suitcase_font_only_within_its_share() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A suitcase font read for one search (Retype) is read no further than one byte past the limit,
+/// and the bytes read are counted.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_suitcase_font_read_for_a_search_counts_the_bytes_of_its_fork() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-unloaded-suitcase", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let suitcase = dir.join("Sysfont Sans3");
+    std::fs::write(&suitcase, b"").unwrap();
+    let fork = crate::suitcase::fork_of(&[renamed("SourceSans3-Regular.ttf")]);
+    let len = fork.len() as u64;
+    std::fs::write(suitcase.join("..namedfork/rsrc"), &fork).unwrap();
+    let db = FontDb::with_font_dirs(vec![]);
+    let file = db.read_unloaded_file(&suitcase, len);
+    assert_eq!((file.faces.len(), file.bytes, file.too_long), (1, len, false));
+    let long = db.read_unloaded_file(&suitcase, len - 1);
+    assert_eq!((long.faces.len(), long.bytes, long.too_long), (0, len, true));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn font_files_are_told_by_their_extension() {
     for name in ["a/B.TTF", "c.otf", "d.Ttc", "e.otc"] {

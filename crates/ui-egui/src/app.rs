@@ -31,7 +31,7 @@ use super::state::SYSTEM_CLIPBOARD_POLL;
 use super::{
     Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits, dialogs,
     edits, export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
-    plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
+    plugin_runs, prefs_dialog, recovery, retype_runs, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
 };
 
 mod commands;
@@ -224,6 +224,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            retype_runs: Default::default(),
             recovery: Default::default(),
             closing: None,
             prefs: None,
@@ -234,6 +235,7 @@ impl VectorcraftApp {
             told: Default::default(),
             missing_font_edit_token: None,
             held: Default::default(),
+            document_setup_source: None,
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
             effect_dialogs: Default::default(),
@@ -346,6 +348,7 @@ impl VectorcraftApp {
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
+        retype_runs::poll(self);
     }
 
     /// The language the UI is drawn in: the Preferences window's choice while it is open (so a
@@ -512,6 +515,7 @@ impl VectorcraftApp {
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
+            || self.retype_runs.running.is_some()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -707,14 +711,18 @@ impl VectorcraftApp {
     }
 }
 
+/// Use the same supported scale for the interface and the canvas. Invalid saved values fall back to 100%.
+fn applied_ui_scaling(saved: f64) -> f32 {
+    if saved.is_finite() && saved > 0.0 { saved.clamp(0.75, 2.0) as f32 } else { 1.0 }
+}
+
 /// The root values the preferences give every frame: the theme, the interface scale (UI Scaling
 /// over the display's `native_ppp`), Show Tool Tips, the zoom stops (100% at `print` screen points
 /// to an inch, [`crate::state::print_ppi`]) and which drags scrub a value (Scrub Numeric Fields: the
 /// side label only, or nothing).
 pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print: Option<f64>) -> RootEnv {
     let (theme, mode, accent) = theme::root_theme(prefs);
-    // A hand-edited preferences file must not scale the interface to nothing.
-    let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
+    let scaling = applied_ui_scaling(prefs.ui_scaling);
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(print, native_ppp));

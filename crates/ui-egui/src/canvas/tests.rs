@@ -718,6 +718,121 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
 }
 
+/// One frame of the whole app on `ctx` with `events`, in a 1600 × 850 window, as the hosts run it.
+fn app_step(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0));
+    crate::testing::app_frame(app, ctx, egui::RawInput { screen_rect: Some(screen), events, ..Default::default() });
+}
+
+/// A Rectangle tool on a new 400 × 300 document in the whole app, after three frames, with Smart
+/// Guides and Snap to Point off → (the app, its context, the canvas view).
+fn rectangle_tool() -> (VectorcraftApp, egui::Context, craft::behavior::CanvasView) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    app.select_tool("rectangle");
+    let ctx = crate::testing::ui_context();
+    for _ in 0..3 {
+        app_step(&mut app, &ctx, vec![]);
+    }
+    let xf = app.canvas_view().unwrap();
+    (app, ctx, xf)
+}
+
+/// The bounds of the paths in the active document.
+fn drawn_paths(app: &VectorcraftApp) -> Vec<Rect> {
+    let mut found = vec![];
+    app.session.active().unwrap().doc.walk(|n| {
+        if n.path_data().is_some() {
+            found.extend(n.geometric_bounds());
+        }
+    });
+    found
+}
+
+/// A primary button event at `pos` with `modifiers` held.
+fn primary(pos: Pos2, pressed: bool, modifiers: egui::Modifiers) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers }
+}
+
+/// A press or release of Space.
+fn space_key(pressed: bool) -> egui::Event {
+    egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE }
+}
+
+/// A tool drag ends with the modifiers held when its button went up. Shift let go after the
+/// release in the same frame still constrains the Rectangle tool's rectangle to a square, Shift
+/// pressed after the release does not constrain it, and Alt held only at the release draws it
+/// from its center.
+#[test]
+fn tool_drag_ends_with_the_modifiers_of_its_button_release() {
+    let draw = |held: egui::Modifiers, after: egui::Modifiers| {
+        let (mut app, ctx, xf) = rectangle_tool();
+        let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
+        let none = egui::Modifiers::NONE;
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        app_step(&mut app, &ctx, vec![primary(from, true, none)]);
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+        app_step(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerMoved(to), egui::Event::ModifiersChanged(held), primary(to, false, held), egui::Event::ModifiersChanged(after)],
+        );
+        app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(none)]);
+        let paths = drawn_paths(&app);
+        assert_eq!(paths.len(), 1, "the drag draws one rectangle");
+        paths[0]
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-3;
+    let r = draw(egui::Modifiers::SHIFT, egui::Modifiers::NONE);
+    assert!(near(r.width(), r.height()), "Shift held at the release draws a square: {r:?}");
+    let r = draw(egui::Modifiers::NONE, egui::Modifiers::SHIFT);
+    assert!(near(r.width(), 60.0) && near(r.height(), 30.0), "Shift pressed after the release does not constrain: {r:?}");
+    let r = draw(egui::Modifiers::ALT, egui::Modifiers::NONE);
+    assert!(near(r.width(), 120.0) && near(r.x0, 40.0), "Alt held at the release draws from the center: {r:?}");
+}
+
+/// Shift pressed only in the frame of a tool drag's release, with the pointer held still since
+/// the drag's last frame, still constrains the Rectangle tool's rectangle to a square.
+#[test]
+fn shift_pressed_at_a_still_release_constrains_the_tool_drag() {
+    let (mut app, ctx, xf) = rectangle_tool();
+    let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, egui::Modifiers::NONE)]);
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), primary(to, false, egui::Modifiers::SHIFT)]);
+    app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let paths = drawn_paths(&app);
+    assert_eq!(paths.len(), 1, "the drag draws one rectangle");
+    assert!((paths[0].width() - paths[0].height()).abs() < 1e-3, "Shift pressed at a still release draws a square: {:?}", paths[0]);
+}
+
+/// The move in the frame of a tool drag's release counts for the drag: the Rectangle tool's last
+/// move sizes the rectangle, and with Space held through the release it moves the rectangle
+/// instead, at the size the drag had before that move.
+#[test]
+fn the_move_of_a_releasing_frame_counts_for_the_tool_drag() {
+    let draw = |space: bool| {
+        let (mut app, ctx, xf) = rectangle_tool();
+        let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
+        let none = egui::Modifiers::NONE;
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, none)]);
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+        if space {
+            app_step(&mut app, &ctx, vec![space_key(true)]);
+        }
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(to), primary(to, false, none)]);
+        app_step(&mut app, &ctx, if space { vec![space_key(false)] } else { vec![] });
+        let paths = drawn_paths(&app);
+        assert_eq!(paths.len(), 1, "the drag draws one rectangle");
+        paths[0]
+    };
+    assert_eq!(draw(false), Rect::new(100.0, 100.0, 160.0, 130.0), "the last move sizes the rectangle");
+    assert_eq!(draw(true), Rect::new(130.0, 115.0, 160.0, 130.0), "with Space held through the release the last move moves it");
+}
+
 /// #6369: only the selection box remains over the temporary halftone, and the original
 /// selection's outlines come back when Preview is turned off or the dialog is cancelled.
 #[test]
@@ -4027,6 +4142,23 @@ fn start_typing(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
     typing_frame(app, ctx, vec![click(at, false)]);
     assert!(app.session.tool_wants_text());
     app.session.active().unwrap().selection.objects[0].0
+}
+
+#[test]
+fn the_canvas_type_editor_uses_the_interface_language() {
+    use crate::i18n::LangExt as _;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    let former = crate::i18n::current();
+    start_typing(&mut app, &ctx);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+    let out = typing_frame(&mut app, &ctx, vec![egui::Event::Text("Bonjour".into())]);
+    crate::i18n::set_current(former);
+
+    let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+    assert!(nodes.iter().any(|(_, node)| node.role() == egui::accesskit::Role::MultilineTextInput && node.label() == Some("Texte")));
 }
 
 /// Returns a key press and its release.

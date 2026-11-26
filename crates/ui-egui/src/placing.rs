@@ -658,7 +658,7 @@ pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
     let command = answer["command"].as_str().unwrap_or_default().to_string();
     let seen = answer["asked"].clone();
     let changed = |app: &mut VectorcraftApp, command: &str, params: &Value| match question {
-        Question::SwatchConflict => crate::dialogs::swatch_conflict::changed(app, params, &seen),
+        Question::SwatchConflict => crate::dialogs::swatch_conflict::changed(app, command, params, &seen),
         Question::ProfileMismatch => {
             crate::dialogs::profile_mismatch::paste_changed(app, command, params, seen.as_array().map_or(&[], Vec::as_slice))
         }

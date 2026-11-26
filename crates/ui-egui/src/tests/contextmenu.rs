@@ -304,6 +304,27 @@ fn cmd_alt_shift_u_switches_to_the_next_unit() {
     assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
 }
 
+/// With the Quick Pen, the menu has Delete, which removes the selected anchor points; with another
+/// tool it does not.
+#[test]
+fn the_quick_pen_menu_deletes_the_selected_anchors() {
+    let mut app = app();
+    let a = rect(&mut app, 0.0, 0.0);
+    app.run("select.anchors", json!({"id": a.0, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+    assert!(!has(&app, "Delete"), "the Selection tool");
+    app.select_tool("quickPen");
+    assert!(has(&app, "Delete"), "{:?}", labels(&app));
+    let delete = menus::context_entries(&app).into_iter().find(|e| e.label == "Delete").expect("Delete");
+    assert_eq!(delete.command.as_deref(), Some("edit.clear"));
+    menus::invoke(&mut app, "edit.clear", json!({}));
+    let st = app.session.active().unwrap();
+    let pd = st.doc.node(a).unwrap().path_data().unwrap().clone();
+    assert_eq!(pd.subpaths[0].anchors.len(), 3, "one anchor removed");
+    // Nothing selected: no Delete.
+    app.run("select.none", json!({})).unwrap();
+    assert!(!has(&app, "Delete"));
+}
+
 #[test]
 fn the_menu_follows_the_selection() {
     let mut app = app();
