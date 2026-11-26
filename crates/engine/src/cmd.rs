@@ -924,6 +924,9 @@ pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYT
 /// An Image Trace made off the UI thread, and what it traced (#3098).
 pub use buildcmds::{TraceRun, Traced, image_trace_target};
 
+/// Retype's search of the installed fonts, made off the UI thread.
+pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
+
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
 

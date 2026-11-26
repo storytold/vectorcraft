@@ -867,7 +867,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "retype.find",
         "Find Matching Fonts",
         "",
-        "{more?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first): ten, as Find Matching Fonts does (more false, omitted or null: a new search), or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more other than true, false or null, is an error and leaves the list as it was; returns what retype.list returns",
+        "{more?: bool, installed?: bool} show the Retype panel and list the fonts whose glyphs match the selected outlined text, compared and ranked as type.retypeFonts does (up to 96 loaded fonts, those of the document's live type first, then, unless installed is false, the installed fonts not loaded yet, which the app reads in the background, with retype.cancelSearch to stop it, when the panel's button, a menu or the command palette runs it): ten, as Find Matching Fonts does (more false, omitted or null: a new search), or with more: true the next five fonts the last search found (whatever is selected now; before any search, a first search), as Find more font matches does; the document does not change; a search with no path or compound path selected, or a more or installed other than true, false or null, is an error and leaves the list as it was; returns what retype.list returns",
     ),
     (
         "retype.list",
@@ -2029,6 +2029,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the progress window of the Image Traces running in the background; they go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "retype.cancelSearch",
+        "Cancel Font Search",
+        "",
+        "{} stop the search of the installed fonts that Type › Retype or the Retype panel's Find Matching Fonts runs in the background (its progress window's Cancel): it stops before its next file, and Retype changes nothing and the list stays as it was → {cancelled: n}",
     ),
     (
         "ui.runScript",

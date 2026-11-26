@@ -12273,7 +12273,9 @@ comparison per contour and one more; past them, the glyphs not yet ranked or com
 selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
 limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
 are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
-in proportion are indexed.
+in proportion are indexed. These limits apply to each set of up to 96 fonts compared and to each installed font read
+(see Retype installed fonts). When Retype finds fonts past the first 96, every shape is matched again with all the fonts
+found, and the limits start again for that match.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.retype","params":{"tolerance":0.02}}}
@@ -13437,7 +13439,7 @@ on an open path that are not drawn because they fall before the path's start can
 
 ## Retype tracking
 
-`type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
+`type.retype {fonts?, tolerance?, installed?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
 has. A line of three or more exactly matched glyphs (none a near match, see `tolerance`) gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
 tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
 advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
@@ -13485,22 +13487,62 @@ the result's `texts` list holds an object's lines joined by `\n`, and each entry
 
 ## Retype panel
 
-`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
+`type.retypeFonts {count?, installed?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
 first, by the matching `type.retype` uses, and it counts only exact matches of whole shapes: it does not split a
 compound path into glyphs or take near matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
 fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
 name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
-`{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
-`shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
-shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
-their paint still count. A font whose glyphs match the shapes only as combining marks is not listed. The
-command does not change the document and records no undo step. With no path or compound
-path selected it is an error.
+`{fonts: [{family, style, matched}], shapes, more, truncated, installed}`: `matched` is the number of shapes the
+font matches, `shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and
+`truncated` is true when shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as
+outlines because of their paint still count. A font whose glyphs match the shapes only as combining marks is not
+listed. The command does not change the document and records no undo step. With no path or compound path selected it
+is an error. `type.retypeFonts` also compares the installed fonts that are not
+loaded yet, as described under Retype installed fonts, and reads every installed file within those limits, so one
+search can read up to 2 GiB; the fonts that match are loaded and ranked with the others while the list holds fewer
+than 96 fonts. A matching font that is shadowed by another version of the same family and style is loaded and not
+listed, and does not take a place. `installed` is `{read, skipped}` as for `type.retype`; when the list is full, the
+installed faces not compared count as skipped, and `more` does not count them.
 
-Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
-96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
+## Retype installed fonts
+
+`type.retype {fonts?, tolerance?, installed?}` compares the shapes that no loaded font, document font or font in `fonts` matches
+with the installed fonts that are not loaded yet. Every loaded font is compared first: the document's fonts, the fonts
+in `fonts` and the fonts earlier searches loaded come first, and the loaded fonts past the first 96 are compared, 96 at
+a time, with the shapes that are not plain and that the first 96 do not match. Both comparisons match as Retype does
+with the first 96 fonts: with a `tolerance`, near matches count, and a compound path of several glyphs counts when every
+glyph it splits into matches. The search of the installed fonts reads their files one at a time, smallest first, and
+stops when every such shape matches the fonts it has read. It leaves out files larger than 256 MiB, and the files and
+faces past 2 GiB read or 500,000 glyphs drawn in all. A file is read for the search and then released; a font whose
+glyphs match a shape, or complete the glyphs of a split compound path with the fonts found before it, is loaded from
+what the search read, without the family's other files. The fonts found are then matched with every selected shape,
+the shapes that matched already included, as the first 96 fonts are. A plain shape (one contour of up to
+four straight edges, such as a rectangle or a hyphen) does not start the search, and matches only a font the other
+shapes found. With `installed: false` the installed fonts are not read; `installed` true, omitted or null reads them,
+and any other value is an error. The result's `installed` is `{read, skipped}`: the installed faces compared, and the
+faces the limits left out. These limits are VectorCraft's own.
+
+The fonts a search loads stay loaded for the rest of the session, also when Retype then finds nothing to set, and later
+searches in every open document compare them ahead of the other loaded fonts. A request that is canceled (an MCP
+cancel) stops the search between files and leaves the document as it was; the fonts loaded before the cancel stay
+loaded. In the app, Type › Retype and Find Matching Fonts (the Retype panel's button, or `retype.find` run from a
+menu or the command palette) search on a thread of their own: the
+status bar shows "Finding matching fonts…", and a progress window with Cancel (also Esc) opens when the search takes
+longer than 0.4 seconds. Cancel runs `retype.cancelSearch {}` → `{cancelled: n}`, after which Retype changes nothing
+and the list stays as it was. When the search is done, Retype runs, or the panel lists the fonts, with the fonts the
+search found, without reading the installed fonts again. If the document or its selection changed meanwhile, nothing changes and the status bar says to run it
+again. `retype.find {installed: false}` lists the loaded fonts only. The control channel and scripts run the commands
+at once.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{"installed":false}}}
+```
+
+Window › Retype shows the Retype panel. Find Matching Fonts searches as `retype.find {}` does, reading the installed
+fonts in the background (see Retype installed fonts); `retype.find {}` shows the panel, ranks up to 96 fonts and lists
+the first ten, and `retype.find {installed: false}` compares the loaded fonts only. Find more font matches, at the end of the list when `more` is true, runs
 `retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
 search, `retype.find {more: true}` runs a first search. With `more` false, omitted or null, `retype.find` runs a new
 search; any other value than true, false or null is an error. A search that fails is an error and leaves the list as
@@ -13514,7 +13556,7 @@ of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some
 `size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
 `retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
 changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
-and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
+and text; a search Find Matching Fonts started in the background stops and does not fill the list. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.retypeFonts","params":{"count":5}}}

@@ -82,7 +82,8 @@ fn more_adds_fonts_until_none_is_left() {
     let mut app = app();
     let g = outlined(&mut app, json!({"x": 40, "y": 100, "text": "More", "size": 30}));
     select(&mut app, &[g]);
-    let first = app.run("retype.find", json!({})).unwrap();
+    // The installed fonts are left out, so the searches compare the same fonts.
+    let first = app.run("retype.find", json!({"installed": false})).unwrap();
     // How many fonts match depends on the fonts loaded: ask until none is left.
     let mut last = first.clone();
     for _ in 0..20 {
@@ -99,10 +100,16 @@ fn more_adds_fonts_until_none_is_left() {
     // A null more is omitted: a new search lists the first ten again. A font added to the list
     // tells the new search apart from adding more when ten or fewer fonts match.
     app.ui.retype.fonts.push(super::Found { family: "Not Found".into(), style: "Regular".into(), matched: 0 });
-    assert_eq!(app.run("retype.find", json!({"more": null})).unwrap(), first);
+    assert_eq!(app.run("retype.find", json!({"more": null, "installed": false})).unwrap(), first);
     // Before any search, more is a first search.
     app.run("retype.reset", json!({})).unwrap();
-    assert_eq!(app.run("retype.find", json!({"more": true})).unwrap(), first);
+    assert_eq!(app.run("retype.find", json!({"more": true, "installed": false})).unwrap(), first);
+    // A bad installed is the command's error, and leaves the list as it was.
+    for p in [json!({"installed": 1}), json!({"more": true, "installed": "yes"})] {
+        let e = app.run("retype.find", p.clone()).unwrap_err();
+        assert!(e.contains("`installed` must be true, false or null"), "{p}: {e}");
+        assert_eq!(app.run("retype.list", json!({})).unwrap(), first, "{p}");
+    }
     assert!(app.run("retype.find", json!({"more": "yes"})).is_err());
 }
 

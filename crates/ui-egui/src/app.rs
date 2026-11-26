@@ -31,7 +31,7 @@ use super::state::SYSTEM_CLIPBOARD_POLL;
 use super::{
     Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits, dialogs,
     edits, export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
-    plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
+    plugin_runs, prefs_dialog, recovery, retype_runs, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
 };
 
 mod commands;
@@ -224,6 +224,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            retype_runs: Default::default(),
             recovery: Default::default(),
             closing: None,
             prefs: None,
@@ -346,6 +347,7 @@ impl VectorcraftApp {
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
+        retype_runs::poll(self);
     }
 
     /// The language the UI is drawn in: the Preferences window's choice while it is open (so a
@@ -512,6 +514,7 @@ impl VectorcraftApp {
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
+            || self.retype_runs.running.is_some()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));

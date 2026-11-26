@@ -310,6 +310,9 @@ pub struct Session {
     /// What a [`cmd::TraceRun`] traced, until the next `imageTrace.make` or
     /// `imageTrace.makeAndExpand` takes it ([`cmd::Traced::hand_in`]).
     pub(crate) trace_hand_off: Option<cmd::Traced>,
+    /// The installed fonts a [`cmd::RetypeSearch`] found, until the next `type.retype` or
+    /// `type.retypeFonts` takes it ([`cmd::RetypeFound::hand_in`]).
+    pub(crate) retype_hand_off: Option<cmd::RetypeFound>,
     /// Whether a click or drag of the place cursor asks the frontend to place its file
     /// ([`UiRequest::Place`]) instead of running `file.place`: the desktop app sets it to read the
     /// file off the UI thread. False: the file is placed at once.

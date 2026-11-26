@@ -139,6 +139,7 @@ impl Session {
             place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
+            retype_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,
