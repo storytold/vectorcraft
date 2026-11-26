@@ -73,7 +73,7 @@ fn artboard_widths(app: &VectorcraftApp) -> Vec<f64> {
     app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect()
 }
 
-fn click_page_footer_ok(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+fn click_page_footer_ok(app: VectorcraftApp, dismiss: bool) -> egui_kittest::Harness<'static, VectorcraftApp> {
     let mut fonts = false;
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
@@ -87,21 +87,36 @@ fn click_page_footer_ok(app: VectorcraftApp) -> egui_kittest::Harness<'static, V
         app,
     );
     h.run_steps(4);
-    h.get_by_label("OK").click();
+    if dismiss {
+        let pos = h.get_by_label("OK").rect().center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        h.hover_at(pos);
+        h.event(button(true));
+        h.step();
+        h.input_mut().events.extend([
+            button(false),
+            egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+        ]);
+    } else {
+        h.get_by_label("OK").click();
+    }
     h.run_steps(4);
     assert!(!is_open(h.state()));
     h
 }
 
 #[test]
-fn pdf_page_footer_ok_opens_the_chosen_range() {
-    let mut app = app();
-    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
-    set(&mut app, "allPages", json!(false));
-    set(&mut app, "range", json!("2-3"));
+fn pdf_page_footer_ok_opens_the_chosen_range_unless_dismissed() {
+    for dismiss in [false, true] {
+        let mut app = app();
+        io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+        set(&mut app, "allPages", json!(false));
+        set(&mut app, "range", json!("2-3"));
 
-    let h = click_page_footer_ok(app);
-    assert_eq!(artboard_widths(h.state()), [200.0, 300.0]);
+        let h = click_page_footer_ok(app, dismiss);
+        let expected: &[f64] = if dismiss { &[400.0] } else { &[200.0, 300.0] };
+        assert_eq!(artboard_widths(h.state()), expected);
+    }
 }
 
 #[test]
@@ -267,7 +282,7 @@ fn pdf_page_footer_ok_places_the_chosen_page() {
     set(&mut app, "page", json!(2));
     set(&mut app, "cropTo", json!("art"));
 
-    let h = click_page_footer_ok(app);
+    let h = click_page_footer_ok(app, false);
     let (_, bounds) = placed(h.state());
     assert_eq!((bounds.width(), bounds.height()), (50.0, 60.0));
 }

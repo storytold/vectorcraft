@@ -372,11 +372,13 @@ impl ImportPdfDialog {
         if self.held.refusal().is_some_and(|(_, refused)| *refused != self.s) {
             self.held.clear_refusal();
         }
+        if out.closed.is_some() {
+            return Some(DialogResult::Cancel);
+        }
         if out.picked == Some(0) && !waiting {
             self.ok();
-            return None;
         }
-        out.closed.map(|_| DialogResult::Cancel)
+        None
     }
 }
 
