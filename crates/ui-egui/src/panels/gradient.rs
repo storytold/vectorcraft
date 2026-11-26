@@ -51,7 +51,8 @@ use egui::{Pos2, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::{MAX_REPEATS, MIN_STOPS, insert_stop, move_stop, remove_stop, set_midpoint};
 use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint};
-use vectorcraft_doc::{NodeId, StrokeGradientMode};
+use vectorcraft_doc::StrokeGradientMode;
+use vectorcraft_engine::StopOwner;
 use vectorcraft_tools::params::stops_json;
 
 // PLAN: assumed hub-w2's `panels::{proxy(app, ui), part_hidden(app, key), set_part_hidden(app, key, on), live_run, Live}` (co.A2, op.A5).
@@ -92,9 +93,10 @@ const MENU_DELETE_PRESET: &str = "ui.gradient.deletePreset";
 /// The panel's view state that lives only while the app runs (`app.ui.gradient_panel`).
 #[derive(Clone, Debug, Default)]
 pub struct GradientUi {
-    /// The selected midpoint diamond and the object it was picked on: it stands while no stop is
-    /// selected and that object is still the first selected.
-    pub(crate) mid_selected: Option<(usize, Option<NodeId>)>,
+    /// The selected midpoint diamond and the gradient it was picked on: it stands while no stop is
+    /// selected and the active proxy still shows that gradient
+    /// ([`vectorcraft_engine::Session::gradient_owner`]).
+    pub(crate) mid_selected: Option<(usize, StopOwner)>,
     /// The stops of the gradient the slider's open gesture began from, from its `Begin` until its
     /// `Commit` or `Cancel`. Every preview restarts from the interaction's snapshot and
     /// `paint.editGradient` sorts the stops, so the gradient shown mid-gesture is the last preview
@@ -282,20 +284,16 @@ fn gradient_swatches(app: &VectorcraftApp) -> Vec<(String, GradientPaint)> {
         .collect()
 }
 
-/// The selected midpoint diamond: kept for the object it was picked on, and given up when a stop
-/// is selected.
+/// The selected midpoint diamond: kept for the gradient it was picked on, as a selected stop is
+/// ([`vectorcraft_engine::Session::gradient_owner`]), and given up when a stop is selected.
 fn selected_mid(app: &VectorcraftApp, stops: usize) -> Option<usize> {
     let (i, owner) = app.ui.gradient_panel.mid_selected?;
-    (app.session.selected_stop().is_none() && i + 1 < stops && owner == first_id(app)).then_some(i)
+    (app.session.selected_stop().is_none() && i + 1 < stops && owner == app.session.gradient_owner()).then_some(i)
 }
 
 /// A stored fraction as the percent a field shows, without the `f32` noise (`0.3` is `30`, not `30.000001`).
 fn percent(v: f32) -> f64 {
     (f64::from(v) * 1e6).round() / 1e4
-}
-
-fn first_id(app: &VectorcraftApp) -> Option<NodeId> {
-    app.session.active().and_then(|d| d.selection.objects.first().copied())
 }
 
 // ---------- UI ----------
@@ -829,7 +827,7 @@ fn stops_editor(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_gra
     if out.selected != selected && (events.is_empty() || events.committed().is_some()) {
         match out.selected {
             Some(StopRef::Midpoint(_, m)) => {
-                app.ui.gradient_panel.mid_selected = Some((m, first_id(app)));
+                app.ui.gradient_panel.mid_selected = Some((m, app.session.gradient_owner()));
                 if app.session.selected_stop().is_some() {
                     select_stop(app, None);
                 }

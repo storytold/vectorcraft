@@ -66,6 +66,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod tags;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -1353,7 +1355,7 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 /// `[]`. Every one must be an object of that document that can be selected.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
@@ -2211,6 +2213,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -2231,6 +2234,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("parent", get(l, item_parent)),
         ("name", property(l, item_name, item_set_name)),
         ("note", property(l, item_note, item_set_note)),
+        ("tags", get(l, tags::item_tags)),
         ("hidden", property(l, item_hidden, item_set_hidden)),
         ("locked", property(l, item_locked, item_set_locked)),
         ("selected", property(l, item_selected, item_set_selected)),
@@ -2259,7 +2263,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "layer",
             "pixelAligned",
             "sliced",
-            "tags",
             "uRL",
             "uuid",
             "visibilityVariable",
@@ -2283,6 +2286,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
         None,
     ));
+    classes.extend(tags::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.
     realm.define_host_globals(vec![
