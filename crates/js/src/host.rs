@@ -173,7 +173,9 @@ pub enum ScriptItem {
     Line,
     /// The running frames of the script's code, outermost first, one a line as `name:line`: the
     /// global code is `[global]` and a function without a name `[anonymous]`. At most 64 frames
-    /// are listed, the innermost ones, after a line `…` when some are left out.
+    /// are listed, the innermost ones, after a line `…` when some are left out. A first line
+    /// `[name]` names the running script when the realm has its name
+    /// ([`crate::Realm::set_script_name`]).
     Stack,
 }
 
@@ -250,6 +252,7 @@ impl Interp {
                 Ok(Data::String(s.to_rust_string()))
             }
             Value::Object(id) => self.read_object(*id, r),
+            Value::Symbol(_) => Err(self.data_error(r, ErrorType::Type, "is a Symbol, not plain data")),
         }
     }
 
@@ -287,6 +290,14 @@ impl Interp {
                 return Err(self.data_error(r, ErrorType::Type, &what));
             }
         };
+        // Each Symbol key the scan may visit takes a unit of fuel first.
+        let syms = self.object(id)?.syms.as_ref().map_or(0, |m| m.len());
+        if syms > 0 {
+            crate::regexp_vm::use_fuel_n(self, syms as u64)?;
+        }
+        if self.object(id)?.syms.as_ref().is_some_and(|m| m.iter().any(|(_, p)| p.enumerable())) {
+            return Err(self.data_error(r, ErrorType::Type, "has a Symbol-keyed property, not plain data"));
+        }
         r.ancestors.push(id);
         let out = match shape {
             Shape::Array(length) => self.read_array(id, length, r),
@@ -321,7 +332,7 @@ impl Interp {
             self.use_fuel()?;
             self.charge_reading(r, k.len().saturating_mul(3).saturating_add(8))?;
             let name = String::from_utf16_lossy(&k);
-            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY) {
+            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY || name == crate::FOLDER_REF_KEY) {
                 return Err(self.data_error(r, ErrorType::Type, "is not plain data"));
             }
             r.path.push(Step::Name(k));
@@ -344,6 +355,14 @@ impl Interp {
     pub(crate) fn write_data(&mut self, d: Data, depth: usize, frozen: bool) -> JsResult<Value> {
         if depth > self.data_limits.depth {
             return Err(self.throw(ErrorType::Range, "a host value is nested too deep"));
+        }
+        // A host member's `File` or `Folder` ([`crate::file_ref`], [`crate::folder_ref`]).
+        if self.write_hosted
+            && let Data::Object(items) = &d
+            && let [(k, Data::String(path))] = items.as_slice()
+            && (k == crate::FILE_REF_KEY || k == crate::FOLDER_REF_KEY)
+        {
+            return self.write_fs_ref(path, k == crate::FOLDER_REF_KEY);
         }
         Ok(match d {
             Data::Undefined => Value::Undefined,
@@ -573,7 +592,14 @@ impl Interp {
 
     /// `v` as the string `String(v)` gives, within the limits of a crossing.
     fn read_text(&mut self, v: &Value, r: &mut Reading) -> JsResult<Data> {
-        let s = self.to_str(v)?;
+        let s = match v {
+            // `String(symbol)` gives `Symbol(description)` (ECMA-262 11th edition, section 21.1.1.1).
+            Value::Symbol(k) => match self.descriptive_string(k)? {
+                Value::String(s) => s,
+                _ => return Err(Abrupt::Internal("a Symbol's descriptive string is not a string".into())),
+            },
+            _ => self.to_str(v)?,
+        };
         self.charge_reading(r, s.len().saturating_mul(3).saturating_add(2))?;
         Ok(Data::String(s.to_rust_string()))
     }
@@ -640,7 +666,7 @@ impl Interp {
             HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
                 None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
                 Some((name, f)) => {
-                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    let get = crate::builtins::accessor_native(self, "get ", name, f, 0)?;
                     Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
                 }
             },

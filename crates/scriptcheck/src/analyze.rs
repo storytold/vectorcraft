@@ -53,19 +53,23 @@ pub(crate) struct Known {
     pub bound: HashMap<String, String>,
     pub files: HashSet<String>,
     pub folders: HashSet<String>,
+    /// A file gives names values the analysis doesn't read ([`Declared::unsure`]): no object counts
+    /// as a Folder object whatever the path names.
+    pub unsure: bool,
 }
 
 impl Known {
     /// The names known, a name that may hold a File object counting twice: a Folder that becomes a
     /// possible File object ([`Known::add`]) changes it too.
     pub fn len(&self) -> usize {
-        self.bound.len() + self.files.len().saturating_mul(2).saturating_sub(self.folders.len())
+        self.bound.len() + self.files.len().saturating_mul(2).saturating_sub(self.folders.len()) + usize::from(self.unsure)
     }
 
     /// What `other` adds, up to [`crate::Limits::entries`] names of each kind: a name already
     /// bound keeps its chain. A name that holds a File or Folder object on both sides holds a Folder
     /// object only when both sides say so; otherwise it may hold a File object.
     pub fn add(&mut self, other: Known, entries: usize) {
+        self.unsure |= other.unsure;
         for (name, chain) in other.bound {
             if self.bound.len() < entries || self.bound.contains_key(&name) {
                 self.bound.entry(name).or_insert(chain);
@@ -245,9 +249,11 @@ enum Pending<'s> {
     /// `Window`: `(` and a string literal with the window's type may follow.
     Window(Option<usize>),
     WindowType(Option<usize>),
-    /// `.executeMenuCommand(`: a string literal and `)` may follow.
+    /// `.executeMenuCommand(`: a string literal and `)` may follow, with a trailing comma
+    /// between them.
     Menu(Option<usize>),
     MenuString(Option<usize>, &'s str),
+    MenuStringComma(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
     /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
@@ -640,6 +646,9 @@ struct Analyzer<'s, 'a, 'l> {
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
+    /// This file or what the scan started with gives names values the analysis doesn't read
+    /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
+    unsure: bool,
     /// The platform names ([`platform_name`]) the script declares or assigns a meaning of its own
     /// for: they no longer stand for the platform's objects.
     own_names: HashSet<String>,
@@ -709,12 +718,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             bound: known.bound.clone(),
             files: known.files.clone(),
             folders: known.folders.clone(),
-            maybe_files: known.files.difference(&known.folders).cloned().collect(),
+            // A variable of the same name as a property a member assignment writes may be that
+            // property of the global object.
+            maybe_files: known.files.difference(&known.folders).chain(declared.rebound.iter()).cloned().collect(),
             maybe_files_full: false,
             writers: HashMap::new(),
             objects: vec![],
             closed: None,
             index_receiver: 0,
+            unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
             declared,
@@ -947,10 +959,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// `name` holds a Folder object whatever the path names, and no assignment the check read gave it
-    /// a value that may be a File object.
+    /// `name` holds a Folder object whatever the path names, no assignment the check read gave it a
+    /// value that may be a File object, and the file gives no name a value the analysis doesn't read.
     fn folder(&self, name: &str) -> bool {
-        !self.maybe_files_full && self.files.contains(name) && self.folders.contains(name) && !self.maybe_files.contains(name)
+        !self.maybe_files_full && !self.unsure && self.files.contains(name) && self.folders.contains(name) && !self.maybe_files.contains(name)
     }
 
     /// `t`, when it names a parameter of the function whose body's `{` is still to come: kept, up to
@@ -1719,7 +1731,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         // A variable that any assignment gave a value that may be a File object leaves as one.
         let folders = self.folders.iter().filter(|name| self.folder(name)).cloned().collect();
-        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files), folders };
+        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files), folders, unsure: self.unsure };
         (std::mem::take(&mut self.includes), module, known)
     }
 }

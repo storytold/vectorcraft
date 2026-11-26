@@ -9,15 +9,12 @@
 //! color: `#rrggbb`, or a layer color's name such as "Red") and `width` (the width of a face's
 //! highlight in screen pixels; an edge's highlight is half as wide).
 
-use serde_json::{Map, Value, json};
-use vectorcraft_color::Color;
-use vectorcraft_doc::LAYER_COLORS;
+use craft::ui::runtime::env::UnitKind;
+use serde_json::Value;
 use vectorcraft_tools::builder::LP_BUCKET_WIDTH_RANGE;
 
-use super::tile_edge_color::{checked, resolve};
-use super::{DialogSpec, form, set_tool_options_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::option_form::{self, OptionSpec, Rows, is_on};
+use crate::VectorcraftApp;
 
 /// The dialog kind of the Live Paint Bucket Options.
 pub const KIND: &str = "livePaintBucketOptions";
@@ -28,153 +25,32 @@ const TOOL: &str = "livePaintBucket";
 /// The options the dialog edits.
 const KEYS: [&str; 6] = ["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"];
 
-/// Width of the label column.
-const LABEL_W: f32 = 60.0;
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 300.0, ..DialogSpec::FORM };
-
-fn heading(_: &Dialog) -> String {
-    let label = vectorcraft_tools::tool_info(TOOL).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
-}
+/// The dialog's description for the option form.
+pub(super) static SPEC: OptionSpec = OptionSpec {
+    key: KIND,
+    title: || option_form::tool_title(TOOL),
+    keys: &KEYS,
+    colors: &["color"],
+    preview: false,
+    body,
+    // The highlight's color and width take input while it is on.
+    inactive: |values, key| matches!(key, "color" | "width") && !is_on(values, "highlight"),
+    run: |app, values, _| option_form::set_tool_options(app, TOOL, values),
+    cancelled: None,
+};
 
 /// Open the Live Paint Bucket Options with the tool's current values.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let o = app.session.tool_options_of(TOOL);
-    let fields: Map<String, Value> = KEYS.iter().filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    Ok(json!({ "dialog": KIND }))
+    option_form::open_tool(app, &SPEC, TOOL)
 }
 
-fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    form::check(ui, d, "paintFills", tl!("Paint Fills"));
-    form::check(ui, d, "paintStrokes", tl!("Paint Strokes"));
-    form::check(ui, d, "cursorSwatchPreview", tl!("Cursor Swatch Preview"));
-    ui.add_space(6.0);
-    form::check(ui, d, "highlight", tl!("Highlight"));
-    let color = resolve(&d.str("color")).unwrap_or(Color::BLACK);
-    let [r, g, b, _] = color.to_rgba8(1.0);
-    let preset = LAYER_COLORS.iter().position(|(_, c)| *c == [r, g, b]);
-    let names: Vec<&str> = LAYER_COLORS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
-    ui.add_enabled_ui(d.bool("highlight"), |ui| {
-        widgets::label_row(ui, tl!("Color:"), LABEL_W, |ui| {
-            if let Some((_, [r, g, b])) =
-                widgets::dropdown(ui, "lp-bucket-color", names[preset.unwrap_or(LAYER_COLORS.len())], &names, 130.0).and_then(|i| LAYER_COLORS.get(i))
-            {
-                d.fields.insert("color".into(), json!(Color::rgb8(*r, *g, *b).to_hex()));
-            }
-            // The color button sets any other color; the dropdown then shows Custom.
-            let mut rgb = [r, g, b];
-            if ui.color_edit_button_srgb(&mut rgb).changed() {
-                d.fields.insert("color".into(), json!(Color::rgb8(rgb[0], rgb[1], rgb[2]).to_hex()));
-            }
-        });
-        let (min, max) = LP_BUCKET_WIDTH_RANGE;
-        let v = d.f64("width", min);
-        widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
-            if let Some(x) = widgets::range_field(ui, "lp-bucket-width", v, min..=max, "px", 0, 72.0) {
-                d.fields.insert("width".into(), json!(x));
-            }
-        });
-    });
-    false
-}
-
-/// OK: set the tool's options, or an error for a `color` that is not a color.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    if d.fields.contains_key("color") {
-        checked(&d.str("color"))?;
-    }
-    let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-    set_tool_options_and_close(app, json!({ "tool": TOOL, "values": values }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_engine::Session;
-    use vectorcraft_tools::{Overlay, PointerEvent, PointerKind};
-
-    /// The labels the open dialog paints.
-    fn painted(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
-    #[test]
-    fn double_clicking_the_tool_opens_its_options_and_ok_sets_them() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        // Two squares side by side, made a Live Paint group: two faces and the edge between them.
-        for x in [0, 100] {
-            app.run("shape.rectangle", json!({"x": 50 + x, "y": 50, "width": 100, "height": 100})).unwrap();
-        }
-        app.run("select.all", json!({})).unwrap();
-        app.run("livePaint.make", json!({})).unwrap();
-        app.run("select.set", json!({"ids": []})).unwrap();
-        app.select_tool(TOOL);
-        let hover = |app: &mut VectorcraftApp, x: f64| {
-            let view = app.view_info();
-            crate::canvas::dispatch(app, &PointerEvent::new(PointerKind::Move, x, 100.0), view);
-            app.session.overlays(view)
-        };
-        let ov = hover(&mut app, 151.0);
-        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color: [0xff, 0x2a, 0x2a], width: 4.0, .. })), "{ov:?}");
-
-        crate::toolbar::open_options(&mut app, TOOL).unwrap();
-        let text = painted(&mut app);
-        for label in ["Live Paint Bucket Options", "Paint Fills", "Paint Strokes", "Cursor Swatch Preview", "Highlight", "Color:", "Width:"] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!(d.kind, KIND);
-        assert_eq!(
-            (d.bool("paintFills"), d.bool("paintStrokes"), d.bool("cursorSwatchPreview"), d.bool("highlight"), d.str("color"), d.f64("width", 0.0)),
-            (true, false, true, true, "#ff2a2a".to_string(), 4.0)
-        );
-        d.fields.insert("paintFills".into(), json!(false));
-        d.fields.insert("paintStrokes".into(), json!(true));
-        d.fields.insert("cursorSwatchPreview".into(), json!(false));
-        d.fields.insert("color".into(), json!("Green"));
-        d.fields.insert("width".into(), json!(8));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        // The tool takes them: by the edge, the edge highlights in the new color at half the new width.
-        let ov = hover(&mut app, 151.0);
-        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color: [0x4f, 0xff, 0x4f], width: 4.0, .. })), "{ov:?}");
-        // They last while another tool is chosen, and the dialog opens on them again.
-        app.select_tool("selection");
-        let o = app.session.tool_options_of(TOOL);
-        assert_eq!(
-            (o["paintFills"].as_bool(), o["paintStrokes"].as_bool(), o["cursorSwatchPreview"].as_bool(), o["color"].as_str()),
-            (Some(false), Some(true), Some(false), Some("#4fff4f"))
-        );
-        app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.bool("paintStrokes"), d.bool("cursorSwatchPreview"), d.str("color")), (true, false, "#4fff4f".to_string()));
-        // Highlight off: the tool outlines nothing under the pointer.
-        d.fields.insert("highlight".into(), json!(false));
-        super::super::confirm(&mut app).unwrap();
-        app.select_tool(TOOL);
-        assert!(!hover(&mut app, 151.0).iter().any(|o| matches!(o, Overlay::Path { .. })));
-    }
-
-    /// A highlight color with an alpha part is refused and leaves the tool's options as they were;
-    /// `#rrggbb` still sets them.
-    #[test]
-    fn a_color_with_an_alpha_part_is_refused() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("color".into(), json!("#ff000080"));
-        d.fields.insert("width".into(), json!(8));
-        let err = super::super::confirm(&mut app).unwrap_err();
-        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
-        assert!(app.ui.dialog.is_some(), "the dialog stays open");
-        let o = app.session.tool_options_of(TOOL);
-        assert_eq!((o["color"].as_str(), o["width"].as_f64()), (Some("#ff2a2a"), Some(4.0)), "nothing changes");
-        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.tool_options_of(TOOL)["color"], json!("#ff0000"));
-    }
+fn body(ui: &mut egui::Ui, rows: &mut Rows<'_>) {
+    rows.check(ui, "paintFills", tl!("Paint Fills"), true);
+    rows.check(ui, "paintStrokes", tl!("Paint Strokes"), true);
+    rows.check(ui, "cursorSwatchPreview", tl!("Cursor Swatch Preview"), true);
+    rows.check(ui, "highlight", tl!("Highlight"), true);
+    let highlight = rows.flag("highlight");
+    rows.field(ui, tl!("Color"), highlight, |ui, rows, label| rows.color(ui, "color", label, highlight));
+    let (min, max) = LP_BUCKET_WIDTH_RANGE;
+    rows.field(ui, tl!("Width"), highlight, |ui, rows, label| rows.number(ui, "width", label, min..=max, UnitKind::Pixels, highlight));
 }

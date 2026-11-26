@@ -54,7 +54,9 @@
 //!   for, loses the grant before that code runs. A run with nobody to ask gets `null` and
 //!   [`NO_PICKER`].
 //! - The commands a script runs with `vc.run` read and write only in the places above and in the
-//!   files of the open documents ([`crate::file_access::ScriptGate`]).
+//!   files the person gave the open documents ([`crate::file_access::ScriptGate`]). They also read
+//!   the files that the documents open when the run began link to, as the person last left those
+//!   documents and as those links led then.
 //! - `open('w')` empties the file at once; what a script writes is kept in memory, at most
 //!   [`MAX_FILE_BYTES`] a file, and written when it closes the file or the run ends; a run writes at
 //!   most [`MAX_RUN_BYTES`] in all and ends past that. `write` encodes in the file's encoding (an
@@ -468,13 +470,14 @@ impl Disk {
         }
     }
 
-    /// The gate for a command the script runs: the places it reads and writes now, and the files of
-    /// the open documents, `documents`, but not the files its `File` objects hold open for writing.
-    pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
+    /// The gate for a command the script runs: the places it reads and writes now, the files the
+    /// person gave the open documents, `documents`, and the files it may only read because the documents open when
+    /// the run began link to them, `linked`, but not the files its `File` objects hold open for writing.
+    pub(crate) fn gate(&self, documents: Vec<String>, linked: crate::file_access::LinkedFiles) -> crate::file_access::ScriptGate {
         // A save, export or open of a `File` the script names reads and writes as its `File` would.
-        let documents = if self.exact { Vec::new() } else { documents };
+        let (documents, linked) = if self.exact { (Vec::new(), Default::default()) } else { (documents, linked) };
         let held = self.open.values().filter_map(|o| o.target.clone()).collect();
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, held, also: None }
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, held, linked, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
@@ -962,8 +965,15 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 /// that is not well formed is left out. It is read under [`lock_store`]'s lock, so it is read
 /// between two changes, and none are read when the lock cannot be taken.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let Ok(_lock) = lock_store(store) else { return Vec::new() };
-    load_store(store, false).unwrap_or_default()
+    list_store(store).unwrap_or_default()
+}
+
+/// The grants [`read_store`] reads; none when the grants file is missing, and `Err` when the lock
+/// cannot be taken or the file is there but cannot be read, is too large, is not a grants file of
+/// this version or holds no list of grants.
+fn list_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    let _lock = lock_store(store)?;
+    load_store(store, false)
 }
 
 /// The grants the grants file at `store` holds, to change and write back; none when it is missing,
@@ -979,7 +989,8 @@ fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
 fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
     let bytes = match read_head(store, MAX_STORE_BYTES) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        // A link whose target is missing is there but cannot be read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(store).is_err() => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
     if bytes.len() > MAX_STORE_BYTES {
@@ -997,14 +1008,14 @@ fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Val
             && g["write"].is_boolean()
             && g["folder"].is_boolean()
     };
+    let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
     if strict {
-        let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
         if grants.len() > MAX_STORED_GRANTS || !grants.iter().all(valid) {
             return Err(std::io::Error::other("the grants file holds a grant that cannot be read"));
         }
         return Ok(grants.clone());
     }
-    Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
+    Ok(grants.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect())
 }
 
 /// The number in the name of the next file [`write_store`] writes before it takes the grants file's
@@ -1104,9 +1115,9 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
-/// its text, the path and whether it may be written (`script.grants`).
-pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
-    read_store(&data_dir.with_file_name(GRANTS_FILE))
+/// its text, the path and whether it may be written (`script.grants`); as [`list_store`] reads them.
+pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    list_store(&data_dir.with_file_name(GRANTS_FILE))
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path

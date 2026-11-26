@@ -63,12 +63,18 @@ impl Exporter<'_> {
     /// missing or left out, its pixels can't be decoded, or its color channel exceeds
     /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
     /// resampled), image rejections too.
-    /// With `interpolate` (and the export's own setting), viewers may smooth it.
-    pub(super) fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, paint: &Paint, interpolate: bool) -> Option<Image> {
+    /// With `interpolate` (and the export's own setting), viewers may smooth it. With `overprint`
+    /// a gray or CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
+    /// leaves at zero keep the inks below: the nonzero overprint mode does not apply to an image's
+    /// samples (ISO 32000-1 §8.6.7).
+    pub(super) fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, paint: &Paint, interpolate: bool, overprint: bool) -> Option<Image> {
         let Paint::Solid { color, swatch, tint } = paint else { return None };
         let size = self.image_size(im);
         let interpolate = interpolate && self.interpolate;
         let mut cache = format!("{}\u{0}{paint:?}", im.key);
+        if overprint {
+            cache.push_str("\u{0}overprint");
+        }
         if self.downsampled() {
             cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
         }
@@ -103,14 +109,24 @@ impl Exporter<'_> {
         } else {
             DeviceNSpace::new(spot_colorants)
         };
-        let (samples, space) = match &device_n {
-            Some(d) if registration => (vec![q(*tint); d.colorants().len()], ImageColorspace::DeviceN),
-            Some(_) => (vec![q(*tint)], ImageColorspace::DeviceN),
-            None if registration => (vec![q(*tint); 4], ImageColorspace::Cmyk),
+        let (samples, space, device_n) = match &device_n {
+            Some(d) if registration => (vec![q(*tint); d.colorants().len()], ImageColorspace::DeviceN, Some(d.clone())),
+            Some(d) => (vec![q(*tint)], ImageColorspace::DeviceN, Some(d.clone())),
+            None if registration => (vec![q(*tint); 4], ImageColorspace::Cmyk, None),
             None => match self.page_color(color) {
-                Color::Gray { k } => (vec![q(1.0 - k)], ImageColorspace::Luma),
-                Color::Cmyk { c, m, y, k } => ([c, m, y, k].map(q).to_vec(), ImageColorspace::Cmyk),
-                other => (other.to_rgb().map(q).to_vec(), ImageColorspace::Rgb),
+                // An overprinting gray: black ink only.
+                Color::Gray { k } if overprint && k > 0.0 => {
+                    (vec![q(k)], ImageColorspace::DeviceN, DeviceNSpace::new([Colorant::Process(Process::Black)]))
+                }
+                Color::Gray { k } => (vec![q(1.0 - k)], ImageColorspace::Luma, None),
+                // An overprinting CMYK color: the process inks it puts down.
+                Color::Cmyk { c, m, y, k } if overprint && [c, m, y, k].iter().any(|v| *v > 0.0) => {
+                    let inks: Vec<(Process, f32)> = Process::ALL.into_iter().zip([c, m, y, k]).filter(|(_, v)| *v > 0.0).collect();
+                    let space = DeviceNSpace::new(inks.iter().map(|(p, _)| Colorant::Process(*p)));
+                    (inks.iter().map(|(_, v)| q(*v)).collect(), ImageColorspace::DeviceN, space)
+                }
+                Color::Cmyk { c, m, y, k } => ([c, m, y, k].map(q).to_vec(), ImageColorspace::Cmyk, None),
+                other => (other.to_rgb().map(q).to_vec(), ImageColorspace::Rgb, None),
             },
         };
         if tinted_color_len(samples.len(), n).is_none() {
@@ -243,6 +259,34 @@ impl Exporter<'_> {
             r.image
         });
         self.images.insert(cache, img.clone());
+        img
+    }
+
+    /// [`Self::masked_image`] of image `im` of node `n`. A distorted image's is resampled for the
+    /// size every piece of its mesh shares ([`Self::warp_image_size`]), since each piece draws this
+    /// one image; its expanded art, whose pieces were measured, is left in `expanded` for drawing.
+    pub(super) fn node_masked_image(
+        &mut self,
+        n: &Node,
+        im: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        expanded: &mut Option<Node>,
+    ) -> Option<Image> {
+        let interpolate = !n.extras().pixelated;
+        // A color-masked image keeps the colors it hides hidden.
+        let shown = self.doc.shown_image(n, im);
+        if !n.is_distorted_image() {
+            return self.masked_image(im, &shown, m, interpolate);
+        }
+        let g = expanded.insert(vectorcraft_effects::expand_live_deep(Some(self.doc), n));
+        let pieces = g.children().and_then(|c| c.first()).map_or(&[][..], |art| vectorcraft_doc::image_quad::distorted_pieces(art));
+        let shared =
+            self.warp_image_size(pieces).map(|s| SharedSize { key: shown.key.clone(), width: shown.width, height: shown.height, size: s.size });
+        let outer = shared.map(|w| self.warp_size.replace(w));
+        let img = self.masked_image(im, &shown, m, interpolate);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
+        }
         img
     }
 
@@ -437,10 +481,10 @@ mod tests {
         for key in ["missing", "bad", "left-out"] {
             let image =
                 ImageObject { key: key.into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
-            assert!(exporter.colorized_image(&image, &paint, true).is_none(), "{key}");
+            assert!(exporter.colorized_image(&image, &paint, true, false).is_none(), "{key}");
             let cache = format!("{key}\u{0}{paint:?}");
             assert!(matches!(exporter.images.get(&cache), Some(None)), "rejection for {key} was not cached");
-            assert!(exporter.colorized_image(&image, &paint, true).is_none(), "second call for {key}");
+            assert!(exporter.colorized_image(&image, &paint, true, false).is_none(), "second call for {key}");
         }
         assert_eq!(exporter.images.len(), 3);
     }
@@ -472,7 +516,7 @@ mod tests {
             pixels: None,
         };
         for scale in [10.0, 20.0] {
-            assert!(exporter.colorized_image(&image("pic", scale), &paint, true).is_some(), "colorized at {scale}");
+            assert!(exporter.colorized_image(&image("pic", scale), &paint, true, false).is_some(), "colorized at {scale}");
             let art = vectorcraft_doc::Node::new(doc.layers[0].id, vectorcraft_doc::NodeKind::Image(Box::new(image("alpha", scale))));
             let mask = vectorcraft_doc::OpacityMask::new(art, true);
             let inks = image("inks", scale);

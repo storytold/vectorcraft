@@ -2,132 +2,165 @@
 //! of a new action. Record adds the action and starts recording into it (`ui.action.new`).
 //!
 //! Fields: `set` (the index of the set the action goes into), `name`, `key` (0 for none, 1 to 15
-//! for F1 to F15), `cmd` (Ctrl, Command on macOS), `shift`, `color` (a value of
-//! [`crate::panels::actions::COLORS`], `""` for none). An invalid set or function key is an error:
-//! Record then adds nothing and the dialog stays open. `automaticAlignTo` (false) chooses the live
-//! selection's reference for Align at playback while keeping recorded step targets.
+//! for F1 to F15), `cmd` (Ctrl, Command on macOS), `shift`, `color` (the file name of an
+//! [`ActionColor`](craft::automation::actions::ActionColor), `""` for none) and `automaticAlignTo`,
+//! which chooses the live selection's reference for Align at playback while keeping recorded step
+//! targets. An invalid set or function key is an error: Record then adds nothing and the dialog
+//! stays open.
 
+use craft::automation::actions::ActionList;
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, HeldOk, StackDialog, dialog_id};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
+use craft::ui::text::TextField;
+use egui::{Context, Ui};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use crate::panels::actions::{COLORS, FUNCTION_KEYS, FunctionKey};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::actions::{ActionDialog, ActionOptions, Form, automatic_align_options, key_and_color, key_and_color_params, key_reason, label};
+use crate::VectorcraftApp;
+use crate::panels::actions::{NEW_ACTION, model};
 
-/// The dialog kind of New Action.
-pub const KIND: &str = "actionNew";
+/// The key the dialog answers for.
+const KEY: &str = "actionNew";
 
-/// The width of the label column.
-const LABEL_W: f32 = 90.0;
+/// What New Action edits.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewActionFields {
+    /// The index of the set the action goes into.
+    pub set: usize,
+    /// The action's name.
+    pub name: String,
+    /// The function key, color and Align choice.
+    #[serde(flatten)]
+    pub options: ActionOptions,
+}
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("New Action").into(),
-    body,
-    confirm,
-    ok: Some("Record"),
-    ok_enabled: Some(|_, d| !d.str("name").trim().is_empty()),
-    min_width: 340.0,
-    ..DialogSpec::FORM
-};
+/// Why OK is off: no name, or a function key the system keeps.
+fn check(fields: &NewActionFields) -> Option<Label> {
+    if fields.name.trim().is_empty() {
+        return Some(label("Enter a name for the action"));
+    }
+    key_reason(&fields.options)
+}
+
+/// The New Action dialog on the dialog host.
+pub struct NewActionDialog {
+    id: DialogId,
+    form: Form<NewActionFields>,
+    /// The names of the sets the Action Set row offers, as the app lists them.
+    sets: Vec<String>,
+}
+
+impl NewActionDialog {
+    fn new(fields: NewActionFields, sets: Vec<String>) -> Self {
+        NewActionDialog { id: dialog_id(KEY), form: Form::new(fields, check), sets }
+    }
+
+    /// Gives the Action Set row the app's set names.
+    pub(crate) fn set_sets(&mut self, sets: &[String]) {
+        if self.sets != sets {
+            self.sets = sets.to_vec();
+        }
+    }
+
+    /// The index of the set the action goes into, for a set edit that moves the sets to follow.
+    pub(crate) fn set_mut(&mut self) -> &mut usize {
+        &mut self.form.values.set
+    }
+}
 
 /// Whether New Action can open: there is a set to put the action in and nothing is recording.
 pub fn can_open(app: &VectorcraftApp) -> bool {
-    !app.ui.action_sets.is_empty() && app.ui.recording.is_none()
+    !app.ui.actions.sets().is_empty() && app.ui.recording.is_none()
 }
 
-/// Opens New Action for the current set, else the first set, named "Action N" with the first
-/// number from the set's action count plus one that no action of the set uses, with no function
-/// key and no color.
+/// "Action N" with the first number from the set's action count plus one that no action of the
+/// list uses: action names are unique in the whole list.
+fn free_name(list: &ActionList, set: &str) -> String {
+    let taken = |n: usize| list.actions().iter().any(|action| action.name == format!("Action {n}"));
+    let n = (model::members(list, set).len() + 1..).find(|&n| !taken(n)).unwrap_or(1);
+    format!("Action {n}")
+}
+
+/// Opens New Action for the current set, else the first set, named by [`free_name`], with no
+/// function key and no color.
 pub fn open(app: &mut VectorcraftApp) -> Result<(), String> {
     if app.ui.recording.is_some() {
         return Err("an action is already recording".into());
     }
-    let len = app.ui.action_sets.len();
-    let set = app.ui.action_set.filter(|&s| s < len).unwrap_or(0);
-    let Some(s) = app.ui.action_sets.get(set) else { return Err("no such action set".into()) };
-    let taken = |n: usize| s.actions.iter().any(|a| a.name == format!("Action {n}"));
-    let n = (s.actions.len() + 1..).find(|&n| !taken(n)).unwrap_or(1);
-    let fields = json!({"set": set, "name": format!("Action {n}"), "key": 0, "cmd": false, "shift": false, "color": "", "automaticAlignTo": false});
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
-    Ok(())
+    let sets: Vec<String> = app.ui.actions.sets().into_iter().map(str::to_owned).collect();
+    // PLAN: assumed `app.ui.action_set` is the current set's name (menus-w13 `deserialize_current_set`).
+    let set = app.ui.action_set.as_deref().and_then(|current| sets.iter().position(|s| s == current)).unwrap_or(0);
+    let name = sets.get(set).map(|set| free_name(&app.ui.actions, set)).ok_or("no such action set")?;
+    let fields = NewActionFields { set, name, options: ActionOptions::default() };
+    super::actions::open(app, NewActionDialog::new(fields, sets))
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::label_row(ui, "Name:", LABEL_W, |ui| {
-        super::form::text(ui, d, "name", 200.0);
-    });
-    let names: Vec<&str> = app.ui.action_sets.iter().map(|s| s.name.as_str()).collect();
-    let set = d.fields.get("set").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
-    let shown = set.and_then(|s| names.get(s)).copied().unwrap_or_default();
-    widgets::label_row(ui, "Action Set:", LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown_names(ui, "action-new-set", shown, &names, 200.0) {
-            d.fields.insert("set".into(), json!(i));
-        }
-    });
-    key_and_color(ui, d);
-    automatic_align_options(ui, d);
-    false
-}
+impl ActionDialog for NewActionDialog {
+    type Answer = NewActionFields;
 
-/// The Function Key and Color rows of New Action and Action Options show errors for invalid keys.
-pub(super) fn key_and_color(ui: &mut egui::Ui, d: &mut Dialog) {
-    let key = d.fields.get("key").and_then(Value::as_u64).unwrap_or(0);
-    let none = tl!("None");
-    let keys: Vec<String> = std::iter::once(none.to_string()).chain((1..=FUNCTION_KEYS).map(|n| format!("F{n}"))).collect();
-    let labels: Vec<&str> = keys.iter().map(String::as_str).collect();
-    let shown = usize::try_from(key).ok().and_then(|k| labels.get(k)).copied().unwrap_or(none);
-    let modifier = if crate::keymap::platform() == craft_keymap::Platform::Mac { "⌘" } else { "Ctrl" };
-    widgets::label_row(ui, "Function Key:", LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown_names(ui, "action-key", shown, &labels, 70.0) {
-            d.fields.insert("key".into(), json!(i));
-        }
-        super::form::check(ui, d, "cmd", modifier);
-        super::form::check(ui, d, "shift", "Shift");
-    });
-    let picked = FunctionKey::from_params(&json!({"key": key, "cmd": d.bool("cmd"), "shift": d.bool("shift")}));
-    if let Ok(Some(k)) = picked
-        && let Some(message) = crate::panels::actions::key_error(k)
-    {
-        widgets::label_row(ui, "", LABEL_W, |ui| {
-            ui.label(crate::i18n::msg(&message));
-        });
+    fn take_ok(&mut self) -> Option<NewActionFields> {
+        self.form.take()
     }
-    let colors: Vec<(&str, &str)> = std::iter::once(("", "None")).chain(COLORS).collect();
-    super::form::choice(ui, d, "color", "Color:", (LABEL_W, 120.0), &colors);
-}
 
-/// The Align playback option shared by New Action and Action Options.
-pub(super) fn automatic_align_options(ui: &mut egui::Ui, d: &mut Dialog) {
-    super::form::check(ui, d, "automaticAlignTo", "Choose Align To at playback");
-    widgets::dim_label(ui, "Align steps use the key object, key anchor or key guide when one is set.");
-    widgets::dim_label(ui, "With one whole object selected and no key, they use the artboard.");
-    widgets::dim_label(ui, "Otherwise they use the selection.");
-}
-
-/// The function key and color params the dialog's fields give, as `ui.action.new` and
-/// `ui.action.options` take them.
-pub(super) fn key_and_color_params(d: &Dialog) -> Value {
-    json!({
-        "key": d.fields.get("key").and_then(Value::as_u64).unwrap_or(0),
-        "cmd": d.bool("cmd"),
-        "shift": d.bool("shift"),
-        "color": d.str("color"),
-    })
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let name = d.str("name").trim().to_string();
-    // Record is disabled without a name; `ui.dialog.confirm` keeps the dialog open the same way.
-    if name.is_empty() {
-        return Ok(Value::Null);
+    fn answer_ok(&mut self, answer: Result<(), Label>) {
+        self.form.answer(answer);
     }
-    let mut p = key_and_color_params(d);
-    p["set"] = d.fields.get("set").cloned().unwrap_or(Value::Null);
-    p["name"] = json!(name);
-    if let Some(value) = d.fields.get("automaticAlignTo") {
-        p["automaticAlignTo"] = value.clone();
+
+    fn run(app: &mut VectorcraftApp, fields: NewActionFields) -> Result<(), String> {
+        let mut params = key_and_color_params(&fields.options);
+        params["set"] = json!(fields.set);
+        params["name"] = json!(fields.name.trim());
+        app.run(NEW_ACTION, params).map(|_| ())
     }
-    app.run(crate::panels::actions::NEW_ACTION, p)?;
-    app.ui.dialog = None;
-    Ok(Value::Null)
+}
+
+impl StackDialog for NewActionDialog {
+    type Result = NewActionFields;
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KEY)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<NewActionFields>> {
+        let sets: Vec<Entry<usize>> = self.sets.iter().enumerate().map(|(i, set)| Entry::new(i, Label::from(set.clone()))).collect();
+        self.form.show(ui, label("New Action"), Some(label("Record")), |ui, fields| {
+            FieldGroup::new(label("New Action")).show(ui, |ui, _| {
+                Field::new(label("Name:")).show(ui, |ui, _| {
+                    TextField::new(label("Name:"), Bind::bound(&mut fields.name)).show(ui);
+                });
+                Field::new(label("Action Set:")).show(ui, |ui, _| {
+                    if let Some(set) = Select::new(label("Action Set:"), Bind::given(fields.set), &sets).show(ui).value().copied() {
+                        fields.set = set;
+                    }
+                });
+                key_and_color(ui, &mut fields.options);
+                automatic_align_options(ui, &mut fields.options);
+            });
+        })
+    }
+
+    fn confirm(&mut self, _: &Context) -> Option<NewActionFields> {
+        self.form.confirm()
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.form.held_state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        self.form.json_fields()
+    }
+
+    fn set_json_field(&mut self, ctx: &Context, field: &str, value: Value) -> Result<(), String> {
+        self.form.set_field(ctx, field, value)
+    }
 }

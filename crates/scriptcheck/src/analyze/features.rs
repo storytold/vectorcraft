@@ -66,7 +66,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     self.menu(None, l);
                 }
             }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
+            Pending::MenuString(l, s) if t.is(",") => self.pending = Pending::MenuStringComma(l, s),
+            Pending::MenuString(l, s) | Pending::MenuStringComma(l, s) => self.menu(t.is(")").then_some(s), l),
             Pending::Open(l) => {
                 if t.kind == T::Str {
                     self.open_mode(&unquote(t.text, 2), l);
@@ -124,10 +125,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         match pending {
             Pending::Window(l) | Pending::WindowType(l) => self.acc.feature(FeatureId::ScriptuiWindow, l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
+            Pending::Menu(l) | Pending::MenuString(l, _) | Pending::MenuStringComma(l, _) => self.menu(None, l),
             Pending::Setter(l, true) => self.file_setter(l),
             Pending::Open(_) | Pending::Setter(_, false) | Pending::Name(..) | Pending::None => {}
         }
+    }
+
+    /// `SaveOptions.SAVECHANGES` read at `line`: a `Document.close` given it saves the document to
+    /// its own file, and the value may reach `close` through a variable or an argument.
+    fn save_changes(&mut self, line: Option<usize>) {
+        self.acc.feature(FeatureId::FileWrite, line);
+        self.acc.outside(OutsideId::FilesWritten, line, None);
     }
 
     /// A File object's `length`, `hidden` or `readonly` set at `line`: the file changes.
@@ -199,6 +207,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if of(catalog::FOLDER) && catalog::FOLDER_PLACES.contains(&n) {
                 self.acc.feature(FeatureId::FilePlaces, line);
+            }
+            if n == catalog::SAVE_CHANGES {
+                self.save_changes(line);
             }
             if n == catalog::ON_DRAW {
                 self.acc.feature(FeatureId::ScriptuiDrawing, line);
@@ -306,7 +317,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
         let n = callee.text;
         if is(h1, ".") {
-            let file = self.file_receiver(h2, h3);
+            let held = self.held_file(h2, h3);
+            // A Folder object whatever the path names has no File-only function: the call does not
+            // reach the file system.
+            if held == Some(true) && catalog::FILE_ONLY.contains(&n) {
+                return;
+            }
+            let file = held.is_some();
             if n == catalog::MENU_COMMAND {
                 self.pending = Pending::Menu(line);
             } else if n == catalog::OPEN && file {
@@ -395,18 +412,14 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     /// Whether `receiver`, which `before` comes before, is a variable holding a File or Folder object
     /// (not a property of the same name), or a File or Folder object made in place or held in
-    /// grouping parentheses ([`Sig::file`]).
-    fn file_receiver(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> bool {
-        self.held_file(receiver, before).is_some()
-    }
-
-    /// What [`Self::file_receiver`] finds: `Some(true)` for a Folder object whatever the path names
-    /// ([`Sig::folder`], [`Analyzer::folder`]), `Some(false)` for an object that may be a File object,
-    /// and `None` for anything else.
+    /// grouping parentheses ([`Sig::file`]): `Some(true)` for a Folder object whatever the path names
+    /// ([`Sig::folder`], [`Analyzer::folder`]), unless the file gives names values the analysis
+    /// doesn't read ([`Analyzer::unsure`]), `Some(false)` for an object that may be a File object, and
+    /// `None` for anything else.
     fn held_file(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> Option<bool> {
         let r = receiver?;
         if r.file {
-            Some(r.folder)
+            Some(r.folder && !self.unsure)
         } else if r.kind == T::Ident && !member_mark(before) && self.alias(&r) {
             Some(self.folder(r.text))
         } else {
@@ -418,6 +431,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let [h0, h1, h2, _] = self.h;
         if t.text.contains(catalog::ACTION_TEXT) {
             self.acc.feature(FeatureId::Actions, line);
+        }
+        // `SaveOptions['SAVECHANGES']`, or the value written as the string `"SaveOptions.SAVECHANGES"`.
+        let value = unquote(t.text, 32);
+        if value == catalog::SAVE_CHANGES
+            || value.strip_prefix(catalog::SAVE_OPTIONS).and_then(|r| r.strip_prefix('.')) == Some(catalog::SAVE_CHANGES)
+        {
+            self.save_changes(line);
         }
         let compares = h0.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "==" | "===" | "!=" | "!=="));
         if compares && word(h1, "typename") && is(h2, ".") {

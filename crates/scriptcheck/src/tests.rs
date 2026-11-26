@@ -543,6 +543,25 @@ fn save_as_and_export_file_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// `SaveOptions.SAVECHANGES` makes a document's `close` save it to its own file, read directly, in
+/// brackets, as a string or through a variable; closing without it, and the other save options,
+/// write nothing.
+#[test]
+fn closing_with_save_changes_writes_a_file() {
+    let r = report(concat!(
+        "app.activeDocument.close();\n",
+        "app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.PROMPTTOSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.SAVECHANGES);\n",
+        "var how = SaveOptions['SAVECHANGES'];\n",
+        "documents[0].close(how);\n",
+        "documents[1].close('SaveOptions.SAVECHANGES');\n",
+        "var w = new Window('dialog'); w.close(1);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 5, 7][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[4, 5, 7][..])]);
+}
+
 /// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
 /// too; reading the method without calling it does not.
 #[test]
@@ -735,6 +754,32 @@ fn setting_a_folders_length_or_flags_does_not_write() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 9, 11, 13, 14, 15, 16][..]));
 }
 
+/// A Folder object has none of the File object's `open`, `read`, `readch`, `readln`, `write`,
+/// `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, so calling them on `new Folder(…)`, a
+/// `Folder` place or a variable holding one reads, writes and asks nothing. On `Folder(…)`, which
+/// gives a File object when the path names a file, and on `Folder.current` they still count, and the
+/// Folder object's own `create`, `remove`, `getFiles` and `selectDlg` count on any of them.
+#[test]
+fn file_only_calls_on_a_folder_do_nothing() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "d.write(s); d.writeln(s); d.copy(q); d.createAlias(q);\n",
+        "d.open('w'); d.read(); d.readch(); d.readln();\n",
+        "Folder.temp.write(s); (new Folder(q)).copy(q);\n",
+        "d.openDlg(); Folder.desktop.saveDlg();\n",
+        "Folder(p).write(s);\n",
+        "Folder.current.copy(q);\n",
+        "d.create(); d.getFiles(); d.selectDlg();\n",
+        "var g = Folder(p); g.open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[6, 7, 8][..])]);
+    assert_eq!(lines("file.write"), [6, 7, 8]);
+    assert_eq!(lines("file.read"), [8, 9]);
+    assert_eq!(lines("file.dialog"), [8]);
+}
+
 /// A File object assigned to a function's own variable, its parameter or a `catch` block's
 /// parameter ends with them; one assigned to an outer variable stays. Such a variable or parameter
 /// starts without what the outer variable of the same name was assigned.
@@ -793,6 +838,154 @@ fn a_variable_that_may_hold_a_file_counts_as_one() {
     let mut m = mem(&[("lib.jsxinc", "d = Folder.temp;\n")]);
     let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
     assert!(r.outside.is_empty(), "{:?}", r.outside);
+}
+
+/// A `with` statement, `eval`, `Function`, `$.evalFile`, a member assignment that may write the
+/// global object's property of a variable's name, and a script's own `Folder` may give a name a
+/// File object the check doesn't see, before or after the setter in the text, so the setter counts.
+#[test]
+fn a_folder_that_other_code_may_rebind_counts_as_a_file() {
+    let scripts: [(&str, usize); 11] = [
+        ("var d = new Folder(p);\nwith (o) { d.length = 0; }\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\n$.global.d = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis.d = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['d'] = new File(q);\n", 2),
+        ("var d = new Folder(p);\nfunction w() { d.hidden = true; }\n$.global[k] = new File(q);\n", 2),
+        ("eval(s);\nnew Folder(p).length = 0;\n", 2),
+        ("var d = new Folder(p);\nd.readonly = true;\n$.evalFile(f);\n", 2),
+        ("var d = new Folder(p);\nd.readonly = true;\nvar g = new Function(s);\n", 2),
+        ("$.global.Folder = File;\nnew Folder(p).length = 0;\n", 2),
+        ("function w() { new Folder(p).hidden = true; }\nFolder = File;\n", 1),
+        ("function w() { Folder.temp.hidden = true; }\nvar Folder = File;\n", 1),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for (script, line) in scripts {
+        assert_eq!(written(&report(script)), Some(vec![line]), "{script}");
+    }
+    // Another variable's name, or a number as the index, leaves the Folder alone.
+    let r = report("var d = new Folder(p);\no.e = new File(q);\na[0] = new File(q);\nd.length = 0;\n");
+    assert_eq!(written(&r), None);
+    // A computed index may name the variable on any object that may be the global object.
+    let r = report("var d = new Folder(p);\na[k] = new File(q);\nd.length = 0;\n");
+    assert_eq!(written(&r), Some(vec![3]));
+    // A `with` statement in an included file counts in the script too.
+    let mut m = mem(&[("lib.jsxinc", "with (o) { x = 1; }\n")]);
+    let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[3][..])]);
+}
+
+/// An assignment to a computed property of any object, a string literal in brackets that names
+/// `eval`, `Function` or `$.evalFile`, and any `constructor` property may give a name a File object
+/// the check doesn't see, so no object counts as a Folder object.
+#[test]
+fn a_folder_that_unnamed_code_may_rebind_counts_as_a_file() {
+    let scripts: [(&str, usize); 13] = [
+        ("var d = new Folder(p);\nvar g = this;\ng[k] = new File(q);\nd.length = 0;\n", 4),
+        ("var d = new Folder(p);\nvar g = $.global;\ng[k] = File;\nd.length = 0;\n", 4),
+        ("var d = new Folder(p);\n$['global'][k] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\n$[\"global\"][k] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\no[f(k)] = new File(q);\nd.length = 0;\n", 3),
+        ("var d = new Folder(p);\nd.length = 0;\n$['evalFile'](f);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nthis['eval'](s);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nthis['\\u0065val'](s);\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nvar g = $.global['Function'];\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\n(function () {}).constructor(s)();\n", 2),
+        ("var d = new Folder(p);\nd.length = 0;\nvar c = o['constructor'];\n", 2),
+        ("new Folder(p).hidden = true;\nvar c = o.constructor;\n", 1),
+        ("var d = new Folder(p);\nd.length = 0;\nvar c = constructor;\n", 2),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for (script, line) in scripts {
+        assert_eq!(written(&report(script)), Some(vec![line]), "{script}");
+    }
+}
+
+/// A string literal in brackets names the property its value spells, escapes undone, as a name
+/// written with escapes is read as the name it spells. A literal longer than the check reads may
+/// name any variable, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_name_is_read_whole_or_counts_as_any_name() {
+    let long = "a".repeat(300);
+    let scripts = [
+        format!("var {long} = new Folder(p);\nfunction w() {{ {long}.length = 0; }}\nthis['{long}'] = new File(q);\n"),
+        format!("var d = new Folder(p);\nfunction w() {{ d.length = 0; }}\nthis['{long}'] = new File(q);\n"),
+        "var d = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['\\u0064'] = new File(q);\n".to_string(),
+        "var \\u0064 = new Folder(p);\nfunction w() { d.hidden = true; }\nthis['d'] = new File(q);\n".to_string(),
+        "var d = new Folder(p);\nfunction w() { \\u0064.hidden = true; }\nthis['\\x64'] = new File(q);\n".to_string(),
+    ];
+    let written = |r: &Report| r.outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone());
+    for script in &scripts {
+        assert_eq!(written(&report(script)), Some(vec![2]), "{script}");
+    }
+    // A short literal that names another variable leaves the Folder alone.
+    let r = report(&format!("var d = new Folder(p);\nfunction w() {{ d.length = 0; }}\nthis['{}'] = new File(q);\n", "a".repeat(200)));
+    assert_eq!(written(&r), None);
+}
+
+/// The lines of `filesWritten` in the report on `script`.
+fn files_written(script: &str) -> Option<Vec<usize>> {
+    report(script).outside.iter().find(|o| o.id == "filesWritten").map(|o| o.lines.clone())
+}
+
+/// A name in brackets held in a variable may be `eval`, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_variable_read_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'eval';\nthis[k]('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets joined from strings may be `eval`, so no object counts as a Folder object.
+#[test]
+fn a_bracketed_joined_name_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis['ev' + 'al']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A string literal in grouping parentheses inside brackets is read as a computed name.
+#[test]
+fn a_bracketed_name_in_parentheses_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[('eval')]('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A comma expression in brackets names its last operand's value, which may be `eval`.
+#[test]
+fn a_bracketed_comma_expression_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[0, 'eval']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets held in a variable may be `evalFile`, called on `$`.
+#[test]
+fn a_bracketed_variable_call_on_dollar_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'evalFile';\n$[k](f);\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// A name in brackets held in a variable may be `constructor`, which reaches `Function`.
+#[test]
+fn a_bracketed_variable_constructor_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nvar k = 'constructor';\n(function () {})[k](s)();\n";
+    assert_eq!(files_written(script), Some(vec![2]));
+}
+
+/// One string or number literal in brackets names one property, and an array literal names none,
+/// also with brackets inside brackets, so the Folder is left alone. A computed name inside another
+/// name in brackets still counts as any name.
+#[test]
+fn a_literal_name_in_brackets_leaves_the_folder_alone() {
+    let script = "var d = new Folder(p);\nvar x = o['plain'];\nvar y = a[0][1];\na[0] = 1;\nvar z = [k, o['x'], a[0]];\nd.length = 0;\n";
+    assert_eq!(files_written(script), None);
+    assert_eq!(files_written("var d = new Folder(p);\nd.length = 0;\nvar x = o[a[0]];\n"), Some(vec![2]));
+}
+
+/// A preprocessor line inside a name in brackets hides the `[` before the name, so the name may be
+/// `eval` and no object counts as a Folder object.
+#[test]
+fn a_directive_in_a_bracketed_name_counts_as_any_name() {
+    let script = "var d = new Folder(p);\nd.length = 0;\nthis[\n#target illustrator\n'eval']('d = new File(q)');\n";
+    assert_eq!(files_written(script), Some(vec![2]));
 }
 
 #[test]
@@ -1519,6 +1712,13 @@ fn application_methods_are_features_not_members() {
 }
 
 #[test]
+fn e4x_and_the_xml_object_need_only_the_language() {
+    let r = report("var x = <a><b/></a>;\nvar y = new XML(s);\nfor each (var v in x.b) {}\n");
+    assert!(feature(&r, "e4x").is_some() && feature(&r, "xml").is_some());
+    assert_eq!(r.needs, [Need::Language]);
+}
+
+#[test]
 fn type_names_compared_or_created_are_listed() {
     let r = report(concat!(
         "if (item.typename == 'AcmeShape') {}\n",
@@ -1548,6 +1748,18 @@ fn menu_commands_are_counted_with_their_lines() {
     assert_eq!(strings, [("acmecopyall", 3, &[1, 2, 6][..]), ("acmeA", 1, &[3][..])]);
     assert_eq!(r.menu_dynamic, 2);
     assert_eq!(feature(&r, "menuCommand").map(|f| f.count), Some(6));
+}
+
+#[test]
+fn a_menu_command_string_with_a_trailing_comma_is_listed() {
+    let r = report(concat!(
+        "app.executeMenuCommand('acmecopyall',);\n",
+        "app.executeMenuCommand('acmecopyall', n);\n",
+        "app.executeMenuCommand('acmecopyall',\n",
+    ));
+    let strings: Vec<(&str, usize, &[usize])> = r.menu_strings.iter().map(|s| (s.value.as_str(), s.count, s.lines.as_slice())).collect();
+    assert_eq!(strings, [("acmecopyall", 1, &[1][..])]);
+    assert_eq!(r.menu_dynamic, 2);
 }
 
 #[test]

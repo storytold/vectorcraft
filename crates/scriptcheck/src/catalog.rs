@@ -38,6 +38,8 @@ pub(crate) const FILE_SETTERS: &[&str] = &["length", "hidden", "readonly"];
 pub(crate) const FILE_DIALOGS: &[&str] = &["openDialog", "saveDialog"];
 pub(crate) const FOLDER_DIALOGS: &[&str] = &["selectDialog"];
 pub(crate) const INSTANCE_DIALOGS: &[&str] = &["openDlg", "saveDlg", "selectDlg"];
+/// The functions of a File object that a Folder object does not have.
+pub(crate) const FILE_ONLY: &[&str] = &["open", "read", "readch", "readln", "write", "writeln", "copy", "createAlias", "openDlg", "saveDlg"];
 pub(crate) const FOLDER_PLACES: &[&str] =
     &["appData", "appPackage", "commonFiles", "current", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
 /// The `Folder` place a script can assign.
@@ -76,6 +78,12 @@ pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "
 
 // Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
 pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "saveAs"];
+
+// The save option of `Document.close` that saves the document to its own file:
+// https://ai-scripting.docsforadobe.dev/jsobjref/Document/ and
+// https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/ (SaveOptions).
+pub(crate) const SAVE_CHANGES: &str = "SAVECHANGES";
+pub(crate) const SAVE_OPTIONS: &str = "SaveOptions";
 
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,
@@ -165,7 +173,7 @@ features! {
     DollarEnv "dollar.env" Files,
     DollarEvalFile "dollar.evalFile" Files,
     DynamicCode "dynamicCode" Language,
-    E4x "e4x" HostOnly,
+    E4x "e4x" Language,
     ExternalObject "externalObject" HostOnly,
     FileDialog "file.dialog" Files,
     FileExecute "file.execute" Files,
@@ -187,6 +195,6 @@ features! {
     SelectTool "selectTool" HostOnly,
     Socket "socket" HostOnly,
     UnitValue "unitValue" Language,
-    Xml "xml" HostOnly,
+    Xml "xml" Language,
     Xmp "xmp" HostOnly,
 }
