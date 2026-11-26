@@ -16682,10 +16682,11 @@ Unit Converter is a built-in add-on that shows one length in every unit at once 
 `addon.units.convert` and `addon.units.selectionSize`, and in the desktop app it lives in Object › Plug-ins › Unit
 Converter and in its panel (`window.panel {panel: "unitConverter"}`). Neither command changes the document.
 
-`addon.units.convert {value, unit?}` reads `value` as a number field reads it: a number, or text with a unit suffix and
+`addon.units.convert {value, unit?}` accepts a number, or text with a unit suffix and
 `+ - * /` arithmetic, where `x`, `X` and `×` multiply as `*` does (`"10mm"`, `"1in/2"`, `"2p6"`, `"1080/2 px"`,
-`"3cm*50%"`, `"2x3 mm"`, `"13q"`), a decimal comma read as a point (`"0,5 mm"`) and a single number with a thousands
-comma (`"1,000 mm"`) refused, in at most 1024 bytes with at most 128 `+ - * /` signs (each multiplication sign counts).
+`"3cm*50%"`, `"2x3 mm"`, `"13q"`). The command reads an unambiguous decimal comma as a point (`"0,5 mm"`).
+It refuses numbers that look like grouped integers, whether alone (`"1,000 mm"`) or in arithmetic (`"1,500+2"`).
+Text may contain at most 1024 bytes and 128 `+ - * /` signs (each multiplication sign counts).
 A number without a suffix is in `unit` (a unit's name, suffix or key: `points`, `picas`, `inches`, `millimeters`,
 `centimeters`, `pixels`, `feetInches`, `meters`, `yards`, `feet`, `q`, `ha`; default `points`); a suffix in the text
 takes precedence over `unit`. It works without an open document. The command fails when `value` is missing, does not
