@@ -302,5 +302,11 @@ mod tests {
         assert_eq!(panel.value("Name").as_deref(), Some("Dots"));
         panel.key(egui::Key::Enter, egui::Modifiers::NONE);
         assert!(panel.app().session.active().unwrap().doc.pattern("Dots").is_some());
+
+        panel.app().run("window.previousDocument", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().uid, source);
+        assert_eq!(panel.value("Name").as_deref(), Some("Dots"));
+        assert!(panel.app().session.active().unwrap().doc.pattern("Dots").is_some());
     }
 }
