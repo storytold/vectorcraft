@@ -11597,10 +11597,7 @@ fn a_static_font_named_like_a_variable_instance_names_the_instance() {
 
     // A run that selects the static font's version keeps its static face on readback, whether the
     // static face or the variable face was loaded first.
-    let (warnings, back) = fonts_saved(&[
-        ("Static", SHADOWED_FAMILY, Some("Version 1.500")),
-        ("Var", SHADOWED_FAMILY, Some("Version 2.000")),
-    ]);
+    let (warnings, back) = fonts_saved(&[("Static", SHADOWED_FAMILY, Some("Version 1.500")), ("Var", SHADOWED_FAMILY, Some("Version 2.000"))]);
     assert!(warnings.is_empty(), "{warnings:?}");
     let face = |v: Option<&str>| db.face_version(SHADOWED_FAMILY, "Regular", v).unwrap().id();
     assert_eq!(back.len(), 2);

@@ -610,15 +610,13 @@ fn font_name(st: &CharStyle) -> FontRecord {
             // names the instance, at its own setting, unless the run selects that static version.
             // The family's traits read no font file, so other static fonts don't load their
             // families' files.
-            let instance = if st.font_version.as_deref() != Some(face.version.as_str())
-                && face.axes().is_empty()
-                && db.family_traits(&face.family).variable
-            {
-                let name = face.postscript_name();
-                db.versions(&face).into_iter().find(|f| !f.axes().is_empty() && f.postscript_name().eq_ignore_ascii_case(&name))
-            } else {
-                None
-            };
+            let instance =
+                if st.font_version.as_deref() != Some(face.version.as_str()) && face.axes().is_empty() && db.family_traits(&face.family).variable {
+                    let name = face.postscript_name();
+                    db.versions(&face).into_iter().find(|f| !f.axes().is_empty() && f.postscript_name().eq_ignore_ascii_case(&name))
+                } else {
+                    None
+                };
             let own_face = instance.is_none();
             let face = instance.unwrap_or(face);
             let axes = face.axes();
@@ -685,9 +683,8 @@ fn font_kept(st: &CharStyle) -> bool {
     let face = |family: &str, style: &str, version: Option<&str>| db.face_version(family, style, version).map(|f| f.id());
     let read_face = face(&family, &style, read.as_deref());
     let own = db.face_version(&st.font_family, &st.font_style, st.font_version.as_deref());
-    let shadowed_instance = own.as_ref().is_some_and(|f| {
-        f.axes().is_empty() && !record.design.is_empty() && f.postscript_name().eq_ignore_ascii_case(&record.name)
-    });
+    let shadowed_instance =
+        own.as_ref().is_some_and(|f| f.axes().is_empty() && !record.design.is_empty() && f.postscript_name().eq_ignore_ascii_case(&record.name));
     family == st.font_family && style == st.font_style && (read_face == own.map(|f| f.id()) || shadowed_instance)
 }
 
