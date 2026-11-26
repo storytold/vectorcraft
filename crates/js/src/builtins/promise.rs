@@ -30,7 +30,9 @@ use std::rc::Rc;
 use super::{arg, constructor, create_at, method, native, new_array};
 use crate::LimitKind;
 use crate::bytecode::Code;
-use crate::heap::{BOUND_ARG_BYTES, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key};
+use crate::heap::{
+    BOUND_ARG_BYTES, CONFIGURABLE, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key,
+};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
 
@@ -261,6 +263,9 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     let object_proto = interp.intrinsics.object_proto;
     let proto = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
     interp.promises.proto = Some(proto);
+    if let Some(tag) = interp.well_known(|w| &w.to_string_tag) {
+        interp.define_sym(proto, tag, Prop::Data { value: Value::str("Promise"), flags: CONFIGURABLE })?;
+    }
     let ctor = native(interp, "Promise", promise_ctor, 1, NativeKind::Plain, true)?;
     interp.promises.ctor = Some(ctor);
     constructor(interp, "Promise", ctor, proto)?;
@@ -928,8 +933,8 @@ fn thrower(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<V
     Err(Abrupt::Throw(thunk_value(interp, args)?))
 }
 
-/// `v` is a constructor: a function written in JavaScript other than an arrow function or a
-/// method, a built-in constructor, or a bound function whose target is one.
+/// `v` is a constructor: a function written in JavaScript other than an arrow function, generator
+/// function or method, a built-in constructor, or a bound function whose target is one.
 fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
     let mut v = v.clone();
     loop {
@@ -938,7 +943,7 @@ fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
             _ => return Ok(false),
         };
         match func {
-            Func::Closure { code, .. } => return Ok(!code.arrow && !code.method),
+            Func::Closure { code, .. } => return Ok(!code.arrow && !code.method && !code.generator),
             Func::Native { constructor, .. } => return Ok(constructor),
             Func::Bound { target, .. } => {
                 interp.use_fuel()?;

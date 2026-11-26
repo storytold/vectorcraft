@@ -353,6 +353,9 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.stack.clear();
+        // A generator whose body was running when the run ended cannot go on.
+        let running: Vec<_> = interp.frames.iter().filter_map(|f| f.generator).collect();
+        running.into_iter().for_each(|g| interp.end_generator(Some(g)));
         interp.frames.clear();
         interp.temp_roots.clear();
         interp.join_stack.clear();

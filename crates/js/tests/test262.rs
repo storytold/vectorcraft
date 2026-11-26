@@ -51,10 +51,14 @@
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
 //! that parse with that option. Its failures go to `symbol-failures.txt`.
 //!
-//! The last test reads the tests of `for-of` and destructuring (the folders
+//! Another test reads the tests of `for-of` and destructuring (the folders
 //! [`FOR_OF_AND_PATTERN_FOLDERS`] names) with [`Options::es2015`]: tests of any edition whose
 //! feature tags are all in [`FOR_OF_AND_PATTERN_FEATURES`]. Negative parse tests must give a
 //! `SyntaxError`; the others run as the Symbol tests run. Its failures go to `for-of-failures.txt`.
+//!
+//! The last test reads and runs the tests of generator functions, `yield` and the generator objects
+//! (the folders [`GENERATOR_FOLDERS`] names) the same way, with the `generators` tag and the tags of
+//! the two tests before it. Its failures go to `generators-failures.txt`.
 //!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
@@ -1173,6 +1177,58 @@ fn run_for_of_and_patterns(dir: &Path) {
         println!("could not write {}: {e}", path.display());
     }
     println!("test262 for-of and destructuring with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// The folders of the tests of generator functions, `yield` and the generator objects, which run
+/// in a realm with [`Options::es2015`].
+const GENERATOR_FOLDERS: &[&str] = &[
+    "language/statements/generators",
+    "language/expressions/generators",
+    "language/expressions/yield",
+    "built-ins/GeneratorPrototype",
+    "built-ins/GeneratorFunction",
+];
+
+#[test]
+fn es2015_generators_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 generators: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_generators(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Reads the tests under each folder [`GENERATOR_FOLDERS`] names whose feature tags are all
+/// `generators` or in [`FOR_OF_AND_PATTERN_FEATURES`] or [`SYMBOL_FEATURES`] with
+/// [`Options::es2015`], as [`run_for_of_and_patterns`] reads its tests. Prints the counts of each
+/// folder and writes the failures to `generators-failures.txt` beside the suite.
+fn run_generators(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut features: Vec<&str> = vec!["generators"];
+    features.extend(FOR_OF_AND_PATTERN_FEATURES);
+    features.extend(SYMBOL_FEATURES);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in GENERATOR_FOLDERS {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, &features);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, &features));
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no generator tests ran under {}", dir.display());
+    let path = dir.join("generators-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 generators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
     assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
 }
 

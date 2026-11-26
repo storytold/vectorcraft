@@ -177,16 +177,14 @@ pub(crate) fn heading(cx: &EffectCx) -> String {
     }
 }
 
-/// The effect's name in the UI language: the catalog may carry it with or without its trailing
-/// ellipsis. A plug-in effect's name is shown as it is.
+/// The effect's name in the UI language as the Effect menu shows it ([`crate::i18n::effect_name`]).
+/// A plug-in effect's name is shown as it is.
 pub(crate) fn label(id: &str) -> String {
     let name = vectorcraft_effects::effect_info(id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string());
     if vectorcraft_plugins::effect::plugin_id(id).is_some() {
         return name;
     }
-    let dotted = format!("{name}…");
-    let shown = tl!(&dotted);
-    if shown != dotted { shown.trim_end_matches('…').to_string() } else { tl!(&name).to_string() }
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or(name)
 }
 
 /// Film Grain's bounded, whole-number controls, in the same order as its parameter docs.

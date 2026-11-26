@@ -220,7 +220,7 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Re
     if params.get("swatchConflict").is_some() {
         return None;
     }
-    let conflicts = found(app, params).filter(|a| !a.is_empty())?;
+    let conflicts = found(app, command, params).filter(|a| !a.is_empty())?;
     let dialog = SwatchConflictDialog::new(conflicts, command, params, app.session.active().map(|doc| doc.uid));
     let Some(host) = app.dialogs() else { return Some(Err(NO_WINDOW.into())) };
     host.with(|h| h.open(dialog));
@@ -258,18 +258,22 @@ pub(crate) fn defer(app: &VectorcraftApp, chain: u64) {
     }
 }
 
-/// Whether the conflicts the paste with `params` raises are no longer the `asked` ones (another profile converts
-/// the pasted swatches meanwhile): it asks about them again.
-pub(crate) fn changed(app: &mut VectorcraftApp, params: &Value, asked: &Value) -> bool {
-    found(app, params).is_some_and(|now| Value::Array(now) != *asked)
+/// Whether the conflicts paste `command` with `params` raises are no longer the `asked` ones (another profile
+/// converts the pasted swatches meanwhile): it asks about them again.
+pub(crate) fn changed(app: &mut VectorcraftApp, command: &str, params: &Value, asked: &Value) -> bool {
+    found(app, command, params).is_some_and(|now| Value::Array(now) != *asked)
 }
 
-/// The swatch conflicts pasting with `params` raises (`clipboard.conflicts`), with the swatches as
-/// the paste brings them: converted from another profile when it converts.
-fn found(app: &mut VectorcraftApp, params: &Value) -> Option<Vec<Value>> {
+/// The swatch conflicts paste `command` with `params` raises (`clipboard.conflicts`), with the
+/// swatches as the paste brings them: converted from another profile when it converts, and for
+/// Paste on All Artboards without the backgrounds of copied artboards, which it leaves behind.
+fn found(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Vec<Value>> {
     let mut q = json!({});
     if let Some(m) = params.get("profileMismatch") {
         q["profileMismatch"] = m.clone();
+    }
+    if command == "edit.pasteOnAllArtboards" {
+        q["allArtboards"] = json!(true);
     }
     let found = app.session.execute("clipboard.conflicts", &q).ok()?;
     found["swatches"].as_array().cloned()

@@ -13,9 +13,9 @@ use std::sync::Arc;
 
 use craft::behavior::CanvasTransform;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Sizing};
 use craft::ui::display::{Divider, Shade, Text};
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView, PreviewZoom};
 use craft::ui::pickers::Select;
@@ -200,30 +200,43 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The highlighted art takes the theme's error colour.
     let highlight = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.solid);
+    let compact = ui.available_width() < Env::of(ui).tokens.size.plot.width;
     let mut set = app.ui.flattener_preview.clone();
     let mut refresh_now = false;
-    Row::new().show(ui, |ui, _| {
+    Row::new().fill_width().wrap(true).show(ui, |ui, _| {
         refresh_now = Button::new(tl!("Refresh")).tooltip(tl!("Preview the document as it is now")).show(ui).clicked();
         let entries = Highlight::ALL.map(|h| Entry::new(h, h.label()));
-        Select::new(tl!("Highlight"), Bind::bound(&mut set.highlight), &entries).show(ui);
+        let picker = Select::new(tl!("Highlight"), Bind::bound(&mut set.highlight), &entries);
+        let picker = if compact { picker.sizing(Sizing::FillWidth) } else { picker };
+        picker.show(ui);
     });
-    Row::new().show(ui, |ui, _| {
+    Row::new().fill_width().wrap(true).show(ui, |ui, _| {
         Text::new(tl!("Overprints:")).shade(Shade::Muted).show(ui);
         let entries = Overprints::ALL.map(|o| Entry::new(o, o.label()));
-        Select::new(tl!("Overprints"), Bind::bound(&mut set.overprints), &entries).show(ui);
+        let picker = Select::new(tl!("Overprints"), Bind::bound(&mut set.overprints), &entries);
+        let picker = if compact { picker.sizing(Sizing::FillWidth) } else { picker };
+        picker.show(ui);
     });
-    Row::new().show(ui, |ui, _| {
+    let preset_id = ui.scope_id().with("flattener-preset-row");
+    let mut preset = |ui: &mut Ui| {
         Text::new(tl!("Preset:")).shade(Shade::Muted).show(ui);
         let names = flatten::preset_names(app);
-        let mut fields = DialogFields::from_pairs([("preset", set.preset.clone())]);
-        flatten::preset_picker(ui, &mut fields, "preset", &names, custom(app));
-        if let Some(name) = fields.text("preset")
-            && name != set.preset
+        let is_custom = custom(app);
+        let current = if is_custom { String::new() } else { set.preset.clone() };
+        let mut fields = DialogFields::from_pairs([("preset", current.clone())]);
+        flatten::preset_picker(ui, &mut fields, "preset", &names, is_custom);
+        if !ui.is_sizing_pass()
+            && let Some(name) = fields.text("preset").filter(|name| *name != current)
             && let Some(p) = app.session.flattener_preset(name)
         {
             (set.preset, set.options) = (p.name, p.options);
         }
-    });
+    };
+    if compact {
+        Stack::new().id(preset_id).fill_width().show(ui, |ui, _| preset(ui));
+    } else {
+        Row::new().id(preset_id).fill_width().wrap(true).show(ui, |ui, _| preset(ui));
+    }
     if set.show_options {
         Divider::horizontal().show(ui);
         let params = flatten::option_params(&[], "");
@@ -285,11 +298,16 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32,
     // At scale 1 the picture is the fit of the well (width `w`, height `w / ASPECT`), so the zoom reads relative to the fit.
     let s = (f64::from(w) / shot.fit.width()).min(f64::from(w / ASPECT) / shot.fit.height());
     let size = vec2((shot.fit.width() * s) as f32, (shot.fit.height() * s) as f32);
-    let out = PreviewPane::new(tl!("Flattener Preview"), SizedTexture::new(tx.id(), size), view)
+    let pane = PreviewPane::new(tl!("Flattener Preview"), SizedTexture::new(tx.id(), size), view)
         .aspect(ASPECT)
         .click_centres(false)
-        .tooltip(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"))
-        .show(ui);
+        .tooltip(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"));
+    let out = if w < Env::of(ui).tokens.size.plot.width {
+        let (_, room) = ui.allocate_space(vec2(w, w / ASPECT));
+        pane.show_at(ui, room)
+    } else {
+        pane.show(ui)
+    };
     *view = match out.clicked {
         Some(at) => {
             let factor = if craft::ui::runtime::pointer::frame(ui.ctx()).pick_mods.alt { 0.5 } else { 2.0 };
@@ -482,6 +500,65 @@ mod tests {
         // The settings persist with the UI state.
         let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
         assert_eq!(back.flattener_preview, app.ui.flattener_preview);
+    }
+
+    #[test]
+    fn the_flattener_selectors_and_preview_fit_a_narrow_dock() {
+        use craft::ui::contract::Role;
+
+        let mut panel = crate::tests::panel_harness::Panel::new(app(), show);
+        let width = 100.0;
+        panel.room(vec2(width, 520.0)).frame();
+        panel.frame();
+        for name in ["Highlight", "Overprints", "Preset:"] {
+            let rect = panel.rect_role(name, Role::COMBO_BOX);
+            assert!(rect.left() >= 0.0 && rect.right() <= width, "{name} overflows the dock at {rect:?}");
+        }
+        let pane = panel.rect("Flattener Preview");
+        assert!(pane.left() >= 0.0 && pane.right() <= width, "preview overflows the dock at {pane:?}");
+    }
+
+    #[test]
+    fn the_flattener_selectors_keep_their_caption_rows_when_the_panel_is_wide() {
+        use craft::ui::contract::Role;
+
+        let mut panel = crate::tests::panel_harness::Panel::new(app(), show);
+        panel.room(vec2(440.0, 600.0)).frame();
+        panel.frame();
+        for (caption, role, picker) in
+            [("Refresh", Role::BUTTON, "Highlight"), ("Overprints:", Role::LABEL, "Overprints"), ("Preset:", Role::LABEL, "Preset:")]
+        {
+            let row = panel.rect_role(caption, role);
+            let field = panel.rect_role(picker, Role::COMBO_BOX);
+            assert!(field.left() >= row.right() && field.center().y >= row.top() && field.center().y <= row.bottom(), "{picker} is below {caption}");
+        }
+    }
+
+    #[test]
+    fn the_compact_flattener_applies_a_preset_and_refreshes_the_snapshot() {
+        use craft::ui::contract::Role;
+
+        let mut app = app();
+        command(&mut app, &json!({"preset": "high", "options": {"balance": 12}})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, show);
+        panel.room(vec2(100.0, 520.0)).frame();
+        panel.frame();
+        panel.click_role("Preset:", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(panel.app().ui.flattener_preview.options.balance, 12.0);
+        panel.click_role("Preset:", Role::COMBO_BOX);
+        panel.click("High Resolution");
+        let expected = FlattenOptions::preset("high").unwrap();
+        assert_eq!(panel.app().ui.flattener_preview.options, expected);
+        panel.app().run("select.all", json!({})).unwrap();
+        panel.app().run("transparency.set", json!({"opacity": 100})).unwrap();
+        assert!(stale(&panel.app()), "the live document changed");
+        panel.click("Refresh");
+        assert!(!stale(&panel.app()), "Refresh takes a new snapshot");
+        let well = panel.rect("Flattener Preview");
+        panel.click_at(well.center());
+        assert!(!panel.app().flattener_preview.view.fit, "the compact preview still zooms");
     }
 
     /// The panel in a fixture, and the preview pane's bounds.

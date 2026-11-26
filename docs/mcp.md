@@ -1393,9 +1393,12 @@ Each coordinate goes to the nearest step of its stored binary value, and a value
 zero (`0.125` at 2 places is `0.13`); `1.005` is stored as slightly less than that and is written as `1.0`. Each anchor is rounded on
 its own, so a closed path stays closed and a shape smaller than one step keeps its anchors on one point. Opening the
 file and saving it again does not bring back the dropped digits. The embedded preview and the PDF that `pdfCompatible: true` adds show the rounded paths. Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
-`precision`. A save writes
-a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
-document uses are written, and document keys written by a newer version are kept.
+`precision`. A save first writes and flushes a temporary file, then renames it over the destination or copies the complete
+content into the destination. The copy path keeps a flushed copy of any existing content before overwriting it.
+A failure during that copy reports the locations of the new content and any saved original.
+Only the images the document uses are written, and document keys written by a newer version are kept.
+On Unix, a save flushes the destination directory after writing or replacing the file. If that flush fails,
+the save reports an error stating that the file was written.
 An uncompressed file is indented JSON when the document has at most 2,000 layers and objects and the indented
 document, as the chosen version writes it, is at most 1 MiB; otherwise the file is compact JSON.
 
@@ -2721,9 +2724,17 @@ value, assignment target or property they are first given to, with `get ` or `se
 Symbol key's description in brackets; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and
 an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-international.org/12.0/, section
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
-ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. A `.js` script also has
+generator functions (ECMA-262 11th edition, sections 14.4 and 25.4, https://262.ecma-international.org/11.0/):
+`function*` declarations and expressions, `*name() {…}` methods in object literals, `yield`, and `yield*`, which
+passes `next`, `throw` and `return` on to the iterator it delegates to. Calling a generator function returns a
+generator object whose `next`, `return` and `throw` run its body to the next `yield`; `return` runs the body's
+`finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each resumption takes fuel and
+counts against the call depth. A generator function called in an engine that `#targetengine` kept from a `.jsx` run
+throws a `TypeError`, since that engine was made without the ECMAScript 2015 built-ins. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there; there
+`yield` is a name like any other. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
@@ -2860,9 +2871,9 @@ other files through `$`:
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
-  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
-  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  a list of at most 10,000, `null` or `[]`. Any other value, `undefined` included, throws a `TypeError`, and an
+  object that cannot be selected throws `Cannot select`, each with nothing changed. While View › Guides › Lock
+  Guides is on, a path made into a guide cannot be selected this way or with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
@@ -2876,6 +2887,14 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
+  with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
+  `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
+  item) and `remove()`; they run the `object.tag.*` commands. VectorCraft's own rules: a collection lists the tags in
+  their order on the object, and `Document.tags` lists every page item's tags in `pageItems` order and throws an error
+  on `add()`; `add()` gives a tag with an empty name and value; `getByName` gives the first tag with the name;
+  `name` and `value` take strings of at most 65,536 bytes, and an object has at most 64 tags. A tag that was deleted
+  throws `Stale tag`, and one whose page item was deleted throws `Stale page item`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -2898,6 +2917,8 @@ In a `.js` script, `Promise` follows ECMA-262 11th edition section 25.6
 `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. `Promise.any` is not provided. These are VectorCraft's
 own rules:
 
+- `Promise.prototype[Symbol.toStringTag]` is `"Promise"` when Symbols are available. The property is configurable,
+  non-enumerable and non-writable. Promise instances also report `[object Promise]` in engines without Symbols.
 - The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
   the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
   A promise still pending when no job is left stays pending, and the run ends.
@@ -3375,18 +3396,18 @@ VectorCraft writes files by these rules of its own:
   `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
   built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
 
-`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
+`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file, error?}`, with `code`
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
 takes its place), and `file` the grants
 file's path, or `null` without a settings folder. Under automation read roots, a `script`, `path` or `file` outside them
 is given as its file name alone. `script.grants.revoke {script?, path?, all?}` removes the grants of
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
-matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
+matched as given, or after its links are followed when no grant holds it as given; under automation read roots, a path outside them is matched as given only. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
 cannot be read, a link to a missing file included, is left as it is: `script.grants` and `script.grants.revoke` fail, and a grant picked with Always is
 not kept. A missing grants file lists no grants, and `script.grants` leaves out a grant in the file that is not well
-formed. A script
+formed. Preferences › General › Script File Access shows the error `script.grants` gives. A script
 cannot run either command.
 
 ```json
@@ -3482,6 +3503,69 @@ leaves out the listed scripts outside the read roots.
 
 ```sh
 vectorcraft-cli run --cmd script.listInstalled --params '{}'
+```
+
+### Startup scripts
+
+With Preferences › General › Run Startup Scripts on (`runStartupScripts`, off by default), the `.jsx` files of the
+`Startup Scripts` folder next to the preferences run when VectorCraft starts, and again before each script chosen from
+File › Scripts, whether a listed script or Other Script…. The folder is `~/Library/Application
+Support/VectorCraft/Startup Scripts` on macOS, `%APPDATA%\VectorCraft\Startup Scripts` on Windows, and
+`$XDG_CONFIG_HOME/vectorcraft/Startup Scripts` or `~/.config/vectorcraft/Startup Scripts` on Linux and BSD.
+VectorCraft does not make the folder. The scripting guide
+https://web.archive.org/web/20210515232518/https://www.adobe.com/content/dam/acom/en/devnet/illustrator/pdf/Illustrator_Scripting_Guide_cc.pdf
+(page 11) describes startup scripts as `.jsx` files that run when the application starts and each time a script is
+run.
+
+The rest of this section is VectorCraft's own rules:
+
+- Only the folder's own `.jsx` files run, never its subfolders. Links, names that start with a dot, files Windows marks
+  hidden or system, names longer than 255 bytes and other file types are left out. A listing stops at 2,048 folder
+  entries or 250 ms and holds at most 512 scripts. When it stops at a limit, leaves out scripts past 512 or skips an
+  entry it cannot read, the status bar says that the folder was not read in full. A folder that is missing runs
+  nothing. At launch and before a chosen script, when the folder is there and cannot be read, or a file is where the
+  folder should be, the status bar says that the folder cannot be read.
+- These two notes, the names of startup scripts that could not start, and the message of each startup script that
+  failed or was stopped stay in the status bar after the last run ends: the status bar shows the first of them, and
+  its hover lists them all, then the last run's message.
+- The scripts run one at a time, sorted by name without regard to case, then by name. Each runs as `script.run` runs a
+  file, with the same limits, and each that changes a document adds its own Run Script undo step. The chosen script
+  runs after the last of them.
+- A startup script that cannot be read, is larger than 8 MiB, throws, runs out of instructions or is stopped is named
+  in the Script Console and the status bar, and the next one runs. The app opens and the chosen script runs either way.
+- In Safe Mode nothing in the folder runs. After a launch that stopped, the startup scripts run once the person
+  chooses Disable and Continue or Start Normally. While a startup script runs, the launch marker names it, so a launch
+  that stops during one offers to disable that script. A disabled startup script does not run, and the reply names it
+  in `disabled`.
+- Running the startup scripts is itself a `script.*` command, which a script cannot run, so a startup script cannot
+  start another round of them. `script.run` called from automation runs alone.
+- The web build has no Startup Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+  `vectorcraft-cli` uses the same folder and runs it only through `script.startup.run`.
+
+`script.startup.run {reason: launch|menu, then?, maxFuel?}` runs the folder now. `then` holds `script.run`'s
+parameters for a script that runs after the startup scripts. A `then` that `script.run` would refuse, such as a
+missing file, one larger than 8 MiB, or source that fails to compile, ends the request with `script.run`'s error
+before any startup script runs. Compilation does not execute the chosen script. The chosen script runs the source
+read before startup scripts begin, including when a startup script removes the installed file.
+Included files are read again when the chosen run starts, so edits to them during startup affect that run.
+A failed chosen-script compilation clears the previous script report. In the app, each queue pump processes at
+most one startup entry and keeps later entries in order, including after a startup entry fails.
+`maxFuel` limits each startup script's instructions
+(from 1 to 100,000,000,000, default 1,000,000,000). It returns `{reason, skipped: true, why}` with `why` set to `off`,
+`safeMode` or `noFolder` when nothing runs, and otherwise `{reason, skipped: false, ran, failed: [{name, error}],
+disabled, truncated, unreadable}`, with `then` holding `script.run`'s reply. In the app the runs are queued and the
+reply is `{reason, skipped: false, running, queued, failed, disabled, truncated, unreadable}`, with `failed` naming
+the runs that could not start before the first one did. Each run then reports as a `script.run` in the app does, the
+next one starts at the frame after, and a later run that cannot start, the chosen script included, is named in the
+status bar. Stop (`script.stop`) asked for between two runs stops the run that starts next. In the app, stopping the runs from
+the prompt shown on quitting, between two runs, drops the runs not yet started, and the status bar says so. While that prompt is open, the next run does not start. Under `--automation-read-root` it reads the folder only when the folder lies inside a
+read root. With the preference on, `ui.runScript` and `ui.runInstalledScript` still return `script.run`'s reply,
+or its error when the chosen script cannot start, and add `startup` holding the `script.startup.run` reply. While a
+startup script runs before the chosen script, that reply is `{running: true, queued: true}`, and a chosen script that
+then cannot start is named in the status bar.
+
+```sh
+vectorcraft-cli run --cmd script.startup.run --params '{"reason": "launch"}'
 ```
 
 ## Transparency and opacity masks
@@ -6375,9 +6459,13 @@ and several can be open at once. `window.swatchLibrary {library}`, `window.graph
 `{open, panel, name, count}`; `library: null` closes every panel of that kind. The panel id is
 `library:<kind>:<library id>` (`library:swatches:pastels`, `library:graphicStyles:hand-drawn`,
 `library:swatches:loaded/C:/Palettes/Brand.ase`), and the panel commands take it like any other panel's:
-`window.panel.float {panel, onto?, x?, y?, width?, height?}` groups, moves or resizes it. Supplied
-geometry also updates an existing native panel window. Positions are relative to the main window's
-content origin; omitted coordinates and dimensions keep the native window's current values.
+`window.panel.float {panel, onto}` makes it a tab of the floating group holding `onto`, and
+`window.panel.float {panel, x?, y?, width?, height?}` moves or resizes it; `onto` takes no geometry.
+Positions are relative to the main window's content origin. When the panel is alone in a native panel
+window, or `column: true` (or `group: true` on a tab group that fills the window) names the whole window,
+supplied geometry updates that window and omitted coordinates and dimensions keep its current values.
+A panel that shares a native window with other panels floats into a new window instead, which takes the
+supplied geometry, and the shared window keeps the other panels, its place and its size.
 `window.panel.dock {panel}` docks it,
 `window.panel.close {panel}` closes it. `window.swatchLibrary.other {path}`, `window.graphicStyleLibrary.other
 {path}`, `window.symbolLibrary.other {path}` and `window.brushLibrary.other {path}` load a file and open it the same
@@ -7202,8 +7290,20 @@ range is an error and changes nothing. The help page
 [Create image maps for web graphics](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/create-image-maps-for-web-graphics.html)
 describes the same 1 to 30 range; the default of 10 is VectorCraft's own value.
 
+An object's tags are name and value pairs that scripts keep on it (`PageItem.tags`). `object.tags {id}` lists them in
+order → `{tags: [{tag, name, value}]}`, where `tag` tells each one apart from the object's other tags.
+`object.tag.add {id, name?, value?}` adds one after the others → `{tag}`, `object.tag.set {id, tag, name?, value?}`
+changes its name or value → `{changed}`, `object.tag.remove {id, tag}` deletes it, and `object.tag.removeAll {ids?}`
+deletes every tag of the objects in `ids` or the selection → `{changed: objects}`; each edit is one undo step, and an
+edit that changes nothing adds none. Names may be empty or repeated. An object has at most 64 tags, each name and
+value at most 65,536 bytes; a layer or a ruler guide has none, and a bad value (a null name or value included) is an error that changes nothing, as is
+an add in a document whose ids have reached the top of their range (a damaged or hand-made file). The
+native file keeps the tags and their `tag` ids, and opening one keeps the first 64 tags of each object whose name and
+value are within the limit, giving a new id to a tag whose id is missing, out of range or repeated. Copies keep their source's tags. Other file formats do not write them.
+
 ```json
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
+{"name":"run_command","arguments":{"command":"object.tag.add","params":{"id":12,"name":"size","value":"XL"}}}
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
 {"name":"invoke_menu","arguments":{"command":"ui.attributesPanelOptions","params":{"count":20}}}
 ```
@@ -7917,6 +8017,22 @@ Pen Toolbar shows or hides it. It hides while a press drags on the canvas, and i
 toolbar its controls wrap onto more rows. `ui.inspect` gives `quickPenToolbar` (`pinned`, and `rect` while it shows); its position,
 the pin and whether it shows are not saved. These commands run in the desktop app; the headless host does not run them,
 so they need `--connect`.
+
+With no path being drawn (after Escape or Enter, or before the first click), the tool edits the selected paths, as
+[Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html)
+describes. A drag on one of their anchors moves that anchor, and a drag that starts on one of several selected anchors
+moves them all; a drag on a segment moves that segment's two ends. The tool selects what it moves
+(`select.anchors` or `select.segments` with `mode: "set"`) and moves it with `path.moveAnchors {dx, dy, interpolate:
+true}`, one undo step per drag: a segment with one moved end is turned and scaled to its new ends, so beside a corner
+anchor a line stays a line and an arc stays an arc through the same angle; at a smooth anchor the handles stay in line
+and the segments bend to meet, so an arc there need not stay circular. A dragged anchor
+snaps to Smart Guides; a dragged segment does not. Escape during the drag takes it back. A click on an anchor selects
+it alone and Shift-click adds it to the selected anchors or takes it out (`select.anchors` with `"set"` or
+`"toggle"`). A click on an end of an open path still goes on drawing from it, a drag there moves the end, and a click
+on a segment starts a new path. With the Quick Pen chosen, the canvas context menu (right-click) has Delete, which
+removes the selected anchors, or the selected objects (`edit.clear {}`). While a path is being drawn, a press on it
+adds a piece as before. Which presses select, which move, and the drag snapping only an anchor are VectorCraft's own
+rules.
 
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
@@ -9792,7 +9908,8 @@ light one, by the wedge colors as pasted: a wedge linked to a swatch merged with
 color first.
 
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
-them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
+them (with `allArtboards: true`, the colors as Paste on All Artboards brings them, without the background colors of
+copied artboards), and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
 pasted swatch comes in renamed) or one answer per name. When a merged swatch turns a pie's wedge from light to dark
 or back, the legend labels in that pie's wedges take the contrast a redraw gives them (white on a dark wedge, black on
 a light one), unless the legend labels have a fill of their own. Pasting back into the document the objects came from
@@ -11285,7 +11402,8 @@ kept and do not change the file. An unknown method or an amount outside 0 to 100
 file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
 (`colors: [{color, source, transparent, locked, webShifted, shifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
-previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
+previews one slice, and a `slice` that is not a whole number from 1 up is an error; `image: true` adds the file;
+`warnings` holds the export's warnings.
 
 Delete Color is `colorTable.deleted: ["#rrggbb"…]`, by `source`. The deleted colors leave the table and the file, and
 their pixels take the nearest color left, with the current reduction's color distance and dither; the preview and the
@@ -11329,6 +11447,30 @@ way also names its color: the table marks it, Lock, Transparent, Web Shift and D
 are written as lowercase `#rrggbb`. A `#rrggbbaa` spelling names no table color. A shifted swatch shows the source color at its upper left and the new color at its lower
 right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
 Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
+
+Save Color Table is `document.exportForWeb.saveColorTable {path?, slice?, …settings}`. It writes
+the GIF or PNG-8 color table the preview shows as a color table file (`.act`) in the layout the file format
+specification gives (https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/): 256 entries of three bytes (red,
+green, blue) in file order, with zero bytes after the colors used, then the number of colors used and the index of the
+transparent entry, two bytes each with the most significant byte first. The file is always 772 bytes, and the index is
+65535 when the table has no transparent entry. A color shifted by hand is written as its new color. Without `slice`
+the file holds the whole image's table, also when `slices` is `selected` and no slice is selected; a `slice` is looked
+up among the slices `slices` names. `.act` is added to
+a `path` without an extension, and without `path` the file comes back as `dataBase64`. The reply is `{path, colors,
+transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). An empty `path`, JPEG and PNG-24
+are errors, and the
+document and the settings do not change. Load Color Table is `webExport.loadColorTable {path | dataBase64,
+…settings}`. It reads a 768-byte file (256 colors, no transparent entry) or a 772-byte one (the number of colors used,
+1 to 256, and the transparent entry's index; an index past the colors used names no entry) and returns
+`{colors, transparentIndex, settings}`: the settings with the file's colors other than its transparent entry as
+`colorTable.customPalette`, `colors` set to the number of colors the file uses (at least 2), the table's other edits
+(`locked`, `transparent`, `deleted`, `shifted`, `webShift` and `sort`) cleared and `webSnap` set to 0, so every loaded
+color is written as it is, in the file's order, and none is locked. A file whose only color is its
+transparent entry loads that color. Another file size (base64 text included), a count of 0 or above 256, both or
+neither of `path` and `dataBase64`, and JPEG or PNG-24 are errors; the command reads at most 773 bytes of a file and
+remembers nothing. The Save for Web dialog's color table menu does not list Save Color Table… or Load Color
+Table… yet; both commands run through the engine and MCP. The help page describes both entries
+(https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=404).
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"png8","colorTable":{"deleted":["#ff0000"],"customPalette":["#0000ff","#00ff00","#ff0000"]}}}}
@@ -12119,6 +12261,23 @@ lines. The rest are VectorCraft's own rules:
   Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
   Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
   gap given with no area type in the selection, and no point type that it turns into area type, is an error.
+- A leading change on the frame's text sets `lineGap` to the new leading less the size of the first character changed,
+  within -1,296 to 1,296 pt, in the change's own undo step. That covers `text.setStyle {leading}` and
+  `text.setRangeStyle {leading}` (the Character panel's and the Properties panel's Leading field and its list),
+  `type.step {attribute: "leading"}` (the Type tool's Alt+arrow leading steps), `charStyle.apply` with a style that sets
+  a leading (or with `clearOverrides` when the Normal style sets one), `charStyle.edit` and `charStyle.setAttrs` when
+  the new definition gives its users another leading, and `addon.type.textTweaker {attribute: "leading"}`. Text
+  Tweaker's ramp sets the gap from its first changed character, and every other character then takes its size plus
+  that gap, so the ramp does not vary the leading. `"auto"` takes the first character's Auto leading. Every line then
+  spreads or tightens by the change to that character's leading. The Eyedropper (`appearance.copyFrom`) copies a whole
+  character style, so it leaves `lineGap` as it is. In a shaped frame where the moved lines take another size, the gap
+  is worked out again from the new size, up to four times, and the leading set can then differ by the last change in
+  that size. When the changed characters share one size and the gap is within its range, the Leading field shows the
+  leading set. Otherwise each character takes its own size plus the gap, and the field is blank where those differ.
+  `keepLineGap: true` on `text.setStyle` and `text.setRangeStyle` leaves `lineGap` as it is, and the Character panel's
+  Reset Panel sends it, so a reset to Auto leading keeps the frame's Line Gap. Point type, type on a path and area type
+  with Block off keep their own leading. If Block cannot fit a frame, editing a character style keeps each run's
+  manual leading override. When Block can fit the frame, its generated leading follows the edited style.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at
@@ -12257,7 +12416,9 @@ comparison per contour and one more; past them, the glyphs not yet ranked or com
 selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
 limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
 are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
-in proportion are indexed.
+in proportion are indexed. These limits apply to each set of up to 96 fonts compared and to each installed font read
+(see Retype installed fonts). When Retype finds fonts past the first 96, every shape is matched again with all the fonts
+found, and the limits start again for that match.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.retype","params":{"tolerance":0.02}}}
@@ -13421,7 +13582,7 @@ on an open path that are not drawn because they fall before the path's start can
 
 ## Retype tracking
 
-`type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
+`type.retype {fonts?, tolerance?, installed?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
 has. A line of three or more exactly matched glyphs (none a near match, see `tolerance`) gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
 tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
 advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
@@ -13469,22 +13630,62 @@ the result's `texts` list holds an object's lines joined by `\n`, and each entry
 
 ## Retype panel
 
-`type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
+`type.retypeFonts {count?, installed?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
 first, by the matching `type.retype` uses, and it counts only exact matches of whole shapes: it does not split a
 compound path into glyphs or take near matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
 fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
 name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
-`{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
-`shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
-shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
-their paint still count. A font whose glyphs match the shapes only as combining marks is not listed. The
-command does not change the document and records no undo step. With no path or compound
-path selected it is an error.
+`{fonts: [{family, style, matched}], shapes, more, truncated, installed}`: `matched` is the number of shapes the
+font matches, `shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and
+`truncated` is true when shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as
+outlines because of their paint still count. A font whose glyphs match the shapes only as combining marks is not
+listed. The command does not change the document and records no undo step. With no path or compound path selected it
+is an error. `type.retypeFonts` also compares the installed fonts that are not
+loaded yet, as described under Retype installed fonts, and reads every installed file within those limits, so one
+search can read up to 2 GiB; the fonts that match are loaded and ranked with the others while the list holds fewer
+than 96 fonts. A matching font that is shadowed by another version of the same family and style is loaded and not
+listed, and does not take a place. `installed` is `{read, skipped}` as for `type.retype`; when the list is full, the
+installed faces not compared count as skipped, and `more` does not count them.
 
-Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
-96 fonts and lists the first ten. Find more font matches, at the end of the list when `more` is true, runs
+## Retype installed fonts
+
+`type.retype {fonts?, tolerance?, installed?}` compares the shapes that no loaded font, document font or font in `fonts` matches
+with the installed fonts that are not loaded yet. Every loaded font is compared first: the document's fonts, the fonts
+in `fonts` and the fonts earlier searches loaded come first, and the loaded fonts past the first 96 are compared, 96 at
+a time, with the shapes that are not plain and that the first 96 do not match. Both comparisons match as Retype does
+with the first 96 fonts: with a `tolerance`, near matches count, and a compound path of several glyphs counts when every
+glyph it splits into matches. The search of the installed fonts reads their files one at a time, smallest first, and
+stops when every such shape matches the fonts it has read. It leaves out files larger than 256 MiB, and the files and
+faces past 2 GiB read or 500,000 glyphs drawn in all. A file is read for the search and then released; a font whose
+glyphs match a shape, or complete the glyphs of a split compound path with the fonts found before it, is loaded from
+what the search read, without the family's other files. The fonts found are then matched with every selected shape,
+the shapes that matched already included, as the first 96 fonts are. A plain shape (one contour of up to
+four straight edges, such as a rectangle or a hyphen) does not start the search, and matches only a font the other
+shapes found. With `installed: false` the installed fonts are not read; `installed` true, omitted or null reads them,
+and any other value is an error. The result's `installed` is `{read, skipped}`: the installed faces compared, and the
+faces the limits left out. These limits are VectorCraft's own.
+
+The fonts a search loads stay loaded for the rest of the session, also when Retype then finds nothing to set, and later
+searches in every open document compare them ahead of the other loaded fonts. A request that is canceled (an MCP
+cancel) stops the search between files and leaves the document as it was; the fonts loaded before the cancel stay
+loaded. In the app, Type › Retype and Find Matching Fonts (the Retype panel's button, or `retype.find` run from a
+menu or the command palette) search on a thread of their own: the
+status bar shows "Finding matching fonts…", and a progress window with Cancel (also Esc) opens when the search takes
+longer than 0.4 seconds. Cancel runs `retype.cancelSearch {}` → `{cancelled: n}`, after which Retype changes nothing
+and the list stays as it was. When the search is done, Retype runs, or the panel lists the fonts, with the fonts the
+search found, without reading the installed fonts again. If the document or its selection changed meanwhile, nothing changes and the status bar says to run it
+again. `retype.find {installed: false}` lists the loaded fonts only. The control channel and scripts run the commands
+at once.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{"installed":false}}}
+```
+
+Window › Retype shows the Retype panel. Find Matching Fonts searches as `retype.find {}` does, reading the installed
+fonts in the background (see Retype installed fonts); `retype.find {}` shows the panel, ranks up to 96 fonts and lists
+the first ten, and `retype.find {installed: false}` compares the loaded fonts only. Find more font matches, at the end of the list when `more` is true, runs
 `retype.find {more: true}`, which adds the next five fonts that search found, whatever is selected now. Before any
 search, `retype.find {more: true}` runs a first search. With `more` false, omitted or null, `retype.find` runs a new
 search; any other value than true, false or null is an error. A search that fails is an error and leaves the list as
@@ -13498,7 +13699,7 @@ of `type.retype` (2,048 shapes, 16 nested groups); the panel then says that some
 `size` is `small`, `medium` or `large`, and `text` is the samples' text (empty for a generic sample). The panel menu's Small, Medium and Large items and the sample field run
 `retype.preview {size?, text?}`. `text` holds at most 100 characters; any other value of either key is an error and
 changes nothing. Reset Retype Panel in the panel menu runs `retype.reset {}`, which clears the list and keeps the size
-and text. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
+and text; a search Find Matching Fonts started in the background stops and does not fill the list. `retype.find`, `retype.preview` and `retype.reset` return what `retype.list` returns.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.retypeFonts","params":{"count":5}}}
@@ -13934,7 +14135,10 @@ them again at startup (`plugin.remove` deletes them there). A window or process 
 while it changes it, so installs, removals, grants and plug-in settings from two of them do not mix; when the file can't
 be locked, `plugin.install` and `plugin.remove` fail and change nothing:
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
-schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
+schema, defaults). An object filter may also be a JavaScript plug-in: a `.vcplugin` manifest with `"runtime": "js"` and
+`script`, the `.js` file beside it, which `plugin.install {path}`, `plugin.inspect {path}` and `plugin.reload` read
+together (`runtime` and `script` in its entry); it runs in an interpreter of its own with no file, command or clock
+access ([plugins.md](plugins.md#javascript-filters)). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected; a run that changes no object and no kept
 data records no undo step and leaves the document unmodified) → `{plugin, ids, notice?, pluginName?}`.
 `notice` is the text the filter's output reports in its `notice` key, escaped and cut at 200 characters
