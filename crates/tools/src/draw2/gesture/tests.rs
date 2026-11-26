@@ -1029,7 +1029,7 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let cx_none = crate::testutil::cx(&d, &none, &p);
     assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
-    assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
+    assert_eq!(Cursor::PencilContinue.precise(), Cursor::PencilContinue, "Use Precise Cursors keeps the badge");
 }
 
 /// A Pencil stroke continuing a selected path shows the continuation cursor while a release would
