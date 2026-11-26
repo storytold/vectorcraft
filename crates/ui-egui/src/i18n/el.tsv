@@ -6625,6 +6625,8 @@ arrowhead	Feather	Φτερό
 	VectorCraft Default	Προεπιλογή VectorCraft
 	VectorCraft Defaults	Προεπιλογές VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Γενικό CMYK του VectorCraft (τύπου SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK επιχρισμένου χαρτιού του VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK μη επιχρισμένου χαρτιού του VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Δείγματα χρωμάτων VectorCraft (.vcswatches)
 	Vertical Align	Κατακόρυφη στοίχιση
 	Vertical Area Type	Κατακόρυφο κείμενο περιοχής
@@ -9031,6 +9033,11 @@ breakText	Glyphs	Γλύφοι
 	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
+	Fold Angle	Γωνία δίπλωσης
+	Set Fold Angle…	Ορισμός γωνίας δίπλωσης…
+	Set Fold Angle	Ορισμός γωνίας δίπλωσης
+	Reset Fold Angle	Επαναφορά γωνίας δίπλωσης
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	επιλέξτε μια γραμμή πτύχωσης, μερικής κοπής ή διάτρησης που δεν είναι κλειδωμένη ούτε κρυφή
 	Check	Έλεγχος
 	Check Fold Lines	Έλεγχος γραμμών δίπλωσης
 @msg	No cut lines are in the selection.	Η επιλογή δεν περιέχει γραμμές κοπής.

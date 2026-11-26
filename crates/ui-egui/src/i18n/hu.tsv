@@ -5344,6 +5344,8 @@ mark-style	Japanese	Japán
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	A VectorCraft legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft általános CMYK (SWOP-szerű)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft mázolt CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft mázolatlan CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft súgó…
 	VectorCraft on getartcraft.com	A VectorCraft a getartcraft.com oldalon
 	VectorCraft on GitHub	A VectorCraft a GitHubon
@@ -10829,6 +10831,11 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Fold Angle	Hajtásszög
+	Set Fold Angle…	Hajtásszög beállítása…
+	Set Fold Angle	Hajtásszög beállítása
+	Reset Fold Angle	Hajtásszög visszaállítása
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	jelöljön ki egy bigvonalat, részleges vágóvonalat vagy perforációs vonalat, amely nincs zárolva és nincs elrejtve
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Az elemleírás helyett kártyán mutatja, mit csinál az eszköztár egy eszköze és a billentyűi; ehhez az Elemleírások megjelenítése szükséges.
 	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.

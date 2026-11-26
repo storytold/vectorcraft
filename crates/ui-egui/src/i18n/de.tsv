@@ -10483,6 +10483,11 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Fold Angle	Faltwinkel
+	Set Fold Angle…	Faltwinkel festlegen…
+	Set Fold Angle	Faltwinkel festlegen
+	Reset Fold Angle	Faltwinkel zurücksetzen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	Wählen Sie eine Rill-, Teilschnitt- oder Perforationslinie aus, die weder gesperrt noch ausgeblendet ist
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Zeigt statt des Tooltips eine Karte, was ein Werkzeug der Werkzeugleiste und seine Tasten tun; erfordert Tooltips anzeigen.
 	Selects whole objects and groups to move, resize or rotate them.	Wählt ganze Objekte und Gruppen aus, um sie zu verschieben, zu skalieren oder zu drehen.
