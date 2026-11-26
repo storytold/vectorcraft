@@ -477,6 +477,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The browser's own state (an open rename field, the scroll position) is kept per document.
     let browser_id = ui.make_persistent_id(("graphic-styles-browser", uid));
     let list = PresetBrowser::<StyleKey>::list_id(browser_id);
+    let takes_object = move |drag: &PanelDrag, _: &DropAt<StyleKey>| dropped_object(drag, uid).is_some();
     // A style dragged from this panel's list.
     let ours = move |drag: &ListDrag<StyleKey>| drag.list == list;
     let svg = |name: &'static str| IconSpec::svg(IconId::new(name));
@@ -485,9 +486,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .popup(PopupKind::Menu)
             .pressed(library_panel::any_open::<GraphicStyleLibraries>(&app.ui)),
         FooterAction::new(svg("link-2-off"), tl!("Break Link to Graphic Style")).enabled(linked),
-        FooterAction::new(svg("trash-2"), tl!("Delete Graphic Style")).enabled(!sel.is_empty()).takes_drops_disabled(true).accepts_drops(ours),
+        FooterAction::new(svg("trash-2"), tl!("Delete Graphic Style (Alt-click: without asking)"))
+            .enabled(!sel.is_empty())
+            .takes_drops_disabled(true)
+            .accepts_drops(ours),
         // A style dropped here is duplicated with or without art selected.
-        FooterAction::new(svg("dc-new-item"), tl!("New Graphic Style"))
+        FooterAction::new(svg("dc-new-item"), tl!("New Graphic Style (Alt-click to name it)"))
             .enabled(selection_len(app) > 0)
             .takes_drops_disabled(true)
             .accepts_drops(ours),
@@ -516,8 +520,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .empty(tl!("Select styled art and click New Graphic Style."))
                     .row_items(items)
                     .tip(|ui, key| large_tip(app, &thumbs, ui, key))
-                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Between, |drag, _| dropped_object(drag).is_some()))
-                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, |drag, _| dropped_object(drag).is_some()))
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Between, takes_object))
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, takes_object))
                     .takes_drop(PresetDrop::new::<ListDrag<StyleKey>>(
                         DropPlace::Onto,
                         |drag, at| matches!(at, DropAt::Onto(name) if !drag.keys.contains(name)),
@@ -596,11 +600,11 @@ fn reorder(app: &mut VectorcraftApp, edit: EditEvent<ReorderMove<StyleKey>>) {
     }
 }
 
-/// The object whose look a dropped payload carries: the first of the art dragged off the canvas, or the Appearance
-/// panel's object.
-fn dropped_object(drag: &PanelDrag) -> Option<NodeId> {
+/// The object whose look a dropped payload carries: the first of the art dragged from this document, or the
+/// Appearance panel's object.
+fn dropped_object(drag: &PanelDrag, uid: u64) -> Option<NodeId> {
     match drag {
-        PanelDrag::Art { ids, .. } => ids.first().copied(),
+        PanelDrag::Art { document, ids } if *document == uid => ids.first().copied(),
         PanelDrag::Appearance(id) => Some(*id),
         _ => None,
     }
@@ -612,7 +616,7 @@ fn dropped(app: &mut VectorcraftApp, at: &DropAt<StyleKey>, payload: &DropPayloa
         DropAt::Onto(name) => Some(name.as_str()),
         _ => None,
     };
-    let object = payload.get::<PanelDrag>().and_then(dropped_object);
+    let object = app.session.active().and_then(|st| dropped_object(payload.get::<PanelDrag>()?, st.uid));
     let style = payload.get::<ListDrag<StyleKey>>().map(|drag| drag.grabbed.as_str());
     drop_on(app, onto, object, style, alt);
 }
@@ -1319,7 +1323,7 @@ mod tests {
         let n = names(&app);
         let document = app.session.active().unwrap().uid;
         for payload in [PanelDrag::Art { document, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
-            drop_on(&mut app, Some("Red"), dropped_object(&payload), None, true);
+            drop_on(&mut app, Some("Red"), dropped_object(&payload, document), None, true);
             let d = doc(&app);
             assert_eq!(d.graphic_style("Red").unwrap().appearance.fill_paint(), green);
             assert_eq!(d.node(oval).unwrap().extras().graphic_style, d.graphic_style("Red").map(|g| g.id));
@@ -1334,6 +1338,54 @@ mod tests {
         let steps = app.session.doc().unwrap().history.undo.len();
         drop_on(&mut app, Some("Red"), Some(rect), None, true);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps);
+    }
+
+    #[test]
+    fn graphic_styles_accepts_artwork_only_from_its_document() {
+        use crate::tests::panel_harness::Panel as PanelHarness;
+        use craft::ui::contract::ShowCollection as _;
+        use craft::ui::list::{List, ListRow};
+        use craft::ui::runtime::drag;
+
+        fn with_artwork(app: &mut VectorcraftApp, ui: &mut Ui) {
+            let st = app.session.active().unwrap();
+            let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+            ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+                let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+                List::<usize>::new("Artwork")
+                    .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+                    .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+            });
+            show(app, ui);
+        }
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let source = app.session.active().unwrap().uid;
+        let first = app.session.active().unwrap().selection.objects[0];
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 25, "y": 25, "width": 55, "height": 55})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let second = app.session.active().unwrap().selection.objects[0];
+        assert_eq!(first, second, "the two documents have different artwork with the same local ID");
+        let before = names(&app);
+        assert!(app.session.set_active(0));
+
+        let mut p = PanelHarness::new(app, with_artwork);
+        let from = p.rect("Dragged artwork").center();
+        let to = p.rect("Drop Target").center();
+        p.drag_hold_role("Dragged artwork", craft::ui::contract::Role::LIST_ITEM, to - from);
+        assert!(drag::mark(p.ctx()).is_some(), "Graphic Styles accepts the artwork before switching documents");
+        assert!(p.app().session.set_active(1));
+        p.frame();
+        let carried = drag::active::<PanelDrag>(p.ctx());
+        assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { document, .. }) if *document == source));
+        assert!(drag::mark(p.ctx()).is_none(), "Graphic Styles withdraws the drop indicator when the artwork is foreign");
+        p.release();
+        assert_eq!(names(&p.app()), before, "the foreign drop creates no style from the active document's same-ID artwork");
+
+        p.drag("Dragged artwork", "Drop Target", egui::Modifiers::NONE);
+        assert_eq!(names(&p.app()).len(), before.len() + 1, "a same-document drop still makes a style");
     }
 
     /// A style dropped on another with Alt takes that style's look; on itself it does nothing.
@@ -1429,5 +1481,23 @@ mod tests {
         let names: Vec<Vec<String>> =
             app.session.documents().iter().map(|st| st.doc.graphic_styles.iter().map(|g| g.name.clone()).collect()).collect();
         assert!(names.iter().all(|n| n.iter().any(|g| g == "Mine")), "no style is renamed: {names:?}");
+    }
+
+    /// The New and Delete buttons name what an Alt-click does, and an Alt-click does it: New asks for a name, Delete
+    /// deletes without asking.
+    #[test]
+    fn the_new_and_delete_buttons_name_their_alt_click() {
+        use crate::tests::panel_harness::Panel;
+        use egui::Modifiers;
+        let mut panel = Panel::new(app(), show);
+        panel.click_with("New Graphic Style (Alt-click to name it)", Modifiers::ALT);
+        assert!(open_dialog(&panel.app(), graphic_style_options::KIND).is_some(), "Alt-click on New asks for a name");
+        let mut app = app();
+        app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
+        let mut panel = Panel::new(app, show);
+        panel.click("Mine");
+        panel.click_with("Delete Graphic Style (Alt-click: without asking)", Modifiers::ALT);
+        let app = panel.app();
+        assert!(!names(&app).iter().any(|s| s == "Mine") && confirm::open_question(&app).is_none(), "Alt-click on Delete deletes at once");
     }
 }

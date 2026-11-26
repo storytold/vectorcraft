@@ -298,6 +298,291 @@ fn reset_preferences_keeps_an_edit_of_general_units() {
     assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
 }
 
+/// Smart Guides, Snap to Grid and Enable Contextual Task Bar, the UI-only rows.
+fn ui_rows(a: &VectorcraftApp) -> (bool, bool, bool) {
+    (a.ui.view.smart_guides, a.ui.view.snap_to_grid, a.ui.task_bar)
+}
+
+fn set_ui_rows(a: &mut VectorcraftApp, rows: (bool, bool, bool)) {
+    (a.ui.view.smart_guides, a.ui.view.snap_to_grid, a.ui.task_bar) = rows;
+}
+
+/// The Contextual Task Bar workspace `name` was left with.
+fn left_task_bar(a: &VectorcraftApp, name: &str) -> bool {
+    let id = &crate::workspaces::find(&a.ui, name).expect("a workspace").id;
+    a.ui.workspaces.edited.get(id).expect("left").task_bar
+}
+
+/// Reset Preferences returns every UI-only row (Smart Guides, Snap to Grid, Enable Contextual Task Bar) to its
+/// default in the draft, the value a new app shows. OK applies them; Cancel keeps the values in use.
+#[test]
+fn reset_preferences_resets_the_ui_only_rows() {
+    let default = ui_rows(&app());
+    let changed = (!default.0, !default.1, !default.2);
+    let reset_changed = |a: &mut VectorcraftApp| {
+        set_ui_rows(a, changed);
+        open(a, Some("General"));
+        reset_preferences(a, PromptChoice::Proceed);
+    };
+    let mut a = app();
+    reset_changed(&mut a);
+    assert_eq!(
+        (field(&a, "__smartGuides"), field(&a, "__snapToGrid"), field(&a, "__taskBar")),
+        (json!(default.0), json!(default.1), json!(default.2))
+    );
+    assert_eq!(ui_rows(&a), changed, "nothing applied before OK");
+    confirm(&mut a).unwrap();
+    assert_eq!(ui_rows(&a), default, "OK applies the defaults");
+
+    let mut b = app();
+    reset_changed(&mut b);
+    cancel(&mut b);
+    assert!(!is_open(&b));
+    assert_eq!(ui_rows(&b), changed, "Cancel keeps the values in use");
+}
+
+/// A page's own reset also resets the UI-only row of that page, and only that one.
+#[test]
+fn a_page_reset_resets_the_ui_only_row_of_the_page() {
+    let mut a = app();
+    let default = ui_rows(&a);
+    set_ui_rows(&mut a, (!default.0, !default.1, !default.2));
+    // The saved Edit Original choice has no setter outside its module; the UI state's saved form sets it.
+    let chosen = json!({"path": "editor"});
+    let editor = |a: &VectorcraftApp| serde_json::to_value(&a.ui.original_editor).unwrap_or_default();
+    a.ui.original_editor = serde_json::from_value(chosen.clone()).unwrap();
+    let reset_page = |a: &mut VectorcraftApp, page: &str| {
+        open(a, Some(page));
+        let mut w = a.prefs.take().expect("Preferences is open");
+        model::Live { app: &mut *a, w: &mut w }.reset_page(page);
+        a.prefs = Some(w);
+    };
+    reset_page(&mut a, "General");
+    assert_eq!(field(&a, "__taskBar"), json!(default.2), "General: Enable Contextual Task Bar");
+    assert_eq!((field(&a, "__smartGuides"), field(&a, "__snapToGrid")), (json!(!default.0), json!(!default.1)), "the other pages' rows");
+    confirm(&mut a).unwrap();
+    assert_eq!(editor(&a), chosen, "General keeps the Edit Original choice");
+    reset_page(&mut a, "File Handling");
+    confirm(&mut a).unwrap();
+    assert_eq!(editor(&a)["path"], Value::Null, "File Handling resets the Edit Original choice");
+}
+
+/// `prefs.reset` (the Command Palette's Reset Preferences) also returns the UI-only rows to their defaults, as a
+/// batch step too; with a category, only that category's rows; with an unknown or malformed category, none.
+#[test]
+fn prefs_reset_resets_the_ui_only_rows_of_its_category() {
+    let default = ui_rows(&app());
+    let changed = (!default.0, !default.1, !default.2);
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    set_ui_rows(&mut a, changed);
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    for bad in [json!("Nowhere"), json!(["General"]), json!(5)] {
+        assert!(a.run("prefs.reset", json!({"category": bad})).is_err(), "{bad}");
+        assert_eq!(ui_rows(&a), changed, "{bad}: an unknown or malformed category resets nothing");
+        assert_eq!(a.session.prefs.keyboard_increment, 7.0, "{bad}: the preferences are kept");
+    }
+    a.run("prefs.reset", json!({"category": "general"})).unwrap();
+    assert_eq!(ui_rows(&a), (changed.0, changed.1, default.2), "General: Enable Contextual Task Bar only");
+    a.run("command.batch", json!({"commands": [{"command": "prefs.reset", "params": {"category": "Guides & Grid"}}]})).unwrap();
+    assert_eq!(ui_rows(&a), (changed.0, default.1, default.2), "Guides & Grid, as a batch step: Snap to Grid only");
+    a.run("prefs.reset", json!({"category": "Smart Guides"})).unwrap();
+    assert_eq!(ui_rows(&a), default, "Smart Guides: Smart Guides");
+    set_ui_rows(&mut a, changed);
+    a.run("prefs.reset", json!({})).unwrap();
+    assert_eq!(ui_rows(&a), default, "every category");
+}
+
+/// A `prefs.reset` run while Preferences is open shows the reset values in the draft, for the categories it reset,
+/// so OK keeps the reset; rows of other categories keep the draft's values.
+#[test]
+fn prefs_reset_while_preferences_is_open_shows_the_reset_values() {
+    let fresh = app();
+    let default = ui_rows(&fresh);
+    let mut a = app();
+    set_ui_rows(&mut a, (!default.0, !default.1, !default.2));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.reset", json!({"category": "General"})).unwrap();
+    assert_eq!(field(&a, "__taskBar"), json!(default.2), "the window shows the reset row");
+    assert_eq!(field(&a, "__smartGuides"), json!(!default.0), "a row of another category keeps its value");
+    confirm(&mut a).unwrap();
+    assert_eq!(ui_rows(&a), (!default.0, !default.1, default.2), "OK keeps the reset");
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment, "OK keeps the reset preference");
+
+    // Every category, the preference groups included.
+    let group = fresh.session.prefs.to_json()["pixelSnap"].clone();
+    let mut changed = group.clone();
+    let flag = changed.as_object_mut().and_then(|o| o.values_mut().find(|v| v.is_boolean())).expect("a pixelSnap option is a boolean");
+    *flag = json!(!flag.as_bool().unwrap_or_default());
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    a.run("prefs.set", json!({"key": "pixelSnap", "value": changed})).unwrap();
+    open(&mut a, Some("General"));
+    assert_eq!(field(&a, "pixelSnap"), changed);
+    a.run("prefs.reset", json!({})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(ui_rows(&a), default, "every category");
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment);
+    assert_eq!(a.session.prefs.to_json()["pixelSnap"], group, "OK keeps the reset group");
+
+    // Run straight on the session, with OK before the next frame.
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.session.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment, "OK keeps a reset outside run");
+}
+
+/// Reset Preferences and `prefs.reset` give Enable Contextual Task Bar the value the current workspace was saved
+/// with, which for a workspace saved with the bar off differs from the default.
+#[test]
+fn reset_preferences_gives_the_task_bar_the_workspaces_value() {
+    let off = crate::workspaces::builtins().into_iter().find(|w| !w.record.task_bar).expect("a workspace saved with the bar off");
+    let in_workspace = |a: &mut VectorcraftApp| {
+        crate::workspaces::switch(a, off.name).unwrap();
+        assert!(!a.ui.task_bar, "{} starts with the bar off", off.name);
+        a.ui.task_bar = true;
+    };
+    let mut a = app();
+    in_workspace(&mut a);
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "__taskBar"), json!(false), "the draft shows the workspace's value");
+    confirm(&mut a).unwrap();
+    assert!(!a.ui.task_bar, "OK applies the workspace's value");
+
+    let mut b = app();
+    in_workspace(&mut b);
+    b.run("prefs.reset", json!({"category": "General"})).unwrap();
+    assert!(!b.ui.task_bar, "prefs.reset gives the workspace's value");
+    let mut c = app();
+    assert!(c.ui.task_bar, "the default workspace starts with the bar on");
+    c.ui.task_bar = false;
+    c.run("prefs.reset", json!({})).unwrap();
+    assert!(c.ui.task_bar, "the default workspace's value");
+}
+
+/// On a touch screen, OK after Reset Preferences turns Enable Touch Workspace back on: the reset task bar goes to
+/// the workspace left, and Touch keeps its own. With Touch entered automatically while Preferences was open,
+/// clearing Enable Touch Workspace gives the row to the workspace returned to.
+#[test]
+fn ok_sets_the_task_bar_in_the_workspace_outside_touch() {
+    use crate::workspaces::{TOUCH, is_current, switch, sync_touch_workspace};
+    let mut a = app();
+    a.touch_screen = true;
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    switch(&mut a, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "touchWorkspace"), json!(true), "the reset turns it on");
+    confirm(&mut a).unwrap();
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    assert!(!left_task_bar(&a, "Essentials Classic"), "the workspace left takes the reset value");
+
+    let mut b = app();
+    b.run("prefs.set", json!({"key": "touchWorkspace", "value": true})).unwrap();
+    switch(&mut b, "Essentials Classic").unwrap();
+    open(&mut b, Some("General"));
+    b.touch_screen = true;
+    sync_touch_workspace(&mut b, true);
+    assert!(is_current(&b.ui, TOUCH));
+    set_field(&mut b, "touchWorkspace", json!(false)).unwrap();
+    confirm(&mut b).unwrap();
+    assert!(is_current(&b.ui, "Essentials Classic"));
+    assert!(!b.ui.task_bar, "the workspace returned to takes the row");
+    assert!(left_task_bar(&b, TOUCH), "Touch keeps its own task bar");
+}
+
+/// After an Apply that enters Touch, the task bar row shows Touch's task bar: a later Apply that leaves the row
+/// unedited keeps it, and an edit or a reset of the row reaches it. Leaving Touch with the row unedited gives the
+/// workspace returned to the value it left with.
+#[test]
+fn apply_after_entering_touch_keeps_touchs_task_bar() {
+    use crate::workspaces::{TOUCH, is_current, switch};
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let apply = |a: &mut VectorcraftApp| {
+        let mut w = a.prefs.take().expect("Preferences is open");
+        let r = model::Live { app: &mut *a, w: &mut w }.apply();
+        a.prefs = Some(w);
+        r.unwrap();
+    };
+    let mut a = app();
+    a.touch_screen = true;
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    switch(&mut a, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "__taskBar"), json!(false), "the reset row differs from Touch's task bar");
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "an Apply without a task bar edit keeps Touch's task bar");
+    assert_eq!(field(&a, "__taskBar"), json!(true), "the row shows Touch's task bar");
+    set_field(&mut a, "__taskBar", json!(false)).unwrap();
+    apply(&mut a);
+    assert!(!a.ui.task_bar, "an edit to the row reaches Touch");
+
+    // Reset Preferences in Touch gives Touch its saved value, the value the row showed before the edit.
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "the reset reaches Touch");
+
+    // Leaving Touch with the row unedited: the workspace returned to keeps the value it left with.
+    set_field(&mut a, "touchWorkspace", json!(false)).unwrap();
+    apply(&mut a);
+    assert!(is_current(&a.ui, "Essentials Classic"));
+    assert!(!a.ui.task_bar, "the workspace returned to keeps its reset value");
+}
+
+/// A Touch return marker left over from an earlier automatic switch (Window › Workspace does not clear it) does not
+/// change where OK puts the task bar: OK enters Touch from the workspace it leaves, so that workspace takes the row
+/// and Touch keeps its own.
+#[test]
+fn ok_sets_the_task_bar_in_the_workspace_left_with_a_stale_touch_marker() {
+    use crate::workspaces::{TOUCH, is_current, switch};
+    let mut a = app();
+    a.touch_screen = true;
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    a.ui.touch_workspace_restore = Some("Typography".into());
+    switch(&mut a, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    confirm(&mut a).unwrap();
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    assert!(!left_task_bar(&a, "Essentials Classic"), "the workspace left takes the reset value");
+}
+
+/// A `prefs.reset` run straight on the session, outside `VectorcraftApp::run`, resets the UI-only rows in the next
+/// frame, and before the next command switches workspaces.
+#[test]
+fn prefs_reset_outside_run_resets_the_ui_only_rows_in_the_next_frame() {
+    let mut a = app();
+    let default = ui_rows(&a);
+    set_ui_rows(&mut a, (!default.0, !default.1, !default.2));
+    a.session.execute("prefs.reset", &json!({})).unwrap();
+    let ctx = a.ui_ctx.clone().expect("a window context");
+    crate::testing::app_frame(&mut a, &ctx, egui::RawInput::default());
+    assert_eq!(ui_rows(&a), default);
+
+    // Before the next command switches workspaces: the workspace left keeps the reset value.
+    let mut b = app();
+    crate::workspaces::switch(&mut b, "Essentials Classic").unwrap();
+    b.ui.task_bar = true;
+    b.session.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    b.run("window.workspace", json!({"name": crate::workspaces::ESSENTIALS})).unwrap();
+    assert!(b.ui.task_bar, "Essentials keeps its own task bar");
+    assert!(!left_task_bar(&b, "Essentials Classic"), "the workspace left keeps the reset value");
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();
@@ -525,6 +810,23 @@ fn prefs_import_of_touch_workspace_switches_the_workspace() {
     assert!(crate::workspaces::is_current(&a.ui, crate::workspaces::TOUCH));
     a.run("prefs.import", json!({ "data": file(false) })).unwrap();
     assert!(crate::workspaces::is_current(&a.ui, "Typography"));
+}
+
+/// A `prefs.reset` run straight on the session, then a touch screen that switches to Touch: the workspace left keeps
+/// the reset value.
+#[test]
+fn a_pending_prefs_reset_applies_before_a_touch_switch() {
+    use crate::workspaces::{TOUCH, is_current, switch, sync_touch_workspace};
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    switch(&mut a, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    a.session.execute("prefs.reset", &json!({})).unwrap();
+    assert!(a.session.prefs.touch_workspace, "the reset turns Enable Touch Workspace on");
+    sync_touch_workspace(&mut a, true);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    assert!(!left_task_bar(&a, "Essentials Classic"), "the workspace left keeps the reset value");
 }
 
 /// A folder that no folder can be created in, or that is not there, is refused on OK with the

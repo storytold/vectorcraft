@@ -289,7 +289,7 @@ pub(crate) struct TypeEditor<'a> {
 impl<'a> TypeEditor<'a> {
     /// A part for the tool's caret at `caret`, the instance of [`TypeEditorCommand`]'s scope while it has the keys.
     fn new(app: &'a mut VectorcraftApp, caret: Rect, ctx: egui::Context) -> Self {
-        TypeEditor { common: Common::new(), app, caret, ctx }.label("Type").command_scope(TYPE_EDITOR_SCOPE)
+        TypeEditor { common: Common::new(), app, caret, ctx }.label(tl!("Type")).command_scope(TYPE_EDITOR_SCOPE)
     }
 
     /// Applies one input of the editor part to the engine tool; a Paste types `pasted`, the text the paste delivered,
