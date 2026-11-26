@@ -44,17 +44,20 @@ impl Drop {
 
 /// The drag a row of `key` starts, moving rows `names`. Colour groups have no paint of their own
 /// (the chip under the pointer draws Registration's mark for Registration).
-pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+pub(super) fn drag_of(d: &Document, document: u64, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
     let name = name_of(key);
-    let (paint, params) = match key {
-        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
+    let (paint, params, process_color_source) = match key {
+        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name), None),
         SwatchKey::Swatch(_) => match d.swatch(name) {
-            Some(w) => (w.paint.clone(), swatch_params(d, name)),
-            None => (Paint::None, Value::Null),
+            Some(w) => {
+                let process = !w.global && !w.spot && matches!(w.paint, Paint::Solid { swatch: None, .. });
+                (w.paint.clone(), swatch_params(d, name), process.then_some(document))
+            }
+            None => (Paint::None, Value::Null, None),
         },
-        _ => (Paint::None, Value::Null),
+        _ => (Paint::None, Value::Null, None),
     };
-    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
+    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)), process_color_source };
     PanelDrag::Paint { paint, params, rows: Some(rows), library: None }
 }
 

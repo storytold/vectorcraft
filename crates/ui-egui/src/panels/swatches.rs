@@ -407,9 +407,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         doc: Arc::clone(&st.doc),
     };
     let dragged_doc = Arc::clone(&thumbs.doc);
+    let document = st.uid;
     let shown_app: &VectorcraftApp = app;
     let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, &drag.grabbed, dragged_rows(drag))))
+        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),

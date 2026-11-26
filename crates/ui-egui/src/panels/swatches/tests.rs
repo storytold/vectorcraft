@@ -96,7 +96,24 @@ fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
 
 /// The drag the row `name` starts, carrying rows `names`.
 fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
-    dnd::drag_of(&doc(app), &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+    dnd::drag_of(&doc(app), app.session.active().unwrap().uid, &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+}
+
+#[test]
+fn only_unlinked_process_swatches_carry_their_source_for_canvas_color() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Global red", "color": "#ff0000", "global": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Spot blue", "color": "#0000ff", "spot": true})).unwrap();
+    let tint = app.run("swatch.new", json!({"swatch": "Spot blue", "tint": 40})).unwrap();
+    let document = app.session.active().unwrap().uid;
+    let source = |name| {
+        let PanelDrag::Paint { rows: Some(rows), .. } = rows_drag(&app, name, &[name]) else { panic!("a swatch row drag") };
+        rows.process_color_source
+    };
+    assert_eq!(source("Red"), Some(document));
+    for name in ["Global red", "Spot blue", tint["name"].as_str().unwrap(), "[None]", "[Registration]"] {
+        assert_eq!(source(name), None, "{name}");
+    }
 }
 
 /// Art `ids` dragged off the canvas.
