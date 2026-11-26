@@ -766,9 +766,11 @@ fn flaps_folded_onto_a_panel_keep_their_order_as_the_panel_tilts_either_way() {
         let img = render(&Scene { blank: b, folded: &f, print: None, inside: [0, 0, 0, 255], outside: WHITE, camera }).expect("drawn");
         let flap = |y: f64| b.panels.iter().position(|p| p.outline.bounds().is_some_and(|r| (r.y0 - y).abs() < 1e-6 && r.x0 > 99.0));
         let shown = img.panel_at(100, 50);
-        if shown == flap(-40.0) {
+        let above = flap(-40.0).expect("the upper flap exists");
+        let below = flap(60.0).expect("the lower flap exists");
+        if shown == Some(above) {
             "above"
-        } else if shown == flap(60.0) {
+        } else if shown == Some(below) {
             "below"
         } else {
             "neither"
