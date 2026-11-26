@@ -234,7 +234,7 @@ mod tests {
         select_slice(&mut app, source);
         app.run(dialog, json!({})).unwrap();
         if !divide {
-            set(&mut app, "name", json!("Original"));
+            set(&app, "name", json!("Original"));
         }
         select_slice(&mut app, destination);
         let st = app.session.active().unwrap();
@@ -263,7 +263,7 @@ mod tests {
         let mut app = app();
         let from = app.session.active().unwrap().doc.slice_ids()[0];
         app.run("object.slice.options", json!({})).unwrap();
-        set(&mut app, "name", json!("Source"));
+        set(&app, "name", json!("Source"));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         let to = add_slice(&mut app, 0.0);
         select_slice(&mut app, to);
@@ -286,7 +286,7 @@ mod tests {
         app.run("object.slice.options", json!({})).unwrap();
         let ctx = app.ui_ctx.clone().unwrap();
         pump(&mut app, &ctx);
-        set(&mut app, "name", json!("Replacement"));
+        set(&app, "name", json!("Replacement"));
 
         assert!(ok(&mut app));
         assert_eq!(app.session.active().unwrap().doc.slice_options(other).unwrap().name, "Replacement");
@@ -299,7 +299,7 @@ mod tests {
         let second = add_slice(&mut app, 80.0);
         app.run("object.slice.select", json!({"slices": [first.0, second.0]})).unwrap();
         app.run("object.slice.options", json!({})).unwrap();
-        set(&mut app, "alt", json!("Two slices"));
+        set(&app, "alt", json!("Two slices"));
         app.run("object.slice.select", json!({"slices": [second.0, first.0]})).unwrap();
 
         assert!(ok(&mut app));
