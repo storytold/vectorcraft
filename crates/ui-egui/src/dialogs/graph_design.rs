@@ -519,8 +519,7 @@ impl GraphDesignDialog {
             }
             true
         });
-        if let Some(options) = shown.accepted {
-            self.column = options;
+        if shown.picked == Some(0) && !waiting {
             let answer = self.answer();
             self.held.file(answer);
             return None;
@@ -836,6 +835,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 #[cfg(test)]
 mod tests {
+    use egui_kittest::kittest::Queryable;
     use serde_json::{Value, json};
 
     use super::GraphDesignDialog;
@@ -877,6 +877,36 @@ mod tests {
         super::pump(app, ctx);
         assert!(dialogs.with(|host| host.confirm::<GraphDesignDialog>(ctx)), "the accepted answer closes the dialog");
         assert!(!dialogs.with(|host| host.is_open::<GraphDesignDialog>()));
+    }
+
+    #[test]
+    fn graph_design_footer_ok_applies_column_and_marker_designs() {
+        for (graph_type, command) in [("column", "graph.column"), ("line", "graph.marker")] {
+            let (mut app, ctx) = app_with_design();
+            select_graph(&mut app, graph_type);
+            crate::menus::invoke(&mut app, command, json!({}));
+            set(&app, &ctx, "selected", json!("New Design")).unwrap();
+
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::testing::install(ui.ctx());
+                        return;
+                    }
+                    app.dialogs().unwrap().with(|host| host.run(ui));
+                    super::pump(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            h.get_by_label("OK").click();
+            h.run_steps(4);
+
+            let app = h.state_mut();
+            assert!(!app.dialogs().unwrap().with(|host| host.is_open::<GraphDesignDialog>()));
+            assert_eq!(app.session.execute(command, &json!({})).unwrap()["design"], "New Design");
+        }
     }
 
     #[test]
