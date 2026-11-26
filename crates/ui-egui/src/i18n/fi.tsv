@@ -9105,6 +9105,10 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Set Fold Angle…	Aseta taittokulma…
+	Set Fold Angle	Aseta taittokulma
+	Reset Fold Angle	Palauta taittokulma
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	valitse nuuttausviiva, osittainen leikkausviiva tai rei’itysviiva, joka ei ole lukittu eikä piilotettu
 	Check	Tarkista
 	Check Fold Lines	Tarkista taittoviivat
 @msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.

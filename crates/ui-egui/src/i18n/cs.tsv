@@ -10832,6 +10832,10 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Set Fold Angle…	Nastavit úhel skladu…
+	Set Fold Angle	Nastavit úhel skladu
+	Reset Fold Angle	Obnovit úhel skladu
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	vyberte linii bigu, částečného řezu nebo perforace, která není zamčená ani skrytá
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Místo popisku zobrazí kartu s tím, co dělá nástroj z panelu a co dělají jeho klávesy; vyžaduje Zobrazovat popisky nástrojů.
 	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.

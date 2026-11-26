@@ -13,7 +13,7 @@ fn poly(points: &[(f64, f64)], closed: bool) -> PathData {
 }
 
 fn line(kind: LineKind, points: &[(f64, f64)], closed: bool, key: u64) -> FoldLine {
-    FoldLine { path: poly(points, closed), kind, key }
+    FoldLine { path: poly(points, closed), kind, key, angle: None }
 }
 
 fn cut(points: &[(f64, f64)], key: u64) -> FoldLine {
@@ -188,7 +188,7 @@ fn a_round_tuck_flap_folds_like_any_panel() {
     bp.curve_to(p(100.0, 10.0), p(80.0, 0.0), p(50.0, 0.0));
     bp.curve_to(p(20.0, 0.0), p(0.0, 10.0), p(0.0, 40.0));
     bp.close_path();
-    let lines = vec![FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Cut, key: 1 }, crease((0.0, 40.0), (100.0, 40.0), 2)];
+    let lines = vec![FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Cut, key: 1, angle: None }, crease((0.0, 40.0), (100.0, 40.0), 2)];
     let (b, issues) = check(&lines);
     assert!(issues.is_empty(), "{issues:?}");
     assert_eq!(b[0].panels.len(), 2);
@@ -353,7 +353,7 @@ fn an_outline_drawn_twice_keeps_its_material() {
     // The same two squares as the subpaths of one compound path.
     let mut twice = poly(&square, true);
     twice.subpaths.extend(poly(&square, true).subpaths);
-    let (b, issues) = check(&[FoldLine { path: twice, kind: LineKind::Cut, key: 1 }]);
+    let (b, issues) = check(&[FoldLine { path: twice, kind: LineKind::Cut, key: 1, angle: None }]);
     assert_eq!(codes(&issues), vec!["duplicate"], "{issues:?}");
     assert_eq!(issues[0].keys, vec![1]);
     assert_eq!(areas(&b[0]), vec![10_000_000]);
@@ -549,7 +549,7 @@ fn a_curved_crease_is_measured_at_its_farthest_point_from_its_line() {
     bp.curve_to(p(10000.0 / 3.0 - off, 10000.0 / 3.0 + off), p(20000.0 / 3.0 + off, 20000.0 / 3.0 - off), p(10000.0, 10000.0));
     let lines = vec![
         cut(&[(0.0, 0.0), (10000.0, 0.0), (10000.0, 10000.0), (0.0, 10000.0)], 1),
-        FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Crease, key: 2 },
+        FoldLine { path: PathData::from_bezpath(&bp), kind: LineKind::Crease, key: 2, angle: None },
     ];
     let (b, issues) = blanks(&lines, 10.0);
     assert_eq!(codes(&issues), vec!["notStraight"], "{issues:?}");
@@ -1232,4 +1232,143 @@ fn a_partial_cut_takes_its_own_angle_and_a_hinge_its_longest_piece_s() {
     let (b, _) = check(&lines);
     assert_eq!(b[0].hinges.len(), 1);
     assert_eq!(b[0].hinges[0].angle, 90.0);
+}
+
+#[test]
+fn a_line_s_own_angle_takes_the_place_of_its_kind_s() {
+    let own = |kind, angle| FoldLine { path: poly(&[(0.0, 0.0), (1.0, 0.0)], false), kind, key: 1, angle };
+    assert_eq!(own(LineKind::Crease, Some(45.0)).fold_angle(), Some(45.0));
+    assert_eq!(own(LineKind::PartialCut, Some(30.0)).fold_angle(), Some(30.0));
+    assert_eq!(own(LineKind::Perforation, Some(-120.0)).fold_angle(), Some(-120.0));
+    assert_eq!(own(LineKind::PartialCut, None).fold_angle(), Some(-90.0));
+    // An angle that is not a number folds at the kind's; a cut never folds.
+    assert_eq!(own(LineKind::Crease, Some(f64::NAN)).fold_angle(), Some(90.0));
+    assert_eq!(own(LineKind::Crease, Some(f64::INFINITY)).fold_angle(), Some(90.0));
+    assert_eq!(own(LineKind::Crease, Some(f64::MAX)).fold_angle(), Some(90.0));
+    // Past -180 to 180, before rounding, as for an angle the engine stores.
+    assert_eq!(own(LineKind::Crease, Some(360.0)).fold_angle(), Some(90.0));
+    assert_eq!(own(LineKind::PartialCut, Some(-180.0000001)).fold_angle(), Some(-90.0));
+    assert_eq!(own(LineKind::Crease, Some(-180.0)).fold_angle(), Some(-180.0));
+    assert_eq!(own(LineKind::Cut, Some(45.0)).fold_angle(), None);
+    // To the millionth of a degree: closer to flat than that is flat.
+    assert_eq!(own(LineKind::Crease, Some(-179.99999998)).fold_angle(), Some(-180.0));
+    assert_eq!(own(LineKind::Crease, Some(179.9999994)).fold_angle(), Some(179.999999));
+    assert_eq!(own(LineKind::Crease, Some(-0.0000001)).fold_angle().map(f64::to_bits), Some(0.0f64.to_bits()));
+}
+
+#[test]
+fn a_tray_wall_with_its_own_angle_stands_at_that_angle() {
+    let mut lines = tray();
+    // The wall below the base (y 90 to 120) folds at 45°, the others at 90°.
+    for l in lines.iter_mut().filter(|l| l.key == 12) {
+        l.angle = Some(45.0);
+    }
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    let f = fold(b, None, 1.0, TOL).expect("folds");
+    for (i, panel) in b.panels.iter().enumerate().filter(|(i, _)| *i != f.base) {
+        let n = f.panels[i].pose.normal();
+        // The cosine of the angle between the wall's print and the base's.
+        let lower = panel.outline.bounds().is_some_and(|r| r.y0 > 89.0);
+        let want = if lower { std::f64::consts::FRAC_1_SQRT_2 } else { 0.0 };
+        assert!((n[2] - want).abs() < 1e-9, "panel {i} ({lower}): {n:?}");
+    }
+    let h = b.hinges.iter().find(|h| h.keys == [12]).expect("the lower wall's hinge");
+    assert_eq!(h.angle, 45.0);
+}
+
+#[test]
+fn a_hinge_takes_the_angle_of_its_longest_line_however_the_map_splits_it() {
+    // One hinge along y = 60: a 60 pt crease at 30° and a 40 pt crease at 120°. A crease that
+    // stops inside the panel above meets the first at x = 30, splitting it into two 30 pt pieces.
+    let mut lines = vec![
+        cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 160.0), (0.0, 160.0)], 1),
+        crease((0.0, 60.0), (60.0, 60.0), 2),
+        crease((60.0, 60.0), (100.0, 60.0), 3),
+        crease((30.0, 60.0), (30.0, 90.0), 4),
+    ];
+    lines[1].angle = Some(30.0);
+    lines[2].angle = Some(120.0);
+    let (b, issues) = check(&lines);
+    assert_eq!(codes(&issues), vec!["danglingCrease"], "{issues:?}");
+    let hinges: Vec<_> = b[0].hinges.iter().filter(|h| h.keys.contains(&2)).collect();
+    assert_eq!(hinges.len(), 1, "{:?}", b[0].hinges);
+    assert_eq!((hinges[0].keys.clone(), hinges[0].angle), (vec![2, 3], 30.0));
+}
+
+#[test]
+fn a_line_s_subpaths_on_top_of_each_other_count_once_toward_the_hinge_angle() {
+    // One hinge along y = 60: a 40 pt crease at 30° drawn as two subpaths on top of each other,
+    // and a 60 pt crease at 120°.
+    let mut twice = poly(&[(0.0, 60.0), (40.0, 60.0)], false);
+    twice.subpaths.extend(poly(&[(0.0, 60.0), (40.0, 60.0)], false).subpaths);
+    let lines = vec![
+        cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 160.0), (0.0, 160.0)], 1),
+        FoldLine { path: twice, kind: LineKind::Crease, key: 2, angle: Some(30.0) },
+        FoldLine { path: poly(&[(40.0, 60.0), (100.0, 60.0)], false), kind: LineKind::Crease, key: 3, angle: Some(120.0) },
+    ];
+    let (b, issues) = check(&lines);
+    assert_eq!(codes(&issues), vec!["duplicate"], "{issues:?}");
+    assert_eq!(b[0].hinges.len(), 1, "{:?}", b[0].hinges);
+    assert_eq!(b[0].hinges[0].angle, 120.0);
+}
+
+#[test]
+fn lines_of_equal_length_on_one_hinge_give_the_lowest_key_s_angle_in_any_order() {
+    let mut a = crease((0.0, 60.0), (50.0, 60.0), 5);
+    a.angle = Some(30.0);
+    let mut b = crease((50.0, 60.0), (100.0, 60.0), 3);
+    b.angle = Some(120.0);
+    let outline = cut(&[(0.0, 0.0), (100.0, 0.0), (100.0, 160.0), (0.0, 160.0)], 1);
+    for lines in [vec![outline.clone(), a.clone(), b.clone()], vec![outline.clone(), b.clone(), a.clone()]] {
+        let (blanks, issues) = check(&lines);
+        assert!(issues.is_empty(), "{issues:?}");
+        assert_eq!(blanks[0].hinges.len(), 1);
+        assert_eq!(blanks[0].hinges[0].angle, 120.0, "{:?}", lines.iter().map(|l| l.key).collect::<Vec<_>>());
+    }
+    // The same along a diagonal, with the line of the higher key split in two by a crease that
+    // stops inside a panel: its pieces' lengths (2√2 and 10√2) add up to a little more than the
+    // other line's (12√2) in floating point.
+    let mut a = crease((0.0, 0.0), (12.0, 12.0), 5);
+    a.angle = Some(30.0);
+    let mut b = crease((12.0, 12.0), (24.0, 24.0), 3);
+    b.angle = Some(120.0);
+    let outline = cut(&[(0.0, 0.0), (24.0, 0.0), (24.0, 24.0), (0.0, 24.0)], 1);
+    let dangling = crease((2.0, 2.0), (6.0, 3.0), 4);
+    for lines in [vec![outline.clone(), a.clone(), b.clone(), dangling.clone()], vec![outline, dangling, b, a]] {
+        let (blanks, issues) = check(&lines);
+        assert_eq!(codes(&issues), vec!["danglingCrease"], "{issues:?}");
+        assert_eq!(blanks[0].hinges.len(), 1, "{:?}", blanks[0].hinges);
+        assert_eq!(blanks[0].hinges[0].angle, 120.0, "{:?}", lines.iter().map(|l| l.key).collect::<Vec<_>>());
+    }
+    // A line 0.0005 pt longer than the other at 1,000,000 pt is longer, not a tie: its angle wins
+    // over the lower key's.
+    let mut a = crease((0.0, 60.0), (1_000_000.0, 60.0), 3);
+    a.angle = Some(30.0);
+    let end = 2_000_000.000_5;
+    let mut b = crease((1_000_000.0, 60.0), (end, 60.0), 5);
+    b.angle = Some(120.0);
+    let outline = cut(&[(0.0, 0.0), (end, 0.0), (end, 160.0), (0.0, 160.0)], 1);
+    for lines in [vec![outline.clone(), a.clone(), b.clone()], vec![outline, b, a]] {
+        let (blanks, issues) = check(&lines);
+        assert!(issues.is_empty(), "{issues:?}");
+        assert_eq!(blanks[0].hinges.len(), 1, "{:?}", blanks[0].hinges);
+        assert_eq!(blanks[0].hinges[0].angle, 120.0, "{:?}", lines.iter().map(|l| l.key).collect::<Vec<_>>());
+    }
+}
+
+#[test]
+fn a_negative_angle_folds_a_crease_toward_the_print() {
+    let mut lines = two_panels(LineKind::Crease, 0, false, false);
+    for l in lines.iter_mut().filter(|l| l.key == 2) {
+        l.angle = Some(-90.0);
+    }
+    let (b, issues) = check(&lines);
+    assert!(issues.is_empty(), "{issues:?}");
+    let b = &b[0];
+    let f = fold(b, None, 1.0, TOL).expect("folds");
+    let child = 1 - f.base;
+    let placed = f.panels[child].pose.apply(flat_center(b, child));
+    assert!(placed[2] > 0.0, "in front of the print: {placed:?}");
 }

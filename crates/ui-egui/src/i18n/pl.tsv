@@ -10697,6 +10697,10 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Set Fold Angle…	Ustaw kąt zgięcia…
+	Set Fold Angle	Ustaw kąt zgięcia
+	Reset Fold Angle	Resetuj kąt zgięcia
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	zaznacz linię bigowania, nacięcia lub perforacji, która nie jest zablokowana ani ukryta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Zamiast podpowiedzi pokazuje kartę z tym, co robią narzędzie z paska i jego klawisze; wymaga opcji Pokaż podpowiedzi.
 	Selects whole objects and groups to move, resize or rotate them.	Zaznacza całe obiekty i grupy, aby je przesuwać, skalować lub obracać.

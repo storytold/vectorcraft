@@ -8601,6 +8601,10 @@ breakText	Glyphs	Глифи
 	No objects are selected.	Няма избрани обекти.
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
+	Set Fold Angle…	Задай ъгъл на сгъване…
+	Set Fold Angle	Задай ъгъл на сгъване
+	Reset Fold Angle	Нулирай ъгъла на сгъване
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	изберете линия за биговане, частично рязане или перфорация, която не е заключена или скрита
 	Check	Провери
 	Check Fold Lines	Провери линиите на сгъване
 @msg	No cut lines are in the selection.	В селекцията няма линии за рязане.

@@ -10508,6 +10508,10 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Set Fold Angle…	Imposta angolo di piega…
+	Set Fold Angle	Imposta angolo di piega
+	Reset Fold Angle	Reimposta angolo di piega
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleziona una linea di cordonatura, di taglio parziale o di perforazione che non sia bloccata né nascosta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra una scheda con ciò che fanno uno strumento della barra e i suoi tasti al posto della descrizione; richiede Mostra descrizioni comandi.
 	Selects whole objects and groups to move, resize or rotate them.	Seleziona oggetti e gruppi interi per spostarli, ridimensionarli o ruotarli.

@@ -10918,6 +10918,10 @@ shape	Open	Открытый
 	No objects are selected.	Объекты не выделены.
 	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
 	Remove Fold Line Role	Убрать тип линии
+	Set Fold Angle…	Задать угол сгиба…
+	Set Fold Angle	Задать угол сгиба
+	Reset Fold Angle	Сбросить угол сгиба
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	выделите линию биговки, надреза или перфорации, которая не закреплена и не скрыта
 	Check	Проверить
 	Check Fold Lines	Проверить линии сгиба
 @msg	No cut lines are in the selection.	В выделении нет линий реза.

@@ -10957,6 +10957,10 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Set Fold Angle…	Ange falsvinkel…
+	Set Fold Angle	Ange falsvinkel
+	Reset Fold Angle	Återställ falsvinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markera en biglinje, halvskärlinje eller perforeringslinje som varken är låst eller dold
 	Check	Kontrollera
 	Check Fold Lines	Kontrollera falslinjer
 @msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.

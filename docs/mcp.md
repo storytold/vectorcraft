@@ -16331,6 +16331,23 @@ The list is shown until the document changes.
 {"name":"run_command","arguments":{"command":"addon.packaging.check","params":{"tolerance":0.5,"select":true}}}
 ```
 
+### Fold angles
+
+`addon.packaging.setFoldAngle` gives Crease, Partial Cut, and Perforation lines an angle from -180 to 180 degrees.
+Pass `angle`, or pass `reset: true` to remove their stored angles. The command accepts `ids` or uses the selection,
+looks through groups and clip groups, and skips locked or hidden objects, Cut lines, and objects without a role.
+It reports `{ids, changed, skipped}` and records one undo step when a value changes. Angles are rounded to the
+millionth of a degree. A positive angle folds away from the printed side; a negative angle folds toward it.
+
+The line stores its angle under `vc-fold-angle` and keeps it through role changes. Native save and SVG with
+Preserve Editing retain it; plain SVG export leaves it out. Without an angle, a Crease or Perforation folds at
+90 degrees and a Partial Cut at -90 degrees. Fold Preview and `addon.packaging.fold` use each hinge's longest line.
+
+`addon.packaging.roles` also reports `foldLines` (editable lines that fold), `foldAngle` (their shared angle, or
+null when they differ or there are none), `ownAngles` (lines with a valid stored angle), and `storedAngles`
+(lines with stored angle text, including damaged values). With nothing selected and no `ids`, the role counts
+describe the document and these angle fields report no editable lines. The range and rounding are VectorCraft's own.
+
 ### Fold Preview
 
 `addon.packaging.fold` (`{ids?, base?: [x, y], amount?: 1, tolerance?: 0.1}`) folds a blank into its 3D shape. It reads

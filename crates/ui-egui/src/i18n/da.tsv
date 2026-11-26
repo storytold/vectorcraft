@@ -10920,6 +10920,10 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Set Fold Angle…	Angiv foldevinkel…
+	Set Fold Angle	Angiv foldevinkel
+	Reset Fold Angle	Nulstil foldevinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markér en rillelinje, delvis skærelinje eller perforeringslinje, der hverken er låst eller skjult
 	Check	Kontrollér
 	Check Fold Lines	Kontrollér foldelinjer
 @msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
