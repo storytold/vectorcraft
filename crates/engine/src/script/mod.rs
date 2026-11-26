@@ -1630,16 +1630,10 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
     const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
-    const APP_MEMBERS: &[&str] = &["activeDocument", "documents", "selection"];
     let message = &e.message;
     let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
     let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
-    if e.kind == RunErrorKind::Thrown
-        && !e.authored
-        && let Some(member) = first.filter(|f| APP_MEMBERS.contains(f))
-    {
-        format!("{message} (use `app.{member}`)")
-    } else if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
+    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
