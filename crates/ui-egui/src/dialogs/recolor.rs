@@ -1505,6 +1505,7 @@ impl Feed {
 /// What the pump works on with the app, out of the host: the values, their steps and what `show`
 /// asked for.
 struct Work {
+    opening: Arc<()>,
     fields: Fields,
     steps: Steps,
     filed: Filed,
@@ -1544,7 +1545,7 @@ impl Work {
             randomize(app, &mut self.fields, sb);
         }
         if filed.library {
-            pick_library(app);
+            pick_library(app, Arc::clone(&self.opening));
         }
         let d = &mut self.fields;
         if let Some(before) = filed.edited {
@@ -1591,16 +1592,16 @@ fn randomize(app: &mut VectorcraftApp, d: &mut Fields, sb: bool) {
 
 /// Other Library…: import a library (.ase, .acb, .gpl, .vcswatches or a document's swatches) and
 /// limit to it.
-fn pick_library(app: &mut VectorcraftApp) {
+fn pick_library(app: &mut VectorcraftApp, opening: Arc<()>) {
     let request = builtin_open_filters().fold(PickRequest::open("library"), |request, (name, exts)| request.filter(name, exts));
-    // PLAN: assumed `file_asks::Owner::Free` (fl.A3's owner of a continuation no document holds), as appearance-w19 codes it.
-    crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, |app, picked| {
+    // A loaded library belongs to the session. The Limit to Library choice belongs to the opening that asked.
+    crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, move |app, picked| {
         let Some(path) = picked.first_path() else { return Ok(Value::Null) };
         let r = app.run("swatch.library.load", json!({ "path": path }))?;
         let library = r["library"].clone();
         if let Some(dialogs) = app.dialogs() {
             dialogs.with(|host| {
-                if let Some(d) = host.get_mut::<RecolorDialog>() {
+                if let Some(d) = host.get_mut_by_id::<RecolorDialog>(dialog_id(KIND)).filter(|d| Arc::ptr_eq(&opening, &d.opening)) {
                     d.fields.fields.insert("limitTo".into(), library);
                 }
             });
@@ -1765,6 +1766,8 @@ fn confirm(app: &mut VectorcraftApp, fields: &Fields) -> Result<(), String> {
 /// commits the recolour.
 pub(crate) struct RecolorDialog {
     id: DialogId,
+    /// The identity of this opening, since Recolor Artwork reuses its dialog ID.
+    opening: Arc<()>,
     fields: Fields,
     steps: Steps,
     held: HeldAnswer<Fields>,
@@ -1787,6 +1790,7 @@ impl RecolorDialog {
     fn new(app: &VectorcraftApp, fields: Fields) -> Self {
         RecolorDialog {
             id: dialog_id(KIND),
+            opening: Arc::new(()),
             feed: Feed::of(app, &fields),
             steps: Steps::opened(snapshot(&fields)),
             fields,
@@ -1803,6 +1807,7 @@ impl RecolorDialog {
     /// The values, steps and requests, for the pump to work on with the app.
     fn take_work(&mut self) -> Work {
         Work {
+            opening: Arc::clone(&self.opening),
             fields: std::mem::take(&mut self.fields),
             steps: std::mem::replace(&mut self.steps, Steps::opened(Snapshot::new())),
             filed: std::mem::take(&mut self.filed),
