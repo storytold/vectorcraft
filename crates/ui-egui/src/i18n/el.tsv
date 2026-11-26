@@ -7532,6 +7532,35 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	only a filter declares `writes`	μόνο ένα φίλτρο δηλώνει `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `writes` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`writes` lists `{shown}` twice	το `writes` αναφέρει το `{shown}` δύο φορές
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	το `writes` αναφέρει το `{shown}`, το οποίο δεν αναφέρει το `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	το `writes` απαιτεί `api` {WRITES_API} ή νεότερο
+@msg	`writes` needs the permission `doc.write`	το `writes` απαιτεί το δικαίωμα `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	το {_1} δεν είναι κείμενο, εικόνα ή στιγμιότυπο συμβόλου
+@msg	the text of type given as `truncated` can't be changed	το κείμενο ενός αντικειμένου κειμένου που δόθηκε ως `truncated` δεν μπορεί να αλλάξει
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	πρέπει να είναι λίστα με έως {MAX_INPUT_RUNS} στοιχεία
+@msg	type needs at least one run	το κείμενο χρειάζεται τουλάχιστον ένα τμήμα
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte κειμένου (όριο {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} παράγραφοι (όριο {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	περισσότερα από {MAX_INPUT_TEXT_TOTAL} byte κειμένου σε όλη την έξοδο
+@msg	unknown key '{k}'	άγνωστο κλειδί '{k}'
+@msg	must be a list of 6 numbers	πρέπει να είναι λίστα 6 αριθμών
+@msg	a number is out of range (limit ±{MAX_COORD})	ένας αριθμός είναι εκτός εύρους (όριο ±{MAX_COORD})
+@msg	flattens the object to a line or a point	συμπιέζει το αντικείμενο σε γραμμή ή σημείο
+@msg	an object flattened to a line or a point can't be placed again	ένα αντικείμενο που συμπιέστηκε σε γραμμή ή σημείο δεν μπορεί να τοποθετηθεί ξανά
+@msg	must be a number from 0 to 1	πρέπει να είναι αριθμός από 0 έως 1
+@msg	must be the name of a symbol	πρέπει να είναι το όνομα ενός συμβόλου
+@msg	'{shown}' is not a symbol in this document	το '{shown}' δεν είναι σύμβολο σε αυτό το έγγραφο
+@msg	a run must be {{"text", "style", "inline"?}}	ένα τμήμα πρέπει να είναι {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	το `text` περιέχει τον χαρακτήρα ενός ενσωματωμένου γραφικού
+@msg	inline graphics can't be added, removed, reordered or changed	τα ενσωματωμένα γραφικά δεν μπορούν να προστεθούν, να αφαιρεθούν, να αναδιαταχθούν ή να αλλάξουν
+@msg	the characters of threaded type can't be changed	οι χαρακτήρες συνδεδεμένου κειμένου δεν μπορούν να αλλάξουν
+@msg	the characters of type with ruby can't be changed	οι χαρακτήρες κειμένου με ruby δεν μπορούν να αλλάξουν
+@msg	expected {count} paragraph styles, one per paragraph	αναμένονταν {count} στυλ παραγράφων, ένα ανά παράγραφο
+@msg	the document has no Kinsoku set named '{shown}'	το έγγραφο δεν έχει σύνολο Kinsoku με όνομα '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	πρέπει να έχει 1-{MAX_FAMILY} εκτυπώσιμους χαρακτήρες
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`

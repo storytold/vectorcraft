@@ -103,6 +103,46 @@ fn a_run_goes_frame_by_frame_and_is_one_undo_step() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The warning automation asked while confined to a folder: Run runs the script as automation's,
+/// with that folder still the only place it may read.
+#[test]
+fn the_warning_runs_the_script_under_the_access_it_was_asked_with() {
+    let mut app = app();
+    let (inside, outside) = (folder("scope-in"), folder("scope-out"));
+    let path = outside.join("draw.js");
+    std::fs::write(&path, DRAW).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::file_asks::as_automated(&mut app, true, |app| {
+            menus::run_ui_command(app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+        })
+    });
+    assert!(confirm(&mut app, KIND));
+    assert!(app.ui.status.contains("outside the read root"), "the script outside the folder is refused: {}", app.ui.status);
+    assert!(!app.session.script_running());
+    finish(&mut app);
+    assert_eq!(objects(&app), 0);
+    let _ = std::fs::remove_dir_all(&inside);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
+/// The warning a person asked, answered by automation confined to a folder: the script runs with
+/// that folder still the only place it may read.
+#[test]
+fn the_warning_answered_under_narrower_access_keeps_it() {
+    let mut app = app();
+    let (inside, outside) = (folder("narrow-in"), folder("narrow-out"));
+    let path = outside.join("draw.js");
+    std::fs::write(&path, DRAW).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"path": path.to_string_lossy()})).unwrap().unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    assert!(vectorcraft_engine::file_access::confine(roots.as_ref(), || confirm(&mut app, KIND)));
+    assert!(app.ui.status.contains("outside the read root"), "the script outside the folder is refused: {}", app.ui.status);
+    assert!(!app.session.script_running());
+    let _ = std::fs::remove_dir_all(&inside);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
 #[test]
 fn do_not_show_again_is_remembered_and_the_script_still_runs() {
     let mut app = app();
