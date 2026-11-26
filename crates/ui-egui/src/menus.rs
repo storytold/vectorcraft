@@ -81,6 +81,8 @@ use entries::flatten;
 pub use entries::{InsertableItem, MenuEntry, context_entries, insertable, insertable_items, menu_entries, plays_in_app, shown_label};
 pub(crate) use invoke::graph_dialog;
 pub use invoke::{click_target, invoke};
+#[cfg(test)]
+pub(crate) use labels::effect_item_label;
 pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
 pub(crate) use labels::{holds_plugin_commands, item_shortcut_in, lists_plugin};

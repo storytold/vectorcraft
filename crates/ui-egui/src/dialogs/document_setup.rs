@@ -73,7 +73,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields["rgbProfile"] = json!(rgb.unwrap_or_else(|| WORKING_RGB.into()));
     fields["cmykProfile"] = json!(cmyk.unwrap_or_else(|| WORKING_CMYK.into()));
     fields["convertColors"] = json!(true);
-    let (mode, setup) = (st.doc.color_mode, st.doc.setup.clone());
+    let (source, mode, setup) = (st.uid, st.doc.color_mode, st.doc.setup.clone());
     let Value::Object(map) = fields else { return Err("document.setup reported no settings".into()) };
     let presets: Vec<String> = app.session.flattener_presets().into_iter().map(|p| p.name).collect();
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
@@ -82,6 +82,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         PropertiesDialog::new(KIND, tl!("Document Setup"), tabs.clone(), values)
     });
     super::host::open_held(app, dialog, |app, fields| confirm(app, fields).map(|_| ())).ok_or("no window to show the dialog in")?;
+    app.document_setup_source = Some(source);
     Ok(Value::Null)
 }
 
@@ -185,6 +186,9 @@ fn color_commands(app: &VectorcraftApp, fields: &Map<String, Value>) -> Result<V
 }
 
 fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<Value, String> {
+    if app.session.active().is_none_or(|st| Some(st.uid) != app.document_setup_source) {
+        return Err(tl!("Document Setup can only change the document where it was opened.").to_owned());
+    }
     let map = json_map(fields);
     let params = nest(map.iter().filter(|(k, _)| !is_ui_only(k)).map(|(k, v)| (k.clone(), v.clone())).collect());
     let color = color_commands(app, &map)?;
@@ -220,9 +224,12 @@ fn short_of_bleed_note(app: &VectorcraftApp, before: [f64; 4]) -> Option<String>
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
-    let edit = dialogs.with(|host| {
-        host.get_by_id::<HostedPropertiesDialog>(id).filter(|d| d.fields().bool("editArtboards") == Some(true)).map(|d| d.fields().clone())
-    });
+    let Some(edit) = dialogs.with(|host| {
+        host.get_by_id::<HostedPropertiesDialog>(id).map(|d| (d.fields().bool("editArtboards") == Some(true)).then(|| d.fields().clone()))
+    }) else {
+        app.document_setup_source = None;
+        return;
+    };
     if let Some(fields) = edit {
         match confirm(app, &fields) {
             Ok(_) => {
@@ -643,6 +650,54 @@ mod tests {
 
     fn undo_steps(app: &VectorcraftApp) -> usize {
         app.session.active().unwrap().history.undo.len()
+    }
+
+    fn check_source_document(edit_artboards: bool) {
+        let (mut app, ctx) = new_app();
+        let source = app.session.active().unwrap().uid;
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let destination = app.session.active().unwrap().uid;
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        set(&app, &ctx, "bleed", json!([9, 9, 9, 9]));
+        set(&app, &ctx, "colorMode", json!("cmyk"));
+
+        let apply = |app: &mut VectorcraftApp| {
+            if edit_artboards {
+                set(app, &ctx, "editArtboards", json!(true));
+                super::pump(app, &ctx);
+                !is_open(app)
+            } else {
+                press_ok(app, &ctx)
+            }
+        };
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = undo_steps(&app);
+        let accepted = apply(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, destination);
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode), ([0.0; 4], ColorMode::Rgb), "the other document keeps its settings");
+        assert_eq!(undo_steps(&app), undo);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(!accepted && is_open(&app));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(apply(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, source);
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode, undo_steps(&app)), ([9.0; 4], ColorMode::Cmyk, 1));
+        assert_eq!(app.session.tool_id(), if edit_artboards { "artboard" } else { "selection" });
+        assert!(!is_open(&app));
+    }
+
+    #[test]
+    fn source_document_is_required_to_confirm_document_setup() {
+        check_source_document(false);
+    }
+
+    #[test]
+    fn source_document_is_required_to_edit_artboards_from_document_setup() {
+        check_source_document(true);
     }
 
     #[test]

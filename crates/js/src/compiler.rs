@@ -109,6 +109,8 @@ struct FnCompiler<'a> {
     /// The optional chains being compiled, innermost last: where a step that finds `undefined`
     /// or `null` jumps, and the stack depth the chain started at.
     optional: Vec<(Label, u32)>,
+    /// The code is a generator function's.
+    generator: bool,
 }
 
 /// The `var` names and function declarations a body hoists.
@@ -157,6 +159,7 @@ impl<'a> FnCompiler<'a> {
             block_funcs: HashSet::new(),
             annex: HashSet::new(),
             optional: Vec::new(),
+            generator: false,
         }
     }
 
@@ -281,12 +284,13 @@ impl<'a> FnCompiler<'a> {
                 Stmt::Var(decls) => decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).for_each(|n| add_var(&mut out, key_of(&n.name))),
                 Stmt::Lexical(..) => {}
                 Stmt::FunctionDecl(fid) => {
-                    let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
+                    let Some((name, generator)) = self.ast.function(*fid).and_then(|f| Some((f.name.as_ref()?, f.generator))) else {
                         return internal("function declaration without a name");
                     };
                     let k = key_of(&name.name);
                     if self.es2015 && nested {
-                        if !self.strict {
+                        // Annex B.3.3 gives plain function declarations only a var binding too.
+                        if !self.strict && !generator {
                             annex.push((k, scope, id));
                         }
                     } else {
@@ -1351,7 +1355,70 @@ impl<'a> FnCompiler<'a> {
                 self.at(self.ast.expr_span(id).end);
                 self.nullish_check()?;
             }
+            Expr::Yield { arg, delegate: false } => {
+                match arg {
+                    Some(e) => self.expr(*e)?,
+                    None => self.emit(Op::Undefined),
+                }
+                self.at(self.ast.expr_span(id).start);
+                self.emit(Op::Yield(false));
+                self.resume_after_yield()?;
+            }
+            Expr::Yield { arg: Some(e), delegate: true } => self.yield_delegate(id, *e)?,
+            Expr::Yield { arg: None, delegate: true } => return internal("yield* without an operand"),
         }
+        Ok(())
+    }
+
+    /// After a `Yield` that left `received mode`: goes on with the received value for `next`,
+    /// throws it for `throw`, and for `return` returns it through the `finally` blocks around.
+    fn resume_after_yield(&mut self) -> CResult<()> {
+        if !self.generator {
+            return internal("yield outside a generator function");
+        }
+        let ret = self.new_label();
+        let after = self.new_label();
+        self.jump(Op::Resume, ret);
+        self.jump(Op::Jump, after);
+        self.bind(ret);
+        self.emit_exit(Exit::Return)?;
+        self.bind(after);
+        Ok(())
+    }
+
+    /// `yield* operand` (ECMA-262 11th edition, section 14.4.14): each `next`, `throw` and `return`
+    /// the generator is resumed with goes to the operand's iterator, each result it gives that is
+    /// not done is yielded as it is, and a done one gives the expression its value, or for a
+    /// `return` returns that value.
+    fn yield_delegate(&mut self, id: ExprId, operand: ExprId) -> CResult<()> {
+        if !self.generator {
+            return internal("yield outside a generator function");
+        }
+        let d = self.depth;
+        self.expr(operand)?;
+        self.at(self.ast.expr_span(id).start);
+        self.emit(Op::DelegateIterator);
+        // The first step calls `next` with one argument, `undefined`: the spec starts with
+        // `received` as NormalCompletion(undefined) and calls `next` with « received.[[Value]] ».
+        self.emit(Op::Undefined);
+        self.push_number(0.0);
+        let (step, ret, done, end) = (self.new_label(), self.new_label(), self.new_label(), self.new_label());
+        self.bind(step);
+        self.jump(Op::DelegateCall, ret);
+        self.emit(Op::Call(1));
+        self.jump(Op::DelegateResult, done);
+        self.emit(Op::Yield(true));
+        self.jump(Op::Jump, step);
+        self.bind(done);
+        self.depth = d + 4;
+        self.jump(Op::DelegateDone, ret);
+        self.emit(Op::PopUnder(2));
+        self.jump(Op::Jump, end);
+        self.bind(ret);
+        self.depth = d + 3;
+        self.emit_exit(Exit::Return)?;
+        self.bind(end);
+        self.depth = d + 1;
         Ok(())
     }
 
@@ -2075,7 +2142,11 @@ impl<'a> FnCompiler<'a> {
                     | Op::JumpIfNullish { target: t, .. }
                     | Op::ForInNext(t)
                     | Op::IterStep(t)
-                    | Op::XmlFilterNext(t),
+                    | Op::XmlFilterNext(t)
+                    | Op::Resume(t)
+                    | Op::DelegateCall(t)
+                    | Op::DelegateResult(t)
+                    | Op::DelegateDone(t),
                 ) => *t = target,
                 _ => return internal("patching an instruction that is not a jump"),
             }
@@ -2123,6 +2194,7 @@ impl<'a> FnCompiler<'a> {
             es2015: self.es2015,
             own_name: meta.own_name,
             method: meta.method,
+            generator: self.generator,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -2156,6 +2228,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     let Some(f) = ast.function(fid) else { return internal("function out of range") };
     let mut c = FnCompiler::new(ast, source, CodeKind::Function, f.strict, recursion);
     c.es2015 = es2015;
+    c.generator = f.generator;
     c.at(f.span.start);
     c.enter()?;
     // A destructured parameter has a binding of its own under a name no script can write, which
@@ -2206,6 +2279,12 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
             }
         }
         c.emit(Op::BodyEnv);
+    }
+    if f.generator {
+        // The call has bound the arguments and run the default values; the body waits for
+        // the first `next` (ECMA-262 2015 section 14.4.11).
+        c.at(f.span.start);
+        c.emit(Op::GeneratorStart);
     }
     c.stmts(&f.body)?;
     c.at(f.span.end.saturating_sub(1));

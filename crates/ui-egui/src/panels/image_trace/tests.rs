@@ -99,6 +99,90 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     app
 }
 
+fn scroll_settings(panel: &mut Panel, dy: f32) {
+    panel.scroll_at(egui::pos2(30.0, 30.0), dy);
+    panel.advance(1.0);
+    panel.frame();
+}
+
+#[test]
+fn preview_trace_and_expand_stay_reachable_in_a_compact_panel() {
+    let mut app = traced_app();
+    app.run("imageTrace.release", json!({})).unwrap();
+    app.ui.image_trace_advanced = true;
+    let source = first_selected(&app).unwrap();
+    assert!(matches!(source.kind, NodeKind::Image(_)));
+    let mut panel = panel_over(app);
+    assert!(panel.rect_role("Image Trace", craft::ui::contract::Role::GROUP).is_positive());
+    for size in [egui::vec2(148.0, 480.0), egui::vec2(240.0, 170.0), egui::vec2(148.0, 170.0)] {
+        panel.room(size);
+        panel.frame();
+        panel.frame();
+        let room = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        for label in ["Preview", "Trace", "Expand"] {
+            assert!(panel.in_view(label), "{label} is clipped at {size:?}");
+            let rect = panel.rect(label);
+            assert!(room.contains_rect(rect), "the whole {label} control {rect:?} fits at {size:?}");
+        }
+        assert!(panel.enabled("Trace"));
+        assert!(!panel.enabled("Expand"));
+    }
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview);
+
+    let action = panel.rect("Trace");
+    let first_preset = panel.rect("Auto Color").top();
+    scroll_settings(&mut panel, -1000.0);
+    assert!(!panel.shows("Auto Color") || panel.rect("Auto Color").top() < first_preset, "the settings scroll");
+    assert_eq!(panel.rect("Trace"), action, "scrolling settings leaves the action in place");
+    let ignore = shown(&panel).params["ignoreWhite"].clone();
+    panel.click("Ignore Color");
+    assert_ne!(shown(&panel).params["ignoreWhite"], ignore, "scrolling reaches the end of Advanced");
+
+    panel.click("Trace");
+    assert!(selected_trace(&panel.app()).is_some());
+    assert!(panel.enabled("Expand"));
+    panel.click("Expand");
+    assert!(selected_trace(&panel.app()).is_none());
+    assert!(!is_trace(&first_selected(&panel.app()).unwrap()));
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert!(selected_trace(&panel.app()).is_some());
+
+    // A single action row needs less height than the wrapped footer in the narrow panel.
+    panel.room(egui::vec2(240.0, 100.0));
+    panel.frame();
+    panel.frame();
+    scroll_settings(&mut panel, 1000.0);
+    let action = panel.rect("Trace");
+    let first_preset = panel.rect("Auto Color").top();
+    scroll_settings(&mut panel, -1000.0);
+    assert!(!panel.shows("Auto Color") || panel.rect("Auto Color").top() < first_preset, "the short settings viewport scrolls");
+    assert!(panel.in_view("Trace"));
+    assert_eq!(panel.rect("Trace"), action, "a short panel still pins the footer when the actions fit on one line");
+
+    // Shorten the panel while the settings-only body remains scrolled to Advanced.
+    panel.room(egui::vec2(148.0, 68.0));
+    panel.frame();
+    panel.frame();
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview, "Preview starts in view in a very short panel");
+    let ignore = shown(&panel).params["ignoreWhite"].clone();
+    scroll_settings(&mut panel, -1000.0);
+    panel.click("Ignore Color");
+    assert_ne!(shown(&panel).params["ignoreWhite"], ignore, "a very short panel still scrolls to the last setting");
+
+    panel.room(egui::vec2(240.0, 100.0));
+    panel.frame();
+    panel.room(egui::vec2(148.0, 68.0));
+    panel.frame();
+    panel.frame();
+    let preview = panel.app().ui.image_trace_preview;
+    panel.click("Preview");
+    assert_ne!(panel.app().ui.image_trace_preview, preview, "shrinking a second time starts at the actions");
+}
+
 #[test]
 fn sketch_quick_trace_reveals_all_adjustments_and_keeps_the_source() {
     let mut app = traced_app();
