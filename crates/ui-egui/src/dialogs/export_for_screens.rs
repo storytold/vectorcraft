@@ -996,17 +996,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     let key = app.session.active().map(|st| (st.uid, st.revision));
     let pdf_presets = pdf::presets(&app.session);
     let saved = &app.session.prefs.screen_export_presets;
-    let Some((stale, pending, rename, filed)) = dialogs.with(|host| {
+    let Some((shown, pending, rename, filed)) = dialogs.with(|host| {
         let d = host.get_mut_by_id::<ExportForScreensDialog>(id)?;
         screen_formats::preset_list(&mut d.presets, saved);
         if d.pdf_presets != pdf_presets {
             d.pdf_presets = pdf_presets;
         }
-        Some((d.doc.as_ref().map(|s| s.key) != key, d.pending.take(), d.rename.take(), d.held.take()))
+        Some((d.doc.as_ref().map(|s| s.key), d.pending.take(), d.rename.take(), d.held.take()))
     }) else {
         return;
     };
-    if stale {
+    if shown != key {
         let (doc, thumbs) = document_view(app, ctx);
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
@@ -1031,7 +1031,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
         rename_artboard(app, board, &name);
     }
     if let Some(fields) = filed {
-        let answer = params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from);
+        // OK validated its selection against the document the dialog showed before refreshing.
+        let answer = if shown.map(|(uid, _)| uid) == app.session.active().map(|st| st.uid) {
+            params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from)
+        } else {
+            Err(Label::from(tl!("The active document changed. Review the export selection and try again.")))
+        };
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
                 d.held.answer(answer);
