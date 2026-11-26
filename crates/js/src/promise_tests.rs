@@ -182,6 +182,9 @@ fn calling_promise_without_new_or_without_an_executor_is_a_type_error() {
         "Promise.prototype.then.call({}, null)",
         "Promise.resolve.call(1, 2)",
         "Promise.all.call(Math.max, [])",
+        "Promise.resolve.call(() => {}, 1)",
+        "Promise.reject.call({ m() {} }.m, 1)",
+        "Promise.race.call((() => {}).bind(null), [])",
     ] {
         match r.run(src) {
             Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with("TypeError"), "{src}: {message}"),

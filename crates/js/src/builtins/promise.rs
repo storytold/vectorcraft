@@ -911,8 +911,8 @@ fn thrower(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<V
     Err(Abrupt::Throw(thunk_value(interp, args)?))
 }
 
-/// `v` is a constructor: a function written in JavaScript, a built-in constructor, or a bound
-/// function whose target is one.
+/// `v` is a constructor: a function written in JavaScript other than an arrow function or a
+/// method, a built-in constructor, or a bound function whose target is one.
 fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
     let mut v = v.clone();
     loop {
@@ -921,7 +921,7 @@ fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
             _ => return Ok(false),
         };
         match func {
-            Func::Closure { .. } => return Ok(true),
+            Func::Closure { code, .. } => return Ok(!code.arrow && !code.method),
             Func::Native { constructor, .. } => return Ok(constructor),
             Func::Bound { target, .. } => {
                 interp.use_fuel()?;
