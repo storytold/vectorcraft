@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use craft::theme::TypeRole;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, Sizing};
+use craft::ui::contract::{Lazy, Props as _, Scroll, Show as _, ShowContainer as _, Sizing};
 use craft::ui::display::{Elide, Shade, Text};
-use craft::ui::layout_components::Row as Line;
+use craft::ui::layout_components::{Row as Line, Stack};
 use craft::ui::runtime::focus::FocusRequest;
 use serde_json::{Map, Value, json};
 use vectorcraft_plugins::permissions;
@@ -30,10 +30,10 @@ pub(super) const ERROR: &str = "__scriptAccessError";
 /// The most characters of a path a row shows.
 const MAX_SHOWN_PATH: usize = 1024;
 
-/// A line's height in the list.
-const LINE_HEIGHT: f32 = 30.0;
+/// How tall a line of the list is taken to be before it was first shown.
+const LINE_ESTIMATE: f32 = 30.0;
 
-/// The list's height before it scrolls.
+/// The height the list offers its lines before it scrolls.
 const LIST_HEIGHT: f32 = 180.0;
 
 /// One script and path with kept access.
@@ -193,26 +193,24 @@ pub(super) fn show(app: &mut VectorcraftApp, access: &mut Option<Access>, ui: &m
         lines.push(Entry::Grant(i));
     }
     let focus = state.focus.take();
-    let mut revoke_at = None;
-    // The list is as tall as its lines, up to LIST_HEIGHT, and draws only the lines in view.
-    let spacing = ui.spacing().item_spacing.y;
-    let height = ((LINE_HEIGHT + spacing) * lines.len() as f32 - spacing).min(LIST_HEIGHT);
-    let scroll = egui::ScrollArea::vertical().id_salt("prefs-script-access").max_height(LIST_HEIGHT).min_scrolled_height(height);
-    scroll.auto_shrink([false, true]).show_rows(ui, LINE_HEIGHT, lines.len(), |ui, range| {
-        for line in &lines[range] {
-            let size = egui::vec2(ui.available_width(), LINE_HEIGHT);
+    // The body returns the row whose Revoke was clicked; the revoke runs after the list is shown.
+    let list = Stack::new().id_salt("prefs-script-access").label(tl!("Script File Access")).fill_width();
+    let shown_list = list.scroll(Scroll::vertical()).room_height(LIST_HEIGHT).show(ui, |ui, _| {
+        let mut clicked = None;
+        // Each line runs only while it is in view, so a long list costs no more per frame than a short one.
+        for line in &lines {
             match *line {
                 Entry::Script(i) => {
                     let script = &rows[i].shown_script;
-                    ui.allocate_ui(size, |ui| {
+                    Lazy::new(("prefs-script", i), LINE_ESTIMATE).show(ui, |ui| {
                         Text::new(shown(script)).role(TypeRole::BodyStrong).elide(Elide::Path).tooltip(shown_whole(script)).show(ui);
                     });
                 }
                 Entry::Grant(i) => {
                     let row = &rows[i];
-                    let (script, path) = (shown_whole(&row.shown_script), shown_whole(&row.shown_path));
-                    ui.allocate_ui(size, |ui| {
-                        Line::new().show(ui, |ui, _| {
+                    let shown_line = Lazy::new(("prefs-script-row", i), LINE_ESTIMATE).reveal(focus == Some(i)).show(ui, |ui| {
+                        let (script, path) = (shown_whole(&row.shown_script), shown_whole(&row.shown_path));
+                        let line = Line::new().id_salt(("prefs-script-row", i)).show(ui, |ui, _| {
                             Text::new(shown(&row.shown_path)).elide(Elide::Path).sizing(Sizing::FillWidth).tooltip(path.clone()).show(ui);
                             Text::new(access_label(row.access)).shade(Shade::Muted).show(ui);
                             // A screen reader names the script and the path along with the button.
@@ -221,15 +219,19 @@ pub(super) fn show(app: &mut VectorcraftApp, access: &mut Option<Access>, ui: &m
                             if focus == Some(i) {
                                 button = button.request_focus(FocusRequest::Take);
                             }
-                            if button.show(ui).clicked() {
-                                revoke_at = Some(i);
-                            }
+                            button.show(ui).clicked()
                         });
+                        line.inner
                     });
+                    if shown_line.flatten() == Some(true) {
+                        clicked = Some(i);
+                    }
                 }
             }
         }
+        clicked
     });
+    let revoke_at = shown_list.inner.flatten();
     Text::new(tl!("Revoke removes the access kept for every version of the script. A folder's access covers everything in it."))
         .shade(Shade::Muted)
         .show(ui);

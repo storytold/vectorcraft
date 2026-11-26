@@ -807,6 +807,27 @@ fn script_file_access_lists_each_script_and_path_once_and_revoke_removes_them() 
     let _ = std::fs::remove_dir_all(store.parent().unwrap());
 }
 
+/// A long list scrolls and draws only the lines in view: of 200 rows, the first shows and the last
+/// does not, and fewer than 200 Revoke buttons are drawn.
+#[test]
+fn script_file_access_draws_only_the_rows_in_view() {
+    let dir = std::env::temp_dir().join("vc-ui-prefs-grants-nowhere");
+    let script = dir.join("a.jsx");
+    let paths: Vec<_> = (0..200).map(|n| dir.join(format!("out{n:03}.txt"))).collect();
+    let grants: Vec<Value> = paths.iter().map(|p| grant(&script, p, "1", false, false)).collect();
+    let (mut a, store) = app_with_grants("grants-many", Value::Array(grants));
+    open(&mut a, Some("General"));
+    assert_eq!(access_rows(&a).len(), 200);
+    let texts = access_texts(&mut a);
+    let painted = |label: &str| texts.iter().filter(|(t, _)| t == label).count();
+    let (first, last) = (paths[0].to_string_lossy(), paths[199].to_string_lossy());
+    assert_eq!(painted(&first), 1, "the first row shows: {texts:?}");
+    assert_eq!(painted(&last), 0, "the last row is out of view: {texts:?}");
+    let revokes = painted("Revoke");
+    assert!(revokes > 0 && revokes < 200, "{revokes} Revoke buttons drawn");
+    let _ = std::fs::remove_dir_all(store.parent().unwrap());
+}
+
 /// Revoke on a row whose grants were removed elsewhere removes nothing and says so; with no kept
 /// grants the section says there are none, and a session without a settings folder (the web among
 /// them) shows no section.
