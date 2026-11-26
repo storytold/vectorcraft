@@ -100,6 +100,7 @@ mod file_classes;
 mod generator;
 mod heap;
 mod host;
+mod host_classes;
 mod interp;
 mod iteration;
 mod lexer;
@@ -127,6 +128,7 @@ pub use ast::{
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
+pub use host_classes::{HOST_REF_KEY, HostClass, HostMember, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};

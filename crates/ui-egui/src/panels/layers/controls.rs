@@ -121,6 +121,7 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
         } else {
             command("layer.locate", json!({}), tl!("Locate Object"), has_sel)
         },
+        command("layer.selectHighlighted", json!({}), tl!("Select Art of Highlighted Rows"), !rows.is_empty()),
         save_selection(app),
         Item::Separator,
         command("layer.merge", json!({}), tl!("Merge Selected"), rows.len() >= 2),

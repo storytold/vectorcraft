@@ -28,7 +28,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "usePreviewBounds",
         "Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.",
     ),
-    ("displayPrintSize", "At 100% zoom, one inch of the document takes 96 screen points instead of 72."),
+    (
+        "displayPrintSize",
+        "At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.",
+    ),
     ("doubleClickToIsolate", "Double-clicking a group, path or image with the Selection tool opens it in isolation mode."),
     (
         "transformPatternTiles",

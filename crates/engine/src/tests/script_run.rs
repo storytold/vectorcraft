@@ -165,7 +165,9 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(e, "t.js: line 2, column 3: TypeError: no (thrown)");
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
-    assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
+    assert!(run(&mut s, "new Window('dialog');").unwrap_err().to_string().contains("`vc`"));
+    // The application's members need no `app.`, so naming one alone is not an error.
+    assert_eq!(run(&mut s, "activeDocument;").unwrap()["ok"], true);
     assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
@@ -204,7 +206,7 @@ fn failed_script_report_keeps_message_and_adds_origin() {
         assert_eq!(error, Some(json!(format!("t.js:{line}:{column}: {message}"))), "{source}");
     }
     // The app's own reference error names the `vc` object; the same text a script threw does not.
-    run(&mut s, "app.activeDocument;").unwrap_err();
+    run(&mut s, "new Window('dialog');").unwrap_err();
     assert!(s.script_report().unwrap()["message"].as_str().unwrap().contains("`vc`"));
     assert_eq!(s.script_report().unwrap()["messageOrigin"], "built-in");
     // An error in code `eval` compiled keeps where its message came from.
