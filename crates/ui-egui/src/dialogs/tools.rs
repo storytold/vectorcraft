@@ -31,7 +31,7 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         // Graph tool click: the graph's size.
         "graph" => {
             let Some(document) = app.session.active().map(|doc| doc.uid) else {
-                app.status(tl!("Open a document before drawing a graph").to_string());
+                app.status("Open a document before drawing a graph");
                 return;
             };
             let at = click_of(&p).map_or(Point::new(0.0, 0.0), |c| c.at);
@@ -125,6 +125,15 @@ mod tests {
             host.with(|h| h.confirm_by_id(&ctx, dialog_id("graph.create")));
             super::super::host::pump(app, &ctx);
         }
+    }
+
+    #[test]
+    fn graph_size_without_a_document_keeps_the_source_status() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        open_tool_dialog(&mut app, "graph", json!({"x": 40.0, "y": 30.0}));
+
+        assert_eq!(app.ui.status, "Open a document before drawing a graph");
+        assert!(!app.any_dialog_open());
     }
 
     #[test]
