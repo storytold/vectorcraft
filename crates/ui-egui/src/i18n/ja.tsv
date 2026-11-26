@@ -3344,7 +3344,7 @@ mark-style	Japanese	日本式
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 表示のとき、ドキュメントの 1 インチをディスプレイの 1 インチで表示します。システムが使用できるディスプレイのサイズを報告しない場合は 96 スクリーンポイントで表示します。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。

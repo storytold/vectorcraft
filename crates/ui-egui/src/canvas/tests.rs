@@ -2946,12 +2946,14 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
     assert_eq!((plain, dots(&t)), (2, 2));
 }
 
-/// General › Display Print Size at 100% Zoom (#394): Actual Size shows the document larger with it
-/// on (an inch at 96 screen points) than off (a point at a point), and reads 100% either way.
+/// General › Display Print Size at 100% Zoom (#394, #9051): Actual Size shows the document larger
+/// with it on (an inch at 96 screen points where no display was measured) than off (a point at a
+/// point), and reads 100% either way.
 #[test]
 fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
     // Frames as the hosts run them: the zoom stops come from the preferences through the app's frame input.
     let frame = |app: &mut VectorcraftApp, ctx: &egui::Context, _: Vec<egui::Event>| {
@@ -2966,7 +2968,7 @@ fn view_actual_size_follows_display_print_size() {
         app.run("view.actualSize", json!({})).unwrap();
         frame(app, &ctx, vec![]);
         let view = app.canvas_view().unwrap();
-        let scheme = crate::app::view::zoom_scheme(&app.session.prefs, ctx.pixels_per_point() / ctx.zoom_factor());
+        let scheme = crate::app::view::zoom_scheme(app.print_ppi(), ctx.pixels_per_point() / ctx.zoom_factor());
         (view.zoom, scheme.percent(craft::behavior::canvas::zoom::device(&view, ctx.pixels_per_point())))
     };
     let (off, off_percent) = actual(&mut app);
@@ -2974,6 +2976,42 @@ fn view_actual_size_follows_display_print_size() {
     let (on, on_percent) = actual(&mut app);
     assert!(on > off, "an inch at 96 screen points shows the document larger: {off} → {on}");
     assert!((off_percent - 100.0).abs() < 1e-9 && (on_percent - 100.0).abs() < 1e-9, "both read 100%: {off_percent}, {on_percent}");
+}
+
+/// #9051: with Display Print Size on, Actual Size shows a document inch in an inch of the display
+/// the window is on, from the density the host measured for it. When the window moves to a display
+/// of another density, the view keeps its zoom percentage, so the art keeps its physical size there.
+#[test]
+fn view_actual_size_fills_an_inch_of_the_measured_display() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    let ctx = crate::testing::ui_context();
+    let frame = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        crate::testing::part_frame(app, ctx, raw, show);
+    };
+    let run = |app: &mut VectorcraftApp, id: &str| {
+        app.run(id, json!({})).unwrap();
+        frame(app, &ctx);
+    };
+    frame(&mut app, &ctx);
+    run(&mut app, "view.fitArtboard");
+    let fitted = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert_eq!(app.view().unwrap().zoom, fitted, "the first measurement leaves a fitted view alone");
+    run(&mut app, "view.actualSize");
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-6, "72 pt take the display's 127 points to an inch");
+    assert!(app.set_screen_ppi(Some(91.0)), "the window moved to a sparser display");
+    assert!(!app.set_screen_ppi(Some(91.0)), "the same reading changes nothing");
+    assert!((app.view().unwrap().zoom * 72.0 - 91.0).abs() < 1e-6, "100% still fills an inch");
+    assert_eq!(crate::state::zoom_label(app.view().unwrap().zoom, app.print_ppi()), "100%");
+    assert!(app.set_screen_ppi(None), "the window moved to a display that reports no size");
+    assert!((app.view().unwrap().zoom * 72.0 - 96.0).abs() < 1e-6, "100% there is 96 points to an inch");
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let zoom = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(110.0)));
+    assert_eq!(app.view().unwrap().zoom, zoom, "off, a move leaves the zoom alone");
 }
 
 /// Fit Artboard in Window fits the active artboard as a turned view shows it: with the second of
@@ -3030,11 +3068,7 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     assert_ne!(shown(&mut app), editing, "Cmd+Space shows the magnifier");
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
-    assert_eq!(
-        app.view().unwrap().zoom,
-        crate::state::next_zoom(before.zoom, true, app.session.prefs.display_print_size),
-        "Cmd+Space click zooms in"
-    );
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, app.print_ppi()), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }

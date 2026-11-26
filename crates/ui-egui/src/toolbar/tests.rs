@@ -175,7 +175,7 @@ fn tools_open_their_options() {
     assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
     open_options(&mut app, "zoom").unwrap();
     canvas_pass(&mut app);
-    assert_eq!(app.view().unwrap().zoom, 1.0);
+    assert_eq!(app.view().unwrap().zoom, crate::state::zoom_baseline(app.print_ppi()));
     // With an object selected, the transform tools open their dialogs and the selection tools open Move.
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
     for (tool, dialog) in [

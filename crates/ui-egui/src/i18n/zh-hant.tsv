@@ -4669,7 +4669,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選取 › 相同 › 填色顏色、筆畫顏色和填色與筆畫只符合全域色票或特別色色票的相同色調，而不是其任意色調。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	沒有開啟文件時顯示首頁畫面；關閉時，視窗保持空白，直到你按下首頁。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和對齊中依物件的筆畫和改變形狀的效果測量物件；陰影、光暈和模糊不計入測量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	縮放為 100% 時，文件的一英吋佔 96 個螢幕點，而不是 72 個。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	縮放為 100% 時，文件的一英吋佔顯示器上的一英吋；系統未回報可用的顯示器尺寸時佔 96 個螢幕點。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用選取工具按兩下群組、路徑或影像時，會在隔離模式中開啟它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	圖樣填色和筆畫隨圖稿一起變形，除非變形指令或變形面板的選單另有選擇。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	即時轉角半徑隨圖稿一起縮放，除非縮放指令另有選擇。

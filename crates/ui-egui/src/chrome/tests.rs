@@ -733,7 +733,8 @@ fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() 
     assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)));
     bar.app().run("view.actualSize", json!({})).unwrap();
     let center = at(&mut bar).1;
-    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
+    let baseline = crate::state::zoom_baseline(bar.app().print_ppi());
+    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), baseline));
     bar.click("First Artboard");
     assert_eq!(at(&mut bar), (0, Point::new(100.0, 50.0)), "first");
     // The command also takes an index, clamped to the last artboard.
@@ -1085,7 +1086,7 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, false);
+    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, None);
     assert!(title(&s).ends_with("(RGB/Preview)"), "{}", title(&s));
     s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
     assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));

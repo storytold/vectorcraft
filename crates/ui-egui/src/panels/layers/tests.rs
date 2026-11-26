@@ -87,7 +87,7 @@ fn target_circle_marks_follow_targeted_and_styled() {
     let thin = std::rc::Rc::new(std::cell::Cell::new(f32::INFINITY));
     let seen = std::rc::Rc::clone(&thin);
     let mut fixture = craft::ui::testing::Fixture::new(move |ui| seen.set(craft::ui::runtime::env::Env::of(ui).tokens.stroke.thin));
-    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)).frame(vec![]);
+    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0, None)).frame(vec![]);
     assert!(TARGET_DOT_IN_RING + 0.5 < TARGET_RING - thin.get() / 2.0, "the dot covers the ring");
 }
 

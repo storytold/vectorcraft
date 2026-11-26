@@ -3333,7 +3333,7 @@ mark-style	Japanese	일본식
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 확대/축소에서 문서의 1인치가 72가 아닌 96 화면 포인트를 차지합니다.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 확대/축소에서 문서의 1인치가 디스플레이의 1인치를 채우며, 시스템이 사용할 수 있는 디스플레이 크기를 알려 주지 않으면 96 화면 포인트를 차지합니다.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.

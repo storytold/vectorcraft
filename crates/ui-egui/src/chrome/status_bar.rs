@@ -20,7 +20,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = next {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
     }
-    let print = app.session.prefs.display_print_size;
+    let print = app.print_ppi();
     let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let cur = crate::panels::artboards::selected(app, nab);
     // PLAN: assumed Artboard::rect has `width()` and `height()`.

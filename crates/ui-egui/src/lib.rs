@@ -127,7 +127,7 @@ pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 #[cfg(test)]
 pub(crate) use services::browsable_url;
-pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, Services, WriteFn};
+pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, ScreenDensity, ScreenPpi, Services, WriteFn};
 pub use ui_fonts::ui_fonts;
 
 pub struct VectorcraftApp {
