@@ -489,8 +489,10 @@ enum PresetKey {
 
 /// The Presets picker: the preset gradients by library (theme), then the saved ones; a choice
 /// applies to the gradient behind the active proxy, keeping its placement
-/// (`gradient.presets.apply`; a solid or no paint becomes the gradient). The picker shows the
-/// preset the gradient is, if any.
+/// (`gradient.presets.apply`; a solid or no paint becomes the gradient), as the panel's other
+/// controls do: an active Appearance row takes the preset only when that row is a fill row with the
+/// Fill proxy in front, or a stroke row with the Stroke proxy in front.
+/// The picker shows the preset the gradient is, if any.
 fn presets_picker(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>) {
     let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).map(PresetKey::Preset);
     let enabled = crate::menus::enabled(app, "gradient.presets.apply");
@@ -502,7 +504,7 @@ fn presets_picker(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPain
         picked = PresetPicker::new(tl!("Presets"), Bind::given(shown.clone()), &source, Bind::kept()).show(ui).picked;
     });
     if let Some(PresetKey::Preset(name)) = picked {
-        app.run("gradient.presets.apply", json!({ "name": name })).ok();
+        app.run("gradient.presets.apply", json!({ "name": name, "stroke": !app.session.fill_active })).ok();
     }
 }
 

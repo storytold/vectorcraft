@@ -335,3 +335,82 @@ fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
     assert_eq!(current(&app), paint, "the stop keeps its color");
     assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
 }
+
+/// The paints of the selected object's appearance rows, in stack order.
+fn row_paints(app: &VectorcraftApp) -> Vec<Paint> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().map(|i| i.paint().clone()).collect()
+}
+
+/// The indices of the selected object's fill (`fill`) or stroke rows.
+fn rows_of_kind(app: &VectorcraftApp, fill: bool) -> Vec<usize> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().enumerate().filter(|(_, i)| i.is_fill() == fill).map(|(n, _)| n).collect()
+}
+
+/// A selected rectangle with a gradient fill and a gradient stroke.
+fn gradient_fill_and_stroke() -> VectorcraftApp {
+    let mut app = app(json!({"gradient": {}}));
+    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
+    app
+}
+
+/// With appearance row `active` active and the Fill (`front_fill`) or Stroke proxy in front,
+/// chooses Soft Spectrum from the Presets picker and checks that row `target` takes the preset
+/// while every other row keeps its paint.
+fn assert_preset_goes_to(mut app: VectorcraftApp, active: usize, front_fill: bool, target: usize) {
+    let soft = app.session.gradient_preset("Soft Spectrum").unwrap().gradient.stops;
+    app.run("appearance.setActiveItem", json!({ "index": active })).unwrap();
+    app.session.fill_active = front_fill;
+    let before = row_paints(&app);
+    let mut rig = Rig::new(app);
+    assert_eq!(rig.app().session.appearance_item(), Some(active), "the row stays active");
+    rig.click("Presets");
+    rig.click("Soft Spectrum");
+    let after = row_paints(&rig.app());
+    assert_eq!(after.len(), before.len());
+    for (n, (was, now)) in before.iter().zip(&after).enumerate() {
+        if n == target {
+            assert!(matches!(now, Paint::Gradient(g) if g.gradient.stops == soft), "row {n} takes the preset: {now:?}");
+        } else {
+            assert_eq!(now, was, "row {n} keeps its paint");
+        }
+    }
+}
+
+/// With a fill row active and the Stroke proxy in front, the Presets picker applies the preset to
+/// the stroke.
+#[test]
+fn the_presets_menu_applies_to_the_stroke_in_front_over_an_active_fill_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, fill_row, false, stroke_row);
+}
+
+/// With a stroke row active and the Fill proxy in front, the Presets picker applies the preset to
+/// the fill.
+#[test]
+fn the_presets_menu_applies_to_the_fill_in_front_over_an_active_stroke_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, stroke_row, true, fill_row);
+}
+
+/// With the proxy of the active row's kind in front, the Presets picker applies the preset to the
+/// active row, not to the topmost row of that kind.
+#[test]
+fn the_presets_menu_applies_to_the_active_row_of_the_kind_in_front() {
+    for fill in [true, false] {
+        let mut app = gradient_fill_and_stroke();
+        app.run(if fill { "appearance.addFill" } else { "appearance.addStroke" }, json!({})).unwrap();
+        // Without an active row a solid goes to the topmost row of the kind; the other stays a gradient.
+        app.run(if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"color": "#ff0000", "focus": false})).unwrap();
+        let paints = row_paints(&app);
+        let rows = rows_of_kind(&app, fill);
+        assert_eq!(rows.len(), 2);
+        let lower = rows.into_iter().find(|&n| matches!(paints[n], Paint::Gradient(_))).expect("a gradient row under the solid one");
+        assert_preset_goes_to(app, lower, fill, lower);
+    }
+}
