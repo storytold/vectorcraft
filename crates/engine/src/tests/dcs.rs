@@ -220,6 +220,53 @@ fn update_link_takes_the_files_new_clipping_path() {
     assert!((after - before / 2.0).abs() < 1e-6, "the clipping path follows the file: {before} → {after}");
 }
 
+/// For an image changed by Perspective Distort or Free Distort, Update Links and Relink draw the
+/// DCS file's new clipping path through the image's corners, and a file without one leaves a plain
+/// group.
+#[test]
+fn update_and_relink_draw_the_files_clipping_path_through_a_distorted_images_corners() {
+    let dir = temp_dir("distorted-clip");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let id = image_of(&s, &r["ids"][0]).id;
+    s.execute("select.set", &json!({ "ids": [group.0] })).unwrap();
+    s.execute("object.distort", &json!({ "corners": [[100, 100], [160, 104], [150, 140], [96, 136]] })).unwrap();
+    let node = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(node(&s).is_distorted_image());
+    let corners = node(&s).image_corners().unwrap();
+    // The clip group's path anchors, and points of the 2 × 2 pixels where the corners put them.
+    let anchors = |s: &Session| {
+        let NodeKind::Group { children, clip: true } = &s.doc().unwrap().doc.node(group).unwrap().kind else { panic!("a clipping group") };
+        let NodeKind::Path { path, clipping: true, .. } = &children[0].kind else { panic!("a clipping path") };
+        path.anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>()
+    };
+    let on_page = |s: &Session, x: f64| {
+        let map = node(s).image_map().unwrap();
+        [(0.0, 0.0), (x, 0.0), (x, 2.0), (0.0, 2.0)].map(|(px, py)| map.apply(vectorcraft_geom::Point::new(px, py)).unwrap())
+    };
+    let matches = |found: &[vectorcraft_geom::Point], want: &[vectorcraft_geom::Point]| {
+        found.len() == want.len() && want.iter().all(|w| found.iter().any(|f| f.distance(*w) < 1e-6))
+    };
+    assert!(matches(&anchors(&s), &on_page(&s, 1.0)), "the left half: {:?} vs {:?}", anchors(&s), on_page(&s, 1.0));
+    // The same file, its composite drawn through the left quarter of the page (same length).
+    let quarter = String::from_utf8(two_plates()).unwrap().replacen("10 0 lineto 10 10 lineto", " 5 0 lineto  5 10 lineto", 1);
+    std::fs::write(&path, quarter.as_bytes()).unwrap();
+    s.execute("links.update", &json!({ "ids": [id.0] })).unwrap();
+    assert!(matches(&anchors(&s), &on_page(&s, 0.5)), "the left quarter: {:?} vs {:?}", anchors(&s), on_page(&s, 0.5));
+    assert_eq!(node(&s).image_corners().unwrap(), corners);
+    // Relink to a file whose composite has no clipping path.
+    let unclipped = String::from_utf8(two_plates()).unwrap().replacen("closepath clip newpath", "closepath newpath     ", 1);
+    let other = write(&dir, "other.eps", unclipped.as_bytes());
+    s.execute("links.relink", &json!({ "ids": [id.0], "path": other })).unwrap();
+    match &s.doc().unwrap().doc.node(group).unwrap().kind {
+        NodeKind::Group { children, clip: false } => assert_eq!(children.iter().map(|c| c.id).collect::<Vec<_>>(), [id]),
+        other => panic!("a plain group of the image: {other:?}"),
+    }
+    assert_eq!(node(&s).image_corners().unwrap(), corners);
+}
+
 #[test]
 fn update_link_clips_an_image_whose_file_gained_a_clipping_path() {
     let dir = temp_dir("update-gained-clip");

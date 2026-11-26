@@ -2,8 +2,8 @@
 //! paths, solid paint and strokes, with their warnings and refusals.
 
 use super::*;
+use craft_cdr::synth_cmx::*;
 use serde_json::json;
-use vectorcraft_cdr::synth_cmx::*;
 use vectorcraft_doc::{Node, NodeKind};
 
 fn paths(nodes: &[std::sync::Arc<Node>], out: &mut Vec<Node>) {

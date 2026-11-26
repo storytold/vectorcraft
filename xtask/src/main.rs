@@ -12,6 +12,7 @@ mod ico;
 mod layers;
 mod pdf_deps;
 mod pngsuite;
+mod script_corpus;
 mod sha256;
 mod shards;
 mod stats;
@@ -43,12 +44,17 @@ commands:
   ci warm         build what every shard builds, without running it (fills the gate's cache)
   shards          list the crates each shard tests; fails when a member is in no shard or in two,
                   or builds with other features in its shard than in the whole workspace
-  corpus [--download] [--affinity]
+  corpus [--download | --affinity | --scripts]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
-                  --affinity the pinned public Affinity documents into corpus/affinity
+                  --affinity the pinned public Affinity documents into corpus/affinity, --scripts
+                  the pinned public scripts of xtask/script-corpus.txt into corpus/scripts
   bundle          build dist/VectorCraft.app (macOS) with assets/app-icon/vectorcraft.icns
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
+  scripts --pass-rate [--report <path>]
+                  run each script in corpus/scripts headless in a process of its own and report how
+                  many pass, as JSON (default target/script-corpus/report-<time>-<pid>.json, a new
+                  file); script failures never fail it, and without the corpus it skips
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
   test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
                   verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
@@ -76,8 +82,8 @@ fn main() -> ExitCode {
         Some("ci") if rest.first() == Some(&"warm") => cmd_ci_warm(),
         Some("ci") => cmd_ci(),
         Some("shards") => shards::run().map(drop),
-        Some("corpus") if rest.contains(&"--affinity") => affinity_corpus::fetch(),
-        Some("corpus") => cmd_corpus(rest.contains(&"--download")),
+        Some("corpus") => cmd_corpus_args(&rest),
+        Some("scripts") => script_corpus::scripts(&rest),
         Some("bundle") => bundle::run(&root()),
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
@@ -460,6 +466,17 @@ fn ci_steps() -> Vec<Step> {
     ]
 }
 
+/// `cargo xtask corpus` with at most one of its flags.
+fn cmd_corpus_args(rest: &[&str]) -> Result<(), String> {
+    match rest {
+        [] => cmd_corpus(false),
+        ["--download"] => cmd_corpus(true),
+        ["--affinity"] => affinity_corpus::fetch(),
+        ["--scripts"] => script_corpus::fetch(),
+        _ => Err(format!("`corpus` takes at most one of --download, --affinity and --scripts, got `{}`\n\n{USAGE}", rest.join(" "))),
+    }
+}
+
 fn cmd_corpus(download: bool) -> Result<(), String> {
     let corpus = root().join("corpus");
     println!(
@@ -480,6 +497,10 @@ Tests that use a corpus skip cleanly when it is absent.
                      cargo xtask test262
   corpus/json2/      json2.js, the public-domain JSON polyfill, at a pinned commit, sha256 verified:
                      compared with vectorcraft-js's JSON. Fetch and run: cargo xtask test262
+  corpus/scripts/    public scripts from MIT and Apache-2.0 repositories at pinned commits, each
+                     with its repository's license file, sha256 verified (xtask/script-corpus.txt):
+                     the script host's headless pass rate. Fetch: cargo xtask corpus --scripts;
+                     run: cargo xtask scripts --pass-rate
 ",
         corpus.display()
     );

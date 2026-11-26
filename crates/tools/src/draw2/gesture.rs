@@ -96,6 +96,20 @@ fn fit_tolerance(cx: &ToolContext, px: f64) -> f64 {
     cx.tol(px).clamp(super::MIN_FIT_TOLERANCE, super::MAX_FIT_TOLERANCE)
 }
 
+/// The `fidelity` (points) the Smooth tool, and an Alt smoothing drag, send `path.smoothRegion` for
+/// `px` screen pixels at the current zoom, within the range the command takes
+/// ([`super::SMOOTH_MIN_TOLERANCE`]..[`super::SMOOTH_MAX_TOLERANCE`]).
+fn smooth_tolerance(cx: &ToolContext, px: f64) -> f64 {
+    cx.tol(px).clamp(super::SMOOTH_MIN_TOLERANCE, super::SMOOTH_MAX_TOLERANCE)
+}
+
+/// The distance (points) the Smooth, Join and Path Eraser tools send for `px` screen pixels at the
+/// current zoom, within [`super::REACH_RANGE`].
+fn reach(cx: &ToolContext, px: f64) -> f64 {
+    let (lo, hi) = super::REACH_RANGE;
+    cx.tol(px).clamp(lo, hi)
+}
+
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]); 0 when it was
     /// fitted coarser than the stroke kept ([`PREVIEW_FIDELITY_PX`]).
@@ -1300,12 +1314,6 @@ impl GestureTool {
         self.poses.len() == self.points.len()
     }
 
-    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there
-    /// ([`Self::controls_of_point`]).
-    fn tip_of_point(&self, i: usize) -> [f64; 3] {
-        self.tip_of_controls(self.controls_of_point(i))
-    }
-
     /// The tip halfway along the step from point `j` to point `j + 1`, as `path.eraseRegion` reads
     /// the pen there: the pressure and tilt halfway between those at the two points, and the
     /// bearing and rotation halfway between them the shorter way round. A tip whose angle follows
@@ -1553,16 +1561,36 @@ impl GestureTool {
         v
     }
 
+    /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
+    /// redraws a selected path is shown as it is drawn, joined at its start to the point of the
+    /// path nearest to it, with no fill, and leaves the path and the selection as they are: where
+    /// the stroke ends is only known at the release, which redraws the path (`finish`).
+    fn drawing_params(&self, cx: &ToolContext) -> Value {
+        let mut v = self.freehand_params(cx, false);
+        let Some((id, _)) = self.redraw else { return v };
+        if let Some(o) = v.as_object_mut() {
+            o.remove("redraw");
+        }
+        v["fill"] = json!(false);
+        v["keepSelected"] = json!(false);
+        v["leaveSelection"] = json!(true);
+        let on = self.points.first().and_then(|&p| cx.doc.node(id)?.path_data()?.nearest(p)).map(|n| n.3);
+        if let (Some(on), Some(pts)) = (on, v["points"].as_array_mut()) {
+            pts.insert(0, json!([on.x, on.y]));
+        }
+        v
+    }
+
     fn finish(&mut self, cx: &ToolContext, m: Mods) -> Vec<Action> {
         let pts = &self.points;
         let has_sel = !cx.selection.is_empty();
-        let tol = cx.tol(self.edit_within);
-        let radius = cx.tol(SMOOTH_RADIUS);
+        let tol = reach(cx, self.edit_within);
+        let radius = reach(cx, SMOOTH_RADIUS);
         if self.smoothing {
             if pts.len() >= 2 && has_selected_smooth_path(cx) {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.smooth_fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.smooth_fidelity)}),
                 )];
             }
             return vec![];
@@ -1627,10 +1655,10 @@ impl GestureTool {
             "smooth" if pts.len() >= 2 && has_selected_smooth_path(cx) => {
                 vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.fidelity)}),
                 )]
             }
-            "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": cx.tol(8.0)}))],
+            "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": reach(cx, 8.0)}))],
             "join" if pts.len() >= 2 => vec![Action::Exec("path.joinScrub".into(), json!({"points": points_json(pts), "tolerance": tol}))],
             _ => vec![],
         }
@@ -1756,7 +1784,7 @@ impl Tool for GestureTool {
                 }
                 // With the Pencil's Live preview off a thin line shows instead (`overlays`).
                 if self.previews() && crate::previews_at(self.points.len()) {
-                    let mut v = self.freehand_params(cx, false);
+                    let mut v = self.drawing_params(cx);
                     let fidelity = self.fidelity.max(PREVIEW_FIDELITY_PX);
                     v["fidelity"] = json!(fit_tolerance(cx, fidelity));
                     // A preview fitted coarser than the stroke kept is stale (`deactivate`).
@@ -1875,10 +1903,11 @@ impl Tool for GestureTool {
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         let began = self.began;
         self.tip_at = None;
-        // Drags past the last preview are in the stroke kept, too, and with Live curve fitting
-        // off the stroke kept is fitted.
-        let stale = (began && (self.previewed != self.points.len() || !self.live_fit) && self.draws_path() && !self.smoothing)
-            .then(|| Action::Preview("path.freehand".into(), self.freehand_params(cx, false)));
+        // Drags past the last preview are in the stroke kept, too, with Live curve fitting off the
+        // stroke kept is fitted, and a stroke that redraws a path redraws it (`drawing_params`).
+        let stale =
+            (began && (self.previewed != self.points.len() || !self.live_fit || self.redraw.is_some()) && self.draws_path() && !self.smoothing)
+                .then(|| Action::Preview("path.freehand".into(), self.freehand_params(cx, false)));
         self.snap.clear();
         self.active = false;
         self.near_start = false;
@@ -1912,7 +1941,7 @@ impl Tool for GestureTool {
         // release smooths.
         if (self.id == "smooth" || self.smoothing)
             && has_selected_smooth_path(cx)
-            && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
+            && let Some(path) = self.smooth_band(reach(cx, SMOOTH_RADIUS))
         {
             o.push(Overlay::SharedPath { path, color: FEEDBACK, width: 1.0, dash: Some(0.0) });
         }
@@ -1945,7 +1974,7 @@ impl Tool for GestureTool {
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
             let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
-            area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
+            area.step(&self.points, &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
             o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0, dash: None }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
@@ -1953,9 +1982,9 @@ impl Tool for GestureTool {
             self.area.set(Some(area));
         } else if size_varies {
             // With Size on a mode that follows the pen, each step of the drag shows as wide as the
-            // tip the pen gives at its ends. A long drag's steps are kept from call to call
-            // ([`LinePreview::segments`]).
-            let width_of = |j: usize| ((self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom) as f32;
+            // tip the pen gives halfway along it, as `path.eraseRegion` reads it. A long drag's
+            // steps are kept from call to call ([`LinePreview::segments`]).
+            let width_of = |j: usize| (self.tip_between(j)[2] * cx.zoom) as f32;
             if self.points.len() > line::PIECE_SEGMENTS + 1 {
                 let mut kept = self.line.take().unwrap_or_default();
                 for (j, path) in kept.segments(&self.points).into_iter().enumerate() {
