@@ -22,6 +22,7 @@
 	Quit VectorCraft	Slut VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Slip illustration
+@id	language.name	Dansk
 @msg	{key} must be [x, y] with finite coordinates	{key} skal være [x, y] med endelige koordinater
 @msg	ids must contain 1–10000 object ids	ids skal indeholde 1–10000 objekt-id’er
 
@@ -412,6 +413,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en gruppes udfyldning eller streg tegner intet
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektets net er ufuldstændigt eller indeholder en værdi, der ikke er et tal
 @msg	give one <filter> element	angiv ét <filter>-element
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementet skal have et id, filterets navn
 @msg	an SVG filter's id is at most {MAX_NAME} characters	et SVG-filters id er højst {MAX_NAME} tegn
@@ -554,11 +556,19 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	module is {_1} bytes (limit {_2})	modulet fylder {_1} byte (grænse {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kræver godkendelse: det beder om {0}, som brugeren tildeler, når det installeres for sig selv
 @msg	not JSON: {e}	ikke JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ikke en WebAssembly-binærfil (headeren \0asm mangler)
+@msg	not a WebAssembly binary (missing \\0asm header)	ikke en WebAssembly-binærfil (headeren \\0asm mangler)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} parametre
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} resultater
 @msg	parameter `{k}`: {what}	parameteren `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt
 @msg	the module must export its linear memory as `memory`	modulet skal eksportere sin lineære hukommelse som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulet skal eksportere `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulet har mere end én brugerdefineret sektion `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	hukommelsesbudget (modulets indledende hukommelse er {initial} byte, grænse {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i den brugerdefinerede sektion `{MANIFEST_SECTION}` skal angive `abi` som {ABI_VERSION}, den ABI-version, denne vært implementerer
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (modulet definerer {count} tabeller, den største med {largest} elementer; grænse {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} elementer)
+@msg	the module's table section could not be read	modulets tabelsektion kunne ikke læses
 @msg	the objects to change are no longer in the document	de objekter, der skal ændres, er ikke længere i dokumentet
 @msg	the runtime panicked	runtime-miljøet gik i panik
 @msg	unexpected host trap	uventet trap i værten
@@ -586,6 +596,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` og `maxItems` skal være 0-{MAX_LIST}, `maxItems` mindst 1, og standardværdien skal have så mange
 @msg	`name` must be a string	`name` skal være en streng
 @msg	`opacity` must be a number	`opacity` skal være et tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` skal være et tal fra 0 til 100
+@msg	`opacity` must be true or false	`opacity` skal være true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tegn i tekst har ingen egen opacitet: tilføj en udfyldning eller kontur med Tilføj ny udfyldning eller Tilføj ny kontur i panelet Udseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	et objekt, der er markeret i en symbolforekomst, har ingen egen opacitet for udfyldning eller kontur
+@msg	no target has that fill or stroke to take the opacity	intet mål har den udfyldning eller kontur, der kan modtage opaciteten
 @msg	`type` must be "path" or "compound"	`type` skal være "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` skal være 1-{MAX_UNIT} tegn, der kan udskrives
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` angiver 1 til {MAX_CONDITION_VALUES} værdier for `{other}`
@@ -629,6 +644,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kræver et gradientstop, der er knyttet til en spotfarveprøve
 @msg	the output	outputtet
 @msg	the path has no anchor points	kurven har ingen ankerpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammensatte kurve {id} har et skjult, låst eller hjælpelinjemedlem, så dens medlemmer kan ikke erstattes
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	den sammensatte kurve {id} har et medlem, der ikke er en kurve, så dens medlemmer kan ikke erstattes
 @msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	et tal >= {_1}
@@ -1140,6 +1157,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`dataBase64` is larger than the module limit	`dataBase64` er større end modulgrænsen
 @msg	`dataBase64` is not valid base64	`dataBase64` er ikke gyldig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan ikke kombineres med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan ikke kombineres med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan ikke kombineres med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` og `childLimit` opdeler oversigten: angiv `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` er et designnavn eller null for almindelige søjler
 @msg	`design` is a design name, or null for the default marker	`design` er et designnavn eller null for standardmarkøren
@@ -3083,6 +3102,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Artboards	Tegneflader
 	Convert to Artboards	Konvertér til tegneflader
 	Rearrange All Artboards…	Omarrangér alle tegneflader…
+	Rearrange…	Omarrangér…
+	Selected Artboards: {n}	Markerede tegneflader: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik på lærredet for at placere tegnefladerne (Esc annullerer)
 	Fit to Artwork Bounds	Tilpas til grafikkens grænser
 	Fit to Selected Art	Tilpas til valgt grafik
 	Graph	Diagram
@@ -3234,6 +3256,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Fill & Stroke	Fyld og streg
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
+	Show Opacity	Vis opacitet
 	Stroke Color	Stregfarve
 	Fill Gradient	Fyldgradient
 	Stroke Gradient	Streggradient
@@ -6259,6 +6282,12 @@ theme	Appearance	Udseende
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	opløsning ikke tilgængelig
+	estimated memory {memory}	anslået hukommelse {memory}
+	memory unavailable	hukommelse ikke tilgængelig
+	Unknown format	Ukendt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -6706,6 +6735,7 @@ theme	Appearance	Udseende
 	Data Recovery	Datgendannelse
 	Default Language	Standardsprog
 	Disable Auto Add/Delete	Deaktivér automatisk tilføjelse/sletning
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete fjerner ankerpunkter og holder stier samlet
 	Interpolate Control Points When Moving Anchors	Interpolér retningshåndtag ved flytning af ankerpunkter
 	Display All Blacks Accurately	Vis alle sorte nøjagtigt
 	Display All Blacks as Rich Black	Vis alle sorte som rich black
@@ -7266,6 +7296,7 @@ font-technology	Variable	Variable
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Når du holder en tast nede, køres værktøjet eller kommandoen i dens Hold-kolonne i Tastaturgenveje; et kort tryk kører dens sædvanlige genvej.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hvor mange sekunder en tast skal holdes nede, før dens holdegenvej køres i stedet for dens sædvanlige genvej.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete fjerner de markerede ankerpunkter og tilpasser kurven omkring hvert af dem i stedet for at åbne stien der.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.

@@ -533,6 +533,102 @@ fn rearrange_that_moves_no_artboard_records_no_undo_step() {
     assert_eq!(history(&s), before);
 }
 
+/// Rearrange with `indices` lays out only those artboards, in document order whatever order they
+/// are listed in, with the grid's top-left at `at`: their art and guides go along, and the other
+/// artboards, their art and their guides stay where they are, all in one undo step.
+#[test]
+fn rearrange_lays_out_only_the_listed_artboards() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 4}));
+    let before = boards(&s);
+    let art: Vec<NodeId> = before
+        .iter()
+        .map(|r| {
+            NodeId(
+                s.execute("shape.rectangle", &json!({"x": r.x0 + 10.0, "y": r.y0 + 10.0, "width": 10, "height": 10})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            )
+        })
+        .collect();
+    for i in [0, 1] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": before[i].x0 + 5.0, "artboard": i})).unwrap();
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"indices": [3, 1], "layout": "row", "spacing": 10, "at": [500, 400]});
+    let r = s.execute("artboard.rearrange", &p).unwrap();
+    assert_eq!(r, json!({"artboards": 4, "indices": [1, 3], "moved": 2, "rows": 1, "columns": 2}));
+    let after = boards(&s);
+    assert_eq!((after[0], after[2]), (before[0], before[2]), "the artboards not listed stay");
+    assert_eq!((after[1], after[3]), (Rect::new(500.0, 400.0, 600.0, 450.0), Rect::new(610.0, 400.0, 710.0, 450.0)));
+    let d = &s.doc().unwrap().doc;
+    for (id, r) in art.iter().zip(&after) {
+        let b = d.node(*id).unwrap().geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0), (r.x0 + 10.0, r.y0 + 10.0), "the art is on its artboard");
+    }
+    let guides: Vec<f64> = d.ruler_guides().iter().map(|g| g.pos).collect();
+    assert_eq!(guides, [before[0].x0 + 5.0, 505.0]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(boards(&s), before);
+}
+
+/// Without `at`, the grid of the listed artboards starts at the first one's top-left; one listed
+/// artboard is laid out alone; a listed locked artboard stays and keeps its cell; when every listed
+/// artboard is locked, nothing moves, no undo step is recorded and `moved` is 0.
+#[test]
+fn rearrange_of_listed_artboards_starts_at_the_first_and_keeps_locked_ones() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 4, "artboardLayout": {"layout": "row", "spacing": 20}}));
+    let before = boards(&s);
+    // Artboards 1 and 3 in one column, from artboard 1's corner.
+    let r = s.execute("artboard.rearrange", &json!({"indices": [1, 3], "layout": "column", "spacing": 10})).unwrap();
+    assert_eq!(r["moved"], 1);
+    let after = boards(&s);
+    assert_eq!(after[1], before[1]);
+    assert_eq!(after[3], Rect::new(before[1].x0, before[1].y1 + 10.0, before[1].x1, before[1].y1 + 60.0));
+    // One artboard goes to `at`.
+    s.execute("artboard.rearrange", &json!({"indices": [2], "at": [-300, -200]})).unwrap();
+    assert_eq!(boards(&s)[2], Rect::new(-300.0, -200.0, -200.0, -150.0));
+    // Artboard 0 locked keeps its place and its cell: artboard 2 goes to the second cell from 0's.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let r = s.execute("artboard.rearrange", &json!({"indices": [0, 2], "layout": "row", "spacing": 5, "at": [1000, 0]})).unwrap();
+    assert_eq!(r["moved"], 1);
+    assert_eq!((boards(&s)[0], boards(&s)[2]), (before[0], Rect::new(1105.0, 0.0, 1205.0, 50.0)));
+    // Every listed artboard locked: nothing moves.
+    let placed = boards(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("artboard.rearrange", &json!({"indices": [0], "at": [3000, 3000]})).unwrap();
+    assert_eq!(r, json!({"artboards": 4, "indices": [0], "moved": 0, "rows": 1, "columns": 1}));
+    assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), (placed, undo));
+}
+
+/// Rearrange refuses `indices` that are not a non-empty list of artboards, and an `at` that is not
+/// [x, y], before anything moves, and leaves the document as it was when `at` would put an
+/// artboard past the canvas; a listed index given twice counts once.
+#[test]
+fn rearrange_refuses_bad_indices_and_at() {
+    let mut s = new_doc(json!({"width": 100, "height": 50, "artboards": 3}));
+    let before = (boards(&s), s.doc().unwrap().history.undo.len());
+    for (p, msg) in [
+        (json!({"indices": []}), "invalid parameters for `artboard.rearrange`: `indices` must be a non-empty list of artboard indices"),
+        (json!({"indices": 1}), "invalid parameters for `artboard.rearrange`: `indices` must be a list of artboard indices"),
+        (json!({"indices": [1.5]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": [-1]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": ["1"]}), "invalid parameters for `artboard.rearrange`: `indices` must contain whole numbers"),
+        (json!({"indices": [0, 3]}), "no such artboard"),
+        (json!({"indices": [0, 1], "at": [1]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"indices": [0, 1], "at": "0,0"}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"at": [0, "1"]}), "invalid parameters for `artboard.rearrange`: `at` must be [x, y]"),
+        (json!({"indices": [0], "at": [1e20, 0]}), "result would exceed the canvas (coordinates out of range)"),
+        (json!({"at": [0, -4.000001e6]}), "result would exceed the canvas (coordinates out of range)"),
+    ] {
+        let err = s.execute("artboard.rearrange", &p).unwrap_err().to_string();
+        assert_eq!(err, msg, "{p}");
+        assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), before, "{p}");
+    }
+    let r = s.execute("artboard.rearrange", &json!({"indices": [2, 2], "at": [0, 500]})).unwrap();
+    assert_eq!((r["indices"].clone(), boards(&s)[2]), (json!([2]), Rect::new(0.0, 500.0, 100.0, 550.0)));
+}
+
 /// A session whose New Document profiles are in a fresh folder for test `name` (not made yet).
 fn with_profiles(name: &str) -> (Session, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("vc-newdoc-profiles-{name}-{}", std::process::id()));

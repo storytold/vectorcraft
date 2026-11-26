@@ -2,6 +2,7 @@
 //! space (the page's first operator maps it onto PostScript's y-up space). Mirrors the PDF
 //! writer's walk, without transparency.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use vectorcraft_doc::{
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
+use crate::print::fonts::{FontJob, UsedGlyphs, font_name};
 use crate::ps::{self, clip_op, fill_op, push_nums, push_path};
 use crate::{EpsOptions, Level, Overprint};
 
@@ -149,6 +151,8 @@ pub(crate) struct Page {
     pub body: String,
     pub custom: Vec<(String, [f32; 4])>,
     pub warnings: Vec<String>,
+    /// The glyphs shown through the print job's fonts ([`Scene::with_fonts`]).
+    pub fonts: UsedGlyphs,
 }
 
 /// The colour spaces process colours are written in.
@@ -213,6 +217,13 @@ type RawStops = Vec<(f32, Vec<f32>)>;
 enum Ink {
     Process(Space, [f32; 4]),
     Spot { space: usize, tint: f32 },
+}
+
+/// One drawing of an overprinting colorized image: the name of the color space it is drawn in
+/// and the amount of each of that space's inks ([`Scene::overprint_passes`]).
+struct InkPass {
+    space: String,
+    values: Vec<f32>,
 }
 
 fn unit(v: f32) -> f32 {
@@ -287,6 +298,14 @@ pub(crate) struct Scene<'a> {
     /// The gradient being painted overprints on a plate: where it is paper white it puts none of
     /// the plate's ink down, and the plate below it is left as it is ([`Self::inked_spans`]).
     keep_below: bool,
+    /// The print job's fonts: type in a solid fill is shown through them (`None`: drawn as
+    /// outlines).
+    fonts: Option<&'a RefCell<FontJob>>,
+    /// The glyphs shown through `fonts`.
+    used: UsedGlyphs,
+    /// The glyphs `used` gained, in the order it gained them: an object left out for the page
+    /// limit takes its own back out of `used` ([`Self::forget_glyphs`]).
+    used_order: Vec<(usize, u32)>,
 }
 
 impl<'a> Scene<'a> {
@@ -317,7 +336,16 @@ impl<'a> Scene<'a> {
             nest: 0,
             plate: false,
             keep_below: false,
+            fonts: None,
+            used: UsedGlyphs::new(),
+            used_order: vec![],
         }
+    }
+
+    /// This scene showing type through the print job's fonts `fonts`.
+    pub fn with_fonts(mut self, fonts: Option<&'a RefCell<FontJob>>) -> Self {
+        self.fonts = fonts;
+        self
     }
 
     /// This scene drawing a separation's plate when `plate` is true: an overprinting gradient
@@ -400,7 +428,7 @@ impl<'a> Scene<'a> {
             .filter(|(n, ..)| n != vectorcraft_color::swatch::REGISTRATION)
             .map(|(_, colorant, cmyk)| (colorant.clone(), *cmyk))
             .collect();
-        Page { setup: self.setup, body: self.body, custom, warnings: self.warnings }
+        Page { setup: self.setup, body: self.body, custom, warnings: self.warnings, fonts: self.used }
     }
 
     fn warn(&mut self, w: &str) {
@@ -544,7 +572,7 @@ impl<'a> Scene<'a> {
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
+        let (was, placed, codes, glyphs) = (self.body.len(), self.placements.len(), self.codes.len(), self.used_order.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -568,8 +596,23 @@ impl<'a> Scene<'a> {
                 let im = &*shown;
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
+                    // On a plate, an overprinting image whose color puts none of the plate's ink
+                    // down is drawn as nothing, as such a solid color is ([`Self::on_plate`]).
+                    Some(p)
+                        if self.plate
+                            && self.o.overprint == Overprint::Preserve
+                            && n.colorize_overprints()
+                            && vectorcraft_doc::overprint::is_white(p) => {}
+                    // Off a plate, a white process color knocks out with Discard White Overprint
+                    // (a plate's colors come from the separator, which has applied it already); a
+                    // spot ink with a white color still overprints, as it is written as that ink.
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
-                        self.colorized_image(&im.key, blob, im.width, im.height, im.xf, p);
+                        let discarded = !self.plate
+                            && vectorcraft_doc::overprint::is_white(p)
+                            && vectorcraft_doc::overprint::DiscardWhite::of(self.doc).discards(p);
+                        let on = self.overprint_on(n.colorize_overprints() && !discarded);
+                        self.colorized_image(im, blob, p, on);
+                        self.overprint_off(on);
                     }
                     _ => self.image(&im.key, blob, im.width, im.height, im.xf),
                 }
@@ -605,7 +648,20 @@ impl<'a> Scene<'a> {
             self.body.truncate(was);
             self.unplace(placed);
             self.forget_codes(codes);
+            self.forget_glyphs(glyphs);
             self.warn(TOO_LARGE);
+        }
+    }
+
+    /// Take the glyphs `used` gained after its first `n` back out of it.
+    fn forget_glyphs(&mut self, n: usize) {
+        for (face, gid) in self.used_order.drain(n.min(self.used_order.len())..) {
+            if let Some(gids) = self.used.get_mut(&face) {
+                gids.remove(&gid);
+                if gids.is_empty() {
+                    self.used.remove(&face);
+                }
+            }
         }
     }
 
@@ -901,8 +957,18 @@ impl<'a> Scene<'a> {
         let _ = writeln!(self.body, "{} cm", ps::matrix(t.xf));
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
+            // With the job's fonts, a run in a solid fill shows its glyphs through them; `art`
+            // holds the outlines of those it draws as art.
+            let fonts = if matches!(run.style.fill, Paint::Solid { .. }) { self.fonts } else { None };
+            let mut shown = vec![];
+            let mut art = BezPath::new();
             for g in layout.glyphs.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
+                match fonts.and_then(|f| self.font_of(f, g)) {
+                    Some((face, upem)) => shown.push((face, upem, g)),
+                    None if fonts.is_some() => art.extend(g.outline.iter()),
+                    None => {}
+                }
                 // Colour bitmap glyphs (emoji): their images, which the run's paint doesn't paint.
                 if let Some((image, to_text)) = g.placed_image() {
                     let key = format!("\u{0}glyph\u{0}{}", image.blob.content_key());
@@ -916,11 +982,21 @@ impl<'a> Scene<'a> {
             // Ruby (furigana) glyphs in their base text's run's paint, as the canvas draws them.
             for g in layout.ruby.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
+                if fonts.is_some() {
+                    art.extend(g.outline.iter());
+                }
             }
             if bp.elements().is_empty() {
                 continue;
             }
-            self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+            if fonts.is_none() {
+                self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+            } else {
+                self.show(&shown, &run.style.fill, run.style.overprint_fill);
+                if !art.elements().is_empty() {
+                    self.fill(&art, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+                }
+            }
             if run.style.has_stroke() {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
                 self.stroke(&bp, FillRule::NonZero, &run.style.stroke_layer(), layout.bounds);
@@ -946,6 +1022,52 @@ impl<'a> Scene<'a> {
                 _ => {}
             }
         }
+    }
+
+    /// The job's index of the face of glyph `g` and its units per em when `g` is shown through
+    /// the job's fonts `fonts` (recorded in `used`); `None` when it is drawn as an outline: a glyph
+    /// with no outline, a color glyph, one bent along a path, or one its face's fonts don't show.
+    fn font_of(&mut self, fonts: &RefCell<FontJob>, g: &vectorcraft_text::PositionedGlyph) -> Option<(usize, f64)> {
+        if g.outline.elements().is_empty() || g.bend.is_some() || g.image.is_some() || g.colour.is_some() || !invertible(g.xf) {
+            return None;
+        }
+        let (face, upem) = fonts.borrow_mut().glyph(g.font_id, g.gid, g.outline.elements().len())?;
+        if self.used.entry(face).or_default().insert(g.gid) {
+            self.used_order.push((face, g.gid));
+        }
+        Some((face, upem))
+    }
+
+    /// Show `glyphs` (the job's index of each one's face, its units per em, the glyph) through the
+    /// job's fonts in solid paint `p`: each glyph at its own place, through a font made for its
+    /// size and slant.
+    fn show(&mut self, glyphs: &[(usize, f64, &vectorcraft_text::PositionedGlyph)], p: &Paint, overprint: bool) {
+        let Paint::Solid { color, swatch, tint } = p else { return };
+        if glyphs.is_empty() {
+            return;
+        }
+        let on = self.overprint_on(overprint);
+        let ink = self.solid(color, swatch.as_deref(), *tint);
+        self.set_ink(ink);
+        let mut current: Option<(String, [f64; 4])> = None;
+        for (face, upem, g) in glyphs {
+            // Font units (y up) → text space: the glyph's own map after the flip to y down.
+            let [a, b, c, d, e, f] = (g.xf * Affine::scale_non_uniform(*upem, -*upem)).as_coeffs();
+            let name = font_name(*face, g.gid >> 8);
+            let key = (name, [a, b, c, d]);
+            if current.as_ref() != Some(&key) {
+                let _ = write!(self.body, "/{} findfont [", key.0);
+                for v in [a, b, c, d] {
+                    ps::push_num_places(&mut self.body, v, 6);
+                    self.body.push(' ');
+                }
+                self.line("0 0] makefont setfont");
+                current = Some(key);
+            }
+            push_nums(&mut self.body, &[e, f]);
+            let _ = writeln!(self.body, "moveto <{:02x}> show", g.gid & 0xff);
+        }
+        self.overprint_off(on);
     }
 
     // ---------- gradients ----------
@@ -1775,14 +1897,90 @@ impl<'a> Scene<'a> {
         i
     }
 
-    /// Gray coverage in the selected process or Separation ink. Binary coverage is a stencil;
-    /// continuous coverage leaves zero pixels untouched at Level 3 and writes them as paper at Level 2.
-    fn colorized_image(&mut self, key: &str, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, paint: &Paint) {
-        let place = xf * Affine::scale_non_uniform(f64::from(width.max(1)), f64::from(height.max(1)));
+    /// Image `im` (its pixels `blob`) as gray coverage in the selected process or Separation ink.
+    /// Binary coverage is a stencil; continuous coverage leaves zero pixels untouched at Level 3
+    /// and writes them as paper at Level 2. With `overprint` a CMYK or gray color is written in only the
+    /// process inks it puts down ([`Self::overprint_passes`]), since a zero sample in an image
+    /// replaces the ink below it.
+    fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, blob: Option<&ImageBlob>, paint: &Paint, overprint: bool) {
+        let place = im.xf * Affine::scale_non_uniform(f64::from(im.width.max(1)), f64::from(im.height.max(1)));
         if !invertible(place) {
             return;
         }
-        let cache = (key.to_string(), format!("{paint:?}"));
+        match overprint.then(|| self.overprint_passes(paint)).flatten() {
+            Some(passes) => {
+                // A pass turned away (at the page limit) takes back the passes before it, so the
+                // image is never written with some of its inks.
+                let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
+                for pass in &passes {
+                    let before = self.placements.len();
+                    self.colorized_pass(&im.key, blob, place, paint, Some(pass));
+                    if self.placements.len() == before {
+                        self.body.truncate(was);
+                        self.unplace(placed);
+                        self.forget_codes(codes);
+                        return;
+                    }
+                }
+            }
+            None => self.colorized_pass(&im.key, blob, place, paint, None),
+        }
+    }
+
+    /// The color spaces an overprinting colorized image of `paint` is drawn in, each with the
+    /// amounts of its inks, when `paint` is a CMYK or gray process color (gray is black ink): at
+    /// Level 3 one DeviceN space of the process inks it puts down, at Level 2 a Separation space
+    /// for each of them. No pass when it puts no ink down. `None` for another paint, which is drawn
+    /// as it is without overprinting.
+    fn overprint_passes(&mut self, paint: &Paint) -> Option<Vec<InkPass>> {
+        let Paint::Solid { color, swatch, tint } = paint else { return None };
+        let c = match self.solid(color, swatch.as_deref(), *tint) {
+            Ink::Process(Space::Cmyk, c) => c,
+            // PostScript's gray is lightness.
+            Ink::Process(Space::Gray, [lightness, ..]) => [0.0, 0.0, 0.0, unit(1.0 - lightness)],
+            _ => return None,
+        };
+        let process: Vec<usize> = (0..4).filter(|&i| c[i] > 0.0).collect();
+        if process.is_empty() {
+            return Some(vec![]);
+        }
+        if self.o.level == Level::Three {
+            let GradientSpace::Inks(space, _) = self.device_n_space(&process, &[])? else { return None };
+            return Some(vec![InkPass { space, values: process.iter().map(|&i| c[i]).collect() }]);
+        }
+        Some(process.iter().map(|&i| InkPass { space: self.process_separation(i), values: vec![c[i]] }).collect())
+    }
+
+    /// The name of a Separation color space of process ink `i` (an index into CMYK) alone,
+    /// defined in the setup the first time.
+    fn process_separation(&mut self, i: usize) -> String {
+        const SEPARATIONS: [&str; 4] = [
+            "/Cyan /DeviceCMYK {0 0 0}",
+            "/Magenta /DeviceCMYK {0 exch 0 0}",
+            "/Yellow /DeviceCMYK {0 0 3 -1 roll 0}",
+            "/Black /DeviceCMYK {0 0 0 4 -1 roll}",
+        ];
+        let def = format!("[/Separation {}]", SEPARATIONS[i.min(3)]);
+        let i = match self.device_n.iter().position(|d| *d == def) {
+            Some(i) => i,
+            None => {
+                let i = self.device_n.len();
+                let _ = writeln!(self.setup, "/VCdn{i} {def} def");
+                self.device_n.push(def);
+                i
+            }
+        };
+        format!("VCdn{i}")
+    }
+
+    /// One drawing of a colorized image on the unit square mapped by `place`: in `paint`, or with
+    /// `pass` in that pass's inks alone ([`Self::overprint_passes`]).
+    fn colorized_pass(&mut self, key: &str, blob: Option<&ImageBlob>, place: Affine, paint: &Paint, pass: Option<&InkPass>) {
+        let mut look = format!("{paint:?}");
+        if let Some(pass) = pass {
+            let _ = write!(look, "\u{0}{} {:?}", pass.space, pass.values);
+        }
+        let cache = (key.to_string(), look);
         let encoded = match self.colorized_images.get(&cache) {
             Some(e) => *e,
             None => {
@@ -1798,7 +1996,7 @@ impl<'a> Scene<'a> {
                 {
                     self.encodes += 1;
                 }
-                let code = self.encode_colorized(blob, paint);
+                let code = self.encode_colorized(blob, paint, pass);
                 // An image that can't be placed isn't kept.
                 if let Some(c) = &code
                     && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
@@ -1817,7 +2015,8 @@ impl<'a> Scene<'a> {
         }
     }
 
-    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint) -> Option<ImageCode> {
+    /// The operators and data of a colorized image of `paint`, or with `pass` of that pass's inks.
+    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint, pass: Option<&InkPass>) -> Option<ImageCode> {
         let Some((w, h, coverage)) = blob.and_then(ImageBlob::coverage) else {
             self.warn(UNDECODED);
             return None;
@@ -1837,12 +2036,19 @@ impl<'a> Scene<'a> {
         if !binary && clear && !keyed {
             self.warn(IMAGE_ALPHA_L2);
         }
-        // Zero tint is uncommon for covered spot pixels; process uses the same rare key as
-        // ordinary images. Nudge a covered collision so only clear pixels match the mask.
+        // Zero tint is uncommon for covered spot pixels (and those of a pass's inks); process
+        // uses the same rare key as ordinary images. Nudge a covered collision so only clear
+        // pixels match the mask.
         let key = match ink {
+            _ if pass.is_some() => [0, 0, 0, 0],
             Ink::Spot { .. } => [0, 0, 0, 0],
             Ink::Process(Space::Gray, ..) => [0, 0, 0, 0],
             Ink::Process(..) => [255, 0, 255, 0],
+        };
+        let n = match (pass, ink) {
+            (Some(pass), _) => pass.values.len(),
+            (None, Ink::Spot { .. }) => 1,
+            (None, Ink::Process(space, ..)) => space.n(),
         };
         let mut data = Vec::new();
         if binary {
@@ -1858,14 +2064,21 @@ impl<'a> Scene<'a> {
         } else {
             for &v in &coverage {
                 if v == 0 && keyed {
-                    let n = match ink {
-                        Ink::Spot { .. } => 1,
-                        Ink::Process(space, ..) => space.n(),
-                    };
                     data.extend(key.iter().take(n));
                     continue;
                 }
                 let a = f32::from(v) / 255.0;
+                if let Some(pass) = pass {
+                    let mut samples: Vec<u8> = pass.values.iter().map(|&v| (255.0 * v * a).round() as u8).collect();
+                    if keyed
+                        && samples.iter().all(|&s| s == 0)
+                        && let Some(first) = samples.first_mut()
+                    {
+                        *first = 1;
+                    }
+                    data.extend(samples);
+                    continue;
+                }
                 match ink {
                     Ink::Spot { tint, .. } => {
                         let mut sample = (255.0 * tint * a).round() as u8;
@@ -1899,7 +2112,17 @@ impl<'a> Scene<'a> {
             }
         };
         let mut prelude = String::new();
-        if binary {
+        if let Some(pass) = pass {
+            let _ = write!(prelude, "{} setcolorspace", pass.space);
+            if binary {
+                // imagemask takes its current ink from the graphics state.
+                for v in &pass.values {
+                    let _ = write!(prelude, " {}", ps::num(f64::from(*v)));
+                }
+                prelude.push_str(" setcolor");
+            }
+            prelude.push('\n');
+        } else if binary {
             // imagemask takes its current ink from the graphics state.
             prelude.push_str(&self.ink_code(ink));
         } else {
@@ -1912,10 +2135,6 @@ impl<'a> Scene<'a> {
                 }
             }
         }
-        let n = match ink {
-            Ink::Spot { .. } => 1,
-            Ink::Process(space, ..) => space.n(),
-        };
         let decode = if binary { "1 0".to_string() } else { "0 1 ".repeat(n).trim_end().to_string() };
         let mut dict = format!(
             "<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent {} /Decode [{decode}] /ImageMatrix [{w} 0 0 {h} 0 0]",

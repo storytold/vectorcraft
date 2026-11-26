@@ -140,7 +140,7 @@ impl Session {
 
     /// Whether `name` is a built-in preset's, "Custom" (changed settings, as the panel and a traced
     /// object show them), or a saved preset's other than the one at `except`.
-    fn trace_preset_taken(&self, name: &str, except: Option<usize>) -> bool {
+    pub fn trace_preset_taken(&self, name: &str, except: Option<usize>) -> bool {
         tr::preset(name).is_some() || name.trim().eq_ignore_ascii_case("Custom") || self.trace_preset_index(name).is_some_and(|i| Some(i) != except)
     }
 

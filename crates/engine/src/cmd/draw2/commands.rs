@@ -1,7 +1,7 @@
 use super::anchors::{convert_anchor, curvature, curvature_edit, remove_anchor, remove_anchors, reshape_segment};
 use super::cut::{erase_region, erase_segments, knife, split};
 use super::freehand::{blob, freehand};
-use super::quickpen::quick_pen;
+use super::quickpen::{quick_pen, quick_pen_length};
 use super::smooth::{join_scrub, smooth_region};
 use super::{CommandSpec, cmd, has_anchors, has_doc, has_selection};
 
@@ -42,6 +42,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{start?: [x, y] (a new path starts there), id? (or: draw on this path), subpath?: index (0), keep?: count (default: all its points; the points after the first `keep` are replaced), pieces?: [{x, y, action?: \"line\" (default)|\"continuousArc\"|\"sharpArc\", turn?: 1..359 degrees (180), flip?: bool}] (at most 10000), closed?: bool} draw a path of straight lines and circular arcs as the Quick Pen tool does, each piece from the path's last point to x, y: a line; a continuous arc, which leaves its start in the direction the path arrives in (with no direction, the first piece of a path, it is drawn as a sharp-corner arc; with its end straight ahead or straight behind, as a line); a sharp-corner arc, which turns through `turn` degrees and bulges to the left of the direction drawn (with flip, to the right). A piece that ends where the path does adds nothing. closed: a last piece that ends on the first point joins it, otherwise a straight segment closes the path. A new path takes the current paint (a black stroke when it has neither fill nor stroke); the path is selected, as one undo step → {id}. Without id, `start` must be given; with id, the subpath must be open and `start` is refused",
             has_doc,
             quick_pen
+        ),
+        cmd!(
+            "path.quickPenLength",
+            "Quick Pen",
+            [],
+            None,
+            "{id, subpath?: index (0), end?: \"end\" (default)|\"start\", length: pt} make the line or arc at that end of the open subpath `length` long, as dragging the Quick Pen tool's length handle does: a line keeps its other point and its direction; an arc (the segments before the end that lie on one circle and turn the same way) keeps its other point, its circle and the way it turns, with a sweep of at most 359°. length runs from 0.001 to 1000000 pt for a line, and to 359° of the circle for an arc. A length the piece already has changes nothing; otherwise the path is selected, as one undo step → {id, kind: \"line\"|\"arc\", length}. An end that is neither straight nor a circular arc, a closed subpath, a locked or hidden path, a length outside the range and a result that would reach past the canvas are errors",
+            has_doc,
+            quick_pen_length
         ),
         cmd!(
             "path.removeAnchor",
@@ -120,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the smoothing), radius?: pt (12; from 0.001 to 1000), fidelity?: pt (2.5; from 0.000078125 to about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom, kept within the range)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side → {ids, before, after}. A radius or fidelity outside its range is refused with an error, and nothing changes",
+            "{points: [[x,y]…] (pen values after x and y are checked as path.freehand checks them and do not change the smoothing), radius?: pt (12; from 0.001 to 1000), fidelity?: pt (2.5; from 0.000078125 to about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom, kept within the range)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side, and leaving a subpath as it is when the result would not be smoother (docs/mcp.md) → {ids, before, after}. A radius or fidelity outside its range is refused with an error, and nothing changes",
             has_selection,
             smooth_region
         ),

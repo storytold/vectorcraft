@@ -55,6 +55,12 @@ pub struct Prefs {
     /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
     /// default), the handles of a moved anchor move with it and the other handles stay.
     pub interpolate_control_points: bool,
+    /// General › Delete Removes Anchor Points and Keeps Paths Joined: the default of the
+    /// `keepJoined` param of `edit.clear` (the Delete and Backspace keys and Edit › Clear). On,
+    /// Clear removes the direct-selected anchors of a path as Remove Anchor Points does, refitting
+    /// the curve around each one, instead of deleting them with their segments. Off (the default),
+    /// Clear opens the path there.
+    pub delete_keeps_paths_joined: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
@@ -479,6 +485,7 @@ impl Default for Prefs {
             corner_radius: 12.0,
             disable_auto_add_delete: false,
             interpolate_control_points: false,
+            delete_keeps_paths_joined: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_tool_cards: false,
