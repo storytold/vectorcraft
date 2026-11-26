@@ -12,8 +12,9 @@ use super::overprint::{AttributesInfo, apply_overprint, edit_counted, overprint_
 use super::path::paths_in;
 use super::{CommandSpec, NodeId, Result, Session, bad, cmd, has_doc, str_param, targets};
 
-/// How many URLs the Attributes panel's recent list keeps.
-const RECENT_URLS: usize = 10;
+/// How many URLs the Attributes panel's recent list keeps: the most its Panel Options lets the
+/// URL menu list.
+pub const RECENT_URLS: usize = 30;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -22,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attributes",
             [],
             None,
-            "{overprintFill?: bool, overprintStroke?: bool (aimed as object.setOverprint's fill and stroke, item? too), showCenter?: bool (the canvas shows the selected object's centre point), imageMap?: \"none\"|\"rectangle\"|\"polygon\", url?: string (\"\" removes it; SVG export links the object), note?: string, ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} set the Attributes panel's values on ids or the selection, as one undo step; a URL given joins the recent URLs (attributes.info) → {changed: objects}",
+            "{overprintFill?: bool, overprintStroke?: bool (aimed as object.setOverprint's fill and stroke, item? too), showCenter?: bool (the canvas shows the selected object's centre point), imageMap?: \"none\"|\"rectangle\"|\"polygon\", url?: string (\"\" removes it; SVG, PDF and .ai export link the object), note?: string, ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} set the Attributes panel's values on ids or the selection, as one undo step; a URL given joins the recent URLs (attributes.info, newest first, at most 30) → {changed: objects}",
             has_doc,
             set
         ),

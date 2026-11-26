@@ -1,63 +1,122 @@
 use super::*;
 use crate::Services;
+use craft::ui::dialog::PromptChoice;
+use craft::ui::patterns::preferences::{PageSpec, PreferencesModel};
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::prefscmds::PREF_SPECS;
 
-#[test]
-fn geometric_snapping_is_a_saved_smart_guides_preference() {
-    let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    open(&mut a, Some("Smart Guides"));
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Geometric Guides") && text.contains("Snap to Perpendicular") && text.contains("Snap to Tangent"), "{text}");
-    a.ui.dialog.as_mut().unwrap().fields.insert("snapPerpendicular".into(), json!(false));
-    confirm(&mut a).unwrap();
-    assert!(!a.session.prefs.snap_perpendicular && a.session.prefs.snap_tangent);
-    let saved: Prefs = serde_json::from_value(a.ui.engine_prefs.clone()).unwrap();
-    assert!(!saved.snap_perpendicular && saved.snap_tangent);
-    assert!(a.run("view.snapping", json!({})).is_err());
+use crate::theme::Brightness;
+
+fn app() -> VectorcraftApp {
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()))
 }
 
-/// A resting checkbox must have a visible outline in both states and every brightness.
+/// One headless pass of the open window.
+fn frame(a: &mut VectorcraftApp, ctx: &egui::Context) {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(a, ui));
+    out.textures_delta.clear();
+}
+
+/// Reset Preferences asked and answered with `choice`, with the passes the question's host needs.
+fn reset_preferences(a: &mut VectorcraftApp, choice: PromptChoice) {
+    // The question's host answers on the window's context.
+    let ctx = a.ui_ctx.clone().expect("a window context");
+    frame(a, &ctx);
+    ask_reset(a);
+    frame(a, &ctx);
+    answer_reset(a, choice);
+    frame(a, &ctx);
+}
+
+/// Runs `f` over the pages the open window builds from its draft.
+fn with_pages<R>(a: &mut VectorcraftApp, f: impl FnOnce(&[PageSpec<'_>]) -> R) -> R {
+    let mut w = a.prefs.take().expect("Preferences is open");
+    let r = f(&model::Live { app: &mut *a, w: &mut w }.pages());
+    a.prefs = Some(w);
+    r
+}
+
+/// The visible row of `key`: whether it is enabled and its help.
+fn row_state(a: &mut VectorcraftApp, key: &str) -> Option<(bool, Option<String>)> {
+    let tail = format!(".{key}");
+    with_pages(a, |pages| {
+        pages
+            .iter()
+            .flat_map(|p| &p.groups)
+            .flat_map(|g| &g.rows)
+            .find(|r| r.visible && (r.key == key || r.key.ends_with(&tail)))
+            .map(|r| (r.enabled, r.help.map(str::to_string)))
+    })
+}
+
+/// Two values equal, numbers by value so `4` and `4.0` agree.
+fn same(a: &Value, b: &Value) -> bool {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
+    }
+}
+
+fn field(a: &VectorcraftApp, key: &str) -> Value {
+    fields(a).and_then(|f| f.get(key).cloned()).unwrap_or(Value::Null)
+}
+
+/// One row per kind is saved by OK: the model's value conversion reaches `prefs.set` for each.
 #[test]
-fn preference_checkboxes_draw_outlines_without_hover() {
-    for brightness in Brightness::ALL {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        theme::apply(&ctx, brightness);
-        for checked in [false, true] {
-            let mut d = Dialog::new("preferences", json!({"showToolTips": checked}));
-            let raw =
-                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0))), ..Default::default() };
-            let mut out = ctx.run_ui(raw, |ui| bool_row(ui, &mut d, "showToolTips", "Show Tool Tips"));
-            out.textures_delta.clear();
-            let outlined = out.shapes.iter().any(|shape| match &shape.shape {
-                egui::Shape::Rect(r) => r.stroke.width > 0.0 && r.rect.width() <= 24.0 && r.rect.height() <= 24.0,
-                _ => false,
-            });
-            assert!(outlined, "{brightness:?}, checked={checked}: no checkbox outline");
+fn ok_saves_every_row_kind() {
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            vectorcraft_text::set_hyphenation_exceptions("");
         }
     }
+    let _clear = Clear;
+    let rows = [
+        ("marqueeSelection", json!("directional")),
+        ("typedLists", json!(false)),
+        ("recentFontsCount", json!(8)),
+        ("constrainAngle", json!(30.0)),
+        ("keyboardIncrement", json!(4)),
+        ("hyphenationExceptions", json!("typography, hap-pen")),
+        ("guideColor", json!("#ff0000")),
+    ];
+    let mut a = app();
+    open(&mut a, None);
+    for (key, value) in &rows {
+        set_field(&mut a, key, value.clone()).unwrap();
+    }
+    confirm(&mut a).unwrap();
+    assert!(!is_open(&a));
+    let saved = a.session.prefs.to_json();
+    for (key, value) in &rows {
+        let kept = &saved[*key];
+        let ok = kept.as_str().zip(value.as_str()).map_or_else(|| same(kept, value), |(x, y)| x.eq_ignore_ascii_case(y));
+        assert!(ok, "{key}: saved {kept} for {value}");
+    }
+    assert_eq!(a.ui.engine_prefs, saved, "saved with the UI state");
+    assert_eq!(vectorcraft_text::hyphenation_exceptions(), "typography, hap-pen");
+    assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
+    assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
 }
 
-/// User Interface › Canvas Color (#663): White and the three greys paint the canvas around the
-/// artboards; Match User Interface Brightness keeps the theme's.
+/// User Interface › Canvas Color (#663): White and the three greys are the pasteboard; Match User
+/// Interface Brightness leaves the theme's own.
 #[test]
 fn canvas_color_choices_paint_the_pasteboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    let ctx = egui::Context::default();
-    apply_runtime(&mut app, &ctx);
-    let themed = Tokens::get(&ctx).pasteboard;
     for (key, want) in [
-        ("white", egui::Color32::WHITE),
-        ("lightGray", egui::Color32::from_gray(0xc8)),
-        ("mediumGray", egui::Color32::from_gray(0x96)),
-        ("darkGray", egui::Color32::from_gray(0x5a)),
-        ("matchUi", themed),
+        ("white", Some(egui::Color32::WHITE)),
+        ("lightGray", Some(egui::Color32::from_gray(0xc8))),
+        ("mediumGray", Some(egui::Color32::from_gray(0x96))),
+        ("darkGray", Some(egui::Color32::from_gray(0x5a))),
+        ("matchUi", None),
     ] {
-        app.run("prefs.set", serde_json::json!({"key": "canvasColor", "value": key})).unwrap();
-        apply_runtime(&mut app, &ctx);
-        assert_eq!(Tokens::get(&ctx).pasteboard, want, "{key}");
+        let mut a = app();
+        open(&mut a, None);
+        set_field(&mut a, "canvasColor", json!(key)).unwrap();
+        confirm(&mut a).unwrap();
+        assert_eq!(canvas_color(&a.session.prefs.canvas_color), want, "{key}");
     }
-    assert!(app.run("prefs.set", serde_json::json!({"key": "canvasColor", "value": "pink"})).is_err());
+    assert!(app().run("prefs.set", json!({"key": "canvasColor", "value": "pink"})).is_err());
 }
 
 /// #4837: the saved Color Scheme, Accent and Canvas Color are the ones the first frame shows, not
@@ -68,114 +127,67 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     for (key, value) in [("uiColorScheme", "classic"), ("uiAccent", "pink"), ("canvasColor", "white")] {
         app.run("prefs.set", json!({"key": key, "value": value})).unwrap();
     }
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     for _ in 0..2 {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx()));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
-        let (t, classic) = (Tokens::get(&ctx), Tokens::for_scheme(Scheme::Classic, app.ui.brightness, Accent::Pink));
-        assert_eq!((t.accent, t.app_bar, t.panel), (classic.accent, classic.app_bar, classic.panel));
-        assert_eq!(t.pasteboard, egui::Color32::WHITE);
-        assert_eq!(ctx.global_style().visuals.hyperlink_color, classic.accent);
+        let shown = crate::theme::root_theme(&app.session.prefs);
+        assert_ne!(shown.0, crate::theme::root_theme(&Prefs::default()).0, "the saved scheme");
+        // Classic keeps its own accent whatever accent is saved, as production's Classic tokens did.
+        let classic = Prefs { ui_color_scheme: "classic".into(), ui_brightness: app.session.prefs.ui_brightness.clone(), ..Prefs::default() };
+        let want = crate::theme::root_theme(&classic);
+        assert!(shown.0 == want.0 && shown.2 == want.2, "the saved accent");
+        assert_eq!(canvas_color(&app.session.prefs.canvas_color), Some(egui::Color32::WHITE));
     }
 }
 
-/// A Render Threads change made after the preferences were applied, and before the first UI pass
-/// applies them again, still restarts the canvas renderer.
+/// A Render Threads change made after the preferences were applied restarts the canvas renderer at
+/// the next push.
 #[test]
-fn reapply_restarts_the_renderer_after_a_render_threads_change() {
+fn a_render_threads_change_restarts_the_renderer_at_the_next_push() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     apply_runtime(&mut app, &ctx);
     app.canvas.worker_started = true;
     // The automatic count as an explicit value: the process-wide count other tests read stays the same.
     // `VECTORCRAFT_RENDER_THREADS` can give more than the 64 the preference accepts.
     let threads = vectorcraft_render::default_threads().min(64);
     app.run("prefs.set", json!({"key": "renderThreads", "value": threads})).unwrap();
-    reapply(&mut app, &ctx);
+    apply_runtime(&mut app, &ctx);
     let restarted = !app.canvas.worker_started;
     app.run("prefs.set", json!({"key": "renderThreads", "value": -1})).unwrap();
     assert!(restarted, "the canvas renderer kept its old thread count");
-}
-
-fn app() -> VectorcraftApp {
-    VectorcraftApp::new(Session::new(), Services::default())
 }
 
 #[test]
 fn dialog_ok_applies_prefs_and_ui_fields() {
     let mut a = app();
     open(&mut a, Some("general"));
-    let d = a.ui.dialog.as_mut().unwrap();
-    assert_eq!(d.str("__category"), "General");
-    d.fields.insert("keyboardIncrement".into(), json!(4));
-    d.fields.insert("uiBrightness".into(), json!("light"));
-    d.fields.insert("__smartGuides".into(), json!(false));
+    assert_eq!(page(&a), Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(4)).unwrap();
+    set_field(&mut a, "uiBrightness", json!("light")).unwrap();
+    set_field(&mut a, "__smartGuides", json!(false)).unwrap();
     confirm(&mut a).unwrap();
-    assert!(a.ui.dialog.is_none());
+    assert!(!is_open(&a));
     assert_eq!(a.session.prefs.keyboard_increment, 4.0);
     assert_eq!(a.session.prefs.ui_brightness, "light");
     assert!(!a.ui.view.smart_guides);
     assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(4.0));
 }
 
-/// General › Show Tool Tips: off, a button held under the pointer shows no tool tip; back on,
-/// it does again (#394).
-#[test]
-fn show_tool_tips_off_hides_tool_tips() {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let mut a = app();
-    let ctx = egui::Context::default();
-    let mut time = 0.0;
-    // Come from elsewhere and hover the button for two seconds: did its tool tip show?
-    let mut hover = |a: &mut VectorcraftApp| {
-        let mut shown = vec![];
-        for i in 0..20 {
-            time += 0.1;
-            let events = match i {
-                0 => vec![egui::Event::PointerGone],
-                1 => vec![egui::Event::PointerMoved(egui::pos2(20.0, 12.0))],
-                _ => vec![],
-            };
-            let raw = egui::RawInput {
-                events,
-                time: Some(time),
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0))),
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(raw, |ui| {
-                apply_runtime(a, ui.ctx());
-                ui.button("Button").on_hover_text("The tool tip");
-            });
-            out.textures_delta.clear();
-            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-        }
-        shown.iter().any(|t| t == "The tool tip")
-    };
-    assert!(hover(&mut a), "on by default");
-    a.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    assert!(!hover(&mut a), "off: no tool tip");
-    a.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
-    assert!(hover(&mut a), "on again");
-}
-
 #[test]
 fn dialog_ok_with_invalid_value_keeps_dialog_and_prefs() {
     let mut a = app();
     open(&mut a, None);
-    a.ui.dialog.as_mut().unwrap().fields.insert("anchorSize".into(), json!(42));
+    set_field(&mut a, "anchorSize", json!(42)).unwrap();
     assert!(confirm(&mut a).is_err());
-    assert!(a.ui.dialog.is_some());
+    assert!(is_open(&a));
     assert_eq!(a.session.prefs, Prefs::default());
 }
 
 #[test]
 fn prefs_persist_through_ui_state() {
+    // PLAN: the `AppSettings` round trip (shell-w8 `settings::from_app`) has no signature in the bundle; the UI state is the saved form here.
     let mut a = app();
     a.run("prefs.set", json!({"key": "gridlineEvery", "value": 50})).unwrap();
     snapshot(&mut a);
@@ -184,6 +196,106 @@ fn prefs_persist_through_ui_state() {
     b.ui = serde_json::from_slice::<crate::UiState>(&saved).unwrap().sanitized();
     restore(&mut b);
     assert_eq!(b.session.prefs.gridline_every, 50.0);
+}
+
+/// Guides & Grid › Lock Guides by Default: applied by OK, saved with the UI state and read back as
+/// locked guides. A file without the key leaves guides unlocked.
+#[test]
+fn lock_guides_by_default_shows_applies_and_restores() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    assert_eq!(field(&a, "lockGuidesByDefault"), json!(false));
+    set_field(&mut a, "lockGuidesByDefault", json!(true)).unwrap();
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked());
+    assert_eq!(crate::menus::dynamic_label(&a, "view.guides.lock", ""), "Unlock Guides");
+    assert_eq!(a.ui.engine_prefs["lockGuidesByDefault"], json!(true));
+
+    let saved = serde_json::to_vec(&a.ui).unwrap();
+    let mut b = app();
+    assert!(!b.session.guides_locked());
+    b.ui = serde_json::from_slice::<crate::UiState>(&saved).unwrap().sanitized();
+    restore(&mut b);
+    assert!(b.session.guides_locked());
+
+    let mut older = app();
+    older.ui.engine_prefs = json!({"gridlineEvery": 50});
+    restore(&mut older);
+    assert!(!older.session.guides_locked());
+}
+
+/// OK with the option unchanged keeps the lock from the View menu. OK after turning the option
+/// off unlocks guides.
+#[test]
+fn preferences_ok_changes_the_guide_lock_only_with_the_option() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("view.guides.lock", json!({"locked": true})).unwrap();
+    open(&mut a, Some("Guides & Grid"));
+    confirm(&mut a).unwrap();
+    assert!(a.session.guides_locked(), "the option did not change");
+    a.run("view.guides.lock", json!({"locked": false})).unwrap();
+    a.run("prefs.set", json!({"key": "lockGuidesByDefault", "value": true})).unwrap();
+    assert!(a.session.guides_locked());
+    open(&mut a, Some("Guides & Grid"));
+    set_field(&mut a, "lockGuidesByDefault", Prefs::default().to_json()["lockGuidesByDefault"].clone()).unwrap();
+    confirm(&mut a).unwrap();
+    assert!(!a.session.guides_locked(), "the option went off");
+}
+
+/// Reset Preferences then OK resets the preferences, General included, and leaves the open
+/// document's units, with no undo step in the document.
+#[test]
+fn reset_preferences_then_ok_leaves_the_documents_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert!(is_open(&a), "Reset leaves Preferences open");
+    assert!(same(&field(&a, "keyboardIncrement"), &Prefs::default().to_json()["keyboardIncrement"]), "the draft holds the defaults");
+    assert_eq!(field(&a, "unitsGeneral"), json!("points"));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+    assert_eq!(a.session.prefs.units_general, Prefs::default().units_general);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+}
+
+/// After Reset Preferences, choosing a General unit still sets the document's units on OK, Points
+/// included once another unit was chosen in between. With no document open, Reset Preferences
+/// resets General to its default.
+#[test]
+fn reset_preferences_keeps_an_edit_of_general_units() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    set_field(&mut a, "unitsGeneral", json!("inches")).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Inches);
+    assert_eq!(a.session.prefs.units_general, "inches");
+
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    for u in ["inches", "points"] {
+        set_field(&mut a, "unitsGeneral", json!(u)).unwrap();
+    }
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+
+    let mut b = app();
+    b.run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters"})).unwrap();
+    open(&mut b, Some("General"));
+    reset_preferences(&mut b, PromptChoice::Proceed);
+    confirm(&mut b).unwrap();
+    assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
 }
 
 #[test]
@@ -195,161 +307,52 @@ fn old_pref_files_keep_their_brightness() {
     assert_eq!(a.session.prefs.ui_brightness, "light");
 }
 
-/// Performance › Graphics Processor (#306, #502): shown with its restart note, applied by OK
-/// and saved with the UI state under the key the desktop app reads before the window opens.
+/// Rows that depend on another setting are dimmed while it does not hold; a row the platform does
+/// not show is skipped.
 #[test]
-fn graphics_processor_preference_shows_and_persists() {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
+fn dimmed_rows_follow_the_settings_they_depend_on() {
+    // Title bars: the environment variable chooses the frame; System Title Bar takes precedence over the app's.
+    for (from_env, system) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut a = app();
+        a.titlebar_from_env = from_env;
+        open(&mut a, Some("User Interface"));
+        set_field(&mut a, "systemTitleBar", json!(system)).unwrap();
+        if let Some((enabled, help)) = row_state(&mut a, "appTitleBar") {
+            let label = format!("variable {from_env}, system {system}");
+            assert_eq!(enabled, !from_env && !system, "app title bar: {label}");
+            // The note, not the setting's sentence, which names the variable too.
+            let note = help.is_some_and(|h| h.contains("VECTORCRAFT_TITLEBAR environment variable"));
+            assert_eq!(note, from_env, "app title bar note: {label}");
+        }
+        if let Some((enabled, _)) = row_state(&mut a, "systemTitleBar") {
+            assert_eq!(enabled, !from_env, "system title bar: variable {from_env}");
         }
     }
-    let mut a = app();
-    open(&mut a, Some("Performance"));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // The window sizes itself on the first frame and draws on the second.
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    assert!(shown.iter().any(|t| t.starts_with("Graphics Processor")), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "Automatic"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
-    a.ui.dialog.as_mut().unwrap().fields.insert("gpuPreference".into(), json!("highPerformance"));
-    assert!(!a.take_prefs_changed(), "nothing to write before OK");
-    confirm(&mut a).unwrap();
-    assert!(a.take_prefs_changed(), "OK asks the host to write the preferences file");
-    assert!(!a.take_prefs_changed());
-    assert_eq!(a.session.prefs.gpu_preference, "highPerformance");
-    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
-    assert_eq!(saved["engine_prefs"]["gpuPreference"], json!("highPerformance"));
-}
-
-/// User Interface › System Title Bar: shown with its next-launch note, applied by OK and
-/// saved with the UI state under the key the desktop app reads before the window opens.
-#[test]
-fn system_title_bar_preference_shows_and_persists() {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
+    // A switch row, the setting it depends on, and the values that enable it.
+    let switches = [
+        ("holdShortcuts", "keyHoldDelay", json!(true), json!(false)),
+        ("fontPreview", "fontSamplesOnWhite", json!(true), json!(false)),
+        ("showToolTips", "showToolCards", json!(true), json!(false)),
+    ];
+    for (master, dependent, on, off) in switches {
+        for (value, enabled) in [(on, true), (off, false)] {
+            let mut a = app();
+            open(&mut a, None);
+            set_field(&mut a, master, value).unwrap();
+            let (shown, _) = row_state(&mut a, dependent).unwrap_or_else(|| panic!("no row {dependent}"));
+            assert_eq!(shown, enabled, "{dependent} with {master}");
         }
     }
-    let mut a = app();
-    open(&mut a, Some("User Interface"));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // The window sizes itself on the first frame and draws on the second.
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    let supported = cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")));
-    assert_eq!(shown.iter().any(|t| t == "System Title Bar"), supported, "{shown:?}");
-    assert_eq!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), supported, "{shown:?}");
-    a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(true));
-    confirm(&mut a).unwrap();
-    assert!(a.session.prefs.system_title_bar);
-    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
-    assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
-}
-
-/// Performance › Linux Display Server (#2028): on Linux it shows the drawing-tablet note, and
-/// X11 (XWayland) When a Pen Is Attached is applied by OK and saved under the key the desktop
-/// app reads before the window opens.
-#[test]
-fn linux_display_server_offers_the_pen_choice() {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
+    // Numbers Without Units Are Points matters only while a unit is Picas.
+    for unit in ["unitsGeneral", "unitsStroke", "unitsType"] {
+        for (value, enabled) in [("picas", true), ("points", false)] {
+            let mut a = app();
+            open(&mut a, Some("Units"));
+            set_field(&mut a, unit, json!(value)).unwrap();
+            let (shown, _) = row_state(&mut a, "numbersWithoutUnitsArePoints").expect("the row is built");
+            assert_eq!(shown, enabled, "{unit} {value}");
         }
     }
-    let mut a = app();
-    open(&mut a, Some("Performance"));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // The window sizes itself on the first frame and draws on the second.
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    let linux = cfg!(target_os = "linux");
-    assert_eq!(shown.iter().any(|t| t.starts_with("Linux Display Server")), linux, "{shown:?}");
-    let note = "If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.";
-    assert_eq!(shown.iter().any(|t| t == note), linux, "{shown:?}");
-    a.ui.dialog.as_mut().unwrap().fields.insert("linuxDisplayServer".into(), json!("x11WithPen"));
-    confirm(&mut a).unwrap();
-    assert_eq!(a.session.prefs.linux_display_server, "x11WithPen");
-    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
-    assert_eq!(saved["engine_prefs"]["linuxDisplayServer"], json!("x11WithPen"));
-}
-
-/// #1866: the category shown is highlighted in the list while the pointer is elsewhere.
-#[test]
-fn the_category_shown_is_highlighted() {
-    fn rects(s: &egui::Shape, out: &mut Vec<(egui::Rect, egui::Color32)>) {
-        match s {
-            egui::Shape::Rect(r) => out.push((r.rect, r.fill)),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, out)),
-            _ => {}
-        }
-    }
-    let mut a = app();
-    open(&mut a, Some("Units"));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // The window sizes itself on the first frame and draws on the second.
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| rects(&c.shape, &mut shown));
-    // The list's rows, top to bottom: only the fourth (Units) is filled.
-    let rows: Vec<_> = shown.iter().filter(|(r, _)| r.width() == 184.0 && r.height() < 30.0).collect();
-    assert_eq!(rows.len(), PREF_CATEGORIES.len(), "{shown:?}");
-    let filled: Vec<usize> = rows.iter().enumerate().filter(|(_, (_, c))| c.a() > 0).map(|(i, _)| i).collect();
-    assert_eq!(filled, vec![3], "{rows:?}");
-}
-
-/// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
-/// changes, and its checkbox is dimmed unless a unit is Picas.
-#[test]
-fn numbers_without_units_are_points_reaches_the_fields_and_dims_without_picas() {
-    let mut a = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let frame = |a: &mut VectorcraftApp| {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            apply_runtime(a, ui.ctx());
-            show(a, ui.ctx());
-        });
-        out.textures_delta.clear();
-    };
-    let read = |ctx: &egui::Context| widgets::typed_unit(ctx, vectorcraft_doc::Unit::Picas);
-    frame(&mut a);
-    assert_eq!(read(&ctx), vectorcraft_doc::Unit::Points, "on by default");
-    a.run("prefs.set", json!({"key": "numbersWithoutUnitsArePoints", "value": false})).unwrap();
-    frame(&mut a);
-    assert_eq!(read(&ctx), vectorcraft_doc::Unit::Picas, "off");
-    // The checkbox: dimmed with every unit in points, enabled once a unit is Picas.
-    open(&mut a, Some("Units"));
-    let d = a.ui.dialog.as_mut().unwrap();
-    assert!(!picas_in_use(d), "dimmed in points");
-    d.fields.insert("unitsStroke".into(), json!("picas"));
-    assert!(picas_in_use(d), "enabled with a unit in picas");
 }
 
 /// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
@@ -364,65 +367,66 @@ fn a_graphics_processor_this_version_does_not_offer_reads_as_automatic() {
     }
 }
 
+/// Reset Preferences asks first, over Preferences. Cancel shows Preferences again as it was: its
+/// edits and page kept, and nothing applied.
+#[test]
+fn reset_preferences_asks_first_and_cancel_returns_to_preferences() {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    open(&mut a, Some("Units"));
+    set_field(&mut a, "keyboardIncrement", json!(7)).unwrap();
+    reset_preferences(&mut a, PromptChoice::Cancel);
+    assert!(is_open(&a), "Preferences is open again");
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(7)), "the edit is kept");
+    assert_eq!(page(&a), Some("Units"));
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "nothing applied");
+}
+
+/// Proceeding fills the draft with the defaults; nothing is applied until OK, and Cancel in
+/// Preferences keeps the stored preferences.
+#[test]
+fn confirming_reset_fills_preferences_and_applies_nothing_until_ok() {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    open(&mut a, Some("Units"));
+    set_field(&mut a, "keyboardIncrement", json!(7)).unwrap();
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert!(is_open(&a));
+    assert!(same(&field(&a, "keyboardIncrement"), &Prefs::default().to_json()["keyboardIncrement"]), "the draft holds the defaults");
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "nothing applied yet");
+    cancel(&mut a);
+    assert!(!is_open(&a));
+    assert_eq!(a.session.prefs.keyboard_increment, 5.0, "Cancel keeps the preferences");
+
+    open(&mut a, Some("Units"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+}
+
+/// A restored Hold Shortcut Delay outside its range opens as the delay in use, and OK keeps it.
+#[test]
+fn a_restored_hold_shortcut_delay_outside_its_range_opens_as_the_delay_in_use() {
+    for (saved, used) in [(5.0, 1.0), (0.05, 0.2)] {
+        let mut a = app();
+        a.session.prefs.key_hold_delay = saved;
+        open(&mut a, Some("General"));
+        assert!(same(&field(&a, "keyHoldDelay"), &json!(used)), "{saved}");
+        confirm(&mut a).unwrap();
+        assert_eq!(a.session.prefs.key_hold_delay, used, "{saved}");
+    }
+}
+
+/// Every page the model builds has a visible row on this platform.
 #[test]
 fn every_category_renders_fields() {
+    let mut a = app();
+    open(&mut a, None);
+    let empty = with_pages(&mut a, |pages| pages.iter().filter(|p| !p.has_content()).map(|p| p.id.to_string()).collect::<Vec<_>>());
+    assert!(empty.is_empty(), "pages without a visible row: {empty:?}");
     for c in PREF_CATEGORIES {
         assert!(PREF_SPECS.iter().any(|s| s.category == *c));
     }
-}
-
-/// Preferences › Type › Show Font Names in English (#394): OK on the dialog stores the flag the
-/// font menus read (Character panel, Type → Font).
-#[test]
-fn show_font_names_in_english_dialog_ok_stores_the_flag() {
-    let mut a = app();
-    assert!(a.session.prefs.font_names_in_english);
-    open(&mut a, Some("Type"));
-    assert_eq!(a.ui.dialog.as_ref().unwrap().str("__category"), "Type");
-    a.ui.dialog.as_mut().unwrap().fields.insert("fontNamesInEnglish".into(), json!(false));
-    confirm(&mut a).unwrap();
-    assert!(a.ui.dialog.is_none());
-    assert!(!a.session.prefs.font_names_in_english);
-    assert!(!crate::font_menu::MenuLook::of(&a).english_names);
-}
-
-/// Preferences › Hyphenation › Exceptions (#394): OK on the dialog pushes the list into the
-/// hyphenator the same way `prefs.set` does (no need to drive the live Preferences window).
-#[test]
-fn hyphenation_exceptions_dialog_ok_reaches_the_hyphenator() {
-    struct Clear;
-    impl Drop for Clear {
-        fn drop(&mut self) {
-            vectorcraft_text::set_hyphenation_exceptions("");
-        }
-    }
-    let _clear = Clear;
-    let mut a = app();
-    open(&mut a, Some("Hyphenation"));
-    let d = a.ui.dialog.as_mut().unwrap();
-    assert_eq!(d.str("__category"), "Hyphenation");
-    d.fields.insert("hyphenationExceptions".into(), json!("typography, hap-pen"));
-    confirm(&mut a).unwrap();
-    assert!(a.ui.dialog.is_none());
-    assert_eq!(a.session.prefs.hyphenation_exceptions, "typography, hap-pen");
-    assert_eq!(vectorcraft_text::hyphenation_exceptions(), "typography, hap-pen");
-    assert!(vectorcraft_text::hyphen::hyphen_points("typography").is_empty());
-    assert_eq!(vectorcraft_text::hyphen::hyphen_points("happen"), vec![3]);
-}
-
-/// #5236: File Handling › Use System Defaults for Edit Original is a checkbox, on by default, and
-/// OK saves it off.
-#[test]
-fn use_system_defaults_for_edit_original_is_a_checkbox() {
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    assert!(a.session.prefs.edit_original_system_defaults, "on by default");
-    open(&mut a, Some("File Handling"));
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Use System Defaults for Edit Original"), "{text}");
-    assert!(a.ui.dialog.as_ref().unwrap().bool("editOriginalSystemDefaults"));
-    a.ui.dialog.as_mut().unwrap().fields.insert("editOriginalSystemDefaults".into(), json!(false));
-    confirm(&mut a).unwrap();
-    assert!(!a.session.prefs.edit_original_system_defaults);
 }
 
 /// A new, empty folder of its own for test `name`.
@@ -433,62 +437,111 @@ fn temp_folder(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// File Handling › Data Recovery › Folder has a Choose… button where the host has a folder
-/// picker, and none where it has not (the web).
-#[test]
-fn recovery_folder_has_a_choose_button_with_a_folder_picker() {
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    a.services.pick_folder = Some(Box::new(|| None));
-    open(&mut a, Some("File Handling"));
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Data Recovery") && text.contains("Choose…"), "{text}");
-    a.services.pick_folder = None;
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Data Recovery") && !text.contains("Choose…"), "{text}");
+/// An app that writes and reads real files.
+fn app_with_files() -> VectorcraftApp {
+    let mut a = app();
+    a.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    a.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    a
 }
 
-/// Choose… puts the folder picked into the Folder field, and OK saves it; a canceled picker
-/// leaves the field as it was.
+/// `prefs.export` saves the applied preferences to a file, and `prefs.import` applies them again:
+/// the open window shows them, OK keeps them, and the open document's units stay as they are.
 #[test]
-fn a_chosen_recovery_folder_fills_the_field_and_cancel_keeps_it() {
-    let dir = temp_folder("recovery-chosen");
-    let picked = dir.to_string_lossy().into_owned();
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    open(&mut a, Some("File Handling"));
-    let answer = picked.clone();
-    a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-    let mut d = a.ui.dialog.clone().unwrap();
-    choose_folder(&mut a, &mut d, "recoveryFolder");
-    assert_eq!(d.str("recoveryFolder"), picked);
-    assert!(a.ui.status.is_empty(), "{}", a.ui.status);
-    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "the write check leaves nothing behind");
-    a.services.pick_folder = Some(Box::new(|| None));
-    choose_folder(&mut a, &mut d, "recoveryFolder");
-    assert_eq!(d.str("recoveryFolder"), picked, "cancel keeps the field");
-    a.ui.dialog = Some(d);
+fn export_and_import_preferences_buttons_round_trip() {
+    let dir = temp_folder("prefs-file");
+    let path = dir.join("VectorCraft Preferences.json").to_string_lossy().into_owned();
+    let mut a = app_with_files();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    let values = json!({"keyboardIncrement": 5, "uiAccent": "green", "unitsGeneral": "inches"});
+    a.run("prefs.set", json!({"values": values, "documentUnits": false})).unwrap();
+    let saved = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    a.run("prefs.export", json!({"path": path})).unwrap();
+    let file: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(file["format"], "vectorcraft-preferences");
+    assert_eq!(file["prefs"]["uiAccent"], "green");
+
+    cancel(&mut a);
+    a.run("prefs.reset", json!({})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    a.run("prefs.import", json!({"path": path})).unwrap();
+    assert_eq!(a.session.prefs.to_json(), saved, "the exported preferences are applied");
+    assert_eq!(a.ui.engine_prefs, saved, "and saved with the UI state");
+    assert!(is_open(&a), "the window stays open");
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(5.0)) && field(&a, "unitsGeneral") == json!("inches"), "the window shows them");
     confirm(&mut a).unwrap();
-    assert_eq!(a.session.prefs.recovery_folder, picked);
+    assert_eq!(a.session.prefs.to_json(), saved);
+    let st = a.session.active().unwrap();
+    assert_eq!(st.doc.units, vectorcraft_doc::Unit::Millimeters, "the document's units stay");
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A picked folder that no folder can be created in is refused: the field keeps its value and the
-/// status bar says why.
+/// A file `prefs.import` can't use changes nothing, the draft's edits included, and the refusal
+/// says why.
+#[test]
+fn import_preferences_of_a_bad_file_changes_nothing() {
+    let dir = temp_folder("prefs-bad-file");
+    let path = dir.join("newer.json");
+    std::fs::write(&path, r#"{"format": "vectorcraft-preferences", "version": 2, "prefs": {"uiAccent": "pink"}}"#).unwrap();
+    let path = path.to_string_lossy().into_owned();
+    let mut a = app_with_files();
+    let before = a.session.prefs.to_json();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    let err = a.run("prefs.import", json!({"path": path})).unwrap_err();
+    assert!(err.contains("newer version of VectorCraft"), "{err}");
+    assert_eq!(a.session.prefs.to_json(), before);
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(9)), "the window keeps its edits");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `prefs.import` from a script or MCP while Preferences is open: the window shows the imported
+/// values.
+#[test]
+fn prefs_import_refreshes_an_open_preferences_dialog() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    a.run("prefs.import", json!({ "data": data })).unwrap();
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(7.0)));
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+}
+
+/// An import that turns Enable Touch Workspace on or off switches the workspace on a touch screen,
+/// as OK in Preferences does.
+#[test]
+fn prefs_import_of_touch_workspace_switches_the_workspace() {
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    a.touch_screen = true;
+    crate::workspaces::switch(&mut a, "Typography").unwrap();
+    let file = |on: bool| json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"touchWorkspace": on}}).to_string();
+    a.run("prefs.import", json!({ "data": file(true) })).unwrap();
+    assert!(crate::workspaces::is_current(&a.ui, crate::workspaces::TOUCH));
+    a.run("prefs.import", json!({ "data": file(false) })).unwrap();
+    assert!(crate::workspaces::is_current(&a.ui, "Typography"));
+}
+
+/// A folder that no folder can be created in, or that is not there, is refused on OK with the
+/// engine's message, and the draft keeps its value.
 #[test]
 fn a_recovery_folder_that_cannot_be_written_is_refused() {
     let dir = temp_folder("recovery-refused");
     let file = dir.join("not-a-folder.txt");
     std::fs::write(&file, b"x").unwrap();
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
+    let mut a = app();
     open(&mut a, Some("File Handling"));
-    let mut d = a.ui.dialog.clone().unwrap();
-    d.fields.insert("recoveryFolder".into(), json!("kept"));
     for path in [file.clone(), dir.join("missing")] {
-        let answer = path.to_string_lossy().into_owned();
-        a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-        a.ui.status.clear();
-        choose_folder(&mut a, &mut d, "recoveryFolder");
-        assert_eq!(d.str("recoveryFolder"), "kept");
-        assert_eq!(a.ui.status, format!("{} is not a folder", path.to_string_lossy()));
+        let path = path.to_string_lossy().into_owned();
+        set_field(&mut a, "recoveryFolder", json!(path)).unwrap();
+        assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")));
+        assert!(is_open(&a));
+        assert_eq!(field(&a, "recoveryFolder"), json!(path), "the draft keeps what was typed");
     }
     #[cfg(unix)]
     {
@@ -498,12 +551,9 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
         // An account that may write anyway (root) has nothing to refuse.
         if std::fs::create_dir(locked.join("probe")).is_err() {
-            let answer = locked.to_string_lossy().into_owned();
-            a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-            a.ui.status.clear();
-            choose_folder(&mut a, &mut d, "recoveryFolder");
-            assert_eq!(d.str("recoveryFolder"), "kept");
-            assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
+            set_field(&mut a, "recoveryFolder", json!(locked.to_string_lossy())).unwrap();
+            let err = confirm(&mut a).unwrap_err();
+            assert!(err.starts_with("Data Recovery can't keep copies in "), "{err}");
         }
         let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
         // A folder that can be written but not listed: the recovery store lists its folders.
@@ -512,92 +562,17 @@ fn a_recovery_folder_that_cannot_be_written_is_refused() {
         std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
         // An account that may list anyway (root) has nothing to refuse.
         if std::fs::read_dir(&unlisted).is_err() {
-            let answer = unlisted.to_string_lossy().into_owned();
-            a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-            a.ui.status.clear();
-            choose_folder(&mut a, &mut d, "recoveryFolder");
-            assert_eq!(d.str("recoveryFolder"), "kept");
-            assert!(a.ui.status.starts_with("Data Recovery can't keep copies in "), "{}", a.ui.status);
+            set_field(&mut a, "recoveryFolder", json!(unlisted.to_string_lossy())).unwrap();
+            let err = confirm(&mut a).unwrap_err();
+            assert!(err.starts_with("Data Recovery can't keep copies in "), "{err}");
         }
         let _ = std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o755));
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The recovery folder is an app preference: a folder picked off the UI thread (Linux) fills the
-/// open dialog's field even when the active document closed while the picker was open.
-#[test]
-fn a_chosen_recovery_folder_fills_the_field_after_the_active_document_closes() {
-    let dir = temp_folder("recovery-closed");
-    let picked = dir.to_string_lossy().into_owned();
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut a.services);
-    a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    open(&mut a, Some("File Handling"));
-    let mut d = a.ui.dialog.take().unwrap();
-    choose_folder(&mut a, &mut d, "recoveryFolder");
-    a.ui.dialog = Some(d);
-    assert!(matches!(shown.requests().as_slice(), [crate::picks::PickRequest::Folder]));
-    a.session.execute("file.close", &json!({})).unwrap();
-    a.sync_views();
-    assert!(a.session.documents().is_empty());
-    shown.answer(&[&picked]);
-    crate::picks::poll(&mut a, &egui::Context::default());
-    assert_eq!(a.ui.dialog.as_ref().unwrap().str("recoveryFolder"), picked, "{}", a.ui.status);
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-/// Plug-ins & Scratch Disks › Additional Plug-ins Folder has a Choose… button where the host has a
-/// folder picker, and none where it has not (the web).
-#[test]
-fn plugins_folder_has_a_choose_button_with_a_folder_picker() {
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    a.services.pick_folder = Some(Box::new(|| None));
-    open(&mut a, Some("Plug-ins & Scratch Disks"));
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Additional Plug-ins Folder") && text.contains("Choose…"), "{text}");
-    a.services.pick_folder = None;
-    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
-    assert!(text.contains("Additional Plug-ins Folder") && !text.contains("Choose…"), "{text}");
-}
-
-/// Choose… beside Additional Plug-ins Folder puts the folder picked into the field, and OK saves
-/// it; a canceled picker, a file and a missing folder leave the field as it was.
-#[test]
-fn a_chosen_plugins_folder_fills_the_field_and_others_keep_it() {
-    let dir = temp_folder("plugins-chosen");
-    let file = dir.join("not-a-folder.txt");
-    std::fs::write(&file, b"x").unwrap();
-    let mut a = VectorcraftApp::new(Session::new(), Default::default());
-    open(&mut a, Some("Plug-ins & Scratch Disks"));
-    let mut d = a.ui.dialog.clone().unwrap();
-    for path in [file.clone(), dir.join("missing")] {
-        let answer = path.to_string_lossy().into_owned();
-        a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-        a.ui.status.clear();
-        choose_folder(&mut a, &mut d, "pluginsFolder");
-        assert_eq!(d.str("pluginsFolder"), "");
-        assert_eq!(a.ui.status, format!("{} is not a folder", path.to_string_lossy()));
-    }
-    let picked = dir.to_string_lossy().into_owned();
-    let answer = picked.clone();
-    a.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
-    a.ui.status.clear();
-    choose_folder(&mut a, &mut d, "pluginsFolder");
-    assert_eq!(d.str("pluginsFolder"), picked);
-    assert!(a.ui.status.is_empty(), "{}", a.ui.status);
-    a.services.pick_folder = Some(Box::new(|| None));
-    choose_folder(&mut a, &mut d, "pluginsFolder");
-    assert_eq!(d.str("pluginsFolder"), picked, "cancel keeps the field");
-    a.ui.dialog = Some(d);
-    confirm(&mut a).unwrap();
-    assert_eq!(a.session.prefs.plugins_folder, picked);
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-/// OK checks a folder typed into Data Recovery › Folder or Additional Plug-ins Folder as Choose…
-/// checks a picked one: one that fails keeps the dialog open and changes no preference. An empty
-/// field and a folder the preference already holds are not checked.
+/// A typed folder is refused the way a picked one is; a saved folder is not checked again, and an
+/// empty field and the field's spaces are saved as typed.
 #[test]
 fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
     let dir = temp_folder("typed-folders");
@@ -605,31 +580,35 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
     std::fs::write(&file, b"x").unwrap();
     let missing = dir.join("missing").to_string_lossy().into_owned();
     for key in ["recoveryFolder", "pluginsFolder"] {
-        let mut a = VectorcraftApp::new(Session::new(), Default::default());
+        let mut a = app();
         open(&mut a, Some("File Handling"));
         let before = a.session.prefs.to_json();
         for path in [file.to_string_lossy().into_owned(), missing.clone()] {
-            let d = a.ui.dialog.as_mut().unwrap();
-            d.fields.insert(key.into(), json!(path));
-            d.fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
+            set_field(&mut a, key, json!(path)).unwrap();
+            let tips = !a.session.prefs.show_tool_tips;
+            set_field(&mut a, "showToolTips", json!(tips)).unwrap();
             assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")), "{key}");
-            assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
+            assert!(is_open(&a), "{key}: the window stays open");
             assert_eq!(a.session.prefs.to_json(), before, "{key}: no preference changes");
+            assert!(!a.prefs_changed, "{key}: nothing to save");
         }
         // A typed folder that passes is saved, with the spaces around it as typed.
         let typed = format!(" {} ", dir.to_string_lossy());
-        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(typed));
+        set_field(&mut a, key, json!(typed)).unwrap();
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(typed), "{key}");
         // An empty field keeps the default folder.
         open(&mut a, Some("File Handling"));
-        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(""));
+        set_field(&mut a, key, json!("")).unwrap();
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(""), "{key}");
         // A folder already saved is not checked again, so OK works while it is unavailable.
+        std::fs::create_dir(&missing).unwrap();
         a.run("prefs.set", json!({"key": key, "value": missing})).unwrap();
+        std::fs::remove_dir(&missing).unwrap();
         open(&mut a, Some("File Handling"));
-        a.ui.dialog.as_mut().unwrap().fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
+        let tips = !a.session.prefs.show_tool_tips;
+        set_field(&mut a, "showToolTips", json!(tips)).unwrap();
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(missing), "{key}");
     }
@@ -646,12 +625,78 @@ fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it()
     let outside = dir.join("outside-missing").to_string_lossy().into_owned();
     let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap().unwrap();
     for (key, access) in [("recoveryFolder", Access::Write), ("pluginsFolder", Access::Read)] {
-        let mut a = VectorcraftApp::new(Session::new(), Default::default());
+        let mut a = app();
         open(&mut a, Some("File Handling"));
-        a.ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(outside));
+        set_field(&mut a, key, json!(outside)).unwrap();
         let r = file_access::confine(Some(&roots), || confirm(&mut a));
         assert_eq!(r, Err(roots.check(&outside, access).unwrap_err()), "{key}");
-        assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
+        assert!(is_open(&a), "{key}: the window stays open");
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Over the categories from General to Devices plus Type, every setting has exactly one non-empty
+/// sentence, and no key is listed twice.
+#[test]
+fn every_setting_from_general_to_devices_has_one_description() {
+    let mut bad = vec![];
+    let categories = [
+        "General",
+        "Type",
+        "Selection & Anchor Display",
+        "Guides & Grid",
+        "Smart Guides",
+        "Slices",
+        "Hyphenation",
+        "Plug-ins & Scratch Disks",
+        "User Interface",
+        "Performance",
+        "File Handling",
+        "Clipboard Handling",
+        "Appearance of Black",
+        "Devices",
+    ];
+    for s in PREF_SPECS.iter().filter(|s| categories.contains(&s.category)) {
+        match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
+            1 => {}
+            n => bad.push(format!("`{}` ({}) has {n} sentences", s.key, s.label)),
+        }
+        if descriptions::description(s.key).is_some_and(|d| d.trim().is_empty()) {
+            bad.push(format!("`{}` has an empty sentence", s.key));
+        }
+    }
+    for (i, (key, _)) in descriptions::DESCRIPTIONS.iter().enumerate() {
+        if descriptions::DESCRIPTIONS[..i].iter().any(|(k, _)| k == key) {
+            bad.push(format!("`{key}` is listed twice"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// Every sentence names a setting the window builds or the engine lists, and shows in its
+/// catalog's translation where there is one, in English where there is none.
+#[test]
+fn every_description_names_a_setting_and_fits_in_every_language() {
+    let mut a = app();
+    open(&mut a, None);
+    let row_keys =
+        with_pages(&mut a, |pages| pages.iter().flat_map(|p| &p.groups).flat_map(|g| &g.rows).map(|r| r.key.to_string()).collect::<Vec<_>>());
+    let mut bad = vec![];
+    for (key, sentence) in descriptions::DESCRIPTIONS {
+        let tail = format!(".{key}");
+        if !PREF_SPECS.iter().any(|s| s.key == *key) && !row_keys.iter().any(|k| k == key || k.ends_with(&tail)) {
+            bad.push(format!("`{key}` is not a setting the window shows"));
+        }
+        for lang in crate::i18n::Lang::all() {
+            let text = crate::i18n::tr(lang, sentence);
+            let translated = crate::i18n::has(lang, sentence);
+            if lang != crate::i18n::Lang::EN && translated && text == *sentence {
+                bad.push(format!("{}: the available translation for {sentence:?} was not used", lang.code()));
+            }
+            if !translated && text != *sentence {
+                bad.push(format!("{}: missing {sentence:?} did not fall back to English", lang.code()));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

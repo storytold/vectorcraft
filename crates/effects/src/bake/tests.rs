@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
-use vectorcraft_geom::{Point, Rect, shapes};
+use vectorcraft_geom::{Point, Rect, Shape, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
 fn skip_without_craft_fonts() -> bool {
@@ -15,6 +15,20 @@ fn skip_without_craft_fonts() -> bool {
 
 fn fx(id: &str, params: serde_json::Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
+}
+
+/// Asserts that placed gradient `got` has `want`'s start, end, aspect and focal point, within 1e-6.
+fn assert_geom_near(got: vectorcraft_color::GradientGeom, want: vectorcraft_color::GradientGeom, what: &str) {
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    let focal = match (got.focal, want.focal) {
+        (None, None) => true,
+        (Some(a), Some(b)) => near(a, b),
+        _ => false,
+    };
+    assert!(
+        near(got.start, want.start) && near(got.end, want.end) && (got.aspect - want.aspect).abs() < 1e-6 && focal,
+        "{what}: got {got:?}, want {want:?}"
+    );
 }
 
 fn doc_with(n: Node) -> Document {
@@ -45,6 +59,501 @@ fn object_effects_become_geometry_and_raster_effects_stay() {
     assert_eq!(m.appearance.effects[0].id, "stylize.dropShadow");
 }
 
+/// The fill colors of the paths under the layers of `d`, in paint order.
+fn path_fills(d: &Document) -> Vec<Color> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. })
+            && let Some(c) = n.appearance.fill_paint().color()
+        {
+            out.push(c);
+        }
+    });
+    out
+}
+
+/// A symbol instance half stained red is baked in its stained colors, as the canvas draws it:
+/// moved by a Transform effect, and recolored by a color adjustment (Invert Colors) after the
+/// stain.
+#[test]
+fn a_stained_instance_is_baked_in_its_stained_colors() {
+    let blue = Color::rgb8(30, 90, 220);
+    let art = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(50), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: vectorcraft_geom::Affine::translate((20.0, 20.0)) });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    inst.appearance.items.retain(|i| i.is_fill());
+    if let vectorcraft_doc::AppearanceItem::Fill(f) = &mut inst.appearance.items[0] {
+        f.opacity = 0.5;
+    }
+    let stained = vectorcraft_doc::symbol_overrides::instance_art(&art, &inst).appearance.fill_paint().color().unwrap();
+    assert_ne!(stained.to_hex(), blue.to_hex());
+    let [r, g, b] = stained.to_rgb();
+    let inverted = Color::rgb(1.0 - r, 1.0 - g, 1.0 - b);
+    for (id, params, want) in [("distort.transform", json!({"moveH": 30.0}), stained), (crate::addons::color::INVERT, json!({}), inverted)] {
+        let mut n = inst.clone();
+        n.appearance.effects.push(fx(id, params));
+        let mut d = doc_with(n);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art.clone()) });
+        let fills = path_fills(&bake_document(&d).unwrap());
+        assert_eq!(fills.iter().map(Color::to_hex).collect::<Vec<_>>(), [want.to_hex()], "{id}");
+    }
+}
+
+#[test]
+fn a_baked_transform_moves_a_placed_gradient_with_the_path() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let placed_geom = |n: &Node| match n.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom.unwrap(),
+        p => panic!("a gradient: {p:?}"),
+    };
+    // A move 30 pt right, and a turn of 90° with the width halved about the center (50, 50): the
+    // square becomes 100 pt wide and 50 pt tall, and the gradient runs from the bottom up.
+    let moves = [
+        (json!({"moveH": 30.0}), Point::new(30.0, 0.0), GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom }),
+        (
+            json!({"rotate": 90.0, "scaleH": 50.0}),
+            Point::new(0.0, 25.0),
+            GradientGeom { start: Point::new(50.0, 75.0), end: Point::new(50.0, 25.0), ..geom },
+        ),
+    ];
+    // Alone, with a stroke whose own effect makes one path for each fill and stroke, and as the
+    // fill's own effect.
+    for (params, corner, want) in moves {
+        for (split, own) in [(false, false), (true, false), (true, true)] {
+            let mut ap = Appearance::basic(placed.clone(), Paint::solid(Color::BLACK), if split { 1.0 } else { 0.0 });
+            if split && let AppearanceItem::Stroke(s) = &mut ap.items[1] {
+                s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
+            }
+            let transform = fx("distort.transform", params.clone());
+            if own {
+                ap.items[0].effects_mut().push(transform.clone());
+            }
+            let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+            if !own {
+                n.appearance.effects.push(transform);
+            }
+            let d = bake_document(&doc_with(n)).unwrap();
+            let m = d.node(NodeId(50)).unwrap();
+            let fill: &Node = if split { &m.children().unwrap()[0] } else { m };
+            let b = fill.geometric_bounds().unwrap();
+            assert!(b.origin().distance(corner) < 1e-6, "{params}, split {split}, own {own}: {b:?}");
+            assert_geom_near(placed_geom(fill), want, &format!("{params}, split {split}, own {own}"));
+        }
+    }
+}
+
+/// A stroke's own Transform effect or Free Distort moves the gradient placed on that stroke.
+#[test]
+fn a_strokes_own_transform_and_free_distort_move_its_placed_gradient() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    // Moved 30 pt right by Transform, and one width (100 pt) right by Free Distort.
+    let moves = [
+        (fx("distort.transform", json!({"moveH": 30.0})), 30.0),
+        (fx("distort.freeDistort", json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]})), 100.0),
+    ];
+    for (e, moved) in moves {
+        let mut ap = Appearance::basic(Paint::None, placed.clone(), 4.0);
+        let Some(stroke) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        stroke.effects_mut().push(e.clone());
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut geoms = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    geoms.push(g.geom.unwrap());
+                }
+            }
+        });
+        assert!(!geoms.is_empty(), "{}: the stroke keeps its gradient", e.id);
+        let want = GradientGeom { start: Point::new(moved, 50.0), end: Point::new(100.0 + moved, 50.0), ..geom };
+        for g in geoms {
+            assert_geom_near(g, want, &e.id);
+        }
+    }
+}
+
+#[test]
+fn a_fills_gradient_follows_the_effects_around_its_transform_with_options() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let moved = fx("distort.transform", json!({"moveH": 30.0}));
+    let scales_strokes = fx("distort.transform", json!({"strokes": true}));
+    // A move before and a move after the fill's Transform effect with Scale Strokes & Effects on.
+    for fill_fx in [vec![moved.clone(), scales_strokes.clone()], vec![scales_strokes, moved]] {
+        let mut ap = Appearance::basic(placed.clone(), Paint::None, 0.0);
+        *ap.items[0].effects_mut() = fill_fx.clone();
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                found.push((c.geometric_bounds().unwrap(), g.geom.unwrap()));
+            }
+        });
+        assert!(!found.is_empty(), "{fill_fx:?}: the fill keeps its gradient");
+        let want = GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom };
+        for (b, g) in found {
+            assert!(b.origin().distance(Point::new(30.0, 0.0)) < 1e-6, "{fill_fx:?}: {b:?}");
+            assert_geom_near(g, want, &format!("{fill_fx:?}"));
+        }
+    }
+}
+
+#[test]
+fn baked_free_distort_moves_placed_gradients_from_the_bounds_to_the_distorted_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = |kind| GradientPaint::new(Gradient::new(kind, stops.clone()));
+    let linear = GradientGeom { start: Point::new(20.0, 50.0), end: Point::new(80.0, 50.0), aspect: 1.0, focal: None };
+    let radial = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(60.0, 30.0), aspect: 0.5, focal: Some(Point::new(45.0, 32.0)) };
+    let placed_linear = Paint::Gradient(Box::new(GradientPaint { geom: Some(linear), ..ramp(GradientKind::Linear) }));
+    let placed_radial = Paint::Gradient(Box::new(GradientPaint { geom: Some(radial), ..ramp(GradientKind::Radial) }));
+    let fitted = Paint::Gradient(Box::new(ramp(GradientKind::Linear)));
+    let baked = |fill: &Paint, e: Effect| {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(e);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        match m.appearance.fill_paint() {
+            Paint::Gradient(g) => (m.geometric_bounds().unwrap(), (*g).clone()),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // The bottom right corner moves 50 pt right, so the bounds grow from 0..100 to 0..150 across.
+    let corners = json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.5, 1.0], [0.0, 1.0]]});
+    let distort = || fx("distort.freeDistort", corners.clone());
+    let (b, g) = baked(&placed_linear, distort());
+    assert!((b.x1 - 150.0).abs() < 1e-6, "{b:?}");
+    let geom = g.geom.unwrap();
+    assert!(near(geom.start, Point::new(30.0, 50.0)) && near(geom.end, Point::new(120.0, 50.0)), "{geom:?}");
+    // A radial gradient's center, focal point and ellipse take the same stretch: the radius along
+    // the vector grows from 20 to 30 pt and the 10 pt radius across it stays.
+    let (_, g) = baked(&placed_radial, distort());
+    let want = GradientGeom { start: Point::new(60.0, 30.0), end: Point::new(90.0, 30.0), aspect: 1.0 / 3.0, focal: Some(Point::new(67.5, 32.0)) };
+    assert_geom_near(g.geom.unwrap(), want, "radial");
+    // A fitted gradient stays fitted, and fits the distorted outline.
+    assert_eq!(baked(&fitted, distort()).1.geom, None);
+}
+
+/// A gradient fitted to the object turns, reflects and stretches with a Transform effect that a
+/// refit would not reproduce: it is fixed to its fit on the geometry the effect takes, then mapped.
+/// Moves and even scales leave it fitted.
+#[test]
+fn a_fitted_gradient_turns_reflects_and_stretches_with_a_transform_effect() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = |kind| Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops.clone()))));
+    let geom = |start: (f64, f64), end: (f64, f64)| GradientGeom { start: start.into(), end: end.into(), aspect: 1.0, focal: None };
+    // The geometry of the baked fill (`own`: the Transform effect is the fill's own effect).
+    let baked = |kind, effects: &[Effect], own: bool| {
+        let mut ap = Appearance::basic(fitted(kind), Paint::None, 0.0);
+        if own {
+            *ap.items[0].effects_mut() = effects.to_vec();
+        }
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        if !own {
+            n.appearance.effects = effects.to_vec();
+        }
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                found.push(g.geom);
+            }
+        });
+        assert_eq!(found.len(), 1, "{effects:?}, own {own}");
+        found[0]
+    };
+    let t = |params| fx("distort.transform", params);
+    let offset = fx("path.offsetPath", json!({"offset": 10.0, "joins": "miter"}));
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    let linear = GradientKind::Linear;
+    let cases = [
+        // A quarter turn about the center: the left to right ramp runs from the bottom up.
+        (linear, vec![t(json!({"rotate": 90.0}))], geom((50.0, 100.0), (50.0, 0.0))),
+        // Reflected left to right: the ramp runs from right to left.
+        (linear, vec![t(json!({"reflectX": true}))], geom((100.0, 50.0), (0.0, 50.0))),
+        // With Scale Strokes & Effects on, the same.
+        (linear, vec![t(json!({"rotate": 90.0, "strokes": true}))], geom((50.0, 100.0), (50.0, 0.0))),
+        // Offset Path grows the square to -10..110 first: the turn takes the fit across 120 pt.
+        (linear, vec![offset.clone(), t(json!({"rotate": 90.0}))], geom((50.0, 110.0), (50.0, -10.0))),
+        // Stretched to twice the width: the circle of radius 50 about the center becomes an
+        // ellipse 100 pt across and 50 pt tall.
+        (GradientKind::Radial, vec![t(json!({"scaleH": 200.0}))], GradientGeom { aspect: 0.5, ..geom((50.0, 50.0), (150.0, 50.0)) }),
+        // Turned, then moved one width right by Free Distort: the fixed gradient moves with it.
+        (linear, vec![t(json!({"rotate": 90.0})), fx("distort.freeDistort", corners)], geom((150.0, 100.0), (150.0, 0.0))),
+    ];
+    for (kind, effects, want) in cases {
+        for own in [false, true] {
+            let what = format!("{kind:?} {effects:?}, own {own}");
+            let got = baked(kind, &effects, own).unwrap_or_else(|| panic!("{what}: fixed to its fit"));
+            assert_geom_near(got, want, &what);
+        }
+    }
+    // A move and an even scale are what a refit gives: the gradient stays fitted.
+    for effects in [vec![t(json!({"moveH": 30.0}))], vec![t(json!({"scaleH": 150.0, "scaleV": 150.0})), offset]] {
+        for own in [false, true] {
+            assert_eq!(baked(linear, &effects, own), None, "{effects:?}, own {own}");
+        }
+    }
+    // A stroke's gradient is fixed to its fit on the box grown by half its weight (4 pt), -2..102,
+    // with Scale Strokes & Effects off or on.
+    let stroked = |effects: &[Effect], own: bool| {
+        let mut ap = Appearance::basic(Paint::None, fitted(linear), 4.0);
+        let Some(stroke) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        if own {
+            *stroke.effects_mut() = effects.to_vec();
+        }
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        if !own {
+            n.appearance.effects = effects.to_vec();
+        }
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    found.push(g.geom);
+                }
+            }
+        });
+        assert_eq!(found.len(), 1, "{effects:?}, own {own}");
+        found[0]
+    };
+    for strokes in [false, true] {
+        for own in [false, true] {
+            let what = format!("stroke, strokes {strokes}, own {own}");
+            let got = stroked(&[t(json!({"rotate": 90.0, "strokes": strokes}))], own).unwrap_or_else(|| panic!("{what}: fixed to its fit"));
+            assert_geom_near(got, geom((50.0, 102.0), (50.0, -2.0)), &what);
+        }
+    }
+}
+
+/// A Transform effect that scales the geometry to nothing across leaves a fitted gradient fitted:
+/// mapping it with the effect would flatten it to one color.
+#[test]
+fn a_transform_effect_that_scales_to_nothing_leaves_a_fitted_gradient_fitted() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    // With Scale Strokes & Effects or Transform Patterns on, and for each copy, as without them.
+    for (options, strokes) in [
+        (json!({}), 1),
+        (json!({"strokes": true}), 1),
+        (json!({"patterns": true}), 1),
+        (json!({"copies": 2}), 3),
+        (json!({"strokes": true, "copies": 2}), 3),
+        (json!({"patterns": true, "copies": 2}), 3),
+    ] {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::None, fitted.clone(), 4.0));
+        let mut p = json!({"scaleH": 0.0, "rotate": 30.0});
+        if let (Some(p), Some(o)) = (p.as_object_mut(), options.as_object()) {
+            p.extend(o.clone());
+        }
+        n.appearance.effects = vec![fx("distort.transform", p)];
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    found.push(g.geom);
+                }
+            }
+        });
+        assert_eq!(found, vec![None; strokes], "{options}");
+    }
+}
+
+#[test]
+fn baked_warps_move_placed_gradients_from_the_bounds_to_the_warped_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = |kind| GradientPaint::new(Gradient::new(kind, stops.clone()));
+    // A ramp across the square and one down it, so both axes of the box map show.
+    let across = GradientGeom { start: Point::new(20.0, 30.0), end: Point::new(80.0, 30.0), aspect: 1.0, focal: None };
+    let down = GradientGeom { start: Point::new(60.0, 10.0), end: Point::new(60.0, 75.0), aspect: 1.0, focal: None };
+    let placed = |geom| Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp(GradientKind::Linear) }));
+    let fitted = Paint::Gradient(Box::new(ramp(GradientKind::Linear)));
+    let square = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let baked = |fill: &Paint, e: Effect| {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(square), Appearance::basic(fill.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(e);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        match m.appearance.fill_paint() {
+            Paint::Gradient(g) => (m.geometric_bounds().unwrap(), (*g).clone()),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    // Where the box map from the square to `to` takes `p`.
+    let follow = |p: Point, to: Rect| Point::new(to.x0 + p.x / 100.0 * to.width(), to.y0 + p.y / 100.0 * to.height());
+    let styles = [
+        "arc",
+        "arcLower",
+        "arcUpper",
+        "arch",
+        "bulge",
+        "shellLower",
+        "shellUpper",
+        "flag",
+        "wave",
+        "fish",
+        "rise",
+        "fisheye",
+        "inflate",
+        "squeeze",
+        "twist",
+    ];
+    // The square's warped bounds, from `warp_point` on 401 points along each side: the square's
+    // corners are (-1, -1) and (1, 1) in the warp's box coordinates, and a vertical warp swaps
+    // the axes.
+    let warped_bounds = |style: &str, p: &serde_json::Value| {
+        let Some(style) = crate::WarpStyle::from_id(style) else { panic!("warp.{style}: a style") };
+        let share = |key: &str, default: f64| p.get(key).and_then(serde_json::Value::as_f64).unwrap_or(default) / 100.0;
+        let vertical = p.get("orientation").and_then(serde_json::Value::as_str) == Some("vertical");
+        let (bend, dh, dv) = (share("bend", 50.0), share("horizontal", 0.0), share("vertical", 0.0));
+        let mut r: Option<Rect> = None;
+        for k in 0..=400 {
+            let s = f64::from(k) / 200.0 - 1.0;
+            for (x, y) in [(s, -1.0), (s, 1.0), (-1.0, s), (1.0, s)] {
+                let (x2, y2) = if vertical {
+                    let (a, b) = crate::warp_point(style, bend, dh, dv, 1.0, y, x);
+                    (b, a)
+                } else {
+                    crate::warp_point(style, bend, dh, dv, 1.0, x, y)
+                };
+                let q = Point::new(50.0 + x2 * 50.0, 50.0 + y2 * 50.0);
+                r = Some(r.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+            }
+        }
+        r.unwrap_or(square)
+    };
+    let near =
+        |a: Rect, b: Rect, tol: f64| (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol;
+    let mut moved = 0;
+    for style in styles {
+        for params in
+            [json!({"bend": 30.0}), json!({"bend": -40.0, "orientation": "vertical"}), json!({"bend": 20.0, "horizontal": 30.0, "vertical": -20.0})]
+        {
+            // A warp that bends the square's sides inward keeps its bounds (within 0.5 pt), and the
+            // gradient stays with them.
+            let expected = warped_bounds(style, &params);
+            let moves = !near(expected, square, 0.5);
+            moved += usize::from(moves);
+            for linear in [across, down] {
+                let what = format!("warp.{style} {params} {linear:?}");
+                let (b, g) = baked(&placed(linear), fx(&format!("warp.{style}"), params.clone()));
+                assert!(near(b, expected, 0.1), "{what}: bounds {b:?}, want {expected:?}");
+                let geom = g.geom.unwrap();
+                let shifted = geom.start.distance(linear.start).max(geom.end.distance(linear.end));
+                assert_eq!(shifted > 0.1, moves, "{what}: the gradient moves {shifted} with bounds {b:?}");
+                let want = GradientGeom { start: follow(linear.start, b), end: follow(linear.end, b), ..linear };
+                assert_geom_near(geom, want, &what);
+            }
+            let what = format!("warp.{style} {params}");
+            // A fitted gradient stays fitted, and fits the warped outline.
+            assert_eq!(baked(&fitted, fx(&format!("warp.{style}"), params)).1.geom, None, "{what}");
+        }
+    }
+    assert_eq!(moved, 39, "the warps that move the bounds, of 45");
+    // With no bend and no distortion the gradient stays where it is.
+    let (_, g) = baked(&placed(across), fx("warp.arc", json!({"bend": 0.0})));
+    assert_geom_near(g.geom.unwrap(), across, "no bend");
+}
+
+/// A warp with no distortion and no bend (or a bend Arc takes as none) leaves a placed gradient
+/// exactly where it was, even where warping the outline moves its bounds by a rounding error.
+#[test]
+fn a_warp_with_no_bend_leaves_a_placed_gradient_exactly_in_place() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let geom = GradientGeom { start: Point::new(13.7, 31.3), end: Point::new(91.1, 47.9), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let mut drift = 0;
+    let cases = crate::WARP_STYLES.map(|(s, _)| (s, 0.0));
+    for (k, (style, bend)) in cases.into_iter().chain([("arc", 1e-5), ("arc", -1e-5)]).enumerate() {
+        let k = k as f64;
+        let oval = Rect::new(10.1 + k * 0.37, 20.3 - k * 1.13, 97.7 + k * 3.31, 71.9 + k * 0.71);
+        let mut n = Node::path(NodeId(50), shapes::ellipse(oval), Appearance::basic(placed.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(fx(&format!("warp.{style}"), json!({ "bend": bend })));
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        drift += usize::from(m.geometric_bounds() != shapes::ellipse(oval).bounds());
+        let Paint::Gradient(g) = m.appearance.fill_paint() else { panic!("warp.{style} {bend}: a gradient") };
+        assert_eq!(g.geom, Some(geom), "warp.{style} {bend}");
+    }
+    assert!(drift > 0, "the warped outlines' bounds move by a rounding error");
+    // Another style with as small a bend still moves the outline, and the gradient follows it.
+    let mut n = Node::path(NodeId(50), shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(placed, Paint::None, 0.0));
+    n.appearance.effects.push(fx("warp.rise", json!({"bend": 1e-5})));
+    let d = bake_document(&doc_with(n)).unwrap();
+    let Paint::Gradient(g) = d.node(NodeId(50)).unwrap().appearance.fill_paint() else { panic!("warp.rise: a gradient") };
+    assert_ne!(g.geom, Some(geom), "warp.rise 1e-5");
+}
+
+/// A Warp effect on a fill or a stroke itself moves and scales its placed gradient from the
+/// path's bounds before the warp to its bounds after it (a stroke: its stroke-inflated bounds).
+#[test]
+fn a_fills_and_a_strokes_own_warp_move_its_placed_gradient_with_the_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(20.0, 60.0), end: Point::new(80.0, 60.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let square = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let width = 4.0;
+    // Where the box map from `from` to `to` takes `p`.
+    let follow = |p: Point, from: Rect, to: Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    let pad = |r: Rect| r.inflate(width / 2.0, width / 2.0);
+    for style in ["arc", "rise", "inflate"] {
+        for stroke in [false, true] {
+            let what = format!("warp.{style} on the {}", if stroke { "stroke" } else { "fill" });
+            let mut ap =
+                if stroke { Appearance::basic(Paint::None, placed.clone(), width) } else { Appearance::basic(placed.clone(), Paint::None, 0.0) };
+            let Some(item) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_)) == stroke) else { panic!("{what}: the item") };
+            item.effects_mut().push(fx(&format!("warp.{style}"), json!({"bend": 40.0})));
+            let n = Node::path(NodeId(50), shapes::rectangle(square), ap);
+            let d = bake_document(&doc_with(n)).unwrap();
+            let mut found = vec![];
+            d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+                for item in &c.appearance.items {
+                    if let Paint::Gradient(g) = item.paint() {
+                        found.push((c.geometric_bounds().unwrap(), g.geom.unwrap()));
+                    }
+                }
+            });
+            assert!(!found.is_empty(), "{what}: the gradient is kept");
+            for (b, g) in found {
+                assert_ne!(b, square, "{what}: the warp changes the bounds");
+                let (from, to) = if stroke { (pad(square), pad(b)) } else { (square, b) };
+                let want = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+                assert_geom_near(g, want, &what);
+            }
+        }
+    }
+}
+
 #[test]
 fn item_effects_split_into_one_path_per_item() {
     let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
@@ -67,7 +576,7 @@ fn a_baked_stroke_keeps_its_raster_effects() {
         s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
         s.effects.push(fx("stylize.dropShadow", json!({})));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     assert_eq!(f.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
@@ -82,7 +591,7 @@ fn a_baked_stroke_leaves_dither_behind() {
         g.gradient.dither = true;
         s.paint = Paint::Gradient(Box::new(g));
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let Some(AppearanceItem::Fill(f)) = ch[1].appearance.items.first() else { panic!("the outline is filled") };
     let Paint::Gradient(g) = &f.paint else { panic!("a gradient fill") };
@@ -98,12 +607,33 @@ fn a_baked_stroke_with_a_gradient_along_it_becomes_meshes_clipped_to_its_outline
         s.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
         s.opacity = 0.5;
     }
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let ch = m.children().unwrap();
     let NodeKind::Group { children, clip: true } = &ch[1].kind else { panic!("a clip group: {:?}", ch[1].kind) };
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert!(children.len() > 1 && children[1..].iter().all(|c| matches!(c.kind, NodeKind::Mesh(_))), "gradient meshes");
     assert_eq!(ch[1].opacity, 0.5);
+}
+
+/// Distort Appearance on the pieces of type's glyph outlines (#6644): a stroke's geometry effect
+/// still bakes into its piece, but the stroke stays a stroke at its own weight; a piece with no
+/// geometry effect is left as it is, its stroke on it (Distort Appearance on a path outlines it).
+#[test]
+fn type_pieces_bake_their_geometry_effects_and_keep_their_strokes() {
+    let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+    assert!(bake_type_appearance(None, &n).is_none(), "nothing to bake");
+    assert!(bake_appearance(None, &n).is_some(), "a path's stroke is outlined");
+    if let AppearanceItem::Stroke(s) = &mut n.appearance.items[1] {
+        s.width = 4.0;
+        s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
+    }
+    let m = bake_type_appearance(None, &n).unwrap();
+    let ch = m.children().unwrap();
+    assert_eq!(ch.len(), 2);
+    let Some(AppearanceItem::Stroke(st)) = ch[1].appearance.items.first() else { panic!("still a stroke: {:?}", ch[1].appearance) };
+    assert!(st.width == 4.0 && st.effects.is_empty(), "{st:?}");
+    assert!((ch[1].geometric_bounds().unwrap().width() - 110.0).abs() < 0.5, "the stroke's offset is baked into its path");
+    assert!((ch[0].geometric_bounds().unwrap().width() - 100.0).abs() < 1e-6, "the fill keeps the square");
 }
 
 /// A 100 pt square at the origin painted by `fill` and `stroke` (`width` pt), with the Transform
@@ -131,10 +661,10 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
     // Distort Appearance: the 200% copy's stroke is 4 pt, as outside the envelope, so its outline
     // is 204 pt wide.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1, "strokes": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 2, "{w:?}");
-    assert!((w[0] - 102.0).abs() < 0.5 && (w[1] - 204.0).abs() < 0.5, "{w:?}");
+    assert!((w[1] - 102.0).abs() < 0.5 && (w[0] - 204.0).abs() < 0.5, "the original on top: {w:?}");
     assert!(baked_paths(&m).iter().all(|p| p.appearance.stroke().is_none()), "the strokes are outlined");
 }
 
@@ -142,7 +672,7 @@ fn a_baked_transform_copy_keeps_its_scaled_stroke() {
 fn a_baked_transform_copy_keeps_its_moved_pattern() {
     let paint = Paint::Pattern { pattern: "p".into(), xf: vectorcraft_geom::Affine::IDENTITY };
     let n = transformed(paint, Paint::None, 0.0, json!({"moveH": 30, "copies": 1, "patterns": true}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let xs: Vec<f64> = baked_paths(&m)
         .iter()
         .map(|p| match p.appearance.fill_paint() {
@@ -150,14 +680,14 @@ fn a_baked_transform_copy_keeps_its_moved_pattern() {
             p => panic!("not a pattern: {p:?}"),
         })
         .collect();
-    assert_eq!(xs, vec![0.0, 30.0]);
+    assert_eq!(xs, vec![30.0, 0.0], "the original on top");
 }
 
 #[test]
 fn a_baked_transform_without_its_options_outlines_the_copies_together() {
     // Without Scale Strokes & Effects the copy keeps the 2 pt stroke: one outline of both squares.
     let n = transformed(Paint::None, Paint::solid(Color::BLACK), 2.0, json!({"scaleH": 200, "scaleV": 200, "copies": 1}));
-    let m = bake_appearance(&n).unwrap();
+    let m = bake_appearance(None, &n).unwrap();
     let w = widths(&m);
     assert_eq!(w.len(), 1, "{w:?}");
     assert!((w[0] - 202.0).abs() < 0.5, "{w:?}");
@@ -246,7 +776,7 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
     let mut shadowed = type_node(55);
     shadowed.opacity = 0.5;
     shadowed.appearance.effects.push(fx("stylize.dropShadow", json!({})));
-    // Type that clips a group is outlined as the plain outlines it clips by.
+    // Type that clips a group is outlined as a plain path of the region it clips by.
     let square = Node::path(NodeId(57), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
     let clip = Node::new(NodeId(58), NodeKind::Group { children: vec![Arc::new(type_node(56)), Arc::new(square)], clip: true });
     g.children_mut().unwrap().extend([Arc::new(shadowed), Arc::new(clip)]);
@@ -259,11 +789,14 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
     let b = o.geometric_bounds().unwrap();
     assert!(b.x0 < 30.0 && b.x1 > 220.0, "{b:?}");
     let clipped = d.node(NodeId(58)).and_then(|n| n.children()).and_then(|c| c.first()).unwrap();
-    assert!(matches!(clipped.kind, NodeKind::Group { .. }) && clipped.opacity == 1.0, "{clipped:?}");
+    assert!(matches!(clipped.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && clipped.opacity == 1.0, "{clipped:?}");
+    // The region is copied with the type.
+    let b = clipped.geometric_bounds().unwrap();
+    assert!(b.x0 < 30.0 && b.x1 > 220.0, "{b:?}");
 }
 
 #[test]
-fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
+fn type_in_a_clipping_group_with_a_fill_of_its_own_keeps_its_effect() {
     if skip_without_craft_fonts() {
         return;
     }
@@ -278,9 +811,59 @@ fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
     g.children_mut().unwrap().push(Arc::new(clip));
     let d = bake_document(&doc_with(g)).unwrap();
     assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
-    // The type clips by its plain outlines, as the canvas clips by them: its own effect is left out.
+    // The type clips by its outlines moved by its own effect, as the canvas clips by them.
     let b = d.node(NodeId(59)).and_then(|n| n.geometric_bounds()).unwrap();
-    assert!(b.y0 > 30.0 && b.y1 < 70.0, "{b:?}");
+    assert!(b.y0 > 330.0 && b.y1 < 370.0, "{b:?}");
+}
+
+#[test]
+fn clipping_type_whose_fill_has_a_geometry_effect_clips_by_its_plain_outlines() {
+    if skip_without_craft_fonts() {
+        return;
+    }
+    let near = |a: Rect, b: Rect, tol: f64| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < tol);
+    for stroke in [Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0))] {
+        // Type that clips a square, with a Transform effect on its own fill.
+        let mut t = type_node(60);
+        t.appearance = Appearance::basic(Paint::solid(Color::BLACK), stroke.clone(), 1.0).into();
+        for item in &mut t.appearance.items {
+            if let AppearanceItem::Fill(f) = item {
+                f.effects.push(fx("distort.transform", json!({"moveH": 300})));
+            }
+        }
+        let square = Node::path(NodeId(61), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        let clip = Node::new(NodeId(62), NodeKind::Group { children: vec![Arc::new(t.clone()), Arc::new(square)], clip: true });
+        let canvas = crate::clip_outline(&t).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(canvas.x1 < 100.0, "the canvas clips by the plain outlines: {canvas:?}");
+        let d = bake_document(&doc_with(clip)).unwrap();
+        let baked = d.node(NodeId(62)).unwrap();
+        // With a stroke, the clip group sits in a group with the stroke over it, outside the clip.
+        let group = match baked.kind {
+            NodeKind::Group { clip: true, .. } => {
+                assert!(stroke.is_none(), "{baked:?}");
+                baked
+            }
+            _ => {
+                let ch = baked.children().unwrap();
+                assert_eq!(ch.len(), 2, "{baked:?}");
+                let strokes = ch[1].appearance.items.iter().all(|i| matches!(i, AppearanceItem::Stroke(_)));
+                assert!(matches!(ch[1].kind, NodeKind::Text(_)) && strokes, "the type with only its stroke: {:?}", ch[1]);
+                &ch[0]
+            }
+        };
+        let ch = group.children().unwrap();
+        assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }) && ch.len() == 3, "{group:?}");
+        // The export clips by the outlines the canvas clips by.
+        assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0]);
+        let b = crate::clip_outline(&ch[0]).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(near(b, canvas, 1e-6), "canvas {canvas:?}, export {b:?}");
+        // The fills (the characters' and the moved one) paint behind the square, inside the clip.
+        let fill = ch[1].geometric_bounds().unwrap();
+        assert!((fill.x0 - canvas.x0).abs() < 1e-6 && fill.x1 > canvas.x1 + 250.0, "{fill:?}");
+        assert_eq!(ch[2].id, NodeId(61));
+        let mut ids = std::collections::HashSet::new();
+        baked.walk(&mut |n| assert!(ids.insert(n.id), "duplicate id {}", n.id));
+    }
 }
 
 #[test]
@@ -534,4 +1117,546 @@ fn exporting_a_path_with_a_transform_gives_each_copy_its_own_gradient() {
     let d = bake_document(&doc_with(gradient_copies(50))).unwrap();
     // Three squares of their own, not one path spanning all three.
     assert_eq!(gradient_pieces(d.node(NodeId(50)).unwrap()), vec![10.0; 3]);
+}
+
+/// A 10 × 10 square at (10, 40), with id `id`, that a Transform effect moves 100 pt right.
+fn moved_square(id: u64) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    n.appearance.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    n
+}
+
+fn instance(id: u64, symbol: &str, xf: vectorcraft_geom::Affine) -> Node {
+    Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: symbol.into(), xf })
+}
+
+fn add_symbol(d: &mut Document, name: &str, art: Node) {
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+}
+
+fn bounds(d: &Document, id: u64) -> Rect {
+    d.node(NodeId(id)).and_then(|n| n.geometric_bounds()).unwrap_or_else(|| panic!("node {id} has bounds"))
+}
+
+fn near_rect(a: Rect, b: Rect) -> bool {
+    [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(x, y)| (x - y).abs() < 1e-6)
+}
+
+/// Each instance draws its symbol's art with the art's effects applied where the instance places
+/// it: an instance that doubles the art's size moves it the effect's 100 pt, as the canvas draws
+/// it, not 200 pt. Plain baking leaves the instances and the symbols' art as they are.
+#[test]
+fn placing_symbols_bakes_their_art_where_each_instance_places_it() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)) * Affine::scale(2.0))).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    assert!(bake_document(&d).is_none(), "nothing in the layers needs baking");
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(matches!(out.node(NodeId(900)).unwrap().kind, NodeKind::Group { .. }));
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 40.0, 120.0, 50.0)), "{:?}", bounds(&out, 900));
+    assert!(near_rect(bounds(&out, 901), Rect::new(120.0, 180.0, 140.0, 200.0)), "{:?}", bounds(&out, 901));
+    assert_eq!(out.symbols[0].art.appearance.effects.len(), 1, "the symbol's art keeps its effect");
+}
+
+/// An instance of a symbol whose art holds an instance of another symbol with effects draws that
+/// art with its effects too.
+#[test]
+fn placing_symbols_reaches_the_art_of_nested_instances() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::translate((0.0, 100.0))))]));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 140.0, 120.0, 150.0)), "{:?}", bounds(&out, 900));
+}
+
+/// A 10 pt square with id `id`, masked by `art` (the mask enabled unless `disabled`).
+fn masked_square(id: u64, art: Node, disabled: bool) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let mut mask = vectorcraft_doc::OpacityMask::new(art, false);
+    mask.disabled = disabled;
+    n.extras_mut().mask = Some(Box::new(mask));
+    n
+}
+
+/// Whether the art of `n`'s opacity mask is still a symbol instance, and its bounds when it is not.
+fn mask_art(n: &Node) -> (bool, Option<Rect>) {
+    let art = &n.extras().mask.as_ref().unwrap_or_else(|| panic!("node {:?} has a mask", n.id)).art;
+    (matches!(art.kind, NodeKind::SymbolInstance { .. }), art.geometric_bounds())
+}
+
+/// An instance in the art of an enabled opacity mask is placed and baked like any other, so the
+/// mask masks with the art the instance draws, and the masked object stays as it is (a clipping
+/// path stays one); one in a disabled mask, in the mask of an object the export leaves out, or in
+/// a ruler guide's mask, stays as it is.
+#[test]
+fn placing_symbols_reaches_instances_in_opacity_masks() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(masked_square(700, instance(900, "S", Affine::IDENTITY), false));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, masked_square(701, instance(901, "S", Affine::IDENTITY), true)).unwrap();
+    let mut hidden = masked_square(702, instance(902, "S", Affine::IDENTITY), false);
+    hidden.visible = false;
+    d.insert(Some(layer), 2, hidden).unwrap();
+    let mut clipping = masked_square(703, instance(903, "S", Affine::IDENTITY), false);
+    if let NodeKind::Path { clipping: c, .. } = &mut clipping.kind {
+        *c = true;
+    }
+    d.insert(Some(layer), 3, Node::group(NodeId(704), vec![Arc::new(clipping)])).unwrap();
+    let mut guide = Node::new(NodeId(705), NodeKind::RulerGuide { vertical: false, pos: 5.0, artboard: None });
+    guide.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(instance(905, "S", Affine::IDENTITY), false)));
+    d.insert(Some(layer), 4, guide).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    for id in [700, 703] {
+        let (still, b) = mask_art(out.node(NodeId(id)).unwrap());
+        assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{id}: {b:?}");
+    }
+    assert!(matches!(out.node(NodeId(703)).unwrap().kind, NodeKind::Path { clipping: true, .. }), "the clipping path stays one");
+    assert!(mask_art(out.node(NodeId(701)).unwrap()).0, "a disabled mask's instance stays");
+    assert!(mask_art(out.node(NodeId(702)).unwrap()).0, "a hidden object's mask's instance stays");
+    assert!(mask_art(out.node(NodeId(705)).unwrap()).0, "a ruler guide's mask's instance stays");
+}
+
+/// A symbol whose art holds an instance only in an opacity mask's art is placed too, and the
+/// instance in its mask is placed with it.
+#[test]
+fn placing_symbols_reaches_instances_in_the_masks_of_symbol_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", masked_square(803, instance(802, "Inner", Affine::IDENTITY), false));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(!is_instance(&out, 900), "the outer instance is placed");
+    let mut found = None;
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.id == NodeId(803) {
+            found = Some(mask_art(n));
+        }
+    });
+    let (still, b) = found.unwrap_or_else(|| panic!("the masked square is in the placed art"));
+    assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{b:?}");
+}
+
+/// A symbol whose art holds an instance of itself is placed until the depth limit, and the export
+/// ends.
+#[test]
+fn placing_a_symbol_that_holds_itself_stops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Loop", Affine::IDENTITY));
+    add_symbol(
+        &mut d,
+        "Loop",
+        Node::group(NodeId(801), vec![Arc::new(moved_square(800)), Arc::new(instance(802, "Loop", Affine::translate((0.0, 1.0))))]),
+    );
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    let mut lefts = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| lefts.extend(n.path_data().and_then(|p| p.bounds()).map(|b| b.x0)));
+    assert!(lefts.len() > 1 && lefts.iter().all(|x| (x - 110.0).abs() < 1e-6), "{lefts:?}");
+    let mut depth = 0;
+    let mut n = out.node(NodeId(900)).unwrap();
+    while let Some(next) = n.children().and_then(|ch| ch.last()) {
+        n = next;
+        depth += 1;
+    }
+    assert!(depth <= 3 * (vectorcraft_doc::depth::MAX_DEPTH + 1), "{depth}");
+}
+
+/// A dynamic symbol instance's own paint for an object of the art applies before the object's
+/// effects are baked: a fill whose own Transform effect makes the square a group of pieces still
+/// paints in the instance's red, and its sibling keeps the symbol's paint.
+#[test]
+fn placing_symbols_keeps_dynamic_instances_changes() {
+    use vectorcraft_geom::Affine;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let mut square = Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    if let Some(AppearanceItem::Fill(f)) = square.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+        f.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    }
+    let sibling = Node::path(NodeId(801), shapes::rectangle(Rect::new(10.0, 60.0, 20.0, 70.0)), Appearance::default_art());
+    let mut inst = instance(900, "D", Affine::IDENTITY);
+    inst.extras_mut().symbol_overrides = vec![vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(red.clone()), ..Default::default() }];
+    let mut d = doc_with(inst);
+    add_symbol(&mut d, "D", Node::group(NodeId(802), vec![Arc::new(square), Arc::new(sibling)]));
+    d.symbols[0].dynamic = true;
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    let mut fills = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.path_data().is_some()
+            && let Some(b) = n.geometric_bounds()
+        {
+            fills.push((b.x0.round(), b.y0.round(), n.appearance.fill_paint()));
+        }
+    });
+    assert!(fills.contains(&(110.0, 40.0, red)), "{fills:?}");
+    assert!(fills.contains(&(10.0, 60.0, Paint::solid(Color::WHITE))), "{fills:?}");
+}
+
+/// An instance whose fill stains its symbol's art places the art in its stained colors, with the
+/// art's effects applied after the stain: a Transform moves the stained square and an Invert
+/// inverts the stained color.
+#[test]
+fn placing_symbols_keeps_the_instances_stain() {
+    use vectorcraft_geom::Affine;
+    let blue = Color::rgb8(30, 90, 220);
+    let mut inst = instance(900, "Mark", Affine::IDENTITY);
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    inst.appearance.items.retain(|i| i.is_fill());
+    if let AppearanceItem::Fill(f) = &mut inst.appearance.items[0] {
+        f.opacity = 0.5;
+    }
+    let square =
+        Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+    let stained = vectorcraft_doc::symbol_overrides::instance_art(&square, &inst).appearance.fill_paint().color().unwrap();
+    assert_ne!(stained.to_hex(), blue.to_hex());
+    let [r, g, b] = stained.to_rgb();
+    let inverted = Color::rgb(1.0 - r, 1.0 - g, 1.0 - b);
+    for (id, params, want) in [("distort.transform", json!({"moveH": 100.0}), stained), (crate::addons::color::INVERT, json!({}), inverted)] {
+        let mut art = square.clone();
+        art.appearance.effects.push(fx(id, params));
+        let mut d = doc_with(inst.clone());
+        add_symbol(&mut d, "Mark", art);
+        let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+        assert!(!is_instance(&out, 900), "{id}: the instance is placed");
+        let mut fills = vec![];
+        out.node(NodeId(900)).unwrap().walk(&mut |n| {
+            if n.path_data().is_some() {
+                fills.extend(n.appearance.fill_paint().color().map(|c| c.to_hex()));
+            }
+        });
+        assert_eq!(fills, [want.to_hex()], "{id}");
+    }
+}
+
+/// Every layer written, as DXF writes them (template layers are never written).
+const ALL: WrittenLayers = WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
+
+fn is_instance(d: &Document, id: u64) -> bool {
+    d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+}
+
+/// The art placed for an export is counted as baked: the copies an effect makes count, so an
+/// instance whose baked art passes what is left of the budget stays an instance, and the budget
+/// holds the baked art of the instances placed, exactly.
+#[test]
+fn placing_symbols_counts_the_baked_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)))).unwrap();
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let each = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(each > 2, "the instance's group, and the copies as objects of their own: {each}");
+    assert_eq!(all.node(NodeId(901)).map(|n| n.count_with_masks() as u64), Some(each));
+    let fits = bake(&d, Some((true, 2 * each, ALL))).unwrap();
+    assert!(!is_instance(&fits, 900) && !is_instance(&fits, 901));
+    let short = bake(&d, Some((true, 2 * each - 1, ALL))).unwrap();
+    assert_eq!(usize::from(is_instance(&short, 900)) + usize::from(is_instance(&short, 901)), 1, "one instance stays as it is");
+}
+
+/// The baked art of an instance placed inside another's art is counted once: a budget of exactly
+/// the outer instance's baked art places both.
+#[test]
+fn placing_symbols_counts_nested_art_once() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::IDENTITY))]));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let total = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let exact = bake(&d, Some((true, total, ALL))).unwrap();
+    assert!(!is_instance(&exact, 900) && !is_instance(&exact, 802), "both are placed within {total}");
+    let short = bake(&d, Some((true, total - 1, ALL))).unwrap();
+    assert!(is_instance(&short, 900), "the outer instance stays as it is");
+}
+
+/// While an instance's art bakes, the art's own objects are held in the budget: an instance
+/// nested in it whose art does not fit in what is left stays as it is, and the outer instance is
+/// placed around it.
+#[test]
+fn placing_symbols_holds_the_outer_art_while_it_bakes() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", Node::group(NodeId(803), vec![Arc::new(gradient_copies(800))]));
+    let mut art: Vec<Arc<Node>> = (0..5)
+        .map(|i| Arc::new(Node::path(NodeId(810 + i), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())))
+        .collect();
+    art.push(Arc::new(instance(802, "Inner", Affine::IDENTITY)));
+    let outer = Node::group(NodeId(801), art);
+    // The outer instance's group around its art, with the inner instance left as it is.
+    let around = 1 + outer.count_with_masks() as u64;
+    add_symbol(&mut d, "Outer", outer);
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let inner = all.node(NodeId(802)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(inner > 2 && inner <= around, "the inner art alone fits: {inner} <= {around}");
+    let out = bake(&d, Some((true, around, ALL))).unwrap();
+    assert!(!is_instance(&out, 900) && is_instance(&out, 802), "the outer instance is placed around the inner one");
+}
+
+/// Art baked for an instance and then left out, because it passes the budget, still counts: an
+/// instance after it whose art would fit in the budget alone stays as it is, and a budget with
+/// room for both places both.
+#[test]
+fn placing_symbols_counts_the_art_it_drops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(901, "Small", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(900, "Big", Affine::IDENTITY)).unwrap();
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    add_symbol(&mut d, "Small", moved_square(810));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let count = |id: u64| all.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (big, small) = (count(900), count(901));
+    assert!(small < big, "{small} < {big}");
+    let short = bake(&d, Some((true, big - 1, ALL))).unwrap();
+    assert!(is_instance(&short, 900), "the big art passes {}", big - 1);
+    assert!(is_instance(&short, 901), "the big art's {big} objects count, so the small art does not fit");
+    let both = bake(&d, Some((true, big + small, ALL))).unwrap();
+    assert!(!is_instance(&both, 900) && !is_instance(&both, 901));
+}
+
+/// Instances the export does not write are not placed and do not count against the budget: with
+/// room for one instance's baked art, hidden instances, an instance in a hidden group, one on a
+/// template layer, one on a layer that does not print and one on a hidden layer (when the export
+/// leaves those layers out) come first and stay as they are, and the visible instance after them
+/// is placed. An export that writes those layers places their instances first.
+#[test]
+fn placing_symbols_skips_instances_the_export_leaves_out() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let each = bake(&d, Some((true, u64::MAX, ALL))).unwrap().node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let layer = d.layers[0].id;
+    let mut hidden = instance(901, "S", Affine::IDENTITY);
+    hidden.visible = false;
+    let mut group = Node::group(NodeId(902), vec![Arc::new(instance(903, "S", Affine::IDENTITY))]);
+    group.visible = false;
+    for (i, n) in [hidden, group].into_iter().enumerate() {
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    let mut left_out = vec![];
+    for (id, template, printable, visible) in [(910, true, true, true), (920, false, false, true), (930, false, true, false)] {
+        let mut l = Node::layer(NodeId(id), &format!("L{id}"), vectorcraft_doc::LayerColor::Preset(0));
+        if let NodeKind::Layer { template: t, printable: p, .. } = &mut l.kind {
+            *t = template;
+            *p = printable;
+        }
+        l.visible = visible;
+        if let Some(ch) = l.children_mut() {
+            ch.push(Arc::new(instance(id + 1, "S", Affine::IDENTITY)));
+        }
+        left_out.push(Arc::new(l));
+    }
+    d.layers.splice(0..0, left_out);
+    let out = bake(&d, Some((true, each, WrittenLayers::default()))).unwrap();
+    assert!(!is_instance(&out, 900), "the visible instance is placed within {each}");
+    for id in [901, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
+    }
+    // An export that writes the layers that do not print, or the hidden layers, places that
+    // layer's instance first; the template layer's instance is never placed.
+    for (layers, first) in
+        [(WrittenLayers { non_printing: true, ..WrittenLayers::default() }, 921), (WrittenLayers { hidden: true, ..WrittenLayers::default() }, 931)]
+    {
+        let out = bake(&d, Some((true, each, layers))).unwrap();
+        assert!(!is_instance(&out, first) && is_instance(&out, 900) && is_instance(&out, 911), "{layers:?}");
+    }
+    // An export that writes hidden objects (SVG keeping hidden layers) places the hidden instance
+    // first, and the instance in the hidden group would come next; the hidden layer's instance
+    // stays, since that layer is still left out.
+    let out = bake(&d, Some((true, each, WrittenLayers { hidden_objects: true, ..WrittenLayers::default() }))).unwrap();
+    assert!(!is_instance(&out, 901), "the hidden instance is placed");
+    for id in [900, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
+    }
+}
+
+/// `leaf` in `levels` groups, with ids from `id` up.
+fn in_groups(id: u64, levels: u64, leaf: Node) -> Node {
+    (0..levels).fold(leaf, |n, i| Node::group(NodeId(id + i), vec![Arc::new(n)]))
+}
+
+/// Placed art is drawn no deeper than the document may draw: an instance whose art's effects add
+/// a level past it stays an instance, and the instances around it are placed.
+#[test]
+fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
+    use vectorcraft_doc::depth::{DrawnHeights, MAX_DRAWN_DEPTH};
+    use vectorcraft_geom::Affine;
+    // The instance on the layer is 2 deep; A to D each hold the next 31 objects down, and E's
+    // square is 2 deep in its art: 2 + 4 × 31 + 2 = MAX_DRAWN_DEPTH.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!d.too_deep(None));
+    assert_eq!(DrawnHeights::of(&d).deepest(&d.layers[0], 1), MAX_DRAWN_DEPTH);
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    // E's square becomes a group of copies, a level past the cap: E's instance stays.
+    assert!(is_instance(&out, 4100), "E's instance stays as it is");
+    assert!(!is_instance(&out, 900) && !is_instance(&out, 3100), "A to D are placed");
+    assert!(DrawnHeights::of(&out).deepest(&out.layers[0], 1) <= MAX_DRAWN_DEPTH);
+    // Without the chain above it, E's art is placed.
+    let mut shallow = doc_with(instance(900, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!is_instance(&bake_document_placing_symbols(&shallow, true, ALL).unwrap(), 900));
+}
+
+/// Art baked for an instance and then left out because it draws too deep still counts when the
+/// baked art of a later instance is checked: that art fits before its effects add copies, but
+/// not once they do.
+#[test]
+fn placing_symbols_counts_art_dropped_for_depth_against_later_baked_art() {
+    use vectorcraft_geom::Affine;
+    // The chain of placing_symbols_keeps_the_baked_art_within_the_drawn_depth, then F, whose
+    // square becomes a group of copies once baked.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    add_symbol(&mut d, "F", gradient_copies(6000));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, instance(901, "F", Affine::IDENTITY)).unwrap();
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    assert!(is_instance(&all, 4100) && !is_instance(&all, 900) && !is_instance(&all, 901));
+    let count = |d: &Document, id: u64| d.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (a, f) = (count(&all, 900), count(&all, 901));
+    // E's baked art, as placed where nothing above it draws deep.
+    let mut shallow = doc_with(instance(4100, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    let e = count(&bake(&shallow, Some((true, u64::MAX, ALL))).unwrap(), 4100);
+    assert!(f > 2, "F's copies are objects of their own: {f}");
+    let short = bake(&d, Some((true, a + e + f - 1, ALL))).unwrap();
+    assert!(!is_instance(&short, 900) && is_instance(&short, 4100), "A to D are placed, E is not");
+    assert!(is_instance(&short, 901), "E's dropped {e} objects count, so F's baked {f} do not fit");
+    let room = bake(&d, Some((true, a + e + f, ALL))).unwrap();
+    assert!(!is_instance(&room, 900) && !is_instance(&room, 901));
+}
+
+/// Instance `id` of `symbol` with a geometry effect, so baking it reshapes its art.
+fn offset_instance(id: u64, symbol: &str) -> Node {
+    let mut n = instance(id, symbol, vectorcraft_geom::Affine::IDENTITY);
+    n.appearance.effects.push(fx("path.offsetPath", json!({"offset": 1.0})));
+    n
+}
+
+/// `n` baked as an instance inside another instance's art, with `spent` objects of nested symbol
+/// art already baked: the baked object, and the objects counted after it, art baked and dropped
+/// included.
+fn bake_nested(d: &mut Document, n: &Node, spent: u64) -> (Option<Node>, u64) {
+    INSTANCE_DEPTH.with(|c| c.set(1));
+    NESTED_NODES.with(|c| c.set(spent));
+    NESTED_DROPPED.with(|c| c.set(0));
+    let out = bake_node(d, n);
+    INSTANCE_DEPTH.with(|c| c.set(0));
+    (out, NESTED_NODES.with(|c| c.replace(0)).saturating_add(NESTED_DROPPED.with(|c| c.replace(0))))
+}
+
+/// The object with id `id` in `n`'s subtree.
+fn find(n: &Node, id: u64) -> Option<&Node> {
+    if n.id == NodeId(id) {
+        return Some(n);
+    }
+    n.children().into_iter().flatten().find_map(|c| find(c, id))
+}
+
+/// Is `n` an object other than a symbol instance?
+fn baked(n: Option<&Node>) -> bool {
+    n.is_some_and(|n| !matches!(n.kind, NodeKind::SymbolInstance { .. }))
+}
+
+/// An instance baked inside another instance's art counts the art it bakes to, the copies its
+/// symbol's effects make included: art that fits exactly takes the last of the budget, and art
+/// whose symbol fits but whose baked art does not leaves the instance as it is and still counts.
+#[test]
+fn nested_reshape_counts_baked_art() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    let n = offset_instance(900, "Inner");
+    let source = d.symbols[0].art.count() as u64;
+    let (all, spent) = bake_nested(&mut d, &n, 0);
+    let baked = all.map_or(0, |m| m.count() as u64);
+    assert!(baked > source + 1, "the copies are objects of their own: {baked} > {source} + 1");
+    assert_eq!(spent, baked, "the baked art is counted in place of the symbol's art");
+    let max = crate::SYMBOL_ART_MAX_NODES;
+    let (exact, spent) = bake_nested(&mut d, &n, max - baked);
+    assert!(exact.is_some(), "{baked} objects fit in {baked}");
+    assert_eq!(spent, max);
+    let (short, spent) = bake_nested(&mut d, &n, max - baked + 1);
+    assert!(short.is_none(), "the symbol's {source} objects fit, the {baked} baked ones do not");
+    assert_eq!(spent, max + 1, "the art baked for the instance left as it is still counts");
+}
+
+/// An instance left as it is because its baked art does not fit still counts the art baked for
+/// it: an instance after it is left as it is too, before its art bakes.
+#[test]
+fn nested_reshape_refusal_keeps_its_work_counted() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    add_symbol(&mut d, "Small", moved_square(810));
+    let (big, small) = (offset_instance(900, "Big"), offset_instance(901, "Small"));
+    let count = |d: &mut Document, n: &Node| bake_nested(d, n, 0).0.map_or(0, |m| m.count() as u64);
+    let (b, s) = (count(&mut d, &big), count(&mut d, &small));
+    assert!(s < b, "{s} < {b}");
+    let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
+    let (refused, spent) = bake_nested(&mut d, &big, first);
+    assert!(refused.is_none(), "the big art passes the budget");
+    assert_eq!(spent, first + b, "the big art baked and dropped counts");
+    let (later, after) = bake_nested(&mut d, &small, spent);
+    assert!(later.is_none(), "the small art does not fit after the dropped art");
+    assert_eq!(after, spent, "the small instance is refused before it bakes");
+}
+
+/// Sibling instances inside other instances' art whose baked art each passes what is left: the
+/// first is baked and dropped, and its art counts, so the others are left as they are before
+/// their art bakes. With room for all of them, every one is baked.
+#[test]
+fn nested_reshape_refused_siblings_bake_once() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    let one = offset_instance(900, "Big");
+    let b = bake_nested(&mut d, &one, 0).0.map_or(0, |m| m.count() as u64);
+    let siblings: Vec<Arc<Node>> = (0..16).map(|i| Arc::new(offset_instance(1000 + i, "Big"))).collect();
+    let group = Node::group(NodeId(999), siblings);
+    let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
+    let (refused, spent) = bake_nested(&mut d, &group, first);
+    let refused = refused.unwrap_or_else(|| group.clone());
+    assert!((0..16).all(|i| !baked(find(&refused, 1000 + i))), "no sibling fits: {refused:?}");
+    assert_eq!(spent, first + b, "only the first sibling's art is baked and counted: {spent}");
+    let (room, spent) = bake_nested(&mut d, &group, 0);
+    let room = room.unwrap_or_else(|| panic!("the siblings are baked"));
+    assert!((0..16).all(|i| baked(find(&room, 1000 + i))), "every sibling is baked");
+    assert_eq!(spent, 16 * b);
+}
+
+/// An instance inside another instance's art whose own art holds a reshaped instance counts that
+/// instance's baked art once: a budget of exactly the outer art's baked objects bakes both, and
+/// with one object less the art baked and dropped still counts.
+#[test]
+fn nested_reshape_counts_successful_descendants_once() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    let square = Node::path(NodeId(803), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(offset_instance(802, "Inner")), Arc::new(square)]));
+    let outer = offset_instance(900, "Outer");
+    let (all, spent) = bake_nested(&mut d, &outer, 0);
+    let all = all.unwrap_or_else(|| panic!("the outer instance is baked"));
+    assert!(baked(find(&all, 802)), "the inner instance is baked: {all:?}");
+    let total = all.count() as u64;
+    assert_eq!(spent, total);
+    let max = crate::SYMBOL_ART_MAX_NODES;
+    let (exact, spent) = bake_nested(&mut d, &outer, max - total);
+    let exact = exact.unwrap_or_else(|| panic!("{total} objects fit in {total}"));
+    assert!(baked(find(&exact, 802)), "the inner instance is baked too");
+    assert_eq!(spent, max);
+    let (short, spent) = bake_nested(&mut d, &outer, max - total + 1);
+    assert!(short.as_ref().is_none_or(|m| !baked(find(m, 802))), "with one object less, not both are baked");
+    assert!(spent > max, "the art baked and dropped counts: {spent}");
+    assert!(spent <= max - total + 1 + 2 * total, "at most the outer and the inner art are dropped: {spent}");
 }

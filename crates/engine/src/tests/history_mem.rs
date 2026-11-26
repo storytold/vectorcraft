@@ -10,6 +10,12 @@ use crate::*;
 /// A session with one document holding `n` rectangles, all selected.
 fn session_with_rects(n: usize) -> Session {
     let mut s = Session::new();
+    open_with_rects(&mut s, n);
+    s
+}
+
+/// Open a new document in `s` holding `n` rectangles, all selected.
+fn open_with_rects(s: &mut Session, n: usize) {
     s.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
     s.edit("Add", |d, _| {
         let layer = d.layers[0].id;
@@ -22,7 +28,6 @@ fn session_with_rects(n: usize) -> Session {
     })
     .unwrap();
     s.execute("select.all", &json!({})).unwrap();
-    s
 }
 
 fn first_x(s: &Session) -> f64 {
@@ -73,6 +78,203 @@ fn within_the_budget_the_step_limit_still_counts() {
     let st = s.doc().unwrap();
     assert_eq!(st.history.undo.len(), 12);
     assert!(st.history.bytes() < st.history.byte_budget);
+}
+
+fn moves(s: &mut Session, n: usize) {
+    for _ in 0..n {
+        s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    }
+}
+
+fn undo_lens(s: &Session) -> Vec<usize> {
+    s.docs.iter().map(|d| d.history.undo.len()).collect()
+}
+
+fn history_bytes(s: &Session) -> usize {
+    s.docs.iter().map(|d| d.history.bytes()).sum()
+}
+
+#[test]
+fn one_document_keeps_its_steps_within_the_session_budget() {
+    let mut s = session_with_rects(500);
+    moves(&mut s, 1);
+    let step = s.doc().unwrap().history.undo.last().unwrap().bytes;
+    s.history_budget = 3 * step;
+    moves(&mut s, 20);
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), History::MIN_STEPS, "only the last few steps are kept");
+    assert_eq!(st.history.byte_budget, default_history_budget(), "the document's own budget is unchanged");
+    // A lower budget applies at the next command, even one that adds no step.
+    s.history_budget = usize::MAX;
+    moves(&mut s, 4);
+    assert_eq!(s.doc().unwrap().history.undo.len(), History::MIN_STEPS + 4);
+    s.history_budget = 3 * step;
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), History::MIN_STEPS);
+}
+
+#[test]
+fn open_documents_share_one_budget_and_the_oldest_steps_go_first() {
+    let n = 300;
+    let mut s = session_with_rects(n);
+    moves(&mut s, 1);
+    let step = s.doc().unwrap().history.undo.last().unwrap().bytes;
+    // Room for about 22 moves in all the open documents together.
+    s.history_budget = 22 * step;
+    moves(&mut s, 11);
+    assert_eq!(undo_lens(&s), [13], "Add and 12 moves fit in the budget");
+    open_with_rects(&mut s, n);
+    moves(&mut s, 12);
+    let lens = undo_lens(&s);
+    assert_eq!(lens[1], 13, "the newer document keeps all of its steps: {lens:?}");
+    assert!((History::MIN_STEPS..13).contains(&lens[0]), "the older document's oldest steps went: {lens:?}");
+    assert!(history_bytes(&s) <= s.history_budget, "{} bytes kept, budget {}", history_bytes(&s), s.history_budget);
+    // Closing the older document frees its share: the other keeps more steps than before.
+    assert!(s.close_document(0));
+    assert!(s.set_active(0));
+    moves(&mut s, 6);
+    assert_eq!(undo_lens(&s), [19], "Add and 18 moves fit in the budget alone");
+}
+
+#[test]
+fn an_undo_group_lets_no_other_documents_steps_go_until_it_ends() {
+    let mut s = session_with_rects(50);
+    moves(&mut s, 12);
+    open_with_rects(&mut s, 50);
+    // The steps kept now fill the budget exactly.
+    s.history_budget = history_bytes(&s);
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(undo_lens(&s), [13, 1]);
+    // A scrubbed field's edits in the second document, then canceled.
+    s.begin_undo_group();
+    moves(&mut s, 3);
+    assert_eq!(undo_lens(&s), [13, 2], "the group's step waits for the group to end");
+    s.end_undo_group(true);
+    assert_eq!(undo_lens(&s), [13, 1], "a canceled group leaves the other document's steps");
+    // The same edits kept: the other document's oldest steps go.
+    s.begin_undo_group();
+    moves(&mut s, 3);
+    s.end_undo_group(false);
+    let lens = undo_lens(&s);
+    assert_eq!(lens[1], 2);
+    assert!((History::MIN_STEPS..13).contains(&lens[0]), "the older document's oldest steps went: {lens:?}");
+    assert!(history_bytes(&s) <= s.history_budget);
+    // A scrub through an undo scope: its step counts once the scope ends.
+    s.history_budget = usize::MAX;
+    assert!(s.set_active(0));
+    moves(&mut s, 6);
+    assert!(s.set_active(1));
+    s.history_budget = history_bytes(&s);
+    let before = undo_lens(&s)[0];
+    let scope = s.begin_undo_scope().unwrap();
+    moves(&mut s, 3);
+    assert_eq!(undo_lens(&s), [before, 3], "the scope's step waits for the scope to end");
+    s.end_undo_scope(scope, false);
+    let lens = undo_lens(&s);
+    assert!(lens[0] < before, "the older document's oldest steps went once the scope ended: {lens:?}");
+    assert!(history_bytes(&s) <= s.history_budget);
+}
+
+#[test]
+fn steps_kept_outside_a_command_keep_to_the_shared_budget() {
+    let mut s = session_with_rects(50);
+    moves(&mut s, 12);
+    open_with_rects(&mut s, 50);
+    assert_eq!(undo_lens(&s), [13, 1]);
+    // A drag the frontend commits itself.
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.history_budget = 1;
+    assert_eq!(undo_lens(&s), [13, 1]);
+    s.commit_interaction().unwrap();
+    assert_eq!(undo_lens(&s), [History::MIN_STEPS, 2], "the drag's step counts against the other document's");
+    // A script run across frames, whose step is kept after `script.run` returns.
+    s.history_budget = usize::MAX;
+    assert!(s.set_active(0));
+    moves(&mut s, 4);
+    assert!(s.set_active(1));
+    s.script_frames = true;
+    let source = "for (var i = 0; i < 3000000; i++) {} vc.run('object.move', {dx: 1, dy: 0});";
+    assert_eq!(s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap()["running"], true);
+    s.history_budget = 1;
+    let mut slices = 0;
+    let r = loop {
+        slices += 1;
+        assert!(slices < 100_000, "the script ends");
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    assert_eq!(r.unwrap()["ok"], true);
+    assert_eq!(undo_lens(&s), [History::MIN_STEPS, 3], "the run's step counts against the other document's");
+    // An edit a frontend makes itself, outside a command.
+    s.history_budget = usize::MAX;
+    assert!(s.set_active(0));
+    moves(&mut s, 4);
+    assert!(s.set_active(1));
+    s.history_budget = 1;
+    s.edit("Add", |d, _| {
+        let id = d.alloc_id();
+        let r = shapes::rectangle(kurbo::Rect::new(0.0, 20.0, 10.0, 30.0));
+        d.insert(Some(d.layers[0].id), usize::MAX, Node::path(id, r, Appearance::default_art()))?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(undo_lens(&s), [History::MIN_STEPS, 4], "the edit's step counts against the other document's");
+}
+
+#[test]
+fn each_document_keeps_its_last_steps_however_small_the_budget() {
+    let mut s = Session::new();
+    // Smaller than any one step.
+    s.history_budget = 1;
+    for _ in 0..4 {
+        open_with_rects(&mut s, 50);
+        moves(&mut s, 12);
+    }
+    assert_eq!(undo_lens(&s), [History::MIN_STEPS; 4]);
+    // The kept steps undo and redo, and the document now is as it was.
+    let x = first_x(&s);
+    assert_eq!(x, 12.0);
+    for _ in 0..History::MIN_STEPS {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(first_x(&s), x - History::MIN_STEPS as f64);
+    assert!(s.execute("edit.undo", &json!({})).is_err(), "the older steps went");
+    assert_eq!(s.doc().unwrap().history.redo.len(), History::MIN_STEPS);
+    // A held history keeps all of its steps until it is released.
+    assert!(s.set_active(0));
+    s.docs[0].history.held = true;
+    moves(&mut s, 3);
+    assert_eq!(undo_lens(&s)[0], History::MIN_STEPS + 3, "a held history keeps its steps");
+    s.docs[0].history.held = false;
+    s.trim_histories();
+    assert_eq!(undo_lens(&s), [History::MIN_STEPS, History::MIN_STEPS, History::MIN_STEPS, 0]);
+}
+
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn the_default_budget_is_a_quarter_of_installed_memory() {
+    assert_eq!(history_budget_for(Some(16 << 30)), 4 << 30);
+    assert_eq!(history_budget_for(Some(64 << 30)), 16 << 30, "no fixed ceiling");
+    // On Linux `physical_memory` returns a cgroup memory limit lower than the installed memory in
+    // its place (the `cgroup_limit_*` tests in vectorcraft-render), so a 2 GiB limit on a 64 GiB
+    // machine gives the budget of 2 GiB installed.
+    assert_eq!(history_budget_for(Some(2 << 30)), 512 << 20, "2 GiB, or a 2 GiB cgroup limit");
+    assert_eq!(history_budget_for(Some(128 << 20)), 64 << 20, "at least 64 MiB");
+    assert_eq!(history_budget_for(Some(1)), 64 << 20, "at least 64 MiB");
+    assert_eq!(history_budget_for(Some(0)), 1 << 30, "a reading of 0 is the 1 GiB fallback");
+    assert_eq!(history_budget_for(None), 1 << 30, "no reading is the 1 GiB fallback");
+}
+
+#[test]
+#[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
+fn the_default_budget_follows_the_installed_memory_read() {
+    // Where the memory can't be read (a sandbox that hides it), the budget is the 1 GiB fallback.
+    let memory = vectorcraft_render::physical_memory();
+    assert_eq!(default_history_budget(), history_budget_for(memory), "{memory:?}");
+    assert_eq!(History::default().byte_budget, default_history_budget());
+    assert_eq!(Session::new().history_budget, default_history_budget(), "the open documents share it");
 }
 
 #[test]
@@ -178,6 +380,47 @@ fn redo_during_an_interaction_keeps_the_history_and_the_document_in_step() {
     assert_eq!(first_x(&s), start + 3.0);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(first_x(&s), start);
+}
+
+/// `History::step` changes with every new step, Undo and Redo, also when an undo and a new edit
+/// leave as many steps as before, and with an edit merged into an undo group's step. It stays the
+/// same for a selection change.
+#[test]
+fn the_history_step_changes_with_each_step_undo_and_redo() {
+    let mut s = session_with_rects(2);
+    let step = |s: &Session| s.doc().unwrap().history.step();
+    let start = step(&s);
+    assert!(start.0 != 0 && start.1 == 0, "the Add step, and nothing to redo: {start:?}");
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let moved = step(&s);
+    assert!(moved.0 != start.0 && moved.1 == 0, "{moved:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let undone = step(&s);
+    assert!(undone.0 == start.0 && undone.1 != 0, "{undone:?}");
+    s.execute("edit.redo", &json!({})).unwrap();
+    let redone = step(&s);
+    assert!(![start, moved, undone].contains(&redone) && redone.1 == 0, "{redone:?}");
+    // An undo and a new edit: as many undo steps as after the move, at a different step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("object.move", &json!({"dx": 0, "dy": 1})).unwrap();
+    let other = step(&s);
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert!(![start, moved, undone, redone].contains(&other), "{other:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), other, "a selection change is no step");
+    s.execute("select.all", &json!({})).unwrap();
+    s.begin_undo_group();
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    let (grouped, depth) = (step(&s), s.doc().unwrap().history.undo.len());
+    assert_ne!(grouped, other);
+    s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "the second move is merged into the first");
+    let merged = step(&s);
+    assert!(merged != grouped && merged.1 == 0, "a merged edit moves the step: {merged:?}");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(step(&s), merged);
+    s.end_undo_group(false);
 }
 
 #[test]

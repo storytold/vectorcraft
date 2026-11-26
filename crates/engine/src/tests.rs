@@ -4,13 +4,18 @@ use super::*;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
+mod actionset;
 pub(super) mod adjust;
 mod ai_open_path;
+mod anchor_edit_work;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
+mod assets_3d;
 mod attributes;
 mod bboxrotate;
+mod bevels;
 mod blendfidelity;
 mod blendopts;
 mod blendspine;
@@ -18,32 +23,42 @@ mod brushlib;
 mod brushsym;
 mod build;
 mod cancel;
+mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
 mod clippaint;
 mod cmdsplit;
 mod cmykflatten;
+mod colorcontrast;
 mod colorguide;
 mod colorguidelib;
 mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compare;
 mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
 mod constrain_tools;
 mod containers;
 mod css;
+mod curvature_circle;
 mod cut;
 mod dashalign;
+mod dcs;
+mod delete_keeps_joined;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
+mod double_click_adds_anchor;
 mod draw2;
 mod dynamic_symbols;
+mod dynamic_text;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -55,6 +70,7 @@ mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
+mod fill_area;
 mod flatpresets;
 mod flatpreview;
 mod flatten;
@@ -70,12 +86,16 @@ mod gradpresets;
 mod gradspan;
 mod guide_clipboard;
 mod halftone;
+mod history_document;
 mod history_mem;
 mod ids_without_selection;
 mod inline;
+mod interaction_commands;
 mod interactivity;
+mod interpolate_handles;
 mod intertwine;
 mod journal;
+mod keyanchor;
 mod keyguide;
 mod knockout;
 mod labspots;
@@ -84,6 +104,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;
@@ -95,6 +116,7 @@ mod live;
 mod livecorners;
 mod maskview;
 pub(super) mod menucmds;
+mod mesh_picks;
 mod missing_links;
 mod nativefile;
 mod newart;
@@ -106,11 +128,14 @@ mod outlineobject;
 pub(super) mod outlinestroke;
 mod overprint;
 mod package;
+mod paintopacity;
 mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
+mod pathfinder_clip;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -118,14 +143,18 @@ mod pdffidelity;
 mod pdfmarks;
 mod pdfpresets;
 mod pdfraster;
+mod persp_infer;
 mod persp_planes;
 pub(super) mod persp_select;
 mod persp_text;
 mod perspgrid;
+mod pixelalign;
 mod place;
 mod placed_document;
 mod plugins;
 mod prefs;
+mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;
@@ -135,6 +164,7 @@ mod printps;
 mod printtiling;
 mod proxyitems;
 mod puppetwarp;
+mod quickpen;
 mod rasterfilters;
 mod rastersettings;
 mod recolor;
@@ -145,15 +175,29 @@ mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
+mod script_console;
+mod script_dialogs;
+mod script_dollar;
+mod script_dom;
+mod script_engines;
+mod script_folder;
+mod script_include;
+mod script_io;
+mod script_run;
 mod scripts;
+mod segment_nudge;
+mod select_effects;
 mod select_ids_first;
 mod shaper;
+mod shapetools;
 mod shortcutset;
 mod simplify_part;
 mod slices;
 mod smartguides;
 mod smooth_path;
+mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;
@@ -161,28 +205,36 @@ mod strokeux;
 mod stylelib;
 mod stylepanel;
 mod styles;
+mod svgfilter;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;
 mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
+mod symbolism_options;
+mod symbolism_shift;
 mod symbollib;
+mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
 pub(super) mod textimport;
+mod three_point_arc;
 mod tileedge;
 mod tints;
 mod toolsettings;
 mod transformfx;
 mod transparencygrid;
 mod trap;
+mod turn_direction;
 mod typearea;
+mod typeglyphbounds;
 mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
@@ -198,6 +250,37 @@ fn session() -> Session {
 fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap();
     NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The active document's selected ruler guides, by their `guide.list` indexes.
+pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
+    let st = s.doc().unwrap();
+    crate::cmd::guide_indexes(&st.doc, &st.selection.guides)
+}
+
+/// The active document's key guide, by its `guide.list` index.
+pub(crate) fn key_guide(s: &Session) -> Option<usize> {
+    let st = s.doc().unwrap();
+    st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
+}
+
+/// Runs the unit test `path` (`tests::newdoc::...`) again in a child process of the test binary
+/// → whether this is that child. For a test that changes process-wide state the tests running
+/// beside it read, such as the active color settings.
+pub(crate) fn in_own_process(path: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{path} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 #[test]
@@ -306,9 +389,12 @@ fn a_long_unknown_command_id_is_answered_at_once() {
 fn action_batch_names_the_nearest_command_id() {
     let mut s = session();
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    assert_eq!(
+        e.to_string(),
+        "invalid parameters for `action.batch`: action step 1 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"
+    );
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: action step 1 (`nope`) failed: unknown command `nope`");
 }
 
 #[test]
@@ -789,12 +875,13 @@ fn align_and_distribute_reject_bad_params_without_changing_state() {
     let h = "`horizontal` must be one of left, center, right";
     let v = "`vertical` must be one of top, center, bottom";
     let to = "`to` must be one of selection, artboard, key";
+    let align_to = "`to` must be one of selection, artboard, key, auto";
     for (cmd, p, msg) in [
         ("object.align", json!({"horizontal": "middle"}), h),
         ("object.align", json!({"vertical": "centre"}), v),
         ("object.align", json!({"horizontal": true}), h),
-        ("object.align", json!({"horizontal": "left", "to": "page"}), to),
-        ("object.align", json!({"horizontal": "left", "to": 0}), to),
+        ("object.align", json!({"horizontal": "left", "to": "page"}), align_to),
+        ("object.align", json!({"horizontal": "left", "to": 0}), align_to),
         ("object.align", json!({"horizontal": "left", "bounds": false}), "`bounds` must be one of preview, geometric"),
         ("object.align", json!({"horizontal": "left", "vertical": "middle"}), v),
         ("object.distribute", json!({"horizontal": "middle"}), h),
@@ -1232,7 +1319,12 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     for (id, p) in calls {
         assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
         assert_eq!(history(&s), before, "{id} {p}");
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+        // The journal adds the frame a scale acted in, so a replay acts in the same one.
+        let mut recorded = p;
+        if id == "object.scale" {
+            recorded["basis"] = json!("box");
+        }
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded));
     }
     assert_eq!(
         s.doc().unwrap().last_transform,
@@ -1478,6 +1570,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
+        ("shape.flare", with(&flare, "ringSeed", json!("7")), "ringSeed"),
         ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
         ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
     ]
@@ -2065,7 +2158,7 @@ mod pen_interactions {
                 gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
                 let extended = path(&s, id);
                 assert_eq!(extended.anchor_count(), 3);
-                assert_eq!(extended.subpaths[0].anchors[..2], reversed.subpaths[0].anchors);
+                assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], reversed.subpaths[0].anchors);
                 assert!(!s.in_interaction() && !s.tool_busy());
                 assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
             }
@@ -2100,7 +2193,7 @@ mod pen_interactions {
         gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], converted.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], converted.subpaths[0].anchors);
         assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
     }
 
@@ -2159,7 +2252,7 @@ mod pen_interactions {
         }
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], before.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], before.subpaths[0].anchors);
         let a = extended.subpaths[0].anchors[2];
         assert_eq!(a.p, Point::new(320.0, 450.0));
         assert_eq!(a.h_in, Point::new(290.0, 430.0), "Alt freezes the incoming handle and Space translates it");
@@ -2738,6 +2831,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
@@ -3124,13 +3237,108 @@ fn every_command_has_unique_id_and_doc() {
     assert!(command_specs().iter().all(|c| !c.params.is_empty() && !c.label.is_empty()));
 }
 
+/// Ids that name no built-in command: commands only the app runs, near misses of real ids and
+/// plug-in command ids of plug-ins that are not installed.
+const NOT_BUILT_IN: &[&str] =
+    &["", "file.save", "file.open", "edit.preferences", "select", "select.none.", "SELECT.NONE", " select.none", "plugin.nobody.cmd", "plugin."];
+
+/// The spec a search of the built-in list in order finds for `id`.
+fn first_built_in(id: &str) -> Option<&'static CommandSpec> {
+    command_specs().iter().find(|c| c.id == id)
+}
+
+#[test]
+fn find_command_finds_the_spec_a_search_of_the_list_finds() {
+    let misses: Vec<String> = NOT_BUILT_IN.iter().map(|id| (*id).to_string()).chain((0..200).map(|i| format!("missing.command{i}"))).collect();
+    for id in command_specs().iter().map(|c| c.id.to_string()).chain(misses) {
+        let (found, first) = (find_command(&id), first_built_in(&id));
+        assert!(found.map(std::ptr::from_ref) == first.map(std::ptr::from_ref), "{id:?}");
+        assert_eq!(found.is_none(), NOT_BUILT_IN.contains(&id.as_str()) || id.starts_with("missing."), "{id:?}");
+    }
+}
+
+#[test]
+fn the_command_index_keeps_the_first_spec_of_an_id() {
+    let base = &command_specs()[0];
+    let specs = [
+        CommandSpec { id: "test.twice", label: "First", ..*base },
+        CommandSpec { id: "test.once", ..*base },
+        CommandSpec { id: "test.twice", label: "Second", ..*base },
+    ];
+    let index = crate::cmd::index_by_id(&specs);
+    assert_eq!(index.len(), 2);
+    assert!(index.get("test.twice").is_some_and(|c| std::ptr::eq(*c, &specs[0])));
+    assert!(index.get("test.once").is_some_and(|c| std::ptr::eq(*c, &specs[1])));
+    assert!(!index.contains_key("test.none"));
+}
+
+/// Times [`find_command`] against a search of the built-in list in order (the lookup before the
+/// index), in one process, over every built-in id and 200 ids that name no command, and
+/// `select.none` run 100,000 times on a document with one rectangle.
+/// Run with `cargo test --release -p vectorcraft-engine --lib command_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn command_lookup_timing() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let hits: Vec<&str> = command_specs().iter().map(|c| c.id).collect();
+    let missing: Vec<String> = (0..200 - NOT_BUILT_IN.len()).map(|i| format!("missing.command{i}")).collect();
+    let misses: Vec<&str> = NOT_BUILT_IN.iter().copied().chain(missing.iter().map(String::as_str)).collect();
+    let linear = |id: &str| first_built_in(id).or_else(|| crate::cmd::plugin::find_spec(id));
+    for id in hits.iter().chain(&misses) {
+        assert!(find_command(id).map(std::ptr::from_ref) == linear(id).map(std::ptr::from_ref), "{id:?}");
+    }
+    let per_lookup = |ids: &[&str], f: &dyn Fn(&str) -> Option<&'static CommandSpec>| {
+        let rounds = 50;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for id in ids {
+                black_box(f(black_box(id)));
+            }
+        }
+        start.elapsed().as_nanos() as f64 / (rounds * ids.len()) as f64
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    println!("{} built-in ids, {} ids that name no command", hits.len(), misses.len());
+    for (what, ids) in [("built-in id", &hits), ("no such command", &misses)] {
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for run in 0..7 {
+            // Alternates which lookup goes first, so a change in machine load falls on both.
+            if run % 2 == 0 {
+                old.push(per_lookup(ids, &linear));
+                new.push(per_lookup(ids, &find_command));
+            } else {
+                new.push(per_lookup(ids, &find_command));
+                old.push(per_lookup(ids, &linear));
+            }
+        }
+        println!("{what}: search of the list {old:.0?} ns, median {:.0}; index {new:.0?} ns, median {:.0}", median(old.clone()), median(new.clone()));
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let runs: Vec<f64> = (0..7)
+        .map(|_| {
+            let start = Instant::now();
+            for _ in 0..100_000 {
+                black_box(s.execute("select.none", &json!({})).unwrap());
+            }
+            start.elapsed().as_nanos() as f64 / 100_000.0
+        })
+        .collect();
+    println!("select.none: {runs:.0?} ns a command, median {:.0}", median(runs.clone()));
+}
+
 #[test]
 fn every_command_survives_empty_params() {
     // Robustness: no command may panic on {} (with and without a selection).
     // The view toggles among them flip the process-wide proof view.
     let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
-        for c in command_specs() {
+        for c in command_specs().iter().filter(|c| crate::runs_with_empty_params(c.id)) {
             let mut s = session();
             let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
             rect(&mut s, 20.0, 0.0, 10.0, 10.0);
@@ -3202,6 +3410,403 @@ fn flare_rotation_turns_only_the_rays() {
     }
 }
 
+/// A flare keeps its settings: `shape.editFlare` draws it again with the settings changed, in its
+/// place and transformed as it has been since, as one undo step (none when nothing changes). A
+/// flare with a changed part, a locked one and an expanded one are not edited.
+#[test]
+fn edit_flare_draws_a_transformed_flare_again_in_its_place_in_one_undo_step() {
+    let mut s = session();
+    let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 200, "seed": 3});
+    let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+    // Reflected twice, sheared and back, turned a quarter and moved: it stays a flare.
+    for (c, p) in [
+        ("object.reflect", json!({"axis": "vertical"})),
+        ("object.reflect", json!({"axis": "horizontal"})),
+        ("object.shear", json!({"angle": 30})),
+        ("object.shear", json!({"angle": -30})),
+        ("object.rotate", json!({"angle": 90})),
+        ("object.move", json!({"dx": 50, "dy": 10})),
+    ] {
+        s.execute(c, &p).unwrap();
+    }
+    let spec = |s: &Session| flare_settings(&s.doc().unwrap().doc, id).expect("still a flare");
+    let part = |s: &Session, name: &str| {
+        let g = s.doc().unwrap().doc.node(id).unwrap();
+        g.children().unwrap().iter().filter(|c| c.name.as_deref() == Some(name)).map(|c| c.geometric_bounds().unwrap()).collect::<Vec<_>>()
+    };
+    let (c, e) = (spec(&s).center().unwrap(), spec(&s).end().unwrap());
+    // The quarter turn made the rings run vertically, 200 points from the center.
+    assert!((c.distance(e) - 200.0).abs() < 1e-6 && (c.x - e.x).abs() < 1e-6, "{c:?} {e:?}");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100, "rings": 6, "rays": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    let centre = part(&s, "Center")[0];
+    assert!(centre.center().distance(c) < 1e-6 && (centre.width() - 100.0).abs() < 1e-6, "{centre:?}");
+    assert_eq!((part(&s, "Ring").len(), part(&s, "Rays").len()), (6, 0));
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "the end point stays");
+    // Each ring lies on the line from the center to the end point.
+    assert!(part(&s, "Ring").iter().all(|r| (r.center().x - c.x).abs() < 1e-6), "{:?}", part(&s, "Ring"));
+    // The center handle, where it is drawn now: the end point stays where it is.
+    s.execute("shape.editFlare", &json!({"ids": [id.0], "cx": c.x + 20.0, "cy": c.y})).unwrap();
+    assert!(spec(&s).center().unwrap().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6);
+    assert!(part(&s, "Center")[0].center().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    // The end handle, then the path length and direction.
+    s.execute("shape.editFlare", &json!({"x2": c.x + 20.0, "y2": c.y + 80.0})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 20.0, c.y + 80.0)) < 1e-6);
+    // The path length and direction are where the flare is drawn now, though it was turned.
+    s.execute("shape.editFlare", &json!({"direction": 0, "pathLength": 50})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 70.0, c.y)) < 1e-6, "{:?}", spec(&s).end());
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Nothing changes: no undo step.
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Bad values are refused.
+    for bad in [json!({"rings": 2.5}), json!({"diameter": "big"}), json!({"cx": 10}), json!({"diameter": 1e20})] {
+        assert!(s.execute("shape.editFlare", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "undo puts the end point back");
+    // A changed part: no longer a flare.
+    s.edit("Opacity", |d, _| {
+        let ring = d.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some("Center")).unwrap().id;
+        d.node_mut(ring).unwrap().opacity = 0.25;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(s.execute("shape.editFlare", &json!({"rings": 3})).unwrap_err().to_string(), "select a flare");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A locked flare.
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.execute("shape.editFlare", &json!({"ids": [id.0], "rings": 3})).is_err());
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    // Object › Expand: a plain group that is no longer a flare.
+    s.execute("object.expand", &json!({"object": true, "fill": false, "stroke": false})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().flare.is_none());
+    assert!(s.execute("shape.editFlare", &json!({"rings": 3})).is_err());
+}
+
+/// `shape.flare` reads whole-number counts written as floats, and refuses fractions.
+#[test]
+fn flare_counts_are_whole_numbers() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 4.0, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let g = s.doc().unwrap().doc.node(id).unwrap();
+    let rays = g.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Rays")).unwrap();
+    assert_eq!(rays.path_data().unwrap().subpaths.len(), 4);
+    assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
+}
+
+/// `shape.flare` given only one of `x2` and `y2`, the other left out or null, refuses the call
+/// naming the missing one, draws nothing and adds no undo step.
+#[test]
+fn flare_requires_both_endpoint_coordinates() {
+    let mut s = session();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.node_count(), st.history.undo.len(), st.history.redo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"cx": 100, "cy": 100, "x2": 300}), "y2"),
+        (json!({"cx": 100, "cy": 100, "x2": 300, "y2": null}), "y2"),
+        (json!({"cx": 100, "cy": 100, "y2": 300}), "x2"),
+        (json!({"cx": 100, "cy": 100, "x2": null, "y2": 300}), "x2"),
+    ] {
+        let err = s.execute("shape.flare", &p).expect_err(&p.to_string()).to_string();
+        assert_eq!(err, format!("invalid parameters for `shape.flare`: missing number `{key}`"), "{p}");
+        assert_eq!(state(&s), before, "{p}");
+    }
+}
+
+/// `shape.flare` with neither `x2` nor `y2` (left out or null) places the rings' end point from
+/// `pathLength` and `direction`; with both it uses them.
+#[test]
+fn flare_omitted_or_null_endpoint_coordinates_use_path_fallback() {
+    let mut s = session();
+    let mut end = |p: serde_json::Value| {
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let spec = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+        Point::new(spec.params["x2"].as_f64().unwrap(), spec.params["y2"].as_f64().unwrap())
+    };
+    for p in [
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "y2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null, "y2": null}),
+    ] {
+        let e = end(p.clone());
+        assert!((e.x - 300.0).abs() < 1e-9 && (e.y - 100.0).abs() < 1e-9, "{p}: {e:?}");
+    }
+    assert_eq!(end(json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": 40, "y2": 70})), Point::new(40.0, 70.0));
+}
+
+/// Settings a file holds with only one of `x2` and `y2` are not a flare's: the group stays as art,
+/// but is not a flare that can be edited.
+#[test]
+fn flare_settings_with_a_lone_endpoint_coordinate_are_not_a_flare() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    assert!(flare_settings(&d, id).is_some());
+    let mut extras = d.node_mut(id).unwrap().extras_mut();
+    let spec = extras.flare.as_deref_mut().expect("flare settings");
+    spec.params.as_object_mut().unwrap().remove("y2");
+    drop(extras);
+    assert!(flare_settings(&d, id).is_none());
+}
+
+/// `shape.editFlare` on a flare scaled far down: a `pathLength`, an end point or a center that,
+/// taken back to where the flare was drawn, is not a finite number is an error, and the flare keeps
+/// its settings.
+#[test]
+fn edit_flare_end_points_that_are_not_finite_are_errors() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.scale", &json!({"sx": 1e-4, "sy": 1e-4})).unwrap();
+    let before = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+    for (p, key) in [
+        (json!({"pathLength": 1e305}), "x2"),
+        (json!({"x2": 1e305, "y2": 0}), "x2"),
+        (json!({"x2": 0, "y2": -1e305}), "y2"),
+        (json!({"cx": 1e305, "cy": 0}), "cx"),
+    ] {
+        let err = s.execute("shape.editFlare", &p).unwrap_err().to_string();
+        assert!(err.ends_with(&format!("{key} must be a finite coordinate")), "{p}: {err}");
+        assert_eq!(flare_settings(&s.doc().unwrap().doc, id).expect("still a flare"), before, "{p}");
+    }
+}
+
+/// A flare drawn again keeps its parts' pixel-aligned property, whatever the document's Align New
+/// Objects to Pixel Grid is now, and a pixel-aligned flare that was moved is still a flare.
+#[test]
+fn edit_flare_keeps_its_parts_pixel_alignment() {
+    let mut s = session();
+    let aligned = |s: &Session, id: NodeId| -> Vec<bool> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|c| c.extras().pixel_aligned).collect()
+    };
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let on = NodeId(s.execute("shape.flare", &json!({"cx": 100.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.move", &json!({"dx": 10.25, "dy": 3.5})).unwrap();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": false})).unwrap();
+    let part = |s: &Session, id: NodeId, name: &str| -> NodeId {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some(name)).unwrap().id
+    };
+    let centre = part(&s, on, "Center");
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, on).len() > 4 && aligned(&s, on).iter().all(|a| *a));
+    // Each part drawn again keeps its id and its own property: without the rays, the center does
+    // not take theirs.
+    assert_eq!(part(&s, on, "Center"), centre);
+    s.execute("object.setPixelAligned", &json!({"ids": [centre.0], "on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [on.0]})).unwrap();
+    s.execute("shape.editFlare", &json!({"rays": 0})).unwrap();
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().pixel_aligned;
+    assert!(!node(&s, centre) && node(&s, part(&s, on, "Halo")));
+    let off = NodeId(s.execute("shape.flare", &json!({"cx": 300.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, off).iter().all(|a| !*a));
+}
+
+/// `shape.flare`'s `ringSeed` places the rings along the path anew and keeps their count and
+/// sizes and the other parts; the same `ringSeed` draws the same flare, neighboring ones differ,
+/// and a seed that is not a whole number of at least 0 (for `ringSeed`, below 2^53) is refused.
+#[test]
+fn flare_ring_seed_moves_only_the_rings() {
+    let mut s = session();
+    let parts = |s: &mut Session, ring_seed: Option<u64>| {
+        let mut p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 6, "x2": 400, "y2": 300, "seed": 3});
+        if let Some(r) = ring_seed {
+            p["ringSeed"] = json!(r);
+        }
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.geometric_bounds().unwrap())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, None);
+    let placed = parts(&mut s, Some(11));
+    assert_eq!(placed, parts(&mut s, Some(11)));
+    assert_eq!(plain.len(), placed.len());
+    let mut moved = 0;
+    for ((name, a), (_, b)) in plain.iter().zip(&placed) {
+        if name.as_deref() == Some("Ring") {
+            assert!((a.width() - b.width()).abs() < 1e-9, "a ring keeps its size");
+            moved += usize::from(a.center().distance(b.center()) > 1e-6);
+        } else {
+            assert_eq!(a, b, "{name:?}");
+        }
+    }
+    assert_eq!(moved, 6, "every ring moves");
+    assert_ne!(parts(&mut s, Some(0)), parts(&mut s, Some(1)), "neighboring seeds place the rings differently");
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-1), json!(2.5), json!(true), json!(1u64 << 53)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "ringSeed": bad})).is_err(), "{bad}");
+    }
+    for bad in [json!(-1), json!(2.5), json!(true)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
+    let mut s = session();
+    let mut positions = Vec::new();
+    for seed in [0, 1, 2, 5, 11, (1u64 << 53) - 1] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        let ring = children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap();
+        let center = ring.geometric_bounds().unwrap().center();
+        assert!((20.0..=1020.0).contains(&center.x), "seed {seed}: {center:?}");
+        assert!((center.y - 30.0).abs() < 1e-9);
+        positions.push(center.x);
+    }
+    assert!((positions[0] - positions[1]).abs() > 1.0, "neighboring small seeds visibly move the first ring: {positions:?}");
+    let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
+}
+
+/// A flare drawn with a small `ringSeed` and then drawn again by `shape.editFlare` keeps its first
+/// ring where `shape.flare` put it: the SplitMix64-initialized Xorshift64 stream's first value
+/// along the path, for each seed.
+#[test]
+fn edit_flare_draws_the_first_ring_of_a_small_ring_seed_where_it_was() {
+    let first_t = |seed: u64| {
+        let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        let mut state = z ^ (z >> 31);
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let ring_x = |s: &Session, id: NodeId| {
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap().geometric_bounds().unwrap().center().x
+    };
+    let mut s = session();
+    for seed in [0, 1, 2, 5, 11] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let expected = 20.0 + 1000.0 * first_t(seed);
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 80})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn again at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 40})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: a second edit keeps the ring");
+    }
+}
+
+/// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
+#[test]
+fn ellipse_with_four_anchors_is_the_live_ellipse() {
+    let mut s = session();
+    let draw = |s: &mut Session, extra: Option<u64>| {
+        let mut p = json!({"x": 40, "y": 30, "width": 120, "height": 80});
+        if let Some(n) = extra {
+            p["anchors"] = json!(n);
+        }
+        let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+        s.doc().unwrap().doc.node(id).unwrap().clone()
+    };
+    let (plain, four) = (draw(&mut s, None), draw(&mut s, Some(4)));
+    for n in [&plain, &four] {
+        assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
+        assert_eq!(n.path_data().unwrap().anchor_count(), 4);
+    }
+    assert_eq!(plain.path_data(), four.path_data());
+    assert_eq!(plain.live_shape(), four.live_shape());
+}
+
+/// Any other count draws a closed plain path of that many smooth anchors on the ellipse, its
+/// bounds the typed size, as one undo step.
+#[test]
+fn ellipse_anchors_draw_that_many_anchors_on_the_ellipse() {
+    let mut s = session();
+    let (x, y, w, h) = (40.0, 30.0, 120.0, 80.0);
+    let (c, rx, ry) = (Point::new(x + w / 2.0, y + h / 2.0), w / 2.0, h / 2.0);
+    for n in [2u64, 3, 5, 6, 8] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": n})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{n}: one undo step");
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.live_shape().is_none(), "{n}: a plain path");
+        let path = node.path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1);
+        let sp = &path.subpaths[0];
+        assert!(sp.closed, "{n}");
+        assert_eq!(sp.anchors.len() as u64, n);
+        for a in &sp.anchors {
+            assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth, "{n}");
+            let on = ((a.p.x - c.x) / rx).powi(2) + ((a.p.y - c.y) / ry).powi(2);
+            assert!((on - 1.0).abs() < 0.01, "{n}: {:?} is off the ellipse ({on})", a.p);
+        }
+        let b = path.bounds().unwrap();
+        for (got, want) in [(b.x0, x), (b.y0, y), (b.x1, x + w), (b.y1, y + h)] {
+            assert!((got - want).abs() < 1e-6, "{n}: bounds {b:?}");
+        }
+    }
+    // The first anchor is the left one, and they run clockwise on screen, as the live ellipse's do.
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": 8})).unwrap()["id"].as_u64().unwrap());
+    let sp = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+    assert!(sp.anchors[0].p.distance(Point::new(x, c.y)) < 1e-6, "{:?}", sp.anchors[0].p);
+    assert!(sp.anchors[2].p.distance(Point::new(c.x, y)) < 1e-6, "{:?}", sp.anchors[2].p);
+}
+
+/// An `anchors` that is not a whole number from 2 to 1000 is refused, and nothing is drawn.
+#[test]
+fn ellipse_refuses_a_bad_anchor_count() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    let range = |got: &str| format!("`anchors` must be a whole number between 2 and 1000 (got {got})");
+    for (bad, want) in [
+        (json!(0), range("0")),
+        (json!(1), range("1")),
+        (json!(2.5), range("2.5")),
+        (json!(-3), range("-3")),
+        (json!(1001), range("1001")),
+        (json!("x"), "`anchors` must be a number, not \"x\"".to_string()),
+        (json!("6"), "`anchors` must be a number, not \"6\"".to_string()),
+        (json!(true), "`anchors` must be a number, not true".to_string()),
+    ] {
+        let e = s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50, "anchors": bad})).unwrap_err().to_string();
+        assert!(e.contains(&want), "{bad}: {e}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    assert!(s.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+}
+
+/// Through the session, Ctrl/Cmd in the Flare tool's center drag keeps the center's size while the
+/// drag sizes the halo, and the flare drawn keeps both.
+#[test]
+fn flare_tool_ctrl_keeps_the_center_while_the_drag_sizes_the_halo() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    s.select_tool("flare", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 240.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 500.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 500.0, 400.0), v).unwrap();
+    let st = s.doc().unwrap();
+    let g = st.doc.node(st.selection.objects[0]).unwrap();
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("flare is a group") };
+    let width = |name: &str| children.iter().find(|c| c.name.as_deref() == Some(name)).unwrap().geometric_bounds().unwrap().width();
+    // The center as the key found it (80); the halo as a 160-point center with 20 % growth would
+    // have it: 80 × 1.2 × 1.6 = 153.6 radius.
+    assert!((width("Center") - 80.0).abs() < 0.5, "{}", width("Center"));
+    assert!((width("Halo") - 2.0 * 153.6).abs() < 0.5, "{}", width("Halo"));
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();
@@ -3234,12 +3839,610 @@ fn reshape_falloff_follows_arc_length_on_open_paths() {
             .as_u64()
             .unwrap(),
     );
-    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "radius": 250.0})).unwrap();
     let pts: Vec<_> = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
     assert!((pts[3].y - 100.0).abs() < 1e-6, "grabbed end moves full delta: {pts:?}");
     assert!(pts[0].y.abs() < 1e-6, "far end stays put: {pts:?}");
     assert!(pts[2].y > 1.0 && pts[2].y < 100.0, "mid-anchor moves partially: {pts:?}");
     assert!(pts[1].y < pts[2].y, "nearer anchors move more: {pts:?}");
+}
+
+/// An open path for the Reshape tests.
+fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
+    NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// The anchors of the path's first subpath.
+fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
+}
+
+/// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.
+fn reshape_share(u: f64) -> f64 {
+    u * u * (3.0 - 2.0 * u)
+}
+
+/// Six anchors 100 apart along a zigzag 300 wide and 80 high.
+fn reshape_zigzag() -> Value {
+    json!([{"x": 0, "y": 0}, {"x": 60, "y": 80}, {"x": 120, "y": 0}, {"x": 180, "y": 80}, {"x": 240, "y": 0}, {"x": 300, "y": 80}])
+}
+
+#[test]
+fn reshape_of_an_end_stretches_an_open_path_to_its_other_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 20.0, "dy": 50.0})).unwrap();
+    let after = reshape_anchors(&s, id);
+    assert_eq!(after.len(), 6);
+    let moved: Vec<vectorcraft_geom::Vec2> = after.iter().zip(&before).map(|(a, b)| a.p - b.p).collect();
+    assert_eq!(moved[0], vectorcraft_geom::Vec2::ZERO, "the other end stays in place: {moved:?}");
+    for (i, m) in moved.iter().enumerate() {
+        let share = reshape_share(i as f64 / 5.0);
+        assert!((m.x - 20.0 * share).abs() < 1e-9 && (m.y - 50.0 * share).abs() < 1e-9, "anchor {i} takes {share} of the drag: {moved:?}");
+    }
+    assert!(moved.windows(2).all(|w| w[0].y < w[1].y), "each anchor moves less than the one after it: {moved:?}");
+    // The path has no handles, and gets none.
+    assert!(after.iter().all(|a| a.h_in == a.p && a.h_out == a.p), "{after:?}");
+}
+
+#[test]
+fn reshape_of_a_middle_anchor_leaves_both_ends_of_an_open_path_in_place() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 200, "y": 0}, {"x": 230, "y": 0}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(y.len(), 5, "the grab was on an anchor, so none is added");
+    assert_eq!((y[0], y[2], y[4]), (0.0, 100.0, 0.0), "{y:?}");
+    // Each side is measured from its own end: 30 of 200 on the left, 170 of 200 on the right.
+    assert!((y[1] - 100.0 * reshape_share(0.15)).abs() < 1e-9, "{y:?}");
+    assert!((y[3] - 100.0 * reshape_share(0.85)).abs() < 1e-9, "{y:?}");
+}
+
+#[test]
+fn reshape_keeps_the_handles_of_a_smooth_anchor_in_line() {
+    let mut s = session();
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0, "out": [40, 0]},
+            {"x": 100, "y": 0, "in": [60, 0], "out": [140, 0], "smooth": true},
+            {"x": 200, "y": 0, "in": [160, 0]}
+        ]),
+    );
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The control polygon is 200 long and the middle anchor is halfway: it takes half the drag,
+    // and its handles, 40 either side, take 0.2 and 0.8 of it.
+    assert!((a[1].p.y - 50.0).abs() < 1e-9 && (a[1].h_in.y - 20.0).abs() < 1e-9 && (a[1].h_out.y - 80.0).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+    // The end that stays keeps its handle, and the grabbed end's handle moves with it.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(40.0, 0.0)));
+    assert_eq!((a[2].p, a[2].h_in), (Point::new(200.0, 100.0), Point::new(160.0, 100.0)));
+}
+
+/// A `radius` still bounds the reach on an open path, as it did before the path stretched to its ends.
+#[test]
+fn reshape_with_a_radius_moves_only_the_anchors_within_it() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": 150.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[..4], &[0.0, 80.0, 0.0, 80.0], "anchors 200 or more along the path stay: {y:?}");
+    assert!(y[4] > 0.0 && y[4] < 50.0 && y[5] == 130.0, "{y:?}");
+}
+
+#[test]
+fn reshape_measures_an_open_path_along_its_control_polygon() {
+    let mut s = session();
+    // The first segment's control polygon is 60 + 100 + 60 long, its chord 100 and its arc 150 to
+    // 160; the second segment is a line 100 long.
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [0, 60]}, {"x": 100, "y": 0, "in": [100, 60]}, {"x": 200, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let u: f64 = 220.0 / 320.0;
+    assert!((a[1].p.y - 100.0 * reshape_share(u)).abs() < 1e-9, "{a:?}");
+    // The in handle lies 160 along the polygon, and takes the share on the tangent line at its anchor.
+    let handle = reshape_share(u) + 6.0 * u * (1.0 - u) * (160.0 / 320.0 - u);
+    assert!((a[1].h_in.y - 60.0 - 100.0 * handle).abs() < 1e-9, "{a:?}");
+    // The end that stays keeps its handle.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(0.0, 60.0)));
+}
+
+#[test]
+fn reshape_of_a_point_on_a_segment_stretches_an_open_path_from_the_new_anchor() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 200, "y": 0}, {"x": 300, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let p: Vec<Point> = reshape_anchors(&s, id).iter().map(|a| a.p).collect();
+    assert_eq!(p.len(), 5, "the grab adds an anchor: {p:?}");
+    assert_eq!((p[0], p[3], p[4]), (Point::new(0.0, 0.0), Point::new(250.0, 100.0), Point::new(300.0, 0.0)), "{p:?}");
+    assert!((p[1].y - 100.0 * reshape_share(0.4)).abs() < 1e-9 && (p[2].y - 100.0 * reshape_share(0.8)).abs() < 1e-9, "{p:?}");
+}
+
+#[test]
+fn reshape_of_an_end_of_a_two_anchor_path_moves_only_that_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [30, 0]}, {"x": 100, "y": 0, "in": [70, 0]}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 100.0, "y": 0.0, "dx": 10.0, "dy": 50.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(30.0, 0.0)));
+    assert_eq!((a[1].p, a[1].h_in), (Point::new(110.0, 50.0), Point::new(80.0, 50.0)));
+}
+
+#[test]
+fn reshape_keeps_smooth_anchors_on_both_sides_of_the_grabbed_one_in_line() {
+    let mut s = session();
+    // Smooth anchors with handles of unequal length, on a curve, before and after the grabbed anchor.
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0},
+            {"x": 100, "y": 50, "in": [80, 40], "out": [160, 80], "smooth": true},
+            {"x": 250, "y": 0, "in": [220, 0], "out": [290, 0], "smooth": true},
+            {"x": 400, "y": 60, "in": [340, 90], "out": [420, 50], "smooth": true},
+            {"x": 500, "y": 0}
+        ]),
+    );
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 35.0, "dy": -80.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let drag = vectorcraft_geom::Vec2::new(35.0, -80.0);
+    assert_eq!((a[2].p - before[2].p, a[2].h_in - before[2].h_in, a[2].h_out - before[2].h_out), (drag, drag, drag));
+    for i in [1, 3] {
+        let (to_in, to_out) = (a[i].h_in - a[i].p, a[i].h_out - a[i].p);
+        assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "anchor {i}'s handles stay opposite each other: {a:?}");
+        let moved = a[i].p - before[i].p;
+        assert!(
+            moved.cross(drag).abs() < 1e-9 && moved.hypot() > 1.0 && moved.hypot() < drag.hypot() - 1.0,
+            "anchor {i} takes part of the drag: {a:?}"
+        );
+        // The handle on the grabbed anchor's side moves farther than its anchor, and the other one less.
+        let (h_in, h_out) = ((a[i].h_in - before[i].h_in).hypot(), (a[i].h_out - before[i].h_out).hypot());
+        let (nearer, farther) = if i == 1 { (h_out, h_in) } else { (h_in, h_out) };
+        assert!(nearer > moved.hypot() + 1.0 && farther < moved.hypot() - 1.0, "anchor {i}: {a:?}");
+    }
+    assert_eq!((a[0].p, a[4].p), (before[0].p, before[4].p));
+}
+
+#[test]
+fn reshape_moves_a_long_handle_against_the_drag_to_keep_its_anchor_smooth() {
+    let mut s = session();
+    let id =
+        reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0, "in": [10, 0], "out": [190, 0], "smooth": true}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 400.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The anchor is a quarter of the way along and takes 0.15625 of the drag. The tangent line
+    // there has slope 1.125, and each handle lies 0.225 of the way from the anchor: the in handle
+    // takes 0.15625 - 0.253125, a share below 0, and the out handle 0.15625 + 0.253125.
+    assert!((a[1].p.y - 15.625).abs() < 1e-9 && (a[1].h_in.y + 9.6875).abs() < 1e-9 && (a[1].h_out.y - 40.9375).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+}
+
+#[test]
+fn reshape_refuses_a_negative_radius() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": -50.0})).unwrap_err();
+    assert!(e.to_string().contains("`radius` must be 0 or more"), "{e}");
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+#[test]
+fn reshape_by_no_distance_on_an_anchor_records_no_undo_step() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    for params in [json!({"id": id.0, "x": 300.0, "y": 80.0}), json!({"id": id.0, "x": 120.0, "y": 0.0, "dx": 0.0, "dy": 0.0, "radius": 40.0})] {
+        s.execute("path.reshape", &params).unwrap();
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // A drag that moves the anchor is still one step.
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 1.0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+}
+
+/// Seven anchors 70 apart along a line, from x 0 to x 420.
+fn reshape_line_of_seven() -> Value {
+    json!([{"x": 0, "y": 0}, {"x": 70, "y": 0}, {"x": 140, "y": 0}, {"x": 210, "y": 0}, {"x": 280, "y": 0}, {"x": 350, "y": 0}, {"x": 420, "y": 0}])
+}
+
+#[test]
+fn reshape_with_two_focal_points_moves_the_anchors_between_them_whole() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 280.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "focal": [[0, 2]]})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[2..5], &[100.0, 100.0, 100.0], "both focal points and the anchor between them: {y:?}");
+    assert_eq!((y[0], y[6]), (0.0, 0.0), "the ends stay: {y:?}");
+    // Each side stretches from its own end to its nearer focal point, 140 along the path.
+    assert!((y[1] - 100.0 * reshape_share(0.5)).abs() < 1e-9 && (y[5] - 100.0 * reshape_share(0.5)).abs() < 1e-9, "{y:?}");
+}
+
+#[test]
+fn reshape_of_a_closed_path_selected_whole_moves_all_of_it() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let before = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().clone();
+    s.execute("path.reshape", &json!({"id": r.0, "x": 0.0, "y": 0.0, "dx": 15.0, "dy": -40.0, "focal": []})).unwrap();
+    let after = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().clone();
+    assert_eq!(after.anchor_count(), before.anchor_count(), "a grab on an anchor adds none");
+    let drag = vectorcraft_geom::Vec2::new(15.0, -40.0);
+    for ((_, _, a), (_, _, b)) in after.anchors().zip(before.anchors()) {
+        assert_eq!((a.p - b.p, a.h_in - b.h_in, a.h_out - b.h_out), (drag, drag, drag), "{after:?}");
+    }
+}
+
+#[test]
+fn reshape_leaves_the_anchors_that_are_not_selected_in_place() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 350.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "focal": []})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[1], y[5], y[6]), (0.0, 0.0, 100.0, 0.0), "{y:?}");
+    // The stretch runs from the last anchor that is not selected, 280 from the focal point.
+    for i in 2..5 {
+        let u = (i as f64 - 1.0) / 4.0;
+        assert!((y[i] - 100.0 * reshape_share(u)).abs() < 1e-9, "anchor {i} takes {u} of the way: {y:?}");
+    }
+}
+
+/// A step with neither `focal` nor `radius`, as one recorded before focal points, plays as it did
+/// then: the selection does not matter, and a closed path follows with the default falloff.
+#[test]
+fn reshape_without_focal_or_radius_keeps_the_earlier_rule() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 350.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[5], y[6]), (0.0, 100.0, 0.0), "{y:?}");
+    // Anchor 1 is not selected and still takes its share, measured from the end 350 away.
+    for i in 1..5 {
+        let u = i as f64 / 5.0;
+        assert!((y[i] - 100.0 * reshape_share(u)).abs() < 1e-9, "anchor {i} takes {u} of the way: {y:?}");
+    }
+    // `focal: null` is the same as leaving it out.
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("path.reshape", &json!({"id": r.0, "x": 0.0, "y": 0.0, "dx": 0.0, "dy": -40.0, "focal": null})).unwrap();
+    let pts: Vec<Point> = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect();
+    assert!(pts.contains(&Point::new(0.0, -40.0)), "{pts:?}");
+    assert!(pts.contains(&Point::new(100.0, 100.0)), "the far corner stays: {pts:?}");
+}
+
+#[test]
+fn reshape_of_a_partly_selected_closed_path_stretches_between_the_anchors_that_stay() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "path.create",
+            &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 200, "y": 0}, {"x": 200, "y": 100}, {"x": 100, "y": 100}, {"x": 0, "y": 100}], "closed": true}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    // Anchors 5, 0, 1 and 2 are selected; 3 and 4 stay. The walk runs 4, 5, 0, 1, 2, 3.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 5], [0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 0.0, "y": 0.0, "dx": 0.0, "dy": -50.0, "focal": []})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[3], y[4]), (-50.0, 100.0, 100.0), "{y:?}");
+    // From anchor 4 to the focal point is 200: anchor 5 is halfway. From anchor 3 back to it is
+    // 300: anchor 2 is a third of the way and anchor 1 two thirds.
+    let want = [(5, 100.0 + -50.0 * reshape_share(0.5)), (2, -50.0 * reshape_share(1.0 / 3.0)), (1, -50.0 * reshape_share(2.0 / 3.0))];
+    for (i, w) in want {
+        assert!((y[i] - w).abs() < 1e-9, "anchor {i}: {y:?}");
+    }
+}
+
+#[test]
+fn reshape_of_a_segment_keeps_the_selected_anchors_and_selects_the_new_one() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 245.0, "y": 0.0, "dx": 0.0, "dy": 60.0, "focal": [[0, 5]]})).unwrap();
+    let a = reshape_anchors(&s, id);
+    assert_eq!(a.len(), 8, "the grab adds an anchor between 210 and 280");
+    let selected: Vec<(usize, usize)> = s.doc().unwrap().selection.partial(id).unwrap().iter().copied().collect();
+    assert_eq!(selected, vec![(0, 3), (0, 4), (0, 5), (0, 6)], "the same points stay selected, with the new one");
+    // The focal point given before the anchor was added still names the anchor at 350.
+    let y: Vec<f64> = a.iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[4..7], &[60.0, 60.0, 60.0], "{y:?}");
+    assert_eq!((y[0], y[1], y[2], y[7]), (0.0, 0.0, 0.0, 0.0), "{y:?}");
+}
+
+#[test]
+fn reshape_of_a_segment_with_a_selected_anchor_index_past_the_end_does_not_panic() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    let past = usize::MAX;
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, past]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 175.0, "y": 0.0, "dx": 0.0, "dy": 10.0})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 105.0, "y": 0.0, "dx": 0.0, "dy": 10.0})).unwrap();
+    assert_eq!(reshape_anchors(&s, id).len(), 9);
+}
+
+#[test]
+fn reshape_of_a_segment_keeps_a_selected_segment_as_its_two_halves() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 2], [0, 4]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 175.0, "y": 0.0, "dx": 0.0, "dy": 0.0})).unwrap();
+    let st = s.doc().unwrap();
+    let segments: Vec<(usize, usize)> = st.selection.segments[&id].iter().copied().collect();
+    assert_eq!(segments, vec![(0, 2), (0, 3), (0, 5)]);
+    let anchors: Vec<(usize, usize)> = st.selection.partial(id).unwrap().iter().copied().collect();
+    assert_eq!(anchors, vec![(0, 2), (0, 3), (0, 4), (0, 5), (0, 6)], "the new anchor moves with the segment's ends");
+}
+
+#[test]
+fn reshape_moves_only_the_subpaths_with_a_focal_point() {
+    let mut s = session();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M0 0 L100 0 L200 0 M0 100 L100 100 L200 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 40.0, "focal": []})).unwrap();
+    let pd = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+    let y: Vec<Vec<f64>> = pd.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| a.p.y).collect()).collect();
+    assert_eq!(y[1], vec![100.0, 100.0, 100.0], "{y:?}");
+    assert_eq!((y[0][0], y[0][2]), (0.0, 40.0), "{y:?}");
+    // A focal point on the other subpath stretches that one too.
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 40.0, "dx": 0.0, "dy": 10.0, "focal": [[1, 1]]})).unwrap();
+    let pd = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+    assert_eq!(pd.subpaths[1].anchors.iter().map(|a| a.p.y).collect::<Vec<_>>(), vec![100.0, 110.0, 100.0]);
+}
+
+#[test]
+fn reshape_refuses_a_focal_point_that_is_not_an_anchor() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    let before = reshape_anchors(&s, id);
+    for (focal, want) in [
+        (json!([[0, 7]]), "`focal` names [0, 7], which is not an anchor of the path"),
+        (json!([[1, 0]]), "`focal` names [1, 0], which is not an anchor of the path"),
+        (json!([[0, -1]]), "invalid anchor index -1"),
+        (json!({"0": 1}), "`focal` must be an array of [subpath, anchor] pairs"),
+    ] {
+        let e = s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": focal})).unwrap_err();
+        assert!(e.to_string().contains(want), "{e}");
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    let steps = s.doc().unwrap().history.undo.len();
+    // An empty `focal` chooses the focal-point rule too, so it cannot go with `radius` either.
+    for focal in [json!([[0, 2]]), json!([])] {
+        let e =
+            s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": focal, "radius": 50.0})).unwrap_err();
+        assert!(e.to_string().contains("`focal` and `radius` cannot be used together"), "{focal}: {e}");
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// The line of seven, selected whole, with the Reshape tool picked.
+fn reshape_tool_on_a_line(s: &mut Session) -> NodeId {
+    let id = reshape_open_path(s, reshape_line_of_seven());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("reshape", ViewInfo::default()).unwrap();
+    id
+}
+
+/// Presses at `a`, drags to `b` unless it is `a` (a click), and releases, with Shift when `shift`.
+fn reshape_gesture(s: &mut Session, a: (f64, f64), b: (f64, f64), shift: bool) {
+    let v = ViewInfo::default();
+    let mods = vectorcraft_tools::Mods { shift, ..vectorcraft_tools::Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, a.0, a.1).with_mods(mods), v).unwrap();
+    if a != b {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, b.0, b.1).with_mods(mods), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, b.0, b.1).with_mods(mods), v).unwrap();
+}
+
+/// Where the Reshape tool draws its highlighted focal points.
+fn reshape_highlights(s: &mut Session) -> Vec<Point> {
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Anchor { p, filled: true, .. } => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn reshape_tool_shift_click_adds_focal_points_that_a_drag_moves_together() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), true);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(280.0, 0.0)]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "a click on an anchor is not an edit");
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[2..5], &[100.0, 100.0, 100.0], "{y:?}");
+    assert!((y[1] - 50.0).abs() < 1e-9 && (y[5] - 50.0).abs() < 1e-9 && y[0] == 0.0 && y[6] == 0.0, "{y:?}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "the drag is one step");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 100.0), Point::new(280.0, 100.0)], "the focal points stay highlighted");
+}
+
+#[test]
+fn reshape_tool_shift_click_on_a_focal_point_removes_it_and_a_click_starts_again() {
+    for (clicks, want) in [
+        // Shift-click 140 again: only 280 is a focal point.
+        (vec![(140.0, false), (280.0, true), (140.0, true)], vec![Point::new(280.0, 0.0)]),
+        // A click without Shift: only 350 is a focal point.
+        (vec![(140.0, false), (280.0, true), (350.0, false)], vec![Point::new(350.0, 0.0)]),
+    ] {
+        let mut s = session();
+        let id = reshape_tool_on_a_line(&mut s);
+        for (x, shift) in clicks {
+            reshape_gesture(&mut s, (x, 0.0), (x, 0.0), shift);
+        }
+        assert_eq!(reshape_highlights(&mut s), want);
+        let at = (want[0].x, 0.0);
+        reshape_gesture(&mut s, at, (at.0, 100.0), false);
+        let full = reshape_anchors(&s, id).iter().filter(|a| a.p.y == 100.0).count();
+        assert_eq!(full, 1, "only the dragged focal point moves whole: {:?}", reshape_anchors(&s, id));
+    }
+}
+
+#[test]
+fn reshape_tool_focal_point_stays_its_anchor_when_another_anchor_moves_onto_it() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // Anchor 2 now lies where the focal point, anchor 4, lies.
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 2, "x": 280.0, "y": 0.0})).unwrap();
+    // A Shift-click adds the last anchor, and a drag from it moves it and anchor 4 whole.
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), true);
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[4] == 100.0 && y[6] == 100.0 && y[2] < 100.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_anchor_added_before_a_focal_point_keeps_it_highlighted() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // A Shift-click on the segment from 70 to 140 adds anchor 2, before the focal point.
+    reshape_gesture(&mut s, (105.0, 0.0), (105.0, 0.0), true);
+    assert_eq!(reshape_anchors(&s, id).len(), 8);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(280.0, 0.0), Point::new(105.0, 0.0)]);
+    // A drag from the added anchor moves both focal points whole.
+    reshape_gesture(&mut s, (105.0, 0.0), (105.0, 40.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[2] == 40.0 && y[5] == 40.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_focal_point_moved_by_another_edit_is_not_passed_to_another_anchor() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // The focal point, anchor 4, moves away, and anchor 2 takes its old place.
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 4, "x": 280.0, "y": 50.0})).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 2, "x": 280.0, "y": 0.0})).unwrap();
+    assert_eq!(reshape_highlights(&mut s), vec![]);
+    // A Shift-click adds the last anchor, and a drag from it moves it alone as the focal point.
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), true);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(420.0, 0.0)]);
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[6] == 100.0 && y[2] < 100.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_drag_from_an_anchor_that_is_not_highlighted_moves_only_it_whole() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (350.0, 0.0), (350.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[2] < 100.0 && y[5] == 100.0, "{y:?}");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(350.0, 100.0)]);
+}
+
+#[test]
+fn reshape_tool_click_on_a_segment_adds_a_highlighted_anchor() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (245.0, 0.0), (245.0, 0.0), true);
+    assert_eq!(reshape_anchors(&s, id).len(), 8);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "adding the anchor is one step");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(245.0, 0.0)]);
+    reshape_gesture(&mut s, (245.0, 0.0), (245.0, 60.0), false);
+    let a = reshape_anchors(&s, id);
+    assert_eq!((a[2].p.y, a[3].p.y, a[4].p.y), (60.0, 60.0, 60.0), "{a:?}");
+    // Undo takes back the drag, then the added anchor. The highlights stay where the drag left
+    // them, where no anchor is now, so none shows.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(reshape_anchors(&s, id).len(), 7);
+    assert!(reshape_highlights(&mut s).is_empty());
+}
+
+#[test]
+fn reshape_tool_escape_during_a_drag_keeps_the_path_and_its_focal_points() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), true);
+    let v = ViewInfo::default();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 0.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 90.0), v).unwrap();
+    assert_ne!(reshape_anchors(&s, id), before, "the preview moves the path");
+    s.tool_key(ToolKey::Escape, vectorcraft_tools::Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 90.0), v).unwrap();
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(280.0, 0.0)]);
+}
+
+#[test]
+fn reshape_tool_shift_drag_from_an_anchor_that_is_not_highlighted_moves_only_it() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    // Shift keeps the drag's angle; the highlighted anchor at 140 does not move whole with it.
+    reshape_gesture(&mut s, (350.0, 0.0), (350.0, 100.0), true);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[5] == 100.0 && y[2] < 100.0, "{y:?}");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(350.0, 100.0)]);
+}
+
+#[test]
+fn reshape_tool_click_on_a_curved_segment_highlights_the_anchor_it_adds() {
+    // Points on the curve from 0 to 300, away from its anchors, each clicked from off it on a
+    // new copy of the path.
+    let c = vectorcraft_geom::CubicBez::new(Point::new(0.0, 0.0), Point::new(40.0, -90.0), Point::new(230.0, 110.0), Point::new(300.0, 0.0));
+    for k in 1..60 {
+        let t = 0.05 + 0.015 * f64::from(k);
+        for off in [(0.3, -0.2), (-2.1, 1.7), (2.6, 2.2)] {
+            let mut s = session();
+            let id = NodeId(
+                s.execute(
+                    "path.create",
+                    &json!({"anchors": [{"x": 0, "y": 0, "out": [40, -90]}, {"x": 300, "y": 0, "in": [230, 110]}, {"x": 600, "y": 0}]}),
+                )
+                .unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            s.select_tool("reshape", ViewInfo::default()).unwrap();
+            let q = vectorcraft_geom::ParamCurve::eval(&c, t);
+            reshape_gesture(&mut s, (q.x + off.0, q.y + off.1), (q.x + off.0, q.y + off.1), false);
+            let a = reshape_anchors(&s, id);
+            assert_eq!(a.len(), 4, "t {t}, {off:?}");
+            assert_eq!(reshape_highlights(&mut s), vec![a[1].p], "t {t}, {off:?}");
+        }
+    }
+}
+
+#[test]
+fn reshape_tool_leaves_a_locked_or_hidden_path_alone() {
+    for command in ["object.lock", "object.hide"] {
+        let mut s = session();
+        let id = reshape_tool_on_a_line(&mut s);
+        let before = reshape_anchors(&s, id);
+        s.execute(command, &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).ok();
+        reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), false);
+        reshape_gesture(&mut s, (420.0, 0.0), (420.0, 60.0), false);
+        assert_eq!(reshape_anchors(&s, id), before, "{command}");
+        assert!(reshape_highlights(&mut s).is_empty(), "{command}");
+    }
 }
 
 #[test]
@@ -3377,6 +4580,124 @@ fn object_mosaic_refuses_a_boolean_given_as_text() {
     assert_eq!((r["tiles"].clone(), images(&s)), (json!(2), 1));
 }
 
+/// The size of the mosaic a call makes from the 100 × 50 pt image selected in `s`, with its column and row counts.
+fn mosaic_size(s: &mut Session, p: serde_json::Value) -> (f64, f64, serde_json::Value, serde_json::Value) {
+    let image = s.doc().unwrap().selection.objects.clone();
+    let r = s.execute("object.createObjectMosaic", &p).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    ((b.width() * 1e6).round() / 1e6, (b.height() * 1e6).round() / 1e6, r["columns"].clone(), r["rows"].clone())
+}
+
+/// Resize Using Percentages reads the new width and height as percentages of the image's size; Constrain Ratio keeps
+/// the image's proportions, the named side leading; Use Ratio makes the tiles square from the count on the
+/// constrained side (columns by default), and the call answers the counts it used.
+#[test]
+fn object_mosaic_resizes_by_percentages_constrains_the_ratio_and_squares_the_tiles() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 2, "rows": 1})), (100.0, 50.0, json!(2), json!(1)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "height": 200, "percentages": true})), (50.0, 100.0, json!(10), json!(10)));
+    // A side left out is 100% of the image's.
+    assert_eq!(mosaic_size(&mut s, json!({"width": 150, "percentages": true})).0, 150.0);
+    assert_eq!(mosaic_size(&mut s, json!({"width": 200, "height": 10, "constrain": "width"})), (200.0, 100.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 10, "height": 25, "constrain": "height"})), (50.0, 25.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "constrain": "width", "percentages": true})), (50.0, 25.0, json!(10), json!(10)));
+    // Square tiles: 10 columns of 10 pt over 50 pt are 5 rows; 4 rows of 12.5 pt over 100 pt are 8 columns.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 10, "rows": 3, "useRatio": true})), (100.0, 50.0, json!(10), json!(5)));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 3, "rows": 4, "useRatio": true, "constrain": "height"})), (100.0, 50.0, json!(8), json!(4)));
+    // A side named for Use Ratio is kept without Constrain Ratio: the size stays as given.
+    assert_eq!(mosaic_size(&mut s, json!({"rows": 4, "height": 100, "useRatio": "height"})), (100.0, 100.0, json!(4), json!(4)));
+    // On a new size: 30 columns over 300 × 50 pt are 5 rows.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 30, "width": 300, "useRatio": true})), (300.0, 50.0, json!(30), json!(5)));
+    // The count is kept within 1..1000.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 1, "height": 5000, "useRatio": true})).3, json!(1000));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 5000, "height": 1, "useRatio": true})).3, json!(1));
+    // A size under 0.1 pt grows in proportion while Constrain Ratio keeps it.
+    let (w, h, ..) = mosaic_size(&mut s, json!({"width": 0.1, "constrain": "width"}));
+    assert!((w - 0.2).abs() < 1e-6 && (h - 0.1).abs() < 1e-6, "{w} × {h}");
+    // A side Constrain Ratio works out above 1,000,000 pt shrinks to it, in proportion: a height of
+    // 1,000,000 pt over the 100 × 50 pt image would need a width of 2,000,000 pt.
+    assert_eq!(mosaic_size(&mut s, json!({"height": 1e6, "constrain": "height"})), (1e6, 5e5, json!(10), json!(10)));
+    // An image 20,000,000 times wider than it is tall has no such size: the call is refused.
+    s.execute("object.scale", &json!({"sx": 1, "sy": 1e-7})).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"width": 1e6, "constrain": "width"}));
+    let msg = "the image's proportions leave no size with both sides between 0.1 and 1000000 pt";
+    assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{r:?}");
+}
+
+/// Use Ratio squares the tiles as drawn: with 4 pt between columns, 10 columns of 10 pt cells draw 6 pt wide, so the
+/// rows are 6 pt plus their own 4 pt apart (5 rows down 50 pt); on an image turned 90°, the tiles are measured along
+/// its own axes.
+#[test]
+fn object_mosaic_use_ratio_takes_spacing_and_turned_images_into_account() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let counts = |s: &Session, p: serde_json::Value| crate::cmd::mosaic_counts(s, &p).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4, "spacingY": 4})), (10, 5));
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4})), (10, 8));
+    assert_eq!(counts(&s, json!({"columns": 10, "rows": 7})), (10, 7), "without Use Ratio the counts are kept");
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 10, "useRatio": true, "spacingX": 4})).unwrap();
+    let g = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().clone();
+    let t = g.children().unwrap()[0].geometric_bounds().unwrap();
+    assert!((t.width() - 6.0).abs() < 1e-6 && (t.height() - 6.25).abs() < 1e-6, "{t:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    // Turned 90°, the image's 100 pt side runs down the page; 10 columns along it are still 5 rows across its 50.
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true})), (10, 5));
+}
+
+#[test]
+fn object_mosaic_square_count_is_the_nearest_whole_count() {
+    use crate::cmd::menucmds::mosaic_square_count;
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 0.0, 0.0), 5);
+    assert_eq!(mosaic_square_count(3, 100.0, 50.0, 0.0, 0.0), 2);
+    assert_eq!(mosaic_square_count(0, 100.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(10, 0.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(1000, 1.0, 1000.0, 0.0, 0.0), 1000);
+    // Spacing wider than a cell leaves 10% of it, on either side.
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 50.0, 0.0), 50);
+    // 10 columns of 1 pt tiles (9 pt gaps) over 100 pt; rows 100 pt apart are capped too, so 10 rows draw 1 pt.
+    assert_eq!(mosaic_square_count(10, 100.0, 100.0, 9.0, 100.0), 10);
+    // 15 pt tiles over 50 pt: 3 rows draw 16.7 pt and 4 rows 12.5 pt, so 3.
+    assert_eq!(mosaic_square_count(1, 15.0, 50.0, 0.0, 0.0), 3);
+}
+
+/// A Constrain Ratio side that is not "width" or "height", a new size of 0 or less, and Use Ratio or Resize Using
+/// Percentages given as text are errors naming the key; no mosaic is made.
+#[test]
+fn object_mosaic_refuses_a_bad_ratio_side_size_or_switch() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    for (p, msg) in [
+        (json!({"constrain": "both"}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"constrain": 1}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"width": 0}), "`width` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"height": -5, "percentages": true}), "`height` must be between 0.1 and 1000000 (got -5)"),
+        (json!({"width": 2e6, "percentages": true}), "`width` must be between 0.1 and 1000000 (got 2000000)"),
+        // A side Constrain Ratio works out is not used, but a size given for it is still checked.
+        (json!({"width": 200, "height": 0, "constrain": "width"}), "`height` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"useRatio": "true"}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"useRatio": 1}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"percentages": 1}), "`percentages` must be true or false"),
+    ] {
+        let r = s.execute("object.createObjectMosaic", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{p}: {r:?}");
+        assert_eq!(undo(&s), before, "{p}");
+    }
+    let r = s.execute("object.createObjectMosaic", &json!({"constrain": null, "useRatio": null, "percentages": null})).unwrap();
+    assert_eq!(r["tiles"], json!(100));
+}
+
 #[test]
 fn snap_to_pixel_rounds_drawing_and_moves() {
     let mut s = session();
@@ -3394,6 +4715,38 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 37.3, 34.8), v).unwrap();
     let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
     assert_eq!((b.x0, b.y0), (17.0, 16.0));
+}
+
+/// Pixel Snapping Options (`view.snapToPixel.options`): with While Drawing off a rectangle drawn
+/// with Snap to Pixel on keeps its fractional corners while a move still lands on whole pixels, and
+/// with While Moving off a move keeps its fractional offset while drawing snaps again.
+#[test]
+fn pixel_snapping_options_choose_the_edits_snap_to_pixel_rounds() {
+    let mut s = session();
+    let v = ViewInfo { snap_to_pixel: true, smart_guides: false, snap_to_point: false, ..Default::default() };
+    let drag = |s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)| {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let bounds = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0, b.x1, b.y1)
+    };
+    s.execute("view.snapToPixel.options", &json!({"drawing": false})).unwrap();
+    drag(&mut s, "rectangle", (10.25, 10.5), (60.5, 40.25));
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, id), (10.25, 10.5, 60.5, 40.25), "drawing does not snap");
+    drag(&mut s, "selection", (30.0, 30.0), (37.5, 34.75));
+    assert_eq!(bounds(&s, id).0, 18.0, "moving still snaps the left edge");
+    assert_eq!(bounds(&s, id).1, 15.0, "moving still snaps the top edge");
+    s.execute("view.snapToPixel.options", &json!({"drawing": true, "moving": false})).unwrap();
+    drag(&mut s, "selection", (40.0, 30.0), (45.25, 33.5));
+    assert_eq!((bounds(&s, id).0, bounds(&s, id).1), (23.25, 18.5), "moving does not snap");
+    drag(&mut s, "rectangle", (100.25, 100.5), (140.5, 130.75));
+    let drawn = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, drawn), (100.0, 101.0, 141.0, 131.0), "drawing snaps again");
 }
 
 #[test]
@@ -3616,16 +4969,18 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
 }
 
 /// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
-/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection or the
-/// current layer instead, and the document and its undo history stay as they are.
+/// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
+/// current layer or a new object instead, and the document, the selection, the undo history,
+/// isolation mode and the shown opacity mask stay as they are.
 #[test]
 fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
     let b = rect(&mut s, 140.0, 120.0, 80.0, 60.0);
     let graph = s.execute("graph.create", &json!({"type": "column", "x": 400, "y": 300, "width": 120, "height": 80, "rows": [[1, 2]]})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "type", "size": 30})).unwrap()["id"].clone();
     let ids = [json!([a.0, "x"]), json!(3)];
-    let id = [json!("2"), json!("$1.id"), json!(2.5)];
+    let id = [json!("2"), json!("$1.id"), json!(2.5), json!("abc"), json!(true), json!({})];
     let commands = [
         ("object.blend.make", json!({}), "ids", &ids[..], json!([a.0, b.0])),
         ("object.envelope.makeWithWarp", json!({}), "ids", &ids[..], json!([a.0, b.0])),
@@ -3635,6 +4990,26 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
         ("perspective.editText", json!({}), "id", &id[..], json!([a.0])),
         ("layer.clippingMask.toggle", json!({}), "id", &id[..], json!([a.0, b.0])),
         ("layer.newSublayer", json!({}), "parent", &id[..], json!([a.0])),
+        ("object.isolate", json!({}), "id", &id[..], json!([a.0])),
+        ("graphicStyle.new", json!({"name": "From a"}), "id", &id[..], json!([a.0])),
+        ("charStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("paraStyle.new", json!({"name": "From type"}), "id", &id[..], json!([text])),
+        ("charStyle.apply", json!({"name": "[Normal Character Style]"}), "id", &id[..], json!([text])),
+        ("type.step", json!({"attribute": "size"}), "id", &id[..], json!([text])),
+        ("layer.releaseToLayers", json!({"build": true}), "id", &id[..], json!([a.0])),
+        ("layer.locate", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.editOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("transparency.viewOpacityMask", json!({}), "id", &id[..], json!([a.0])),
+        ("links.info", json!({}), "id", &id[..], json!([a.0])),
+        ("links.unembed", json!({}), "id", &id[..], json!([a.0])),
+        ("links.goTo", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.release", json!({}), "id", &id[..], json!([a.0])),
+        ("shaper.expand", json!({}), "id", &id[..], json!([a.0])),
+        ("image.info", json!({}), "id", &id[..], json!([a.0])),
+        ("symbol.edit", json!({}), "id", &id[..], json!([a.0])),
+        ("object.blend.spine.addAnchor", json!({"x": 120, "y": 110}), "id", &id[..], json!([a.0])),
+        ("path.curvature", json!({"points": [[0, 0], [50, 40], [100, 0]]}), "id", &id[..], json!([a.0])),
+        ("css.export", json!({"unnamed": true}), "id", &id[..], json!([a.0])),
     ];
     let mut wrong = vec![];
     for (cmd, params, key, values, selected) in commands {
@@ -3644,19 +5019,44 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
             if let Some(p) = p.as_object_mut() {
                 p.insert(key.into(), bad.clone());
             }
-            let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+            let st = s.doc().unwrap();
+            let (doc, selection, undo, modes) = (st.doc.clone(), st.selection.clone(), st.history.undo.len(), (st.isolation, st.mask_view));
             let r = s.execute(cmd, &p);
-            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| e.contains("object id") || e.contains("step reference"));
-            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().history.undo.len() == undo;
+            let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
+            let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
+            let st = s.doc().unwrap();
+            let same = st.doc == doc && st.selection == selection && st.history.undo.len() == undo && (st.isolation, st.mask_view) == modes;
             if !(refused && same) {
                 wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
             }
             if !same {
-                s.execute("edit.undo", &json!({})).ok();
+                let st = s.doc_mut().unwrap();
+                (st.doc, st.selection, (st.isolation, st.mask_view)) = (doc, selection, modes);
+                st.history.undo.truncate(undo);
             }
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// An omitted or null `id` still means the selection, and an object id names that object.
+/// `effect.apply` with the effect given as `id` (its older key) still applies it to the selection,
+/// as one undo step.
+#[test]
+fn an_omitted_id_still_means_the_selection_and_effect_apply_takes_an_effect_as_id() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for p in [json!({}), json!({"id": null}), json!({"id": a.0})] {
+        assert_eq!(s.execute("layer.locate", &p).unwrap()["id"], a.0, "{p}");
+    }
+    for p in [json!({"unnamed": true}), json!({"id": null, "unnamed": true}), json!({"id": a.0, "unnamed": true})] {
+        assert_eq!(s.execute("css.export", &p).unwrap()["rules"], 1, "{p}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("effect.apply", &json!({"id": "stylize.dropShadow"})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 #[test]

@@ -4,7 +4,10 @@
 //! 1. **Distance**: an exact Euclidean distance transform in each blob crop gives each pixel
 //!    its distance to the nearest pixel outside the blob.
 //! 2. **Lines**: an 8-connected component whose widest point (twice its largest distance, less
-//!    one) is within the stroke width is a line; wider ones stay filled areas.
+//!    one) is within the stroke width is a line. A wider one keeps as its area every disc wider
+//!    than the stroke width that fits in it; each piece outside those discs that reaches out of
+//!    them at least one and a half times its own width (and 3 px) is a thin feature of it, and a
+//!    line, whose end at the area goes to the cut, its cap reaching into the area.
 //! 3. **Skeleton**: Guo–Hall thins the crop to one pixel, preserving diagonal ends, then
 //!    staircase corners that don't connect anything are dropped.
 //! 4. **Graph**: runs of skeleton pixels between ends and junctions (touching junction pixels
@@ -93,18 +96,109 @@ pub(crate) fn lines(
         cells_left = left;
         let Some(dt) = distance::squared(&g.on, g.w, g.h) else { continue };
         let widest = 2.0 * f64::from(dt.iter().copied().fold(0.0f32, f32::max)).sqrt() - 1.0;
-        if widest > max_width {
-            continue;
-        }
-        let Some(line) = trace_line(g, &dt, comp.len(), max_width, img, ink, style) else { continue };
-        for &i in &comp {
-            if let Some(v) = thin.get_mut(i) {
-                *v = true;
+        let found = if widest > max_width {
+            // A wider shape keeps its wide part as an area; its thin features are lines.
+            arm_lines(&g, &dt, w, max_width, img, ink, style, &mut cells_left)
+        } else {
+            trace_line(g, &dt, comp.len(), max_width, img, ink, style, None).map(|line| (comp, line)).into_iter().collect()
+        };
+        for (pixels, line) in found {
+            for &i in &pixels {
+                if let Some(v) = thin.get_mut(i) {
+                    *v = true;
+                }
             }
+            out.push(line);
         }
-        out.push(line);
     }
     (thin, out)
+}
+
+/// The thin features of component `g` (wider than `max_width` somewhere; `dt` its distances), traced
+/// as lines, each with its pixels (indices of the `w`-wide image). A feature that cannot be traced, or
+/// past the work left in `cells_left`, stays part of the area.
+#[allow(clippy::too_many_arguments)]
+fn arm_lines(
+    g: &Grid,
+    dt: &[f32],
+    w: usize,
+    max_width: f64,
+    img: &Raster,
+    ink: [f64; 3],
+    style: &Style,
+    cells_left: &mut usize,
+) -> Vec<(Vec<usize>, Line)> {
+    let mut out = vec![];
+    for arm in arms(g, dt, w, max_width).unwrap_or_default() {
+        let pixels: Vec<usize> = arm.iter().map(|&(i, _)| i).collect();
+        let Some(ag) = Grid::from_component(&pixels, w) else { continue };
+        let Some(left) = cells_left.checked_sub(ag.w.saturating_mul(ag.h)) else { break };
+        *cells_left = left;
+        let mut cut = vec![false; ag.on.len()];
+        for &(i, at_cut) in &arm {
+            if let Some(c) = ag.index(i, w).and_then(|k| cut.get_mut(k)) {
+                *c = at_cut;
+            }
+        }
+        let Some(adt) = distance::squared(&ag.on, ag.w, ag.h) else { continue };
+        if 2.0 * f64::from(adt.iter().copied().fold(0.0f32, f32::max)).sqrt() - 1.0 > max_width {
+            continue;
+        }
+        if let Some(line) = trace_line(ag, &adt, pixels.len(), max_width, img, ink, style, Some(&cut)) {
+            out.push((pixels, line));
+        }
+    }
+    out
+}
+
+/// The thin features of component `g`, which is wider than `max_width` somewhere (`dt` its squared
+/// distances to the paper): the pieces of it that lie outside every disc wider than `max_width`
+/// that fits in it (the component opened by such a disc) and reach out of those discs at least one
+/// and a half times their own width (and 3 px). The rest, with the slivers and corners the discs
+/// leave, is the area. Each piece is a list of its pixels (indices of the `w`-wide image), each
+/// marked when it touches the area (where the line is cut from it).
+fn arms(g: &Grid, dt: &[f32], w: usize, max_width: f64) -> Option<Vec<Vec<(usize, bool)>>> {
+    let r = (max_width + 1.0) / 2.0;
+    let seeds: Vec<bool> = dt.iter().map(|&d| f64::from(d) > r * r).collect();
+    let near = distance::to_seeds(&seeds, g.w, g.h)?;
+    drop(seeds);
+    // (Half a pixel more than the discs' radius, so pixels the discs cut through are area.)
+    let cover = r + 0.5;
+    let rest = |i: usize| g.on.get(i) == Some(&true) && near.get(i).is_some_and(|&d| f64::from(d) > cover * cover);
+    let mut seen = vec![false; g.on.len()];
+    let (mut out, mut stack) = (vec![], vec![]);
+    for start in g.interior() {
+        if !rest(start) || seen.get(start).copied().unwrap_or(true) {
+            continue;
+        }
+        let mut piece = vec![];
+        *seen.get_mut(start)? = true;
+        stack.push(start);
+        while let Some(i) = stack.pop() {
+            let mut at_cut = false;
+            for j in g.neighbours(i) {
+                if !rest(j) {
+                    at_cut = true;
+                } else if !seen.get(j).copied().unwrap_or(true) {
+                    *seen.get_mut(j)? = true;
+                    stack.push(j);
+                }
+            }
+            piece.push((i, at_cut));
+        }
+        let deepest = piece.iter().filter_map(|&(i, _)| dt.get(i)).copied().fold(0.0f32, f32::max);
+        let width = (2.0 * f64::from(deepest).sqrt() - 1.0).max(1.0);
+        let farthest = piece.iter().filter_map(|&(i, _)| near.get(i)).copied().fold(0.0f32, f32::max);
+        if f64::from(farthest).sqrt() - cover < (1.5 * width).max(3.0) {
+            continue;
+        }
+        let image = |i: usize| {
+            let (x, y) = (usize::try_from(g.x0 + (i % g.w) as i64).ok()?, usize::try_from(g.y0 + (i / g.w) as i64).ok()?);
+            y.checked_mul(w)?.checked_add(x)
+        };
+        out.push(piece.into_iter().map(|(i, at_cut)| Some((image(i)?, at_cut))).collect::<Option<Vec<_>>>()?);
+    }
+    Some(out)
 }
 
 /// The 8 neighbours of pixel `i` inside the `w` × `h` image.
@@ -163,6 +257,23 @@ impl Grid {
         let comp: Vec<_> = mask.iter().enumerate().filter_map(|(i, &on)| on.then_some(i)).collect();
         Self::from_component(&comp, w)
     }
+    /// The grid index of pixel `i` of the `image_width`-wide image, when the grid holds it.
+    fn index(&self, i: usize, image_width: usize) -> Option<usize> {
+        let (x, y) = (i64::try_from(i % image_width.max(1)).ok()? - self.x0, i64::try_from(i / image_width.max(1)).ok()? - self.y0);
+        let (x, y) = (usize::try_from(x).ok()?, usize::try_from(y).ok()?);
+        (x < self.w && y < self.h).then(|| y * self.w + x)
+    }
+    /// Whether a pixel `cut` marks (`cut` is laid out as the grid) has its center within `radius` of
+    /// `p` (image coordinates).
+    fn near_cut(&self, cut: &[bool], p: Point, radius: f64) -> bool {
+        if !p.x.is_finite() || !p.y.is_finite() || !radius.is_finite() {
+            return false;
+        }
+        let (cx, cy) = (p.x - self.x0 as f64 - 0.5, p.y - self.y0 as f64 - 0.5);
+        let span = |c: f64, n: usize| ((c - radius).floor().max(0.0) as usize, ((c + radius).ceil().max(0.0) as usize).min(n.saturating_sub(1)));
+        let ((x0, x1), (y0, y1)) = (span(cx, self.w), span(cy, self.h));
+        (y0..=y1).any(|y| (x0..=x1).any(|x| (x as f64 - cx).hypot(y as f64 - cy) <= radius && cut.get(y * self.w + x).copied().unwrap_or(false)))
+    }
     fn offsets(&self) -> [isize; 8] {
         let w = self.w as isize;
         [-w, -w + 1, 1, w + 1, w, w - 1, -1, -w - 1]
@@ -193,8 +304,20 @@ impl Grid {
     }
 }
 
-/// The centre lines of one line component (pixel indices of the `w`-wide image).
-fn trace_line(mut g: Grid, dist: &[f32], pixels: usize, max_width: f64, img: &Raster, ink: [f64; 3], style: &Style) -> Option<Line> {
+/// The center lines of one line component (pixel indices of the `w`-wide image). `cut`, for a thin
+/// feature of a wider shape, marks (in `g`) its pixels that touch the shape's area: an end there is
+/// not an end of the ink, and goes to the cut, its cap reaching into the area.
+#[allow(clippy::too_many_arguments)]
+fn trace_line(
+    mut g: Grid,
+    dist: &[f32],
+    pixels: usize,
+    max_width: f64,
+    img: &Raster,
+    ink: [f64; 3],
+    style: &Style,
+    cut: Option<&[bool]>,
+) -> Option<Line> {
     thin::thin(&mut g);
     let mut graph = graph::build(&g, dist)?;
     graph.simplify(max_width)?;
@@ -268,7 +391,9 @@ fn trace_line(mut g: Grid, dist: &[f32], pixels: usize, max_width: f64, img: &Ra
             // to a few degrees at best, less without anti-aliasing, and an end already on it is
             // better left where it is.)
             let before = inner - *r.pts.get(at(2 * back))?;
-            let wide = width >= 3.0 && n > 2 * back && before.cross(tip - inner).abs() > (0.25 * width).max(1.0) * before.hypot();
+            // (At a cut from a wider shape, where the skeleton turns along the cut.)
+            let joined = cut.is_some_and(|cut| g.near_cut(cut, tip, width / 2.0 + 1.5));
+            let wide = width >= 3.0 && n > 2 * back && (joined || before.cross(tip - inner).abs() > (0.25 * width).max(1.0) * before.hypot());
             let d = if wide { before } else { tip - inner };
             if d.hypot() < 1e-9 {
                 continue;
@@ -282,6 +407,11 @@ fn trace_line(mut g: Grid, dist: &[f32], pixels: usize, max_width: f64, img: &Ra
                 }
             }
             let tip = on_line(tip);
+            if joined {
+                // The skeleton stops about half a width short of the cut.
+                *r.pts.get_mut(at(0))? = tip + along * (width / 2.0 + 0.5);
+                continue;
+            }
             let reach = ink.beyond(tip, along);
             if width >= 3.0 {
                 let aside = kurbo::Vec2::new(-along.y, along.x) * (0.35 * width);

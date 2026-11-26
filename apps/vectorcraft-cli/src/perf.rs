@@ -64,6 +64,61 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
     v.get(v.len() / 2).copied().unwrap_or(0.0)
 }
 
+/// Exercise the application's native save/open commands, including previews, PDF output,
+/// compression and API base64 conversion. Session setup and validation are outside timing.
+/// Five measured runs follow one warmup; no filesystem or GPU window is involved.
+fn native_io(doc: &Document) -> Result<(), String> {
+    for (label, compatible, preview) in [
+        ("default options", None, false),
+        ("PDF disabled", Some(false), false),
+        ("preview+gzip", None, true),
+        ("preview+gzip, PDF disabled", Some(false), true),
+    ] {
+        let mut session = vectorcraft_engine::Session::new();
+        session.add_document(doc.clone(), None);
+        let mut params = json!({"format":"vectorcraft","modified":null,"preview":preview,"compress":preview});
+        if let Some(value) = compatible {
+            params["pdfCompatible"] = json!(value);
+        }
+        let (mut saves, mut opens) = (Vec::new(), Vec::new());
+        let (mut size, mut has_pdf, mut compressed) = (0, false, false);
+        for run in 0..6 {
+            let start = Instant::now();
+            let saved = session.execute("file.saveAs", &params).map_err(|e| e.to_string())?;
+            let save_ms = start.elapsed().as_secs_f64() * 1000.0;
+            let data = saved["dataBase64"].as_str().ok_or("native save returned no dataBase64")?;
+            let bytes = vectorcraft_format::base64_decode(data).ok_or("native save returned invalid base64")?;
+            size = bytes.len();
+            has_pdf = vectorcraft_format::pdf_content(&bytes).is_some();
+            if compatible == Some(false) && has_pdf {
+                return Err("native save ignored the explicit PDF opt-out".into());
+            }
+            compressed = vectorcraft_format::is_compressed(&bytes);
+            if compressed != preview || vectorcraft_format::preview(&bytes).is_some() != preview {
+                return Err("native save did not apply the requested preview/compression options".into());
+            }
+            let args = json!({"name":"perf.vectorcraft","dataBase64":data});
+            let mut opened = vectorcraft_engine::Session::new();
+            let start = Instant::now();
+            opened.execute("document.open", &args).map_err(|e| e.to_string())?;
+            let open_ms = start.elapsed().as_secs_f64() * 1000.0;
+            if opened.doc().map_err(|e| e.to_string())?.doc.artboards.len() != doc.artboards.len() {
+                return Err("native round trip changed the artboard count".into());
+            }
+            if run > 0 {
+                saves.push(save_ms);
+                opens.push(open_ms);
+            }
+        }
+        saves.sort_by(f64::total_cmp);
+        opens.sort_by(f64::total_cmp);
+        let save = saves.get(2).copied().ok_or("no save measurements")?;
+        let open = opens.get(2).copied().ok_or("no open measurements")?;
+        outln!("  native {label}: save {save:.2} ms, open {open:.2} ms, {size} bytes, PDF {has_pdf}, compressed {compressed}");
+    }
+    Ok(())
+}
+
 /// 1-minute load average (macOS / Linux), if available.
 #[cfg(not(windows))]
 fn load_average() -> Option<f64> {
@@ -393,19 +448,36 @@ fn deep(n: usize) -> Result<(), String> {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    if crate::help_requested(args, &["--paths"]) {
+    if crate::help_requested(args, &["--paths", "--artboards"]) {
         return crate::help();
     }
     let mut n = 50_000usize;
     let mut want_deep = false;
+    let mut want_native = false;
+    let mut artboards = None::<usize>;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--deep" => want_deep = true,
+            "--native-io" => want_native = true,
+            "--artboards" => {
+                artboards =
+                    Some(it.next().and_then(|v| v.parse().ok()).filter(|n| (1..=4).contains(n)).ok_or("--artboards needs a number from 1 to 4")?)
+            }
             "--paths" => n = it.next().and_then(|v| v.parse().ok()).ok_or("--paths needs a number")?,
             other => return Err(format!("unknown perf option `{other}`")),
         }
     }
+    if want_native && n > 50_000 {
+        return Err("--native-io allows at most 50000 paths".into());
+    }
+    if want_native && want_deep {
+        return Err("--native-io and --deep are separate measurement modes".into());
+    }
+    if artboards.is_some() && !want_native {
+        return Err("--artboards requires --native-io".into());
+    }
+    let artboards = artboards.unwrap_or(1);
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     // The figure is the 1-minute load average, or on Windows the cores busy over one second.
     #[cfg(not(windows))]
@@ -418,8 +490,20 @@ pub fn run(args: &[String]) -> Result<(), String> {
         outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
     }
     let t = Instant::now();
-    let doc = synthetic(n)?;
+    let mut doc = synthetic(n)?;
     outln!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
+    if want_native {
+        let first = doc.artboards.first().cloned().ok_or("synthetic document has no artboard")?;
+        // Overlapping artboards intentionally repeat the same paths on every PDF page.
+        for index in 1..artboards {
+            let mut page = first.clone();
+            page.id = first.id.checked_add(index as u32).ok_or("artboard id overflow")?;
+            page.name = format!("Perf {}", index + 1);
+            doc.artboards.push(page);
+        }
+        outln!("  application native I/O: {artboards} overlapping artboard(s), one warmup + five samples; medians; no disk I/O");
+        return native_io(&doc);
+    }
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
     let opts = RenderOptions::default();
@@ -512,6 +596,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_io_exercises_the_application_save_and_open_commands() {
+        native_io(&synthetic(3).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn native_io_rejects_conflicting_modes_and_excessive_workloads() {
+        for (args, expected) in [
+            (vec!["--native-io", "--deep"], "separate measurement modes"),
+            (vec!["--native-io", "--paths", "50001"], "at most 50000"),
+            (vec!["--native-io", "--artboards", "5"], "1 to 4"),
+            (vec!["--artboards", "1"], "requires --native-io"),
+            (vec!["--artboards", "2"], "requires --native-io"),
+        ] {
+            assert!(run(&args.into_iter().map(str::to_owned).collect::<Vec<_>>()).unwrap_err().contains(expected));
+        }
+    }
 
     #[test]
     fn busy_share_leaves_out_idle_time() {

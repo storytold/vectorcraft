@@ -7,23 +7,82 @@ pub(super) fn svg_drawn(face: &FontFace, font: &skrifa::FontRef<'_>, gid: u32) -
     face.svg_glyphs && !crate::colr::has_colour_glyph(font, gid)
 }
 
+/// The most path elements one glyph outline keeps. Real outlines have hundreds; a variable
+/// composite glyph can repeat a big base outline into millions. Elements past it are dropped.
+pub(crate) const MAX_OUTLINE_ELEMENTS: usize = 1 << 20;
+
 /// A pen drawing outlines y down, as text space has them.
 pub(crate) struct FlipPen(pub(crate) BezPath);
 
+impl FlipPen {
+    fn full(&self) -> bool {
+        self.0.elements().len() >= MAX_OUTLINE_ELEMENTS
+    }
+}
+
 impl OutlinePen for FlipPen {
     fn move_to(&mut self, x: f32, y: f32) {
+        if self.full() {
+            return;
+        }
         self.0.move_to((x as f64, -y as f64));
     }
     fn line_to(&mut self, x: f32, y: f32) {
+        if self.full() {
+            return;
+        }
         self.0.line_to((x as f64, -y as f64));
     }
     fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
+        if self.full() {
+            return;
+        }
         self.0.quad_to((cx0 as f64, -cy0 as f64), (x as f64, -y as f64));
     }
     fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
+        if self.full() {
+            return;
+        }
         self.0.curve_to((cx0 as f64, -cy0 as f64), (cx1 as f64, -cy1 as f64), (x as f64, -y as f64));
     }
     fn close(&mut self) {
+        if self.full() {
+            return;
+        }
         self.0.close_path();
+    }
+}
+
+// Share font decoding while preserving the app's existing y-down geometry and resource budget.
+impl craft::font_catalog::GlyphPen for FlipPen {
+    fn move_to(&mut self, x: f32, y: f32) {
+        OutlinePen::move_to(self, x, y);
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        OutlinePen::line_to(self, x, y);
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        OutlinePen::quad_to(self, x1, y1, x, y);
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        OutlinePen::curve_to(self, x1, y1, x2, y2, x, y);
+    }
+    fn close(&mut self) {
+        OutlinePen::close(self);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pen_keeps_at_most_the_element_cap() {
+        let mut pen = FlipPen(BezPath::new());
+        pen.move_to(0.0, 0.0);
+        for i in 0..MAX_OUTLINE_ELEMENTS + 10 {
+            pen.line_to(i as f32, 0.0);
+        }
+        assert_eq!(pen.0.elements().len(), MAX_OUTLINE_ELEMENTS);
     }
 }

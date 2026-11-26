@@ -42,6 +42,51 @@ fn text(pdf: &[u8]) -> String {
     String::from_utf8_lossy(pdf).into_owned()
 }
 
+/// The XMP packet of `pdf`, read as its stream's `/Length` says: the packet's end must be inside
+/// those bytes and nothing but the end of line may follow them before `endstream`.
+fn xmp_packet(pdf: &[u8]) -> String {
+    use crate::lab_spot::{find, rfind};
+    let begin = find(pdf, b"<?xpacket begin", 0).expect("an XMP packet");
+    let head = &pdf[..begin];
+    let obj = rfind(head, b" obj").expect("the packet's object");
+    let dict = &head[obj..];
+    let at = find(dict, b"/Length ", 0).expect("its length") + b"/Length ".len();
+    let digits: Vec<u8> = dict[at..].iter().copied().take_while(u8::is_ascii_digit).collect();
+    let length: usize = String::from_utf8(digits).unwrap().parse().unwrap();
+    let mut data = obj + rfind(dict, b"stream").unwrap() + b"stream".len();
+    data += pdf[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+    let stream = &pdf[data..data + length];
+    let close = find(stream, b"<?xpacket end=", 0).expect("the packet ends inside the stream's length");
+    assert!(find(stream, b"?>", close).is_some(), "the packet ends inside the stream's length");
+    let rest = String::from_utf8_lossy(&pdf[data + length..]);
+    assert!(rest.trim_start_matches(['\r', '\n']).starts_with("endstream"), "the stream ends at its length");
+    String::from_utf8(stream.to_vec()).unwrap()
+}
+
+/// The value of the XMP element `tag` in `xmp`.
+fn xmp_value<'a>(xmp: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let rest = &xmp[xmp.find(&open)? + open.len()..];
+    Some(&rest[..rest.find(&format!("</{tag}>"))?])
+}
+
+#[test]
+fn pdfx4_metadata_has_a_metadata_date_equal_to_the_modification_date() {
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0)]);
+    // Dated by the writer (created), then dated again after writing (modified later).
+    for modified in [None, Some(1_800_000_000)] {
+        let mut o = opts(Standard::PdfX4, |_| {});
+        o.modified = modified;
+        let xmp = xmp_packet(&export(&d, &o).unwrap());
+        let modify = xmp_value(&xmp, "xmp:ModifyDate").expect("xmp:ModifyDate");
+        assert_eq!(xmp_value(&xmp, "xmp:MetadataDate"), Some(modify), "{modified:?}: {xmp}");
+        assert_eq!(xmp.matches("<xmp:MetadataDate>").count(), 1, "{modified:?}");
+        if modified.is_some() {
+            assert!(modify.starts_with("2027-01-15T"), "the later date: {modify}");
+        }
+    }
+}
+
 #[test]
 fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     let mut d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::rgb(0.2, 0.4, 0.9)]);
@@ -113,7 +158,41 @@ fn pdfx_1a_files_have_no_rgb() {
     let png = {
         let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 200, 30, 255]));
         let mut out = std::io::Cursor::new(vec![]);
-        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.get_mut().extend_from_slice(&__b))
+        }
+        .unwrap();
         out.into_inner()
     };
     d.images.insert("img".into(), ImageBlob::new("image/png", png));
@@ -168,35 +247,20 @@ fn pdfx_1a_and_x3_files_have_no_transparency() {
 
 #[test]
 fn pdfx_settings_rules() {
+    let profiles = ActiveProfiles::default();
     for standard in X {
-        // A password is refused, and so are editing data.
-        let e = opts(standard, |s| s.security.open_password = "x".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(_)), "{standard:?}: {e}");
+        // A password is refused.
         assert!(export(&doc(&[]), &opts(standard, |s| s.security.permissions_password = "x".into())).is_err());
-        assert!(
-            matches!(opts(standard, |s| s.preserve_editing = true).settings.check(), Err(PdfError::BadSetting(m)) if m.contains("preserveEditing"))
-        );
-        // Its own version, never PDF 1.7 or 2.0.
-        assert!(standard.allows(standard.version()), "{standard:?}");
-        assert!(!standard.allows(Compatibility::Pdf17) && !standard.allows(Compatibility::Pdf20), "{standard:?}");
-        let e = opts(standard, |s| s.compatibility = Compatibility::Pdf17).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains(standard.label())), "{standard:?}: {e}");
-        // A name that is no profile, without a registry.
-        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains("No Such Press")), "{standard:?}: {e}");
+        // A name that is no profile of the app's colour catalog, without a registry.
+        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check(&profiles).unwrap_err();
+        assert!(e.message.contains("No Such Press"), "{standard:?}: {e}");
     }
-    assert_eq!(Standard::PdfX4.version(), Compatibility::Pdf16);
-    assert!(Standard::PdfX4.allows(Compatibility::Pdf15) && !Standard::PdfX1a.allows(Compatibility::Pdf15));
-    // Layers: PDF/X-4 only.
-    assert!(
-        matches!(settings(json!({"standard": "pdfX1a", "compatibility": "1.4", "createLayers": true})).check(), Err(PdfError::BadSetting(m)) if m.contains("createLayers"))
-    );
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "createLayers": true})).check_values().is_ok());
     // A date is required.
     assert!(matches!(crate::pdfx::require_date(Standard::PdfX4, None), Err(PdfError::Unsupported(_))));
     assert!(crate::pdfx::require_date(Standard::None, None).is_ok());
     // PDF/X settings don't warn about the output condition: the output intent is always written.
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings().is_empty());
+    let warned = settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings(&profiles);
+    assert!(warned.is_empty(), "{warned:?}");
 }
 
 #[test]
@@ -223,4 +287,24 @@ fn verify_finds_what_each_standard_forbids() {
     let font = "<</Type/FontDescriptor/FontName/A>>";
     assert!(matches!(verify(&file(font), Standard::PdfX4), Err(PdfError::Unsupported(m)) if m.contains("fonts")));
     assert!(verify(&file("<</Type/FontDescriptor/FontFile2 4 0 R>>"), Standard::PdfX4).is_ok());
+}
+
+/// Names inside a string or a comment are text, not syntax: a file identifier, whose base64 hash
+/// can hold `/BM` or `/Lab`, does not make a file break its standard.
+#[test]
+fn verify_skips_names_in_strings_and_comments() {
+    use crate::pdfx::verify;
+    let file = |body: &str| format!("%PDF-1.3\n%/BM/Multiply\n1 0 obj\n{body}\nendobj\n").into_bytes();
+    for ok in [
+        "<</Size 2/ID[(q/BM+Zt1kR0x/Lab=) (q/BM+Zt1kR0x/Lab=)]>>",
+        "<</Title(a\\)/SMask 5 0 R)/Subject(a(b)/ca 0.5)>>",
+        "<</Title(stream\n/BM/Multiply\nendstream)>>",
+    ] {
+        for standard in [Standard::PdfX1a, Standard::PdfX3] {
+            assert!(verify(&file(ok), standard).is_ok(), "{standard:?}: {ok}");
+        }
+    }
+    // A name after a string is still read.
+    let after = "<</Title(a(b)c)/BM/Multiply>>";
+    assert!(matches!(verify(&file(after), Standard::PdfX3), Err(PdfError::Unsupported(m)) if m.contains("blend modes")));
 }

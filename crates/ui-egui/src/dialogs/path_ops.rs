@@ -1,15 +1,28 @@
 //! Path dialogs: Average, Average & Join, and Offset Path, Simplify and Split Into Grid with Preview.
+//!
+//! Every dialog is a held parameter dialog: its OK is the closure given to `open_held`, a refusal keeps it open with
+//! the reason, and [`pump`] only runs the live preview of the kinds that have one.
 
-use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind, Unit};
+// PLAN: the framework import paths below are assumed from the contract rows (craft-ui-patterns re-exports contract and
+// runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
+use craft::ui::contract::{Bind, FieldLabelRole, Show as _, ShowContainer as _, SideLabel};
+use craft::ui::dialog::DialogId;
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
+use craft::ui::text::{NumberField, NumberOutput};
+use craft::ui::value_drag::SliderScale;
+use serde_json::{Map, Value, json};
+use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::PathData;
 
-use super::{DialogSpec, form, run_and_close};
+use super::form;
+// PLAN: assumed `LivePreview` is exported by `dialogs::form` (wg.A20, widgets-w11).
+use super::host::{HeldOptions, open_held, open_held_with};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).into(), body, confirm, preview: true, ..DialogSpec::FORM };
 
 /// Simplify's Corner Point Angle Threshold when the dialog opens, in degrees. An anchor whose
 /// corner is sharper than the threshold stays a corner, so a higher threshold keeps more corners.
@@ -17,215 +30,477 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).int
 /// sends 180° less the threshold: 150° sends `object.path.simplify`'s default of 30°.
 pub(crate) const ANGLE_THRESHOLD: f64 = 150.0;
 
-/// The field where Simplify keeps the ids of the paths its last preview ran on.
-const ORIGINAL_IDS: &str = "__ids";
+/// Simplify's tolerance when the dialog opens from the menu, in points.
+const DEFAULT_TOLERANCE: f64 = 1.0;
 
-fn title(kind: &str) -> &'static str {
-    match kind {
-        "average" => tl!("Average"),
-        "averageJoin" => tl!("Average & Join"),
-        "offsetPath" => tl!("Offset Path"),
-        "simplify" => tl!("Simplify"),
-        _ => tl!("Split Into Grid"),
+// PLAN: the save-key prefix is assumed.
+/// The Simplify settings kept by "Open this dialog with these settings next time" (`None` when unticked).
+pub(crate) const SIMPLIFY_KEY: SaveKey = SaveKey::new("vectorcraft_dialogs.simplify");
+/// The Offset Path values confirmed last.
+pub(crate) const OFFSET_KEY: SaveKey = SaveKey::new("vectorcraft_dialogs.offset_path");
+/// The Average & Join anchor confirmed last.
+pub(crate) const JOIN_KEY: SaveKey = SaveKey::new("vectorcraft_dialogs.average_join");
+
+/// The key of Split Into Grid's command and dialog.
+const SPLIT_COMMAND: &str = "object.path.splitIntoGrid";
+/// The private field that holds Simplify's anchor counts, `{before, after}`.
+const COUNTS: &str = "__counts";
+
+/// The path dialogs that share [`open`]; Split Into Grid has [`open_split`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PathOp {
+    /// Path › Average.
+    Average,
+    /// Path › Average & Join.
+    AverageJoin,
+    /// Object › Path › Offset Path.
+    OffsetPath,
+    /// Object › Path › Simplify.
+    Simplify,
+}
+
+impl PathOp {
+    fn title(self) -> &'static str {
+        match self {
+            PathOp::Average => tl!("Average"),
+            PathOp::AverageJoin => tl!("Average & Join"),
+            PathOp::OffsetPath => tl!("Offset Path"),
+            PathOp::Simplify => tl!("Simplify"),
+        }
     }
+
+    /// The dialog's key: the command it runs.
+    fn key(self) -> &'static str {
+        match self {
+            PathOp::Average => "path.average",
+            PathOp::AverageJoin => "path.averageJoin",
+            PathOp::OffsetPath => "object.path.offsetPath",
+            PathOp::Simplify => "object.path.simplify",
+        }
+    }
+
+    /// Whether the dialog previews on the canvas.
+    fn previews(self) -> bool {
+        matches!(self, PathOp::OffsetPath | PathOp::Simplify)
+    }
+
+    /// The fields the dialog opens with, before remembered values.
+    fn opening(self) -> Map<String, Value> {
+        let v = match self {
+            PathOp::Average => json!({"axis": "both"}),
+            PathOp::AverageJoin => json!({"to": "corner"}),
+            PathOp::OffsetPath => json!({"offset": 10.0, "joins": "miter", "miterLimit": 4.0}),
+            PathOp::Simplify => json!({}),
+        };
+        match v {
+            Value::Object(m) => m,
+            _ => Map::new(),
+        }
+    }
+}
+
+/// The open Average-family, Offset Path or Simplify dialog's live state.
+pub(crate) struct Open {
+    op: PathOp,
+    id: DialogId,
+    preview: LivePreview,
+    /// The params the preview last answered for.
+    last: Value,
+    /// Simplify: the paths the preview ran on.
+    original: Vec<NodeId>,
+    /// Simplify: whether the canvas outlines `original` (Preview and Show Original Path are on).
+    shown: bool,
+}
+
+/// The open Split Into Grid dialog's live state.
+pub(crate) struct SplitOpen {
+    id: DialogId,
+    preview: LivePreview,
+    last: Value,
 }
 
 /// The command the dialog runs and its parameters.
-fn command(d: &Dialog) -> (&'static str, Value) {
-    match d.kind.as_str() {
-        "average" => ("path.average", json!({"axis": d.str("axis")})),
-        "averageJoin" => ("path.averageJoin", json!({"to": d.str("to")})),
-        "offsetPath" => {
-            ("object.path.offsetPath", json!({"offset": d.f64("offset", 10.0), "joins": d.str("joins"), "miterLimit": d.f64("miterLimit", 4.0)}))
+fn command(op: PathOp, f: &DialogFields) -> (&'static str, Value) {
+    let params = match op {
+        PathOp::Average => json!({"axis": f.text("axis").unwrap_or("both")}),
+        PathOp::AverageJoin => json!({"to": f.text("to").unwrap_or("corner")}),
+        PathOp::OffsetPath => json!({
+            "offset": f.number("offset").unwrap_or(10.0),
+            "joins": f.text("joins").unwrap_or("miter"),
+            "miterLimit": f.number("miterLimit").unwrap_or(4.0),
+        }),
+        PathOp::Simplify => {
+            let turn = 180.0 - f.number("angleThreshold").unwrap_or(ANGLE_THRESHOLD).clamp(0.0, 180.0);
+            json!({
+                "tolerance": f.number("tolerance").unwrap_or(DEFAULT_TOLERANCE),
+                "cornerAngle": turn,
+                "straightLines": f.bool("straightLines").unwrap_or(false),
+            })
         }
-        "simplify" => {
-            let turn = 180.0 - d.f64("angleThreshold", ANGLE_THRESHOLD).clamp(0.0, 180.0);
-            ("object.path.simplify", json!({"tolerance": d.f64("tolerance", 1.0), "cornerAngle": turn, "straightLines": d.bool("straightLines")}))
-        }
-        _ => ("object.path.splitIntoGrid", form::params(d)),
-    }
+    };
+    (op.key(), params)
 }
 
-/// The undo label of the dialogs that preview on the canvas (all but Average and Average & Join).
-fn previewed(kind: &str) -> Option<&'static str> {
-    match kind {
-        "offsetPath" => Some("Offset Path"),
-        "simplify" => Some("Simplify"),
-        "splitIntoGrid" => Some("Split Into Grid"),
-        _ => None,
-    }
+/// Split Into Grid's command parameters.
+fn split_params(f: &DialogFields) -> Value {
+    let num = |k: &str, d: f64| f.number(k).unwrap_or(d);
+    json!({
+        "rows": num("rows", 2.0),
+        "columns": num("columns", 2.0),
+        "rowGutter": num("rowGutter", 0.0),
+        "columnGutter": num("columnGutter", 0.0),
+        "totalHeight": num("totalHeight", 0.0),
+        "totalWidth": num("totalWidth", 0.0),
+        "addGuides": f.bool("addGuides").unwrap_or(false),
+    })
 }
 
 /// The fields Split Into Grid opens with for a selection `width` × `height` points.
-pub(crate) fn split_fields(width: f64, height: f64) -> Value {
-    json!({"rows": 2, "columns": 2, "rowGutter": 12.0, "columnGutter": 12.0, "totalHeight": height, "totalWidth": width, "addGuides": false})
+pub(crate) fn split_fields(width: f64, height: f64) -> DialogFields {
+    let mut f = DialogFields::from_pairs([
+        ("rows", 2.0),
+        ("columns", 2.0),
+        ("rowGutter", 12.0),
+        ("columnGutter", 12.0),
+        ("totalHeight", height),
+        ("totalWidth", width),
+    ]);
+    f.set("addGuides", false);
+    f
 }
 
-/// Split Into Grid's fields: the rows on the left and the columns on the right, each with its
-/// number, size, gutter and total, and Add Guides. The size of a row or column is what the total
-/// leaves each of them after the gutters, so it follows the other three; typing it sets the total.
-fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    const WIDTH: f32 = 84.0;
-    let axes = [
-        ("rows", tl!("Rows:"), tl!("Height:"), "rowGutter", "totalHeight"),
-        ("columns", tl!("Columns:"), tl!("Width:"), "columnGutter", "totalWidth"),
-    ];
-    let gutter_label = form::humanized("gutter");
-    egui::Grid::new("dlg").num_columns(4).spacing([10.0, 8.0]).show(ui, |ui| {
-        for (number, label, ..) in axes {
-            let row = form::row_label(ui, label);
-            ui.label_inputs_by(row.id, |ui| {
-                if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
-                    d.fields.insert(number.into(), json!(v));
-                }
-            });
-        }
-        ui.end_row();
-        for (number, _, label, gutter, total) in axes {
-            let row = form::row_label(ui, label);
-            let n = d.f64(number, 2.0).max(1.0);
-            let gaps = d.f64(gutter, 0.0) * (n - 1.0);
-            ui.label_inputs_by(row.id, |ui| {
-                if let Some(v) = crate::widgets::num_field(ui, ("dlg-size", number), Some((d.f64(total, 0.0) - gaps) / n), unit, WIDTH) {
-                    d.fields.insert(total.into(), json!(n * v + gaps));
-                }
-            });
-        }
-        ui.end_row();
-        for (_, axis, _, gutter, _) in axes {
-            // The visible rows stay the existing translated "Gutter:" and "Total:" labels; the
-            // accessible names say which axis they belong to (two identical visible labels would
-            // otherwise name two different inputs the same).
-            let _ = form::row_label(ui, &gutter_label);
-            ui.name_inputs(format!("{axis} {gutter_label}"), |ui| form::length(ui, d, gutter, unit, WIDTH));
-        }
-        ui.end_row();
-        for (_, axis, _, _, total) in axes {
-            let _ = form::row_label(ui, tl!("Total:"));
-            ui.name_inputs(format!("{axis} {}", tl!("Total:")), |ui| form::length(ui, d, total, unit, WIDTH));
-        }
-        ui.end_row();
+/// One cell of Split Into Grid's grid: a labelled number field. A count (`lengths` is `None`) is a whole number;
+/// the others are lengths. A cell whose visible label repeats another's carries its axis in its name, so the visible
+/// label only describes it. Returns the value typed this pass.
+fn cell(ui: &mut egui::Ui, label: &'static str, name: String, describes: bool, value: f64, lengths: Option<LengthUnits>) -> Option<f64> {
+    let role = if describes { FieldLabelRole::Describes } else { FieldLabelRole::Names };
+    let mut edited = None;
+    Field::new(label).side(SideLabel::new().role(role)).show(ui, |ui, _| {
+        let bind = Bind::given(Some(value));
+        let out: NumberOutput = match lengths {
+            Some(l) => NumberField::length(name.clone(), bind, l).show(ui),
+            None => NumberField::new(name.clone(), bind).range(1.0..=500.0).commit_decimals(0).show(ui),
+        };
+        edited = out.value().copied().flatten();
     });
-    ui.add_space(8.0);
-    form::check(ui, d, "addGuides", tl!("Add Guides"));
+    edited
 }
 
-/// Average & Join's Points: Corner or Smooth, the joined anchor. "Points:" in the "anchor"
-/// context: the plain row is a star's number of points.
-fn join_points(ui: &mut egui::Ui, d: &mut Dialog) {
-    let to = d.str("to");
-    ui.horizontal(|ui| {
-        form::row_label(ui, crate::i18n::tr_ctx(crate::i18n::current(), "anchor", "Points:"));
-        for (value, label) in [("corner", "Corner"), ("smooth", "Smooth")] {
-            if crate::widgets::radio(ui, label, to == value, true) {
-                d.fields.insert("to".into(), json!(value));
+/// Split Into Grid's fields: the rows on the left and the columns on the right, each with its number, size, gutter
+/// and total. The size of a row or column is what the total leaves each of them after the gutters, so it follows the
+/// other three; typing it sets the total.
+fn split_grid(ui: &mut egui::Ui, f: &mut DialogFields, lengths: LengthUnits) -> egui::Response {
+    let axes = [
+        ("rows", tl!("Rows:"), tl!("Height:"), "rowGutter", "totalHeight", 2.0),
+        ("columns", tl!("Columns:"), tl!("Width:"), "columnGutter", "totalWidth", 2.0),
+    ];
+    egui::Grid::new("split-grid")
+        .num_columns(2)
+        .show(ui, |ui| {
+            for (number, label, _, _, _, default) in axes {
+                let n = f.number(number).unwrap_or(default);
+                if let Some(v) = cell(ui, label, label.to_string(), false, n, None) {
+                    f.set(number, v);
+                }
+            }
+            ui.end_row();
+            for (number, _, label, gutter, total, default) in axes {
+                let n = f.number(number).unwrap_or(default).max(1.0);
+                let gaps = f.number(gutter).unwrap_or(0.0) * (n - 1.0);
+                let size = (f.number(total).unwrap_or(0.0) - gaps) / n;
+                if let Some(v) = cell(ui, label, label.to_string(), false, size, Some(lengths)) {
+                    f.set(total, n * v + gaps);
+                }
+            }
+            ui.end_row();
+            for (_, axis, _, gutter, _, _) in axes {
+                let label = tl!("Gutter:");
+                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(gutter).unwrap_or(0.0), Some(lengths)) {
+                    f.set(gutter, v);
+                }
+            }
+            ui.end_row();
+            for (_, axis, _, _, total, _) in axes {
+                let label = tl!("Total:");
+                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(total).unwrap_or(0.0), Some(lengths)) {
+                    f.set(total, v);
+                }
+            }
+            ui.end_row();
+        })
+        .response
+}
+
+/// Split Into Grid's rows: the grid and Add Guides.
+fn split_rows(lengths: LengthUnits) -> Vec<Param> {
+    vec![
+        // PLAN: `companions` is assumed to take the keys of the values a custom row owns.
+        Param::custom("grid", tl!("Grid"), move |ui, f, _| split_grid(ui, f, lengths))
+            .companions(["rows", "columns", "rowGutter", "columnGutter", "totalHeight", "totalWidth"])
+            .full_width(),
+        Param::new("addGuides", tl!("Add Guides"), ParamKind::bool(false)),
+    ]
+}
+
+/// Simplify's rows: Tolerance, Corner Point Angle Threshold (0°, the smoothest, to 180°, the sharpest), Convert to
+/// Straight Lines, Show Original Path and Open this dialog with these settings next time.
+fn simplify_rows(lengths: LengthUnits, tolerance: f64) -> Vec<Param> {
+    let check = |key: &str, label: &'static str| Param::new(key, label, ParamKind::bool(false));
+    vec![
+        Param::number("tolerance", tl!("Tolerance:"), tolerance, 0.1, 3).bounds(Some(0.0), None).length(lengths),
+        Param::new("angleThreshold", tl!("Corner Point Angle Threshold:"), ParamKind::range(0.0, 180.0, ANGLE_THRESHOLD, SliderScale::Linear))
+            .unit(UnitKind::Degrees),
+        check("straightLines", tl!("Convert to Straight Lines")),
+        check("showOriginal", tl!("Show Original Path")),
+        check("retain", tl!("Open this dialog with these settings next time")),
+    ]
+}
+
+/// Average & Join's Points: Corner or Smooth, the joined anchor. "Points:" in the "anchor" context: the plain row is
+/// a star's number of points.
+fn join_rows() -> Vec<Param> {
+    let options = vec![("corner".to_string(), tl!("Corner").into()), ("smooth".to_string(), tl!("Smooth").into())];
+    vec![Param::new("to", crate::i18n::tr_ctx(crate::i18n::current(), "anchor", "Points:"), ParamKind::radio(options, Some("corner".into())))]
+}
+
+fn rows(op: PathOp, opening: &Map<String, Value>, lengths: LengthUnits) -> Vec<Param> {
+    match op {
+        PathOp::Average => form::grid_params("average", opening, lengths),
+        PathOp::AverageJoin => join_rows(),
+        PathOp::OffsetPath => form::grid_params("offsetPath", opening, lengths),
+        PathOp::Simplify => simplify_rows(lengths, DEFAULT_TOLERANCE),
+    }
+}
+
+/// The dialog of Simplify's fields at `tolerance` (points): the slider's tolerance when its More Options opens the
+/// dialog.
+pub(crate) fn simplify_dialog(tolerance: f64) -> DialogFields {
+    let mut f = DialogFields::from_pairs([("tolerance", tolerance), ("angleThreshold", ANGLE_THRESHOLD)]);
+    for key in ["straightLines", "showOriginal", "retain"] {
+        f.set(key, false);
+    }
+    f
+}
+
+/// The anchor counts line under Simplify's rows.
+fn counts_row(ui: &mut egui::Ui, f: &DialogFields) {
+    if let Some(FieldValue::Json(c)) = f.get(COUNTS)
+        && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
+    {
+        Text::new(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points")))).show(ui);
+    }
+}
+
+/// The record of the open dialog of `op`, taken out of the app.
+fn take_open(app: &mut VectorcraftApp, op: PathOp) -> Option<Open> {
+    let i = app.object_dialogs.path.iter().position(|r| r.op == op)?;
+    Some(app.object_dialogs.path.remove(i))
+}
+
+/// Whether Object › Path › Simplify opens its dialog (the user kept its settings) instead of the slider.
+pub(crate) fn retained_simplify(app: &VectorcraftApp) -> bool {
+    let Some(ctx) = app.ui_ctx.as_ref() else { return false };
+    saved_value::<Option<DialogFields>>(ctx, &SIMPLIFY_KEY).is_some()
+}
+
+/// Opens the dialog of `op` on its remembered values (Simplify: the ones kept for next time).
+pub(crate) fn open(app: &mut VectorcraftApp, op: PathOp) {
+    let opening = op.opening();
+    let fields = if op == PathOp::Simplify {
+        simplify_dialog(DEFAULT_TOLERANCE)
+    } else {
+        let lengths = crate::canvas::general_lengths(app);
+        form::fields_of(&rows(op, &opening, lengths), &opening)
+    };
+    let remember = match op {
+        PathOp::Average => None,
+        PathOp::AverageJoin => Some(JOIN_KEY),
+        PathOp::OffsetPath => Some(OFFSET_KEY),
+        PathOp::Simplify => Some(SIMPLIFY_KEY),
+    };
+    open_dialog(app, op, fields, remember);
+}
+
+/// Simplify's More Options: the dialog on its defaults at the slider's `tolerance`. It does not lay the kept values
+/// over the opening, which would replace the slider's tolerance.
+pub(crate) fn open_simplify(app: &mut VectorcraftApp, tolerance: f64) {
+    open_dialog(app, PathOp::Simplify, simplify_dialog(tolerance), None);
+}
+
+fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remember: Option<SaveKey>) {
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status("There is no window to show the dialog in.");
+        return;
+    };
+    let lengths = crate::canvas::general_lengths(app);
+    let opening = op.opening();
+    let key = op.key();
+    let dialog = HostedParamDialog::new(&ctx, key, fields, move |f| {
+        let mut d = ParamDialog::new(key, op.title(), rows(op, &opening, lengths)).values(Bind::bound(f));
+        if let Some(k) = remember.clone() {
+            d = d.remember(k);
+        }
+        if op.previews() {
+            d = d.previews(true);
+        }
+        if op == PathOp::Simplify { d.below(counts_row) } else { d }
+    });
+    let ok = move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
+        let (cmd, params) = command(op, &result.fields);
+        match take_open(app, op) {
+            Some(record) => {
+                let id = record.id;
+                record.preview.commit(app, cmd, params).map(drop).inspect_err(|_| {
+                    // The dialog stays open on the refusal, so it keeps previewing.
+                    app.object_dialogs.path.push(Open { op, id, preview: LivePreview::default(), last: Value::Null, original: vec![], shown: false });
+                })?;
+            }
+            None => {
+                app.run(cmd, params).map(drop)?;
             }
         }
-    });
+        match op {
+            PathOp::Simplify => {
+                let kept =
+                    result.fields.bool("retain").unwrap_or(false).then(|| ParamDialog::remembered(&rows(op, &Map::new(), lengths), &result.fields));
+                set_saved_value(&ctx, &SIMPLIFY_KEY, kept);
+            }
+            PathOp::AverageJoin | PathOp::OffsetPath => result.remember(&ctx),
+            PathOp::Average => {}
+        }
+        Ok(())
+    };
+    if let Some(old) = take_open(app, op) {
+        old.preview.cancel(app);
+    }
+    let id = if op.previews() {
+        let cancel = Box::new(move |app: &mut VectorcraftApp| {
+            if let Some(record) = take_open(app, op) {
+                record.preview.cancel(app);
+            }
+        });
+        open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) })
+    } else {
+        open_held(app, dialog, ok)
+    };
+    match id {
+        Some(id) if op.previews() => {
+            app.object_dialogs.path.push(Open { op, id, preview: LivePreview::default(), last: Value::Null, original: vec![], shown: false })
+        }
+        Some(_) => {}
+        None => app.status("There is no window to show the dialog in."),
+    }
 }
 
-/// The fields the Simplify dialog opens with at `tolerance` (points): the slider's tolerance when
-/// its More Options opens the dialog.
-pub(crate) fn simplify_dialog(tolerance: f64) -> Value {
-    json!({"tolerance": tolerance, "angleThreshold": ANGLE_THRESHOLD, "straightLines": false, "showOriginal": false, "retain": false, "preview": true})
+/// Opens Split Into Grid on a grid the size of the selection.
+pub(crate) fn open_split(app: &mut VectorcraftApp) {
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status("There is no window to show the dialog in.");
+        return;
+    };
+    let (width, height) =
+        app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
+    let lengths = crate::canvas::general_lengths(app);
+    let dialog = HostedParamDialog::new(&ctx, SPLIT_COMMAND, split_fields(width, height), move |f| {
+        ParamDialog::new(SPLIT_COMMAND, tl!("Split Into Grid"), split_rows(lengths)).values(Bind::bound(f)).previews(true)
+    });
+    let ok = |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
+        let params = split_params(&result.fields);
+        match app.object_dialogs.split.take() {
+            Some(record) => {
+                let id = record.id;
+                record.preview.commit(app, SPLIT_COMMAND, params).map(drop).inspect_err(|_| {
+                    app.object_dialogs.split = Some(SplitOpen { id, preview: LivePreview::default(), last: Value::Null });
+                })
+            }
+            None => app.run(SPLIT_COMMAND, params).map(drop),
+        }
+    };
+    if let Some(old) = app.object_dialogs.split.take() {
+        old.preview.cancel(app);
+    }
+    let cancel = Box::new(|app: &mut VectorcraftApp| {
+        if let Some(record) = app.object_dialogs.split.take() {
+            record.preview.cancel(app);
+        }
+    });
+    match open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }) {
+        Some(id) => app.object_dialogs.split = Some(SplitOpen { id, preview: LivePreview::default(), last: Value::Null }),
+        None => app.status("There is no window to show the dialog in."),
+    }
 }
 
-/// The fields the Simplify dialog keeps when OK confirms it with `retain` ticked.
-const SIMPLIFY_KEPT: [&str; 6] = ["tolerance", "angleThreshold", "straightLines", "showOriginal", "retain", "preview"];
+/// Whether the dialog `id` previews, and its values.
+fn dialog_state(app: &VectorcraftApp, id: DialogId) -> Option<(bool, DialogFields)> {
+    app.dialogs()?.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone())))
+}
 
-/// Simplify's fields: Tolerance, Corner Point Angle Threshold (its label above a slider from 0° on
-/// the left, the smoothest, to 180°, the sharpest), Convert to Straight Lines, Show Original Path
-/// and Open this dialog with these settings next time.
-fn simplify_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
-    let rail = Tokens::get(ui.ctx()).input_border;
-    egui::Grid::new("dlg").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        form::length_field(ui, d, "tolerance", &form::humanized("tolerance"), unit);
-    });
-    ui.add_space(8.0);
-    form::row_label(ui, tl!("Corner Point Angle Threshold:"));
-    ui.horizontal(|ui| form::slider_field_named(ui, d, "angleThreshold", tl!("Corner Point Angle Threshold:"), 0.0..=180.0, "°", &|_| rail));
-    ui.add_space(8.0);
-    form::check(ui, d, "straightLines", tl!("Convert to Straight Lines"));
-    form::check(ui, d, "showOriginal", tl!("Show Original Path"));
-    form::check(ui, d, "retain", tl!("Open this dialog with these settings next time"));
+/// Runs the previews of the open dialogs. Each pass applies only the dialog's own values, so a second pass in one
+/// frame finds the same params and runs nothing.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let mut records = std::mem::take(&mut app.object_dialogs.path);
+    for r in &mut records {
+        step(app, r);
+    }
+    records.append(&mut app.object_dialogs.path);
+    app.object_dialogs.path = records;
+    if let Some(mut s) = app.object_dialogs.split.take() {
+        if let Some((on, fields)) = dialog_state(app, s.id) {
+            let params = split_params(&fields);
+            if !on {
+                s.last = Value::Null;
+            }
+            if s.preview.run(app, on, tl!("Split Into Grid"), SPLIT_COMMAND, &params).is_some() {
+                s.last = params;
+            }
+        }
+        app.object_dialogs.split = Some(s);
+    }
+}
+
+fn step(app: &mut VectorcraftApp, r: &mut Open) {
+    let Some((on, fields)) = dialog_state(app, r.id) else { return };
+    let (cmd, params) = command(r.op, &fields);
+    let stale = !on || r.last != params;
+    if stale {
+        r.original.clear();
+    }
+    if !on {
+        r.last = Value::Null;
+    }
+    let mut counts = stale.then_some(None);
+    if let Some(Ok(answer)) = r.preview.run(app, on, r.op.title(), cmd, &params) {
+        r.last = params;
+        if r.op == PathOp::Simplify {
+            r.original = answer["ids"].as_array().into_iter().flatten().filter_map(|id| id.as_u64().map(NodeId)).collect();
+            counts = Some(Some(json!({"before": answer["before"], "after": answer["after"]})));
+        }
+    }
+    r.shown = on && fields.bool("showOriginal").unwrap_or(false);
+    let Some(counts) = counts.filter(|_| r.op == PathOp::Simplify) else { return };
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|h| {
+            let Some(d) = h.get_mut_by_id::<HostedParamDialog>(r.id) else { return };
+            match counts {
+                Some(v) => d.set_field(COUNTS, FieldValue::Json(v)),
+                None if d.fields().contains(COUNTS) => d.clear_field(COUNTS),
+                None => {}
+            }
+        });
+    }
 }
 
 /// Simplify's Show Original Path: while the dialog previews with it on, every path the preview ran
 /// on, with its id, as it was before the preview (from the interaction's snapshot). Empty
 /// otherwise.
 pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
-    let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == "simplify" && d.bool("showOriginal") && d.bool("preview")) else { return vec![] };
-    let (Some(ids), Some(it)) = (d.fields.get(ORIGINAL_IDS).and_then(Value::as_array), app.session.active().and_then(|st| st.interaction.as_ref()))
-    else {
-        return vec![];
-    };
-    ids.iter()
-        .filter_map(|id| {
-            let id = NodeId(id.as_u64()?);
-            match &it.doc.node(id)?.kind {
-                NodeKind::Path { path, .. } => Some((id, path)),
-                _ => None,
-            }
+    let Some(r) = app.object_dialogs.path.iter().find(|r| r.op == PathOp::Simplify && r.shown) else { return vec![] };
+    let Some(it) = app.session.active().and_then(|st| st.interaction.as_ref()) else { return vec![] };
+    r.original
+        .iter()
+        .filter_map(|&id| match &it.doc.node(id)?.kind {
+            NodeKind::Path { path, .. } => Some((id, path)),
+            _ => None,
         })
         .collect()
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.general_unit();
-    if d.kind == "splitIntoGrid" {
-        split_grid(ui, d, unit);
-    } else if d.kind == "simplify" {
-        simplify_fields(ui, d, unit);
-    } else if d.kind == "averageJoin" {
-        join_points(ui, d);
-    } else {
-        form::grid(ui, d, unit);
-    }
-    if let Some(label) = previewed(&d.kind) {
-        let (id, params) = command(d);
-        if d.fields.get(form::PREVIEWED) != Some(&params) || !d.bool("preview") {
-            d.fields.remove("__counts");
-            d.fields.remove(ORIGINAL_IDS);
-        }
-        if let Some(r) = form::preview_result(app, ui, d, label, id, params)
-            && d.kind == "simplify"
-        {
-            d.fields.insert("__counts".into(), json!({"before": r["before"], "after": r["after"]}));
-            d.fields.insert(ORIGINAL_IDS.into(), r["ids"].clone());
-        }
-        if d.kind == "simplify"
-            && d.bool("preview")
-            && let Some(counts) = d.fields.get("__counts")
-            && let (Some(before), Some(after)) = (counts["before"].as_u64(), counts["after"].as_u64())
-        {
-            ui.label(format!("{}: {before} → {after}", tl!("Anchor Points")));
-        }
-    }
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let (id, params) = command(d);
-    if previewed(&d.kind).is_none() {
-        let r = run_and_close(app, id, params)?;
-        if d.kind == "averageJoin" {
-            app.ui.average_join = json!({"to": d.str("to")});
-        }
-        return Ok(r);
-    }
-    let r = form::commit_preview(app, id, params)?;
-    // Simplify: with retain ticked, the menu item opens this dialog on these fields next time; with it
-    // unticked, the menu item opens the slider.
-    if d.kind == "simplify" {
-        let kept = SIMPLIFY_KEPT.into_iter().filter_map(|k| Some((k.to_string(), d.fields.get(k)?.clone())));
-        app.ui.simplify = if d.bool("retain") { Value::Object(kept.collect()) } else { Value::Null };
-    }
-    // The fields as the dialog held them, so they show as typed when it opens again.
-    if d.kind == "offsetPath" {
-        // Preview among them: the checkbox keeps its last state across opens (#3195), as
-        // Simplify's retained fields keep theirs.
-        let kept = ["offset", "joins", "miterLimit", "preview"].into_iter().filter_map(|k| Some((k.to_string(), d.fields.get(k)?.clone())));
-        app.ui.offset_path = Value::Object(kept.collect());
-    }
-    Ok(r)
 }

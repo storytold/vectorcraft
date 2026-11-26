@@ -2,50 +2,66 @@
 //!
 //! The first row holds the series labels (the legend), the first column the category labels, the
 //! top-left cell stays blank; the other cells are values (a blank cell has none). A cell is picked
-//! with a click and edited in the entry box above the sheet: Tab enters it and moves right, Enter
-//! (Return) down, Shift with either the other way, and the arrow keys move between cells (so they
-//! don't move the caret in the entry box). Pasting tab- or line-separated text fills the cells from
+//! with a click and edited in the entry box above the sheet: Enter writes the text into the cell and
+//! moves down, Tab off the box moves right, Shift with either the other way, and the arrow keys move
+//! between the sheet's cells. Pasting tab- or line-separated text into the sheet fills the cells from
 //! the picked one. Import Data reads a tab-separated text file, Transpose row/column swaps rows and
 //! columns, Switch x/y swaps a scatter graph's y and x columns, Cell Style sets the number of
-//! decimals the sheet shows and its columns' width, and Revert reads the graph's data again. Apply
-//! (`graph.setData` with its series, categories and rows) redraws the graph and leaves the window
-//! open.
+//! decimals the sheet shows and the width of every column, dragging a column's right edge sets that
+//! column's width (in whole digits, 0 to 20, as Cell Style), and Revert reads the graph's data
+//! again. Apply (`graph.setData` with its series, categories and rows) redraws the graph and leaves
+//! the window open.
 //!
-//! Fields: `grid` (rows of cell texts), `sel` ([row, column]), `entry` (the picked cell's text
-//! being edited), `decimals` (null: as typed), `width` (digits), `__graph` (the graph's id) and
-//! `__scatter`.
+//! Fields (`ui.inspect`, `ui.dialog.set`): `grid` (rows of cell texts), `sel` ([row, column]),
+//! `entry` (the picked cell's text being edited), `decimals` (null: as typed), `width` (digits) and
+//! `widths` (a column's own width in digits by its index, null or missing: `width`; setting `width`
+//! empties it).
 
+use std::collections::BTreeMap;
+
+use craft::behavior::{EditEvent, NumberCodec};
+use craft::host::{PickRequest, Picked};
+use craft::table::ui::{
+    CellAt, CellDirection, CellEdit, CellGrid, CellSelection, CellSpace, ColumnEdges, GridEdit, GridModel, GridState, LineIndex, Positions,
+};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, PaintUi, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{
+    DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id, serde_fields, set_serde_field,
+};
+use craft::ui::display::Text;
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::primitives::TextRun;
+use craft::ui::runtime::env::{Env, Label, Units};
+use craft::ui::runtime::focus::Initial;
+use craft::ui::style::TypeRole;
+use craft::ui::text::{NumberField, TextField};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::{MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES};
 
-use super::DialogSpec;
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+use crate::file_asks::{self, Owner};
 
-/// The dialog kind of Graph Data.
+/// The dialog kind of Graph Data, the key of its dialog on the host.
 pub const KIND: &str = "graphData";
 
 /// The sheet's size: a row of labels over a graph's categories, a column of labels before its
-/// series; the least it shows; a cell's longest text.
+/// series; the least rows it shows.
 const MAX_ROWS: usize = MAX_GRAPH_CATEGORIES + 1;
 const MAX_COLS: usize = MAX_GRAPH_SERIES + 1;
 const MIN_ROWS: usize = 8;
-const MIN_COLS: usize = 6;
-const MAX_CELL: usize = 256;
-/// The Cell Style limits (Adjust column width and decimal digits).
+/// The largest file Import Data reads, 1 MB (1,048,576 bytes), the same as Import Data Sets'.
+const MAX_IMPORT_BYTES: usize = vectorcraft_engine::cmd::MAX_GRAPH_DATA_FILE;
+/// The Cell Style limits (Adjust column width and decimal digits), and what they start at.
 const MAX_DECIMALS: u64 = 10;
 const MAX_WIDTH: u64 = 20;
+const DEFAULT_DECIMALS: u64 = 2;
+const DEFAULT_WIDTH: u64 = 7;
 /// A cell's height on the sheet.
 const ROW_H: f32 = 19.0;
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Graph Data").into(),
-    body,
-    confirm: |app, d| apply(app, d).map(|_| Value::Null),
-    ok: Some("Apply"),
-    min_width: 620.0,
-    ..DialogSpec::FORM
-};
 
 /// Open Graph Data for the selected graph.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -56,12 +72,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         st.doc.node(id).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter)
     });
     let id = graph.map(|(_, id)| id.0);
-    let grid = grid_from_data(&v);
-    let entry = cell(&grid, 0, 1);
-    app.ui.dialog = Some(Dialog::new(
-        KIND,
-        json!({ "grid": grid, "sel": [0, 1], "entry": entry, "decimals": null, "width": 7, "__graph": id, "__scatter": scatter }),
-    ));
+    let dialog = GraphDataDialog::new(grid_from_data(&v), id, scatter, can_import(app));
+    let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
+    dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
 
@@ -81,8 +94,133 @@ fn graph_of(doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> Opt
 
 type Grid = Vec<Vec<String>>;
 
-/// A button's work, done once the sheet is drawn.
-type Action = fn(&mut VectorcraftApp, &mut Dialog) -> Result<(), String>;
+/// The values the window edits: the cells and Cell Style. What `FormDialog` binds and what Apply sends.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Sheet {
+    /// The cells by row; a row or cell past them is blank.
+    grid: Grid,
+    /// The decimals a number cell shows; `None` shows the text as typed.
+    decimals: Option<u64>,
+    /// Cell Style's Column Width in digits.
+    width: u64,
+    /// A column's own width in digits by its index; `None` takes `width`.
+    widths: Vec<Option<u64>>,
+}
+
+impl Default for Sheet {
+    fn default() -> Self {
+        Sheet { grid: Grid::new(), decimals: None, width: DEFAULT_WIDTH, widths: Vec::new() }
+    }
+}
+
+/// A button's work that needs the app, done by [`pump`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Action {
+    /// Import Data…: ask for a file.
+    Import,
+    /// Revert: read the graph's data again.
+    Revert,
+}
+
+/// The entry box: the text of the cell `at`, which it writes into the sheet when the cell is left.
+#[derive(Clone, Debug, PartialEq)]
+struct Entry {
+    text: String,
+    at: (usize, usize),
+}
+
+/// The row and column lines the grid lays out, rebuilt only when the rows shown or the column widths change.
+struct Lines {
+    key: Option<(usize, u64, Vec<Option<u64>>)>,
+    rows: LineIndex,
+    columns: LineIndex,
+    /// The own width of the column whose edge a drag holds, as it was when the drag began.
+    resize_from: Option<Option<u64>>,
+}
+
+impl Lines {
+    fn new() -> Self {
+        Lines {
+            key: None,
+            rows: LineIndex::uniform(ROW_H, 0),
+            columns: LineIndex::uniform(digits_px(DEFAULT_WIDTH), MAX_COLS as u32),
+            resize_from: None,
+        }
+    }
+
+    /// Lays out `rows` rows and every column of `sheet` at its width.
+    fn sync(&mut self, rows: usize, sheet: &Sheet) {
+        if self.key.as_ref().is_some_and(|(r, w, ws)| *r == rows && *w == sheet.width && *ws == sheet.widths) {
+            return;
+        }
+        let own: BTreeMap<u32, f32> = sheet.widths.iter().enumerate().filter_map(|(c, w)| Some((u32::try_from(c).ok()?, digits_px((*w)?)))).collect();
+        self.rows = LineIndex::uniform(ROW_H, u32::try_from(rows).unwrap_or(u32::MAX));
+        self.columns = LineIndex::new(&own, digits_px(width(sheet)), MAX_COLS as u32);
+        self.key = Some((rows, sheet.width, sheet.widths.clone()));
+    }
+}
+
+/// The sheet as the grid reads it.
+struct SheetModel<'a> {
+    sheet: &'a Sheet,
+    rows: &'a LineIndex,
+    columns: &'a LineIndex,
+}
+
+impl GridModel for SheetModel<'_> {
+    fn rows(&self) -> &LineIndex {
+        self.rows
+    }
+
+    fn columns(&self) -> &LineIndex {
+        self.columns
+    }
+
+    fn selectable(&self, cell: CellAt<u32>) -> bool {
+        selectable(cell)
+    }
+
+    fn last_used(&self) -> CellAt<u32> {
+        let column = self.sheet.grid.iter().filter_map(|r| r.iter().rposition(|c| !c.trim().is_empty())).max().unwrap_or(0);
+        CellAt::new(data_rows(self.sheet) as u32, column as u32)
+    }
+
+    fn paint_cell(&self, ui: &mut PaintUi<'_>, rect: egui::Rect, cell: CellAt<u32>, _zoom: f32) {
+        let text = shown(&self.cell_text(cell), self.sheet.decimals);
+        ui.draw().text(rect, &TextRun::new(text).role(TypeRole::Mono).elide());
+    }
+
+    fn cell_text(&self, cell: CellAt<u32>) -> String {
+        cell_of(&self.sheet.grid, cell.row as usize, cell.column as usize)
+    }
+}
+
+/// The top-left cell stays blank: no pick lands on it.
+fn selectable(cell: CellAt<u32>) -> bool {
+    (cell.row, cell.column) != (0, 0)
+}
+
+/// Runs `f` with the rules the picked cell moves by: the sheet's full size, whatever it shows.
+fn with_space<R>(f: impl FnOnce(&CellSpace<'_, u32>) -> R) -> R {
+    let rows = Positions::new(MAX_ROWS as u32);
+    f(&CellSpace::new(&rows, MAX_COLS as u32).selectable(&selectable))
+}
+
+/// The cells' text of a grid, or an empty text past it.
+fn cell_of(grid: &[Vec<String>], r: usize, c: usize) -> String {
+    grid.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default()
+}
+
+/// The picked cell of the sheet view ([row, column]).
+fn active(state: &GridState) -> (usize, usize) {
+    state.selection.active().map_or((0, 1), |c| (c.row as usize, c.column as usize))
+}
+
+/// Picks cell `to`; `false` when the sheet has no such cell or it is the blank one.
+fn select(state: &mut GridState, to: (usize, usize)) -> bool {
+    let (Ok(row), Ok(column)) = (u32::try_from(to.0), u32::try_from(to.1)) else { return false };
+    with_space(|space| state.selection.select(CellAt::new(row, column), space))
+}
 
 /// The sheet's cells from the `graph.setData` query: the series in the first row, each category's
 /// label then values below (the label column is there, blank, when the graph has no labels).
@@ -101,96 +239,41 @@ pub(crate) fn grid_from_data(v: &Value) -> Grid {
     grid
 }
 
-/// The sheet as `graph.setData` takes it: series labels, category labels (none when all are blank)
-/// and the values (a blank cell, or text that isn't a number, has none), without the empty rows and
-/// columns past the data.
+/// The sheet as `graph.setData` takes it ([`vectorcraft_engine::cmd::graph_data_from_grid`]),
+/// which Import Data Sets' `%` columns also use.
 pub(crate) fn data_from_grid(grid: &Grid) -> Value {
-    let filled = |s: &String| !s.trim().is_empty();
-    // At most a graph's rows and columns, as a file gives (`grid_from_text`): a grid sent by
-    // automation is any size, and the values are their product.
-    let grid = &grid[..grid.len().min(MAX_ROWS)];
-    let rows = grid.iter().rposition(|r| r.iter().take(MAX_COLS).any(filled)).map_or(1, |i| i + 1).max(1);
-    let cols = grid.iter().take(rows).filter_map(|r| r.iter().take(MAX_COLS).rposition(filled)).max().map_or(1, |i| i + 1).max(1);
-    let label = |s: &str| {
-        let s = s.trim();
-        // A label typed in straight quotes (as the CSV form takes a number as a label) is the text inside.
-        s.strip_prefix('"').and_then(|t| t.strip_suffix('"')).unwrap_or(s).to_string()
-    };
-    // Series labels up to the last one given (none when all are blank).
-    let mut series: Vec<String> = (1..cols).map(|c| label(&cell(grid, 0, c))).collect();
-    while series.last().is_some_and(String::is_empty) {
-        series.pop();
-    }
-    let mut categories: Vec<String> = (1..rows).map(|r| label(&cell(grid, r, 0))).collect();
-    if categories.iter().all(String::is_empty) {
-        categories.clear();
-    }
-    let values: Vec<Vec<Value>> = (1..rows)
-        .map(|r| {
-            (1..cols)
-                .map(|c| {
-                    let t = cell(grid, r, c);
-                    t.trim().parse::<f64>().ok().filter(|v| v.is_finite() && !t.trim().starts_with('"')).map_or(Value::Null, |v| json!(v))
-                })
-                .collect()
-        })
-        .collect();
-    json!({ "series": series, "categories": categories, "rows": values })
+    vectorcraft_engine::cmd::graph_data_from_grid(grid)
 }
 
-/// Text from a file or the clipboard as cells: tab-separated when any line holds a tab, else
-/// comma-separated (decided once, so a label with a comma in a tab-separated file stays whole), at
-/// most a graph's rows and columns.
+/// Text from a file or the clipboard as cells ([`vectorcraft_engine::cmd::graph_grid_from_text`]).
 pub(crate) fn grid_from_text(text: &str) -> Grid {
-    let sep = if text.contains('\t') { '\t' } else { ',' };
-    text.lines().take(MAX_ROWS).map(|l| l.trim_end_matches('\r').split(sep).take(MAX_COLS).map(|c| clean(c.trim())).collect()).collect()
+    vectorcraft_engine::cmd::graph_grid_from_text(text)
 }
 
-/// A text file's bytes as text: UTF-16 with its byte-order mark (spreadsheets' "Unicode Text"),
-/// else UTF-8 without one.
+/// A text file's bytes as text ([`vectorcraft_engine::cmd::graph_data_text`]).
 pub(crate) fn decode(bytes: &[u8]) -> String {
-    let utf16 = |rest: &[u8], le: bool| {
-        let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|p| if le { u16::from_le_bytes(*p) } else { u16::from_be_bytes(*p) }).collect();
-        String::from_utf16_lossy(&units)
-    };
-    match bytes {
-        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
-        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
-        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
-    }
+    vectorcraft_engine::cmd::graph_data_text(bytes)
 }
 
-/// A cell's text: one line (tabs and line breaks become spaces), at most MAX_CELL characters.
+/// A cell's text ([`vectorcraft_engine::cmd::graph_cell_text`]).
 fn clean(s: &str) -> String {
-    s.chars().map(|c| if matches!(c, '\t' | '\r' | '\n') { ' ' } else { c }).take(MAX_CELL).collect()
+    vectorcraft_engine::cmd::graph_cell_text(s)
 }
 
-fn cell(grid: &[Vec<String>], r: usize, c: usize) -> String {
-    grid.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default()
-}
-
-/// Cell `(r, c)` of the dialog's sheet, read in place.
-fn cell_at(d: &Dialog, r: usize, c: usize) -> &str {
-    d.fields.get("grid").and_then(|g| g.get(r)).and_then(|row| row.get(c)).and_then(Value::as_str).unwrap_or_default()
-}
-
-/// Set cell `(r, c)` of the dialog's sheet in place, growing it as needed (within the sheet's size).
-fn set_cell_at(d: &mut Dialog, r: usize, c: usize, text: &str) {
+/// Set cell `(r, c)` of the sheet, growing it as needed (within the sheet's size).
+fn set_cell_at(sheet: &mut Sheet, r: usize, c: usize, text: &str) {
     if r >= MAX_ROWS || c >= MAX_COLS {
         return;
     }
-    let grid = d.fields.entry("grid").or_insert_with(|| json!([]));
-    let Some(rows) = grid.as_array_mut() else { return };
-    if rows.len() <= r {
-        rows.resize(r + 1, json!([]));
+    if sheet.grid.len() <= r {
+        sheet.grid.resize(r + 1, Vec::new());
     }
-    let Some(row) = rows.get_mut(r).and_then(Value::as_array_mut) else { return };
+    let Some(row) = sheet.grid.get_mut(r) else { return };
     if row.len() <= c {
-        row.resize(c + 1, json!(""));
+        row.resize(c + 1, String::new());
     }
     if let Some(cell) = row.get_mut(c) {
-        *cell = json!(clean(text));
+        *cell = clean(text);
     }
 }
 
@@ -219,38 +302,14 @@ pub(crate) fn switch_xy(grid: &Grid) -> Grid {
         .collect()
 }
 
-/// How many rows of the dialog's sheet hold data (below the labels' row), read in place.
-fn data_rows(d: &Dialog) -> usize {
-    let filled = |r: &Value| r.as_array().is_some_and(|r| r.iter().any(|c| c.as_str().is_some_and(|c| !c.trim().is_empty())));
-    d.fields.get("grid").and_then(Value::as_array).and_then(|g| g.iter().rposition(filled)).unwrap_or(0)
+/// How many rows of the sheet hold data (below the labels' row).
+fn data_rows(sheet: &Sheet) -> usize {
+    sheet.grid.iter().rposition(|r| r.iter().any(|c| !c.trim().is_empty())).unwrap_or(0)
 }
 
-/// How big the sheet is drawn: the data, a spare row and column, and at least MIN_ROWS × MIN_COLS.
-fn extent(d: &Dialog, sel: (usize, usize)) -> (usize, usize) {
-    let rows = d.fields.get("grid").and_then(Value::as_array);
-    let n = rows.map_or(0, Vec::len);
-    let w = rows.into_iter().flatten().filter_map(Value::as_array).map(Vec::len).max().unwrap_or(0);
-    ((n + 1).max(MIN_ROWS).max(sel.0 + 2).min(MAX_ROWS), (w + 1).max(MIN_COLS).max(sel.1 + 2).min(MAX_COLS))
-}
-
-/// A key that moves the picked cell.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Move {
-    Right,
-    Down,
-    Up,
-    Left,
-}
-
-/// The cell `m` moves to from `sel`, within the sheet (the top-left blank cell is skipped).
-pub(crate) fn step(sel: (usize, usize), m: Move) -> (usize, usize) {
-    let to = match m {
-        Move::Right => (sel.0, (sel.1 + 1).min(MAX_COLS - 1)),
-        Move::Down => ((sel.0 + 1).min(MAX_ROWS - 1), sel.1),
-        Move::Up => (sel.0.saturating_sub(1), sel.1),
-        Move::Left => (sel.0, sel.1.saturating_sub(1)),
-    };
-    if to == (0, 0) { sel } else { to }
+/// How many rows the sheet draws: the data, a spare row, the picked cell's, and at least MIN_ROWS.
+fn extent(sheet: &Sheet, sel: (usize, usize)) -> usize {
+    (sheet.grid.len() + 1).max(MIN_ROWS).max(sel.0 + 2).min(MAX_ROWS)
 }
 
 /// A cell as the sheet shows it: a number with `decimals` places when Cell Style sets them, else as
@@ -262,220 +321,480 @@ pub(crate) fn shown(text: &str, decimals: Option<u64>) -> String {
     }
 }
 
-fn grid(d: &Dialog) -> Grid {
-    d.fields.get("grid").and_then(|g| serde_json::from_value(g.clone()).ok()).unwrap_or_default()
+/// The sheet's cells replaced by `g`.
+fn replace_grid(sheet: &mut Sheet, g: Grid) {
+    sheet.grid = g;
 }
 
-fn sel(d: &Dialog) -> (usize, usize) {
-    let get = |i: usize| d.fields.get("sel").and_then(|s| s.get(i)).and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).unwrap_or(0);
-    (get(0).min(MAX_ROWS - 1), get(1).min(MAX_COLS - 1))
-}
-
-/// The entry box's text into the picked cell.
-fn commit(d: &mut Dialog) {
-    let (r, c) = sel(d);
-    let text = d.str("entry");
-    if cell_at(d, r, c) != text {
-        set_cell_at(d, r, c, &text);
-    }
-}
-
-/// Pick cell `to`, its text in the entry box.
-fn pick(d: &mut Dialog, to: (usize, usize)) {
-    commit(d);
-    d.fields.insert("sel".into(), json!([to.0, to.1]));
-    let text = cell_at(d, to.0, to.1).to_string();
-    d.fields.insert("entry".into(), json!(text));
-}
-
-fn replace_grid(d: &mut Dialog, g: Grid) {
-    let (r, c) = sel(d);
-    d.fields.insert("entry".into(), json!(cell(&g, r, c)));
-    d.fields.insert("grid".into(), json!(g));
-}
-
-/// Paste: text with tabs or line breaks fills the cells from the picked one.
-fn paste_block(d: &mut Dialog, text: &str) {
-    let (r0, c0) = sel(d);
+/// Paste: text with tabs or line breaks fills the cells from the cell `at`.
+fn paste_block(sheet: &mut Sheet, at: (usize, usize), text: &str) {
     for (r, row) in grid_from_text(text).into_iter().enumerate() {
         for (c, t) in row.into_iter().enumerate() {
-            set_cell_at(d, r0 + r, c0 + c, &t);
+            set_cell_at(sheet, at.0 + r, at.1 + c, &t);
         }
     }
-    let text = cell_at(d, r0, c0).to_string();
-    d.fields.insert("entry".into(), json!(text));
+}
+
+/// Keeps what a field set on the sheet may hold within the sheet's size.
+fn limit(sheet: &mut Sheet) {
+    sheet.grid.truncate(MAX_ROWS);
+    for row in &mut sheet.grid {
+        row.truncate(MAX_COLS);
+    }
+    sheet.widths.truncate(MAX_COLS);
+    sheet.width = sheet.width.min(MAX_WIDTH);
+    sheet.decimals = sheet.decimals.map(|d| d.min(MAX_DECIMALS));
+}
+
+/// The entry box's text into its cell.
+fn commit_text(sheet: &mut Sheet, entry: &Entry) {
+    if cell_of(&sheet.grid, entry.at.0, entry.at.1) != entry.text {
+        set_cell_at(sheet, entry.at.0, entry.at.1, &entry.text);
+    }
+}
+
+/// The entry box shows the picked cell's text.
+fn load(sheet: &Sheet, state: &GridState, entry: &mut Entry) {
+    entry.at = active(state);
+    entry.text = cell_of(&sheet.grid, entry.at.0, entry.at.1);
+}
+
+/// The picked cell moved since the entry box loaded: the box's text goes into the cell it left and
+/// the box loads the new one.
+fn follow(sheet: &mut Sheet, state: &GridState, entry: &mut Entry) {
+    if active(state) != entry.at {
+        commit_text(sheet, entry);
+        load(sheet, state, entry);
+    }
+}
+
+/// Enter, Tab or Shift with either in the entry box: its text into the picked cell, then the pick moves
+/// one cell toward `step` (it stays at the sheet's edge and off the blank cell) and the box loads that cell.
+fn commit_entry(sheet: &mut Sheet, state: &mut GridState, entry: &mut Entry, step: CellDirection) {
+    commit_text(sheet, entry);
+    with_space(|space| state.selection.step(step, space));
+    load(sheet, state, entry);
 }
 
 /// Apply: the sheet's data to the graph.
-fn apply(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut d = d.clone();
-    commit(&mut d);
+fn apply(app: &mut VectorcraftApp, sheet: &Sheet, graph: Option<u64>) -> Result<Value, String> {
     // The graph the sheet opened on (else the selected one).
-    let mut p = data_from_grid(&grid(&d));
-    p["id"] = d.fields.get("__graph").cloned().unwrap_or(Value::Null);
-    let r = app.run("graph.setData", p);
-    if let Some(open) = app.ui.dialog.as_mut().filter(|o| o.kind == KIND) {
-        open.fields = d.fields;
-    }
-    r
+    let mut p = data_from_grid(&sheet.grid);
+    p["id"] = json!(graph);
+    app.run("graph.setData", p)
 }
 
-/// Revert: the graph's data again.
-fn revert(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let id = d.fields.get("__graph").cloned().unwrap_or(Value::Null);
-    let v = app.session.execute("graph.setData", &json!({ "id": id })).map_err(|e| e.to_string())?;
-    replace_grid(d, grid_from_data(&v));
-    Ok(())
+/// The graph's data as sheet cells.
+fn graph_grid(app: &mut VectorcraftApp, graph: Option<u64>) -> Result<Grid, String> {
+    let v = app.session.execute("graph.setData", &json!({ "id": graph })).map_err(|e| e.to_string())?;
+    Ok(grid_from_data(&v))
 }
 
-/// Import Data: a tab-separated text file's rows into the sheet.
-fn import(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt", "tsv", "csv"])], ..Default::default() };
-    let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
-    // The button is off where files can't be read.
-    let Some(read) = app.services.read.as_ref() else { return Ok(()) };
-    let bytes = read(&path)?;
-    replace_grid(d, grid_from_text(&decode(&bytes)));
-    Ok(())
+/// Whether Import Data can ask for a file here: the host has a picker and the app can read files.
+fn can_import(app: &VectorcraftApp) -> bool {
+    file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()
 }
 
-/// Draw the graph-data sheet: keyboard cell movement, block paste, import, transpose, switch-x/y
-/// and revert actions, decimals and column width, and only the cells in view.
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let entry_id = egui::Id::unique("graph-data-entry");
-    if ui.memory(|m| m.has_focus(entry_id)) {
-        // Tab, Enter (Shift: the other way) and the arrow keys move the picked cell while the entry box
-        // has the keys; the entry keeps them (egui would move the focus on with Tab).
-        // Shift first: a key asked for without modifiers also matches it with Shift held.
-        let keys = [
-            (egui::Modifiers::SHIFT, egui::Key::Tab, Move::Left),
-            (egui::Modifiers::SHIFT, egui::Key::Enter, Move::Up),
-            (egui::Modifiers::NONE, egui::Key::Tab, Move::Right),
-            (egui::Modifiers::NONE, egui::Key::Enter, Move::Down),
-            (egui::Modifiers::NONE, egui::Key::ArrowDown, Move::Down),
-            (egui::Modifiers::NONE, egui::Key::ArrowUp, Move::Up),
-            (egui::Modifiers::NONE, egui::Key::ArrowRight, Move::Right),
-            (egui::Modifiers::NONE, egui::Key::ArrowLeft, Move::Left),
-        ];
-        let moved = keys.iter().find(|(m, k, _)| ui.input_mut(|i| i.consume_key(*m, *k))).map(|(_, _, mv)| *mv);
-        if let Some(m) = moved {
-            pick(d, step(sel(d), m));
-            ui.memory_mut(|mem| {
-                mem.request_focus(entry_id);
-                mem.move_focus(egui::FocusDirection::None);
-            });
-        }
-        // A pasted block (a spreadsheet's cells) fills the sheet instead of the entry box.
-        let block = ui.input_mut(|i| {
-            let k = i.events.iter().position(|e| matches!(e, egui::Event::Paste(s) if s.contains('\t') || s.contains('\n')))?;
-            match i.events.remove(k) {
-                egui::Event::Paste(s) => Some(s),
-                _ => None,
+/// Import Data's answer: a tab-separated text file's rows into the sheet.
+fn import(app: &mut VectorcraftApp, picked: Picked) -> Result<Value, String> {
+    let bytes = match picked {
+        Picked::Paths(paths) => {
+            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else { return Ok(Value::Null) };
+            // One byte past the limit tells a larger file apart without reading all of it.
+            match (&app.services.read_head, &app.services.read) {
+                (Some(read_head), _) => read_head(&path, MAX_IMPORT_BYTES + 1)?,
+                (None, Some(read)) => read(&path)?,
+                // The button is off where files can't be read.
+                (None, None) => return Ok(Value::Null),
             }
-        });
-        if let Some(text) = block {
-            paste_block(d, &text);
+        }
+        // The web build answers with the file's bytes.
+        Picked::Contents(files) => match files.into_iter().next() {
+            Some((_, bytes)) => bytes,
+            None => return Ok(Value::Null),
+        },
+        // Cancelled, or no picker could be shown: nothing to say.
+        _ => return Ok(Value::Null),
+    };
+    if bytes.len() > MAX_IMPORT_BYTES {
+        return Err("the file is larger than 1 MB".into());
+    }
+    let grid = grid_from_text(&decode(&bytes));
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
+    }
+    Ok(Value::Null)
+}
+
+/// What the window asked of the app since the last [`pump`].
+struct Asks {
+    graph: Option<u64>,
+    apply: Option<Sheet>,
+    actions: Vec<Action>,
+}
+
+/// Runs once per frame after the shell: answers what the open Graph Data window asked (Apply, Import,
+/// Revert) and tells it whether Import can ask for a file.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let can = can_import(app);
+    let asked = dialogs.with(|host| {
+        host.get_mut::<GraphDataDialog>().map(|d| {
+            d.can_import = can;
+            d.take_asks()
+        })
+    });
+    let Some(Asks { graph, apply: filed, actions }) = asked else { return };
+    if let Some(sheet) = filed {
+        if let Err(e) = apply(app, &sheet, graph) {
+            app.status(e);
+        }
+        dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(GraphDataDialog::applied));
+    }
+    for action in actions {
+        match action {
+            Action::Import => {
+                let request = PickRequest::open("document").filter("Text", &["txt", "tsv", "csv"]);
+                file_asks::ask(app, request, Owner::Document, import);
+            }
+            Action::Revert => match graph_grid(app, graph) {
+                Ok(grid) => {
+                    dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
+                }
+                Err(e) => app.status(e),
+            },
         }
     }
-    let mut action: Option<Action> = None;
-    ui.horizontal(|ui| {
-        let mut text = d.str("entry");
-        // The entry box has the keys when the window opens, so Enter moves down instead of applying.
-        widgets::take_dialog_focus(ui, entry_id, &text);
-        let r = ui.add(egui::TextEdit::singleline(&mut text).id(entry_id).align(egui::Align2::LEFT_CENTER).desired_width(260.0));
-        if r.changed() {
-            d.fields.insert("entry".into(), json!(clean(&text)));
+}
+
+// ---------- Cell Style ----------
+
+/// Cell Style's Column Width in digits.
+fn width(sheet: &Sheet) -> u64 {
+    sheet.width.min(MAX_WIDTH)
+}
+
+/// A column's width in digits: its own when its edge was dragged, else Cell Style's.
+fn col_digits(sheet: &Sheet, c: usize) -> u64 {
+    sheet.widths.get(c).copied().flatten().unwrap_or_else(|| width(sheet)).min(MAX_WIDTH)
+}
+
+/// Cell Style's Column Width: every column `n` digits wide, the ones given their own width too.
+fn set_width(sheet: &mut Sheet, n: u64) {
+    sheet.width = n.min(MAX_WIDTH);
+    sheet.widths.clear();
+}
+
+/// Set column `c`'s own width in digits (at most MAX_WIDTH).
+fn set_col_digits(sheet: &mut Sheet, c: usize, n: u64) {
+    if c >= MAX_COLS {
+        return;
+    }
+    if sheet.widths.len() <= c {
+        sheet.widths.resize(c + 1, None);
+    }
+    if let Some(w) = sheet.widths.get_mut(c) {
+        *w = Some(n.min(MAX_WIDTH));
+    }
+}
+
+/// A column `n` digits wide, in points on the sheet.
+fn digits_px(n: u64) -> f32 {
+    (n.min(MAX_WIDTH) as f32 * 7.0 + 10.0).max(12.0)
+}
+
+/// The width in digits nearest to `px` points, within Cell Style's 0 to MAX_WIDTH.
+fn px_digits(px: f32) -> u64 {
+    if px.is_finite() { ((px - 10.0) / 7.0).round().clamp(0.0, MAX_WIDTH as f32) as u64 } else { 0 }
+}
+
+/// A column's edge dragged: the width the drag gives it in whole digits, on every update and at the commit; a
+/// cancel gives back the width it began with (`began`, kept at the begin). A drag that stays where it began changes
+/// nothing.
+fn handle_edit(sheet: &mut Sheet, began: &mut Option<Option<u64>>, column: u32, width: &EditEvent<f32>) {
+    let c = column as usize;
+    match width {
+        EditEvent::Begin { .. } => *began = Some(sheet.widths.get(c).copied().flatten()),
+        // The grid's cancel carries no starting width: the one kept at the begin goes back.
+        EditEvent::Cancel { .. } => {
+            if let (Some(own), Some(w)) = (began.take(), sheet.widths.get_mut(c)) {
+                *w = own;
+            }
+            return;
         }
-        ui.add_space(8.0);
-        let can_read = app.services.read.is_some();
-        if ui.add_enabled_ui(can_read, |ui| widgets::flat_button(ui, tl!("Import Data…"), 96.0)).inner.clicked() {
-            action = Some(|app, d| crate::picks::in_dialog(app, d, import));
+        _ => {}
+    }
+    let Some(px) = width.landed() else { return };
+    let n = px_digits(*px);
+    if n != col_digits(sheet, c) {
+        set_col_digits(sheet, c, n);
+    }
+}
+
+// ---------- the window ----------
+
+/// What the body edits besides the sheet.
+struct Pane<'a> {
+    state: &'a mut GridState,
+    entry: &'a mut Entry,
+    lines: &'a mut Lines,
+    actions: &'a mut Vec<Action>,
+    scatter: bool,
+    can_import: bool,
+}
+
+/// A whole number field of `units` named `label`, from 0 to `max`.
+fn whole(units: &Units, label: impl Into<Label>, value: u64, max: u64) -> NumberField<'static> {
+    NumberField::new(label, Bind::given(Some(value as f64))).codec(NumberCodec::new(units.reader(None), 0)).step(1.0).range(0.0..=max as f64)
+}
+
+/// The whole number a field reported, within 0 to `max`.
+fn digits(typed: Option<f64>, max: u64) -> Option<u64> {
+    typed.filter(|n| n.is_finite()).map(|n| n.round().clamp(0.0, max as f64) as u64)
+}
+
+/// Draws the entry box with the sheet's buttons, Cell Style and the sheet itself.
+fn body(ui: &mut egui::Ui, values: &mut Sheet, pane: &mut Pane<'_>) -> bool {
+    let Pane { state, entry, lines, actions, scatter, can_import } = pane;
+    let units = Env::of(ui).units();
+    Row::new().show(ui, |ui, _| {
+        let edit = TextField::new(tl!("Cell Value"), Bind::bound(&mut entry.text)).submits().show(ui);
+        if edit.submitted {
+            let step = if edit.submit_mods.shift { CellDirection::Up } else { CellDirection::Down };
+            commit_entry(values, state, entry, step);
+        } else if let Some(forward) = edit.left_by_tab {
+            commit_entry(values, state, entry, if forward { CellDirection::Right } else { CellDirection::Left });
+        }
+        if Button::new(tl!("Import Data…")).enabled(*can_import).show(ui).clicked() {
+            actions.push(Action::Import);
         }
         // Transposed, the categories become series: at most as many as a graph has.
-        if ui.add_enabled_ui(data_rows(d) <= MAX_GRAPH_SERIES, |ui| widgets::flat_button(ui, tl!("Transpose"), 80.0)).inner.clicked() {
-            commit(d);
-            replace_grid(d, transpose(&grid(d)));
+        if Button::new(tl!("Transpose")).enabled(data_rows(values) <= MAX_GRAPH_SERIES).show(ui).clicked() {
+            commit_text(values, entry);
+            replace_grid(values, transpose(&values.grid));
+            load(values, state, entry);
         }
-        if ui.add_enabled_ui(d.bool("__scatter"), |ui| widgets::flat_button(ui, tl!("Switch x/y"), 80.0)).inner.clicked() {
-            commit(d);
-            replace_grid(d, switch_xy(&grid(d)));
+        if Button::new(tl!("Switch x/y")).enabled(*scatter).show(ui).clicked() {
+            commit_text(values, entry);
+            replace_grid(values, switch_xy(&values.grid));
+            load(values, state, entry);
         }
-        if widgets::flat_button(ui, tl!("Revert"), 64.0).clicked() {
-            action = Some(revert);
+        if Button::new(tl!("Revert")).show(ui).clicked() {
+            actions.push(Action::Revert);
         }
     });
     // Cell Style: decimals shown and the columns' width in digits.
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Number of Decimals:"));
-        let mut dec = d.fields.get("decimals").and_then(Value::as_u64);
-        let mut on = dec.is_some();
-        if ui.checkbox(&mut on, "").changed() {
-            dec = on.then_some(2);
+    Row::new().show(ui, |ui, _| {
+        let on = Checkbox::new(Bind::given(values.decimals.is_some())).label(tl!("Number of Decimals:")).show(ui).value().copied();
+        if let Some(on) = on {
+            values.decimals = on.then_some(DEFAULT_DECIMALS);
         }
-        let mut n = dec.unwrap_or(2);
-        if ui.add_enabled(on, egui::DragValue::new(&mut n).range(0..=MAX_DECIMALS)).changed() {
-            dec = Some(n);
+        let field = whole(&units, tl!("Number of Decimals"), values.decimals.unwrap_or(DEFAULT_DECIMALS), MAX_DECIMALS)
+            .enabled(values.decimals.is_some())
+            .show(ui);
+        if let Some(n) = digits(field.edit.value().copied().flatten(), MAX_DECIMALS) {
+            values.decimals = Some(n);
         }
-        d.fields.insert("decimals".into(), json!(dec));
-        ui.add_space(12.0);
-        widgets::dim_label(ui, tl!("Column Width:"));
-        let mut w = d.fields.get("width").and_then(Value::as_u64).unwrap_or(7);
-        if ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH)).changed() {
-            d.fields.insert("width".into(), json!(w));
+        Text::new(tl!("Column Width:")).show(ui);
+        let field = whole(&units, tl!("Column Width"), width(values), MAX_WIDTH).show(ui);
+        // A value entered with Enter sets every column, also when it is the width shown. Leaving the
+        // field without a new value keeps the columns' own widths.
+        let typed = digits(field.edit.value().copied().flatten(), MAX_WIDTH);
+        if typed.is_some() || field.edit.submitted {
+            set_width(values, typed.unwrap_or_else(|| width(values)));
         }
     });
-    ui.add_space(6.0);
-    let at = sel(d);
-    let (rows, cols) = extent(d, at);
-    let decimals = d.fields.get("decimals").and_then(Value::as_u64);
-    let w = (d.fields.get("width").and_then(Value::as_u64).unwrap_or(7).min(MAX_WIDTH) as f32 * 7.0 + 10.0).max(12.0);
-    let mut clicked = None;
-    widgets::list_box(ui, |ui| {
-        // Only the cells in view are drawn: a graph's sheet can be 10,001 × 257.
-        egui::ScrollArea::both().id_salt("graph-data-sheet").max_height(280.0).auto_shrink([false, false]).show_viewport(ui, |ui, view| {
-            let (cw, ch) = (w + 1.0, ROW_H);
-            ui.set_min_size(egui::vec2(cols as f32 * cw, rows as f32 * ch));
-            let origin = ui.max_rect().min;
-            let span = |lo: f32, hi: f32, size: f32, n: usize| ((lo / size).floor().max(0.0) as usize, ((hi / size).ceil().max(0.0) as usize).min(n));
-            let (r0, r1) = span(view.min.y, view.max.y, ch, rows);
-            let (c0, c1) = span(view.min.x, view.max.x, cw, cols);
-            for r in r0..r1 {
-                for c in c0..c1 {
-                    let rect = egui::Rect::from_min_size(origin + egui::vec2(c as f32 * cw, r as f32 * ch), egui::vec2(w, ch - 1.0));
-                    let text = shown(cell_at(d, r, c), decimals);
-                    let b = egui::Button::selectable((r, c) == at, egui::RichText::new(text).monospace()).truncate();
-                    if ui.put(rect, b).clicked() && (r, c) != (0, 0) {
-                        clicked = Some((r, c));
-                    }
-                }
+    lines.sync(extent(values, active(state)), values);
+    let model = SheetModel { sheet: values, rows: &lines.rows, columns: &lines.columns };
+    let out = CellGrid::new(tl!("Graph Data"), &model, state).headings(false).column_edges(ColumnEdges::Cells).default_stop().show_sheet(ui);
+    if let Some(CellEdit { cell, text, .. }) = out.committed {
+        let (r, c) = (cell.row as usize, cell.column as usize);
+        set_cell_at(values, r, c, &text);
+        if entry.at == (r, c) {
+            entry.text = cell_of(&values.grid, r, c);
+        }
+    }
+    for edit in out.edits {
+        match edit {
+            GridEdit::Paste(text) => {
+                paste_block(values, active(state), &text);
+                load(values, state, entry);
             }
-        });
-    });
-    if let Some(to) = clicked {
-        pick(d, to);
-        ui.memory_mut(|mem| mem.request_focus(entry_id));
+            GridEdit::ResizeColumn { column, width, .. } => handle_edit(values, &mut lines.resize_from, column, &width),
+            _ => {}
+        }
     }
-    if let Some(f) = action
-        && let Err(e) = f(app, d)
-        && e != "cancelled"
-    {
-        app.status(e);
+    // The box mirrors the cell being edited in place, else follows the picked cell.
+    match out.draft {
+        Some(draft) => entry.text = draft,
+        None => follow(values, state, entry),
     }
-    false
+    true
+}
+
+/// The Graph Data window: a [`StackDialog`] on the window's host, over the sheet it edits. Apply files the
+/// sheet for [`pump`], which sends it to the graph and keeps the window open.
+pub(crate) struct GraphDataDialog {
+    id: DialogId,
+    sheet: Sheet,
+    state: GridState,
+    entry: Entry,
+    /// The graph the sheet opened on.
+    graph: Option<u64>,
+    scatter: bool,
+    can_import: bool,
+    lines: Lines,
+    actions: Vec<Action>,
+    /// Apply's sheet, until the pump has sent it.
+    held: HeldAnswer<Sheet>,
+}
+
+impl GraphDataDialog {
+    /// The window over `grid`, the data of `graph`; Switch x/y is on for a `scatter` graph.
+    fn new(grid: Grid, graph: Option<u64>, scatter: bool, can_import: bool) -> Self {
+        let sheet = Sheet { grid, ..Sheet::default() };
+        let state = GridState::new(CellSelection::cell(CellAt::new(0, 1)), 1.0);
+        let mut entry = Entry { text: String::new(), at: (0, 1) };
+        load(&sheet, &state, &mut entry);
+        GraphDataDialog {
+            id: dialog_id(KIND),
+            sheet,
+            state,
+            entry,
+            graph,
+            scatter,
+            can_import,
+            lines: Lines::new(),
+            actions: Vec::new(),
+            held: HeldAnswer::new(),
+        }
+    }
+
+    /// Everything the window asked since the last call, once.
+    fn take_asks(&mut self) -> Asks {
+        Asks { graph: self.graph, apply: self.held.take(), actions: std::mem::take(&mut self.actions) }
+    }
+
+    /// The pump sent Apply's sheet to the graph; the window stays open and Apply is ready again.
+    fn applied(&mut self) {
+        self.held.answer(Ok(()));
+        self.held.finish();
+    }
+
+    /// The cells replaced by `grid` (Import, Revert); the box loads the picked cell.
+    fn replace(&mut self, grid: Grid) {
+        replace_grid(&mut self.sheet, grid);
+        load(&self.sheet, &self.state, &mut self.entry);
+    }
+
+    /// Files Apply: the box's text into its cell, then the sheet for the pump.
+    fn file_apply(&mut self) {
+        commit_text(&mut self.sheet, &self.entry);
+        self.held.file(self.sheet.clone());
+    }
+}
+
+impl StackDialog for GraphDataDialog {
+    type Result = ();
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KIND)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+        let GraphDataDialog { sheet, state, entry, scatter, can_import, lines, actions, held, .. } = self;
+        let mut pane = Pane { state, entry, lines, actions, scatter: *scatter, can_import: *can_import };
+        let shown = FormDialog::new(tl!("Graph Data"), Bind::bound(&mut *sheet))
+            .ok_label(tl!("Apply"))
+            .ok_enabled(!held.is_waiting())
+            .accept_stays_open(true)
+            .enter_confirms(false)
+            // The sheet owns the scroll; the controls above it stay in view.
+            .collection_body(true)
+            .shaped(|dialog| dialog.initial_focus(Initial::Default))
+            .show(ui, |ui, _, values| body(ui, values, &mut pane));
+        // The pass reports a press only in the pass that took the input, so a second pass of the frame files nothing.
+        if shown.picked == Some(0) && !held.is_waiting() {
+            commit_text(sheet, pane.entry);
+            held.file(sheet.clone());
+        }
+        shown.closed.map(|_| DialogResult::Cancel)
+    }
+
+    /// OK as the button: Apply files the sheet for the pump and answers none, so the window stays open.
+    fn confirm(&mut self, _: &egui::Context) -> Option<()> {
+        if !self.held.is_waiting() {
+            self.file_apply();
+        }
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let mut fields = serde_fields(&self.sheet)?;
+        if let Value::Object(map) = &mut fields {
+            let (r, c) = active(&self.state);
+            map.insert("sel".to_owned(), json!([r, c]));
+            map.insert("entry".to_owned(), json!(self.entry.text));
+        }
+        Some(fields)
+    }
+
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let rejected = |value: &Value| FieldRefusal::Rejects(value).message(field);
+        match field {
+            "sel" => {
+                let at = value.as_array().and_then(|a| match a.as_slice() {
+                    [r, c] => Some((usize::try_from(r.as_u64()?).ok()?, usize::try_from(c.as_u64()?).ok()?)),
+                    _ => None,
+                });
+                let at = at.ok_or_else(|| rejected(&value))?;
+                commit_text(&mut self.sheet, &self.entry);
+                if !select(&mut self.state, at) {
+                    return Err(rejected(&value));
+                }
+                load(&self.sheet, &self.state, &mut self.entry);
+            }
+            "entry" => self.entry.text = clean(value.as_str().ok_or_else(|| rejected(&value))?),
+            "width" => set_width(&mut self.sheet, value.as_u64().ok_or_else(|| rejected(&value))?),
+            _ => {
+                set_serde_field(&mut self.sheet, field, value)?;
+                limit(&mut self.sheet);
+                load(&self.sheet, &self.state, &mut self.entry);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use craft::host::ScriptedFiles;
+    use egui_kittest::kittest::{NodeT, Queryable};
     use serde_json::json;
 
     use super::*;
+
+    type Harness = egui_kittest::Harness<'static, VectorcraftApp>;
 
     fn g(rows: &[&[&str]]) -> Grid {
         rows.iter().map(|r| r.iter().map(|c| c.to_string()).collect()).collect()
     }
 
     fn app_with(csv: &str, ty: &str) -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let id =
             app.run("graph.create", json!({"type": ty, "x": 0, "y": 0, "width": 200, "height": 150, "csv": csv})).unwrap()["id"].as_u64().unwrap();
@@ -484,6 +803,49 @@ mod tests {
 
     fn data(app: &mut VectorcraftApp, id: u64) -> Value {
         app.session.execute("graph.setData", &json!({"id": id})).unwrap()
+    }
+
+    /// Reads the open window.
+    fn read<R>(app: &VectorcraftApp, f: impl FnOnce(&GraphDataDialog) -> R) -> R {
+        app.dialogs().expect("a window").with(|host| f(host.get::<GraphDataDialog>().expect("Graph Data is open")))
+    }
+
+    /// Edits the open window.
+    fn edit<R>(app: &VectorcraftApp, f: impl FnOnce(&mut GraphDataDialog) -> R) -> R {
+        app.dialogs().expect("a window").with(|host| f(host.get_mut::<GraphDataDialog>().expect("Graph Data is open")))
+    }
+
+    fn set_field(app: &VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
+        let ctx = crate::testing::ui_context();
+        app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, dialog_id(KIND), field, value))
+    }
+
+    /// OK through the host, then the pump: what Apply does.
+    fn apply_through_host(app: &mut VectorcraftApp) {
+        let ctx = crate::testing::ui_context();
+        let closed = app.dialogs().expect("a window").with(|host| host.confirm::<GraphDataDialog>(&ctx));
+        assert!(!closed, "Apply leaves the window open");
+        pump(app, &ctx);
+    }
+
+    /// The app with the window drawn each frame as the shell draws it.
+    // PLAN: the shell's own frame (hub-w2) replaces `host.run` here, and runs `file_asks::poll` (files-w7) itself.
+    fn harness(app: VectorcraftApp) -> Harness {
+        let mut fonts = false;
+        egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::testing::install(ui.ctx());
+                    return;
+                }
+                if let Some(dialogs) = app.dialogs() {
+                    dialogs.with(|host| host.run(ui));
+                }
+                pump(app, ui.ctx());
+                file_asks::poll(app);
+            },
+            app,
+        )
     }
 
     #[test]
@@ -497,8 +859,7 @@ mod tests {
             let (mut app, id) = app_with(csv, ty);
             let before = data(&mut app, id);
             open(&mut app).unwrap();
-            let d = app.ui.dialog.clone().unwrap();
-            apply(&mut app, &d).unwrap();
+            apply_through_host(&mut app);
             assert_eq!(data(&mut app, id), before, "{csv}");
         }
     }
@@ -518,6 +879,28 @@ mod tests {
     }
 
     #[test]
+    fn utf16_without_a_byte_order_mark_reads_by_its_line_breaks() {
+        let text = "\tSales é\r\nQ1\t1\n";
+        let le: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let be: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        assert_eq!(decode(&le), text, "little-endian");
+        assert_eq!(decode(&be), text, "big-endian");
+        assert_eq!(grid_from_text(&decode(&le)), g(&[&["", "Sales é"], &["Q1", "1"]]));
+        // One row has no line break: the side of each unit that holds the NUL byte gives the order.
+        for (bytes, order) in [(b"\0Q\x001\0\t\x002".to_vec(), "big-endian"), (b"Q\x001\0\t\x002\0".to_vec(), "little-endian")] {
+            assert_eq!(decode(&bytes), "Q1\t2", "one line, {order}");
+        }
+        // A file cut short by one byte, or with an unpaired surrogate, reads as it would after a
+        // byte-order mark.
+        assert_eq!(decode(&[le.as_slice(), &[0x0A]].concat()), text, "odd length");
+        assert_eq!(decode(&[le.as_slice(), &[0x00, 0xD8]].concat()), format!("{text}\u{FFFD}"), "unpaired surrogate");
+        // A line break in both byte orders leaves the order unknown, and UTF-8 with a stray NUL
+        // byte isn't UTF-16: both read as UTF-8, as before.
+        assert_eq!(decode(&[0x0A, 0, 0, 0x0A]), "\n\0\0\n");
+        assert_eq!(decode(b"a,b\n1,2\0"), "a,b\n1,2\0");
+    }
+
+    #[test]
     fn a_sheet_sent_wider_and_taller_than_a_graph_is_cut_to_one() {
         // One long row and one long column: their product would be ten billion cells.
         let mut grid: Grid = vec![vec!["1".to_string(); 100_000]];
@@ -527,23 +910,70 @@ mod tests {
         assert_eq!(p["series"].as_array().unwrap().len(), MAX_COLS - 1);
     }
 
+    /// Import Data reads a file no further than one byte past 1 MB where the host can read part of
+    /// a file: a larger file is refused with the sheet left as it was, and a file at the limit is
+    /// read. Where the host only reads whole files, a larger file is refused too, and so is a file
+    /// the web build answers with that is over the limit.
     #[test]
-    fn transpose_switch_and_moves() {
+    fn import_data_refuses_a_file_larger_than_its_limit() {
+        let (mut app, _) = app_with(",a\nQ1,1", "column");
+        open(&mut app).unwrap();
+        let at_limit = [b"\tb\nQ2\t2\n".as_slice(), &vec![b' '; MAX_IMPORT_BYTES - 8]].concat();
+        let files: HashMap<String, Vec<u8>> =
+            [("/big.txt".to_string(), vec![b'1'; MAX_IMPORT_BYTES + 1]), ("/limit.txt".to_string(), at_limit.clone())].into();
+        let files = Rc::new(files);
+        app.services.read = Some(Box::new(|_: &str| Err("the whole file was read".to_string())));
+        let asked = Rc::new(RefCell::new(vec![]));
+        let (f, a) = (files.clone(), asked.clone());
+        app.services.read_head = Some(Box::new(move |path: &str, max: usize| {
+            a.borrow_mut().push(max);
+            Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
+        }));
+        let scripted = Arc::new(ScriptedFiles::new());
+        // The window's host asks for the file, as the hosts install the app's on its context.
+        app.host.with_files(scripted.clone()).install(app.ui_ctx.as_ref().expect("a window"));
+        app.host = Arc::new(app.host.with_files(scripted.clone()));
+        let mut h = harness(app);
+        h.run_steps(4);
+        let import = |h: &mut Harness, picked: Picked| {
+            scripted.queue(picked);
+            h.get_by_label("Import Data…").click();
+            h.run_steps(5);
+        };
+        let at = |h: &Harness, r: usize, c: usize| read(h.state(), |d| cell_of(&d.sheet.grid, r, c));
+        import(&mut h, Picked::Paths(vec!["/big.txt".into()]));
+        assert_eq!(at(&h, 0, 1), "a", "the sheet is left as it was");
+        import(&mut h, Picked::Paths(vec!["/limit.txt".into()]));
+        assert_eq!((at(&h, 0, 1), at(&h, 1, 0)), ("b".to_string(), "Q2".to_string()));
+        assert_eq!(*asked.borrow(), [MAX_IMPORT_BYTES + 1; 2], "each read stops one byte past the limit");
+        // A host that reads only whole files.
+        let app = h.state_mut();
+        app.services.read_head = None;
+        let f = files.clone();
+        app.services.read = Some(Box::new(move |path: &str| Ok(f.get(path).ok_or("no such file")?.clone())));
+        import(&mut h, Picked::Paths(vec!["/big.txt".into()]));
+        assert_eq!(at(&h, 0, 1), "b");
+        // The web build answers with the bytes.
+        import(&mut h, Picked::Contents(vec![("big.txt".into(), vec![b'1'; MAX_IMPORT_BYTES + 1])]));
+        assert_eq!(at(&h, 0, 1), "b");
+        import(&mut h, Picked::Contents(vec![("small.txt".into(), b"\tc\n".to_vec())]));
+        assert_eq!(at(&h, 0, 1), "c");
+    }
+
+    #[test]
+    fn transpose_and_switch_xy() {
         assert_eq!(transpose(&g(&[&["", "a", "b"], &["Q1", "1", "2"]])), g(&[&["", "Q1"], &["a", "1"], &["b", "2"]]));
-        assert_eq!(step((0, 1), Move::Right), (0, 2));
-        assert_eq!(step((0, 1), Move::Down), (1, 1));
-        assert_eq!(step((1, 0), Move::Up), (1, 0), "the top-left cell stays blank");
-        assert_eq!(step((MAX_ROWS - 1, 1), Move::Down), (MAX_ROWS - 1, 1));
         assert_eq!(shown("3.14159", Some(2)), "3.14");
         assert_eq!(shown("3.14159", None), "3.14159");
         // Switch x/y in the sheet does what the engine's does.
         let (mut app, id) = app_with("y1,x1,y2,x2\n1,10,2,20\n3,30,4,40", "scatter");
         open(&mut app).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        let switched = switch_xy(&grid(&d));
-        replace_grid(&mut d, switched);
-        apply(&mut app, &d).unwrap();
-        let sheet = data(&mut app, id);
+        let mut h = harness(app);
+        h.run_steps(4);
+        h.get_by_label("Switch x/y").click();
+        h.run_steps(3);
+        apply_through_host(h.state_mut());
+        let sheet = data(h.state_mut(), id);
         let (mut other, oid) = app_with("y1,x1,y2,x2\n1,10,2,20\n3,30,4,40", "scatter");
         other.run("graph.setData", json!({"id": oid, "switchXY": true})).unwrap();
         assert_eq!(sheet, data(&mut other, oid));
@@ -553,81 +983,147 @@ mod tests {
     fn data_opens_the_sheet_and_apply_redraws_the_graph() {
         let (mut app, id) = app_with(",a,b\nQ1,1,2", "column");
         crate::menus::invoke(&mut app, "graph.setData", json!({}));
-        let mut d = app.ui.dialog.take().unwrap();
-        assert_eq!(d.kind, KIND);
-        pick(&mut d, (1, 2));
-        d.fields.insert("entry".into(), json!("5"));
-        pick(&mut d, (2, 0));
-        d.fields.insert("entry".into(), json!("Q2"));
-        pick(&mut d, (2, 1));
-        d.fields.insert("entry".into(), json!("7"));
-        app.ui.dialog = Some(d.clone());
-        apply(&mut app, &d).unwrap();
+        assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())));
+        // Cells picked and typed into through the dialog's fields: the entry box's text goes into the cell it leaves.
+        for (at, text) in [([1, 2], "5"), ([2, 0], "Q2"), ([2, 1], "7")] {
+            set_field(&app, "sel", json!(at)).unwrap();
+            set_field(&app, "entry", json!(text)).unwrap();
+        }
+        apply_through_host(&mut app);
         assert_eq!(data(&mut app, id)["rows"], json!([[1.0, 5.0], [7.0, null]]));
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "Apply leaves the window open");
+        assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())), "Apply leaves the window open");
+        assert_eq!(read(&app, |d| d.held.state()), None, "Apply is ready again");
         // A pasted block fills the cells from the picked one.
-        let mut d = app.ui.dialog.take().unwrap();
-        pick(&mut d, (1, 1));
-        paste_block(&mut d, "8\t9\n10\t11\n");
-        assert_eq!((cell_at(&d, 1, 1), cell_at(&d, 2, 2), d.str("entry")), ("8", "11", "8".to_string()));
-        // Revert reads the graph again; the tool's Graph Data after drawing opens the same sheet.
-        replace_grid(&mut d, vec![]);
-        revert(&mut app, &mut d).unwrap();
-        assert_eq!(cell_at(&d, 0, 1), "a");
-        super::super::tools::open_tool_dialog(&mut app, "graphData", json!({}));
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        set_field(&app, "sel", json!([1, 1])).unwrap();
+        edit(&app, |d| {
+            paste_block(&mut d.sheet, active(&d.state), "8\t9\n10\t11\n");
+            load(&d.sheet, &d.state, &mut d.entry);
+            assert_eq!((cell_of(&d.sheet.grid, 1, 1), cell_of(&d.sheet.grid, 2, 2), d.entry.text.clone()), ("8".into(), "11".into(), "8".into()));
+            replace_grid(&mut d.sheet, vec![]);
+        });
+        // Revert reads the graph again.
+        let mut h = harness(app);
+        h.run_steps(4);
+        h.get_by_label("Revert").click();
+        h.run_steps(3);
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 0, 1)), "a");
+        // The tool's Graph Data after drawing opens the same sheet.
+        let app = h.state_mut();
+        let ctx = crate::testing::ui_context();
+        app.dialogs().expect("a window").with(|host| host.cancel::<GraphDataDialog>(&ctx));
+        super::super::tools::open_tool_dialog(app, "graphData", json!({}));
+        assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())));
     }
 
     #[test]
-    fn the_keys_move_the_picked_cell_and_keep_the_entry_box() {
+    fn the_entry_box_writes_its_text_and_moves_the_picked_cell() {
         let (mut app, id) = app_with(",a,b\nQ1,1,2", "column");
         open(&mut app).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
-            out.textures_delta.clear();
-        };
-        let key = |k: egui::Key, m: egui::Modifiers| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m };
-        let none = egui::Modifiers::NONE;
-        // The window opening gives the entry box the keys.
-        frame(&mut app, vec![]);
-        frame(&mut app, vec![]);
-        frame(&mut app, vec![egui::Event::Text("9".into())]);
-        frame(&mut app, vec![key(egui::Key::Tab, none)]);
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(sel(d), (0, 2), "Tab: right");
-        assert!(cell_at(d, 0, 1).ends_with('9'), "the typed text went into the cell it left: {}", cell_at(d, 0, 1));
-        // Still the entry's keys after a Tab: Enter moves down rather than applying.
-        frame(&mut app, vec![key(egui::Key::Enter, none)]);
-        assert_eq!(sel(app.ui.dialog.as_ref().unwrap()), (1, 2), "Enter: down");
+        let moves = [(CellDirection::Down, (1, 1)), (CellDirection::Right, (1, 2)), (CellDirection::Left, (1, 1)), (CellDirection::Up, (0, 1))];
+        for (step, to) in moves {
+            edit(&app, |d| {
+                let from = active(&d.state);
+                let typed = format!("t{}{}", from.0, from.1);
+                d.entry.text = typed.clone();
+                commit_entry(&mut d.sheet, &mut d.state, &mut d.entry, step);
+                assert_eq!(cell_of(&d.sheet.grid, from.0, from.1), typed, "the typed text went into the cell it left");
+                assert_eq!(active(&d.state), to, "{step:?}");
+                assert_eq!(d.entry.text, cell_of(&d.sheet.grid, to.0, to.1), "the box loads the cell it moved to");
+            });
+        }
+        // The top-left cell stays blank: a move onto it stays where it was.
+        edit(&app, |d| {
+            commit_entry(&mut d.sheet, &mut d.state, &mut d.entry, CellDirection::Left);
+            assert_eq!(active(&d.state), (0, 1));
+        });
+        // Entering text does not apply.
         assert_eq!(data(&mut app, id)["series"], json!(["a", "b"]), "not applied");
-        frame(&mut app, vec![key(egui::Key::Tab, egui::Modifiers::SHIFT)]);
-        assert_eq!(sel(app.ui.dialog.as_ref().unwrap()), (1, 1), "Shift+Tab: left");
-        frame(&mut app, vec![key(egui::Key::ArrowUp, none)]);
-        assert_eq!(sel(app.ui.dialog.as_ref().unwrap()), (0, 1), "Up");
+        // A pick set from outside loads the cell's text into the box.
+        set_field(&app, "sel", json!([1, 0])).unwrap();
+        assert_eq!(read(&app, |d| d.entry.text.clone()), "Q1");
     }
 
-    /// How many buttons (the sheet's cells and the window's own) Graph Data draws in the second of two
-    /// frames in a 1280 × 900 window, for a graph of `categories` rows of `series` values.
-    fn buttons_drawn(categories: usize, series: usize) -> usize {
-        let rows: Vec<Vec<f64>> = (0..categories).map(|i| vec![i as f64; series]).collect();
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150, "rows": rows})).unwrap();
+    /// A column's end edge in the cell rows is dragged with the mouse: the width is the one at the release, in whole
+    /// digits; Esc mid-drag gives the width at the start back; entering the width Column Width shows sets every column.
+    #[test]
+    fn a_column_drag_ends_where_released_and_the_shown_width_entered_sets_every_column() {
+        let (mut app, _) = app_with(",a,b\nQ1,1,2", "column");
         open(&mut app).unwrap();
-        let tree = crate::widgets::accessibility_tests::tree(|ui| super::super::show(&mut app, ui.ctx()));
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
-        tree.iter().filter(|n| n.role() == egui::accesskit::Role::Button).count()
+        let mut h = harness(app);
+        h.run_steps(5);
+        let digits = |h: &Harness, c: usize| read(h.state(), |d| col_digits(&d.sheet, c));
+        let grid = h.get_by_role_and_label(egui::accesskit::Role::Grid, "Graph Data").accesskit_node().locate().0;
+        // Column `c`'s end edge over the cells, on the second data row: a pointer-only part, found by the rect the last
+        // pass sensed. It runs down every row shown, past the part of the sheet in view.
+        let edge = |h: &Harness, c: usize| {
+            let part = craft::behavior::PartKey::new("column_edge").at(c as u64);
+            let rect = craft::ui::testing::pointer::part_rect_of_node(&h.ctx, grid, part).unwrap_or_else(|| panic!("column {c}'s edge is sensed"));
+            egui::pos2(rect.center().x, rect.top() + ROW_H * 1.5)
+        };
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let drag = |h: &mut Harness, c: usize, dx: f32, release: bool| {
+            // The pointer comes over the edge before it presses, as a mouse's does.
+            let at = edge(h, c);
+            h.event(egui::Event::PointerMoved(at));
+            h.step();
+            h.event(button(at, true));
+            h.step();
+            for step in 1..=4 {
+                h.event(egui::Event::PointerMoved(at + egui::vec2(dx * step as f32 / 4.0, 0.0)));
+                h.step();
+            }
+            if release {
+                h.event(button(at + egui::vec2(dx, 0.0), false));
+                h.step();
+            }
+        };
+        // 70 points is 10 digits, on the dragged column only.
+        drag(&mut h, 1, 70.0, true);
+        assert_eq!((digits(&h, 0), digits(&h, 1), digits(&h, 2)), (7, 17, 7));
+        // Esc in the middle of a drag puts the width back.
+        drag(&mut h, 2, 70.0, false);
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.step();
+        h.event(button(edge(&h, 2), false));
+        h.step();
+        assert_eq!(digits(&h, 2), 7, "Esc restores the width at the start");
+        // The last move and the release in one frame.
+        let at = edge(&h, 0);
+        h.event(egui::Event::PointerMoved(at));
+        h.step();
+        h.event(button(at, true));
+        h.step();
+        h.event(egui::Event::PointerMoved(at + egui::vec2(-35.0, 0.0)));
+        h.event(button(at + egui::vec2(-35.0, 0.0), false));
+        // That frame reports the drag's start, the next one the release.
+        h.step();
+        h.step();
+        assert_eq!(digits(&h, 0), 2, "the width where the drag was released");
+        // Column Width still shows 7: entering 7 there sets every column to 7.
+        set_field(h.state(), "width", json!(7)).unwrap();
+        assert_eq!((digits(&h, 0), digits(&h, 1), digits(&h, 2)), (7, 7, 7), "Column Width sets every column");
     }
 
     #[test]
-    fn a_full_size_sheet_draws_only_what_is_in_view() {
-        // 40 categories of 40 values fill 41 × 41 cells of a 42 × 42 sheet, larger than the view both ways: it
-        // draws some cells, but fewer than the data fill.
-        let some = buttons_drawn(40, 40);
-        assert!(some > 20 && some < 41 * 41, "{some} buttons");
-        // A full-size sheet draws the same cells in view, and none more.
-        assert_eq!(buttons_drawn(MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES), some);
+    fn a_column_width_in_points_maps_to_whole_digits() {
+        assert!((0..=MAX_WIDTH).all(|n| px_digits(digits_px(n)) == n));
+        assert_eq!((px_digits(-40.0), px_digits(1e9), px_digits(f32::NAN)), (0, MAX_WIDTH, 0));
+        let mut sheet = Sheet::default();
+        set_col_digits(&mut sheet, 3, 99);
+        set_col_digits(&mut sheet, MAX_COLS, 5);
+        assert_eq!((col_digits(&sheet, 2), col_digits(&sheet, 3)), (DEFAULT_WIDTH, MAX_WIDTH));
+        assert_eq!(sheet.widths.len(), 4, "a column past the sheet is left alone");
+        // `width` set through the dialog's fields sets every column too, also when set back to the width before.
+        let (mut app, _) = app_with(",a\nQ1,1", "column");
+        open(&mut app).unwrap();
+        for w in [12, 7] {
+            set_field(&app, "width", json!(w)).unwrap();
+            assert_eq!(read(&app, |d| (col_digits(&d.sheet, 2), col_digits(&d.sheet, 3))), (w, w));
+            edit(&app, |d| set_col_digits(&mut d.sheet, 1, 4));
+            set_field(&app, "width", json!(w)).unwrap();
+            assert_eq!(read(&app, |d| col_digits(&d.sheet, 1)), w, "setting width back to the one shown clears a column's own");
+        }
+        edit(&app, |d| set_col_digits(&mut d.sheet, 1, 4));
+        assert_eq!(read(&app, |d| (col_digits(&d.sheet, 1), col_digits(&d.sheet, 3))), (4, 7), "a drag after it gives that column its own width");
     }
 }

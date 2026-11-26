@@ -134,7 +134,8 @@ fn a_failed_batch_restores_the_file_the_history_and_a_drag_in_progress() {
         (doc_json(&st.doc), st.history.undo.len(), st.history.redo.len())
     };
     // Save As, then a failing step: the document keeps no file and stays modified.
-    let path = vectorcraft_testkit::temp_dir("batch-rollback").join("named.vectorcraft").to_string_lossy().to_string();
+    let dir = vectorcraft_testkit::TempDir::new("batch-rollback");
+    let path = dir.join("named.vectorcraft").to_string_lossy().to_string();
     let save = json!({"command": "file.saveAs", "params": {"path": path}});
     assert!(s.execute("command.batch", &json!({"commands": [rect(0), save, fail]})).is_err());
     assert_eq!(state(&s), before);
@@ -170,7 +171,7 @@ fn empty_batch_is_harmless() {
 #[test]
 fn save_open_via_commands_roundtrips() {
     let mut s = fixtures::rich_session();
-    let dir = vectorcraft_testkit::temp_dir("engine-save");
+    let dir = vectorcraft_testkit::TempDir::new("engine-save");
     let path = dir.join("rich.vectorcraft");
     exec(&mut s, "document.save", json!({"path": path.to_str().unwrap()}));
     let want = doc_json(&s.doc().unwrap().doc);

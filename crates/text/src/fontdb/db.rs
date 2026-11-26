@@ -1,46 +1,58 @@
+use craft::font_catalog::{Catalog, FontEnv, Limits, Os, Source};
+
 use super::build::make_face;
-#[cfg(not(target_arch = "wasm32"))]
-use super::build::{style_italic, style_weight};
-#[cfg(not(target_arch = "wasm32"))]
-use super::cache::CatalogFace;
-use super::cache::{CanonicalNames, Catalog, GlyphCache, PostScriptNames};
+use super::cache::{CanonicalNames, GlyphCache};
 #[cfg(not(target_arch = "wasm32"))]
 use super::dirs::confined_font_dirs;
+use super::dirs::system_catalog;
 use super::face::{BUNDLED, FontBytes, FontFace, Instances};
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SysFallback;
-use super::names::name;
+use super::names::{name, pick_native_label};
 use super::scan::enumerate_faces;
-#[cfg(not(target_arch = "wasm32"))]
-use super::scan::{file_face_names, is_font_file};
 #[cfg(test)]
 use super::traits::faces_published;
-#[cfg(not(target_arch = "wasm32"))]
-use super::traits::{Alias, FaceStyle};
-use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
-#[cfg(not(target_arch = "wasm32"))]
-use super::{ScanStamp, modified};
+use super::{Arc, AtomicU64, FontDb, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
+
+/// The next [`FontDb::id`].
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
+/// [`FontDb::global`].
+static GLOBAL: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
 
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs` (folders,
-    /// read with their subfolders, and font files).
+    /// read with their subfolders, and font files) and nothing else.
     pub fn with_font_dirs(font_dirs: Vec<PathBuf>) -> Self {
-        Self::new(FontPaths::Fixed(font_dirs))
+        // No platform folders, font store or font service.
+        let catalog = Catalog::new(FontEnv { os: Os::None, ..FontEnv::default() }).with_font_service(false);
+        // A path that isn't a folder is a font file named by itself, read whatever its name (font
+        // services keep fonts in files without an extension); one that becomes a folder is read as one.
+        let (folders, files): (Vec<PathBuf>, Vec<PathBuf>) = font_dirs.into_iter().partition(|p| p.is_dir());
+        let catalog = catalog.with_lister(Arc::new(move || files.clone()));
+        catalog.set_app_dirs(folders);
+        Self::new(catalog)
     }
 
     /// Same scan paths as [`FontDb::global`] (platform lister and font folders), for tests.
     #[cfg(test)]
     pub(crate) fn for_system_scan_test() -> Self {
-        Self::new(FontPaths::System)
+        Self::new(system_catalog())
     }
 
-    fn new(font_paths: FontPaths) -> Self {
+    fn new(catalog: Catalog) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        catalog.set_confined_dirs(confined_font_dirs());
         let mut faces = Vec::new();
         // Bundled fonts first, then explicitly supplied craft-fonts faces: Japanese (Mincho
         // first), Arabic, Thai, then remaining faces in manifest order. Existing script fallback
         // priorities stay ahead of the additional families users can now pick by name.
         let craft = crate::craft_fonts::document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
+            // Font pickers list the catalog's families: the fonts the app carries are in it as bundled faces.
+            if let Err(e) = catalog.add_bytes(data.to_vec(), Source::Bundled, &Limits::default()) {
+                log::warn!("a bundled font is not in the font catalog: {e}");
+            }
             for (i, spec) in enumerate_faces(data) {
                 if let Some(f) = make_face(FontBytes::Static(data), i, spec, None) {
                     faces.push(Arc::new(f));
@@ -52,23 +64,20 @@ impl FontDb {
             outlines: Mutex::new(HashMap::new()),
             images: Mutex::new(GlyphCache::default()),
             colours: Mutex::new(GlyphCache::default()),
-            catalog: RwLock::new(Catalog::new()),
-            postscript: RwLock::new(PostScriptNames::new()),
-            font_paths,
-            aliases: RwLock::new(HashMap::new()),
+            catalog: Arc::new(catalog),
+            file_faces: RwLock::new(super::FileFaces::default()),
             canonical_cache: Mutex::new(CanonicalNames::new()),
-            #[cfg(not(target_arch = "wasm32"))]
-            cataloged: std::sync::OnceLock::new(),
             #[cfg(not(target_arch = "wasm32"))]
             version_scanned: RwLock::new(std::collections::HashSet::new()),
             family_cache: Mutex::new(None),
             menu_cache: Mutex::new(None),
             generation: AtomicU64::new(0),
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             #[cfg(not(target_arch = "wasm32"))]
             sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
-            #[cfg(not(target_arch = "wasm32"))]
-            stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
+            composites: RwLock::new(HashMap::new()),
+            custom_classes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -83,21 +92,39 @@ impl FontDb {
         let _ = on;
     }
 
+    /// Is the lazy system-font fallback on ([`Self::set_system_fallback`])?
+    pub(crate) fn system_fallback_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+
     /// Process-wide database: the bundled fonts, then the installed system fonts, cataloged the
     /// first time a lookup by family name needs them (or ahead of time by
     /// [`FontDb::scan_in_background`]).
     pub fn global() -> &'static FontDb {
-        static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
-        DB.get_or_init(|| FontDb::new(FontPaths::System))
+        GLOBAL.get_or_init(|| FontDb::new(system_catalog()))
+    }
+
+    /// [`FontDb::global`] when it has been made, without making it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn global_if_made() -> Option<&'static FontDb> {
+        GLOBAL.get()
+    }
+
+    /// The installed fonts this database finds by name, shared with the framework's font menus and
+    /// pickers. Its lookups wait for its first scan ([`FontDb::scan_in_background`]).
+    pub fn catalog(&self) -> &Arc<Catalog> {
+        &self.catalog
     }
 
     pub(super) fn read_faces(&self) -> std::sync::RwLockReadGuard<'_, Vec<Arc<FontFace>>> {
         self.faces.read().unwrap_or_else(|e| e.into_inner())
-    }
-
-    pub(super) fn read_catalog(&self) -> std::sync::RwLockReadGuard<'_, Catalog> {
-        self.ensure_catalog();
-        self.catalog.read().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Fonts were added or the catalog changed: cached family lists and [`FontDb::canonical`]'s
@@ -109,9 +136,24 @@ impl FontDb {
     }
 
     /// A number that changes whenever the available fonts do (fonts added, system fonts
-    /// rescanned): lists built from [`FontDb::family_list`] are current while it doesn't.
+    /// rescanned, here or by the catalog's own watch): lists built from [`FontDb::family_list`] are
+    /// current while it doesn't. While a guard of this thread lends composite fonts other than the
+    /// ones the database holds ([`FontDb::lend_composite_fonts`]), it is a number of its own for
+    /// those definitions.
     pub fn generation(&self) -> u64 {
-        self.generation.load(Ordering::Relaxed)
+        self.lent_generation(self.own_generation())
+    }
+
+    /// [`FontDb::generation`] without a loan's: the database's count and its catalog's.
+    pub(super) fn own_generation(&self) -> u64 {
+        // Both count up from 0, so their sum moves whenever either does.
+        self.generation.load(Ordering::Relaxed).wrapping_add(self.catalog.generation())
+    }
+
+    /// A number no other database made in this process has: with [`FontDb::generation`], it tells
+    /// what a list built from a database was built from.
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     /// Family names available (loaded plus installed system fonts), sorted and deduplicated.
@@ -121,24 +163,28 @@ impl FontDb {
 
     /// [`FontDb::families`], shared: cheap to call every frame.
     pub fn family_list(&self) -> Arc<[String]> {
-        let catalog = self.read_catalog();
+        // The catalog's list is the same `Arc` until it rescans (here or in its watch).
+        let installed = self.catalog.families();
         let mut cache = self.family_cache.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(list) = cache.as_ref() {
+        if let Some((from, list)) = cache.as_ref()
+            && Arc::ptr_eq(from, &installed)
+        {
             return list.clone();
         }
         let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).collect();
-        v.extend(catalog.values().map(|c| c.name.clone()));
+        v.extend(installed.iter().cloned());
         v.sort_by_key(|a| a.to_lowercase());
         v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
         let list: Arc<[String]> = v.into();
-        *cache = Some(list.clone());
+        *cache = Some((installed, list.clone()));
         list
     }
 
     /// The families font menus and lists show: [`FontDb::family_list`] without the system's hidden
     /// families, whose names start with "." (macOS keeps ".SF NS", ".LastResort" and others for its
     /// own interface, and Mac apps don't list them). Those still resolve by name, for documents and
-    /// fallbacks that name them. Cheap to call every frame.
+    /// fallbacks that name them. The composite fonts ([`FontDb::composite_font_names`]) come first.
+    /// Cheap to call every frame.
     pub fn menu_family_list(&self) -> Arc<[String]> {
         let all = self.family_list();
         let mut cache = self.menu_cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -147,7 +193,8 @@ impl FontDb {
         {
             return list.clone();
         }
-        let list: Arc<[String]> = all.iter().filter(|f| !f.starts_with('.')).cloned().collect();
+        let composites = self.composite_font_names();
+        let list: Arc<[String]> = composites.into_iter().chain(all.iter().filter(|f| !f.starts_with('.')).cloned()).collect();
         *cache = Some((all, list.clone()));
         list
     }
@@ -157,7 +204,7 @@ impl FontDb {
     pub fn installed_fonts_ready(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.cataloged.get().is_some()
+            self.catalog.is_ready()
         }
         #[cfg(target_arch = "wasm32")]
         true
@@ -175,7 +222,7 @@ impl FontDb {
         let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).filter(|f| !f.starts_with('.')).collect();
         v.sort_by_key(|a| a.to_lowercase());
         v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-        v.into()
+        self.composite_font_names().into_iter().chain(v).collect()
     }
 
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
@@ -189,10 +236,13 @@ impl FontDb {
         if let Some(native) = self.read_faces().iter().find(|f| f.family.eq_ignore_ascii_case(&family)).and_then(|f| f.native_family.clone()) {
             return native;
         }
-        if let Some(native) = self.read_catalog().get(&family.to_ascii_lowercase()).and_then(|c| c.native.clone()) {
-            return native;
-        }
-        family
+        // An installed family's, from its names in other languages, as a loaded face's is chosen
+        // (every face of a family has the same names: one is enough).
+        let native = self.catalog.resolve(&family, "").and_then(|(f, _)| {
+            let names: Vec<(Option<String>, String)> = f.localized_families.into_iter().map(|n| (n.language, n.name)).collect();
+            pick_native_label(&f.family, &names)
+        });
+        native.unwrap_or(family)
     }
 
     /// Style names available for `family`: upright styles by weight, then italics.
@@ -206,11 +256,9 @@ impl FontDb {
                 v.push((f.italic, f.weight, f.style.clone()));
             }
         }
-        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
-            for cf in &c.faces {
-                if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(&cf.style)) {
-                    v.push((cf.italic, cf.weight, cf.style.clone()));
-                }
+        for f in self.catalog.styles(family) {
+            if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(&f.style)) {
+                v.push((f.italic, f.weight, f.style));
             }
         }
         v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
@@ -234,10 +282,8 @@ impl FontDb {
         for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
             consider(&mut best, f.weight, f.italic, &f.style);
         }
-        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
-            for cf in &c.faces {
-                consider(&mut best, cf.weight, cf.italic, &cf.style);
-            }
+        for f in self.catalog.styles(family) {
+            consider(&mut best, f.weight, f.italic, &f.style);
         }
         best.map(|(_, style)| style)
     }
@@ -277,6 +323,8 @@ impl FontDb {
                 }
             }
         }
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = (!made.is_empty()).then(crate::test_fonts::font_change);
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         let before = faces.len();
         for f in made {
@@ -296,130 +344,41 @@ impl FontDb {
     }
 
     /// Catalog the installed fonts unless that has been done: the first caller scans the font
-    /// folders, any other waits for that scan to finish. A no-op on wasm.
-    pub(super) fn ensure_catalog(&self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        self.cataloged.get_or_init(|| {
-            self.scan_font_dirs();
-        });
+    /// folders, any other waits for that scan to finish, as every catalog lookup does.
+    #[cfg(any(test, feature = "test-fonts"))]
+    pub(crate) fn ensure_catalog(&self) {
+        let _ = self.catalog.families();
     }
 
     /// Catalog the installed fonts on a background thread, so the first lookup by family name
     /// (opening a file, the font menus) doesn't wait for the scan. A no-op once they are
     /// cataloged, and on wasm.
     pub fn scan_in_background(&'static self) {
+        // A failed spawn leaves the scan to the first lookup that needs it.
         #[cfg(not(target_arch = "wasm32"))]
-        if self.cataloged.get().is_none() {
-            // A failed spawn leaves the scan to the first lookup that needs it.
-            let _ = std::thread::Builder::new().name("font-scan".into()).spawn(move || self.ensure_catalog());
-        }
+        self.catalog.scan_in_background();
     }
 
     /// Scan the font folders again (fonts installed or removed since), cataloging the faces
     /// found (native only). Font data is loaded when a cataloged family is first resolved. Faces
-    /// loaded from files the scan no longer finds are dropped. Returns the number of faces
-    /// cataloged.
+    /// loaded from files the scan no longer finds are dropped. Returns the number of installed
+    /// faces cataloged.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_system_fonts(&self) -> usize {
-        // The first scan, or a rescan once it is done (never both at once).
-        let mut first = None;
-        self.cataloged.get_or_init(|| first = Some(self.scan_font_dirs()));
-        first.unwrap_or_else(|| self.scan_font_dirs())
-    }
-
-    /// Whether fonts were installed or removed since the last scan (a font folder or font file it
-    /// read changed, or a new one is to be read), for [`FontDb::load_system_fonts`] to catalog
-    /// them. Costs a look at each folder the scan read, not a scan. `false` before the first scan
-    /// and on wasm.
-    pub fn installed_fonts_changed(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let paths = self.font_paths.get();
-            let stamp = self.stamp.lock().unwrap_or_else(|e| e.into_inner());
-            stamp.as_ref().is_some_and(|s| s.paths != paths || s.modified.iter().any(|(p, t)| modified(p) != *t))
-        }
-        #[cfg(target_arch = "wasm32")]
-        false
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn scan_font_dirs(&self) -> usize {
-        // Files may have been installed since: other versions are looked for again.
+        // The first scan waits for nothing: a guard is made only for a database already cataloged.
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = self.catalog.is_ready().then(crate::test_fonts::font_change);
+        // The first scan, or a rescan once it is done (never both at once). The count is of the installed faces: the
+        // catalog's less the bundled faces no installed file also has.
+        let cataloged = self.catalog.rescan();
+        let bundled_only = self.catalog.faces().iter().filter(|f| f.source == Source::Bundled && self.catalog.versions(f).len() == 1).count();
+        let n = cataloged.saturating_sub(bundled_only);
+        // Files may have been installed since: other versions are looked for again, in the catalog
+        // the rescan published. A version lookup made during the scan read the previous one.
         self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
-        let mut catalog = Catalog::new();
-        let mut aliases: HashMap<String, Vec<Alias>> = HashMap::new();
-        let mut postscript = PostScriptNames::new();
-        let mut n = 0;
-        let paths = self.font_paths.get();
-        let mut modified_at = Vec::new();
-        // Each file with whether it was named by itself rather than found in a folder.
-        let mut files = Vec::new();
-        let mut stack = paths.clone();
-        // Each folder once, however links lead back to it.
-        let mut visited = std::collections::HashSet::new();
-        let confined = confined_font_dirs();
-        let inside_confined = |p: &Path| std::fs::canonicalize(p).is_ok_and(|r| confined.iter().any(|root| r.starts_with(root)));
-        while let Some(d) = stack.pop() {
-            if !visited.insert(std::fs::canonicalize(&d).unwrap_or_else(|_| d.clone())) {
-                continue;
-            }
-            // In a confined folder, a link is followed only to somewhere inside one.
-            let in_confined = !confined.is_empty() && inside_confined(&d);
-            // Before listing it: a font installed meanwhile changes it after this.
-            modified_at.push((d.clone(), modified(&d)));
-            // Not a folder: a font file named by itself (or nothing, yet).
-            let Ok(rd) = std::fs::read_dir(&d) else {
-                files.push((d, true));
-                continue;
-            };
-            for e in rd.flatten() {
-                let p = e.path();
-                if in_confined && e.file_type().is_ok_and(|t| t.is_symlink()) && !inside_confined(&p) {
-                    continue;
-                }
-                if p.is_dir() {
-                    stack.push(p);
-                } else {
-                    files.push((p, false));
-                }
-            }
-        }
-        for (p, named) in files {
-            // A file named by itself is a font whatever its name (font services keep fonts in
-            // files without an extension); one of a folder's only with a font's extension, or
-            // a suitcase font (whose fonts are in its resource fork, whatever its name).
-            if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
-                continue;
-            }
-            for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
-                for (k, a) in Alias::of(&family, &style, &keys) {
-                    aliases.entry(k).or_default().push(a);
-                }
-                // `keys.postscript` is normalized ([`norm`]), as `by_postscript_name` looks it up.
-                for ps in &keys.postscript {
-                    postscript.insert(ps.clone(), (family.clone(), style.clone()));
-                }
-                let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
-                let kind = entry.traits.get_or_insert(traits);
-                kind.variable |= traits.variable;
-                if entry.name.is_empty() {
-                    entry.name = family;
-                }
-                if entry.native.is_none() {
-                    entry.native = native_family;
-                }
-                let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
-                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
-                n += 1;
-            }
-        }
-        log::debug!("cataloged {n} system font faces");
-        let installed: std::collections::HashSet<PathBuf> = catalog.values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
-        *self.stamp.lock().unwrap_or_else(|e| e.into_inner()) = Some(ScanStamp { paths, modified: modified_at });
-        *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
-        *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
-        *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
-        // Faces loaded from a file this scan did not catalog (the font was removed, or its folder
+        let installed: std::collections::HashSet<PathBuf> =
+            self.catalog.faces().iter().flat_map(|f| self.catalog.versions(f)).filter_map(|f| f.path).collect();
+        // Faces loaded from a file this scan did not catalog, as a face or a version of one (the font was removed, or its folder
         // is no longer read) are dropped with their outlines. A family with no face left and no
         // cataloged file leaves the lists, and type set in it resolves to the fallback font. A face
         // without a file (bundled, or added as bytes) stays.
@@ -440,8 +399,22 @@ impl FontDb {
             let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
             sys.scans = sys.scans.wrapping_add(1);
             sys.misses.clear();
+            sys.file_searches = 0;
         }
         self.changed();
         n
+    }
+
+    /// Whether fonts were installed or removed since the last scan (a font folder it read
+    /// changed, or a new one is to be read), for [`FontDb::load_system_fonts`] to catalog them.
+    /// Costs a look at each folder the scan read, not a scan. `false` before the first scan and on
+    /// wasm.
+    pub fn installed_fonts_changed(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.catalog.installed_fonts_changed()
+        }
+        #[cfg(target_arch = "wasm32")]
+        false
     }
 }

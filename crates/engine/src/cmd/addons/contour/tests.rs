@@ -158,6 +158,39 @@ fn contour_refuses_what_it_cannot_offset() {
     assert!(err.contains("select paths or shapes"), "{err}");
 }
 
+/// A param of the wrong type is an error naming the param, and leaves the document, the selection
+/// and the undo history as they were. Null keeps a param's default, and `offset` still takes a
+/// string with a unit.
+#[test]
+fn contour_refuses_a_param_of_the_wrong_type() {
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 50.0, 40.0);
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    for (p, want) in [
+        (json!({"offset": true}), "`offset` must be a number, not true"),
+        (json!({"offset": "abc"}), "`offset` must be a number, not \"abc\""),
+        (json!({"offset": [5]}), "`offset` must be a number, not [5]"),
+        (json!({"offset": 5, "corners": 3}), "`corners` must be a string"),
+        (json!({"offset": 5, "miterLimit": "high"}), "`miterLimit` must be a number, not \"high\""),
+        (json!({"offset": 5, "miterLimit": false}), "`miterLimit` must be a number, not false"),
+    ] {
+        let r = s.execute("addon.contour.set", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+        assert!(state(&s) == before, "{p} changed the document, the selection or the undo history");
+    }
+    // A null `offset` is a missing one.
+    let err = s.execute("addon.contour.set", &json!({"offset": null})).unwrap_err().to_string();
+    assert!(err.contains("missing `offset`"), "{err}");
+    // Null corners and miter limit keep sharp corners at 4; the offset takes a unit.
+    let r = s.execute("addon.contour.set", &json!({"offset": "1 in", "corners": null, "miterLimit": null})).unwrap();
+    let fx = effects_of(&s, ids_of(&r, "created")[0]);
+    assert_eq!((fx[0].1["offset"].clone(), fx[0].1["joins"].clone(), fx[0].1["miterLimit"].clone()), (json!(72.0), json!("miter"), json!(4.0)));
+}
+
 /// The border-with-a-gap recipe: two Contours of one shape (the gap, then the border), baked, then
 /// the gap taken out of the border with Minus Front, leaves a ring between the two.
 #[test]

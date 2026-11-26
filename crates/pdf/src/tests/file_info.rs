@@ -45,7 +45,7 @@ fn description(attrs: &str, body: &str) -> String {
 }
 
 const INFO: &str = "/Author (Grace Hopper) /Subject <FEFF00430061007400610020006C006F0067> /Keywords (navy; compilers, , cobol) \
-                    /CreationDate (D:20261005140300+02'00') /ModDate (D:20261006090000Z) /Title (Ignored title)";
+                    /CreationDate (D:20261005140300+02'00') /ModDate (D:20261006090000Z) /Title (Compiler manual)";
 
 /// Unix seconds of 2026-10-05 12:03:00 UTC (14:03 at +02:00).
 const CREATED: i64 = 1_791_201_780;
@@ -58,6 +58,7 @@ fn the_information_dictionary_gives_file_info() {
     assert_eq!(
         f,
         FileInfo {
+            title: Some("Compiler manual".into()),
             author: Some("Grace Hopper".into()),
             description: Some("Cata log".into()),
             keywords: Some(vec!["navy".into(), "compilers".into(), "cobol".into()]),
@@ -79,7 +80,8 @@ fn the_information_dictionary_gives_file_info() {
 fn the_xmp_packet_gives_file_info() {
     let body = description(
         "xmpRights:Marked=\"False\" xmp:ModifyDate=\"2026-10-06T09:00:00.25Z\"",
-        "<dc:creator><rdf:Seq><rdf:li>Ada Lovelace</rdf:li><rdf:li>Charles Babbage</rdf:li></rdf:Seq></dc:creator>\
+        "<dc:title><rdf:Alt><rdf:li xml:lang=\"de\">Plakat</rdf:li><rdf:li xml:lang=\"x-default\">Poster</rdf:li></rdf:Alt></dc:title>\
+         <dc:creator><rdf:Seq><rdf:li>Ada Lovelace</rdf:li><rdf:li>Charles Babbage</rdf:li></rdf:Seq></dc:creator>\
          <dc:description><rdf:Alt><rdf:li xml:lang=\"de\">Ein Plakat</rdf:li><rdf:li xml:lang=\"x-default\">A poster\nfor the fair</rdf:li></rdf:Alt></dc:description>\
          <dc:subject><rdf:Bag><rdf:li>fair</rdf:li><rdf:li> print </rdf:li><rdf:li></rdf:li></rdf:Bag></dc:subject>\
          <dc:rights><rdf:Alt><rdf:li xml:lang=\"en\">(c) 2026 Ada</rdf:li></rdf:Alt></dc:rights>\
@@ -90,9 +92,12 @@ fn the_xmp_packet_gives_file_info() {
     assert_eq!(
         f,
         FileInfo {
+            title: Some("Poster".into()),
             author: Some("Ada Lovelace, Charles Babbage".into()),
+            author_title: None,
             description: Some("A poster\nfor the fair".into()),
             keywords: Some(vec!["fair".into(), "print".into()]),
+            rating: None,
             copyright_notice: Some("(c) 2026 Ada".into()),
             copyright_url: Some("https://example.com/rights".into()),
             copyrighted: Some(false),
@@ -138,6 +143,13 @@ fn the_xmp_packet_wins_where_both_give_a_field() {
     assert_eq!(f.created, Some(1_791_331_200 + 5 * 3600 + 30 * 60));
     assert_eq!(f.description.as_deref(), Some("Cata log"));
     assert_eq!(f.modified, Some(MODIFIED));
+    // The title is the packet's where it gives one (a blank `x-default` item leaves the next one),
+    // else the dictionary's.
+    assert_eq!(f.title.as_deref(), Some("Compiler manual"));
+    let body =
+        description("", "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\"> </rdf:li><rdf:li xml:lang=\"fr\">Manuel</rdf:li></rdf:Alt></dc:title>");
+    let f = file_info(&pdf(Some(INFO), Some(&packet(&body))), None).unwrap();
+    assert_eq!(f.title.as_deref(), Some("Manuel"));
 }
 
 #[test]
@@ -197,15 +209,27 @@ fn an_xmp_packet_nested_too_deep_leaves_the_information_dictionary() {
 #[test]
 fn a_written_pdf_gives_its_file_info_back() {
     let mut d = Document::new(100.0, 100.0);
+    d.title = "Fair poster".into();
     d.metadata.author = "Ada Lovelace".into();
     d.metadata.description = "A poster\nfor the fair".into();
     d.metadata.keywords = vec!["fair".into(), "print".into()];
     let bytes = export(&d, &PdfOptions { created: Some(CREATED), ..PdfOptions::uncompressed() }).unwrap();
     let f = file_info(&bytes, None).unwrap();
+    assert_eq!(f.title.as_deref(), Some("Fair poster"));
     assert_eq!(f.author.as_deref(), Some("Ada Lovelace"));
     assert_eq!(f.description.as_deref(), Some("A poster\nfor the fair"));
     assert_eq!(f.keywords, Some(vec!["fair".to_string(), "print".into()]));
     assert_eq!((f.created, f.modified), (Some(CREATED), Some(CREATED)));
+}
+
+#[test]
+fn a_written_pdf_carries_the_file_info_title_not_the_documents_name() {
+    let mut d = Document::new(100.0, 100.0);
+    d.title = "poster.svg".into();
+    d.metadata.title = Some("Fair poster".into());
+    let bytes = export(&d, &PdfOptions { created: Some(CREATED), ..PdfOptions::uncompressed() }).unwrap();
+    assert_eq!(file_info(&bytes, None).unwrap().title.as_deref(), Some("Fair poster"));
+    assert!(!String::from_utf8_lossy(&bytes).contains("poster.svg"));
 }
 
 #[test]
@@ -247,4 +271,49 @@ fn a_written_pdf_gives_its_copyright_back() {
     (d.metadata.author, d.metadata.copyright_notice) = ("Ada".into(), "(c)\u{1} Ada\u{FFFF}".into());
     let f = file_info(&export(&d, &PdfOptions::uncompressed()).unwrap(), None).unwrap();
     assert_eq!((f.author.as_deref(), f.copyright_notice.as_deref()), (Some("Ada"), Some("(c) Ada")));
+}
+
+#[test]
+fn a_metadata_template_gives_its_file_info_back() {
+    let f = FileInfo {
+        title: Some("Fair poster".into()),
+        author: Some("Ada & <Lovelace>".into()),
+        author_title: Some("Designer, \"lead\"".into()),
+        description: Some("A poster\r\nfor the fair".into()),
+        keywords: Some(vec!["fair".into(), "print, large".into()]),
+        rating: Some(4),
+        copyright_notice: Some("(c) 2026 Ada".into()),
+        copyright_url: Some("https://example.com/rights?a=1&b=2".into()),
+        copyrighted: Some(true),
+        ..Default::default()
+    };
+    let xmp = metadata_template(&f);
+    assert!(xmp.starts_with("<?xpacket begin=") && xmp.trim_end().ends_with("<?xpacket end=\"w\"?>"), "{xmp}");
+    assert_eq!(read_template(xmp.as_bytes()), Some(f));
+    // A public-domain status writes Marked False; fields without a value and the dates are left out.
+    let f = FileInfo { copyrighted: Some(false), author: Some("  ".into()), created: Some(CREATED), ..Default::default() };
+    let xmp = metadata_template(&f);
+    assert!(!xmp.contains("dc:creator") && !xmp.contains("CreateDate") && xmp.contains("<xmpRights:Marked>False</xmpRights:Marked>"), "{xmp}");
+    assert_eq!(read_template(xmp.as_bytes()), Some(FileInfo { copyrighted: Some(false), ..Default::default() }));
+    // The template is the PDF packet's format: a PDF whose metadata stream holds one reads the same.
+    let f = FileInfo { author: Some("Ada".into()), author_title: Some("Editor".into()), rating: Some(2), ..Default::default() };
+    let read = file_info(&pdf(None, Some(&metadata_template(&f))), None).unwrap();
+    assert_eq!((read.author, read.author_title, read.rating), (f.author, f.author_title, f.rating));
+}
+
+#[test]
+fn a_metadata_template_reads_ratings_and_refuses_what_is_not_xmp() {
+    let rated = |r: &str| read_template(packet(&description(&format!("xmp:Rating=\"{r}\""), "")).as_bytes()).unwrap().rating;
+    assert_eq!([rated("0"), rated("5"), rated("3.0"), rated(" 2 ")], [Some(0), Some(5), Some(3), Some(2)]);
+    // A rejected file's -1, fractions, ratings past 5 and words are left out.
+    assert_eq!([rated("-1"), rated("2.5"), rated("6"), rated("high")], [None; 4]);
+    // XML without `rdf:RDF`, text and a packet that isn't well-formed are not templates.
+    assert_eq!(read_template(b"<root><title>Poster</title></root>"), None);
+    assert_eq!(read_template(b"Ada Lovelace"), None);
+    assert_eq!(read_template(packet("<rdf:Description>").as_bytes()), None);
+    // An XMP packet with no File Info is a template with no fields.
+    assert_eq!(read_template(packet("").as_bytes()), Some(FileInfo::default()));
+    // Longer than the longest template read, it is refused without being parsed.
+    let long = packet(&description("", &" ".repeat(MAX_TEMPLATE_BYTES)));
+    assert_eq!(read_template(long.as_bytes()), None);
 }

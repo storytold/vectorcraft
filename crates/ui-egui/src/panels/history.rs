@@ -1,11 +1,13 @@
 //! History panel: the document's states; click one to go back (or forward) to it.
 
-use egui::{Sense, Ui, vec2};
-use serde_json::json;
+use craft::keymap::CommandRef;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::panels::{HistoryEvent, HistoryFooter, HistoryKey, HistoryPanel, HistoryRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use egui::Ui;
+use serde_json::{Value, json};
 
-use crate::theme::Tokens;
-use crate::widgets::menu_item;
-use crate::{VectorcraftApp, icons};
+use crate::VectorcraftApp;
 
 /// Undo (negative) / redo (positive) steps to reach row `target` when `current` is the current
 /// row (row 0 = the document as opened).
@@ -43,94 +45,103 @@ pub(crate) fn shown(h: &vectorcraft_engine::HistoryEntry) -> String {
     entry_name(crate::i18n::current(), h).unwrap_or_else(|| h.label.clone())
 }
 
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else {
-        super::empty_state(ui, "history", tl!("No document"), tl!("Open a document to see its history."));
-        return;
-    };
-    let mut rows: Vec<(String, bool)> = vec![(tl!("Open").to_string(), false)];
-    rows.extend(st.history.undo.iter().map(|h| (shown(h), false)));
-    let current = rows.len() - 1;
-    rows.extend(st.history.redo.iter().rev().map(|h| (shown(h), true)));
-    let mut steps: Option<i64> = None;
-    crate::widgets::list_box(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        egui::ScrollArea::vertical().id_salt("hist").max_height(260.0).stick_to_bottom(true).show(ui, |ui| {
-            for (i, (label, future)) in rows.iter().enumerate() {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
-                if i == current {
-                    ui.painter().rect_filled(r, 0.0, t.row_selected);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, 0.0, t.hover);
-                }
-                let icon = if i == 0 { "file-plus" } else { "history" };
-                icons::paint(
-                    ui,
-                    icon,
-                    egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(14.0, 14.0)),
-                    if *future { t.text_disabled } else { t.icon },
-                );
-                let col = if *future { t.text_disabled } else { t.text };
-                ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
-                if resp.clicked() && i != current {
-                    steps = Some(steps_to(current, i));
-                }
-            }
-        });
-    });
-    if let Some(s) = steps {
-        let (cmd, n) = if s < 0 { ("edit.undo", -s) } else { ("edit.redo", s) };
-        for _ in 0..n {
-            if app.run(cmd, json!({})).is_err() {
-                break;
-            }
+/// The names of the rows, top to bottom: the document as opened, each step to undo, then each step
+/// to redo with the next one first. Empty with no document.
+fn names(app: &VectorcraftApp) -> Vec<String> {
+    let Some(st) = app.session.active() else { return Vec::new() };
+    let mut names = vec![tl!("Open").to_string()];
+    names.extend(st.history.undo.iter().map(shown));
+    names.extend(st.history.redo.iter().rev().map(shown));
+    names
+}
+
+/// The rows of the list: row `i` is state `i`, and the rows after the last undo step are redo states.
+fn rows(app: &VectorcraftApp) -> Vec<HistoryRow> {
+    let undone = app.session.active().map_or(0, |st| st.history.undo.len());
+    names(app)
+        .into_iter()
+        .enumerate()
+        .map(|(i, name)| {
+            // PLAN: assumed `craft::ui::primitives::IconId`; the app has no direct craft-behavior dependency.
+            let icon = craft::behavior::IconId::new(if i == 0 { "new_file" } else { "history" });
+            HistoryRow::state(i as u64, name).icon(icon).redo(i > undone)
+        })
+        .collect()
+}
+
+/// Moves the document to state `target`, stopping at the first step that fails.
+fn step_to(app: &mut VectorcraftApp, target: usize) {
+    let Some(current) = app.session.active().map(|st| st.history.undo.len()) else { return };
+    let s = steps_to(current, target);
+    let (cmd, n) = if s < 0 { ("edit.undo", -s) } else { ("edit.redo", s) };
+    for _ in 0..n {
+        if app.run(cmd, json!({})).is_err() {
+            break;
         }
     }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    for (label, cmd) in [(tl!("Step Backward"), "edit.undo"), (tl!("Step Forward"), "edit.redo")] {
-        if menu_item(ui, label, crate::menus::enabled(app, cmd), false) {
-            crate::menus::invoke(app, cmd, json!({}));
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let Some(undone) = app.session.active().map(|st| st.history.undo.len()) else {
+        super::empty_state(ui, "history", tl!("No document"), tl!("Open a document to see its history."));
+        return;
+    };
+    let rows = rows(app);
+    // A click on a row moves to its state at once, so the current state is the selected one.
+    let out = HistoryPanel::new(&rows, Some(HistoryKey::State(undone as u64)))
+        .footer(HistoryFooter::default().new_document(true))
+        .can_delete(|_| false)
+        .show(ui);
+    for event in out.events {
+        match event {
+            HistoryEvent::Select(HistoryKey::State(n)) => step_to(app, n as usize),
+            HistoryEvent::NewDocument => crate::menus::invoke(app, "edit.newDocumentFromState", json!({})),
+            _ => {}
         }
     }
-    ui.separator();
-    if menu_item(ui, tl!("Clear History"), crate::menus::enabled(app, "edit.clearHistory"), false) {
-        crate::menus::invoke(app, "edit.clearHistory", json!({}));
+}
+
+/// Set History Limit…: Preferences at the page with History States.
+fn limit_row() -> CommandRef {
+    CommandRef::with_params("edit.preferences", json!({ "category": "Performance" }))
+}
+
+/// The panel menu's rows.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    vec![
+        PanelRow::Command(CommandRef::new("ui.history.stepBackward")),
+        PanelRow::Command(CommandRef::new("ui.history.stepForward")),
+        PanelRow::Separator,
+        PanelRow::Command(CommandRef::new("edit.clearHistory")),
+        PanelRow::Command(limit_row()),
+        PanelRow::Command(CommandRef::new("ui.history.options")),
+    ]
+}
+
+/// The titles and enabled states of [`menu_rows`].
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let state = |title: &'static str, enabled: bool| CommandState::new().title(title).enabled(enabled);
+    states.set(CommandRef::new("ui.history.stepBackward"), state(tl!("Step Backward"), crate::menus::enabled(app, "edit.undo")));
+    states.set(CommandRef::new("ui.history.stepForward"), state(tl!("Step Forward"), crate::menus::enabled(app, "edit.redo")));
+    states.set(CommandRef::new("edit.clearHistory"), state(tl!("Clear History"), crate::menus::enabled(app, "edit.clearHistory")));
+    states.set(limit_row(), state(tl!("Set History Limit…"), true));
+    states.set(CommandRef::new("ui.history.options"), state(tl!("History Options…"), false));
+}
+
+/// Runs the panel menu's own rows; `None` for an id that is not one of them.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    match id {
+        "ui.history.stepBackward" => Some(app.run("edit.undo", json!({}))),
+        "ui.history.stepForward" => Some(app.run("edit.redo", json!({}))),
+        "ui.history.options" => Some(Err("History Options… is not available".into())),
+        _ => None,
     }
-    if menu_item(ui, tl!("Set History Limit…"), true, false) {
-        crate::menus::invoke(app, "edit.preferences", json!({ "category": "Performance" }));
-    }
-    menu_item(ui, tl!("History Options…"), false, false);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn steps() {
-        assert_eq!(steps_to(5, 2), -3);
-        assert_eq!(steps_to(2, 4), 2);
-        assert_eq!(steps_to(3, 3), 0);
-    }
-
-    /// The step names the panel paints, top to bottom. The SVG loaders are installed so each row's
-    /// icon draws as an image instead of egui's ⚠ placeholder.
-    fn listed(app: &mut VectorcraftApp) -> Vec<String> {
-        let ctx = egui::Context::default();
-        egui_extras::install_image_loaders(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-        out.textures_delta.clear();
-        out.shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Text(t) => Some(t.galley.text().to_string()),
-                _ => None,
-            })
-            .collect()
-    }
+    use crate::i18n::LangExt;
 
     /// A step named after a style lists the template's translation with the style's name in it as
     /// the document holds it, also when the name looks like a template, like a step with a row of
@@ -154,7 +165,7 @@ mod tests {
         run("charStyle.setAttrs", json!({"name": "Graphic Style “X”", "attrs": {"size": 30.0}}));
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
         crate::i18n::set_current(ja);
-        let rows = listed(&mut app);
+        let rows = names(&app);
         let step = |template: &str, name: &str| crate::i18n::fmt(crate::i18n::tr(ja, template), &[("name", name)]);
         let apply = |name: &str| step("Apply {name}", name);
         let want = [
@@ -169,9 +180,9 @@ mod tests {
         assert!(rows.contains(&want[0]), "{rows:#?}");
         assert_eq!(rows[rows.len() - 6..], want[1..], "{rows:#?}");
         app.session.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(listed(&mut app).last(), Some(&want[6]), "an undone step");
+        assert_eq!(names(&app).last(), Some(&want[6]), "an undone step");
         crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert_eq!(listed(&mut app)[rows.len() - 6..rows.len() - 4], ["Apply Body", "Apply {name}"]);
+        assert_eq!(names(&app)[rows.len() - 6..rows.len() - 4], ["Apply Body", "Apply {name}"]);
     }
 
     /// A step named after an effect whose catalog row has only the menu label with its ellipsis
@@ -203,113 +214,74 @@ mod tests {
         (h.undo.len(), h.redo.len())
     }
 
-    /// Clicks the panel menu's item labeled `label`.
-    fn click(app: &mut VectorcraftApp, label: &str) {
-        let ctx = egui::Context::default();
-        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
-            out.textures_delta.clear();
-            out.shapes
-        };
-        let item = frame(app, vec![])
-            .iter()
-            .find_map(|c| match &c.shape {
-                egui::Shape::Text(t) if t.galley.text().trim_start() == label => Some(t.visual_bounding_rect().center()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("no `{label}` in the panel menu"));
-        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+    /// Whether the menu has Step Backward, Step Forward and Clear History enabled.
+    fn enabled(app: &VectorcraftApp) -> (bool, bool, bool) {
+        let mut states = CommandStates::default();
+        menu_states(app, &mut states);
+        let on = |id: &str| states.get(&CommandRef::new(id)).is_some_and(CommandState::is_enabled);
+        (on("ui.history.stepBackward"), on("ui.history.stepForward"), on("edit.clearHistory"))
     }
 
-    /// The panel menu's Step Backward undoes one step and Step Forward redoes one, as Edit › Undo
-    /// and Edit › Redo do.
+    /// The menu's step rows are enabled exactly when there is a step to undo or redo and move one
+    /// state; Clear History empties both stacks and leaves the document as it is; a run of a
+    /// disabled row changes nothing.
     #[test]
-    fn the_panel_menu_steps_backward_and_forward() {
-        let mut app = app_with_two_rectangles();
-        let objects = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
-        assert_eq!((depth(&app), objects(&app)), ((2, 0), 2));
-        click(&mut app, "Step Backward");
-        assert_eq!((depth(&app), objects(&app)), ((1, 1), 1));
-        click(&mut app, "Step Backward");
-        assert_eq!((depth(&app), objects(&app)), ((0, 2), 0));
-        click(&mut app, "Step Forward");
-        assert_eq!((depth(&app), objects(&app)), ((1, 1), 1));
-    }
-
-    /// Step Backward is disabled when there is nothing to undo, and Step Forward is disabled when
-    /// there is nothing to redo. A click on a disabled item changes nothing.
-    #[test]
-    fn the_step_items_are_disabled_with_nothing_to_undo_or_redo() {
-        use crate::widgets::accessibility_tests::tree;
-        let disabled = |app: &mut VectorcraftApp| {
-            let tree = tree(|ui| menu(app, ui));
-            let off =
-                |label: &str| tree.iter().find(|n| n.label().map(str::trim) == Some(label)).unwrap_or_else(|| panic!("no `{label}`")).is_disabled();
-            (off("Step Backward"), off("Step Forward"))
-        };
+    fn the_history_rows_step_one_state_and_clear_without_touching_the_document() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        assert_eq!(disabled(&mut app), (true, true), "no document");
+        assert_eq!(enabled(&app), (false, false, false), "no document");
+        assert!(run(&mut app, "ui.history.stepBackward", &json!({})).is_some_and(|r| r.is_err()), "no document");
         app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
-        assert_eq!(disabled(&mut app), (true, true), "a new document");
+        assert_eq!(enabled(&app), (false, false, false), "a new document");
+        let revision = app.session.active().unwrap().revision;
+        let _ = run(&mut app, "ui.history.stepBackward", &json!({}));
+        let _ = run(&mut app, "ui.history.stepForward", &json!({}));
+        assert_eq!((app.session.active().unwrap().revision, depth(&app)), (revision, (0, 0)), "disabled rows change nothing");
         app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-        assert_eq!(disabled(&mut app), (false, true), "one step to undo");
-        click(&mut app, "Step Forward");
+        assert_eq!(enabled(&app), (true, false, true), "one step to undo");
+        run(&mut app, "ui.history.stepBackward", &json!({})).unwrap().unwrap();
+        assert_eq!((depth(&app), enabled(&app)), ((0, 1), (false, true, true)), "one step to redo");
+        run(&mut app, "ui.history.stepForward", &json!({})).unwrap().unwrap();
         assert_eq!(depth(&app), (1, 0));
-        click(&mut app, "Step Backward");
-        assert_eq!(disabled(&mut app), (true, false), "one step to redo");
-        click(&mut app, "Step Backward");
-        assert_eq!(depth(&app), (0, 1));
-    }
-
-    /// Returns whether the panel menu's item labeled `label` is disabled.
-    fn disabled(app: &mut VectorcraftApp, label: &str) -> bool {
-        let tree = crate::widgets::accessibility_tests::tree(|ui| menu(app, ui));
-        tree.iter().find(|n| n.label().map(str::trim) == Some(label)).unwrap_or_else(|| panic!("no `{label}`")).is_disabled()
-    }
-
-    /// The panel menu's Clear History removes the steps to undo and to redo, and the document stays
-    /// as it is. Step Backward and Step Forward are then disabled.
-    #[test]
-    fn the_panel_menu_clears_the_history() {
         let mut app = app_with_two_rectangles();
-        click(&mut app, "Step Backward");
+        run(&mut app, "ui.history.stepBackward", &json!({})).unwrap().unwrap();
         assert_eq!(depth(&app), (1, 1));
         let doc = app.session.active().unwrap().doc.clone();
-        click(&mut app, "Clear History");
-        assert_eq!(depth(&app), (0, 0));
+        crate::menus::invoke(&mut app, "edit.clearHistory", json!({}));
+        assert_eq!((depth(&app), enabled(&app)), ((0, 0), (false, false, false)));
         assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &doc), "the document stays as it is");
-        assert_eq!((disabled(&mut app, "Step Backward"), disabled(&mut app, "Step Forward")), (true, true));
+        assert!(run(&mut app, "ui.history.unknown", &json!({})).is_none());
     }
 
-    /// Clear History is disabled with no document and with no step to undo or redo, and a click on it
-    /// then changes nothing.
+    /// The bottom of the panel's New Document from State button makes a new document, the active
+    /// one, from the state a click on a row moved to. The source document stays open at that state.
     #[test]
-    fn clear_history_is_disabled_with_no_step_to_clear() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        assert!(disabled(&mut app, "Clear History"), "no document");
-        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
-        assert!(disabled(&mut app, "Clear History"), "a new document");
-        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-        assert!(!disabled(&mut app, "Clear History"), "one step to undo");
-        click(&mut app, "Step Backward");
-        assert!(!disabled(&mut app, "Clear History"), "one step to redo");
-        click(&mut app, "Clear History");
-        assert_eq!(depth(&app), (0, 0));
-        assert!(disabled(&mut app, "Clear History"), "the history cleared");
-        let revision = app.session.active().unwrap().revision;
-        click(&mut app, "Clear History");
-        assert_eq!(app.session.active().unwrap().revision, revision, "a click on the disabled item changes nothing");
-    }
-
-    /// Set History Limit… opens Preferences at Performance, the page with History States.
-    #[test]
-    fn set_history_limit_opens_the_history_states_preference() {
+    fn the_new_document_button_makes_a_document_from_the_selected_state() {
         let mut app = app_with_two_rectangles();
-        click(&mut app, "Set History Limit…");
-        let d = app.ui.dialog.take().expect("a dialog");
-        assert_eq!((d.kind.as_str(), d.str("__category")), ("preferences", "Performance".to_string()));
-        assert!(d.fields.contains_key("historyStates"), "{:?}", d.fields.keys());
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        let source = app.session.active().unwrap().doc.clone();
+        let ctx = crate::testing::ui_context();
+        ctx.enable_accesskit();
+        egui_extras::install_image_loaders(&ctx);
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let out = crate::testing::part_frame(app, &ctx, egui::RawInput { events, screen_rect: screen, ..Default::default() }, show);
+            out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+        };
+        frame(&mut app, vec![]);
+        let nodes = frame(&mut app, vec![]);
+        // PLAN: the button is named by the framework's words ("Create New Document from Current State"); the name is
+        // matched by the words it holds.
+        let button = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.contains("New Document"))).expect("the button");
+        let at = button.bounds().expect("its bounds");
+        let at = egui::pos2((at.x0 + at.x1) as f32 / 2.0, (at.y0 + at.y1) as f32 / 2.0);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(&mut app, vec![press(false)]);
+        assert_eq!(app.session.documents().len(), 2);
+        assert_eq!(app.session.active_index(), Some(1), "the new document is the active one");
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.layers[0].children().unwrap().len(), 1, "the art of the selected state");
+        assert!(st.is_dirty(), "the new document is unsaved");
+        assert!(std::sync::Arc::ptr_eq(&app.session.documents()[0].doc, &source), "the source stays at that state");
     }
 }

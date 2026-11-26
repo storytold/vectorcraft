@@ -77,6 +77,46 @@ fn anchors_json(v: &BTreeSet<AnchorRef>) -> Value {
     Value::Array(v.iter().map(|(s, a)| json!([s, a])).collect())
 }
 
+/// The selection a closed loop `poly` (even-odd) makes, for the Lasso and the Polygonal Lasso:
+/// the anchor points inside it on every editable path a click can pick, and the gradient mesh
+/// points inside it, which `mesh` keeps picked, with their meshes. `add` (Shift) adds to the
+/// selection and `sub` (Alt) subtracts from it.
+pub(crate) fn lasso_select(cx: &ToolContext, mesh: &mut MeshEdit, poly: &[Point], add: bool, sub: bool) -> Action {
+    // Anchors inside the loop for every editable path the Lasso may pick.
+    let mut hits: Vec<(NodeId, BTreeSet<AnchorRef>)> = vec![];
+    let mut inside: Vec<(NodeId, usize)> = vec![];
+    crate::draw2::walk_pickable(cx, |n| {
+        if let Some(grid) = grid_of(n) {
+            inside.extend(grid.points.iter().enumerate().filter(|(_, q)| point_in_polygon(poly, q.p)).map(|(i, _)| (n.id, i)));
+        }
+        if let NodeKind::Path { path, .. } = &n.kind {
+            let v: BTreeSet<AnchorRef> = path.anchors().filter(|(_, _, a)| point_in_polygon(poly, a.p)).map(|(s, i, _)| (s, i)).collect();
+            if !v.is_empty() {
+                hits.push((n.id, v));
+            }
+        }
+    });
+    let editable = cx.doc.editable();
+    hits.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
+    // The mesh points inside the loop are picked, and their meshes selected whole;
+    // Alt deselects a mesh only when it loses its last picked point.
+    inside.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
+    for (id, any) in mesh.lasso(&inside, add, sub) {
+        if any != sub {
+            hits.push((id, BTreeSet::new()));
+        }
+    }
+    let items: Vec<Value> = hits.iter().map(|(id, v)| json!({ "id": id.0, "anchors": anchors_json(v) })).collect();
+    let mode = if sub {
+        "subtract"
+    } else if add {
+        "add"
+    } else {
+        "set"
+    };
+    Action::Exec("select.anchorsMany".into(), json!({ "items": items, "mode": mode }))
+}
+
 impl Tool for LassoTool {
     fn id(&self) -> &'static str {
         "lasso"
@@ -105,42 +145,14 @@ impl Tool for LassoTool {
                 let poly = std::mem::take(&mut self.points);
                 let (add, sub) = (ev.mods.shift, ev.mods.alt);
                 if poly.len() < 3 {
-                    return if add || sub { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                    if add || sub {
+                        return vec![];
+                    }
+                    // The click deselects everything, so no mesh point stays picked.
+                    self.mesh.unfocus();
+                    return vec![Action::Exec("select.none".into(), json!({}))];
                 }
-                // Anchors inside the loop for every editable path the Lasso may pick.
-                let mut hits: Vec<(NodeId, BTreeSet<AnchorRef>)> = vec![];
-                let mut inside: Vec<(NodeId, usize)> = vec![];
-                crate::draw2::walk_pickable(cx, |n| {
-                    if let Some(grid) = grid_of(n) {
-                        inside.extend(grid.points.iter().enumerate().filter(|(_, q)| point_in_polygon(&poly, q.p)).map(|(i, _)| (n.id, i)));
-                    }
-                    if let NodeKind::Path { path, .. } = &n.kind {
-                        let v: BTreeSet<AnchorRef> =
-                            path.anchors().filter(|(_, _, a)| point_in_polygon(&poly, a.p)).map(|(s, i, _)| (s, i)).collect();
-                        if !v.is_empty() {
-                            hits.push((n.id, v));
-                        }
-                    }
-                });
-                let editable = cx.doc.editable();
-                hits.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
-                // The mesh points inside the loop are picked, and their meshes selected whole;
-                // Alt deselects a mesh only when it loses its last picked point.
-                inside.retain(|(id, _)| editable(*id) && cx.doc.is_visible(*id));
-                for (id, any) in self.mesh.lasso(&inside, add, sub) {
-                    if any != sub {
-                        hits.push((id, BTreeSet::new()));
-                    }
-                }
-                let items: Vec<Value> = hits.iter().map(|(id, v)| json!({ "id": id.0, "anchors": anchors_json(v) })).collect();
-                let mode = if sub {
-                    "subtract"
-                } else if add {
-                    "add"
-                } else {
-                    "set"
-                };
-                vec![Action::Exec("select.anchorsMany".into(), json!({ "items": items, "mode": mode }))]
+                vec![lasso_select(cx, &mut self.mesh, &poly, add, sub)]
             }
             _ => vec![],
         }
@@ -156,6 +168,13 @@ impl Tool for LassoTool {
 
     fn options(&self) -> Value {
         self.mesh.options()
+    }
+
+    /// Pick the gradient mesh points the tool chosen before held (`meshPoints`).
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "meshPoints" {
+            self.mesh.set_options(value);
+        }
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {

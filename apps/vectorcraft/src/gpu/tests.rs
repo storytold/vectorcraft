@@ -820,3 +820,24 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
     assert_eq!(record.crashed.last().map(|c| c.key.as_str()), Some("Dx12:10de:0013"));
 }
+
+/// `u32::from_str_radix` accepts a leading `+`; a device id with one is not a PCI id.
+#[test]
+fn pci_ids_reject_a_sign_in_the_hex_digits() {
+    assert_eq!(pci_ids("PCI\\VEN_+10DE&DEV_2204"), None);
+    assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_+2204"), None);
+}
+
+/// #9183: a Mac lists one adapter. A start ended from outside before its first frame left it
+/// recorded as crashed, and the next start left it out and had nothing to draw on. It is tried
+/// again when nothing else is left; an adapter a restart left out after it failed stays out, and
+/// with another adapter to try, the one that crashed is still left out.
+#[test]
+fn an_adapter_that_crashed_an_earlier_start_is_tried_again_when_no_other_is_left() {
+    let mac = [gpu("Apple M6", Backend::Metal, DeviceType::IntegratedGpu)];
+    let crashed = vec![mac[0].key.clone()];
+    assert_eq!(order_leaving_out(&mac, PowerPreference::LowPower, &[], None, None, &[], &crashed), (vec![0], true));
+    assert_eq!(order_leaving_out(&mac, PowerPreference::LowPower, &[], None, None, &crashed, &crashed), (vec![], false));
+    let two = [gpu("Apple M6", Backend::Metal, DeviceType::IntegratedGpu), gpu("llvmpipe", Backend::Gl, DeviceType::Cpu)];
+    assert_eq!(order_leaving_out(&two, PowerPreference::LowPower, &[], None, None, &[], &crashed), (vec![1], false));
+}

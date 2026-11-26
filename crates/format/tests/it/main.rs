@@ -3,6 +3,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod links;
+mod native_guides;
 mod native_v3;
 mod native_v4;
 mod save_options;

@@ -99,7 +99,7 @@ struct Drag {
     began: bool,
 }
 
-/// The type object's layout, keyed by the font database's generation and the object.
+/// The type object's layout, keyed by [`vectorcraft_text::layout_inputs`] and the object.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
 
 #[derive(Default)]
@@ -150,7 +150,7 @@ fn is_inline(lay: &TextLayout, gi: usize) -> bool {
 /// inline graphics, glyphs whose font is gone and type whose transform is collapsed.
 fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
     let g: &PositionedGlyph = lay.glyphs.get(gi)?;
-    if is_inline(lay, gi) {
+    if is_inline(lay, gi) || g.off_path {
         return None;
     }
     let m = g.xf;
@@ -161,7 +161,7 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
     let corners: Vec<Point> = lay
         .glyphs
         .iter()
-        .filter(|h| h.byte == g.byte && h.len > 0 && h.line == g.line)
+        .filter(|h| h.byte == g.byte && h.len > 0 && h.line == g.line && !h.off_path)
         .filter_map(glyph_quad)
         .flatten()
         .map(|p| to_glyph * p)
@@ -196,9 +196,10 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
 }
 
 impl TouchTypeTool {
-    /// Layout of `t`, cached by content (overlays run every frame) and by the fonts available.
+    /// Layout of `t`, cached by content (overlays run every frame), by the fonts available and by
+    /// the hyphenation exceptions.
     fn layout(&self, t: &TextObject) -> Arc<TextLayout> {
-        let fonts = FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(((g, k), l)) = c.as_ref()
             && *g == fonts
@@ -217,7 +218,8 @@ impl TouchTypeTool {
         let selected = std::iter::successors(Some(id), |c| cx.doc.parent_of(*c)).any(|c| cx.selection.contains(c));
         let t = text_of(cx, id).filter(|_| selected)?;
         let lay = self.layout(t);
-        let gi = lay.glyphs.iter().position(|g| g.byte <= start && start < g.byte + g.len)?;
+        // The character's first drawn glyph: glyphs before an open path's start are not drawn.
+        let gi = lay.glyphs.iter().position(|g| g.byte <= start && start < g.byte + g.len && !g.off_path)?;
         Some((id, t, char_box(t, &lay, gi)?))
     }
 
@@ -229,7 +231,7 @@ impl TouchTypeTool {
         let lay = self.layout(t);
         let local = t.xf.inverse() * p;
         let boxes: Vec<(usize, [Point; 4])> = (lay.glyphs.iter().enumerate())
-            .filter(|(gi, g)| g.len > 0 && !is_inline(&lay, *gi))
+            .filter(|(gi, g)| g.len > 0 && !g.off_path && !is_inline(&lay, *gi))
             .filter_map(|(_, g)| Some((g.byte, glyph_quad(g)?)))
             .collect();
         let center = |q: &[Point; 4]| q[0].midpoint(q[2]);
@@ -359,7 +361,9 @@ impl Tool for TouchTypeTool {
                         let Some(t) = text_of(cx, id) else { return out };
                         let lay = self.layout(t);
                         let start = self.target.map_or(0, |(_, s)| s);
-                        let Some(b) = lay.glyphs.iter().position(|g| g.byte == start && g.len > 0).and_then(|gi| char_box(t, &lay, gi)) else {
+                        // The character's first drawn glyph: glyphs before an open path's start are not drawn.
+                        let first = lay.glyphs.iter().position(|g| g.byte == start && g.len > 0 && !g.off_path);
+                        let Some(b) = first.and_then(|gi| char_box(t, &lay, gi)) else {
                             return out;
                         };
                         (Part::Move, b)
@@ -386,7 +390,7 @@ impl Tool for TouchTypeTool {
                 Some(d) if d.began => vec![Action::Commit],
                 _ => vec![],
             },
-            PointerKind::DoubleClick | PointerKind::Move => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick | PointerKind::Move => vec![],
         }
     }
 

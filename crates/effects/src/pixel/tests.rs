@@ -12,6 +12,7 @@ fn space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(w / 2.0, h / 2.0),
+        size: vectorcraft_geom::Vec2::new(w, h),
         channels: Channels::Rgb,
         line: 1.0,
         extent: 0.5 * w.hypot(h),
@@ -479,12 +480,16 @@ fn film_grain_leaves_invalid_coordinate_spaces_alone() {
 
 #[test]
 fn params_take_defaults_and_stay_in_range() {
-    assert_eq!(fx("blur.radial", json!({})), PixelFx::RadialBlur { amount: 10.0, zoom: false, passes: 6 });
+    assert_eq!(fx("blur.radial", json!({})), PixelFx::RadialBlur { amount: 10.0, zoom: false, passes: 6, center: [0.5, 0.5] });
     assert_eq!(
-        fx("blur.radial", json!({"amount": 1e308, "method": "ZOOM", "quality": "best"})),
-        PixelFx::RadialBlur { amount: 100.0, zoom: true, passes: 8 }
+        fx("blur.radial", json!({"amount": 1e308, "method": "ZOOM", "quality": "best", "centerX": 0.25, "centerY": 1})),
+        PixelFx::RadialBlur { amount: 100.0, zoom: true, passes: 8, center: [0.25, 1.0] }
     );
-    assert_eq!(fx("blur.radial", json!({"amount": -5, "quality": "nonsense"})), PixelFx::RadialBlur { amount: 1.0, zoom: false, passes: 6 });
+    // A saved center outside the bounds (the commands refuse one) draws at the nearest edge.
+    assert_eq!(
+        fx("blur.radial", json!({"amount": -5, "quality": "nonsense", "centerX": -3, "centerY": 7})),
+        PixelFx::RadialBlur { amount: 1.0, zoom: false, passes: 6, center: [0.0, 1.0] }
+    );
     assert_eq!(fx("blur.smart", json!({})), PixelFx::SmartBlur { radius: 3.0, threshold: 25.0, samples: 7, mode: SmartBlurMode::Normal });
     assert_eq!(
         fx("blur.smart", json!({"radius": "1e999", "threshold": -1, "quality": "low", "blurMode": "EDGEONLY"})),
@@ -519,6 +524,11 @@ fn outsets_follow_the_object() {
     let far = 0.5 * 100f64.hypot(50.0);
     assert!((spin.outset(b) - (far - 25.0)).abs() < 1e-9);
     assert!(fx("blur.radial", json!({"method": "zoom", "amount": 100})).outset(b) > 0.4 * far);
+    // About a corner the spin reaches the circle through the opposite corner, the whole diagonal out.
+    let corner = fx("blur.radial", json!({"centerX": 0, "centerY": 0}));
+    assert!((corner.outset(b) - 100f64.hypot(50.0)).abs() < 1e-9, "{}", corner.outset(b));
+    let zoom = |center: f64| fx("blur.radial", json!({"method": "zoom", "amount": 100, "centerX": center, "centerY": center})).outset(b);
+    assert!((zoom(1.0) - 2.0 * zoom(0.5)).abs() < 1e-9, "a zoom about a corner reaches twice as far");
     assert_eq!(fx("blur.smart", json!({"radius": 4})).outset(b), 4.0);
     assert_eq!(fx("blur.smart", json!({"radius": 4})).reach(1.0), Some(4.0));
     // The edge modes also read the copy blurred over a wide radius's samples.
@@ -631,6 +641,40 @@ fn spin_blur_smears_along_arcs_and_keeps_the_centre() {
     fx("blur.radial", json!({"amount": 60, "method": "zoom", "quality": "best"})).apply(&mut z, w, h, &space(w, h));
     assert!(at(&z, w, 35, 20)[3] > 0 && at(&z, w, 29, 20)[3] > 0, "the dot streaks along the ray");
     assert_eq!(at(&z, w, 32, 16)[3], 0, "not across it");
+}
+
+/// The Blur Center moves the point the blur turns about: a dot on it stays sharp, a dot on the
+/// object's centre then spreads, and the center follows the object when it moves or is scaled.
+#[test]
+fn radial_blur_turns_about_its_blur_center() {
+    let (w, h) = (41, 41);
+    // A dot on pixel (10, 30), whose centre (10.5, 30.5) is the Blur Center below, and one on the
+    // object's centre.
+    let src = image(w, h, |x, y| if (x == 10 && y == 30) || (x == 20 && y == 20) { grey(255) } else { [0, 0, 0, 0] });
+    let blur = |p: serde_json::Value, s: &PixelSpace, src: &[u8]| {
+        let mut d = src.to_vec();
+        fx("blur.radial", p).apply(&mut d, w, h, s);
+        d
+    };
+    let off = json!({"amount": 60, "quality": "best", "centerX": 10.5 / 41.0, "centerY": 30.5 / 41.0});
+    let d = blur(off.clone(), &space(w, h), &src);
+    assert!(at(&d, w, 10, 30)[3] > 100, "the dot on the Blur Center barely moves: {:?}", at(&d, w, 10, 30));
+    assert!(at(&d, w, 20, 20)[3] < 100, "the dot on the object's centre spreads: {:?}", at(&d, w, 20, 20));
+    // The default center is the object's centre, the same as no center at all.
+    assert_eq!(blur(json!({"amount": 60, "centerX": 0.5, "centerY": 0.5}), &space(w, h), &src), blur(json!({"amount": 60}), &space(w, h), &src));
+    // Moved 7 pt right and 3 pt down, the object draws the same pixels.
+    let moved =
+        PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: space(w, h).center + vectorcraft_geom::Vec2::new(7.0, 3.0), ..space(w, h) };
+    assert_eq!(blur(off.clone(), &moved, &src), d, "the center moves with the object");
+    // Drawn at twice the size (two points a pixel), the center lies on the same pixels.
+    let big = PixelSpace {
+        to_doc: Affine::scale(2.0),
+        px: 2.0,
+        center: Point::new(41.0, 41.0),
+        size: vectorcraft_geom::Vec2::new(82.0, 82.0),
+        ..space(w, h)
+    };
+    assert_eq!(blur(off, &big, &src), d, "the center scales with the object");
 }
 
 #[test]
@@ -862,6 +906,7 @@ fn lengths_are_document_units() {
             to_doc: Affine::scale(1.0 / scale as f64),
             px: 1.0 / scale as f64,
             center: Point::ZERO,
+            size: vectorcraft_geom::Vec2::ZERO,
             channels: Channels::Rgb,
             line: 1.0,
             extent: 0.0,
@@ -887,6 +932,28 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
     assert!((plane.iter().sum::<f32>() - 100.0).abs() < 0.5 && plane[15 * w + 13] > 0.0 && plane[13 * w + 15] > 0.0);
 }
 
+/// Blurred in linear light, black beside white meets at about 188/255 (half the light, encoded),
+/// where the plain blur meets at about 128; flat areas and alpha stay as they are (#5877).
+#[test]
+fn linear_light_blur_mixes_light_not_values() {
+    // Large enough that the transparency past the edges doesn't reach the middle.
+    let (w, h) = (120, 60);
+    let src = image(w, h, |x, _| if x < 60 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    let (mut plain, mut linear) = (src.clone(), src.clone());
+    gaussian_rgba(&mut plain, w, h, 3.0);
+    gaussian_rgba_linear(&mut linear, w, h, 3.0);
+    let mid = |d: &[u8]| (f32::from(at(d, w, 59, 30)[0]) + f32::from(at(d, w, 60, 30)[0])) / 2.0;
+    assert!((mid(&plain) - 128.0).abs() < 6.0, "{}", mid(&plain));
+    assert!((mid(&linear) - 188.0).abs() < 6.0, "{}", mid(&linear));
+    assert_eq!((at(&linear, w, 30, 30), at(&linear, w, 90, 30)), ([0, 0, 0, 255], [255, 255, 255, 255]));
+    // Premultiplied input: a half-transparent white square blurs to white at any alpha.
+    let mut soft = image(30, 30, |x, y| if (10..20).contains(&x) && (10..20).contains(&y) { [128, 128, 128, 128] } else { [0, 0, 0, 0] });
+    gaussian_rgba_linear(&mut soft, 30, 30, 2.0);
+    for p in soft.as_chunks::<4>().0 {
+        assert!(p[0] <= p[3] && p[3] <= 128 && (p[3] < 8 || p[0] + 2 >= p[3]), "{p:?}");
+    }
+}
+
 /// Timings on a 2000 × 2000 raster (`cargo test -p vectorcraft-effects --release -- --ignored
 /// --nocapture pixel_timings`).
 #[test]
@@ -894,7 +961,15 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
 fn pixel_timings() {
     let (w, h) = (2000, 2000);
     let src = image(w, h, |x, y| [(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8, 255]);
-    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb, line: 1.0, extent: 0.0 };
+    let s = PixelSpace {
+        to_doc: Affine::IDENTITY,
+        px: 1.0,
+        center: Point::new(1000.0, 1000.0),
+        size: vectorcraft_geom::Vec2::new(2000.0, 2000.0),
+        channels: Channels::Rgb,
+        line: 1.0,
+        extent: 0.0,
+    };
     let cases = [
         ("blur.radial", json!({"quality": "draft"})),
         ("blur.radial", json!({"quality": "good"})),
@@ -1472,6 +1547,42 @@ fn texturizer_draws_a_loaded_texture_as_relief() {
     assert_eq!(fx("texture.texturizer", json!({"texture": "LOADED", "textureImage": "not a texture"})), fx("texture.texturizer", json!({})));
 }
 
+/// Rough Pastels draws a loaded texture as its surface, and Scaling, Relief, Light Direction and
+/// Invert act on it as on the built-in ones.
+#[test]
+fn rough_pastels_draws_a_loaded_texture_as_its_surface() {
+    let w = 64;
+    let mid = grey(150);
+    let rings = stored(12, 10, |x, y| {
+        let v = ((x as f64 - 5.5).hypot(y as f64 - 4.5) * 0.9).sin().abs();
+        let g = (v * 255.0).round() as u8;
+        [g, g, g, 255]
+    });
+    let run = |mut p: serde_json::Value| {
+        p["strokeLength"] = json!(0);
+        let mut d = flat(w, mid);
+        fx("artistic.roughPastels", p).apply(&mut d, w, w, &space(w, w));
+        d
+    };
+    let relief = run(json!({"texture": "loaded", "textureImage": rings, "relief": 20}));
+    assert_ne!(relief, flat(w, mid));
+    for (_, builtin) in TEXTURES {
+        assert_ne!(relief, run(json!({"texture": builtin, "relief": 20})), "{builtin}");
+    }
+    for (key, value) in [("invert", json!(true)), ("scaling", json!(200)), ("lightDirection", json!("bottomRight")), ("relief", json!(5))] {
+        let mut p = json!({"texture": "loaded", "textureImage": rings, "relief": 20});
+        p[key] = value;
+        assert_ne!(run(p), relief, "{key}");
+    }
+    assert_eq!(run(json!({"texture": "loaded", "textureImage": rings, "relief": 0})), flat(w, mid));
+    let parsed = fx("artistic.roughPastels", json!({"texture": "Loaded", "textureImage": rings}));
+    assert!(matches!(parsed, PixelFx::RoughPastels { texture: Texture::Loaded(_), .. }), "{parsed:?}");
+    // Without a stored texture, or with one that isn't, Loaded draws Canvas.
+    for p in [json!({"texture": "loaded"}), json!({"texture": "loaded", "textureImage": "not a texture"})] {
+        assert_eq!(fx("artistic.roughPastels", p), fx("artistic.roughPastels", json!({})));
+    }
+}
+
 /// The Texture filters' patterns lie in document space around the object's centre: the same at
 /// twice the resolution, and moving with the object.
 #[test]
@@ -1591,6 +1702,14 @@ fn a_loaded_texture_is_its_gray_over_middle_gray() {
     assert_eq!(h(-0.5), 0.5 * (1.0 + 128.0 / 255.0));
     assert!(LoadedTexture::from_rgba(0, 4, &[]).is_none() && LoadedTexture::from_rgba(2, 2, &[0; 12]).is_none());
     assert!(texture("not base64!").is_none() && texture("aGVsbG8=").is_none(), "base64 of a PNG only");
+}
+
+/// A stored texture longer than the codec's default 2^18-pixel side still reads back.
+#[test]
+fn a_stored_texture_longer_than_the_codec_default_side_reads_back() {
+    let t = LoadedTexture::from_rgba(262_145, 1, &vec![128; 262_145 * 4]).and_then(|t| t.to_stored()).unwrap();
+    let loaded = texture(&t).unwrap();
+    assert_eq!(loaded.size(), (262_145, 1));
 }
 
 #[test]

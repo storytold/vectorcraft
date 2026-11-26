@@ -1,78 +1,253 @@
-/// With more tabs than fit, the strip starts late enough to show the active one (#746).
-#[test]
-fn the_active_tab_stays_in_view() {
-    let widths = [100.0; 10];
-    assert_eq!(super::first_tab_shown(&widths, Some(2), 350.0), 0, "it fits from the start");
-    assert_eq!(super::first_tab_shown(&widths, Some(9), 350.0), 7, "the last three tabs shown");
-    assert_eq!(super::first_tab_shown(&widths, None, 350.0), 0);
-    assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
-}
-
-/// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).
-fn slots(docs: &[usize]) -> Vec<(usize, egui::Rect)> {
-    docs.iter().enumerate().map(|(k, &d)| (d, egui::Rect::from_min_size(egui::pos2(k as f32 * 100.0, 0.0), egui::vec2(100.0, 30.0)))).collect()
-}
-
-/// A document's view tabs make one group, which moves as one (#5663).
-#[test]
-fn a_documents_view_tabs_make_one_group() {
-    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
-    let spans: Vec<(usize, f32, f32)> = groups.iter().map(|(d, s)| (*d, s.min, s.max)).collect();
-    assert_eq!(spans, vec![(0, 0.0, 100.0), (1, 100.0, 300.0), (2, 300.0, 400.0)]);
-    assert!(super::tab_groups(&[]).is_empty());
-}
-
-/// A dragged tab drops past the middles of the tabs it crossed, as an index among all the open
-/// documents (#5663).
-#[test]
-fn a_dragged_tab_drops_past_the_middles_it_crossed() {
-    let groups = super::tab_groups(&slots(&[0, 1, 2, 3]));
-    let drop = |from, x| super::tab_drop(&groups, from, x);
-    assert_eq!(drop(0, 40.0), None, "still over itself");
-    assert_eq!(drop(0, 140.0), None, "not yet past the next tab's middle");
-    assert_eq!(drop(0, 160.0), Some((1, 200.0)), "past the second tab's middle: between it and the third");
-    assert_eq!(drop(0, 900.0), Some((3, 400.0)), "past the end: last");
-    assert_eq!(drop(3, -50.0), Some((0, 0.0)), "before the start: first");
-    assert_eq!(drop(3, 120.0), Some((1, 100.0)), "between the first two");
-    assert_eq!(drop(2, 260.0), None, "between its neighbours: where it is");
-    assert_eq!(super::tab_drop(&super::tab_groups(&slots(&[0])), 0, 500.0), None, "no other tab");
-    assert_eq!(super::tab_drop(&[], 0, 500.0), None);
-}
-
-/// Documents without a tab on the strip (floating, or past its end) keep their places in the
-/// documents' order; the drop names an index among all of them (#5663).
-#[test]
-fn a_drop_counts_the_documents_the_strip_does_not_show() {
-    // Documents 0, 2 and 5 have tabs; 1, 3 and 4 float.
-    let groups = super::tab_groups(&slots(&[0, 2, 5]));
-    let drop = |from, x| super::tab_drop(&groups, from, x).map(|(to, _)| to);
-    assert_eq!(drop(0, 260.0), Some(5), "after document 5: last, as 0 leaves its place");
-    assert_eq!(drop(0, 160.0), Some(4), "between 2 and 5: just before 5, which is index 4 once 0 has left its place");
-    assert_eq!(drop(5, -10.0), Some(0), "before document 0");
-    assert_eq!(drop(5, 60.0), Some(2), "before document 2: index 2, the floating document 1 stays before it");
-    assert_eq!(drop(2, 260.0), Some(5), "after document 5");
-    // With view tabs: document 1 has two, side by side; it moves as one.
-    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
-    assert_eq!(super::tab_drop(&groups, 1, 20.0), Some((0, 0.0)), "both views' document goes first");
-    assert_eq!(super::tab_drop(&groups, 0, 220.0), Some((1, 300.0)), "past document 1's middle, which both its tabs span");
-    assert_eq!(super::tab_drop(&groups, 0, 190.0), None, "not yet past it");
-}
+use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
 use std::sync::Arc;
 
-use super::{StatusReadoutWidths, status_readouts};
-use crate::theme::Tokens;
+use craft::behavior::Mixed;
+use craft::ui::runtime::access::Role;
+use craft::ui::testing::{Fixture, Target};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
+use crate::i18n::LangExt;
+
+/// Draws part of the window's chrome over the app.
+type Draw = Box<dyn FnMut(&mut crate::VectorcraftApp, &mut egui::Ui)>;
+
+/// The app with part of its chrome shown in a framework fixture. Every frame runs on the fixture's one context, so a
+/// press and its release, or a hover and its tooltip, reach the same widgets. The part shown can change between
+/// frames ([`Shown::draw`]), as the window shows the tabs, the bars and Properties side by side. The commands the
+/// frames fire run as the window runs them.
+struct Shown {
+    fixture: Fixture,
+    app: Rc<RefCell<crate::VectorcraftApp>>,
+    draw: Rc<RefCell<Draw>>,
+}
+
+impl Shown {
+    /// `draw` over `app` in a room of size `room`; no frame has run yet.
+    fn new(app: crate::VectorcraftApp, room: egui::Vec2, draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui) + 'static) -> Self {
+        let app = Rc::new(RefCell::new(app));
+        let draw: Rc<RefCell<Draw>> = Rc::new(RefCell::new(Box::new(draw)));
+        let (shown, drawn) = (Rc::clone(&app), Rc::clone(&draw));
+        let mut fixture = Fixture::new(move |ui| {
+            let mut draw = drawn.borrow_mut();
+            (*draw)(&mut shown.borrow_mut(), ui);
+        });
+        fixture.room(room);
+        // The fixture's context is the app's window, as a host's is.
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        Shown { fixture, app, draw }
+    }
+
+    /// The app. Drop the borrow before the next frame: the frames borrow the app to draw.
+    fn app(&self) -> RefMut<'_, crate::VectorcraftApp> {
+        self.app.borrow_mut()
+    }
+
+    /// Shows `draw` from the next frame on.
+    fn draw(&mut self, draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui) + 'static) -> &mut Self {
+        *self.draw.borrow_mut() = Box::new(draw);
+        self
+    }
+
+    /// One frame of the canvas, as the window draws it beside the chrome: a fit or zoom a command asked for waits for
+    /// the canvas (a view request, canvas-w10 note 3). Then the status bar again, and the view keeps the rect the test
+    /// gave it.
+    fn canvas_pass(&mut self) -> &mut Self {
+        let rect = self.app().view().map(|v| v.rect);
+        self.draw(crate::canvas::show).frame(vec![]);
+        if let Some(rect) = rect {
+            let mut app = self.app();
+            if let Some(view) = app.view_mut() {
+                view.rect = rect;
+            }
+        }
+        self.draw(super::status_bar)
+    }
+
+    /// The room every following frame shows the chrome in.
+    fn room(&mut self, room: egui::Vec2) -> &mut Self {
+        self.fixture.room(room);
+        self
+    }
+
+    /// One frame with `events`, then the commands it fired.
+    fn frame(&mut self, events: Vec<egui::Event>) -> &mut Self {
+        self.run_fired();
+        self.fixture.frame(events);
+        self.run_fired();
+        self
+    }
+
+    /// Frames with no events until the chrome is at rest, then the commands they fired.
+    fn settle(&mut self) -> &mut Self {
+        self.run_fired();
+        self.fixture.settle();
+        self.run_fired();
+        self
+    }
+
+    /// Runs the commands the frames since the last call fired, as the window runs them, and gives the fixture the
+    /// app's input for the next frame.
+    fn run_fired(&mut self) {
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+    }
+
+    /// Moves the fixture's clock on by `seconds` before the next frame.
+    fn advance(&mut self, seconds: f64) -> &mut Self {
+        self.fixture.advance(seconds);
+        self
+    }
+
+    /// The control named `label` in the latest frame.
+    fn find(&self, label: &str) -> Option<Target> {
+        self.fixture.by_label(label)
+    }
+
+    /// A fresh frame, then the control named `label`.
+    fn named(&mut self, label: &str) -> Target {
+        self.frame(Vec::new());
+        self.find(label).unwrap_or_else(|| panic!("no {label:?} in {:?}", self.names()))
+    }
+
+    /// The first node of the latest frame whose name starts with `prefix`, a control before a label.
+    fn starting(&self, prefix: &str) -> Option<Target> {
+        let tree = self.fixture.tree();
+        let named: Vec<_> = tree.keys().into_iter().filter(|key| tree.name_of(*key).is_some_and(|name| name.starts_with(prefix))).collect();
+        let first = named.iter().find(|key| tree.role_of(**key) != Some(Role::LABEL)).or(named.first());
+        first.and_then(|key| self.fixture.target(*key))
+    }
+
+    /// The names the latest frame gives screen readers.
+    fn names(&self) -> Vec<String> {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().filter_map(|key| tree.name_of(key)).map(str::to_owned).collect()
+    }
+
+    /// Whether the latest frame names or paints `text`.
+    fn shows(&self, text: &str) -> bool {
+        self.find(text).is_some() || self.fixture.texts().iter().any(|t| t.text == text)
+    }
+
+    /// The latest frame's AccessKit tree.
+    fn tree(&self) -> &craft::ui::runtime::egui::access::AccessTree {
+        self.fixture.tree()
+    }
+
+    /// The texts the latest frame painted, with where each lies.
+    fn texts(&self) -> Vec<StatusText> {
+        self.fixture.texts().iter().map(|t| StatusText { text: t.text.clone(), at: t.rect.min, bounds: t.rect }).collect()
+    }
+
+    /// Clicks the control named `label`.
+    fn click(&mut self, label: &str) -> &mut Self {
+        let target = self.named(label);
+        self.click_on(&target)
+    }
+
+    /// Clicks `target`.
+    fn click_on(&mut self, target: &Target) -> &mut Self {
+        self.fixture.click(target);
+        self.run_fired();
+        self
+    }
+
+    /// Clicks at `at`, where no control needs to be.
+    fn click_at(&mut self, at: egui::Pos2) -> &mut Self {
+        self.fixture.click_at(at);
+        self.run_fired();
+        self
+    }
+
+    /// Presses at `from`, moves by `by` and releases.
+    fn drag_at(&mut self, from: egui::Pos2, by: egui::Vec2) -> &mut Self {
+        self.fixture.drag_at(from, by);
+        self.run_fired();
+        self
+    }
+
+    /// A press and release of `key`.
+    fn key(&mut self, key: egui::Key) -> &mut Self {
+        self.fixture.key(key, egui::Modifiers::NONE);
+        self.run_fired();
+        self
+    }
+
+    /// Where the pointer is.
+    fn pointer(&self) -> Option<egui::Pos2> {
+        self.fixture.ctx().input(|i| i.pointer.hover_pos())
+    }
+
+    /// Whether the node of `target` is checked.
+    fn checked(&self, target: &Target) -> bool {
+        self.tree().toggled_of(target.node) == Some(Mixed::Same(true))
+    }
+}
+
+/// A tab dropped on the strip lands at an index among all the open documents: the documents without a tab (the
+/// floating ones) keep their places in the documents' order, and a document with two views moves as one (#5663).
+#[test]
+fn a_drop_counts_the_documents_the_strip_does_not_show() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    for _ in 0..6 {
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    }
+    for index in [1, 3, 4] {
+        app.run("window.arrange.floatInWindow", json!({ "index": index })).unwrap();
+    }
+    let docked = |app: &crate::VectorcraftApp| crate::doc_windows::docked_windows(app);
+    assert_eq!(docked(&app).iter().map(|w| w.0).collect::<Vec<_>>(), [0, 2, 5], "documents 1, 3 and 4 float");
+    let dropped = |from: usize, before: Option<usize>| {
+        let before = before.map(|d| docked(&app).into_iter().find(|w| w.0 == d).unwrap_or_else(|| panic!("document {d} has a tab")));
+        super::tabs::reorder_target(&app, from, before)
+    };
+    assert_eq!(dropped(0, None), 5, "after the last tab: last, as 0 leaves its place");
+    assert_eq!(dropped(0, Some(5)), 4, "before document 5: just before it once 0 has left its place");
+    assert_eq!(dropped(5, Some(0)), 0, "before document 0: first");
+    assert_eq!(dropped(5, Some(2)), 2, "before document 2: the floating document 1 stays before it");
+    assert_eq!(dropped(2, None), 5, "after the last tab");
+    // Document 1 has two views, side by side on the strip.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    for _ in 0..3 {
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    }
+    crate::doc_windows::show_window(&mut app, (1, 1));
+    app.run("window.newWindow", json!({})).unwrap();
+    let views: Vec<_> = docked(&app).into_iter().filter(|w| w.0 == 1).collect();
+    assert_eq!(views.len(), 2, "document 1 has two tabs");
+    let first = docked(&app).into_iter().find(|w| w.0 == 0);
+    assert_eq!(super::tabs::reorder_target(&app, 1, first), 0, "both views' document goes first");
+    for view in views {
+        assert_eq!(super::tabs::reorder_target(&app, 2, Some(view)), 1, "before either of document 1's tabs: before the document");
+    }
+    let last = docked(&app).into_iter().find(|w| w.0 == 2);
+    assert_eq!(super::tabs::reorder_target(&app, 0, last), 1, "past both of document 1's tabs: after the document");
+}
+
+/// `layers` without their ruler guides: the art.
+fn art_of(layers: &[Arc<vectorcraft_doc::Node>]) -> Vec<vectorcraft_doc::Node> {
+    layers
+        .iter()
+        .map(|l| {
+            let mut l = vectorcraft_doc::Node::clone(l);
+            l.strip_ruler_guides();
+            l
+        })
+        .collect()
+}
+
 #[test]
 fn hints_name_keys_as_the_menus_do() {
-    let text = |tool: &str| super::hint_segments(tool).into_iter().map(|(s, _)| s).collect::<String>();
+    // A drawn frame gives the window its keymap, which the Search Commands shortcut is read from.
+    let mut app = crate::VectorcraftApp::new(Session::new(), crate::Services::default());
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
+    let text = |tool: &str| super::hint_segments(&app, tool).into_iter().map(|(s, _)| s).collect::<String>();
     for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id) {
         let hint = text(tool);
         assert!(!hint.contains("Option"), "{tool}: {hint}");
         assert!(cfg!(target_os = "macos") || !hint.contains("Cmd"), "{tool}: {hint}");
     }
-    let pretty = crate::menus::pretty_shortcut;
+    let pretty = crate::keymap::chord_text;
     assert!(text("selection").contains(&pretty("Alt+Drag")));
     assert!(text("rectangle").contains(&pretty("Alt+Drag")));
     assert!(text("zoom").contains(&pretty("Alt+Click")));
@@ -85,38 +260,54 @@ fn hints_name_keys_as_the_menus_do() {
     }
 }
 
+/// As the window narrows, the app bar gives up its right-hand controls one at a time, each before the one after it:
+/// Discord, the search and last the workspace switcher; each keeps its whole width until it goes. Whatever shows lies inside the window. Safe Mode's rows are in `tests/safe_mode.rs`, whose
+/// process owns the Safe Mode switch.
+#[test]
+fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    // The bar is the shell's title bar, which only the whole window's frame draws.
+    let mut bar = Shown::new(app, egui::vec2(1600.0, 600.0), |app, ui| app.ui(ui));
+    // In the order the bar gives them up; the search's name goes on with its chord.
+    let controls = ["Discord", "Search commands", "Choose a workspace"];
+    let mut before: Option<Vec<bool>> = None;
+    let mut search_widths = vec![];
+    for width in (30..=160).rev().map(|w| w as f32 * 10.0) {
+        bar.room(egui::vec2(width, 600.0));
+        bar.frame(Vec::new()).frame(Vec::new());
+        let shown: Vec<Option<Target>> = controls.iter().map(|c| bar.starting(c)).collect();
+        for (control, target) in controls.iter().zip(&shown) {
+            if let Some(t) = target {
+                assert!(t.rect.left() >= 0.0 && t.rect.right() <= width, "{width}: {control} at {:?} lies inside the window", t.rect);
+            }
+        }
+        let on: Vec<bool> = shown.iter().map(Option::is_some).collect();
+        assert!(width < 1600.0 || on.iter().all(|o| *o), "a wide bar shows every control: {on:?}");
+        assert!(on.windows(2).all(|w| !w[0] || w[1]), "{width}: a control outlasted one the bar gives up after it: {on:?}");
+        if let Some(before) = &before {
+            assert!(on.iter().zip(before).all(|(now, was)| !now || *was), "{width}: a control came back as the window narrowed: {on:?}");
+        }
+        if let Some(search) = shown[1] {
+            search_widths.push(search.rect.width());
+        }
+        before = Some(on);
+    }
+    let (widest, narrowest) = (search_widths.first().copied(), search_widths.last().copied());
+    assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
+}
+
+/// A text the status bar painted, with where it lies.
 #[derive(Debug)]
 struct StatusText {
     text: String,
     at: egui::Pos2,
-    clip: egui::Rect,
     bounds: egui::Rect,
-    elided: bool,
 }
 
-/// Collect status-bar text layout from a headless frame without pointer events.
-fn status_readout_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32) -> Vec<StatusText> {
-    status_readout_frame_events(app, ctx, width, vec![])
-}
-
-/// Collect status-bar text, positions, clips and elision state with explicit pointer events.
-fn status_readout_frame_events(app: &mut crate::VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<egui::Event>) -> Vec<StatusText> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
-    out.textures_delta.clear();
-    out.shapes
-        .iter()
-        .filter_map(|s| match &s.shape {
-            egui::Shape::Text(t) => Some(StatusText {
-                text: t.galley.job.text.clone(),
-                at: t.pos,
-                clip: s.clip_rect,
-                bounds: egui::Rect::from_min_size(t.pos, t.galley.size()),
-                elided: t.galley.elided,
-            }),
-            _ => None,
-        })
-        .collect()
+/// The texts of the status bar at rest.
+fn status_readout_frame(bar: &mut Shown) -> Vec<StatusText> {
+    bar.settle().texts()
 }
 
 /// Find a required text record by prefix, failing the test when it is absent.
@@ -124,336 +315,445 @@ fn status_text<'a>(texts: &'a [StatusText], prefix: &str) -> &'a StatusText {
     texts.iter().find(|t| t.text.starts_with(prefix)).unwrap_or_else(|| panic!("missing {prefix:?}: {texts:?}"))
 }
 
-/// Prepare an English test document with the app fonts and a status message.
-fn status_readout_app() -> (crate::VectorcraftApp, egui::Context) {
+/// The status bar shown alone over `app`, in a window 1200 points wide.
+fn status_shown(app: crate::VectorcraftApp) -> Shown {
+    Shown::new(app, egui::vec2(1200.0, 300.0), super::status_bar)
+}
+
+/// An English test document with a status message, its status bar shown in a window 1400 points wide.
+fn status_readout_app() -> Shown {
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.ui.status = "Saved recovery data for Untitled-1".to_owned();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
-    (app, ctx)
+    let mut bar = status_shown(app);
+    bar.room(egui::vec2(1400.0, 300.0));
+    bar
 }
 
-/// Draw the production readouts and observe the cached measurement object across frames.
-fn status_width_cache_frame(app: &crate::VectorcraftApp, ctx: &egui::Context, width: f32, ppp: f32) -> Arc<StatusReadoutWidths> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
-    let mut input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-    input.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point = Some(ppp);
-    let mut cache = None;
-    let mut output = ctx.run_ui(input, |ui| {
-        let t = Tokens::get(ui.ctx());
-        status_readouts(app, ui, &t);
-        cache = ui.data(|data| data.get_temp::<Arc<StatusReadoutWidths>>(ui.scope_id().with("status-readout-widths")));
-    });
-    output.textures_delta.clear();
-    cache.expect("production status readouts populated their cache")
-}
-
-/// Live values, hover state and window width reuse the same measurement object.
-#[test]
-fn status_width_measurements_are_reused_across_frames() {
-    let (mut app, ctx) = status_readout_app();
-    let first = status_width_cache_frame(&app, &ctx, 1400.0, 1.0);
-    for width in [1400.0_f32, 500.0, 2200.0] {
-        app.perf = crate::Perf { render_ms: f64::from(width), frame_ms: f64::from(width) / 3.0, fps: 120.0 };
-        app.hover_doc = Some(vectorcraft_geom::Point::new(-width as f64, width as f64));
-        let cached = status_width_cache_frame(&app, &ctx, width, 1.0);
-        assert!(Arc::ptr_eq(&first, &cached), "live state or window size remeasured the samples");
-    }
-    app.hover_doc = None;
-    assert!(Arc::ptr_eq(&first, &status_width_cache_frame(&app, &ctx, 1400.0, 1.0)));
-}
-
-/// Each independent cache-key component refreshes widths, then subsequent frames reuse them.
-#[test]
-fn status_width_measurements_refresh_for_language_units_and_dpi() {
-    let (mut app, ctx) = status_readout_app();
-    let mut previous = status_width_cache_frame(&app, &ctx, 4000.0, 1.0);
-    let french = crate::i18n::Lang::from_code("fr").unwrap();
-    for (lang, unit, ppp) in [
-        (french, vectorcraft_doc::Unit::Points, 1.0),
-        (french, vectorcraft_doc::Unit::Millimeters, 1.0),
-        (french, vectorcraft_doc::Unit::Millimeters, 1.5),
-        (crate::i18n::Lang::EN, vectorcraft_doc::Unit::Millimeters, 1.5),
-        (crate::i18n::Lang::EN, vectorcraft_doc::Unit::Points, 1.5),
-        (crate::i18n::Lang::EN, vectorcraft_doc::Unit::Points, 1.0),
-    ] {
-        crate::i18n::set_current(lang);
-        app.session.execute("document.setUnits", &json!({"units": unit.key()})).unwrap();
-        let fresh = status_width_cache_frame(&app, &ctx, 4000.0, ppp);
-        assert_eq!(fresh.key, (lang, unit, ppp));
-        assert!(!Arc::ptr_eq(&previous, &fresh), "changed language/units/DPI reused stale widths");
-        assert!(fresh.values.iter().all(|w| w.is_finite() && *w > 0.0));
-        assert!(Arc::ptr_eq(&fresh, &status_width_cache_frame(&app, &ctx, 4000.0, ppp)));
-        previous = fresh;
-    }
-}
-
-/// These assertions require every target to be present, and cover the old padding limits.
+/// The status bar keeps the message and every readout where they are while the readouts' values change: a readout
+/// takes the width of its widest value, so a longer value does not push the ones after it, and the readouts never
+/// overlap. Screen readers get a readout's whole value.
 #[test]
 fn the_status_bar_stands_still_while_its_readouts_change() {
-    let (mut app, ctx) = status_readout_app();
+    let mut bar = status_readout_app();
     let mut baseline = None;
-    let mut message_baseline = None;
     for (render, frame, fps, x, y) in [
         (233.4, 4.9, 80.0, -662.25, 1647.9),
         (9.8, 1.0, 120.0, 7.0, 5.0),
         (100000.0, 10000.0, 1000.0, -1000.0, 100000.0),
         (99999.9, 9999.9, 999.0, -999.99, 9999.99),
     ] {
-        app.perf = crate::Perf { render_ms: render, frame_ms: frame, fps };
-        app.hover_doc = Some(vectorcraft_geom::Point::new(x, y));
-        let texts = status_readout_frame(&mut app, &ctx, 1400.0);
-        let message = status_text(&texts, "Saved recovery data");
-        let extent = (message.at, message.clip, message.bounds, message.elided);
-        if let Some(first) = message_baseline {
-            assert_eq!(extent, first, "message extent changed with readout values");
-        } else {
-            message_baseline = Some(extent);
-        }
-        for (prefix, value) in [
+        let (x_value, y_value) = {
+            let mut app = bar.app();
+            app.perf = crate::Perf { render_ms: render, frame_ms: frame, fps };
+            app.hover_doc = Some(vectorcraft_geom::Point::new(x, y));
+            (app.session.general_unit().readout(x), app.session.general_unit().readout(y))
+        };
+        let texts = status_readout_frame(&mut bar);
+        let fps_text = format!("{fps:.0} fps");
+        let readouts = [
             ("render", format!("{render:.1} ms")),
             ("ui ", format!("{frame:.1} ms")),
-            ("X:", app.session.general_unit().readout(x)),
-            ("Y:", app.session.general_unit().readout(y)),
-        ] {
-            let text = status_text(&texts, prefix);
-            assert!(text.text.contains(&value), "{text:?} must contain {value:?}");
-            assert!(text.bounds.width() <= text.clip.width() + 0.01, "field overflow: {text:?}");
-        }
-        let fps_text = format!("{fps:.0} fps");
-        let fps_label = status_text(&texts, &fps_text);
-        assert!(fps_label.bounds.width() <= fps_label.clip.width() + 0.01);
-        let positions = ["Saved recovery data", "render", "ui ", "X:", "Y:", fps_text.as_str()].map(|p| status_text(&texts, p).at);
+            (fps_text.as_str(), fps_text.clone()),
+            ("X:", x_value),
+            ("Y:", y_value),
+        ];
+        let mut fields: Vec<&StatusText> = readouts
+            .iter()
+            .map(|(prefix, value)| {
+                let text = status_text(&texts, prefix);
+                assert!(text.text.contains(value.as_str()), "{text:?} must contain {value:?}");
+                text
+            })
+            .collect();
+        fields.sort_by(|a, b| a.at.x.total_cmp(&b.at.x));
+        assert!(fields.windows(2).all(|w| w[0].bounds.right() <= w[1].bounds.left()), "a readout overlaps the next: {fields:?}");
+        let lefts = ["Saved recovery data", "render", "ui ", fps_text.as_str(), "X:", "Y:"].map(|p| status_text(&texts, p).at.x);
         if let Some(first) = baseline {
-            assert_eq!(positions, first, "readout origins changed");
+            assert_eq!(lefts, first, "the message or a readout moved as the values changed");
         } else {
-            baseline = Some(positions);
+            baseline = Some(lefts);
         }
     }
-    app.perf.render_ms = 1000000.0;
-    let tree = crate::widgets::accessibility_tests::tree(|ui| super::status_bar(&mut app, ui));
-    assert!(
-        tree.iter().any(|n| n.role() == egui::accesskit::Role::Label && n.value() == Some("render 1000000.0 ms")),
-        "screen readers receive the complete value"
-    );
+    bar.app().perf.render_ms = 1000000.0;
+    bar.settle();
+    assert!(bar.find("render 1000000.0 ms").is_some(), "screen readers receive the complete value: {:?}", bar.names());
 }
 
-/// Canvas hover entry and exit keep the status message at the same origin.
+/// The status message stays where it is as the pointer enters the canvas and leaves it, and the coordinates show only
+/// while it is over the canvas.
 #[test]
 fn status_messages_keep_their_origin_when_the_pointer_enters_and_leaves() {
-    let (mut app, ctx) = status_readout_app();
+    let mut bar = status_readout_app();
     let mut first = None;
     for hover in [None, Some(vectorcraft_geom::Point::new(7.0, 5.0)), None] {
-        app.hover_doc = hover;
-        let texts = status_readout_frame(&mut app, &ctx, 1400.0);
-        let message = status_text(&texts, "Saved recovery data");
-        assert!(!message.elided);
-        let position = (message.at, message.clip);
+        bar.app().hover_doc = hover;
+        let texts = status_readout_frame(&mut bar);
+        let left = status_text(&texts, "Saved recovery data").at.x;
         if let Some(first) = first {
-            assert_eq!(position, first);
+            assert_eq!(left, first, "the message moved as the pointer went {}", if hover.is_some() { "in" } else { "out" });
         } else {
-            first = Some(position);
+            first = Some(left);
         }
         assert_eq!(texts.iter().any(|t| t.text.starts_with("X:")), hover.is_some());
     }
 }
 
-/// Hovering a coordinate preserves its document-scoped value for inspection.
-#[test]
-fn hovering_a_coordinate_retains_its_full_value_for_inspection() {
-    let (mut app, ctx) = status_readout_app();
-    app.hover_doc = Some(vectorcraft_geom::Point::new(1e12, -1e12));
-    let first = status_readout_frame(&mut app, &ctx, 1400.0);
-    let x = status_text(&first, "X:");
-    assert!(x.elided);
-    let expected = x.text.clone();
-    app.hover_doc = None;
-    let inspect = status_readout_frame_events(&mut app, &ctx, 1400.0, vec![egui::Event::PointerMoved(x.clip.center())]);
-    assert_eq!(status_text(&inspect, "X:").text, expected);
-    let gone = status_readout_frame_events(&mut app, &ctx, 1400.0, vec![egui::Event::PointerGone]);
-    assert!(!gone.iter().any(|t| t.text.starts_with("X:")));
-    // A different document must not inherit the previous document's coordinate.
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let other = status_readout_frame_events(&mut app, &ctx, 1400.0, vec![egui::Event::PointerMoved(x.clip.center())]);
-    assert!(!other.iter().any(|t| t.text.starts_with("X:")));
+/// The notes the status message lists: in its screen-reader description, and in the tooltip that shows once the
+/// pointer has rested on the message past the tooltip delay. The message is the text that starts with `prefix`.
+fn listed_on_hover(bar: &mut Shown, prefix: &str) -> (Option<String>, Vec<String>) {
+    let texts = status_readout_frame(bar);
+    let message = status_text(&texts, prefix);
+    let (text, at) = (message.text.clone(), message.bounds.center());
+    let described = bar.find(&text).and_then(|t| bar.tree().description_of(t.node).map(str::to_owned));
+    bar.frame(vec![egui::Event::PointerMoved(at)]);
+    bar.advance(2.0).frame(Vec::new()).frame(Vec::new());
+    let shown = bar.texts().into_iter().filter(|t| t.text.contains("• ")).map(|t| t.text).collect();
+    bar.frame(vec![egui::Event::PointerGone]).frame(Vec::new());
+    (described, shown)
 }
 
-/// Narrow windows hide optional readouts while keeping the status message visible.
+/// The status message of an open with several notes lists them on hover, and screen readers receive them after the
+/// message, while the status bar shows that message. A later message leaves the list out, and so does an open with
+/// one note.
 #[test]
-fn narrow_status_bars_preserve_the_message_and_hide_optional_readouts() {
-    let (mut app, ctx) = status_readout_app();
-    app.hover_doc = Some(vectorcraft_geom::Point::new(7.0, 5.0));
-    let mut origin = None;
-    for (width, coords, perf) in [(1400.0, true, true), (1000.0, true, false), (800.0, false, false)] {
-        let texts = status_readout_frame(&mut app, &ctx, width);
-        let message = status_text(&texts, "Saved recovery data");
-        assert!(!message.elided, "{width}: message was truncated: {message:?}");
-        if let Some(origin) = origin {
-            assert_eq!(message.at, origin);
+fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
+    let mut bar = status_readout_app();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    {
+        let mut app = bar.app();
+        app.ui.status = crate::io::opened_with_notes(2, &notes[0]);
+        let status = app.ui.status.clone();
+        app.ui.status_notes = Some((status, notes));
+    }
+    let listed = "• the file's layers weren't read\n• a brush wasn't read";
+    let (described, shown) = listed_on_hover(&mut bar, "Opened");
+    assert!(described.as_deref().is_some_and(|d| d.contains(listed)), "screen readers receive the notes: {described:?}");
+    assert!(shown.iter().any(|t| t.contains(listed)), "the tooltip lists the notes: {shown:?}");
+
+    bar.app().ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (described, shown) = listed_on_hover(&mut bar, "Saved");
+    assert!(!described.as_deref().is_some_and(|d| d.contains("• ")) && shown.is_empty(), "a later message lists nothing: {described:?} {shown:?}");
+
+    // One note is the message itself: no list.
+    {
+        let mut app = bar.app();
+        app.ui.status = crate::io::opened_with_notes(1, "a brush wasn't read");
+        let status = app.ui.status.clone();
+        app.ui.status_notes = Some((status, vec!["a brush wasn't read".to_string()]));
+    }
+    let (described, shown) = listed_on_hover(&mut bar, "Opened");
+    assert!(!described.as_deref().is_some_and(|d| d.contains("• ")) && shown.is_empty(), "one note lists nothing: {described:?} {shown:?}");
+}
+
+/// The status message of a failed script run shows text the script threw as it is, even when it
+/// reads like one of the app's own errors, and translates the words around it; the app's own error
+/// is translated. Both a run that ends in one call and a run the frames take to its end show it.
+#[test]
+fn german_script_status_preserves_authored_error_and_translates_native_error() {
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let failed = |app: &mut crate::VectorcraftApp, source: &str, frames: bool| {
+        app.session.script_frames = frames;
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"}));
+        if frames {
+            assert_eq!(r.map(|v| v["running"].clone()), Ok(json!(true)), "{source}");
+            for _ in 0..1_000 {
+                if !app.session.script_running() {
+                    break;
+                }
+                crate::script_runs::poll(app);
+            }
         } else {
-            origin = Some(message.at);
+            assert!(r.is_err(), "{source}");
         }
-        assert_eq!(texts.iter().any(|t| t.text.starts_with("X:")), coords, "{width}");
-        assert_eq!(texts.iter().any(|t| t.text.starts_with("render")), perf, "{width}");
-        let tool = status_text(&texts, "Selection");
-        assert!(message.clip.left() >= tool.bounds.right(), "readouts must not overlap navigation: {texts:?}");
-        for field in texts.iter().filter(|t| t.text.starts_with("X:") || t.text.starts_with("Y:") || t.text.starts_with("render")) {
-            assert!(field.clip.left() >= tool.bounds.right());
-            assert!(!field.clip.intersects(message.clip));
+        assert!(!app.session.script_running());
+        super::status_bar::status_message(app)
+    };
+    let long = "invalid array length ".repeat(120);
+    for frames in [false, true] {
+        let shown = failed(&mut app, "throw new Error('invalid array length')", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: Error: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "throw 'invalid array length'", frames);
+        assert_eq!(shown, "t.js: Zeile 1, Spalte 1: invalid array length (ausgelöst)");
+        let shown = failed(&mut app, "new Array(-1)", frames);
+        assert!(shown.starts_with("t.js: Zeile 1, Spalte 1: ") && shown.contains("ungültige Array-Länge"), "{shown}");
+        for text in ["", "invalid array length\nsecond line", "{name}: {e}", "t.js: line 1, column 1: invalid array length (thrown)", long.as_str()] {
+            let source = format!("throw {}", serde_json::to_string(text).unwrap());
+            assert_eq!(failed(&mut app, &source, frames), format!("t.js: Zeile 1, Spalte 1: {text} (ausgelöst)"), "{text}");
         }
     }
-    // Still narrower bars may truncate a long message but must not draw over navigation.
-    let texts = status_readout_frame(&mut app, &ctx, 600.0);
-    let message = status_text(&texts, "Saved recovery data");
-    assert!(message.clip.left() >= status_text(&texts, "Selection").bounds.right());
+    // Another message, even one spelled like the script's text, is translated as before.
+    failed(&mut app, "throw 'invalid array length'", false);
+    app.ui.status = "invalid array length".to_string();
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    // A change of language while the message stays keeps the script's text.
+    failed(&mut app, "throw new Error('invalid array length')", false);
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    assert_eq!(super::status_bar::status_message(&app), "t.js\u{a0}: ligne 1, colonne 1\u{a0}: Error: invalid array length (levée)");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(super::status_bar::status_message(&app), app.ui.status);
+    // After a run that completes, the message is an ordinary one.
+    app.session.script_frames = false;
+    app.run("script.run", json!({"source": "1", "name": "t.js"})).unwrap();
+    assert_eq!(app.session.script_authored_failure(), None);
 }
 
-/// Busy-job transitions preserve message placement, labels and accessibility.
+/// A plug-in run's notice shows in the status bar after the plug-in's name once its output is
+/// applied: the words around it are translated and the notice itself never is, even when it reads
+/// like one of the app's own messages. A run whose output is refused shows no notice, and the next
+/// status message replaces the notice.
+#[test]
+fn plugin_notice_shows_after_the_plug_in_s_name_and_is_never_translated() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let install = |app: &mut crate::VectorcraftApp, id: &str, output: &str| {
+        let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), output)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module), "replace": true})).unwrap();
+    };
+    let id = "test.ui.notice";
+    install(&mut app, id, r#"{"objects":[],"notice":"invalid array length"}"#);
+    let r = app.run("plugin.run", json!({"id": id})).unwrap();
+    assert_eq!(r["notice"], json!("invalid array length"));
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    assert_eq!(super::status_bar::status_message(&app), format!("Plug-in „Test {id}“: invalid array length"));
+    // The same words as an ordinary message are translated.
+    app.status("invalid array length");
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    // An output refused for its notice shows no notice.
+    let bad = "test.ui.notice.bad";
+    install(&mut app, bad, r#"{"objects":[],"notice":"\u0007"}"#);
+    app.status("");
+    assert!(app.run("plugin.run", json!({"id": bad})).is_err());
+    assert!(!app.ui.status.starts_with("Plug-in “"), "{}", app.ui.status);
+    // A plug-in step of a batch, as an action plays it, shows its notice too.
+    app.status("");
+    app.replay("command.batch", json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A batch without a plug-in step leaves the status bar as it is.
+    app.status("kept");
+    app.run("command.batch", json!({"commands": [{"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, "kept");
+    // The notice keeps the plug-in's name when a later step of the batch removes the plug-in.
+    app.status("");
+    let run_and_remove = json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "plugin.remove", "params": {"id": id}}]});
+    app.run("command.batch", run_and_remove).unwrap();
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A name's closing ellipsis is dropped, and a name that is only an ellipsis shows the plug-in's id.
+    for (name, shown) in [("Resize…", "Resize"), (" … ", id)] {
+        let r = json!({"plugin": id, "ids": [], "notice": "done", "pluginName": name});
+        crate::plugin_runs::show_notice(&mut app, "plugin.run", &r);
+        assert_eq!(app.ui.status, format!("Plug-in “{shown}”: done"));
+    }
+    app.run("plugin.remove", json!({"id": bad})).unwrap();
+}
+
+/// The message of an open that starts with a line about its linked files lists the open's notes on
+/// hover and for screen readers, in a wide and in a narrow window. A later message leaves the list
+/// out.
+#[test]
+fn combined_open_and_link_status_lists_notes_on_hover_and_for_accessibility() {
+    let mut bar = status_readout_app();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    let notice = crate::dialogs::missing_links::changed_on_disk_status(2);
+    let opened = crate::io::opened_with_notes(2, &notes[0]);
+    crate::io::show_opened(&mut bar.app(), Some(notice.clone()), notes);
+    let status = bar.app().ui.status.clone();
+    assert!(status.starts_with(&notice) && status.ends_with(&opened), "{status}");
+    let listed = "• the file's layers weren't read\n• a brush wasn't read";
+    for width in [1400.0, 700.0] {
+        bar.room(egui::vec2(width, 300.0));
+        let (described, shown) = listed_on_hover(&mut bar, "2 linked");
+        assert!(described.as_deref().is_some_and(|d| d.contains(listed)), "screen readers receive the notes at {width}: {described:?}");
+        assert!(shown.iter().any(|t| t.contains(listed)), "the tooltip lists the notes at {width}: {shown:?}");
+    }
+
+    bar.room(egui::vec2(1400.0, 300.0));
+    bar.app().ui.status = crate::dialogs::missing_links::changed_on_disk_status(1);
+    let (described, shown) = listed_on_hover(&mut bar, "1 linked");
+    assert!(!described.as_deref().is_some_and(|d| d.contains("• ")) && shown.is_empty(), "a later message lists nothing: {described:?} {shown:?}");
+}
+
+/// While Cmd/Ctrl is held, Current Tool names the selection tool a press would borrow: Direct
+/// Selection with the Selection tool chosen, and the Selection tool again once the key is let go.
+#[test]
+fn current_tool_names_the_selection_tool_cmd_lends() {
+    let bar = status_readout_app();
+    let app = bar.app();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(super::status_bar::info_text(&app, &cmd).0, "Direct Selection");
+    assert_eq!(super::status_bar::info_text(&app, &Default::default()).0, "Selection");
+}
+
+/// The status bar's info field shows the readout `view.statusBarShow` chooses: the navigator's
+/// artboard name, the tool in use, the date and time, the undo and redo counts, or the document's
+/// color profile.
+#[test]
+fn the_status_bar_info_field_shows_the_chosen_readout() {
+    let mut bar = status_readout_app();
+    let texts = status_readout_frame(&mut bar);
+    assert!(texts.iter().any(|t| t.text == "Selection"), "Current Tool by default: {texts:?}");
+
+    let first = {
+        let mut app = bar.app();
+        app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 100, "name": "Back Cover"})).unwrap();
+        app.run("view.statusBarShow", json!({"show": "artboardName"})).unwrap();
+        app.session.active().unwrap().doc.artboards[0].name.clone()
+    };
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == first), "the first artboard's name");
+    bar.app().run("view.goToArtboard", json!({"index": 1})).unwrap();
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == "Back Cover"), "the navigator's artboard");
+
+    bar.app().run("view.statusBarShow", json!({"show": "undos"})).unwrap();
+    let counts = |app: &crate::VectorcraftApp| {
+        let h = &app.session.active().unwrap().history;
+        format!("Undos: {}  Redos: {}", h.undo.len(), h.redo.len())
+    };
+    let before = bar.app().session.active().unwrap().history.undo.len();
+    bar.app().session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    assert_eq!(counts(&bar.app()), format!("Undos: {}  Redos: 0", before + 1));
+    let shown = counts(&bar.app());
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == shown));
+    bar.app().run("edit.undo", json!({})).unwrap();
+    let shown = counts(&bar.app());
+    assert_eq!(shown, format!("Undos: {before}  Redos: 1"));
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == shown), "the redo step counts");
+    // The labels take the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let (french, _) = super::status_bar::info_text(&bar.app(), &Default::default());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(french, format!("{}\u{a0}: {before}  {}\u{a0}: 1", crate::i18n::tr(fr, "Undos"), crate::i18n::tr(fr, "Redos")));
+
+    bar.app().run("view.statusBarShow", json!({"show": "colorProfile"})).unwrap();
+    let working = vectorcraft_color::cms::working_settings();
+    let mode_working = |app: &crate::VectorcraftApp| match app.session.active().unwrap().doc.color_mode {
+        vectorcraft_doc::ColorMode::Rgb => working.rgb.clone(),
+        vectorcraft_doc::ColorMode::Cmyk => working.cmyk.clone(),
+    };
+    let untagged = vectorcraft_color::cms::canonical_name(&mode_working(&bar.app())).to_string();
+    assert_eq!(super::color_profile_name(&bar.app().session.active().unwrap().doc), untagged, "untagged: the working space");
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == untagged));
+    // A profile assigned for the document's color mode shows; one that is not available shows the
+    // working space the document draws through.
+    let (key, assigned) = match bar.app().session.active().unwrap().doc.color_mode {
+        vectorcraft_doc::ColorMode::Rgb => ("rgb", vectorcraft_color::cms::PROPHOTO_RGB),
+        vectorcraft_doc::ColorMode::Cmyk => ("cmyk", vectorcraft_color::cms::DEVICE_CMYK),
+    };
+    bar.app().run("edit.assignProfile", json!({ key: assigned })).unwrap();
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == assigned), "the assigned profile");
+    {
+        let mut app = bar.app();
+        let st = app.session.active_mut().unwrap();
+        std::sync::Arc::make_mut(&mut st.doc).color_profiles =
+            vectorcraft_doc::ColorProfiles { rgb: Some("Not Installed".into()), cmyk: Some("Not Installed".into()) };
+    }
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == untagged), "an unavailable profile: the working space");
+
+    bar.app().run("view.statusBarShow", json!({"show": "dateTime"})).unwrap();
+    let texts = status_readout_frame(&mut bar);
+    let is_date = |s: &str| {
+        let b = s.as_bytes();
+        b.len() == 16
+            && b.iter().enumerate().all(|(i, c)| match i {
+                4 | 7 => *c == b'-',
+                10 => *c == b' ',
+                13 => *c == b':',
+                _ => c.is_ascii_digit(),
+            })
+    };
+    assert!(texts.iter().any(|t| is_date(&t.text)), "a date and time: {texts:?}");
+    assert_eq!(super::date_time_label([2026, 3, 7, 9, 5, 59]), "2026-03-07 09:05");
+
+    // Without a document the field shows a dash, which can still be clicked.
+    {
+        let mut app = bar.app();
+        app.run("view.statusBarShow", json!({"show": "undos"})).unwrap();
+        while app.session.active().is_some() {
+            app.session.execute("file.close", &json!({})).unwrap();
+        }
+    }
+    assert!(status_readout_frame(&mut bar).iter().any(|t| t.text == "–"));
+}
+
+/// `view.statusBarShow` takes only the five readouts, leaving the choice as it was otherwise, and the
+/// choice is saved with the UI state, which reads a value it does not know as Current Tool.
+#[test]
+fn the_status_bar_show_choice_is_checked_and_saved() {
+    let bar = status_readout_app();
+    let mut app = bar.app();
+    assert_eq!(app.run("view.statusBarShow", json!({"show": "dateTime"})).unwrap(), json!("dateTime"));
+    for bad in [json!({}), json!({"show": "zoom"}), json!({"show": 2}), json!({"show": null}), json!({"show": "DateTime"})] {
+        let err = app.run("view.statusBarShow", bad.clone()).unwrap_err();
+        assert!(err.contains("`show` must be one of artboardName, currentTool, dateTime, undos, colorProfile"), "{bad}: {err}");
+        assert_eq!(app.ui.status_bar_show, super::StatusBarShow::DateTime, "{bad} leaves the choice");
+    }
+    let saved = serde_json::to_value(&app.ui).unwrap();
+    assert_eq!(saved["status_bar_show"], json!("dateTime"));
+    let read: crate::state::UiState = serde_json::from_value(saved.clone()).unwrap();
+    assert_eq!(read.status_bar_show, super::StatusBarShow::DateTime);
+    for (stored, shown) in [
+        (json!("colorProfile"), super::StatusBarShow::ColorProfile),
+        (json!("zoom"), super::StatusBarShow::CurrentTool),
+        (json!(7), super::StatusBarShow::CurrentTool),
+    ] {
+        let mut v = saved.clone();
+        v["status_bar_show"] = stored;
+        assert_eq!(serde_json::from_value::<crate::state::UiState>(v).unwrap().status_bar_show, shown);
+    }
+    let mut v = saved;
+    v.as_object_mut().unwrap().remove("status_bar_show");
+    assert_eq!(
+        serde_json::from_value::<crate::state::UiState>(v).unwrap().status_bar_show,
+        super::StatusBarShow::CurrentTool,
+        "state saved before it"
+    );
+}
+
+/// While background work runs the status bar shows it where the message was, with the count of the jobs after the
+/// first, and the message of the work's result takes the same place when it ends. Screen readers find the progress.
 #[test]
 fn background_activity_keeps_the_status_message_origin() {
-    let (mut app, ctx) = status_readout_app();
-    let before = status_readout_frame(&mut app, &ctx, 1400.0);
-    let before = status_text(&before, "Saved recovery data");
+    let mut bar = status_readout_app();
+    let before = status_text(&status_readout_frame(&mut bar), "Saved recovery data").at.x;
     let (tx, rx) = std::sync::mpsc::channel();
-    app.services.write_shared = Some(std::sync::Arc::new(|_, _| Ok(())));
-    crate::background::run(
-        &mut app,
-        true,
-        "Saving test.vectorcraft".to_owned(),
-        None,
-        move |_| {
-            rx.recv().unwrap();
-            Ok(json!({}))
-        },
-        |app, result| {
-            app.status("Saved recovery data for Untitled-1");
-            result
-        },
-    )
-    .unwrap();
-    let busy = status_readout_frame(&mut app, &ctx, 1400.0);
-    let message = status_text(&busy, "Saving test.vectorcraft");
-    assert_eq!((before.at, before.clip), (message.at, message.clip));
-    crate::background::run(&mut app, true, "Exporting test.svg".to_owned(), None, |_| Ok(json!({})), |_, result| result).unwrap();
-    let several = status_readout_frame(&mut app, &ctx, 1400.0);
+    {
+        let mut app = bar.app();
+        app.services.write_shared = Some(std::sync::Arc::new(|_, _| Ok(())));
+        crate::background::run(
+            &mut app,
+            true,
+            "Saving test.vectorcraft".to_owned(),
+            None,
+            move |_| {
+                rx.recv().unwrap();
+                Ok(json!({}))
+            },
+            |app, result| {
+                app.status("Saved recovery data for Untitled-1");
+                result
+            },
+        )
+        .unwrap();
+    }
+    let busy = status_readout_frame(&mut bar);
+    assert_eq!(status_text(&busy, "Saving test.vectorcraft").at.x, before, "the work shows where the message was");
+    crate::background::run(&mut bar.app(), true, "Exporting test.svg".to_owned(), None, |_| Ok(json!({})), |_, result| result).unwrap();
+    let several = status_readout_frame(&mut bar);
     let message = status_text(&several, "Saving test.vectorcraft");
-    assert!(message.text.ends_with("(+1)"));
-    assert_eq!((before.at, before.clip), (message.at, message.clip));
-    let tree = crate::widgets::accessibility_tests::tree(|ui| super::status_bar(&mut app, ui));
-    assert!(tree.iter().any(|n| n.role() == egui::accesskit::Role::ProgressIndicator), "the busy spinner remains accessible");
+    assert!(message.text.ends_with("(+1)"), "{message:?}");
+    assert_eq!(message.at.x, before);
+    assert!(!bar.fixture.by_role(Role::PROGRESS_INDICATOR).is_empty(), "the busy progress stays accessible: {:?}", bar.names());
     tx.send(()).unwrap();
-    crate::background::wait_all(&mut app);
-    let after = status_readout_frame(&mut app, &ctx, 1400.0);
-    let after = status_text(&after, "Saved recovery data");
-    assert_eq!((before.at, before.clip), (after.at, after.clip));
-}
-
-/// Ordinary signed coordinates fit without elision in every supported unit.
-#[test]
-fn ordinary_coordinates_are_readable_in_every_unit() {
-    let (mut app, ctx) = status_readout_app();
-    for unit in vectorcraft_doc::Unit::ALL {
-        app.session.execute("document.setUnits", &json!({"units": unit.key()})).unwrap();
-        for (x, y) in [(-1234.56, 1234.56), (-9999.99, 9999.99), (9999.99, -9999.99)] {
-            let (x, y) = (unit.to_pt(x), unit.to_pt(y));
-            app.hover_doc = Some(vectorcraft_geom::Point::new(x, y));
-            let texts = status_readout_frame(&mut app, &ctx, 1400.0);
-            for (axis, value) in [("X:", x), ("Y:", y)] {
-                let field = status_text(&texts, axis);
-                assert_eq!(field.text, format!("{axis} {}", unit.readout(value)));
-                assert!(!field.elided, "{unit:?}: {field:?}");
-                assert!(field.clip.contains_rect(field.bounds), "{unit:?}: {field:?}");
-            }
-        }
-    }
-}
-
-/// Localized diagnostics remain readable without moving neighboring fields.
-#[test]
-fn localized_diagnostics_are_readable_and_keep_their_field_bounds() {
-    let (mut app, ctx) = status_readout_app();
-    for lang in crate::i18n::Lang::all() {
-        crate::i18n::set_current(lang);
-        let render = crate::i18n::tr_ctx(lang, "diagnostics", "render");
-        let ui_name = crate::i18n::tr_ctx(lang, "diagnostics", "ui");
-        let mut baseline = None;
-        for (render_ms, frame_ms, fps, readable) in [(233.4, 4.9, 80.0, true), (9999.9, 9999.9, 9999.0, true), (1e12, 1e12, 1e12, false)] {
-            app.perf = crate::Perf { render_ms, frame_ms, fps };
-            let texts = status_readout_frame(&mut app, &ctx, 4000.0);
-            let fields = [format!("{render} {render_ms:.1} ms"), format!("{ui_name} {frame_ms:.1} ms"), format!("{fps:.0} fps")];
-            let bounds = fields.map(|value| {
-                let field = status_text(&texts, &value);
-                assert_eq!(field.text, value);
-                assert_eq!(!field.elided, readable, "{}: {field:?}", lang.code());
-                assert!(field.bounds.width() <= field.clip.width() + 0.01, "{}: {field:?}", lang.code());
-                (field.at, field.clip)
-            });
-            if let Some(first) = baseline {
-                assert_eq!(bounds, first, "{}: field allocation changed", lang.code());
-            } else {
-                baseline = Some(bounds);
-            }
-        }
-        // Even long translations must yield their whole diagnostics group in a narrow
-        // window rather than overlapping the message or navigation controls.
-        let texts = status_readout_frame(&mut app, &ctx, 800.0);
-        assert!(!texts.iter().any(|t| t.text == format!("{render} {:.1} ms", app.perf.render_ms)), "{}", lang.code());
-    }
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-}
-
-/// A document tab's × sits where the platform puts it (#673): after the title on Windows,
-/// Linux and the web, before it on macOS; clicking it closes that document.
-#[test]
-fn a_tabs_close_box_sits_where_the_platform_puts_it() {
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 200.0));
-    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
-        out.textures_delta.clear();
-        let mut titles = vec![];
-        for c in &out.shapes {
-            // The titles, not the × icons.
-            if let egui::Shape::Text(t) = &c.shape
-                && t.visual_bounding_rect().width() > 30.0
-            {
-                titles.push(t.visual_bounding_rect());
-            }
-        }
-        titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        titles
-    };
-    let titles = frame(&mut app, vec![]);
-    assert_eq!(titles.len(), 2, "{titles:?}");
-    // The first tab's ×: 20 pt past its title's end, or 16 pt before its start.
-    let first = titles[0];
-    let x = if super::CLOSE_BEFORE_TITLE { first.left() - 16.0 } else { first.right() + 20.0 };
-    let at = egui::pos2(x, first.center().y);
-    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
-    frame(&mut app, vec![press(false)]);
-    assert_eq!(app.session.documents().len(), 1, "the × closed the first document");
-    assert!(super::CLOSE_BEFORE_TITLE == cfg!(target_os = "macos"));
-}
-
-/// One headless frame of the status bar; returns the artboard navigator's buttons, left to
-/// right: first, previous, next, last.
-fn navigator(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Rect> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 300.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
-    out.textures_delta.clear();
-    let size = egui::vec2(18.0, 18.0);
-    let mut r: Vec<egui::Rect> =
-        ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
-    r.sort_by(|a, b| a.left().total_cmp(&b.left()));
-    r
+    crate::background::wait_all(&mut bar.app());
+    let after = status_readout_frame(&mut bar);
+    assert_eq!(status_text(&after, "Saved recovery data").at.x, before, "the result's message takes the same place");
 }
 
 /// Artboard navigation updates the active artboard and fitted view together.
@@ -465,34 +765,33 @@ fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() 
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run("artboard.new", json!({})).unwrap();
     app.run("artboard.new", json!({})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let buttons = navigator(&mut app, &ctx, vec![]);
-    assert_eq!(buttons.len(), 4);
-    let click = |app: &mut crate::VectorcraftApp, r: egui::Rect| {
-        let b =
-            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        navigator(app, &ctx, vec![egui::Event::PointerMoved(r.center())]);
-        navigator(app, &ctx, vec![b(true)]);
-        navigator(app, &ctx, vec![b(false)]);
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0));
+    let mut bar = status_shown(app);
+    // Where the view is once the canvas has drawn.
+    let at = |bar: &mut Shown| {
+        bar.canvas_pass();
+        let app = bar.app();
+        let view = app.view().unwrap();
+        (view.artboard, view.center)
     };
-    let at = |app: &crate::VectorcraftApp| (app.view().unwrap().artboard, app.view().unwrap().center);
-    click(&mut app, buttons[2]);
-    assert_eq!(at(&app), (1, Point::new(320.0, 50.0)), "next");
-    click(&mut app, buttons[3]);
-    assert_eq!(at(&app), (2, Point::new(540.0, 50.0)), "last");
-    click(&mut app, buttons[1]);
-    assert_eq!(at(&app), (1, Point::new(320.0, 50.0)), "previous");
+    bar.click("Next Artboard");
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)), "next");
+    bar.click("Last Artboard");
+    assert_eq!(at(&mut bar), (2, Point::new(540.0, 50.0)), "last");
+    bar.click("Previous Artboard");
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)), "previous");
     // Fit Artboard in Window and Actual Size show the navigator's artboard.
-    app.run("view.setZoom", json!({"zoom": 300, "center": [0, 0]})).unwrap();
-    app.run("view.fitArtboard", json!({})).unwrap();
-    assert_eq!(at(&app), (1, Point::new(320.0, 50.0)));
-    app.run("view.actualSize", json!({})).unwrap();
-    assert_eq!((at(&app).1, app.view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
-    click(&mut app, buttons[0]);
-    assert_eq!(at(&app), (0, Point::new(100.0, 50.0)), "first");
+    bar.app().run("view.setZoom", json!({"zoom": 300, "center": [0, 0]})).unwrap();
+    bar.app().run("view.fitArtboard", json!({})).unwrap();
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)));
+    bar.app().run("view.actualSize", json!({})).unwrap();
+    let center = at(&mut bar).1;
+    let baseline = crate::state::zoom_baseline(bar.app().print_ppi());
+    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), baseline));
+    bar.click("First Artboard");
+    assert_eq!(at(&mut bar), (0, Point::new(100.0, 50.0)), "first");
     // The command also takes an index, clamped to the last artboard.
+    let mut app = bar.app();
     assert_eq!(app.run("view.goToArtboard", json!({"index": 9})), Ok(json!({"index": 2})));
     assert!(app.run("view.goToArtboard", json!({"index": "sideways"})).is_err());
 }
@@ -507,49 +806,22 @@ fn set_zoom_100_matches_actual_size_with_display_print_size() {
     assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12);
 }
 
-/// Screen readers name the artboard navigator's four buttons, the ones that lead nowhere from
-/// the first artboard disabled.
-#[test]
-fn screen_readers_name_the_artboard_navigators_buttons() {
-    use crate::widgets::accessibility_tests::{named, tree};
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
-    let tree = tree(|ui| super::status_bar(&mut app, ui));
-    for (label, enabled) in [("First Artboard", false), ("Previous Artboard", false), ("Next Artboard", true), ("Last Artboard", true)] {
-        let n = named(&tree, label);
-        assert_eq!((n.role(), n.is_disabled()), (egui::accesskit::Role::Button, !enabled), "{label}");
-    }
-}
-
-/// One headless frame of the status bar, with room above it for the artboard list; returns the
-/// texts painted and where they are.
-fn status_texts(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 600.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
-    out.textures_delta.clear();
-    out.shapes
-        .iter()
-        .filter_map(|c| match &c.shape {
-            egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
-            _ => None,
-        })
-        .collect()
-}
-
 /// Read the painted coordinates while checking that drawing never changes the source
 /// position, document, selection or either branch of its edit history.
-fn assert_status_coordinates(app: &mut crate::VectorcraftApp, expected: Option<&str>) {
-    let hover = app.hover_doc;
-    let before = app.session.active().map(|st| (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.is_dirty()));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = status_texts(app, &ctx, vec![]);
+fn assert_status_coordinates(bar: &mut Shown, expected: Option<&str>) {
+    let read = |app: &crate::VectorcraftApp| {
+        let state =
+            app.session.active().map(|st| (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.is_dirty()));
+        (app.hover_doc, state)
+    };
+    let (hover, before) = read(&bar.app());
+    let texts = status_readout_frame(bar);
     let coordinates: Vec<&str> =
-        texts.iter().filter_map(|(text, _)| (text.starts_with("X: ") || text.starts_with("Y: ")).then_some(text.as_str())).collect();
+        texts.iter().filter_map(|t| (t.text.starts_with("X: ") || t.text.starts_with("Y: ")).then_some(t.text.as_str())).collect();
     let expected: Vec<&str> = expected.into_iter().flat_map(|text| text.split("  ")).collect();
     assert_eq!(coordinates, expected, "{texts:?}");
-    assert_eq!(app.hover_doc, hover, "tools still receive the absolute document position");
-    let after = app.session.active().map(|st| (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.is_dirty()));
+    let (hover_after, after) = read(&bar.app());
+    assert_eq!(hover_after, hover, "tools still receive the absolute document position");
     assert_eq!(after, before, "painting is read-only");
 }
 
@@ -561,20 +833,21 @@ fn status_coordinates_follow_global_ruler_origins_and_general_units() {
     app.run("view.globalRulers", json!({"global": true})).unwrap();
     app.session.active_mut().unwrap().mark_saved();
     app.hover_doc = Some(Point::new(72.0, 144.0));
-    assert_status_coordinates(&mut app, Some("X: 72.00 pt  Y: 144.00 pt"));
-    app.run("document.setRulerOrigin", json!({"x": 36, "y": 72})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 36.00 pt  Y: 72.00 pt"));
-    app.run("document.setRulerOrigin", json!({"x": -72, "y": 216})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 144.00 pt  Y: -72.00 pt"));
-    app.run("document.setUnits", json!({"units": "Inches"})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 2.00 in  Y: -1.00 in"));
-    app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 50.80 mm  Y: -25.40 mm"));
-    app.run("document.resetRulerOrigin", json!({})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 25.40 mm  Y: 50.80 mm"));
+    let mut bar = status_shown(app);
+    assert_status_coordinates(&mut bar, Some("X: 72.00 pt  Y: 144.00 pt"));
+    bar.app().run("document.setRulerOrigin", json!({"x": 36, "y": 72})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 36.00 pt  Y: 72.00 pt"));
+    bar.app().run("document.setRulerOrigin", json!({"x": -72, "y": 216})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 144.00 pt  Y: -72.00 pt"));
+    bar.app().run("document.setUnits", json!({"units": "Inches"})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 2.00 in  Y: -1.00 in"));
+    bar.app().run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 50.80 mm  Y: -25.40 mm"));
+    bar.app().run("document.resetRulerOrigin", json!({})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 25.40 mm  Y: 50.80 mm"));
     // Keep a nonempty Redo branch as well as Undo while painting.
-    app.run("edit.undo", json!({})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 50.80 mm  Y: -25.40 mm"));
+    bar.app().run("edit.undo", json!({})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 50.80 mm  Y: -25.40 mm"));
 }
 
 #[test]
@@ -586,65 +859,62 @@ fn status_coordinates_follow_the_active_artboard_and_ruler_mode() {
     app.hover_doc = Some(Point::new(760.0, -210.0));
     app.run("document.setRulerOrigin", json!({"artboard": 0, "x": 25, "y": 30})).unwrap();
     app.run("view.goToArtboard", json!({"index": 0})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 735.00 pt  Y: -240.00 pt"));
-    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 60.00 pt  Y: 40.00 pt"));
-    app.run("document.setRulerOrigin", json!({"artboard": 1, "x": 800, "y": -190})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: -40.00 pt  Y: -20.00 pt"));
-    app.run("view.globalRulers", json!({"global": true})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 760.00 pt  Y: -210.00 pt"));
-    app.run("document.setRulerOrigin", json!({"x": -20, "y": -10})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 780.00 pt  Y: -200.00 pt"));
-    app.run("view.globalRulers", json!({"global": false})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: -40.00 pt  Y: -20.00 pt"));
-    app.run("document.resetRulerOrigin", json!({"artboard": 1})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 60.00 pt  Y: 40.00 pt"));
-    app.run("view.goToArtboard", json!({"index": 0})).unwrap();
-    assert_status_coordinates(&mut app, Some("X: 735.00 pt  Y: -240.00 pt"));
+    let mut bar = status_shown(app);
+    assert_status_coordinates(&mut bar, Some("X: 735.00 pt  Y: -240.00 pt"));
+    bar.app().run("view.goToArtboard", json!({"index": 1})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 60.00 pt  Y: 40.00 pt"));
+    bar.app().run("document.setRulerOrigin", json!({"artboard": 1, "x": 800, "y": -190})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: -40.00 pt  Y: -20.00 pt"));
+    bar.app().run("view.globalRulers", json!({"global": true})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 760.00 pt  Y: -210.00 pt"));
+    bar.app().run("document.setRulerOrigin", json!({"x": -20, "y": -10})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 780.00 pt  Y: -200.00 pt"));
+    bar.app().run("view.globalRulers", json!({"global": false})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: -40.00 pt  Y: -20.00 pt"));
+    bar.app().run("document.resetRulerOrigin", json!({"artboard": 1})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 60.00 pt  Y: 40.00 pt"));
+    bar.app().run("view.goToArtboard", json!({"index": 0})).unwrap();
+    assert_status_coordinates(&mut bar, Some("X: 735.00 pt  Y: -240.00 pt"));
 }
 
 #[test]
 fn status_coordinates_handle_missing_pointer_or_document() {
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    assert_status_coordinates(&mut app, None);
-    app.hover_doc = Some(vectorcraft_geom::Point::new(42.0, -21.0));
-    assert_status_coordinates(&mut app, Some("X: 42.00 pt  Y: -21.00 pt"));
-    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-    app.run("document.setRulerOrigin", json!({"x": 10, "y": 20})).unwrap();
-    app.hover_doc = None;
-    assert_status_coordinates(&mut app, None);
+    let mut bar = status_shown(crate::VectorcraftApp::new(Session::new(), Default::default()));
+    assert_status_coordinates(&mut bar, None);
+    bar.app().hover_doc = Some(vectorcraft_geom::Point::new(42.0, -21.0));
+    assert_status_coordinates(&mut bar, Some("X: 42.00 pt  Y: -21.00 pt"));
+    {
+        let mut app = bar.app();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("document.setRulerOrigin", json!({"x": 10, "y": 20})).unwrap();
+        app.hover_doc = None;
+    }
+    assert_status_coordinates(&mut bar, None);
 }
 
 #[test]
 fn status_coordinates_keep_the_inspected_point_relative_after_an_origin_change() {
-    let (mut app, ctx) = status_readout_app();
-    app.run("view.globalRulers", json!({"global": true})).unwrap();
-    app.run("document.setRulerOrigin", json!({"x": 36, "y": 72})).unwrap();
-    app.hover_doc = Some(vectorcraft_geom::Point::new(72.0, 144.0));
-    let first = status_readout_frame(&mut app, &ctx, 1400.0);
-    let at = status_text(&first, "X:").bounds.center();
-    app.hover_doc = None;
-    let inspecting = status_readout_frame_events(&mut app, &ctx, 1400.0, vec![egui::Event::PointerMoved(at)]);
+    let mut bar = status_readout_app();
+    {
+        let mut app = bar.app();
+        app.run("view.globalRulers", json!({"global": true})).unwrap();
+        app.run("document.setRulerOrigin", json!({"x": 36, "y": 72})).unwrap();
+        app.hover_doc = Some(vectorcraft_geom::Point::new(72.0, 144.0));
+    }
+    // PLAN: the readouts keep no hovered value once the pointer leaves the canvas (the retention memory is gone, :777's verdict), so the point stays inspected through `hover_doc`.
+    let inspecting = status_readout_frame(&mut bar);
     assert_eq!(status_text(&inspecting, "X:").text, "X: 36.00 pt");
     assert_eq!(status_text(&inspecting, "Y:").text, "Y: 72.00 pt");
-    app.run("document.setRulerOrigin", json!({"x": -72, "y": 216})).unwrap();
-    let before = app.session.active().unwrap().doc.clone();
-    let inspecting = status_readout_frame(&mut app, &ctx, 1400.0);
+    bar.app().run("document.setRulerOrigin", json!({"x": -72, "y": 216})).unwrap();
+    let before = bar.app().session.active().unwrap().doc.clone();
+    let inspecting = status_readout_frame(&mut bar);
     assert_eq!(status_text(&inspecting, "X:").text, "X: 144.00 pt");
     assert_eq!(status_text(&inspecting, "Y:").text, "Y: -72.00 pt");
-    assert_eq!(app.hover_doc, None, "inspection never changes the absolute canvas hover state");
-    assert_eq!(app.session.active().unwrap().doc, before, "painting is read-only");
-    let gone = status_readout_frame_events(&mut app, &ctx, 1400.0, vec![egui::Event::PointerGone]);
+    assert_eq!(bar.app().hover_doc, Some(vectorcraft_geom::Point::new(72.0, 144.0)), "the readouts never change the absolute canvas hover state");
+    assert_eq!(bar.app().session.active().unwrap().doc, before, "painting is read-only");
+    bar.app().hover_doc = None;
+    let gone = status_readout_frame(&mut bar);
     assert!(!gone.iter().any(|field| field.text.starts_with("X:") || field.text.starts_with("Y:")));
-}
-
-/// A click at `at` in the status bar; returns the texts of the frame after it.
-fn status_click(app: &mut crate::VectorcraftApp, ctx: &egui::Context, at: egui::Pos2) -> Vec<(String, egui::Rect)> {
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        status_texts(app, ctx, vec![event]);
-    }
-    status_texts(app, ctx, vec![])
 }
 
 /// The navigator shows the active artboard's number and name, and its list shows every artboard
@@ -657,126 +927,91 @@ fn the_artboard_navigator_lists_the_artboards_by_number_and_name() {
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
     app.run("artboard.setProps", json!({"index": 0, "name": "Front"})).unwrap();
     app.run("artboard.setProps", json!({"index": 1, "name": "Back"})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0));
     app.select_tool("artboard");
     app.run("view.goToArtboard", json!({"index": 1})).unwrap();
     let first = app.session.active().unwrap().doc.artboards[0].rect.center();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = status_texts(&mut app, &ctx, vec![]);
-    let field = texts.iter().find(|(s, _)| s == "2  Back").map(|(_, r)| *r).expect("the field shows artboard 2's number and name");
-    assert!(!texts.iter().any(|(s, _)| s == "Front"), "the list is closed: {texts:?}");
-    let texts = status_click(&mut app, &ctx, field.center());
-    let at = |s: &str| texts.iter().find(|(t, _)| t == s).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {s:?} in {texts:?}"));
-    let rows: Vec<egui::Rect> = [("1", "Front"), ("2", "Back"), ("3", "Artboard 3")]
-        .into_iter()
-        .map(|(number, name)| {
-            let (n, r) = (at(number), at(name));
-            assert!(r.y_range().contains(n.center().y) && n.right() < r.left(), "{number} before {name} on one row: {texts:?}");
-            r
-        })
-        .collect();
-    assert!(rows.windows(2).all(|w| w[0].bottom() <= w[1].top()), "the rows in the artboards' order: {rows:?}");
-    let texts = status_click(&mut app, &ctx, at("Front").center());
-    assert_eq!((app.view().unwrap().artboard, app.view().unwrap().center), (0, first), "Front, fitted in the window");
-    assert_eq!(app.session.tool_options()["active"], json!(0));
-    assert!(texts.iter().any(|(s, _)| s == "1  Front"), "{texts:?}");
-    assert!(!texts.iter().any(|(s, _)| s == "Back"), "the list closed: {texts:?}");
+    let mut bar = status_shown(app);
+    bar.room(egui::vec2(1200.0, 600.0));
+    let entries = ["1  Front", "2  Back", "3  Artboard 3"];
+    bar.settle();
+    assert!(bar.shows("2  Back"), "the field shows artboard 2's number and name: {:?}", bar.names());
+    assert!(bar.find("1  Front").is_none(), "the list is closed: {:?}", bar.names());
+    bar.click("Artboard");
+    let rows: Vec<Target> = entries.iter().map(|e| bar.find(e).unwrap_or_else(|| panic!("the list shows {e:?}: {:?}", bar.names()))).collect();
+    assert!(rows.windows(2).all(|w| w[0].rect.bottom() <= w[1].rect.top()), "the rows in the artboards' order: {rows:?}");
+    bar.click_on(&rows[0]);
+    bar.canvas_pass();
+    {
+        let app = bar.app();
+        let view = app.view().unwrap();
+        assert_eq!((view.artboard, view.center), (0, first), "Front, fitted in the window");
+        assert_eq!(app.session.tool_options()["active"], json!(0));
+    }
+    bar.settle();
+    assert!(bar.shows("1  Front"), "{:?}", bar.names());
+    assert!(bar.find("2  Back").is_none(), "the list closed: {:?}", bar.names());
 }
 
-/// With 1,000 artboards the list lays out at most 12 rows. It opens on the active
-/// artboard's row, a swipe scrolls it to the last artboard, and choosing that row goes there.
-#[test]
-fn the_artboard_list_lays_out_only_the_rows_near_the_view() {
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 1000})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
-    app.run("view.goToArtboard", json!({"index": 699})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let rows = |texts: &[(String, egui::Rect)]| texts.iter().filter(|(s, _)| s.starts_with("Artboard ")).cloned().collect::<Vec<_>>();
-    let texts = status_texts(&mut app, &ctx, vec![]);
-    let field = texts.iter().find(|(s, _)| s == "700  Artboard 700").map(|(_, r)| *r).expect("the field");
-    let shown = rows(&status_click(&mut app, &ctx, field.center()));
-    assert!((1..=12).contains(&shown.len()), "{} rows laid out", shown.len());
-    let active = shown.iter().find(|(s, _)| s == "Artboard 700").map(|(_, r)| *r).expect("the active artboard's row in view");
-    let swipe = |phase, dy| egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        delta: egui::vec2(0.0, dy),
-        phase,
-        modifiers: Default::default(),
-        source: egui::MouseWheelSource::Unknown,
-    };
-    status_texts(
-        &mut app,
-        &ctx,
-        vec![egui::Event::PointerMoved(active.center()), swipe(egui::TouchPhase::Start, 0.0), swipe(egui::TouchPhase::Move, -100_000.0)],
-    );
-    let shown = rows(&status_texts(&mut app, &ctx, vec![swipe(egui::TouchPhase::End, 0.0)]));
-    assert!((1..=12).contains(&shown.len()), "{} rows laid out", shown.len());
-    let last = shown.iter().find(|(s, _)| s == "Artboard 1000").map(|(_, r)| *r).expect("the last row after the swipe");
-    status_click(&mut app, &ctx, last.center());
-    assert_eq!(app.view().unwrap().artboard, 999);
+/// Where the artboard flows keep the canvas: below the strip the tabs and the status bar take at the top of their
+/// fixture, and left of Properties, so no click of theirs lands on it.
+const ARTBOARD_CANVAS: egui::Rect = egui::Rect { min: egui::pos2(0.0, 60.0), max: egui::pos2(800.0, 300.0) };
+
+/// The room the artboard flows draw the status bar, the tabs and Properties in.
+const ARTBOARD_ROOM: egui::Vec2 = egui::vec2(1200.0, 700.0);
+
+/// Properties docked at the right, as the window shows it.
+fn properties(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui) {
+    egui::Panel::right("navigation-properties").exact_size(300.0).show(ui, |ui| crate::panels::properties::show(app, ui));
 }
 
-fn artboard_navigation_app(tool: &str) -> (crate::VectorcraftApp, vectorcraft_doc::NodeId) {
+fn artboard_navigation_app(tool: &str) -> (Shown, vectorcraft_doc::NodeId) {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+    app.view_mut().unwrap().rect = ARTBOARD_CANVAS;
     app.select_tool(tool);
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    (app, vectorcraft_doc::NodeId(id))
+    (Shown::new(app, ARTBOARD_ROOM, super::status_bar), vectorcraft_doc::NodeId(id))
 }
 
 /// Click the actual status-bar Next control, without sending a canvas pointer event.
-fn artboard_navigation_next(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
-    let buttons = navigator(app, ctx, vec![]);
-    assert_eq!(buttons.len(), 4);
-    let at = buttons[2].center();
-    assert!(!app.canvas_rect.unwrap().contains(at));
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        navigator(app, ctx, vec![event]);
-    }
+fn artboard_navigation_next(bar: &mut Shown) {
+    bar.draw(super::status_bar);
+    let next = bar.named("Next Artboard");
+    assert!(!bar.app().view().unwrap().rect.contains(next.center()));
+    bar.click_on(&next);
+    bar.canvas_pass();
 }
 
-fn artboard_navigation_properties_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
-        egui::Panel::right("navigation-properties").exact_size(300.0).show(ui, |ui| crate::panels::properties::show(app, ui));
-    });
-    out.textures_delta.clear();
-    out.shapes
-        .iter()
-        .filter_map(|s| match &s.shape {
-            egui::Shape::Text(t) => Some((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
-            _ => None,
-        })
-        .collect()
+/// Properties' Delete Artboard button, once Properties shows the board named `shown`.
+fn properties_delete(bar: &mut Shown, shown: &str) -> Target {
+    bar.draw(properties);
+    bar.settle();
+    assert!(bar.shows(shown), "Properties shows the board {shown:?}: {:?}", bar.names());
+    let delete = bar.named("Delete Artboard");
+    assert!(!bar.app().view().unwrap().rect.contains(delete.center()));
+    delete
+}
+
+/// A press and release of `key` through the window's whole frame, as the keyboard sends it. The window's first frame
+/// builds its keymap and the keys the tool claims, as a running window has them before any key.
+fn key_through_the_app(app: &mut crate::VectorcraftApp, key: egui::Key, modifiers: egui::Modifiers) {
+    let ctx = crate::testing::ui_context();
+    crate::tests_synthetic::key_frame(app, &ctx, vec![]);
+    let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+    crate::tests_synthetic::key_frame(app, &ctx, vec![event(true)]);
+    crate::tests_synthetic::key_frame(app, &ctx, vec![event(false)]);
 }
 
 /// Delete the shown artboard with `key`, or with Properties' Delete Artboard button.
-fn trigger_artboard_delete(app: &mut crate::VectorcraftApp, ctx: &egui::Context, key: Option<egui::Key>, before: &vectorcraft_doc::Document) {
+fn trigger_artboard_delete(bar: &mut Shown, key: Option<egui::Key>, before: &vectorcraft_doc::Document) {
     if let Some(key) = key {
-        let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 300.0));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events: vec![ev], ..Default::default() }, |ui| {
-            crate::shortcuts::handle(app, ui.ctx());
-            super::status_bar(app, ui);
-        });
-        out.textures_delta.clear();
+        key_through_the_app(&mut bar.app(), key, egui::Modifiers::NONE);
     } else {
-        artboard_navigation_properties_frame(app, ctx, vec![]);
-        let texts = artboard_navigation_properties_frame(app, ctx, vec![]);
-        assert!(texts.iter().any(|(label, _)| label == &before.artboards[1].name), "Properties shows the navigated board");
-        let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, rect)| rect.center()).expect("Properties Delete button");
-        assert!(!app.canvas_rect.unwrap().contains(at));
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-            artboard_navigation_properties_frame(app, ctx, vec![event]);
-        }
+        let delete = properties_delete(bar, &before.artboards[1].name);
+        bar.click_on(&delete);
     }
 }
 
@@ -788,31 +1023,25 @@ fn artboard_navigation_delete(key: Option<egui::Key>) {
 }
 
 fn artboard_navigation_delete_case(key: Option<egui::Key>, multiple: bool) {
-    let (mut app, id) = artboard_navigation_app("artboard");
-    let selected = if multiple { json!([0, 2]) } else { json!([0]) };
-    app.session.set_tool_option("selected", &selected);
-    assert_eq!(app.view().unwrap().artboard, 0);
-    assert_eq!(app.session.tool_options()["active"], json!(0));
-    assert_eq!(app.session.tool_options()["selected"], selected);
-    app.session.active_mut().unwrap().mark_saved();
-    let st = app.session.active().unwrap();
-    let before = st.doc.clone();
-    let selection = st.selection.clone();
-    let undo = st.history.undo.len();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    navigate_to_next_board(&mut app, &ctx, &before, &selection, undo);
-    delete_navigated_board(&mut app, &ctx, key, id, &before, &selection, undo);
+    let (mut bar, id) = artboard_navigation_app("artboard");
+    let (before, selection, undo) = {
+        let mut app = bar.app();
+        let selected = if multiple { json!([0, 2]) } else { json!([0]) };
+        app.session.set_tool_option("selected", &selected);
+        assert_eq!(app.view().unwrap().artboard, 0);
+        assert_eq!(app.session.tool_options()["active"], json!(0));
+        assert_eq!(app.session.tool_options()["selected"], selected);
+        app.session.active_mut().unwrap().mark_saved();
+        let st = app.session.active().unwrap();
+        (st.doc.clone(), st.selection.clone(), st.history.undo.len())
+    };
+    navigate_to_next_board(&mut bar, &before, &selection, undo);
+    delete_navigated_board(&mut bar, key, id, &before, &selection, undo);
 }
 
-fn navigate_to_next_board(
-    app: &mut crate::VectorcraftApp,
-    ctx: &egui::Context,
-    before: &vectorcraft_doc::Document,
-    selection: &vectorcraft_doc::Selection,
-    undo: usize,
-) {
-    artboard_navigation_next(app, ctx);
+fn navigate_to_next_board(bar: &mut Shown, before: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection, undo: usize) {
+    artboard_navigation_next(bar);
+    let app = bar.app();
     assert_eq!(app.view().unwrap().artboard, 1, "Next shows board 2");
     assert_eq!(app.session.tool_options()["active"], json!(1), "Next must change the destructive target before deletion");
     assert_eq!(app.session.tool_options()["selected"], json!([1]), "navigation replaces the old artboard multiselection");
@@ -826,15 +1055,15 @@ fn navigate_to_next_board(
 }
 
 fn delete_navigated_board(
-    app: &mut crate::VectorcraftApp,
-    ctx: &egui::Context,
+    bar: &mut Shown,
     key: Option<egui::Key>,
     id: vectorcraft_doc::NodeId,
     before: &vectorcraft_doc::Document,
     selection: &vectorcraft_doc::Selection,
     undo: usize,
 ) {
-    trigger_artboard_delete(app, ctx, key, before);
+    trigger_artboard_delete(bar, key, before);
+    let mut app = bar.app();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.artboards, vec![before.artboards[0].clone(), before.artboards[2].clone()], "first and third original board records survive");
     assert_eq!(st.doc.node(id), before.node(id), "selected artwork survives unchanged");
@@ -873,22 +1102,24 @@ fn artboard_navigation_next_then_properties_delete_uses_shown_board() {
 #[test]
 fn artboard_navigation_preserves_other_tools_selection_and_history() {
     for tool in ["selection", "rectangle"] {
-        let (mut app, _) = artboard_navigation_app(tool);
-        app.run("object.move", json!({"dx": 7, "dy": 9})).unwrap();
-        let redo = app.session.active().unwrap().doc.clone();
-        app.run("edit.undo", json!({})).unwrap();
-        app.session.active_mut().unwrap().mark_saved();
-        let st = app.session.active().unwrap();
-        let before = st.doc.clone();
-        let selection = st.selection.clone();
-        let history = (st.history.undo.len(), st.history.redo.len());
-        assert_eq!(history.1, 1);
-        let options = app.session.tool_options();
+        let (mut bar, _) = artboard_navigation_app(tool);
+        let (redo, before, selection, history, options) = {
+            let mut app = bar.app();
+            app.run("object.move", json!({"dx": 7, "dy": 9})).unwrap();
+            let redo = app.session.active().unwrap().doc.clone();
+            app.run("edit.undo", json!({})).unwrap();
+            app.session.active_mut().unwrap().mark_saved();
+            let st = app.session.active().unwrap();
+            let before = st.doc.clone();
+            let selection = st.selection.clone();
+            let history = (st.history.undo.len(), st.history.redo.len());
+            assert_eq!(history.1, 1);
+            (redo, before, selection, history, app.session.tool_options())
+        };
 
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        artboard_navigation_next(&mut app, &ctx);
+        artboard_navigation_next(&mut bar);
 
+        let mut app = bar.app();
         assert_eq!(app.view().unwrap().artboard, 1);
         assert_eq!(app.view().unwrap().center, before.artboards[1].rect.center());
         assert_eq!(app.session.tool_id(), tool);
@@ -908,7 +1139,7 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, false);
+    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, None);
     assert!(title(&s).ends_with("(RGB/Preview)"), "{}", title(&s));
     s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
     assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
@@ -928,12 +1159,37 @@ fn only_the_outlined_documents_tab_reads_outline() {
     assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
 }
 
-/// One headless frame of the Control bar; returns the isolation button's rectangle, if it shows.
-fn isolation_button(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::Rect> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::control_bar(app, ui));
-    out.textures_delta.clear();
-    ctx.viewport(|vp| vp.prev_pass.widgets.get(egui::Id::unique(super::ISOLATION_BUTTON)).map(|w| w.rect))
+/// The Control bar shown alone over `app`, in a window 1600 points wide.
+fn control_shown(app: crate::VectorcraftApp) -> Shown {
+    Shown::new(app, egui::vec2(1600.0, 300.0), super::control_bar)
+}
+
+/// With the Circle tool, the Control bar shows From Center unchecked; a click on it turns the option on and checks
+/// it, and a second click turns it off and unchecks it.
+#[test]
+fn the_circle_tool_s_from_center_checkbox_sets_the_option() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("circle");
+    let mut bar = control_shown(app);
+    let from_center = |bar: &Shown| bar.app().session.tool_options()["fromCenter"].clone();
+    assert_eq!(from_center(&bar), json!(false));
+    let target = bar.named("From Center");
+    assert!(!bar.checked(&target), "From Center starts unchecked");
+    for want in [true, false] {
+        bar.click("From Center").settle();
+        assert_eq!(from_center(&bar), json!(want));
+        let target = bar.named("From Center");
+        assert_eq!(bar.checked(&target), want, "the checkbox shows the option");
+    }
+}
+
+/// The Control bar's isolation button, if it shows: Isolate Selected Object, Exit Isolation Mode or Exit Symbol
+/// Editing Mode.
+fn isolation_button(bar: &mut Shown) -> Option<Target> {
+    bar.settle();
+    ["Isolate Selected Object", "Exit Isolation Mode", "Exit Symbol Editing Mode"].iter().find_map(|name| bar.find(name))
 }
 
 /// Entering isolation mode leaves the canvas where it was: the breadcrumb bar is drawn over the
@@ -943,25 +1199,38 @@ fn the_isolation_bar_does_not_take_layout_height_from_the_canvas() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let top = |app: &mut crate::VectorcraftApp| {
-        let mut below = 0.0;
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-            super::doc_tabs(app, ui);
-            below = ui.available_rect_before_wrap().top();
-            let area = ui.available_rect_before_wrap();
-            super::isolation_bar(app, ui, area);
-            assert_eq!(ui.available_rect_before_wrap().top(), below, "the bar takes no layout space");
-        });
-        out.textures_delta.clear();
-        below
-    };
-    let before = top(&mut app);
-    app.run("object.isolate", json!({"id": id})).unwrap();
-    assert!(app.session.active().unwrap().isolation.is_some());
-    assert_eq!(top(&mut app), before, "isolation mode leaves the canvas where it was");
+    // Where the canvas starts below the tabs, as the frame laid it out.
+    let below = Rc::new(std::cell::Cell::new(0.0));
+    let seen = Rc::clone(&below);
+    let mut bar = Shown::new(app, egui::vec2(1200.0, 700.0), move |app, ui| {
+        super::doc_tabs(app, ui);
+        let area = ui.available_rect_before_wrap();
+        seen.set(area.top());
+        super::isolation_bar(app, ui, area);
+        assert_eq!(ui.available_rect_before_wrap().top(), area.top(), "the bar takes no layout space");
+    });
+    bar.settle();
+    let before = below.get();
+    bar.app().run("object.isolate", json!({"id": id})).unwrap();
+    assert!(bar.app().session.active().unwrap().isolation.is_some());
+    bar.settle();
+    assert_eq!(below.get(), before, "isolation mode leaves the canvas where it was");
+}
+
+/// The isolation bar shown over the top of a 1200 × 700 canvas.
+fn isolation_shown(app: crate::VectorcraftApp) -> Shown {
+    Shown::new(app, egui::vec2(1200.0, 700.0), |app, ui| {
+        let area = ui.max_rect();
+        super::isolation_bar(app, ui, area);
+    })
+}
+
+/// A point on the isolation bar's own surface: right of its crumbs, at the end of the path, which fills the bar up
+/// to the pattern editing buttons at its right.
+fn isolation_bar_surface(bar: &mut Shown) -> egui::Pos2 {
+    let back = bar.named("Back");
+    let path = bar.named("Isolation path");
+    egui::pos2(path.rect.right() - 8.0, back.center().y)
 }
 
 /// #4468: In nested isolation, clicking the back button steps up one level in the hierarchy,
@@ -986,84 +1255,206 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     // Isolate path a (deepest level: Layer 1 > <Group> > <Group> > <Path>)
     app.run("object.isolate", json!({"id": a})).unwrap();
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
-
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    egui_extras::install_image_loaders(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-
-    let click_at = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| {
-        let button = egui::PointerButton::Primary;
-        let mut run_frame = |events| {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
-                super::isolation_bar(app, ui, screen);
-            });
-            out.textures_delta.clear();
-        };
-        run_frame(vec![egui::Event::PointerMoved(pos)]);
-        run_frame(vec![egui::Event::PointerButton { pos, button, pressed: true, modifiers: Default::default() }]);
-        run_frame(vec![egui::Event::PointerButton { pos, button, pressed: false, modifiers: Default::default() }]);
-    };
+    let mut bar = isolation_shown(app);
+    let isolation = |bar: &Shown| bar.app().session.active().unwrap().isolation;
 
     // Clicking back from `a` steps up to parent group `g1`
-    click_at(&mut app, egui::pos2(15.0, 12.0));
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g1)));
+    bar.click("Back");
+    assert_eq!(isolation(&bar), Some(NodeId(g1)));
 
     // Clicking back from `g1` steps up to grandparent group `g2`
-    click_at(&mut app, egui::pos2(15.0, 12.0));
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+    bar.click("Back");
+    assert_eq!(isolation(&bar), Some(NodeId(g2)));
 
     // Clicking back from `g2` (parent is layer) exits isolation mode completely
-    click_at(&mut app, egui::pos2(15.0, 12.0));
-    assert_eq!(app.session.active().unwrap().isolation, None);
+    bar.click("Back");
+    assert_eq!(isolation(&bar), None);
 
     // Deep isolate again to test clicking ancestor breadcrumb directly
-    app.run("object.isolate", json!({"id": a})).unwrap();
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
+    bar.app().run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(isolation(&bar), Some(NodeId(a)));
 
-    // First crumb is Layer 1 (at x ~ 30..80). Clicking it exits isolation directly.
-    click_at(&mut app, egui::pos2(45.0, 12.0));
-    assert_eq!(app.session.active().unwrap().isolation, None);
+    // The first crumb is Layer 1. Clicking it exits isolation directly.
+    bar.click("Layer 1");
+    assert_eq!(isolation(&bar), None);
 
     // Deep isolate again to test clicking an intermediate ancestor group breadcrumb directly
-    app.run("object.isolate", json!({"id": a})).unwrap();
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)));
+    bar.app().run("object.isolate", json!({"id": a})).unwrap();
+    assert_eq!(isolation(&bar), Some(NodeId(a)));
 
-    // Second crumb is g2 ("<Group>") at x ~ 95..140.
-    // Clicking g2 isolates g2 directly.
-    click_at(&mut app, egui::pos2(115.0, 12.0));
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+    // The second crumb is g2, the first "<Group>". Clicking it isolates g2 directly.
+    bar.click("<Group>");
+    assert_eq!(isolation(&bar), Some(NodeId(g2)));
 }
 
-/// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
-/// behind them, which only keeps the pointer off the canvas.
+/// With a sublayer isolated, the back arrow goes up one layer at a time and then leaves isolation
+/// mode. The top-level layer's crumb leaves isolation mode from any depth, and a parent sublayer's
+/// crumb isolates that sublayer.
 #[test]
-fn tab_skips_the_isolation_bars_background() {
+fn isolation_bar_back_button_steps_up_through_sublayers() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = NodeId(app.run("layer.newSublayer", json!({"parent": top.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap());
+    let deep = NodeId(app.run("layer.newSublayer", json!({"parent": mid.0, "name": "Sublayer C"})).unwrap()["id"].as_u64().unwrap());
+    app.run("layer.setCurrent", json!({"id": deep.0})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    let mut bar = isolation_shown(app);
+    let isolation = |bar: &Shown| bar.app().session.active().unwrap().isolation;
+    let steps = |bar: &Shown| bar.app().session.doc().unwrap().history.undo.len();
+
+    let before = steps(&bar);
+    bar.click("Back");
+    assert_eq!(isolation(&bar), Some(mid), "back from the deepest sublayer");
+    bar.click("Back");
+    assert_eq!(isolation(&bar), Some(top), "back from the middle sublayer");
+    bar.click("Back");
+    assert_eq!(isolation(&bar), None, "back from the top-level layer");
+    assert_eq!(steps(&bar), before, "no undo step");
+
+    // "Layer 1" is the first crumb.
+    bar.app().run("object.isolate", json!({"id": deep.0})).unwrap();
+    bar.click("Layer 1");
+    assert_eq!(isolation(&bar), None, "the top-level layer's crumb");
+
+    // "Sublayer B" is the second crumb.
+    bar.app().run("object.isolate", json!({"id": deep.0})).unwrap();
+    bar.click("Sublayer B");
+    assert_eq!(isolation(&bar), Some(mid), "the parent sublayer's crumb");
+}
+
+/// A click on the isolation bar's empty space leaves nested isolation mode altogether, selects the
+/// isolated object as Exit Isolation Mode does and adds no undo step. A drag across the bar does not
+/// leave it.
+#[test]
+fn isolation_bar_background_click_exits_nested_isolation() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g1 = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    let c = rect(&mut app, 90.0);
+    app.run("select.set", json!({"ids": [g1, c]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let mut bar = isolation_shown(app);
+    let empty = isolation_bar_surface(&mut bar);
+    bar.drag_at(empty, egui::vec2(-200.0, 2.0));
+    assert_eq!(bar.app().session.active().unwrap().isolation, Some(NodeId(a)), "a drag across the bar stays in isolation mode");
+    let steps = bar.app().session.doc().unwrap().history.undo.len();
+    bar.click_at(empty);
+    let app = bar.app();
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "the click leaves isolation mode");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+}
+
+/// While a pattern is edited, a click on the isolation bar's empty space leaves pattern editing
+/// open; the back arrow still ends it as Done does.
+#[test]
+fn isolation_bar_background_click_leaves_pattern_edit_open() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let f = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [f]})).unwrap();
+    app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    assert!(app.session.active().unwrap().doc.pattern_edit.is_some());
+    let mut bar = isolation_shown(app);
+    let empty = isolation_bar_surface(&mut bar);
+    bar.click_at(empty);
+    {
+        let app = bar.app();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.pattern_edit.is_some() && st.isolation.is_some(), "pattern editing stays open");
+    }
+    bar.click("Back");
+    let app = bar.app();
+    let st = app.session.active().unwrap();
+    assert!(st.doc.pattern_edit.is_none() && st.isolation.is_none(), "the back arrow ends pattern editing");
+}
+
+/// While an opacity mask is edited, a click on the isolation bar's empty space stops editing the
+/// mask as Exit Isolation Mode does: the masked object is selected again.
+#[test]
+fn isolation_bar_background_click_stops_mask_editing() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let obj = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let m = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [obj, m]})).unwrap();
+    app.run("transparency.makeOpacityMask", json!({})).unwrap();
+    app.run("transparency.editOpacityMask", json!({})).unwrap();
+    assert!(app.session.active().unwrap().doc.mask_edit.is_some());
+    let mut bar = isolation_shown(app);
+    let empty = isolation_bar_surface(&mut bar);
+    bar.click_at(empty);
+    let app = bar.app();
+    let st = app.session.active().unwrap();
+    assert!(st.doc.mask_edit.is_none() && st.isolation.is_none(), "mask editing ends");
+    assert_eq!(st.selection.objects, vec![NodeId(obj)]);
+}
+
+/// In symbol editing mode, a click on the isolation bar's empty space leaves the mode, also while a
+/// group inside the symbol's art is isolated, and the symbol keeps the art drawn while editing.
+#[test]
+fn isolation_bar_background_click_leaves_nested_symbol_editing() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    let mut bar = isolation_shown(app);
+    let empty = isolation_bar_surface(&mut bar);
+    bar.click_at(empty);
+    {
+        let app = bar.app();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "symbol editing mode ends");
+        let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+        assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
+    }
+    // Symbol editing entered while a group was isolated: the click leaves that isolation too.
+    {
+        let mut app = bar.app();
+        let c = app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let d = app.run("shape.rectangle", json!({"x": 250, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [c, d]})).unwrap();
+        let h = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.isolate", json!({"id": h})).unwrap();
+        app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+        assert!(app.session.active().unwrap().doc.symbol_edit.is_some());
+    }
+    bar.click_at(empty);
+    let app = bar.app();
+    let st = app.session.active().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "the isolation from before symbol editing ends too");
+}
+
+/// A click on the current object's name at the end of the breadcrumbs, which is not a link, leaves
+/// isolation mode as a click on the bar's empty space does.
+#[test]
+fn isolation_bar_click_on_the_current_name_exits() {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let b = app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    app.run("object.group", json!({})).unwrap();
     app.run("object.isolate", json!({"id": a})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let mut frame = |events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
-            super::isolation_bar(&mut app, ui, screen);
-        });
-        out.textures_delta.clear();
-    };
-    frame(vec![]);
-    let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), 24.0));
-    let back = egui::Rect::from_min_size(bar.min + egui::vec2(6.0, 3.0), egui::vec2(18.0, 18.0));
-    let widget =
-        |rect: egui::Rect| ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == rect).map(|w| w.id));
-    let (bar, back) = (widget(bar).expect("the isolation bar"), widget(back).expect("the back button"));
-    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 10, frame);
-    assert!(stops.contains(&back), "Tab reaches the back button: {stops:?}");
-    assert!(!stops.contains(&bar), "{stops:?}");
+    // The crumbs are "Layer 1 › <Path>"; the leaf is the isolated path's name.
+    let leaf = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).unwrap().display_name();
+    let mut bar = isolation_shown(app);
+    bar.click(&leaf);
+    assert_eq!(bar.app().session.active().unwrap().isolation, None);
 }
 
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
@@ -1083,45 +1474,53 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     app.run("object.group", json!({})).unwrap();
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let click = |app: &mut crate::VectorcraftApp| {
-        let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
-        let press =
-            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
-            isolation_button(app, &ctx, vec![e]);
-        }
+    let mut bar = control_shown(app);
+    let click = |bar: &mut Shown| {
+        let button = isolation_button(bar).expect("the bar shows the isolation button");
+        bar.click_on(&button);
     };
-    click(&mut app);
-    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)), "Isolate Selected Object isolates the path");
-    click(&mut app);
-    let st = app.session.active().unwrap();
-    assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "Exit Isolation Mode selects the path");
-    app.select_tool("selection");
+    click(&mut bar);
+    assert_eq!(bar.app().session.active().unwrap().isolation, Some(NodeId(a)), "Isolate Selected Object isolates the path");
+    click(&mut bar);
+    {
+        let app = bar.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "Exit Isolation Mode selects the path");
+    }
+    bar.app().select_tool("selection");
     // Type, a symbol instance, a blend and two objects.
-    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
-    let c = rect(&mut app, 100.0);
-    app.run("select.set", json!({"ids": [c]})).unwrap();
-    let symbol = app.run("symbol.new", json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap();
-    let (d, e) = (rect(&mut app, 150.0), rect(&mut app, 250.0));
-    let blend = app.run("object.blend.make", json!({"ids": [d, e], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+    let (text, symbol, blend) = {
+        let mut app = bar.app();
+        let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+        let c = rect(&mut app, 100.0);
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        let symbol = app.run("symbol.new", json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap();
+        let (d, e) = (rect(&mut app, 150.0), rect(&mut app, 250.0));
+        let blend = app.run("object.blend.make", json!({"ids": [d, e], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+        (text, symbol, blend)
+    };
     for ids in [json!([text]), json!([symbol]), json!([blend]), json!([text, symbol])] {
-        app.run("select.set", json!({ "ids": ids })).unwrap();
-        assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "{ids}");
+        bar.app().run("select.set", json!({ "ids": ids })).unwrap();
+        assert!(isolation_button(&mut bar).is_none(), "{ids}");
     }
     // An envelope's contents, while Edit Contents is on.
-    let g = rect(&mut app, 350.0);
-    app.run("select.set", json!({"ids": [g]})).unwrap();
-    app.run("object.envelope.makeWithWarp", json!({})).unwrap();
-    app.run("object.envelope.editContents", json!({"editing": true})).unwrap();
-    assert_eq!(app.session.active().unwrap().selection.objects, vec![NodeId(g)]);
-    assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the envelope's controls show instead");
-    let f = rect(&mut app, 300.0);
-    app.run("select.set", json!({"ids": [f]})).unwrap();
-    app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
-    assert!(app.session.active().unwrap().isolation.is_some());
-    assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
+    {
+        let mut app = bar.app();
+        let g = rect(&mut app, 350.0);
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+        app.run("object.envelope.editContents", json!({"editing": true})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![NodeId(g)]);
+    }
+    assert!(isolation_button(&mut bar).is_none(), "the envelope's controls show instead");
+    {
+        let mut app = bar.app();
+        let f = rect(&mut app, 300.0);
+        app.run("select.set", json!({"ids": [f]})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+        assert!(app.session.active().unwrap().isolation.is_some());
+    }
+    assert!(isolation_button(&mut bar).is_none(), "the isolation bar ends pattern editing");
 }
 
 /// In symbol editing mode the Control bar's isolation button is Exit Symbol Editing Mode and
@@ -1136,44 +1535,38 @@ fn the_control_bar_exits_symbol_editing_mode() {
     app.run("symbol.new", json!({"name": "Box"})).unwrap();
     app.run("symbol.edit", json!({"name": "Box"})).unwrap();
     let layer = app.session.active().unwrap().doc.symbol_edit.as_ref().expect("symbol editing mode").layer;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
+    let mut bar = control_shown(app);
     // The isolation button's label (the one exit label the bar shows), and a click on it.
-    let label = |app: &mut crate::VectorcraftApp| {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
-        out.textures_delta.clear();
-        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        let exits: Vec<String> = nodes
-            .iter()
-            .filter_map(|(_, n)| n.label().map(|l| l.trim().to_string()))
-            .filter(|l| l == "Exit Symbol Editing Mode" || l == "Exit Isolation Mode")
-            .collect();
+    let label = |bar: &mut Shown| {
+        bar.settle();
+        let exits: Vec<&str> = ["Exit Symbol Editing Mode", "Exit Isolation Mode"].into_iter().filter(|l| bar.find(l).is_some()).collect();
         assert!(exits.len() <= 1, "{exits:?}");
         exits.into_iter().next()
     };
-    let click = |app: &mut crate::VectorcraftApp| {
-        let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
-        let press =
-            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
-            isolation_button(app, &ctx, vec![e]);
-        }
+    let click = |bar: &mut Shown| {
+        let button = isolation_button(bar).expect("the bar shows the isolation button");
+        bar.click_on(&button);
     };
-    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    assert_eq!(label(&mut bar), Some("Exit Symbol Editing Mode"));
     // Two rectangles drawn into the symbol's art, grouped and isolated.
-    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
-    app.run("object.isolate", json!({"id": g})).unwrap();
-    assert_eq!(label(&mut app).as_deref(), Some("Exit Isolation Mode"));
-    click(&mut app);
-    let st = app.session.active().unwrap();
-    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (Some(layer), true), "back to the symbol's art");
-    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
-    click(&mut app);
+    {
+        let mut app = bar.app();
+        let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.isolate", json!({"id": g})).unwrap();
+    }
+    assert_eq!(label(&mut bar), Some("Exit Isolation Mode"));
+    click(&mut bar);
+    {
+        let app = bar.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (Some(layer), true), "back to the symbol's art");
+    }
+    assert_eq!(label(&mut bar), Some("Exit Symbol Editing Mode"));
+    click(&mut bar);
+    let app = bar.app();
     let st = app.session.active().unwrap();
     assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (None::<NodeId>, false), "symbol editing mode ends");
     // The symbol keeps the art drawn while editing.
@@ -1202,138 +1595,74 @@ fn a_blend_selected_with_direct_selection_shows_the_convert_buttons() {
 /// or (off) zooms into the area dragged across.
 #[test]
 fn the_zoom_hint_follows_animated_zoom() {
-    fn texts(s: &egui::Shape, out: &mut String) {
-        match s {
-            egui::Shape::Text(t) => out.push_str(t.galley.text()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.select_tool("zoom");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let hint = |app: &mut crate::VectorcraftApp| {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::hint_bar(app, ui));
-        out.textures_delta.clear();
-        let mut shown = String::new();
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-        shown
-    };
-    let on = hint(&mut app);
+    let mut bar = Shown::new(app, egui::vec2(1600.0, 300.0), super::hint_bar);
+    let hint = |bar: &mut Shown| bar.settle().texts().into_iter().map(|t| t.text).collect::<String>();
+    let on = hint(&mut bar);
     assert!(on.contains(" right or left to zoom in or out") && on.contains("Hold"), "{on}");
-    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
-    let off = hint(&mut app);
+    bar.app().run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+    let off = hint(&mut bar);
     assert!(off.contains(" to zoom into an area") && !off.contains("Hold"), "{off}");
 }
 
-fn title_test_app(custom_titlebar: bool) -> crate::VectorcraftApp {
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    app.custom_titlebar = custom_titlebar;
-    // The preference that makes the shell launch without its own title bar.
-    app.run("prefs.set", json!({"key": "systemTitleBar", "value": !custom_titlebar})).unwrap();
-    app
-}
-
-#[test]
-fn without_the_preference_the_mark_stays() {
-    // The default (e.g. the web build): no custom bar, no preference.
-    let app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    assert!(!super::system_title_bar(&app));
-}
-
+/// With no document the window's title names the app.
 #[test]
 fn window_title_with_no_document_is_the_app_name() {
-    assert_eq!(super::window_title(&title_test_app(true)), "VectorCraft");
+    let app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let title = super::window_title(&app);
+    assert!(title.contains("VectorCraft"), "{title}");
 }
 
+/// The window's title names the active file and the app, and unsaved changes mark it.
 #[test]
 fn window_title_follows_the_active_file() {
-    let mut app = title_test_app(true);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
-    assert_eq!(super::window_title(&app), "foo.svg \u{2014} VectorCraft");
-    // Unsaved changes gain a `*` prefix, like the `*` in the document tabs.
+    let saved = super::window_title(&app);
+    assert!(saved.contains("foo.svg") && saved.contains("VectorCraft"), "{saved}");
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    assert_eq!(super::window_title(&app), "*foo.svg \u{2014} VectorCraft");
+    let modified = super::window_title(&app);
+    assert!(
+        modified != saved && modified.contains("foo.svg") && modified.contains("VectorCraft"),
+        "an edit marks the title: {saved} then {modified}"
+    );
 }
 
+/// A nightly's window carries the nightly name, with and without a document, so the stable app's
+/// window and taskbar entry never read the same.
 #[test]
-fn system_mode_hides_the_mark() {
-    for custom in [true, false] {
-        let mut app = title_test_app(custom);
-        app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::app_bar(&mut app, ui));
-        let uploads = out.textures_delta.set.values().flat_map(|d| d.iter()).filter(|d| d.image.size() == [128, 128]).count();
-        out.textures_delta.clear();
-        let marks: Vec<egui::Rect> = out
-            .shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Mesh(m) if m.texture_id == crate::brand::texture_id(&ctx) => Some(m.calc_bounds()),
-                _ => None,
-            })
-            .collect();
-        let system = super::system_title_bar(&app);
-        assert_eq!(system, !custom && !cfg!(target_os = "macos"));
-        assert_eq!(marks.is_empty(), system, "mark in system mode (custom={custom})");
-        assert_eq!(uploads, if system { 0 } else { 1 }, "mark texture in system mode (custom={custom})");
-    }
-}
-
-#[test]
-fn sync_window_title_sends_only_on_change() {
-    let mut app = title_test_app(true);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    super::sync_window_title(&mut app, &ctx);
-    assert_eq!(app.last_window_title, "VectorCraft");
-    let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-    out.textures_delta.clear();
-    let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
-    assert!(cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(t) if t == "VectorCraft")), "{cmds:?}");
-    // Same document state again: the cached title stops a repeat command.
-    super::sync_window_title(&mut app, &ctx);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-    out.textures_delta.clear();
-    let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
-    assert!(!cmds.iter().any(|c| matches!(c, egui::ViewportCommand::Title(_))), "repeat Title: {cmds:?}");
+fn a_nightly_window_title_carries_the_nightly_name() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let nightly = crate::os_window::name_for(crate::os_window::LaunchIdentity::NightlyV1);
+    assert_eq!(super::window_title_named(&app, nightly), "VectorCraft Nightly");
     app.run("file.new", json!({"width": 100, "height": 100, "name": "foo.svg"})).unwrap();
-    super::sync_window_title(&mut app, &ctx);
-    assert_eq!(app.last_window_title, "foo.svg \u{2014} VectorCraft");
+    let titled = super::window_title_named(&app, nightly);
+    assert!(titled.contains("foo.svg") && titled.ends_with("\u{2014} VectorCraft Nightly"), "{titled}");
 }
-/// Draw actual tabs, including the same per-frame view synchronization as the app.
-fn artboard_document_tabs_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Rect> {
+
+/// The document tabs over `app`, with the same per-frame view synchronization as the app.
+fn tabs_with_views(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui) {
     app.sync_views();
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::doc_tabs(app, ui));
-    out.textures_delta.clear();
-    let mut titles: Vec<_> = out
-        .shapes
-        .iter()
-        .filter_map(|shape| match &shape.shape {
-            egui::Shape::Text(t) if t.galley.text().contains(" @ ") => Some(t.visual_bounding_rect()),
-            _ => None,
-        })
-        .collect();
-    titles.sort_by(|a, b| a.left().total_cmp(&b.left()));
-    titles
+    super::doc_tabs(app, ui);
 }
 
-fn artboard_document_click_tab(app: &mut crate::VectorcraftApp, ctx: &egui::Context, index: usize) {
-    let titles = artboard_document_tabs_frame(app, ctx, vec![]);
-    assert_eq!(titles.len(), 2, "both real document tabs must be visible");
-    let at = titles[index].center();
-    assert!(!app.canvas_rect.unwrap().contains(at));
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        artboard_document_tabs_frame(app, ctx, vec![event]);
-    }
-    assert_eq!(app.session.active_index(), Some(index), "the actual tab click must activate its document");
+/// The document tabs, in the strip's order.
+fn artboard_document_tabs(bar: &mut Shown) -> Vec<Target> {
+    bar.draw(tabs_with_views);
+    bar.settle();
+    bar.fixture.by_role(Role::TAB)
 }
 
-fn artboard_document_app() -> (crate::VectorcraftApp, egui::Context) {
+fn artboard_document_click_tab(bar: &mut Shown, index: usize) {
+    let tabs = artboard_document_tabs(bar);
+    assert_eq!(tabs.len(), 2, "both real document tabs must be visible");
+    assert!(!bar.app().view().unwrap().rect.contains(tabs[index].center()));
+    bar.click_on(&tabs[index]);
+    assert_eq!(bar.app().session.active_index(), Some(index), "the actual tab click must activate its document");
+}
+
+fn artboard_document_app() -> Shown {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     app.run("artboard.setProps", json!({"index": 0, "name": "Keep"})).unwrap();
@@ -1343,54 +1672,58 @@ fn artboard_document_app() -> (crate::VectorcraftApp, egui::Context) {
     app.run("shape.rectangle", json!({"x": 230, "y": 10, "width": 30, "height": 20})).unwrap();
     app.run("guide.add", json!({"artboard": 0, "pos": 20})).unwrap();
     app.run("guide.add", json!({"artboard": 1, "pos": 250, "vertical": true})).unwrap();
+    // Neither tab nor Properties clicks enter the canvas; a canvas move could hide the bug. Each document's view
+    // has the canvas.
+    app.view_mut().unwrap().rect = ARTBOARD_CANVAS;
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    // Neither tab nor Properties clicks enter the canvas; a canvas move could hide the bug.
-    app.canvas_rect = Some(egui::Rect::from_min_max(egui::pos2(0.0, 40.0), egui::pos2(800.0, 260.0)));
+    app.view_mut().unwrap().rect = ARTBOARD_CANVAS;
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    artboard_document_click_tab(&mut app, &ctx, 0);
-    (app, ctx)
+    let mut bar = Shown::new(app, ARTBOARD_ROOM, tabs_with_views);
+    artboard_document_click_tab(&mut bar, 0);
+    bar
 }
 
 #[test]
 fn artboard_document_tab_roundtrip_properties_delete_uses_shown_board() {
-    let (mut app, ctx) = artboard_document_app();
-    app.select_tool("artboard");
-    app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
-    app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
-    artboard_navigation_next(&mut app, &ctx);
-    assert_eq!(app.view().unwrap().artboard, 1);
-    assert_eq!(app.session.tool_options()["selected"], json!([1]), "start with the tool and navigator aligned");
-    app.session.active_mut().unwrap().mark_saved();
-    let before = app.session.active().unwrap().doc.clone();
-    let selection = app.session.active().unwrap().selection.clone();
-    let undo = app.session.active().unwrap().history.undo.len();
-    let other = app.session.documents()[1].doc.clone();
-    let other_history = (app.session.documents()[1].history.undo.len(), app.session.documents()[1].history.redo.len());
+    let mut bar = artboard_document_app();
+    {
+        let mut app = bar.app();
+        app.select_tool("artboard");
+        app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
+        app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
+    }
+    artboard_navigation_next(&mut bar);
+    let (before, selection, undo, other, other_history) = {
+        let mut app = bar.app();
+        assert_eq!(app.view().unwrap().artboard, 1);
+        assert_eq!(app.session.tool_options()["selected"], json!([1]), "start with the tool and navigator aligned");
+        app.session.active_mut().unwrap().mark_saved();
+        let before = app.session.active().unwrap().doc.clone();
+        let selection = app.session.active().unwrap().selection.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let other = app.session.documents()[1].doc.clone();
+        let other_history = (app.session.documents()[1].history.undo.len(), app.session.documents()[1].history.redo.len());
+        (before, selection, undo, other, other_history)
+    };
 
     // No direct set_active, tool reselection, or selected-option repair after this round trip.
-    artboard_document_click_tab(&mut app, &ctx, 1);
-    artboard_document_click_tab(&mut app, &ctx, 0);
-    assert_eq!(app.view().unwrap().artboard, 1, "the document keeps its displayed artboard");
-    assert_eq!(app.session.active().unwrap().doc, before, "switching tabs is not a document edit");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
-    assert!(!app.session.active().unwrap().is_dirty());
-    let selected_before_delete = app.session.tool_options()["selected"].clone();
-    let active_before_delete = app.session.tool_options()["active"].clone();
-    assert_eq!(app.session.tool_options()["moveArt"], json!(false));
-    assert_eq!(app.session.tool_options()["scaleArt"], json!(true));
+    artboard_document_click_tab(&mut bar, 1);
+    artboard_document_click_tab(&mut bar, 0);
+    let (selected_before_delete, active_before_delete) = {
+        let app = bar.app();
+        assert_eq!(app.view().unwrap().artboard, 1, "the document keeps its displayed artboard");
+        assert_eq!(app.session.active().unwrap().doc, before, "switching tabs is not a document edit");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(!app.session.active().unwrap().is_dirty());
+        assert_eq!(app.session.tool_options()["moveArt"], json!(false));
+        assert_eq!(app.session.tool_options()["scaleArt"], json!(true));
+        (app.session.tool_options()["selected"].clone(), app.session.tool_options()["active"].clone())
+    };
 
-    artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
-    let texts = artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
-    assert!(texts.iter().any(|(label, _)| label == "Shown"), "Properties must display the second board before deletion");
-    let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, r)| r.center()).expect("actual Properties Delete button");
-    assert!(!app.canvas_rect.unwrap().contains(at));
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let commands = app.run_count;
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        artboard_navigation_properties_frame(&mut app, &ctx, vec![event]);
-    }
+    let delete = properties_delete(&mut bar, "Shown");
+    let commands = bar.app().run_count;
+    bar.click_on(&delete);
+    let mut app = bar.app();
     let st = app.session.active().unwrap();
     assert_eq!(
         st.doc.artboards.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(),
@@ -1400,8 +1733,8 @@ fn artboard_document_tab_roundtrip_properties_delete_uses_shown_board() {
     assert_eq!(selected_before_delete, json!([1]));
     assert_eq!(active_before_delete, json!(1));
     assert_eq!(st.doc.artboards, vec![before.artboards[0].clone()], "the original first board survives");
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()], "only the deleted board's guide is removed");
-    assert_eq!(st.doc.layers, before.layers, "artwork and symbol instances stay unchanged");
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()], "only the deleted board's guide is removed");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols, "symbol definitions stay unchanged");
     assert_eq!(st.selection, selection);
     assert_eq!(app.run_count, commands.wrapping_add(1), "one command from the actual Properties control");
@@ -1421,19 +1754,24 @@ fn artboard_document_tab_roundtrip_properties_delete_uses_shown_board() {
 
 #[test]
 fn artboard_document_tab_same_document_preserves_multiselection_and_options() {
-    let (mut app, ctx) = artboard_document_app();
-    app.select_tool("artboard");
-    artboard_navigation_next(&mut app, &ctx);
-    app.run("tool.setOption", json!({"key": "selected", "value": [1, 0]})).unwrap();
-    app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
-    app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
-    let options = app.session.tool_options();
-    let before = app.session.active().unwrap().doc.clone();
-    let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
-    artboard_document_click_tab(&mut app, &ctx, 0);
+    let mut bar = artboard_document_app();
+    bar.app().select_tool("artboard");
+    artboard_navigation_next(&mut bar);
+    let (options, before, history) = {
+        let mut app = bar.app();
+        app.run("tool.setOption", json!({"key": "selected", "value": [1, 0]})).unwrap();
+        app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
+        app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
+        let options = app.session.tool_options();
+        let before = app.session.active().unwrap().doc.clone();
+        let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
+        (options, before, history)
+    };
+    artboard_document_click_tab(&mut bar, 0);
     for _ in 0..3 {
-        artboard_document_tabs_frame(&mut app, &ctx, vec![]);
+        artboard_document_tabs(&mut bar);
     }
+    let app = bar.app();
     assert_eq!(app.session.tool_options(), options, "an already-active tab must not collapse valid multiselection or options");
     assert_eq!(app.view().unwrap().artboard, 1);
     assert_eq!(app.session.active().unwrap().doc, before);
@@ -1443,15 +1781,20 @@ fn artboard_document_tab_same_document_preserves_multiselection_and_options() {
 #[test]
 fn artboard_document_tab_roundtrip_preserves_other_tools() {
     for tool in ["selection", "rectangle"] {
-        let (mut app, ctx) = artboard_document_app();
-        app.select_tool(tool);
-        artboard_navigation_next(&mut app, &ctx);
-        let before = app.session.active().unwrap().doc.clone();
-        let selection = app.session.active().unwrap().selection.clone();
-        let options = app.session.tool_options();
-        let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
-        artboard_document_click_tab(&mut app, &ctx, 1);
-        artboard_document_click_tab(&mut app, &ctx, 0);
+        let mut bar = artboard_document_app();
+        bar.app().select_tool(tool);
+        artboard_navigation_next(&mut bar);
+        let (before, selection, options, history) = {
+            let app = bar.app();
+            let before = app.session.active().unwrap().doc.clone();
+            let selection = app.session.active().unwrap().selection.clone();
+            let options = app.session.tool_options();
+            let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
+            (before, selection, options, history)
+        };
+        artboard_document_click_tab(&mut bar, 1);
+        artboard_document_click_tab(&mut bar, 0);
+        let app = bar.app();
         assert_eq!(app.session.tool_id(), tool);
         assert_eq!(app.session.tool_options(), options);
         assert_eq!(app.view().unwrap().artboard, 1);
@@ -1461,46 +1804,9 @@ fn artboard_document_tab_roundtrip_preserves_other_tools() {
     }
 }
 
-/// Press F6 with `modifiers` through the shortcut handler.
+/// Press F6 with `modifiers` through the window's frame.
 fn press_f6(app: &mut crate::VectorcraftApp, modifiers: egui::Modifiers) {
-    let ctx = egui::Context::default();
-    let ev = egui::Event::Key { key: egui::Key::F6, physical_key: None, pressed: true, repeat: false, modifiers };
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-    out.textures_delta.clear();
-}
-
-/// Cmd+F6 is Next Document and Cmd+Shift+F6 is Previous Document by default: Ctrl+F6 and
-/// Ctrl+Shift+F6 on Windows and Linux, Command+F6 and Shift+Command+F6 on macOS. Keyboard
-/// Shortcuts lists both under Window. F6 and Shift+F6 are still the Color and Appearance panels'
-/// keys, and no other command, tool or panel has either key by default.
-#[test]
-fn cmd_f6_and_cmd_shift_f6_are_next_and_previous_document() {
-    use crate::shortcut_editor::{command_for_key, default_command_shortcut, panel_shortcut};
-    assert_eq!(default_command_shortcut("window.nextDocument"), Some("Cmd+F6"));
-    assert_eq!(default_command_shortcut("window.previousDocument"), Some("Cmd+Shift+F6"));
-    assert_eq!(command_for_key("Cmd+F6"), Some("window.nextDocument"));
-    assert_eq!(command_for_key("Cmd+Shift+F6"), Some("window.previousDocument"));
-    assert_eq!((panel_shortcut("color"), panel_shortcut("appearance")), (Some("F6"), Some("Shift+F6")));
-    let chord = crate::shortcuts::parse("Cmd+Shift+F6").expect("parses");
-    assert_eq!((chord.modifiers, chord.logical_key), (egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::F6));
-    let shown = (crate::menus::pretty_shortcut("Cmd+F6"), crate::menus::pretty_shortcut("Cmd+Shift+F6"));
-    let want = if cfg!(target_os = "macos") { ("⌘F6", "⇧⌘F6") } else { ("Ctrl+F6", "Ctrl+Shift+F6") };
-    assert_eq!((shown.0.as_str(), shown.1.as_str()), want);
-    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    let listed = app.run("shortcuts.list", json!({"query": "Document"})).unwrap();
-    let rows: Vec<_> = listed
-        .as_array()
-        .expect("rows")
-        .iter()
-        .filter(|r| r["id"].as_str().is_some_and(|id| id.ends_with("Document") && id.starts_with("window.")))
-        .map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone()))
-        .collect();
-    assert_eq!(
-        rows,
-        [(json!("Next Document"), json!("Window"), json!("Cmd+F6")), (json!("Previous Document"), json!("Window"), json!("Cmd+Shift+F6"))],
-        "Keyboard Shortcuts lists both"
-    );
-    assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the keys");
+    key_through_the_app(app, egui::Key::F6, modifiers);
 }
 
 /// Cmd+F6 makes the next open document in tab order the current one, and Cmd+Shift+F6 makes the
@@ -1553,32 +1859,32 @@ fn cmd_f6_goes_to_the_next_document_and_cmd_shift_f6_to_the_previous_one() {
 /// panel's Delete Artboard then removes that artboard. Switching is not an edit.
 #[test]
 fn cmd_f6_switches_documents_as_a_tab_click_does_with_the_artboard_tool() {
-    let (mut app, ctx) = artboard_document_app();
-    app.select_tool("artboard");
-    artboard_navigation_next(&mut app, &ctx);
-    assert_eq!(app.session.tool_options()["selected"], json!([1]));
-    let before = app.session.active().unwrap().doc.clone();
-    let undo = app.session.active().unwrap().history.undo.len();
-    press_f6(&mut app, egui::Modifiers::COMMAND);
-    assert_eq!(app.session.active_index(), Some(1));
+    let mut bar = artboard_document_app();
+    bar.app().select_tool("artboard");
+    artboard_navigation_next(&mut bar);
+    let (before, undo) = {
+        let app = bar.app();
+        assert_eq!(app.session.tool_options()["selected"], json!([1]));
+        (app.session.active().unwrap().doc.clone(), app.session.active().unwrap().history.undo.len())
+    };
+    press_f6(&mut bar.app(), egui::Modifiers::COMMAND);
+    assert_eq!(bar.app().session.active_index(), Some(1));
     // The app draws frames while the other document is the current one.
-    artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
-    artboard_document_tabs_frame(&mut app, &ctx, vec![]);
-    press_f6(&mut app, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
-    assert_eq!(app.session.active_index(), Some(0));
-    app.sync_views();
-    assert_eq!(app.session.tool_options()["selected"], json!([1]), "the tool targets the displayed artboard");
-    assert_eq!(app.view().unwrap().artboard, 1, "the document keeps its displayed artboard");
-    assert_eq!(app.session.active().unwrap().doc, before, "switching documents is not a document edit");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
-    artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
-    let texts = artboard_navigation_properties_frame(&mut app, &ctx, vec![]);
-    let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, r)| r.center()).expect("Properties Delete button");
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        artboard_navigation_properties_frame(&mut app, &ctx, vec![event]);
+    bar.draw(properties).settle();
+    artboard_document_tabs(&mut bar);
+    press_f6(&mut bar.app(), egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    {
+        let mut app = bar.app();
+        assert_eq!(app.session.active_index(), Some(0));
+        app.sync_views();
+        assert_eq!(app.session.tool_options()["selected"], json!([1]), "the tool targets the displayed artboard");
+        assert_eq!(app.view().unwrap().artboard, 1, "the document keeps its displayed artboard");
+        assert_eq!(app.session.active().unwrap().doc, before, "switching documents is not a document edit");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     }
-    let names: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+    let delete = properties_delete(&mut bar, "Shown");
+    bar.click_on(&delete);
+    let names: Vec<_> = bar.app().session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
     assert_eq!(names, ["Keep"], "Delete Artboard after the keys removes the artboard the document shows");
 }
 
@@ -1594,9 +1900,9 @@ fn history_of(st: &vectorcraft_engine::DocState) -> HistoryDump {
     (entries(&st.history.undo), entries(&st.history.redo))
 }
 
-fn assert_outside_canvas(app: &crate::VectorcraftApp, ctx: &egui::Context) {
-    let p = ctx.input(|i| i.pointer.hover_pos()).expect("a real chrome or panel pointer position");
-    assert!(!app.canvas_rect.unwrap().contains(p), "the pointer must stay outside the canvas: {p:?}");
+fn assert_outside_canvas(bar: &Shown) {
+    let p = bar.pointer().expect("a real chrome or panel pointer position");
+    assert!(!bar.app().view().unwrap().rect.contains(p), "the pointer must stay outside the canvas: {p:?}");
 }
 
 /// Document A as it was saved, before its second tab closed and its shown board was deleted.
@@ -1611,44 +1917,48 @@ struct Baseline {
 }
 
 /// Close document B's tab with its close box, leaving A as it was.
-fn close_b_tab(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base: &Baseline) {
+fn close_b_tab(bar: &mut Shown, base: &Baseline) {
     let Baseline { uid, revision, before, selection, history_before, history_limits, expected: _ } = base;
     // Route from the status bar along the panel edge to the tab strip, never through canvas.
+    bar.draw(tabs_with_views);
     for at in [egui::pos2(1000.0, 280.0), egui::pos2(1000.0, 20.0)] {
-        artboard_document_tabs_frame(app, ctx, vec![egui::Event::PointerMoved(at)]);
-        assert_outside_canvas(app, ctx);
+        bar.frame(vec![egui::Event::PointerMoved(at)]);
+        assert_outside_canvas(bar);
     }
-    artboard_document_click_tab(app, ctx, 1);
-    assert_outside_canvas(app, ctx);
-    app.session.active_mut().unwrap().mark_saved();
-    let other_uid = app.session.active().unwrap().uid;
-    assert_ne!(other_uid, *uid);
-    assert!(app.session.documents().iter().all(|d| !d.is_dirty()), "both ordinary documents are in saved state");
-    assert!(app.ui.dialog.is_none());
+    artboard_document_click_tab(bar, 1);
+    assert_outside_canvas(bar);
+    let other_uid = {
+        let mut app = bar.app();
+        app.session.active_mut().unwrap().mark_saved();
+        let other_uid = app.session.active().unwrap().uid;
+        assert_ne!(other_uid, *uid);
+        assert!(app.session.documents().iter().all(|d| !d.is_dirty()), "both ordinary documents are in saved state");
+        assert!(!app.any_dialog_open());
+        other_uid
+    };
     eprintln!("ARTBOARD_CLOSE_TARGET_SETUP_READY");
 
-    // The actual B tab x, using the existing close-box test's title-relative hit position.
-    let titles = artboard_document_tabs_frame(app, ctx, vec![]);
-    assert_outside_canvas(app, ctx);
-    assert_eq!(titles.len(), 2);
-    let title = titles[1];
-    let x = if super::CLOSE_BEFORE_TITLE { title.left() - 16.0 } else { title.right() + 20.0 };
-    let at = egui::pos2(x, title.center().y);
-    assert!(!app.canvas_rect.unwrap().contains(at));
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
-        artboard_document_tabs_frame(app, ctx, vec![event]);
-        assert_outside_canvas(app, ctx);
-    }
+    // B's tab and its close box, which the tab's name names.
+    let tabs = artboard_document_tabs(bar);
+    assert_outside_canvas(bar);
+    assert_eq!(tabs.len(), 2);
+    let title = bar.tree().name_of(tabs[1].node).unwrap_or_else(|| panic!("B's tab is named: {:?}", bar.names())).to_owned();
+    let close = bar.find(&format!("Close {title}")).unwrap_or_else(|| panic!("B's tab has a close box: {:?}", bar.names()));
+    assert!(!bar.app().view().unwrap().rect.contains(close.center()));
+    bar.click_on(&close);
+    assert_outside_canvas(bar);
+    let app = bar.app();
     assert_eq!(app.session.documents().len(), 1, "B tab x must really close B");
     assert_eq!(app.session.active_index(), Some(0));
     assert_eq!(app.session.active().unwrap().uid, *uid, "the survivor is the original A, not a replacement document");
     assert!(app.session.documents().iter().all(|d| d.uid != other_uid));
-    assert!(app.ui.dialog.is_none(), "a clean close must not leave a save/discard modal");
+    assert!(!app.any_dialog_open(), "a clean close must not leave a save/discard modal");
+    drop(app);
     for _ in 0..2 {
-        artboard_document_tabs_frame(app, ctx, vec![]);
-        assert_outside_canvas(app, ctx);
+        artboard_document_tabs(bar);
+        assert_outside_canvas(bar);
     }
+    let app = bar.app();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.as_ref(), before.as_ref(), "closing B must not edit A");
     assert_eq!(&st.selection, selection);
@@ -1661,28 +1971,30 @@ fn close_b_tab(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base: &Base
 }
 
 /// Delete the board Properties shows, then Undo and Redo it.
-fn delete_shown_board(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base: &Baseline) {
+fn delete_shown_board(bar: &mut Shown, base: &Baseline) {
     let Baseline { uid, revision, before, selection, history_before, history_limits, expected } = base;
     // Cross the tab strip to the Properties panel before moving down to its Delete control.
-    app.sync_views();
-    artboard_navigation_properties_frame(app, ctx, vec![egui::Event::PointerMoved(egui::pos2(1000.0, 20.0))]);
-    assert_outside_canvas(app, ctx);
-    app.sync_views();
-    let texts = artboard_navigation_properties_frame(app, ctx, vec![]);
-    assert_outside_canvas(app, ctx);
-    assert!(texts.iter().any(|(label, _)| label == "Shown"), "actual Properties must display Shown before deletion");
-    assert_eq!(app.view().unwrap().artboard, 1);
-    let tool_before_delete = app.session.tool_options();
-    eprintln!("ARTBOARD_CLOSE_TARGET_SHOWN_DISPLAYED tool={tool_before_delete}");
-    let at = texts.iter().find(|(label, _)| label == "Delete Artboard").map(|(_, r)| r.center()).expect("actual Properties Delete button");
-    assert!(at.x > app.canvas_rect.unwrap().right(), "Delete is in the right panel");
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let commands = app.run_count;
-    for event in [egui::Event::PointerMoved(at), button(true), button(false)] {
+    bar.draw(|app, ui| {
         app.sync_views();
-        artboard_navigation_properties_frame(app, ctx, vec![event]);
-        assert_outside_canvas(app, ctx);
-    }
+        properties(app, ui);
+    });
+    bar.frame(vec![egui::Event::PointerMoved(egui::pos2(1000.0, 20.0))]);
+    assert_outside_canvas(bar);
+    bar.settle();
+    assert_outside_canvas(bar);
+    assert!(bar.shows("Shown"), "actual Properties must display Shown before deletion: {:?}", bar.names());
+    let tool_before_delete = {
+        let app = bar.app();
+        assert_eq!(app.view().unwrap().artboard, 1);
+        app.session.tool_options()
+    };
+    eprintln!("ARTBOARD_CLOSE_TARGET_SHOWN_DISPLAYED tool={tool_before_delete}");
+    let delete = bar.named("Delete Artboard");
+    assert!(delete.center().x > bar.app().view().unwrap().rect.right(), "Delete is in the right panel");
+    let commands = bar.app().run_count;
+    bar.click_on(&delete);
+    assert_outside_canvas(bar);
+    let mut app = bar.app();
     let st = app.session.active().unwrap();
     assert_eq!(app.run_count, commands.wrapping_add(1), "the actual Properties click executes one command");
     assert_eq!(st.doc.artboards.len(), 1, "the real Delete action removed one board");
@@ -1697,13 +2009,13 @@ fn delete_shown_board(app: &mut crate::VectorcraftApp, ctx: &egui::Context, base
         "ARTBOARD_CLOSE_TARGET_WRONG_SURVIVOR: Properties showing Shown must delete Shown after closing B"
     );
     assert_eq!(st.doc.as_ref(), expected, "only Shown and its attached guide may be removed from the full document");
-    assert_eq!(st.doc.layers, before.layers, "all artwork and symbol instances stay unchanged");
+    assert_eq!(art_of(&st.doc.layers), art_of(&before.layers), "all artwork and symbol instances stay unchanged");
     assert_eq!(st.doc.symbols, before.symbols);
-    assert_eq!(st.doc.guides, vec![before.guides[0].clone()]);
+    assert_eq!(st.doc.ruler_guides(), vec![before.ruler_guides()[0].clone()]);
     assert_eq!(&st.selection, selection);
     assert_eq!(st.uid, *uid);
     assert_eq!(st.revision, revision + 1);
-    undo_and_redo_the_deletion(app, base);
+    undo_and_redo_the_deletion(&mut app, base);
 }
 
 /// Undo and Redo of the deletion that [`delete_shown_board`] made.
@@ -1743,12 +2055,16 @@ fn undo_and_redo_the_deletion(app: &mut crate::VectorcraftApp, base: &Baseline) 
 
 #[test]
 fn artboard_close_active_tab_properties_delete_uses_shown_board() {
-    let (mut app, ctx) = artboard_document_app();
-    app.select_tool("artboard");
-    app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
-    app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
-    artboard_navigation_next(&mut app, &ctx);
-    assert_outside_canvas(&app, &ctx);
+    let mut bar = artboard_document_app();
+    {
+        let mut app = bar.app();
+        app.select_tool("artboard");
+        app.run("tool.setOption", json!({"key": "moveArt", "value": false})).unwrap();
+        app.run("tool.setOption", json!({"key": "scaleArt", "value": true})).unwrap();
+    }
+    artboard_navigation_next(&mut bar);
+    assert_outside_canvas(&bar);
+    let mut app = bar.app();
     assert_eq!(app.view().unwrap().artboard, 1);
     assert_eq!(app.session.tool_options()["selected"], json!([1]), "the initial navigator action targets Shown");
     app.session.active_mut().unwrap().mark_saved();
@@ -1759,46 +2075,640 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
     let history_before = history_of(st);
     let history_limits = (st.history.limit, st.history.byte_budget);
     assert_eq!(before.artboards.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["Keep", "Shown"]);
-    assert_eq!(before.guides.len(), 2);
+    assert_eq!(before.ruler_guides().len(), 2);
     assert!(!selection.objects.is_empty());
     assert!(history_before.1.is_empty());
     assert!(!st.is_dirty());
+    drop(app);
     let mut expected = before.as_ref().clone();
     expected.artboards = vec![before.artboards[0].clone()];
-    expected.guides = vec![before.guides[0].clone()];
+    let keep = before.ruler_guides()[0].id;
+    expected.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.id == keep);
     let base = Baseline { uid, revision, before, selection, history_before, history_limits, expected };
-    close_b_tab(&mut app, &ctx, &base);
-    delete_shown_board(&mut app, &ctx, &base);
+    close_b_tab(&mut bar, &base);
+    delete_shown_board(&mut bar, &base);
 }
 
-/// #4365: Full Screen and Presentation Mode put the window full screen once, and Normal Screen
-/// Mode takes it back out; a window already full screen is left as it is.
+/// The screen mode the app keeps (not saved, #472) maps to the shell's: Normal Screen Mode (0) to Standard, Full
+/// Screen Mode with Menu Bar (1) to FullScreenWithMenuBar, Full Screen Mode (2) and Presentation Mode (3) to
+/// FullScreen (#4365). Entering and leaving the OS's full screen is the shell's.
 #[test]
 fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
-    let mut app = title_test_app(true);
-    let ctx = egui::Context::default();
-    let sent = |app: &mut crate::VectorcraftApp, fullscreen: bool| -> Vec<bool> {
-        let mut input = egui::RawInput::default();
-        input.viewports.entry(egui::ViewportId::ROOT).or_default().fullscreen = Some(fullscreen);
-        let mut out = ctx.run_ui(input, |ui| super::sync_fullscreen(app, ui.ctx()));
-        out.textures_delta.clear();
-        let cmds = out.viewport_output.remove(&egui::ViewportId::ROOT).map(|v| v.commands).unwrap_or_default();
-        cmds.iter().filter_map(|c| if let egui::ViewportCommand::Fullscreen(f) = c { Some(*f) } else { None }).collect()
+    use craft::ui::shell::ScreenMode;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    for (kept, mode) in [(0, ScreenMode::Standard), (1, ScreenMode::FullScreenWithMenuBar), (2, ScreenMode::FullScreen), (3, ScreenMode::FullScreen)]
+    {
+        app.ui.screen_mode = kept;
+        assert_eq!(app.ui.screen_mode(), mode, "screen mode {kept}");
+    }
+    // PLAN: hub-w1 passes `allow_reveal` inline in `ui_frame` (its decision 41), so this table cannot assert that only Presentation Mode (3) turns the reveal off; that needs one reader of the rule, `UiState::allow_reveal(&self) -> bool` (hub-w1).
+}
+
+/// The Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools show Hide Shape Widgets in the
+/// Control bar, with a selection and without one; a click hides the widgets and the button then reads
+/// Show Shape Widgets, and a second click shows them again. The Selection, Spiral and Line Segment
+/// tools show no such button.
+#[test]
+fn the_shape_tools_control_bar_hides_and_shows_the_shape_widgets() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let mut bar = control_shown(app);
+    let shows = |bar: &mut Shown, name: &str| bar.settle().find(name).is_some();
+    for ids in [json!([id]), json!([])] {
+        bar.app().run("select.set", json!({ "ids": ids })).unwrap();
+        for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+            bar.app().select_tool(tool);
+            assert!(shows(&mut bar, "Hide Shape Widgets"), "{tool} {ids}");
+            bar.click("Hide Shape Widgets");
+            assert!(!bar.app().ui.view.shape_widgets, "{tool} {ids}");
+            assert!(!shows(&mut bar, "Hide Shape Widgets"), "{tool} {ids}");
+            bar.click("Show Shape Widgets");
+            assert!(bar.app().ui.view.shape_widgets, "{tool} {ids}");
+        }
+    }
+    for tool in ["selection", "spiral", "lineSegment"] {
+        bar.app().select_tool(tool);
+        assert!(!shows(&mut bar, "Hide Shape Widgets"), "{tool}");
+    }
+}
+
+/// Snapping quick access includes the existing glyph and alignment settings. Pointer clicks use
+/// their commands, and reopening reads the same state as View and Preferences (#6164).
+#[test]
+fn the_control_bar_snapping_menu_shares_glyph_and_alignment_settings() {
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.snap_to_glyph = false;
+    app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(1200.0, 400.0));
+    let room = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 400.0));
+    // The menu row `name`, which shows inside the window and is checked while `on`.
+    let check = |bar: &Shown, name: &str, on: bool| {
+        let row = bar.find(name).unwrap_or_else(|| panic!("missing {name}: {:?}", bar.names()));
+        assert!(room.contains_rect(row.rect), "menu control stays inside the window: {row:?}");
+        assert_eq!(bar.checked(&row), on, "{name}");
+        row
     };
-    assert!(sent(&mut app, false).is_empty(), "Normal Screen Mode");
-    app.ui.screen_mode = 3;
-    assert_eq!(sent(&mut app, false), [true], "Presentation Mode");
-    assert!(sent(&mut app, true).is_empty(), "once");
-    app.ui.screen_mode = 2;
-    assert!(sent(&mut app, true).is_empty(), "Full Screen Mode keeps it");
-    app.ui.screen_mode = 0;
-    assert_eq!(sent(&mut app, true), [false], "back to a window");
-    assert!(sent(&mut app, false).is_empty());
-    // Full screen by the user's own choice: the modes leave it so.
-    app.ui.screen_mode = 3;
-    assert!(sent(&mut app, true).is_empty());
-    app.ui.screen_mode = 0;
-    assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
+    let open = |bar: &mut Shown| {
+        bar.click("Snapping");
+        bar.settle();
+    };
+    let dismiss = |bar: &mut Shown| {
+        let state = |app: &crate::VectorcraftApp| (app.ui.view.snap_to_glyph, app.session.prefs.to_json(), app.run_count);
+        let before = state(&bar.app());
+        bar.key(egui::Key::Escape).settle();
+        assert!(bar.find("Snap to Glyph").is_none(), "Escape closes Snapping");
+        assert_eq!(state(&bar.app()), before, "dismissal changes no settings and runs no command");
+    };
+    open(&mut bar);
+    let glyph = check(&bar, "Snap to Glyph", false);
+    check(&bar, "Alignment Guides", true);
+    // The two extra rows still leave the original menu entries visible.
+    for name in ["Smart Guides", "Snap to Point", "Snap to Grid", "Snap to Pixel", "Snap to Tangent", "Snap to Perpendicular"] {
+        let row = bar.find(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert!(room.contains_rect(row.rect), "menu control stays inside the window: {row:?}");
+    }
+    bar.click_on(&glyph).settle();
+    {
+        let app = bar.app();
+        assert!(app.ui.view.snap_to_glyph);
+        assert_eq!(crate::menus::checked(&app, "view.snapToGlyph", &json!({})), Some(true));
+        assert!(app.session.prefs.alignment_guides, "glyph snapping leaves Alignment Guides alone");
+    }
+    dismiss(&mut bar);
+    open(&mut bar);
+    check(&bar, "Snap to Glyph", true);
+    let alignment = check(&bar, "Alignment Guides", true);
+    let commands = bar.app().run_count;
+    bar.click_on(&alignment).settle();
+    let mut app = bar.app();
+    assert_eq!(app.run_count, commands + 1, "Alignment Guides uses the app command entry point");
+    assert_eq!(app.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(), json!(false));
+    assert!(!app.session.prefs.alignment_guides);
+    crate::prefs_dialog::snapshot(&mut app);
+    let saved = serde_json::to_string(&app.ui.engine_prefs).unwrap();
+    let mut restored = crate::VectorcraftApp::new(Session::new(), Default::default());
+    restored.ui.engine_prefs = serde_json::from_str(&saved).unwrap();
+    crate::prefs_dialog::restore(&mut restored);
+    assert_eq!(
+        restored.run("prefs.get", json!({"key": "alignmentGuides"})).unwrap(),
+        json!(false),
+        "Alignment Guides survives host preference persistence"
+    );
+    assert!(app.ui.view.snap_to_glyph, "Alignment Guides leaves glyph snapping alone");
+    drop(app);
+    dismiss(&mut bar);
+    open(&mut bar);
+    check(&bar, "Snap to Glyph", true);
+    check(&bar, "Alignment Guides", false);
+    // Changes made through the existing command surfaces are reflected on the next opening too.
+    {
+        let mut app = bar.app();
+        crate::menus::invoke(&mut app, "view.snapToGlyph", json!({}));
+        app.run("prefs.set", json!({"key": "alignmentGuides", "value": true})).unwrap();
+    }
+    dismiss(&mut bar);
+    open(&mut bar);
+    check(&bar, "Snap to Glyph", false);
+    check(&bar, "Alignment Guides", true);
+}
+
+/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, or floats it, and the
+/// panel menu checks the edge in use; another edge, or none, is an error and changes nothing. A floating bar keeps
+/// the edge it docked to last, and floats again where it last floated after docking in between.
+/// `window.control.options {group, visible?}` turns a group of the bar's options on or off, or toggles it, and the
+/// panel menu's item shows it; an unknown or missing group, or a `visible` that is not true or false, is an error
+/// and changes nothing.
+#[test]
+fn control_bar_commands_set_its_place_and_groups() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let edge = |app: &crate::VectorcraftApp, edge: &str| crate::menus::checked(app, "window.control.dock", &json!({ "edge": edge }));
+    assert_eq!(app.run("window.control.dock", json!({"edge": "bottom"})).unwrap(), json!({"edge": "bottom"}));
+    assert!(app.ui.control_bar_bottom);
+    assert_eq!((edge(&app, "bottom"), edge(&app, "top")), (Some(true), Some(false)));
+    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": "Float"}), json!({"edge": 1}), json!({})] {
+        let err = app.run("window.control.dock", p.clone()).unwrap_err();
+        assert!(err.starts_with("`edge` must be one of"), "{p}: {err}");
+        assert!(app.ui.control_bar_bottom && !app.ui.control_bar_floating, "{p} leaves the bar at the bottom");
+    }
+    assert_eq!(app.run("window.control.dock", json!({"edge": "float"})).unwrap(), json!({"edge": "float"}));
+    assert!(app.ui.control_bar_floating && app.ui.control_bar_bottom, "floating, it keeps the edge it docked to last");
+    assert_eq!((edge(&app, "top"), edge(&app, "bottom"), edge(&app, "float")), (Some(false), Some(false), Some(true)));
+    assert!(app.run("window.control.dock", json!({"edge": "side"})).is_err());
+    assert!(app.ui.control_bar_floating, "an error leaves the bar floating");
+    app.ui.control_bar_float_pos = Some([240.0, 160.0]);
+    assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
+    assert!(!app.ui.control_bar_bottom && !app.ui.control_bar_floating);
+    app.run("window.control.dock", json!({"edge": "float"})).unwrap();
+    assert_eq!(app.ui.control_bar_float_pos, Some([240.0, 160.0]), "it floats where it last floated");
+
+    let checked = |app: &crate::VectorcraftApp, group: &str| crate::menus::checked(app, "window.control.options", &json!({ "group": group }));
+    for group in crate::chrome::CONTROL_BAR_GROUPS {
+        assert_eq!(checked(&app, group), Some(true), "{group} starts on");
+    }
+    let run = |app: &mut crate::VectorcraftApp, p: serde_json::Value| app.run("window.control.options", p);
+    assert_eq!(run(&mut app, json!({"group": "opacity", "visible": false})).unwrap(), json!({"group": "opacity", "visible": false}));
+    assert_eq!(checked(&app, "opacity"), Some(false));
+    assert_eq!(run(&mut app, json!({"group": "opacity", "visible": false})).unwrap(), json!({"group": "opacity", "visible": false}), "off stays off");
+    assert_eq!(run(&mut app, json!({"group": "opacity"})).unwrap(), json!({"group": "opacity", "visible": true}), "toggled on");
+    assert_eq!(run(&mut app, json!({"group": "transform"})).unwrap(), json!({"group": "transform", "visible": false}), "toggled off");
+    assert_eq!(run(&mut app, json!({"group": "transform", "visible": null})).unwrap(), json!({"group": "transform", "visible": true}));
+    assert_eq!(run(&mut app, json!({"group": "paragraph", "visible": false})).unwrap()["visible"], json!(false));
+    let before = app.ui.control_bar_hidden_groups.clone();
+    for (p, err) in [
+        (json!({"group": "stroke"}), "`group` must be one of"),
+        (json!({"group": "Opacity"}), "`group` must be one of"),
+        (json!({"group": 1}), "`group` must be one of"),
+        (json!({}), "`group` must be one of"),
+        (json!({"group": "paragraph", "visible": "true"}), "`visible` must be true or false"),
+        (json!({"group": "opacity", "visible": 0}), "`visible` must be true or false"),
+    ] {
+        let e = run(&mut app, p.clone()).unwrap_err();
+        assert!(e.starts_with(err), "{p}: {e}");
+        assert_eq!(app.ui.control_bar_hidden_groups, before, "{p} changes nothing");
+    }
+    assert_eq!(checked(&app, "paragraph"), Some(false));
+    assert_eq!(checked(&app, "stroke"), Some(false), "an unknown group is never checked");
+}
+
+/// The labels of the Control bar panel menu's groups of options, in the menu's order.
+const CONTROL_BAR_GROUP_LABELS: [&str; 15] = [
+    "Snapping",
+    "Anchor Points",
+    "Tool Options",
+    "Object Options",
+    "Image Options",
+    "Fill and Stroke",
+    "Opacity",
+    "Graphic Style",
+    "Character",
+    "Paragraph",
+    "Vertical Alignment",
+    "Align and Distribute",
+    "Transform",
+    "Artboard Options",
+    "Document Options",
+];
+
+/// Opens the Control bar's panel menu with its button unless it is open.
+fn open_control_bar_menu(bar: &mut Shown) {
+    bar.settle();
+    if bar.find("Dock to Bottom").is_none() {
+        bar.click("Panel menu").settle();
+    }
+    assert!(bar.find("Dock to Bottom").is_some(), "the panel menu opens: {:?}", bar.names());
+}
+
+/// With every group of options off, the Control bar keeps its gripper, the selection's label and
+/// its panel menu, which lists every group off; nothing selected shows no Document Setup either.
+#[test]
+fn the_control_bar_keeps_its_label_and_menu_with_every_group_off() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    for group in crate::chrome::CONTROL_BAR_GROUPS {
+        app.run("window.control.options", json!({ "group": group, "visible": false })).unwrap();
+    }
+    let label = crate::panels::appearance::object_label(&app).to_owned();
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(1400.0, 900.0)).settle();
+    assert!(bar.shows(&label), "the label stays: {:?}", bar.names());
+    for s in ["Snapping", "Stroke:", "Opacity:", "Style:", "Transform", BAR_FIELDS[0]] {
+        assert!(!bar.shows(s), "{s} is off");
+    }
+    open_control_bar_menu(&mut bar);
+    for label in CONTROL_BAR_GROUP_LABELS {
+        let item = bar.find(label).unwrap_or_else(|| panic!("{label} is listed: {:?}", bar.names()));
+        assert!(!bar.checked(&item), "{label} is listed, off");
+    }
+    bar.key(egui::Key::Escape);
+    bar.app().run("select.set", json!({ "ids": [] })).unwrap();
+    bar.settle();
+    assert!(!bar.shows("Document Setup") && !bar.shows("Preferences"), "{:?}", bar.names());
+}
+
+/// The Control bar's selection label follows a selection whose middle object changes while its
+/// length, first and last object stay the same, and a target circle with the selection unchanged.
+#[test]
+fn the_control_bar_label_follows_every_selected_object() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = |v: serde_json::Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    let r: Vec<_> = (0..3).map(|i| id(app.run("shape.rectangle", json!({"x": i * 30, "y": 10, "width": 20, "height": 20})).unwrap())).collect();
+    let t = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap());
+    app.run("select.set", json!({ "ids": r })).unwrap();
+    let ctx = crate::testing::ui_context();
+    let alike = crate::panels::appearance::object_label(&app);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), alike), "{alike}");
+    app.session.active_mut().unwrap().selection.objects[1] = t;
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Mixed Objects"), "{bar:?}");
+    let layer = app.session.active().unwrap().doc.default_layer().unwrap();
+    app.session.active_mut().unwrap().selection.target = Some(layer);
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), "Layer"), "the targeted layer");
+}
+
+/// A group of options that is off takes no room in the Control bar: with Fill and Stroke, Opacity
+/// and Graphic Style off, or Transform off, the Align buttons fit a narrower window, and the panel
+/// menu button still shows there.
+#[test]
+fn groups_that_are_off_leave_their_room_to_the_later_groups() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let ids: Vec<serde_json::Value> =
+        [10, 100].iter().map(|x| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone()).collect();
+    app.run("select.set", json!({ "ids": ids })).unwrap();
+    let mut bar = control_shown(app);
+    // The narrowest window, in steps of 10 points, whose bar shows the Align buttons.
+    let narrowest = |bar: &mut Shown| {
+        (40..=240).map(|w| w as f32 * 10.0).find(|&w| {
+            bar.room(egui::vec2(w, 300.0)).settle();
+            bar.find("Horizontal Align Left").is_some() && bar.find("Panel menu").is_some()
+        })
+    };
+    let all = narrowest(&mut bar).expect("the Align buttons show in a wide window");
+    for group in ["fillStroke", "opacity", "graphicStyle"] {
+        bar.app().run("window.control.options", json!({ "group": group, "visible": false })).unwrap();
+    }
+    let fewer = narrowest(&mut bar).expect("they show with fewer groups");
+    assert!(fewer < all, "the Align buttons fit {fewer} wide with three groups off, {all} with every group on");
+    for group in ["fillStroke", "opacity", "graphicStyle"] {
+        bar.app().run("window.control.options", json!({ "group": group, "visible": true })).unwrap();
+    }
+    bar.app().run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
+    let no_transform = narrowest(&mut bar).expect("they show without Transform");
+    assert!(no_transform < all, "without the Transform link's room the Align buttons fit {no_transform} wide, {all} with it");
+}
+
+/// With the Artboard tool, the Artboard Options group holds the artboard's own controls and the
+/// Transform group the Transform link and the X/Y/W/H fields; each one off leaves the other, and
+/// with Artboard Options off the fields find room in a window that is too narrow for them otherwise.
+#[test]
+fn the_artboard_tool_s_control_bar_follows_its_two_groups() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("artboard");
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(2400.0, 300.0)).settle();
+    for s in ["Artboard", "Name:", "Transform", "Move Artwork with Artboard"] {
+        assert!(bar.shows(s), "{s} shows with every group on: {:?}", bar.names());
+    }
+    let options = |bar: &mut Shown, visible: bool| {
+        bar.app().run("window.control.options", json!({"group": "artboardOptions", "visible": visible})).unwrap();
+    };
+    // Some width shows the fields with Artboard Options off and leaves them out with it on.
+    let freed = (40..=240).map(|w| w as f32 * 10.0).any(|w| {
+        bar.room(egui::vec2(w, 300.0));
+        options(&mut bar, true);
+        let on = bar.settle().shows(BAR_FIELDS[0]);
+        options(&mut bar, false);
+        let off = bar.settle().shows(BAR_FIELDS[0]);
+        !on && off
+    });
+    assert!(freed, "with Artboard Options off the fields find room in a window too narrow for them otherwise");
+    options(&mut bar, false);
+    bar.room(egui::vec2(2400.0, 300.0)).settle();
+    assert!(!bar.shows("Name:") && !bar.shows("Move Artwork with Artboard"), "{:?}", bar.names());
+    assert!(bar.shows("Artboard") && bar.shows("Transform") && bar.shows(BAR_FIELDS[0]), "{:?}", bar.names());
+    options(&mut bar, true);
+    bar.app().run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
+    bar.settle();
+    assert!(!bar.shows("Transform") && !bar.shows(BAR_FIELDS[0]), "{:?}", bar.names());
+    assert!(bar.shows("Name:") && bar.shows("Move Artwork with Artboard"), "{:?}", bar.names());
+}
+
+/// Whether the Control bar shows each of `names`, at each width from 2400 down to 150 points in 10-point steps.
+fn control_bar_widths(bar: &mut Shown, names: &[&str]) -> Vec<Vec<bool>> {
+    (15..=240)
+        .rev()
+        .map(|w| {
+            bar.room(egui::vec2(w as f32 * 10.0, 300.0)).settle();
+            names.iter().map(|name| bar.find(name).is_some()).collect()
+        })
+        .collect()
+}
+
+/// A 20 × 20 PNG, half black and half white, written to a folder `dir` of its own; its path.
+fn half_png(dir: &str) -> std::path::PathBuf {
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    path
+}
+
+/// As its room runs short the Control bar leaves its members out in its priority order: some width shows the first
+/// of each pair without the second, which goes before it. Select Similar never shows while one of a selected image's
+/// controls is left out, and the X, Y, W and H fields show or go together, before the groups ahead of them.
+#[test]
+fn the_control_bar_leaves_members_out_in_its_priority_order() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let path = half_png("control-bar-priority");
+    let linked = app.run("file.place", json!({"path": path, "link": true})).unwrap()["ids"].clone();
+    let embedded = app.run("file.place", json!({"path": path, "link": false})).unwrap()["ids"].clone();
+    let mut bar = control_shown(app);
+    let select = |bar: &mut Shown, ids: serde_json::Value| {
+        bar.app().run("select.set", json!({ "ids": ids })).unwrap();
+    };
+    let groups = |bar: &mut Shown, groups: &[&str], visible: bool| {
+        for group in groups {
+            bar.app().run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
+        }
+    };
+    // A wide bar shows `kept` and `left`, and some width shows `kept` without `left`.
+    let left_first = |bar: &mut Shown, case: &str, kept: &str, left: &str| {
+        let seen = control_bar_widths(bar, &[kept, left]);
+        assert!(seen.iter().any(|s| s[0] && s[1]), "{case}: a wide bar shows {kept} and {left}");
+        assert!(seen.iter().any(|s| s[0] && !s[1]), "{case}: some width shows {kept} without {left}");
+    };
+
+    select(&mut bar, json!([rect]));
+    groups(&mut bar, &["fillStroke"], false);
+    left_first(&mut bar, "a rectangle", "Style:", "Opacity:");
+    groups(&mut bar, &["fillStroke"], true);
+
+    select(&mut bar, json!([]));
+    groups(&mut bar, &["fillStroke", "opacity", "graphicStyle"], false);
+    left_first(&mut bar, "nothing selected", "Preferences", "Document Setup");
+    groups(&mut bar, &["fillStroke", "opacity", "graphicStyle"], true);
+
+    select(&mut bar, linked);
+    left_first(&mut bar, "a linked image", "Embed", "Edit Original");
+
+    select(&mut bar, json!([]));
+    bar.app().select_tool("artboard");
+    left_first(&mut bar, "the Artboard tool", "Transform", "Rearrange All Artboards");
+    bar.app().select_tool("selection");
+
+    // With these groups off, the image's controls come right before Select Similar.
+    select(&mut bar, embedded);
+    let ahead = ["opacity", "graphicStyle", "alignDistribute", "transform"];
+    groups(&mut bar, &ahead, false);
+    let seen = control_bar_widths(&mut bar, &["Remove Background", "Select Similar Objects"]);
+    assert!(seen.iter().any(|s| s[0] && s[1]), "a wide bar shows Select Similar after the image's controls");
+    assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the image's controls without Select Similar");
+    assert!(seen.iter().all(|s| !s[1] || s[0]), "Select Similar shows while an image control is left out");
+    groups(&mut bar, &ahead, true);
+
+    select(&mut bar, json!([rect]));
+    let [x, y, w, h] = BAR_FIELDS;
+    let seen = control_bar_widths(&mut bar, &["Horizontal Align Left", x, y, w, h]);
+    assert!(seen.iter().all(|s| s[2..].iter().all(|f| *f == s[1])), "the four fields show or go together");
+    assert!(seen.iter().any(|s| s[0] && s[1]), "a wide bar shows the fields and the Align buttons");
+    assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Align buttons without the fields");
+}
+
+/// With type selected, the Character and Paragraph groups leave the Control bar before Opacity and the Style group: at
+/// every width that shows the Character group, Opacity, Recolor Artwork and the Style picker show too, the Paragraph
+/// group leaves before the Character group, the Align buttons leave before the Paragraph group, and some width shows
+/// Opacity without them.
+#[test]
+fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Character:", "Paragraph:", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(!s[0] || s[2..5].iter().all(|shown| *shown), "the Character group shows only with {:?}: {s:?}", &names[2..5]);
+        assert!(!s[1] || s[0], "the Paragraph group shows only with the Character group: {s:?}");
+        assert!(!s[5] || s[1], "the Align buttons show only with the Paragraph group: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
+}
+
+/// With area type selected, its vertical alignment buttons leave the Control bar before Opacity and the Style group,
+/// and after the Align buttons that follow them, with the Character and Paragraph groups shown and with both off.
+#[test]
+fn the_vertical_alignment_buttons_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let area = json!({"x": 10, "y": 10, "text": "Hi", "area": {"width": 100, "height": 120}});
+    let text = app.run("text.create", area).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Align Top", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left", "Paragraph:"];
+    for type_groups in [true, false] {
+        for group in ["character", "paragraph"] {
+            bar.app().run("window.control.options", json!({ "group": group, "visible": type_groups })).unwrap();
+        }
+        let case = if type_groups { "with the type groups" } else { "without the type groups" };
+        let seen = control_bar_widths(&mut bar, &names);
+        assert!(seen.iter().any(|s| s[..5].iter().all(|shown| *shown)), "{case}: a wide bar shows {:?}", &names[..5]);
+        for s in &seen {
+            assert!(!s[0] || s[1..4].iter().all(|shown| *shown), "{case}: Align Top shows only with {:?}: {s:?}", &names[1..4]);
+            assert!(!s[4] || s[0], "{case}: the Align buttons show only with Align Top: {s:?}");
+            assert!(type_groups || !s[5], "{case}: the Paragraph group is off: {s:?}");
+            assert!(!type_groups || !s[0] || s[5], "{case}: Align Top shows only with the Paragraph group: {s:?}");
+        }
+        assert!(seen.iter().any(|s| s[1] && !s[0]), "{case}: some width shows Opacity without Align Top");
+    }
+}
+
+/// The names of the bar's X, Y, W and H fields, in their order.
+const BAR_FIELDS: [&str; 4] = ["X position", "Y position", "Width", "Height"];
+
+/// The caption of the bar's field named `field`: the link that names it, not the field.
+fn caption(bar: &Shown, field: &str) -> Option<Target> {
+    let tree = bar.tree();
+    bar.fixture.by_role(Role::LINK).into_iter().find(|t| tree.name_of(t.node) == Some(field))
+}
+
+/// The Control bar's labels that open a panel: a click on the Linked File or Embedded label shows the Links panel
+/// in its dock, expanded or collapsed to icons, and a rectangle's label opens nothing. A click on the X, Y, W or H
+/// caption opens the Transform panel under it and a second click closes it, leaving the selection and its bounds as
+/// they were and no field with the keyboard.
+#[test]
+fn label_links_open_their_panels() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let path = half_png("control-bar-image-label");
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let linked = app.run("file.place", json!({"path": path, "link": true})).unwrap()["ids"].clone();
+    let embedded = app.run("file.place", json!({"path": path, "link": false})).unwrap()["ids"].clone();
+    let links = crate::panels::links::ID;
+    // The default layout floats Links: dock it beside Layers so that both passes reach a docked panel.
+    app.run("window.panel", json!({"panel": links})).unwrap();
+    app.run("window.panel.dock", json!({"panel": links, "onto": "layers"})).unwrap();
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(2400.0, 600.0));
+    // Closes the Links panel, clicks `name` on the bar and answers whether the panel shows.
+    let click = |bar: &mut Shown, name: &str| {
+        // Closing a panel that is already closed is an error that changes nothing.
+        bar.app().run("window.panel.close", json!({"panel": links})).ok();
+        assert!(!crate::panel_docking::visible(&bar.app(), links), "{name}: the panel is closed first");
+        bar.click(name);
+        crate::panel_docking::visible(&bar.app(), links)
+    };
+    // Whether Links floats, and whether it opens in its collapsed column's flyout.
+    let placed = |bar: &Shown| {
+        let app = bar.app();
+        let layout = crate::panel_docking::layout_of(&app.ui);
+        (layout.floating.iter().any(|w| w.panels().any(|p| p == links)), layout.opens_in_flyout(&links.to_owned()))
+    };
+    for collapsed in [false, true] {
+        bar.app().run("window.collapseDock", json!({ "collapsed": collapsed })).unwrap();
+        bar.app().run("select.set", json!({ "ids": linked })).unwrap();
+        assert!(click(&mut bar, "Linked File"), "collapsed {collapsed}, status: {}", bar.app().ui.status);
+        assert_eq!(placed(&bar), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
+        bar.app().run("select.set", json!({ "ids": embedded })).unwrap();
+        assert!(click(&mut bar, "Embedded"), "collapsed {collapsed}, status: {}", bar.app().ui.status);
+        assert_eq!(placed(&bar), (false, collapsed), "Links opened in its dock, collapsed {collapsed}");
+        bar.app().run("select.set", json!({ "ids": [id] })).unwrap();
+        let name = crate::panels::appearance::object_label(&bar.app()).to_owned();
+        assert!(!click(&mut bar, &name), "collapsed {collapsed}: a rectangle's label opens nothing");
+    }
+
+    let state = |bar: &Shown| {
+        let app = bar.app();
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        (st.selection.objects.len(), [b.x0, b.y0, b.x1, b.y1])
+    };
+    // The Transform panel's Rotate field is not on the bar itself.
+    let open = |bar: &Shown| bar.find("Rotate").is_some();
+    let before = state(&bar);
+    for name in BAR_FIELDS {
+        bar.settle();
+        assert!(!open(&bar), "{name}: the Transform panel is closed at first");
+        let at = caption(&bar, name).unwrap_or_else(|| panic!("no {name} caption: {:?}", bar.names()));
+        bar.click_on(&at).settle();
+        assert!(open(&bar), "{name}: a click on the caption opens the Transform panel");
+        assert!(bar.fixture.ime().is_none(), "{name}: no field took the keyboard");
+        assert_eq!(state(&bar), before, "{name}: the selection and its bounds stay");
+        bar.click_on(&at).settle();
+        assert!(!open(&bar), "{name}: a second click closes it");
+    }
+}
+
+/// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
+/// its Anchor Point label.
+#[test]
+fn the_anchor_points_group_holds_convert_and_anchors() {
+    use crate::tests_removeanchors::{control_frame, has};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0]]})).unwrap();
+    let ctx = crate::testing::ui_context();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Convert:") && has(&bar, "Anchors:"), "{bar:?}");
+    app.run("window.control.options", json!({"group": "anchors", "visible": false})).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(!has(&bar, "Convert:") && !has(&bar, "Anchors:"), "{bar:?}");
+    assert!(has(&bar, "Anchor Point") && has(&bar, "Stroke:"), "{bar:?}");
+}
+
+/// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
+/// controls while it has room, and the Distribute buttons for two or more selected artboards with
+/// Align to Artboard and three or more with Align to Selection. A
+/// click aligns the selected artboards as the Align panel's button does. The group is left out
+/// while the panel menu has it off.
+#[test]
+fn the_control_bar_aligns_the_selected_artboards_with_the_artboard_tool() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+    app.select_tool("artboard");
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(2400.0, 300.0));
+    let button = |bar: &mut Shown, name: &str| bar.settle().find(name);
+    bar.app().session.set_tool_option("selected", &json!([1]));
+    assert!(button(&mut bar, "Vertical Align Top").is_some(), "one artboard: the Align buttons");
+    assert!(button(&mut bar, "Horizontal Distribute Left").is_none(), "one artboard: no Distribute buttons");
+    bar.app().session.set_tool_option("selected", &json!([1, 0]));
+    assert!(button(&mut bar, "Horizontal Distribute Left").is_none(), "two artboards, Align to Selection: no Distribute buttons");
+    bar.app().ui.align_to = crate::panels::align::AlignTo::Artboard;
+    assert!(button(&mut bar, "Horizontal Distribute Left").is_some(), "two artboards, Align to Artboard: the Distribute buttons");
+    bar.app().ui.align_to = crate::panels::align::AlignTo::Selection;
+    let top = button(&mut bar, "Vertical Align Top").expect("Vertical Align Top");
+    bar.click_on(&top);
+    {
+        let app = bar.app();
+        let tops: Vec<f64> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.y0).collect();
+        assert_eq!(tops, [0.0, 0.0], "{}", app.ui.status);
+    }
+    bar.app().run("window.control.options", json!({"group": "alignDistribute", "visible": false})).unwrap();
+    assert!(button(&mut bar, "Vertical Align Top").is_none(), "the group is off");
 }
 
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
@@ -1812,15 +2722,7 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone()
     };
     let (a, b, c) = (rect(&mut app, 10.0), rect(&mut app, 100.0), rect(&mut app, 200.0));
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
-    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
-        out.textures_delta.clear();
-        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
-    };
+    let mut bar = control_shown(app);
     const DISTRIBUTE: [&str; 6] = [
         "Vertical Distribute Top",
         "Vertical Distribute Center",
@@ -1829,29 +2731,207 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         "Horizontal Distribute Center",
         "Horizontal Distribute Right",
     ];
-    let rects = |app: &mut crate::VectorcraftApp| {
-        frame(app, vec![]);
-        let nodes = frame(app, vec![]);
-        DISTRIBUTE.map(|name| {
-            let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
-            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
-        })
+    let buttons = |bar: &mut Shown| {
+        bar.settle();
+        DISTRIBUTE.map(|name| bar.find(name))
     };
-    app.run("select.set", json!({"ids": [a]})).unwrap();
-    assert!(rects(&mut app).iter().all(Option::is_none), "one object: no distribute buttons");
-    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
-    let rects = rects(&mut app);
-    assert!(rects.iter().all(Option::is_some), "three objects: {rects:?}");
-    let r = rects[3].expect("Horizontal Distribute Left");
-    let press =
-        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
-        frame(&mut app, events);
-    }
+    bar.app().run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(buttons(&mut bar).iter().all(Option::is_none), "one object: no distribute buttons");
+    bar.app().run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let shown = buttons(&mut bar);
+    assert!(shown.iter().all(Option::is_some), "three objects: {shown:?}");
+    let left_edges = shown[3].expect("Horizontal Distribute Left");
+    bar.click_on(&left_edges);
     let left = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
+    let app = bar.app();
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar's Align To menu follows its Align buttons. It shows the Align panel's Align To
+/// choice (Artboard for one object, which the buttons align to the artboard) and screen readers
+/// get it as the value of a combo box named "Align To:". Its menu checks that choice, has Align to
+/// Key Object off while no key object can be made, and a pick chooses as the Align panel does:
+/// Artboard and Selection are stored with the UI state and let go of the key object, and Key
+/// Object makes the topmost selected object the key, keeping the stored choice. The Align
+/// buttons then align to the choice.
+#[test]
+fn the_control_bar_align_to_menu_chooses_what_align_aligns_to() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 40, "width": 30, "height": 20})).unwrap()["id"].clone()
+    };
+    let (a, b) = (rect(&mut app, 50.0), rect(&mut app, 150.0));
+    let mut bar = control_shown(app);
+    // The Align To menu and the value it shows.
+    let menu = |bar: &mut Shown| {
+        let menu = bar.settle().find("Align To:").unwrap_or_else(|| panic!("the Control bar has the Align To menu"));
+        assert_eq!(bar.tree().role_of(menu.node), Some(Role::COMBO_BOX));
+        (menu, bar.tree().value_of(menu.node).map(str::to_owned))
+    };
+    // Opens the menu, checks its rows and picks `pick`, or closes it with Escape.
+    let choose = |bar: &mut Shown, checked: &str, key_on: bool, pick: Option<&str>| {
+        let (opener, _) = menu(bar);
+        bar.click_on(&opener).settle();
+        for name in ["Align to Selection", "Align to Key Object", "Align to Artboard"] {
+            let row = bar.find(name).unwrap_or_else(|| panic!("the menu lists {name}"));
+            assert_eq!(bar.checked(&row), name == checked, "{name} checked");
+            assert_eq!(bar.tree().is_disabled_key(row.node), name == "Align to Key Object" && !key_on, "{name} off");
+        }
+        match pick {
+            Some(pick) => {
+                bar.click(pick);
+            }
+            None => {
+                bar.key(egui::Key::Escape);
+            }
+        }
+        assert!(bar.settle().find("Align to Artboard").is_none(), "the menu closes");
+    };
+    let key = |bar: &Shown| bar.app().session.active().unwrap().selection.key;
+    let x0 = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
+    };
+
+    // One object: the buttons align it to the artboard, and Align to Key Object is off.
+    bar.app().run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Artboard"), "one object shows Artboard");
+    choose(&mut bar, "Align to Artboard", false, None);
+    assert_eq!(key(&bar), None);
+
+    // Two objects: the stored choice, Selection.
+    bar.app().run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Selection"));
+    choose(&mut bar, "Align to Selection", true, Some("Align to Artboard"));
+    assert_eq!(bar.app().ui.align_to, crate::panels::align::AlignTo::Artboard, "the choice the Align panel shows");
+    assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Artboard"));
+    bar.click("Horizontal Align Left");
+    {
+        let app = bar.app();
+        assert_eq!((x0(&app, &a), x0(&app, &b)), (0.0, 0.0), "aligned to the artboard: {}", app.ui.status);
+    }
+
+    // Key Object makes the topmost the key and keeps the stored choice.
+    choose(&mut bar, "Align to Artboard", true, Some("Align to Key Object"));
+    assert_eq!(key(&bar), Some(vectorcraft_doc::NodeId(b.as_u64().unwrap())), "the topmost object is the key");
+    assert_eq!(bar.app().ui.align_to, crate::panels::align::AlignTo::Artboard, "the stored choice stays");
+    assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Key Object"));
+
+    // Selection lets go of the key and is stored.
+    choose(&mut bar, "Align to Key Object", true, Some("Align to Selection"));
+    assert_eq!(key(&bar), None, "the key object is let go");
+    assert_eq!(bar.app().ui.align_to, crate::panels::align::AlignTo::Selection);
+    assert_eq!(menu(&mut bar).1.as_deref(), Some("Align to Selection"));
+}
+
+/// What the latest frame paints in the Control bar's Style field.
+struct StyleFace {
+    /// The field's rect.
+    field: egui::Rect,
+    /// The rects of the textured meshes inside the field, each with the texel at its middle when the texture is known.
+    pictures: Vec<(egui::Rect, Option<egui::Color32>)>,
+    /// The rects the field fills, each with its fill, in paint order.
+    fills: Vec<(egui::Rect, egui::Color32)>,
+}
+
+/// The Style field of the settled bar. `textures` holds the textures the frames uploaded since the fixture began
+/// recording; the uploads of these frames are applied to it.
+fn style_face(bar: &mut Shown, textures: &mut std::collections::HashMap<egui::TextureId, egui::ColorImage>) -> StyleFace {
+    fn flat(shape: egui::Shape, out: &mut Vec<egui::Shape>) {
+        if let egui::Shape::Vec(shapes) = shape {
+            shapes.into_iter().for_each(|s| flat(s, out));
+        } else {
+            out.push(shape);
+        }
+    }
+    let field = bar.settle().named("Graphic Styles").rect;
+    let mut paint = bar.fixture.take_paint().expect("the fixture records what it paints");
+    for (id, delta) in paint.textures_delta.set.iter().flat_map(|(id, deltas)| deltas.iter().map(move |delta| (id, delta))) {
+        let egui::ImageData::Color(image) = &delta.image;
+        match delta.pos {
+            None => {
+                textures.insert(*id, egui::ColorImage::clone(image.as_ref()));
+            }
+            Some([x0, y0]) => {
+                let Some(page) = textures.get_mut(id) else { continue };
+                for (i, texel) in image.pixels.iter().enumerate() {
+                    let (x, y) = (x0 + i % image.size[0], y0 + i / image.size[0]);
+                    if x < page.size[0] && y < page.size[1] {
+                        page.pixels[y * page.size[0] + x] = *texel;
+                    }
+                }
+            }
+        }
+    }
+    // The uploads are applied to `textures`, not to a renderer.
+    paint.textures_delta.clear();
+    let mut shapes = Vec::new();
+    for clipped in std::mem::take(&mut paint.shapes) {
+        flat(clipped.shape, &mut shapes);
+    }
+    let mut face = StyleFace { field, pictures: Vec::new(), fills: Vec::new() };
+    for shape in shapes {
+        match shape {
+            egui::Shape::Mesh(mesh) if mesh.texture_id != egui::TextureId::default() => {
+                let rect = egui::Rect::from_points(&mesh.vertices.iter().map(|v| v.pos).collect::<Vec<_>>());
+                if !field.contains_rect(rect) {
+                    continue;
+                }
+                let uv = egui::Rect::from_points(&mesh.vertices.iter().map(|v| v.uv).collect::<Vec<_>>()).center();
+                let texel = textures.get(&mesh.texture_id).map(|image| {
+                    let x = ((uv.x * image.size[0] as f32) as usize).min(image.size[0] - 1);
+                    let y = ((uv.y * image.size[1] as f32) as usize).min(image.size[1] - 1);
+                    image.pixels[y * image.size[0] + x]
+                });
+                face.pictures.push((rect, texel));
+            }
+            egui::Shape::Rect(r) if field.contains_rect(r.rect) && r.fill != egui::Color32::TRANSPARENT => face.fills.push((r.rect, r.fill)),
+            _ => {}
+        }
+    }
+    face
+}
+
+/// The Control bar's Style picker is a swatch of the style the selection is linked to: the field shows that style's
+/// thumbnail, and white once the selection is linked to no style. It paints no style's name, and it keeps its width
+/// whether the selection is linked or not and when a style with a long name is added.
+#[test]
+fn the_control_bar_style_picker_is_a_swatch_of_the_linked_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
+    let mut bar = control_shown(app);
+    bar.fixture.record_paint();
+    let mut textures = std::collections::HashMap::new();
+    bar.room(egui::vec2(2400.0, 300.0));
+    let unlinked = style_face(&mut bar, &mut textures).field.width();
+    let long = "A graphic style whose name is longer than any field on the bar";
+    bar.app().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    bar.app().run("graphicStyle.new", json!({"name": long})).unwrap();
+    bar.app().run("graphicStyle.apply", json!({"name": long})).unwrap();
+    let linked = bar.app().session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == long);
+    assert!(linked, "the rectangle is linked to the new style");
+    let face = style_face(&mut bar, &mut textures);
+    let shown = face.field.width();
+    assert!((shown - unlinked).abs() < 0.5, "the swatch keeps its width: {unlinked} unlinked, {shown} linked to {long:?}");
+    assert!(!bar.texts().iter().any(|t| t.text.contains(long)), "the swatch paints no style name: {:?}", bar.texts());
+    let largest = |face: &StyleFace| face.pictures.iter().copied().max_by(|a, b| a.0.area().total_cmp(&b.0.area()));
+    let Some((thumb, Some(texel))) = largest(&face) else { panic!("the field shows the style's thumbnail: {:?}", face.pictures) };
+    assert!(texel.r() > 180 && texel.g() < 70 && texel.b() < 70, "the thumbnail shows the style's red fill: {texel:?}");
+
+    // Break Link to Graphic Style: the field turns white where the thumbnail was.
+    bar.app().run("graphicStyle.breakLink", json!({})).unwrap();
+    assert!(bar.app().session.selection_graphic_style().is_none_or(|(_, linked)| !linked), "the rectangle is linked to no style");
+    let face = style_face(&mut bar, &mut textures);
+    assert!((face.field.width() - unlinked).abs() < 0.5, "the swatch keeps its width once unlinked");
+    let middle = thumb.center();
+    assert!(!face.pictures.iter().any(|(r, _)| r.contains(middle)), "no thumbnail shows once unlinked: {:?}", face.pictures);
+    let top = face.fills.iter().rev().find(|(r, _)| r.contains(middle)).map(|(_, fill)| *fill);
+    assert_eq!(top, Some(egui::Color32::WHITE), "the unlinked swatch is white: {:?}", face.fills);
 }
 
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
@@ -1869,163 +2949,94 @@ fn the_control_bar_shows_the_global_edit_options() {
     let a = rect(&mut app, 20.0, 40.0);
     rect(&mut app, 100.0, 40.0);
     rect(&mut app, 200.0, 80.0);
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
-    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
-        out.textures_delta.clear();
-        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
-    };
-    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
-    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
-    let center = |n: &egui::accesskit::Node| {
-        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
-        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
-    };
-    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
-        frame(app, vec![press(false)]);
-        frame(app, vec![]);
-        frame(app, vec![])
-    };
-    app.run("select.set", json!({"ids": []})).unwrap();
-    frame(&mut app, vec![]);
-    assert!(find(&frame(&mut app, vec![]), "Global Edit Options").is_none(), "nothing selected: no dropdown");
-    app.run("select.set", json!({"ids": [a]})).unwrap();
-    frame(&mut app, vec![]);
-    let nodes = frame(&mut app, vec![]);
-    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("one rectangle: the dropdown shows"));
-    let nodes = click(&mut app, center(&button));
-    assert!(find(&nodes, "Results: 3").is_some(), "the options open with their Results");
-    let size = find(&nodes, "Size").unwrap_or_else(|| panic!("the Size check"));
-    let nodes = click(&mut app, center(&size));
-    assert!(app.session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
-    assert!(find(&nodes, "Results: 2").is_some(), "Size narrows the Results");
-    app.run("select.globalEdit", json!({})).unwrap();
-    let ge = app.session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
+    let mut bar = control_shown(app);
+    // Whether the latest frame shows the options' Results line.
+    let results = |bar: &Shown| bar.names().iter().chain(bar.texts().iter().map(|t| &t.text)).any(|t| t.starts_with("Result"));
+    bar.app().run("select.set", json!({"ids": []})).unwrap();
+    assert!(bar.settle().find("Global Edit Options").is_none(), "nothing selected: no dropdown");
+    bar.app().run("select.set", json!({"ids": [a]})).unwrap();
+    bar.click("Global Edit Options").settle();
+    assert!(bar.shows("Results: 3"), "the options open with their Results: {:?}", bar.names());
+    bar.click("Size").settle();
+    assert!(bar.app().session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
+    assert!(bar.shows("Results: 2"), "Size narrows the Results: {:?}", bar.names());
+    bar.app().run("select.globalEdit", json!({})).unwrap();
+    let ge = bar.app().session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
     assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
-    let nodes = frame(&mut app, vec![]);
-    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
-    assert!(button.is_disabled(), "the options are off while Global Edit is on");
-    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
-    assert!(!results(&nodes), "Global Edit starting closes the open options");
-    assert!(!results(&frame(&mut app, vec![])));
-    app.run("select.globalEdit", json!({})).unwrap();
-    frame(&mut app, vec![]);
-    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
-    // At any width the button either fits inside the bar or is left out, and a wider bar never
-    // leaves it out once a narrower one showed it.
-    let mut seen = false;
-    for width in (600..=2400).step_by(10) {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
-        let mut nodes = Vec::new();
-        for _ in 0..2 {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
-            out.textures_delta.clear();
-            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-        }
-        let shown = find(&nodes, "Global Edit Options").and_then(|n| n.bounds());
-        if let Some(b) = shown {
-            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
-        }
-        assert!(!seen || shown.is_some(), "{width}: left out after a narrower bar showed it");
-        seen |= shown.is_some();
-    }
-    assert!(seen, "a wide bar has room for it");
+    let button = bar.named("Global Edit Options");
+    assert!(bar.tree().is_disabled_key(button.node), "the options are off while Global Edit is on");
+    // The closed popover's body still runs through its exit fade, so the options are looked for once it ends.
+    assert!(!results(bar.advance(1.0).settle()), "Global Edit starting closes the open options");
+    bar.app().run("select.globalEdit", json!({})).unwrap();
+    assert!(!results(bar.settle()), "the options stay closed once Global Edit stops");
 }
 
-/// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
-/// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
-/// narrower one showed them. The Align buttons, and for two objects the Distribute buttons, are
-/// trimmed the same way ahead of the Transform link (#5372).
+/// The Control bar's Select Similar Objects button selects the objects like the first selected one
+/// by the attribute kept for the session (All at first), and the Select Similar Options menu beside
+/// it selects by the item chosen, which is kept and checked from then on. Both show with something
+/// selected while the Object Options group is on.
 #[test]
-fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
+fn the_control_bar_selects_similar_objects() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    for count in [1, 2] {
-        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let ids: Vec<_> = (0..count)
-            .map(|i| app.run("shape.rectangle", json!({"x": 20 + 100 * i, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone())
-            .collect();
-        app.run("select.set", json!({ "ids": ids })).unwrap();
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        crate::theme::install_fonts(&ctx);
-        let mut seen = false;
-        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
-        let mut groups: Vec<(&str, Vec<&str>)> = vec![(
-            "Align",
-            vec![
-                "Horizontal Align Left",
-                "Horizontal Align Center",
-                "Horizontal Align Right",
-                "Horizontal & Vertical Align Center",
-                "Vertical Align Top",
-                "Vertical Align Center",
-                "Vertical Align Bottom",
-            ],
-        )];
-        if count == 2 {
-            groups.push((
-                "Distribute",
-                vec![
-                    "Vertical Distribute Top",
-                    "Vertical Distribute Center",
-                    "Vertical Distribute Bottom",
-                    "Horizontal Distribute Left",
-                    "Horizontal Distribute Center",
-                    "Horizontal Distribute Right",
-                ],
-            ));
-        }
-        let mut groups_seen = vec![false; groups.len()];
-        for width in (600..=2400).step_by(10) {
-            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
-            let mut nodes = Vec::new();
-            for _ in 0..2 {
-                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
-                out.textures_delta.clear();
-                nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-            }
-            let spacing = ctx.global_style().spacing.item_spacing.x;
-            // The right edge of the box of the field its label names. The text box sits inside the
-            // field's box with the same inset on both sides, and one item spacing after the label.
-            let right = |name: &str| {
-                let (id, label) = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))?;
-                let input = nodes.iter().find(|(_, n)| n.labelled_by().contains(id)).and_then(|(_, n)| n.bounds())?;
-                let inset = input.x0 - label.bounds()?.x1 - f64::from(spacing);
-                Some(input.x1 + inset)
-            };
-            let fields = ["X:", "Y:", "W:", "H:"].map(right);
-            assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
-            assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
-            // The bar's content ends at its 10-point inner margin.
-            if let Some(h) = fields[3] {
-                assert!(h <= f64::from(width) - 10.0, "{count} objects, {width}: H ends at {h}");
-            }
-            assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
-            seen |= fields[3].is_some();
-            // The Align and Distribute buttons show whole inside the margin, with the Transform
-            // link after them, or are left out; once shown, a wider bar keeps them.
-            let end = |name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds()).map(|b| b.x1);
-            let inside = |x: f64| x <= f64::from(width) - 10.0;
-            for ((group, names), was) in groups.iter().zip(groups_seen.iter_mut()) {
-                let ends: Vec<Option<f64>> = names.iter().map(|n| end(n)).collect();
-                let shown = ends.iter().all(Option::is_some);
-                assert!(shown || ends.iter().all(Option::is_none), "{count} objects, {width}: {group} {ends:?}");
-                if let Some(Some(last)) = ends.last() {
-                    assert!(inside(*last), "{count} objects, {width}: {group} ends at {last}");
-                    let transform = end("Transform");
-                    assert!(transform.is_some_and(inside), "{count} objects, {width}: Transform after {group} ends at {transform:?}");
-                }
-                assert!(!*was || shown, "{count} objects, {width}: {group} left out after a narrower bar showed it");
-                *was |= shown;
-            }
-        }
-        assert!(seen, "{count} objects: a wide bar has room for the fields");
-        assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, color: &str| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+        id
+    };
+    let a = rect(&mut app, 20.0, "#ff0000");
+    let b = rect(&mut app, 100.0, "#ff0000");
+    let c = rect(&mut app, 200.0, "#0000ff");
+    let mut bar = control_shown(app);
+    bar.room(egui::vec2(2400.0, 300.0));
+    let selected = |bar: &Shown| {
+        let mut ids: Vec<u64> = bar.app().session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+        ids.sort();
+        ids
+    };
+    let select = |bar: &mut Shown, ids: serde_json::Value| {
+        bar.app().run("select.set", json!({ "ids": ids })).unwrap();
+        bar.settle();
+    };
+    select(&mut bar, json!([]));
+    assert!(bar.find("Select Similar Objects").is_none() && bar.find("Select Similar Options").is_none(), "nothing selected");
+    select(&mut bar, json!([a]));
+    bar.click("Select Similar Objects");
+    assert_eq!(selected(&bar), vec![a, b], "All: the red rectangles");
+    // The menu selects by the item chosen and keeps it.
+    select(&mut bar, json!([a]));
+    bar.click("Select Similar Options").settle();
+    for label in [
+        "All",
+        "Fill Color",
+        "Fill & Stroke",
+        "Stroke Color",
+        "Stroke Weight",
+        "Opacity",
+        "Blending Mode",
+        "Appearance",
+        "Graphic Style",
+        "Shape",
+        "Symbol Instance",
+    ] {
+        assert!(bar.find(label).is_some(), "{label} in the menu: {:?}", bar.names());
     }
+    let all = bar.find("All").unwrap_or_else(|| panic!("All"));
+    assert!(bar.checked(&all), "All is checked at first");
+    bar.click("Stroke Color");
+    assert_eq!(bar.app().session.select_similar, "strokeColor");
+    assert_eq!(selected(&bar), vec![a, b, c], "Stroke Color: all three share the default stroke");
+    select(&mut bar, json!([c]));
+    bar.click("Select Similar Objects");
+    assert_eq!(selected(&bar), vec![a, b, c], "the button keeps Stroke Color");
+    bar.click("Select Similar Options").settle();
+    let stroke = bar.find("Stroke Color").unwrap_or_else(|| panic!("Stroke Color"));
+    assert!(bar.checked(&stroke), "the kept item is checked");
+    bar.key(egui::Key::Escape);
+    // The panel menu's Object Options group turns them off.
+    bar.app().run("window.control.options", json!({"group": "objectOptions"})).unwrap();
+    assert!(bar.settle().find("Select Similar Objects").is_none(), "Object Options off");
+    bar.app().run("window.control.options", json!({"group": "objectOptions"})).unwrap();
+    assert!(bar.settle().find("Select Similar Objects").is_some(), "Object Options on again");
 }

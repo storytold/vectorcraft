@@ -101,15 +101,24 @@ impl PathEffect {
     }
 }
 
-/// Type on a Path Options › Align to Path: which height of the type runs along the path.
+/// Type on a Path Options › Align to Path: which height of the type runs along the path. Each
+/// character is measured by its own font, size and vertical scale, and in vertical type by its own
+/// size and horizontal scale. An inline graphic moves as a character of its run would, by its
+/// run's vertical scale in vertical type too. These distances are VectorCraft's own values.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PathAlign {
-    /// The font's top edge: the type hangs below the path.
+    /// The top of the font's em box: the type hangs below the path. The em box is the font's
+    /// ideographic em box (from its `BASE` table, its typographic or `hhea` box, or its
+    /// ideographs), else an em box centered on the cap height, else a box whose top is 0.88 em
+    /// above the baseline. In vertical type the characters move half an em.
     Ascender,
-    /// The font's bottom edge: the type stands above the path.
+    /// The bottom of the font's bounding box, else the font's descent: the type stands above the
+    /// path. In vertical type the characters move half an em the other way.
     Descender,
-    /// Halfway between the ascender and the descender.
+    /// A line at half the height of the top of the font's H above the baseline, else at half its
+    /// cap height, else at the middle of its em box. In vertical type the characters stay on the
+    /// path.
     Center,
     /// The baseline (the default).
     #[default]
@@ -158,6 +167,15 @@ pub struct AreaOptions {
     /// How the frame and its text fit each other (Auto Size, Shrink Text to Fit).
     #[serde(skip_serializing_if = "crate::skip::is_default")]
     pub fit: AreaFit,
+    /// Dynamic Text's Block ([`super::TextObject::dynamic_text`] on area type): the Desired word
+    /// spacing the layout sets every paragraph with ([`super::TextObject::layout_justification`]), in
+    /// percent of a word space (100, the default, is left out when saved).
+    #[serde(skip_serializing_if = "AreaOptions::is_default_word_gap")]
+    pub word_gap: f64,
+    /// Dynamic Text's Block: the points added to each character's size to give its leading (0, the
+    /// default, is left out when saved).
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub line_gap: f64,
 }
 
 impl Default for AreaOptions {
@@ -173,6 +191,8 @@ impl Default for AreaOptions {
             vertical_align: VerticalAlign::Top,
             flow: TextFlow::Columns,
             fit: AreaFit::None,
+            word_gap: Self::DEFAULT_WORD_GAP,
+            line_gap: 0.0,
         }
     }
 }
@@ -180,6 +200,21 @@ impl Default for AreaOptions {
 impl AreaOptions {
     /// The most rows, and the most columns, area type can have.
     pub const MAX_ROWS_COLUMNS: usize = 100;
+    /// Block's word gap range (percent of a word space), the Justification word spacing range.
+    pub const WORD_GAP: (f64, f64) = (0.0, 1000.0);
+    /// Block's word gap new type starts with: the font's own word space.
+    pub const DEFAULT_WORD_GAP: f64 = 100.0;
+    /// Block's line gap range in points.
+    pub const LINE_GAP: (f64, f64) = (-1296.0, 1296.0);
+    fn is_default_word_gap(v: &f64) -> bool {
+        *v == Self::DEFAULT_WORD_GAP
+    }
+    /// Block's gaps kept within their ranges; a gap that is not a number gives its default.
+    pub fn block_gaps(&self) -> (f64, f64) {
+        let word = if self.word_gap.is_finite() { self.word_gap.clamp(Self::WORD_GAP.0, Self::WORD_GAP.1) } else { Self::DEFAULT_WORD_GAP };
+        let line = if self.line_gap.is_finite() { self.line_gap.clamp(Self::LINE_GAP.0, Self::LINE_GAP.1) } else { 0.0 };
+        (word, line)
+    }
 }
 
 /// [`AreaOptions::rows`] or [`AreaOptions::columns`], read as a `u64` and clamped to

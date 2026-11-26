@@ -9,7 +9,6 @@
 //! the stroke with what the pen recorded on it (`StrokeLayer::pressure`, `tilt`, `bearing` and
 //! `rotation`): the sweep is sampled densely and each sample takes the nib for the pen there.
 
-use vectorcraft_color::Paint;
 use vectorcraft_doc::{Node, StrokeLayer};
 use vectorcraft_geom::{BezPath, PathData, Point, SubPath, Vec2};
 
@@ -78,7 +77,11 @@ fn samples(t: &Track, step: Option<f64>) -> Vec<(Point, Vec2, f64)> {
             let pieces = (seg / step).ceil().clamp(1.0, MAX_STEPS) as usize;
             for k in 1..pieces {
                 let u = k as f64 / pieces as f64;
-                out.push((p.lerp(t.verts[i + 1], u), t.dirs[i], (t.cum[i] + seg * u) / len));
+                let s = t.cum[i] + seg * u;
+                // On a chord of a flattened curve the samples follow the smooth frame through the
+                // vertices.
+                let (q, tg) = if t.curved.get(i).copied().unwrap_or(false) { t.frame_in(i, u) } else { (p.lerp(t.verts[i + 1], u), t.dirs[i]) };
+                out.push((q, tg, s / len));
             }
         }
     }
@@ -194,7 +197,70 @@ fn offset_track(t: &Track, d: f64, trim0: f64, trim1: f64) -> Option<BezPath> {
     Some(bp)
 }
 
-pub(crate) fn bristle(b: &Bristle, bp: &BezPath, weight: f64, paint: &Paint, name: &str) -> Vec<Node> {
+/// A strand that follows the recorded pen pose. Pressure and tilt change its spread; bearing and
+/// barrel rotation turn that spread in the path's local frame. Original path corners are included
+/// in the samples so a turn is not rounded away by the pose sampling interval.
+fn posed_bristle_track(
+    t: &Track,
+    d: f64,
+    trim0: f64,
+    trim1: f64,
+    size: f64,
+    stroke: &StrokeLayer,
+    varies: bool,
+) -> Option<(BezPath, Vec<(f64, f64)>)> {
+    let l = t.len();
+    let (s0, s1) = (trim0.clamp(0.0, l), (l - trim1).clamp(0.0, l));
+    if s1 - s0 < 1e-6 {
+        return None;
+    }
+    let steps = if varies { ((s1 - s0) / (size * 0.2).max(0.25)).ceil().clamp(1.0, MAX_STEPS) as usize } else { 1 };
+    let mut positions: Vec<f64> = (0..=steps).map(|i| s0 + (s1 - s0) * i as f64 / steps as f64).collect();
+    positions.extend(t.cum.iter().copied().filter(|&s| s > s0 && s < s1));
+    positions.sort_by(f64::total_cmp);
+    positions.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let mut path = BezPath::new();
+    // Distance along the posed strand -> fraction along the original, untrimmed path.
+    let mut source = Vec::with_capacity(positions.len());
+    let mut previous: Option<Point> = None;
+    let mut distance = 0.0;
+    for (i, s) in positions.into_iter().enumerate() {
+        let pen = PenAt::of(stroke, s / l);
+        let pressure = pen.control(Variation::Pressure).unwrap_or(0.5);
+        let tilt = pen.control(Variation::Tilt).unwrap_or(0.5);
+        let bearing = pen.control(Variation::Bearing).unwrap_or(0.5);
+        let rotation = pen.control(Variation::Rotation).unwrap_or(0.5);
+        let spread = d * (0.5 + pressure) * (1.25 - 0.5 * tilt);
+        let angle = std::f64::consts::TAU * (bearing + rotation - 1.0);
+        let p = t.map(s + spread * angle.sin(), spread * angle.cos());
+        if i == 0 {
+            path.move_to(p)
+        } else {
+            path.line_to(p)
+        }
+        if let Some(previous) = previous {
+            distance += previous.distance(p);
+        }
+        source.push((distance, s / l));
+        previous = Some(p);
+    }
+    Some((path, source))
+}
+
+fn source_fraction(source: &[(f64, f64)], distance: f64) -> f64 {
+    let next = source.partition_point(|(d, _)| *d < distance);
+    if next == 0 {
+        return source.first().map_or(0.0, |(_, f)| *f);
+    }
+    if next >= source.len() {
+        return source.last().map_or(1.0, |(_, f)| *f);
+    }
+    let (d0, f0) = source[next - 1];
+    let (d1, f1) = source[next];
+    if d1 - d0 < 1e-9 { f1 } else { f0 + (f1 - f0) * ((distance - d0) / (d1 - d0)) }
+}
+
+pub(crate) fn bristle(b: &Bristle, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let mut rng = Rng::new(seed_of(bp, name));
     let size = b.size.max(0.1) * weight;
     let strands = (3.0 + b.density.clamp(1.0, 100.0) / 100.0 * 13.0).round() as usize;
@@ -206,6 +272,13 @@ pub(crate) fn bristle(b: &Bristle, bp: &BezPath, weight: f64, paint: &Paint, nam
     let wobble = (100.0 - b.stiffness.clamp(1.0, 100.0)) / 100.0;
     let ragged = b.length.clamp(25.0, 300.0) / 100.0;
     let opacity = (b.opacity.clamp(1.0, 100.0) / 100.0) as f32;
+    let posed = stroke.pressure.is_some() || stroke.tilt.is_some() || stroke.bearing.is_some() || stroke.rotation.is_some();
+    let varies = |points: &[(f64, f64)]| points.first().is_some_and(|(_, first)| points.iter().any(|(_, value)| (value - first).abs() > 1e-6));
+    let pressure_varies = stroke.pressure.as_ref().is_some_and(|p| varies(&p.points));
+    let pose_varies = pressure_varies
+        || stroke.tilt.as_ref().is_some_and(|p| varies(&p.points))
+        || stroke.bearing.as_ref().is_some_and(|p| varies(&p.points))
+        || stroke.rotation.as_ref().is_some_and(|p| varies(&p.points));
     let mut out = vec![];
     for t in tracks(bp, tolerance(size)) {
         let l = t.len();
@@ -216,14 +289,37 @@ pub(crate) fn bristle(b: &Bristle, bp: &BezPath, weight: f64, paint: &Paint, nam
             let edge = 1.0 - lane.abs();
             let trim = |r: &mut Rng| r.unit() * ragged * size * (1.2 - edge) * 0.8;
             let (t0, t1) = (trim(&mut rng), trim(&mut rng));
-            let Some(sp) = offset_track(&t, off, t0.min(l * 0.3), t1.min(l * 0.3)) else { continue };
+            let (t0, t1) = (t0.min(l * 0.3), t1.min(l * 0.3));
+            let sp = if posed {
+                posed_bristle_track(&t, off, t0, t1, size, stroke, pose_varies)
+            } else {
+                offset_track(&t, off, t0, t1).map(|path| (path, Vec::new()))
+            };
+            let Some((sp, source)) = sp else { continue };
             let w = thick * (0.6 + 0.4 * edge) * rng.range(0.8, 1.2);
-            let nib = Nib::new(0.0, 1.0, w);
-            let subs: Vec<SubPath> = tracks(&sp, tolerance(w)).iter().flat_map(|tt| sweep(tt, &|_| nib, None)).collect();
+            let subs: Vec<SubPath> = tracks(&sp, tolerance(w))
+                .iter()
+                .flat_map(|tt| {
+                    if posed {
+                        sweep(
+                            tt,
+                            &|f| {
+                                let original_fraction = source_fraction(&source, f * tt.len());
+                                let pressure = PenAt::of(stroke, original_fraction).control(Variation::Pressure).unwrap_or(0.5);
+                                Nib::new(0.0, 1.0, w * (0.5 + pressure))
+                            },
+                            pressure_varies.then_some((tt.len() / MAX_STEPS).max(0.25)),
+                        )
+                    } else {
+                        let nib = Nib::new(0.0, 1.0, w);
+                        sweep(tt, &|_| nib, None)
+                    }
+                })
+                .collect();
             if subs.is_empty() {
                 continue;
             }
-            let mut n = filled(PathData::new(subs), paint);
+            let mut n = filled(PathData::new(subs), &stroke.paint);
             n.opacity = (opacity * rng.range(0.7, 1.0) as f32).clamp(0.0, 1.0);
             out.push(n);
         }

@@ -27,7 +27,7 @@ const ACCURACY: f64 = 1e-6;
 fn merged(prev: &Anchor, cur: &Anchor, next: &Anchor) -> CubicBez {
     let mut run = SubPath::new(vec![*prev, *cur, *next], false);
     remove_anchor(&mut run, 1);
-    match run.anchors.as_slice() {
+    match &*run.anchors.contiguous() {
         [a, b] => CubicBez::new(prev.p, a.h_out, b.h_in, next.p),
         _ => CubicBez::new(prev.p, prev.h_out, next.h_in, next.p),
     }

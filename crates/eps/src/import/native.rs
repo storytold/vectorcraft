@@ -47,15 +47,18 @@ mod layers;
 mod plan;
 mod slots;
 
-pub(crate) use build::scale_document;
+#[cfg(test)]
+pub(crate) use build::READ_AFRESH;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
+pub(crate) use build::{MAX_WRAP_WORK, scale_document, scale_symbols};
 #[cfg(test)]
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
+pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
+pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;
 #[cfg(test)]
 use slots::join_pieces;
@@ -167,11 +170,15 @@ mod tests {
         }
         let rect = vector.artboards[0].rect;
         let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.6, true);
-        let mut png = Vec::new();
-        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
-            .unwrap()
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        let raw = craft_image_codecs::Image::from_raw(
+            source.width,
+            source.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            source.to_straight(),
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         let mut page = Document::new(1000.0, 500.0);
@@ -235,11 +242,15 @@ mod tests {
         vector.insert(Some(layer), usize::MAX, n).unwrap();
         let rect = vector.artboards[0].rect;
         let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.0, true);
-        let mut png = Vec::new();
-        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
-            .unwrap()
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        let raw = craft_image_codecs::Image::from_raw(
+            source.width,
+            source.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            source.to_straight(),
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         let mut page = Document::new(width, height);

@@ -20,7 +20,41 @@ fn session() -> Session {
 /// A `w`×`h` PNG of one colour (`rgba`), declaring `ppi` when given.
 fn png(w: u32, h: u32, rgba: [u8; 4], ppi: Option<f64>) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba(rgba)).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba(rgba))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     match ppi {
         Some(r) => cmd::fileio::ppi::with_png_resolution(&out, (r, r)),
         None => out,
@@ -365,6 +399,95 @@ fn a_file_read_apart_from_the_session_replaces_what_was_selected_when_place_star
     }
 }
 
+/// Every open document with its art, selection and undo steps, and the journal, tool and tool
+/// options: what a refused hand-off leaves as it was.
+type Snapshot = (Vec<(u64, Arc<vectorcraft_doc::Document>, Vec<NodeId>, usize)>, usize, &'static str, Value);
+
+fn snapshot(s: &Session) -> Snapshot {
+    let docs = s.documents().iter().map(|d| (d.uid, d.doc.clone(), d.selection.objects.clone(), d.history.undo.len())).collect();
+    (docs, s.journal.len(), s.tool_id(), s.tool_options())
+}
+
+/// A file read apart from the session is placed only in the document Place started in: with
+/// another document active, Replace included when that document holds the same object under the
+/// same id, or after the document closed, nothing changes in any document; with the document
+/// active again, the file is placed in it.
+#[test]
+fn a_file_read_apart_from_the_session_is_placed_only_in_the_document_it_was_read_for() {
+    let blue = file("blue.png", &png(8, 8, [0, 0, 255, 255], None));
+    let not_active = "the document it was prepared for is no longer active";
+    for replace in [false, true] {
+        let p = with(blue.clone(), json!({"replace": replace}));
+        let mut s = session();
+        let square = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+        let a = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        let read = s.prepare_place(&p).unwrap().read().unwrap();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let b = s.execute("shape.rectangle", &square).unwrap()["id"].clone();
+        assert_eq!(a, b, "the other document holds an object with the same id");
+        assert!(node(&s, &b) == s.documents()[0].doc.node(NodeId(a.as_u64().unwrap())).unwrap().clone(), "and the same content");
+        let before = snapshot(&s);
+        let err = s.place_read(read).unwrap_err();
+        assert!(err.to_string().contains(not_active), "replace {replace}: {err}");
+        assert!(snapshot(&s) == before, "replace {replace}: nothing placed, selected or journaled in either document");
+        // Active again, the document Place started in takes the file.
+        let read = {
+            s.execute("document.activate", &json!({"index": 0})).unwrap();
+            s.prepare_place(&p).unwrap().read().unwrap()
+        };
+        s.execute("document.activate", &json!({"index": 1})).unwrap();
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        let r = s.place_read(read).unwrap();
+        assert_eq!(s.active_index(), Some(0));
+        assert!(s.doc().unwrap().doc.node(NodeId(r["ids"][0].as_u64().unwrap())).is_some(), "replace {replace}: placed in the first document");
+        let others = s.documents()[1].doc.layers.last().unwrap().children().unwrap().len();
+        assert_eq!(others, 1, "replace {replace}: the other document keeps its one object");
+    }
+    // The document Place started in closed: refused in the document left open, and with none left.
+    let mut s = session();
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "nothing placed in the document left open");
+    let read = s.prepare_place(&blue).unwrap().read().unwrap();
+    s.execute("file.close", &json!({})).unwrap();
+    let journal = s.journal.len();
+    assert!(s.place_read(read).is_err() && s.journal.len() == journal, "no document left: refused");
+}
+
+/// Files read for the place cursor apart from the session load it only in the document they were
+/// read for: with another document active, or after that document closed, its tool and queue stay
+/// as they were; with the document active again, the cursor is loaded.
+#[test]
+fn files_read_for_the_place_cursor_apart_from_the_session_load_it_only_in_their_document() {
+    let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "link": false});
+    let not_active = "the document it was prepared for is no longer active";
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before && s.tool_id() == "selection", "the other document's tool and queue stay");
+    let read = {
+        s.execute("document.activate", &json!({"index": 0})).unwrap();
+        s.prepare_place_queue(&p).unwrap().read().unwrap()
+    };
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(s.place_queue_read(read).unwrap()["count"], 1);
+    assert_eq!(s.tool_id(), "place");
+    // The document they were read for closed.
+    let mut s = session();
+    let read = s.prepare_place_queue(&p).unwrap().read().unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("file.close", &json!({"index": 0})).unwrap();
+    let before = snapshot(&s);
+    assert!(s.place_queue_read(read).unwrap_err().to_string().contains(not_active));
+    assert!(snapshot(&s) == before, "the document left open keeps its tool");
+}
+
 /// A linked image keeps the preview its file was read with ([`cmd::place::PlaceJob::read`] makes
 /// it), so placing the read file does not decode the image again; an embedded image has none.
 #[test]
@@ -393,13 +516,46 @@ fn keeping_an_image_decodes_nothing() {
 }
 
 /// `w`×`h` pixels of noise, which compress little, encoded as `format`.
-fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
+fn noise(w: u32, h: u32, format: craft_image_codecs::Format) -> Vec<u8> {
     let img = image::RgbImage::from_fn(w, h, |x, y| {
         let v = x.wrapping_mul(2_654_435_761) ^ y.wrapping_mul(40_503).rotate_left(13);
         image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -408,7 +564,7 @@ fn noise(w: u32, h: u32, format: image::ImageFormat) -> Vec<u8> {
 /// cut short still decodes, with its missing rows empty, and is placed.
 #[test]
 fn an_image_whose_pixels_cant_be_read_is_not_placed() {
-    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    let mut cut = noise(600, 300, craft_image_codecs::Format::Png);
     cut.truncate(cut.len() / 2);
     let mut s = session();
     let info = s.execute("file.place.info", &file("cut.png", &cut)).unwrap();
@@ -424,7 +580,7 @@ fn an_image_whose_pixels_cant_be_read_is_not_placed() {
         assert!(top_children(&s).is_empty(), "{p}: nothing placed");
         assert_eq!((s.doc().unwrap().history.undo.len(), s.journal.len()), (undo, journal), "{p}");
     }
-    let mut jpeg = noise(600, 300, image::ImageFormat::Jpeg);
+    let mut jpeg = noise(600, 300, craft_image_codecs::Format::Jpeg);
     jpeg.truncate(jpeg.len() / 2);
     let r = place(&mut s, "cut.jpg", &jpeg, json!({}));
     assert_eq!(r["format"], "jpg");
@@ -662,11 +818,269 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
     assert!(linked, "still linked to the swatch it brought");
 }
 
+/// The symbol and pattern art placed art brings takes ids of the document's own: the file's ids
+/// already name other objects there, and the Links panel names linked art in symbols by its id.
+#[test]
+fn placed_art_brings_its_symbols_and_patterns_with_ids_of_the_documents_own() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    // The document's objects take the same ids the file's do.
+    let mut s = session();
+    for x in [0, 20, 40, 60] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 5, "height": 5})).unwrap();
+    }
+    s.execute("symbol.new", &json!({"name": "Box"})).unwrap();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.symbols.iter().any(|x| x.name == "Star") && doc.pattern("Dots").is_some());
+    let mut ids = vec![];
+    doc.visit_stored(|n, _| ids.push(n.id.0));
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}");
+}
+
+/// Placing the same file again shares the symbols and patterns the first placement brought: their
+/// art differs from the file's only in its ids, so no `Star 2` or `Dots 2` joins the document.
+#[test]
+fn placing_the_same_art_again_shares_its_symbols_and_patterns() {
+    let mut src = session();
+    src.execute("shape.ellipse", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    let counts = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        (doc.symbols.len(), doc.patterns.len())
+    };
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let once = counts(&s);
+    for _ in 0..2 {
+        place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    }
+    assert_eq!(counts(&s), once);
+    let doc = &s.doc().unwrap().doc;
+    assert!(!doc.symbols.iter().any(|x| x.name == "Star 2") && doc.pattern("Dots 2").is_none());
+}
+
+/// A symbol whose art matches the document's own but uses a pattern the document defines
+/// differently is not shared: it comes in under a free name, using the pattern it brings.
+#[test]
+fn placed_art_does_not_share_a_symbol_whose_pattern_moves() {
+    let mut src = session();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
+    let tile = src.doc().unwrap().selection.objects[0];
+    src.execute("object.pattern.make", &json!({"ids": [tile.0], "edit": false, "name": "Dots"})).unwrap();
+    src.execute("paint.setFill", &json!({"ids": [tile.0], "swatch": "Dots"})).unwrap();
+    src.execute("symbol.new", &json!({"name": "Star", "ids": [tile.0]})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    // The document's "Dots" changes; its "Star" still matches the file's.
+    let st = s.doc_mut().unwrap();
+    let d = Arc::make_mut(&mut st.doc);
+    let dots = d.pattern_mut("Dots").unwrap();
+    dots.tile = Rect::new(0.0, 0.0, 50.0, 50.0);
+    let r = place(&mut s, "logo.vectorcraft", &bytes, json!({}));
+    let mut symbol = None;
+    node(&s, &r["ids"][0]).walk(&mut |n| {
+        if let NodeKind::SymbolInstance { symbol: name, .. } = &n.kind {
+            symbol = Some(name.clone());
+        }
+    });
+    assert_eq!(symbol.as_deref(), Some("Star 2"));
+    let doc = &s.doc().unwrap().doc;
+    let star2 = doc.symbols.iter().find(|x| x.name == "Star 2").unwrap();
+    let mut fills = vec![];
+    star2.art.walk(&mut |n| {
+        fills.extend(n.appearance.items.iter().filter_map(|i| match i {
+            AppearanceItem::Fill(f) => match &f.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.clone()),
+                _ => None,
+            },
+            _ => None,
+        }))
+    });
+    assert_eq!(fills, ["Dots 2"]);
+}
+
+#[test]
+fn placed_art_brings_its_brushes_renaming_on_conflict() {
+    // The file: a path with its own brush, and one with a brush the defaults hold.
+    let mut src = session();
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 20, "roundness": 30, "size": 8}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Charcoal"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let brushes = |n: &Node| {
+        let mut names = vec![];
+        n.walk(&mut |c| names.extend(c.appearance.stroke().and_then(|st| st.brush.clone())));
+        names
+    };
+    // A document with a different "Nib".
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let before = s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 2", "Charcoal"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(2.0), "its own stays");
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len(), before + 1, "the same Charcoal is shared");
+    // A document without it gets it as it is.
+    let mut fresh = session();
+    let r = place(&mut fresh, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&fresh, &r["ids"][0])), ["Nib", "Charcoal"]);
+    assert_eq!(fresh.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(8.0));
+    // The name a conflict would take is not one the art already uses.
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib 2", "params": {"angle": 40, "roundness": 50, "size": 5}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib 2"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 3", "Charcoal", "Nib 2"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 3"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(5.0));
+}
+
+/// A placed brush whose art uses an image the document holds under the same key, with other pixels,
+/// isn't the document's brush of that name, though the two brushes read the same.
+#[test]
+fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
+    let file = |pixel: u8| {
+        let mut png = vec![];
+        {
+            let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(2, 1, image::Luma([pixel]))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        s.edit("Brush", |d, _| {
+            d.images.insert(
+                "k".into(),
+                vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() },
+            );
+            let im = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 2,
+                height: 1,
+                xf: Default::default(),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let art = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+            let brush = vectorcraft_brush::Scatter { art, ..Default::default() };
+            vectorcraft_brush::store(d, &[vectorcraft_brush::Brush { name: "Speck".into(), kind: vectorcraft_brush::BrushKind::Scatter(brush) }]);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("brush.apply", &json!({"name": "Speck"})).unwrap();
+        serialize(&mut s, "vectorcraft")
+    };
+    let mut s = session();
+    let first = place(&mut s, "one.vectorcraft", &file(0), json!({"crop": "bounding"}));
+    let second = place(&mut s, "two.vectorcraft", &file(255), json!({"crop": "bounding"}));
+    let brush_of = |r: &Value| {
+        let mut name = None;
+        node(&s, &r["ids"][0]).walk(&mut |c| name = name.take().or_else(|| c.appearance.stroke().and_then(|st| st.brush.clone())));
+        name
+    };
+    assert_eq!(brush_of(&first).as_deref(), Some("Speck"));
+    assert_eq!(brush_of(&second).as_deref(), Some("Speck 2"));
+    let doc = &s.doc().unwrap().doc;
+    let key = |name: &str| {
+        let Some(vectorcraft_brush::Brush { kind: vectorcraft_brush::BrushKind::Scatter(b), .. }) = vectorcraft_brush::find(doc, name) else {
+            panic!("{name}")
+        };
+        let NodeKind::Image(im) = &b.art.kind else { panic!("{name}: {:?}", b.art.kind_label()) };
+        im.key.clone()
+    };
+    assert_eq!((key("Speck"), key("Speck 2")), ("k".to_string(), "k 2".to_string()));
+}
+
 #[test]
 fn info_reports_size_resolution_colour_mode_and_link() {
     let mut s = session();
     let mut gray = vec![];
-    image::GrayImage::from_pixel(300, 150, image::Luma([128])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_pixel(300, 150, image::Luma([128]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| gray.extend_from_slice(&__b))
+    }
+    .unwrap();
     let gray = cmd::fileio::ppi::with_png_resolution(&gray, (300.0, 300.0));
     let mut p = file("scan.png", &gray);
     p["thumbnail"] = json!(16);
@@ -674,7 +1088,23 @@ fn info_reports_size_resolution_colour_mode_and_link() {
     assert_eq!((info["colorMode"].as_str(), info["pixelWidth"].as_u64()), (Some("Grayscale"), Some(300)));
     assert_eq!(info["ppi"], json!([300.0, 300.0]));
     assert!(close(info["width"].as_f64().unwrap(), 72.0));
-    let thumb = image::load_from_memory(&vectorcraft_format::base64_decode(info["thumbnailBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let thumb = craft_image_codecs::decode(&vectorcraft_format::base64_decode(info["thumbnailBase64"].as_str().unwrap()).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((thumb.width(), thumb.height()), (16, 8));
     assert!(top_children(&s).is_empty(), "info places nothing");
     // A path is linked by default.
@@ -785,6 +1215,30 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     assert_eq!(s.journal.last(), at_once.journal.last());
 }
 
+/// A Shift-click of the place cursor asks the frontend for the file's import options
+/// (`showImportOptions: true`); headless, with no frontend to ask, it places the file as a click
+/// does.
+#[test]
+fn a_shift_click_of_the_place_cursor_places_headless_as_a_click_does() {
+    let view = ViewInfo::default();
+    let files: Vec<Value> = ["a.png", "b.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    let shift = Mods { shift: true, ..Mods::default() };
+    let (mut headless, mut app) = (session(), session());
+    app.place_cursor_requests = true;
+    let mut reqs = vec![];
+    for s in [&mut headless, &mut app] {
+        s.execute("file.place.queue", &json!({"files": files})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift), view).unwrap();
+        reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(shift), view).unwrap();
+    }
+    let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
+    assert_eq!(p["showImportOptions"], true);
+    let [img] = &top_children(&headless)[..] else { panic!("one image placed") };
+    let b = img.geometric_bounds().unwrap();
+    assert_eq!([b.x0, b.y0, b.width(), b.height()], [10.0, 10.0, 40.0, 20.0]);
+    assert_eq!(headless.tool_options()["names"], json!(["b.png"]));
+}
+
 /// Files read for the place cursor apart from the session ([`Session::prepare_place_queue`], then
 /// [`cmd::place::QueueJob::read`] on another thread and [`Session::place_queue_read`]) load it as
 /// `file.place.queue` loads it: the same reply, with the files that can't be read skipped, and the
@@ -814,7 +1268,7 @@ fn files_read_for_the_place_cursor_apart_from_the_session_load_it_as_file_place_
 /// queue, read with the session or apart from it.
 #[test]
 fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
-    let mut cut = noise(600, 300, image::ImageFormat::Png);
+    let mut cut = noise(600, 300, craft_image_codecs::Format::Png);
     cut.truncate(cut.len() / 2);
     let p = json!({"files": [file("a.png", &png(40, 20, [9, 9, 9, 255], None)), file("cut.png", &cut)], "link": false});
     let (mut a, mut b) = (session(), session());
@@ -825,6 +1279,35 @@ fn the_place_queue_skips_an_image_whose_pixels_cant_be_read() {
     assert_eq!(b.place_queue_read(read).unwrap(), r);
 }
 
+/// An encrypted PDF stays in the place cursor's queue, read with the session or apart from it, at
+/// a letter page's size with `needsPassword`, so that a click in the app can ask for its password;
+/// headless, a click on it places nothing.
+#[test]
+fn the_place_queue_keeps_an_encrypted_pdf() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let locked = pdf(&[PdfPage::new(100.0, 50.0, "0 g 0 0 10 10 re f")], Some("pw"));
+    let p = json!({"files": [file("locked.pdf", &locked), file("a.png", &png(40, 20, [9, 9, 9, 255], None))], "thumbnail": 8});
+    let (mut a, mut b) = (session(), session());
+    let r = a.execute("file.place.queue", &p).unwrap();
+    assert_eq!((&r["count"], &r["skipped"]), (&json!(2), &json!([])), "{r}");
+    assert_eq!(r["files"][0], json!({"name": "locked.pdf", "format": "pdf", "width": 612.0, "height": 792.0, "needsPassword": true}));
+    assert!(r["files"][1].get("needsPassword").is_none());
+    let read = b.prepare_place_queue(&p).unwrap().read().unwrap();
+    assert_eq!(b.place_queue_read(read).unwrap(), r);
+    let view = ViewInfo::default();
+    assert_eq!(a.tool_options()["name"], "locked.pdf");
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0), view);
+    let _ = a.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0), view);
+    assert_eq!((top_children(&a).len(), a.doc().unwrap().history.undo.len()), (0, 0), "nothing placed without the password");
+    // An encrypted PDF with a bad option is refused for the option, not kept.
+    let e = a.execute("file.place.queue", &json!({"files": [file("locked.pdf", &locked)], "page": 0})).unwrap_err().to_string();
+    assert!(e.contains("page must be a whole number from 1"), "{e}");
+    // A PDF that can't be read for another reason is still skipped.
+    let broken = file("broken.pdf", b"%PDF-1.7\nnot a PDF body\n");
+    let r = a.execute("file.place.queue", &json!({"files": [broken, file("b.png", &png(4, 4, [0; 4], None))]})).unwrap();
+    assert_eq!((&r["count"], &r["skipped"][0]["name"]), (&json!(1), &json!("broken.pdf")), "{r}");
+}
+
 /// The place queue's thumbnail of an image is drawn from the pixels its check decoded, so each
 /// image is decoded once.
 #[test]
@@ -832,7 +1315,41 @@ fn the_place_queue_draws_a_thumbnail_without_decoding_the_image_again() {
     // Pixels no other test uses, since every test shares the image store.
     let img = image::RgbImage::from_fn(320, 160, |x, y| image::Rgb([(x % 251) as u8, 23, (y % 241) as u8]));
     let mut bytes = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bytes.extend_from_slice(&__b))
+    }
+    .unwrap();
     let p = json!({"files": [file("q.png", &bytes)], "link": false, "thumbnail": 64});
     let decodes = vectorcraft_render::image_decodes();
     let r = session().execute("file.place.queue", &p).unwrap();
@@ -860,6 +1377,51 @@ fn bad_place_params_are_errors() {
     assert!(s.execute("file.place.queue", &json!({"files": [{"name": "notes.txt", "dataBase64": ""}]})).is_err());
     assert_eq!(s.tool_id(), "selection", "a failed queue leaves the tool alone");
     assert!(top_children(&s).is_empty());
+}
+
+#[test]
+fn place_params_of_the_wrong_type_are_refused_and_null_keeps_the_default() {
+    let mut s = session();
+    let ok = png(2, 2, [0; 4], None);
+    let with = |extra: Value| {
+        let mut p = file("x.png", &ok);
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    let queue = |extra: Value| {
+        let mut p = json!({ "files": [file("x.png", &ok)] });
+        if let (Some(o), Value::Object(e)) = (p.as_object_mut(), extra) {
+            o.extend(e);
+        }
+        p
+    };
+    for (cmd, p, msg) in [
+        ("file.place", with(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place", with(json!({"replace": 1})), "`replace` must be true or false"),
+        ("file.place", with(json!({"template": "true"})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"link": "false"})), "`link` must be true or false"),
+        ("file.place.queue", queue(json!({"template": 1})), "`template` must be true or false"),
+        ("file.place.queue", queue(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+        ("file.place.info", with(json!({"link": "no"})), "`link` must be true or false"),
+        ("file.place.info", with(json!({"thumbnail": "8"})), "`thumbnail` must be a number"),
+    ] {
+        let e = match s.execute(cmd, &p) {
+            Ok(r) => panic!("{cmd} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{cmd}: {e}");
+        assert_eq!(s.tool_id(), "selection", "{cmd}: the tool stays");
+        assert!(top_children(&s).is_empty(), "{cmd}: nothing placed");
+    }
+    let placed = s.execute("file.place", &with(json!({"link": null, "replace": null, "template": null}))).unwrap();
+    assert_eq!(placed["ids"].as_array().unwrap().len(), 1);
+    assert_eq!(top_children(&s).len(), 1, "placed on the current layer, not a template layer");
+    let info = s.execute("file.place.info", &with(json!({"link": null, "thumbnail": null}))).unwrap();
+    assert!(info.get("thumbnailBase64").is_none(), "{info}");
+    let r = s.execute("file.place.queue", &queue(json!({"link": null, "template": null, "thumbnail": null}))).unwrap();
+    assert_eq!(r["count"], 1, "{r}");
 }
 
 /// An SVG placed with `crop: "crop"` given is framed and clipped by its viewBox, as a PDF by its

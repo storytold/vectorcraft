@@ -1,0 +1,294 @@
+//! Image resolution metadata (pixels per inch) in the formats the image decoder reads: PNG `pHYs`,
+//! JPEG JFIF density or EXIF, TIFF and WebP EXIF resolution tags, and BMP pixels per metre. An image
+//! converted to PNG keeps it as a `pHYs` chunk ([`with_png_resolution`]).
+
+const INCH_M: f64 = 0.0254;
+const INCH_CM: f64 = 2.54;
+
+/// Is `bytes` a PNG, JPEG, TIFF, WebP or BMP file, the formats [`resolution`] reads?
+pub fn reads(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(&[0xff, 0xd8])
+        || bytes.starts_with(b"II*\0")
+        || bytes.starts_with(b"MM\0*")
+        || (bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP")
+        || bytes.starts_with(b"BM")
+}
+
+/// The resolution a PNG, JPEG, TIFF, WebP or BMP file declares as (horizontal, vertical) ppi, each
+/// from 1 to 100,000; `None` when it declares none (or only an aspect ratio), and for other files.
+pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
+    let r = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        png(bytes)
+    } else if bytes.starts_with(&[0xff, 0xd8]) {
+        jpeg(bytes)
+    } else if bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*") {
+        tiff(bytes)
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        webp(bytes)
+    } else if bytes.starts_with(b"BM") {
+        bmp(bytes)
+    } else {
+        None
+    };
+    r.filter(|(x, y)| [*x, *y].iter().all(|v| v.is_finite() && (1.0..=100_000.0).contains(v)))
+}
+
+/// `n` bytes at `at` (`None` past the end; offsets come from the file, so no overflow either).
+fn slice(b: &[u8], at: usize, n: usize) -> Option<&[u8]> {
+    b.get(at..at.checked_add(n)?)
+}
+fn bytes<const N: usize>(b: &[u8], at: usize) -> Option<[u8; N]> {
+    slice(b, at, N)?.try_into().ok()
+}
+fn be16(b: &[u8], at: usize) -> Option<u16> {
+    bytes(b, at).map(u16::from_be_bytes)
+}
+fn be32(b: &[u8], at: usize) -> Option<u32> {
+    bytes(b, at).map(u32::from_be_bytes)
+}
+fn le32(b: &[u8], at: usize) -> Option<u32> {
+    bytes(b, at).map(u32::from_le_bytes)
+}
+
+/// Pixels per inch from the whole pixels per metre PNG and BMP store: a whole number of ppi when
+/// the metre value is that rounded (300 ppi is stored as 11811 per metre, 299.9994 ppi).
+fn per_metre(ppm: u32) -> f64 {
+    let v = ppm as f64 * INCH_M;
+    let whole = v.round();
+    if (v - whole).abs() <= INCH_M / 2.0 + 1e-9 { whole } else { v }
+}
+
+/// PNG chunks after the signature: (type, data).
+pub fn png_chunks(b: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
+    let mut at = 8;
+    std::iter::from_fn(move || {
+        let len = be32(b, at)? as usize;
+        let ty = slice(b, at + 4, 4)?;
+        let data = slice(b, at + 8, len)?;
+        at = at.checked_add(12 + len)?;
+        Some((ty, data))
+    })
+}
+
+fn png(b: &[u8]) -> Option<(f64, f64)> {
+    let (_, d) = png_chunks(b).take_while(|(ty, _)| *ty != b"IDAT").find(|(ty, _)| *ty == b"pHYs")?;
+    // Unit 1 = metre; 0 only gives the pixel aspect ratio.
+    (d.get(8) == Some(&1)).then(|| (per_metre(be32(d, 0).unwrap_or(0)), per_metre(be32(d, 4).unwrap_or(0))))
+}
+
+fn jpeg(b: &[u8]) -> Option<(f64, f64)> {
+    let (mut jfif, mut exif) = (None, None);
+    let mut at = 2;
+    while at + 4 <= b.len() && b[at] == 0xff {
+        let marker = b[at + 1];
+        // 0xff fill bytes pad between segments.
+        if marker == 0xff {
+            at += 1;
+            continue;
+        }
+        if marker == 0xd8 || marker == 0x01 || (0xd0..=0xd7).contains(&marker) {
+            at += 2;
+            continue;
+        }
+        // Start of scan or end of image: no more metadata.
+        if marker == 0xda || marker == 0xd9 {
+            break;
+        }
+        let len = be16(b, at + 2)? as usize;
+        let seg = slice(b, at + 4, len.checked_sub(2)?)?;
+        match marker {
+            0xe0 if seg.starts_with(b"JFIF\0") && seg.len() >= 12 => {
+                let (x, y) = (be16(seg, 8)? as f64, be16(seg, 10)? as f64);
+                jfif = match seg[7] {
+                    1 => Some((x, y)),
+                    2 => Some((x * INCH_CM, y * INCH_CM)),
+                    _ => None,
+                };
+            }
+            0xe1 if seg.starts_with(b"Exif\0\0") => exif = tiff(&seg[6..]),
+            _ => {}
+        }
+        at += 2 + len;
+    }
+    jfif.or(exif)
+}
+
+/// TIFF (or EXIF) IFD0 XResolution / YResolution / ResolutionUnit, as (horizontal, vertical) ppi
+/// in the stored pixels' axes, unchecked; `None` without an absolute unit.
+pub fn tiff(b: &[u8]) -> Option<(f64, f64)> {
+    let le = b.starts_with(b"II");
+    let u16_at = |at: usize| bytes(b, at).map(if le { u16::from_le_bytes } else { u16::from_be_bytes });
+    let u32_at = |at: usize| bytes(b, at).map(if le { u32::from_le_bytes } else { u32::from_be_bytes });
+    let ifd = u32_at(4)? as usize;
+    let (mut x, mut y, mut unit) = (None, None, 2);
+    for i in 0..u16_at(ifd)? as usize {
+        let e = ifd.checked_add(2 + i * 12)?;
+        let rational = || -> Option<f64> {
+            let at = u32_at(e + 8)? as usize;
+            let (n, d) = (u32_at(at)?, u32_at(at.checked_add(4)?)?);
+            (d != 0).then(|| n as f64 / d as f64)
+        };
+        match u16_at(e)? {
+            282 => x = rational(),
+            283 => y = rational(),
+            296 => unit = u16_at(e + 8)?,
+            _ => {}
+        }
+    }
+    let k = match unit {
+        2 => 1.0,
+        3 => INCH_CM,
+        _ => return None,
+    };
+    let x = x?;
+    Some((x * k, y.unwrap_or(x) * k))
+}
+
+fn webp(b: &[u8]) -> Option<(f64, f64)> {
+    let mut at = 12;
+    while at + 8 <= b.len() {
+        let len = le32(b, at + 4)? as usize;
+        let data = slice(b, at + 8, len)?;
+        if &b[at..at + 4] == b"EXIF" {
+            return tiff(data.strip_prefix(b"Exif\0\0").unwrap_or(data));
+        }
+        at += 8 + len + (len & 1);
+    }
+    None
+}
+
+fn bmp(b: &[u8]) -> Option<(f64, f64)> {
+    let (x, y) = craft_image_codecs::bmp_probe::pixels_per_meter(b)?;
+    Some((per_metre(x.unsigned_abs()), per_metre(y.unsigned_abs())))
+}
+
+/// Pixels per metre for a resolution in pixels per inch (the unit `pHYs` stores).
+pub fn pixels_per_metre(ppi: f64) -> u32 {
+    (ppi / INCH_M).round().clamp(1.0, u32::MAX as f64) as u32
+}
+
+/// PNG CRC-32 (the polynomial ZIP uses) of `parts` read one after another.
+#[cfg(test)]
+fn crc32(parts: &[&[u8]]) -> u32 {
+    let mut crc = !0u32;
+    for &b in parts.iter().flat_map(|p| p.iter()) {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xEDB8_8320 & u32::from(crc & 1 != 0).wrapping_neg());
+        }
+    }
+    !crc
+}
+
+/// A whole `pHYs` chunk (length, type, data, CRC) declaring `x` × `y` pixels per inch.
+pub fn phys_chunk(x: f64, y: f64) -> Vec<u8> {
+    let ppm = (pixels_per_metre(x).max(1), pixels_per_metre(y).max(1));
+    craft_image_codecs::raw_metadata::png_pixels_per_meter_chunk(ppm).map_or_else(|_| Vec::new(), |chunk| chunk.to_vec())
+}
+
+/// `png` with a `pHYs` chunk declaring `ppi` right after the header (any existing one is replaced).
+pub fn with_png_resolution(png: &[u8], (x, y): (f64, f64)) -> Vec<u8> {
+    let resolution = (pixels_per_metre(x), pixels_per_metre(y));
+    craft_image_codecs::raw_metadata::with_png_pixels_per_meter(png, resolution, png.len().saturating_add(21)).unwrap_or_else(|_| png.to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn png_of(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        image::RgbaImage::new(w, h).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    /// The `pHYs` chunk carries the CRC a PNG reader checks, and replaces the one already there.
+    #[test]
+    fn a_png_takes_its_resolution_and_still_decodes() {
+        let png = png_of(4, 3);
+        assert_eq!(resolution(&png), None);
+        let tagged = with_png_resolution(&png, (300.0, 150.0));
+        assert_eq!(resolution(&tagged), Some((300.0, 150.0)));
+        let again = with_png_resolution(&tagged, (72.0, 72.0));
+        assert_eq!(resolution(&again), Some((72.0, 72.0)), "replaced, not duplicated");
+        assert_eq!(again.len(), tagged.len());
+        let img = image::load_from_memory(&again).unwrap();
+        assert_eq!((img.width(), img.height()), (4, 3));
+        // Every PNG ends with this IEND chunk CRC.
+        assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
+    }
+
+    #[test]
+    fn bmp_resolution_keeps_fractional_axes_and_rounds_near_whole_ppi() {
+        let bmp = bmp_resolution_header(108, 6001, 11811);
+        let (horizontal, vertical) = resolution(&bmp).expect("recorded physical resolution");
+        assert!((horizontal - 152.4254).abs() < 1e-9);
+        assert_eq!(vertical, 300.0);
+    }
+
+    #[test]
+    fn bmp_resolution_requires_complete_positive_density_in_range() {
+        let bmp = bmp_resolution_header(40, 3937008, 6001);
+        assert_eq!(resolution(&bmp).map(|(x, _)| x), Some(100_000.0));
+        for len in 0..bmp.len() {
+            assert_eq!(resolution(&bmp[..len]), None, "only {len} header bytes");
+        }
+        for (dib_size, x, y) in [(12, 11811, 11811), (40, -1, 11811), (40, 11811, 0), (40, 1, 11811), (40, 11811, 3937009)] {
+            assert_eq!(resolution(&bmp_resolution_header(dib_size, x, y)), None, "DIB {dib_size}, density {x} by {y}");
+        }
+    }
+
+    fn bmp_resolution_header(dib_size: u32, x: i32, y: i32) -> [u8; 46] {
+        let mut header = [0; 46];
+        header[..2].copy_from_slice(b"BM");
+        header[14..18].copy_from_slice(&dib_size.to_le_bytes());
+        header[38..42].copy_from_slice(&x.to_le_bytes());
+        header[42..46].copy_from_slice(&y.to_le_bytes());
+        header
+    }
+
+    /// RIFF chunk `ty` holding `data`, padded to an even length.
+    fn riff_chunk(ty: &[u8; 4], len: u32, data: &[u8]) -> Vec<u8> {
+        let mut out = [ty.as_slice(), &len.to_le_bytes(), data].concat();
+        if data.len() % 2 == 1 {
+            out.push(0);
+        }
+        out
+    }
+
+    fn webp_of(chunks: &[Vec<u8>]) -> Vec<u8> {
+        let body = chunks.concat();
+        let size = u32::try_from(body.len() + 4).unwrap();
+        [b"RIFF".as_slice(), &size.to_le_bytes(), b"WEBP", &body].concat()
+    }
+
+    /// A WebP's EXIF chunk is found past an odd-length chunk and its padding byte, and a chunk whose
+    /// length runs past the end of the file (up to `u32::MAX`, more than a 32-bit `usize` can add to
+    /// an offset) gives no resolution.
+    #[test]
+    fn a_webp_reads_its_exif_and_rejects_a_chunk_past_the_end() {
+        // Little-endian TIFF: two IFD0 entries, XResolution 300/1 at offset 38 and ResolutionUnit inch.
+        let mut tiff = b"II*\0".to_vec();
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&2u16.to_le_bytes());
+        for (tag, ty, value) in [(282u16, 5u16, 38u32), (296, 3, 2)] {
+            tiff.extend_from_slice(&tag.to_le_bytes());
+            tiff.extend_from_slice(&ty.to_le_bytes());
+            tiff.extend_from_slice(&1u32.to_le_bytes());
+            tiff.extend_from_slice(&value.to_le_bytes());
+        }
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        tiff.extend_from_slice(&300u32.to_le_bytes());
+        tiff.extend_from_slice(&1u32.to_le_bytes());
+        let exif = [b"Exif\0\0".as_slice(), &tiff].concat();
+        let exif_len = u32::try_from(exif.len()).unwrap();
+        let ok = webp_of(&[riff_chunk(b"VP8X", 3, &[0, 0, 0]), riff_chunk(b"EXIF", exif_len, &exif)]);
+        assert_eq!(resolution(&ok), Some((300.0, 300.0)));
+
+        for len in [u32::MAX, u32::MAX - 7, 1_000] {
+            let bad = webp_of(&[riff_chunk(b"VP8X", len, &[0; 10])]);
+            assert_eq!(resolution(&bad), None, "chunk length {len}");
+        }
+    }
+}

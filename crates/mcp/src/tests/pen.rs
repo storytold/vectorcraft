@@ -46,7 +46,8 @@ fn cmd_with_the_pen_edits_the_path_being_drawn() {
     assert_eq!(paths(&h).iter().map(Vec::len).collect::<Vec<_>>(), [3], "the same path, three anchors");
 }
 
-/// #501: a drag out of the first anchor closes the path, shaping the closing curve.
+/// #501: a drag out of the first anchor closes the path, shaping the closing curve. #6634: the first
+/// anchor was placed by a click, so it stays a corner and the first segment keeps its shape.
 #[test]
 fn a_drag_from_the_first_anchor_closes_the_path() {
     let mut h = Headless::new();
@@ -62,5 +63,6 @@ fn a_drag_from_the_first_anchor_closes_the_path() {
     d.walk(|n| closed.extend(n.path_data().map(|p| p.is_closed())));
     assert_eq!(closed, [true], "one path, closed");
     let first = paths(&h)[0][0];
-    assert_eq!((first.h_in, first.h_out), (vectorcraft_geom::Point::new(40.0, 348.0), vectorcraft_geom::Point::new(160.0, 252.0)));
+    assert_eq!((first.h_in, first.h_out), (vectorcraft_geom::Point::new(40.0, 348.0), vectorcraft_geom::Point::new(100.0, 300.0)));
+    assert_eq!(first.kind, vectorcraft_geom::AnchorKind::Corner);
 }

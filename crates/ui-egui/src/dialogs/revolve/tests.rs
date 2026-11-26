@@ -1,502 +1,515 @@
-//! Real pointer interaction with Revolve's compact controls.
-use super::*;
-use crate::{dialogs, theme};
-use egui::{Event, PointerButton, Rect, Vec2, pos2};
+//! The 3D dialog through the app frame: what its controls do to the document.
+use craft::ui::patterns::form_dialogs::FieldValue;
+use egui::{Event, Key, Modifiers, PointerButton, vec2};
+use serde_json::{Value, json};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, INFLATE, REVOLVE, ROTATE, ROTATION_PRESETS, merged_params};
 use vectorcraft_engine::Session;
 
-struct Harness {
-    app: VectorcraftApp,
-    ctx: egui::Context,
-    screen: Vec2,
-    texts: Vec<(String, Rect)>,
+use super::super::effect;
+use super::super::three_d::tests_support::ThreeD;
+use crate::VectorcraftApp;
+
+const SQUARE: &str = "M100 100 L200 100 L200 200 L100 200 Z";
+
+fn app_with(d: &str) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    app.run("path.create", json!({"d": d})).unwrap();
+    app.run("paint.setFill", json!({"color":"#338ad6"})).unwrap();
+    app
 }
 
-impl Harness {
-    fn new(screen: Vec2) -> Self {
-        Self::with("M150 40 L180 60 L180 140 L150 160", REVOLVE, screen)
-    }
+/// The dialog `effect.dialog` opens with `p` over `app`'s document.
+fn opened(app: VectorcraftApp, p: Value) -> ThreeD {
+    let mut h = ThreeD::new(app);
+    // The first frames give the app its window.
+    h.settle();
+    reopen(&mut h, p);
+    h
+}
 
-    /// The dialog of 3D effect `effect` on a path drawn from SVG path data `d`.
-    fn with(d: &str, effect: &str, screen: Vec2) -> Self {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+/// Opens the dialog again with `p`, as `effect.dialog` does.
+fn reopen(h: &mut ThreeD, p: Value) {
+    if let Err(e) = effect::open(&mut h.app(), &p) {
+        panic!("the dialog did not open: {e}");
+    }
+    h.settle();
+    assert!(h.app().three_d_dialog.is_some(), "the dialog opened");
+}
+
+/// The dialog of `effect` over a path drawn from `d`.
+fn drawn(d: &str, effect: &str) -> ThreeD {
+    opened(app_with(d), json!({"effect": effect, "item": null}))
+}
+
+/// An app with a one-surface symbol "Mark" and a path drawn from `d`, selected.
+fn with_symbol(d: &str) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    app.run("path.create", json!({"d": d})).unwrap();
+    app
+}
+
+fn doc(h: &ThreeD) -> std::sync::Arc<vectorcraft_doc::Document> {
+    h.app().session.doc().unwrap().doc.clone()
+}
+
+/// The document as the dialog found it: the snapshot of the interaction its preview runs in, else the document.
+fn source(h: &ThreeD) -> std::sync::Arc<vectorcraft_doc::Document> {
+    let app = h.app();
+    let state = app.session.doc().unwrap();
+    state.interaction.as_ref().map_or_else(|| state.doc.clone(), |it| it.doc.clone())
+}
+
+/// The effect's stored params with the defaults filled in.
+fn stored(h: &ThreeD, effect: &str) -> Value {
+    let app = h.app();
+    let state = app.session.doc().unwrap();
+    merged_params(effect, &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params)
+}
+
+fn undo(h: &ThreeD) {
+    h.app().run("edit.undo", json!({})).unwrap();
+}
+
+fn maps(h: &ThreeD) -> Vec<vectorcraft_effects::SurfaceMap> {
+    vectorcraft_effects::surface_maps(&json!({"mapArt": h.json("mapArt")}))
+}
+
+fn number(h: &ThreeD, key: &str) -> f64 {
+    h.fields().number(key).unwrap_or(f64::NAN)
+}
+
+fn same(a: &Value, b: &Value) -> bool {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(a), Some(b)) => (a - b).abs() < 1e-6,
+        _ => a == b,
+    }
+}
+
+/// `(effect, page, key, value)`: a setting each 3D effect shows, on the page that shows it.
+// PLAN: the page names ("object", "rotation", "lighting") are assumed; `set` fails on a key the page does not show.
+fn rows() -> Vec<(&'static str, &'static str, &'static str, Value)> {
+    let [x, y, z] = ROTATION_PRESETS[14].1;
+    vec![
+        (REVOLVE, "object", "angle", json!(90.0)),
+        (REVOLVE, "rotation", "rotationX", json!(30.0)),
+        (REVOLVE, "rotation", "rotationY", json!(20.0)),
+        (REVOLVE, "object", "cap", json!(false)),
+        (REVOLVE, "object", "offset", json!(10.0)),
+        (EXTRUDE, "lighting", "shadow", json!(true)),
+        (EXTRUDE, "object", "bevel", json!("rounded")),
+        (INFLATE, "object", "volume", json!(50.0)),
+        (ROTATE, "rotation", "rotationX", json!(x)),
+        (ROTATE, "rotation", "rotationY", json!(y)),
+        (ROTATE, "rotation", "rotationZ", json!(z)),
+        (CLASSIC_EXTRUDE, "object", "depth", json!(60.0)),
+        (CLASSIC_REVOLVE, "object", "angle", json!(90.0)),
+        (CLASSIC_ROTATE, "rotation", "rotationX", json!(30.0)),
+        (CLASSIC_ROTATE, "lighting", "surface", json!("none")),
+    ]
+}
+
+#[test]
+fn a_3d_row_sets_its_param_previews_and_applies_in_one_step() {
+    for (effect, page, key, value) in rows() {
+        let name = format!("{effect}.{key}");
+        for confirm in [false, true] {
+            let mut h = drawn(SQUARE, effect);
+            let before = source(&h);
+            h.set("__page", json!(page));
+            h.set(key, value.clone());
+            assert!(same(&stored(&h, effect)[key], &value), "{name}: the preview follows the row");
+            if confirm {
+                h.ok();
+                assert!(same(&stored(&h, effect)[key], &value), "{name}: OK keeps it");
+                undo(&h);
+            } else {
+                h.cancel();
+            }
+            assert_eq!(doc(&h), before, "{name}: {}", if confirm { "one undo step" } else { "Cancel restores" });
+        }
+    }
+}
+
+#[test]
+fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
+    let mut h = opened(with_symbol("M50 50L150 50L150 150L50 150Z"), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("__page", json!("mapArt"));
+    let count = h.surfaces().map_or(0, |s| s.len());
+    assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
+    // The Symbol menu maps the symbol onto the surface shown, the first.
+    h.choose("Symbol", "None", "Mark");
+    assert_eq!(maps(&h).iter().map(|m| (m.surface, m.symbol.as_str(), m.scale_x)).collect::<Vec<_>>(), [(1, "Mark", 100.0)]);
+    h.set("__mapSurface", json!(2));
+    assert_eq!(maps(&h).len(), 1, "the next surface has no map until it is given one");
+    h.set("__mapSurface", json!(1));
+    h.press("Scale to Fit");
+    assert!(maps(&h)[0].scale_x > 100.0, "the 10-point art is scaled up to the 100-point cap: {:?}", maps(&h));
+    h.press("Done");
+    assert_ne!(h.fields().text("__page"), Some("mapArt"), "Done goes back to the effect's options");
+    h.ok();
+    let app = h.app();
+    let state = app.session.doc().unwrap();
+    let params = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params;
+    assert_eq!(vectorcraft_effects::surface_maps(params).len(), 1, "{params}");
+    assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
+}
+
+/// The theme's plot size, as a pass of the app's interface resolves it.
+fn plot_size() -> egui::Vec2 {
+    let mut plot = None;
+    crate::testing::ui_context()
+        .run_ui(Default::default(), |ui| {
+            let size = craft::ui::runtime::env::Env::of(ui).tokens.size.plot;
+            plot = Some(vec2(size.width, size.height));
+        })
+        .textures_delta
+        .clear();
+    plot.expect("the pass ran")
+}
+
+#[test]
+fn map_art_surface_preview_takes_the_themes_plot_size() {
+    let mut h = opened(with_symbol("M50 50L150 50L150 150L50 150Z"), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("__page", json!("mapArt"));
+    let plot = plot_size();
+    let tree = h.fixture.tree();
+    let surface = h
+        .fixture
+        .by_role(craft::ui::contract::Role::CANVAS)
+        .into_iter()
+        .find(|t| tree.name_of(t.node) == Some("Surface"))
+        .expect("Map Art shows the surface canvas");
+    assert_eq!(surface.rect.height(), plot.y, "the preview is as tall as the theme's plot: {:?}", surface.rect);
+    assert!(surface.rect.width() >= plot.x, "the preview is at least as wide as the theme's plot: {:?}", surface.rect);
+}
+
+#[test]
+fn map_art_maps_no_more_surfaces_than_an_object_takes() {
+    let max = vectorcraft_effects::MAX_MAPS;
+    // A star with 36 points has 72 corners, so its solid has two caps and 72 walls.
+    let corners: Vec<String> = (0..72)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 60.0 }, f64::from(i) * std::f64::consts::TAU / 72.0);
+            format!("{:.3} {:.3}", 150.0 + r * a.cos(), 150.0 + r * a.sin())
+        })
+        .collect();
+    let mut h = opened(with_symbol(&format!("M{}Z", corners.join(" L"))), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("__page", json!("mapArt"));
+    assert!(h.surfaces().map_or(0, |s| s.len()) > max);
+    // Every map the object takes is used, and the surface shown has none.
+    let full: Vec<Value> = (1..=max).map(|surface| json!({"surface": surface, "symbol": "Mark"})).collect();
+    h.set("mapArt", json!(full));
+    h.set("__mapSurface", json!(max + 1));
+    h.press("Symbol");
+    if let Some(mark) = h.fixture.by_label("Mark") {
+        h.fixture.click(&mark);
+    }
+    assert_eq!(maps(&h).len(), max, "no map past the limit is written");
+}
+
+#[test]
+fn map_art_surfaces_follow_the_active_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for d in ["M50 50L150 50L150 150L50 150Z", "M50 50L80 50L80 200L50 200Z"] {
         app.run("file.new", json!({"width":300,"height":300})).unwrap();
         app.run("path.create", json!({"d": d})).unwrap();
-        app.run("paint.setFill", json!({"color":"#338ad6"})).unwrap();
-        app.run("effect.dialog", json!({"effect":effect,"item":null})).unwrap();
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        theme::apply(&ctx, Default::default());
-        Self { app, ctx, screen, texts: vec![] }
     }
-
-    fn frame(&mut self, events: Vec<Event>) {
-        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.screen)), events, ..Default::default() };
-        let mut out = self.ctx.run_ui(input, |ui| dialogs::show(&mut self.app, ui.ctx()));
-        out.textures_delta.clear();
-        fn collect(shape: &egui::Shape, clip: Rect, texts: &mut Vec<(String, Rect)>) {
-            match shape {
-                egui::Shape::Text(t) if clip.contains_rect(t.visual_bounding_rect()) => {
-                    texts.push((t.galley.text().to_string(), t.visual_bounding_rect()))
-                }
-                egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, clip, texts)),
-                _ => {}
-            }
-        }
-        self.texts.clear();
-        out.shapes.iter().for_each(|s| collect(&s.shape, s.clip_rect, &mut self.texts));
-    }
-
-    fn settle(&mut self) {
-        for _ in 0..5 {
-            self.frame(vec![]);
-        }
-    }
-
-    fn rect(&self, text: &str) -> Rect {
-        self.texts.iter().find(|(s, _)| s == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("missing text {text:?}"))
-    }
-
-    /// Return the rectangle of the widget drawn under `Id::unique(id)` in the revolve test harness.
-    fn response(&self, id: impl std::hash::Hash + std::fmt::Debug) -> Rect {
-        self.ctx.read_response(Id::unique(id)).unwrap().rect
-    }
-
-    fn click(&mut self, p: Pos2) {
-        self.frame(vec![Event::PointerMoved(p), button(p, true)]);
-        self.frame(vec![button(p, false)]);
-        self.settle();
-    }
-
-    fn drag(&mut self, p: Pos2, delta: Vec2) {
-        self.frame(vec![Event::PointerMoved(p), button(p, true)]);
-        for i in 1..=5 {
-            self.frame(vec![Event::PointerMoved(p + delta * (i as f32 / 5.0))]);
-        }
-        self.frame(vec![button(p + delta, false)]);
-        self.settle();
-    }
-
-    fn value(&self, key: &str) -> f64 {
-        self.app.ui.dialog.as_ref().unwrap().f64(key, 0.0)
-    }
-}
-
-fn button(pos: Pos2, pressed: bool) -> Event {
-    Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
-}
-
-#[test]
-fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    let before = h.app.session.doc().unwrap().doc.clone();
+    let key = |h: &ThreeD| {
+        let app = h.app();
+        let st = app.session.active().unwrap();
+        (st.selection.objects.first().copied(), st.revision)
+    };
+    let mut h = opened(app, json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("preview", json!(false));
+    h.set("__page", json!("mapArt"));
+    let second = h.surfaces().unwrap();
+    let at_second = key(&h);
+    assert!(h.app().session.set_active(0));
+    // The preview the dialog opened with moved the second document's revision on: the first is given the same, so
+    // only the document tells the two objects apart.
+    h.app().session.active_mut().unwrap().revision = at_second.1;
     h.settle();
-    assert!(!h.rect("Advanced").is_negative(), "Advanced is visible without scrolling in a normal window");
-    let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    // Cap adds one 28-point row to the shared dialog's previous 540-point bound.
-    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact controls with Cap: {panel:?}");
-    let label = h.rect("Rotation X");
-    h.drag(pos2(label.left() + LABEL_W + 6.0 + VALUE_W / 2.0, label.center().y), vec2(40.0, 0.0));
-    assert!(h.value("rotationX") > 0.0, "the value itself drags");
-    let label = h.rect("Rotation Y");
-    h.drag(label.center(), vec2(40.0, 0.0));
-    assert!(h.value("rotationY") > 0.0, "the label scrubs");
-    let label = h.rect("Revolve angle");
-    h.click(pos2(label.left() + LABEL_W + VALUE_W + 24.0, label.center().y));
-    assert!(h.value("angle") < 180.0, "the slider changes the sweep");
-    h.click(h.response(("revolve-reset", "rotationX")).center());
-    assert_eq!(h.value("rotationX"), 0.0);
-    assert!(h.value("angle") < 180.0, "a dot resets only its own setting");
-    let node = h.app.session.doc().unwrap().doc.node(h.app.session.doc().unwrap().selection.objects[0]).unwrap();
-    assert_eq!(node.appearance.effects[0].params["angle"], json!(h.value("angle")));
-    h.click(h.response("revolve-reset-all").center());
-    let defaults = vectorcraft_effects::default_params(REVOLVE).unwrap();
-    let dialog = h.app.ui.dialog.as_ref().unwrap();
-    for (key, value) in defaults.as_object().unwrap() {
-        assert_eq!(dialog.fields.get(key), Some(value), "reset all: {key}");
-    }
-    dialogs::confirm(&mut h.app).unwrap();
-    h.app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
-}
-
-#[test]
-fn preview_off_changes_fields_without_changing_the_document() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
-    let before = h.app.session.doc().unwrap().doc.clone();
+    assert_eq!(key(&h), at_second, "both documents' objects have the same id and revision");
+    let first = h.surfaces().unwrap();
+    assert_ne!(first, second, "the two objects' solids differ in size");
+    assert!(h.app().session.set_active(1));
     h.settle();
-    h.drag(h.rect("Rotation Y").center(), vec2(40.0, 0.0));
-    assert!(h.value("rotationY") > 0.0);
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
-    dialogs::cancel(&mut h.app);
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
-}
-
-#[test]
-fn command_driven_fields_preview_and_small_windows_keep_the_buttons_reachable() {
-    let mut h = Harness::new(vec2(640.0, 480.0));
-    h.settle();
-    let dialog = h.app.ui.dialog.as_mut().unwrap();
-    dialog.fields.insert("angle".into(), json!(180));
-    h.settle();
-    let state = h.app.session.doc().unwrap();
-    let node = state.doc.node(state.selection.objects[0]).unwrap();
-    assert_eq!(node.appearance.effects[0].params["angle"], json!(180));
-    let screen = Rect::from_min_size(Pos2::ZERO, h.screen);
-    assert!(screen.contains_rect(h.rect("OK")) && screen.contains_rect(h.rect("Cancel")));
-    dialogs::cancel(&mut h.app);
-    assert!(!h.app.session.in_interaction());
-}
-
-#[test]
-fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    h.settle();
-    h.click(h.rect("Lighting").center());
-    assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "light");
-    for label in ["Shading", "Color", "Intensity", "Height", "Softness", "Ambient Light", "Light behind the object"] {
-        assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
-    }
-    let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact lighting controls with light management: {panel:?}");
-    h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
-    assert_ne!(h.value("lightHeight"), 30.0);
-    h.click(h.response(("revolve-reset", "lightHeight")).center());
-    assert_eq!(h.value("lightHeight"), 30.0);
-    h.click(h.rect("Rotation").center());
-    assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("__gizmo"), "rotation");
-    assert!(!h.rect("Rotation X").is_negative());
+    assert_eq!(h.surfaces().unwrap(), second, "back on the second document its own surfaces");
 }
 
 #[test]
 fn automatic_smooth_shading_previews_saves_and_respects_cancel_and_one_step_undo() {
+    let gradients = |h: &ThreeD| {
+        let app = h.app();
+        let state = app.session.doc().unwrap();
+        let art = vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap();
+        let mut count = 0;
+        art.walk(&mut |face| {
+            count += face
+                .appearance
+                .items
+                .iter()
+                .filter(
+                    |item| matches!(item, vectorcraft_doc::AppearanceItem::Fill(f) if matches!(f.paint, vectorcraft_doc::color::Paint::Gradient(_))),
+                )
+                .count();
+        });
+        count
+    };
     for confirm in [false, true] {
-        let mut h = Harness::new(vec2(1280.0, 900.0));
-        let before = h.app.session.doc().unwrap().doc.clone();
-        h.settle();
-        h.click(h.rect("Lighting").center());
-        assert!(!h.texts.iter().any(|(text, _)| text == "Smooth shading"));
-        assert!(!h.app.ui.dialog.as_ref().unwrap().fields.contains_key("smoothShading"));
-        let art = |h: &Harness| {
-            let state = h.app.session.doc().unwrap();
-            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
-        };
-        let gradients = |n: &vectorcraft_doc::Node| {
-            let mut count = 0;
-            n.walk(&mut |face| {
-                count += face.appearance.items.iter().filter(|item| {
-                    matches!(item, vectorcraft_doc::AppearanceItem::Fill(fill) if matches!(fill.paint, vectorcraft_doc::color::Paint::Gradient(_)))
-                }).count();
-            });
-            count
-        };
-        assert!(gradients(&art(&h)) > 0, "default rendering uses vector gradients");
-        h.click(h.rect("Shading").center());
-        assert_eq!(gradients(&art(&h)), 0, "Shading still controls all lighting");
-        h.click(h.response(("revolve-reset", "shade")).center());
-        assert!(gradients(&art(&h)) > 0);
-        h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
-        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(false));
-        h.settle();
-        assert_eq!(h.app.session.doc().unwrap().doc, before);
-        h.app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
-        h.settle();
+        let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
+        let before = source(&h);
+        h.set("__page", json!("lighting"));
+        assert!(!h.fields().contains("smoothShading"));
+        assert!(gradients(&h) > 0, "default rendering uses vector gradients");
+        h.set("shade", json!(false));
+        assert_eq!(gradients(&h), 0, "Shading still controls all lighting");
+        h.set("shade", json!(true));
+        assert!(gradients(&h) > 0);
+        h.set("preview", json!(false));
+        assert_eq!(doc(&h), before, "no preview while Preview is off");
+        h.set("preview", json!(true));
         if confirm {
-            dialogs::confirm(&mut h.app).unwrap();
-            let state = h.app.session.doc().unwrap();
+            h.ok();
+            let app = h.app();
+            let state = app.session.doc().unwrap();
             let node = state.doc.node(state.selection.objects[0]).unwrap();
             let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
             assert!(!node.appearance.effects[0].params.as_object().unwrap().contains_key("smoothShading"));
             assert_eq!(vectorcraft_effects::revolve_art(loaded.node(node.id).unwrap()), vectorcraft_effects::revolve_art(node));
-            h.app.run("edit.undo", json!({})).unwrap();
+            drop(app);
+            undo(&h);
         } else {
-            dialogs::cancel(&mut h.app);
+            h.cancel();
         }
-        assert_eq!(h.app.session.doc().unwrap().doc, before);
+        assert_eq!(doc(&h), before);
     }
 }
 
 #[test]
 fn advanced_visibility_option_is_saved_resettable_and_leaves_preview_geometry_complete() {
-    let mut h = Harness::new(vec2(1280.0, 1000.0));
-    h.settle();
-    h.click(h.rect("Advanced").center());
-    let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    h.frame(vec![
-        Event::PointerMoved(panel.center()),
-        Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            delta: vec2(0.0, -220.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: Default::default(),
-            source: egui::MouseWheelSource::Unknown,
-        },
-    ]);
-    h.settle();
-    let before = vectorcraft_effects::revolve_art({
-        let state = h.app.session.doc().unwrap();
-        state.doc.node(state.selection.objects[0]).unwrap()
-    })
-    .unwrap();
-    let checkbox = h.rect("Keep visible surfaces only when expanding");
-    h.click(checkbox.center());
-    assert!(!h.app.ui.dialog.as_ref().unwrap().bool("expandVisibleOnly"));
-    let state = h.app.session.doc().unwrap();
-    let node = state.doc.node(state.selection.objects[0]).unwrap();
-    assert_eq!(node.appearance.effects[0].params["expandVisibleOnly"], json!(false));
-    assert_eq!(vectorcraft_effects::revolve_art(node), Some(before));
-    h.click(h.response(("revolve-reset", "expandVisibleOnly")).center());
-    assert!(h.app.ui.dialog.as_ref().unwrap().bool("expandVisibleOnly"));
-    h.click(h.rect("Keep visible surfaces only when expanding").center());
-    h.click(h.response("revolve-reset-all").center());
-    assert!(h.app.ui.dialog.as_ref().unwrap().bool("expandVisibleOnly"));
-    dialogs::confirm(&mut h.app).unwrap();
-    let state = h.app.session.doc().unwrap();
+    let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
+    let art = |h: &ThreeD| {
+        let app = h.app();
+        let state = app.session.doc().unwrap();
+        vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
+    };
+    let before = art(&h);
+    h.set("expandVisibleOnly", json!(false));
+    assert_eq!(stored(&h, REVOLVE)["expandVisibleOnly"], json!(false));
+    assert_eq!(art(&h), before, "the option does not change the preview geometry");
+    h.press("Reset all");
+    assert_eq!(h.fields().bool("expandVisibleOnly"), Some(true));
+    h.ok();
+    let app = h.app();
+    let state = app.session.doc().unwrap();
     let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
     assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["expandVisibleOnly"], json!(true));
 }
 
-/// Extrude & Bevel, Inflate and Rotate open the same compact controls, with their own options, the
-/// Position presets and the artboard gizmo turning about the centre of the art.
-#[test]
-fn the_other_3d_effects_show_their_options_and_position_presets() {
-    use vectorcraft_effects::{EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS};
-    let square = "M100 100 L200 100 L200 200 L100 200 Z";
-    for (effect, own) in [
-        (EXTRUDE, &["Depth", "Twist", "Taper", "Cap", "Bevel", "Bevel Shape", "Space", "Bevel Inside", "Bevel both sides"][..]),
-        (INFLATE, &["Depth", "Twist", "Taper", "Cap", "Volume", "Both sides"][..]),
-        (ROTATE, &[][..]),
-    ] {
-        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
-        h.settle();
-        // Extrude & Bevel and Inflate open on their Object tab; Rotate on Rotation.
-        for text in own.iter() {
-            h.rect(text);
-        }
-        if !own.is_empty() {
-            h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
-            h.settle();
-        }
-        for text in ["Presets", "Rotation X", "Perspective"] {
-            h.rect(text);
-        }
-        // The defaults are the Off-Axis Front position, shown by name.
-        h.rect("Off-Axis Front");
-        assert!(!h.texts.iter().any(|(t, _)| t == "Revolve angle"), "{effect}: Revolve's own options stay out");
-        let d = h.app.ui.dialog.as_ref().unwrap();
-        assert!(dialogs::revolve_gizmo::active(d), "{effect}: the gizmo is on");
-        // A preset's angles show its name; other angles are Custom.
-        let [x, y, z] = ROTATION_PRESETS[14].1;
-        let d = h.app.ui.dialog.as_mut().unwrap();
-        d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
-        h.settle();
-        h.rect("Isometric Top");
-        h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationZ".into(), json!(12.5));
-        h.settle();
-        h.rect("Custom");
-    }
+fn button(pos: egui::Pos2, pressed: bool) -> Event {
+    Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
+/// The classic effects' track cube: a drag on its face turns the object live, Escape during a drag puts the angles
+/// back, a key turns Z by a degree, and OK keeps it all as one undo step.
 #[test]
-fn extrude_bevel_options_enable_with_a_bevel_shape() {
-    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
+    let mut h = drawn(SQUARE, CLASSIC_ROTATE);
+    let before = source(&h);
+    h.set("__page", json!("rotation"));
+    let angles = |h: &ThreeD| ["rotationX", "rotationY", "rotationZ"].map(|k| number(h, k));
+    let start = angles(&h);
+    // PLAN: assumed the cube's accessible name "Track cube"
+    let cube = h.target("Track cube");
+    h.fixture.drag(&cube, vec2(30.0, 0.0));
+    let turned = angles(&h);
+    assert_ne!(turned, start, "the drag turned the object");
+    assert_eq!(stored(&h, CLASSIC_ROTATE)["rotationY"].as_f64(), Some(turned[1]), "the preview follows the cube");
+    // Escape during a drag puts the angles back and keeps the dialog open.
+    let p = cube.center();
+    h.fixture.frame(vec![Event::PointerMoved(p), button(p, true)]);
+    h.fixture.frame(vec![Event::PointerMoved(p + vec2(0.0, 30.0))]);
+    h.fixture.frame(vec![Event::PointerMoved(p + vec2(0.0, 40.0))]);
+    assert_ne!(number(&h, "rotationX"), turned[0]);
+    h.fixture.key(Key::Escape, Modifiers::NONE);
+    h.fixture.frame(vec![button(p + vec2(0.0, 40.0), false)]);
     h.settle();
-    let width = h.response(("revolve-reset", "bevelWidth"));
-    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "bevelWidth"))).unwrap().enabled(), "no bevel: its sizes are off");
-    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevel".into(), json!("rounded"));
+    assert!(h.app().three_d_dialog.is_some(), "Escape ends the drag, not the dialog");
+    assert_eq!(angles(&h), turned);
+    h.fixture.key(Key::PageUp, Modifiers::NONE);
     h.settle();
-    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "bevelWidth"))).unwrap().enabled());
-    assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
+    assert!((number(&h, "rotationZ") - (turned[2] - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
+    let last = number(&h, "rotationZ");
+    h.ok();
+    assert_eq!(stored(&h, CLASSIC_ROTATE)["rotationZ"].as_f64(), Some(last));
+    undo(&h);
+    assert_eq!(doc(&h), before);
+}
+
+/// A mixed rotation (the 3D and Materials panel's selected effects differ) leaves the cube off. It is tested at the
+/// row: `effect::open` never marks a value mixed, only the panel does.
+#[test]
+fn the_track_cube_is_off_while_a_rotation_is_mixed() {
+    use std::{cell::RefCell, rc::Rc};
+    let fields = Rc::new(RefCell::new(craft::ui::patterns::form_dialogs::DialogFields::from_pairs([
+        ("rotationX", 0.0),
+        ("rotationY", 10.0),
+        ("rotationZ", 0.0),
+    ])));
+    fields.borrow_mut().set_mixed("rotationX");
+    let shown = fields.clone();
+    let params = [super::super::track_cube::row()];
+    let mut fixture = craft::ui::testing::Fixture::new(move |ui| {
+        craft::ui::patterns::form_dialogs::ParamRows::new("Rotation", &params, craft::ui::contract::Bind::bound(&mut *shown.borrow_mut())).show(ui);
+    });
+    fixture.settle();
+    // A mixed value holds no number: the drag leaves the three as they were.
+    let start = ["rotationX", "rotationY", "rotationZ"].map(|k| fields.borrow().number(k));
+    let cube = fixture.by_label("Track cube").expect("the cube is shown");
+    fixture.drag(&cube, vec2(30.0, 0.0));
+    let f = fields.borrow();
+    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| f.number(k)), start);
+    assert!(f.is_mixed("rotationX"), "the drag leaves the mixed rotation mixed");
 }
 
 #[test]
-fn cap_checkbox_previews_resets_and_respects_cancel_and_one_step_undo() {
-    for confirm in [false, true] {
-        let mut h = Harness::new(vec2(1280.0, 1000.0));
-        let before = h.app.session.doc().unwrap().doc.clone();
-        let dialog = h.app.ui.dialog.as_mut().unwrap();
-        dialog.fields.insert("offset".into(), json!(20));
-        dialog.fields.insert("rotationX".into(), json!(-35));
-        h.settle();
-        let art = |h: &Harness| {
-            let state = h.app.session.doc().unwrap();
-            vectorcraft_effects::revolve_art(state.doc.node(state.selection.objects[0]).unwrap()).unwrap()
-        };
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"), "Cap starts on");
-        let capped = art(&h);
-        h.click(h.rect("Cap").center());
-        assert!(!h.app.ui.dialog.as_ref().unwrap().bool("cap"));
-        assert_ne!(art(&h), capped);
-        h.click(h.response(("revolve-reset", "cap")).center());
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
-        assert_eq!(art(&h), capped);
-        h.click(h.rect("Cap").center());
-        h.click(h.response("revolve-reset-all").center());
-        assert!(h.app.ui.dialog.as_ref().unwrap().bool("cap"));
-        h.click(h.rect("Cap").center());
-        if confirm {
-            dialogs::confirm(&mut h.app).unwrap();
-            let state = h.app.session.doc().unwrap();
-            assert_eq!(state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
-            let loaded = vectorcraft_format::load(&vectorcraft_format::save(&state.doc, false)).unwrap();
-            assert_eq!(loaded.node(state.selection.objects[0]).unwrap().appearance.effects[0].params["cap"], json!(false));
-            h.app.run("edit.undo", json!({})).unwrap();
-        } else {
-            dialogs::cancel(&mut h.app);
-        }
-        assert_eq!(h.app.session.doc().unwrap().doc, before);
-        assert!(!h.app.session.in_interaction());
+fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
+    let mut h = drawn(SQUARE, EXTRUDE);
+    let before = source(&h);
+    h.set("__page", json!("object"));
+    let changed = json!({"bevel": "step", "bevelWidth": 12.0, "bevelHeight": 3.0, "bevelRepeat": 4, "bevelSpace": 30.0, "bevelInside": true, "bevelBothSides": true, "depth": 90.0, "twist": 45.0});
+    for (key, value) in changed.as_object().unwrap() {
+        h.set(key, value.clone());
     }
-}
-
-#[test]
-fn light_picker_previews_and_reset_dot_and_cancel_restore_white() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    let before = h.app.session.doc().unwrap().doc.clone();
-    h.settle();
-    h.click(h.rect("Lighting").center());
-    h.click(pos2(h.rect("#FFFFFF").left() - 18.0, h.rect("Color").center().y));
-    let green =
-        h.texts.iter().find(|(s, _)| s.starts_with("G ")).map(|(_, r)| *r).unwrap_or_else(|| panic!("the opaque RGB picker opens: {:?}", h.texts));
-    h.drag(green.center(), vec2(-100.0, 0.0));
-    let color = h.app.ui.dialog.as_ref().unwrap().str("lightColor");
-    assert_ne!(color, "#ffffff");
-    let st = h.app.session.doc().unwrap();
-    assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().appearance.effects[0].params["lightColor"], json!(color));
-    h.click(h.rect("Color").center());
-    h.click(h.response(("revolve-reset", "lightColor")).center());
-    assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
-    dialogs::cancel(&mut h.app);
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
-}
-
-#[test]
-fn every_3d_dialog_has_color_and_reset_all_restores_white() {
-    for id in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
-        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", id, vec2(1280.0, 900.0));
-        h.settle();
-        h.click(h.rect("Lighting").center());
-        h.app.ui.dialog.as_mut().unwrap().fields.insert("lightColor".into(), json!("blue"));
-        h.settle();
-        assert!(!h.rect("#FFFFFF").is_negative(), "invalid stored colors show the renderer's white fallback");
-        h.app.ui.dialog.as_mut().unwrap().fields.insert("lightColor".into(), json!("#ff8000"));
-        h.settle();
-        assert!(!h.rect("Color").is_negative());
-        assert!(!h.rect("#FF8000").is_negative());
-        h.click(h.response("revolve-reset-all").center());
-        assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
-        dialogs::confirm(&mut h.app).unwrap();
+    h.set("__page", json!("rotation"));
+    h.set("rotationX", json!(10.0));
+    h.set("__page", json!("object"));
+    // PLAN: assumed the button's name "Reset" (the bevel group's)
+    h.press("Reset");
+    let defaults = vectorcraft_effects::default_params(EXTRUDE).unwrap();
+    let fields = h.fields();
+    for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+        assert!(same(&h.json(key), &defaults[key]), "reset: {key}");
     }
+    for (key, want) in [("depth", 90.0), ("twist", 45.0), ("rotationX", 10.0)] {
+        assert_eq!(fields.number(key), Some(want), "kept: {key}");
+    }
+    h.ok();
+    let params = stored(&h, EXTRUDE);
+    assert_eq!((params["depth"].as_f64(), params["bevelBothSides"].clone(), params["bevel"].clone()), (Some(90.0), json!(false), json!("none")));
+    undo(&h);
+    assert_eq!(doc(&h), before);
+}
+
+#[test]
+fn reset_all_keeps_map_art_and_its_options() {
+    let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);
+    let maps = json!([{"surface": 1, "symbol": "Mark"}]);
+    // The maps and their options as the Map Art page leaves them.
+    super::super::three_d::with_fields(&mut h.app(), |d| {
+        d.set_field("mapArt", FieldValue::Json(maps.clone()));
+        d.set_field("mapShade", true.into());
+        d.set_field("mapInvisible", true.into());
+    });
+    h.set("__page", json!("rotation"));
+    h.set("rotationX", json!(40.0));
+    h.press("Reset all");
+    assert_eq!(number(&h, "rotationX"), -21.88, "the view is reset");
+    assert_eq!(h.json("mapArt"), maps, "the maps stay");
+    let fields = h.fields();
+    assert!(fields.bool("mapShade") == Some(true) && fields.bool("mapInvisible") == Some(true), "Shade Artwork and Invisible Geometry stay");
+    h.cancel();
 }
 
 #[test]
 fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
-    for effect in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
-        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
-        let before = h.app.session.doc().unwrap().doc.clone();
-        h.settle();
-        h.click(h.rect("Lighting").center());
-        let one = h.app.session.doc().unwrap().doc.clone();
-        h.click(h.rect("Delete Light").center());
-        assert_eq!(h.app.session.doc().unwrap().doc, one, "retain at least one light");
-        h.click(h.rect("Add Light").center());
-        let d = h.app.ui.dialog.as_ref().unwrap();
-        let first = d.fields["lights"][0].clone();
-        assert_eq!(d.fields["lights"].as_array().unwrap().len(), 2);
-        assert_eq!(d.fields["__light"], 1);
-        assert_eq!(selected_light(d).f64("lightHeight", 0.0), 90.0);
-        h.drag(h.rect("Height").center(), vec2(-35.0, 0.0));
-        let d = h.app.ui.dialog.as_ref().unwrap();
-        assert_ne!(d.fields["lights"][1]["height"], 90);
-        assert_eq!(d.fields["lights"][0], first);
-        let two = h.app.session.doc().unwrap().doc.clone();
-        h.click(h.rect("Light 2").center());
-        h.click(h.rect("Light 1").center());
-        assert_eq!(h.app.session.doc().unwrap().doc, two, "selection changes no effect params");
-        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["__light"], 0);
-        h.click(h.rect("Delete Light").center());
-        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["lights"].as_array().unwrap().len(), 1);
-        h.click(h.response("revolve-reset-all").center());
-        assert!(h.app.ui.dialog.as_ref().unwrap().fields["lights"].is_null());
-        h.click(h.rect("Add Light").center());
-        dialogs::confirm(&mut h.app).unwrap();
-        h.app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(h.app.session.doc().unwrap().doc, before, "whole dialog is one undo step");
+    for effect in [REVOLVE, EXTRUDE] {
+        let mut h = drawn(SQUARE, effect);
+        let before = source(&h);
+        h.set("__page", json!("lighting"));
+        let one = doc(&h);
+        h.press("Delete Light");
+        assert_eq!(doc(&h), one, "retain at least one light");
+        h.press("Add Light");
+        let lights = h.json("lights");
+        let first = lights[0].clone();
+        assert_eq!(lights.as_array().map(Vec::len), Some(2));
+        assert_eq!(h.json("__light"), json!(1));
+        assert_eq!(super::selected_light(&h.fields()).number("lightHeight"), Some(90.0), "a new light starts at Height 90");
+        h.set("lightHeight", json!(55.0));
+        let lights = h.json("lights");
+        assert_eq!(lights[1]["height"], json!(55.0));
+        assert_eq!(lights[0], first, "an edit changes only the selected light");
+        let two = doc(&h);
+        h.choose("Lights", "Light 2", "Light 1");
+        assert_eq!(doc(&h), two, "selection changes no effect params");
+        assert_eq!(h.json("__light"), json!(0));
+        h.press("Delete Light");
+        assert_eq!(h.json("lights").as_array().map(Vec::len), Some(1));
+        h.press("Reset all");
+        assert!(h.json("lights").is_null());
+        h.press("Add Light");
+        h.ok();
+        undo(&h);
+        assert_eq!(doc(&h), before, "whole dialog is one undo step");
     }
 }
 
 #[test]
 fn light_list_stops_at_ten_and_cancel_restores_the_source() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    let before = h.app.session.doc().unwrap().doc.clone();
-    h.settle();
-    h.click(h.rect("Lighting").center());
+    let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
+    let before = source(&h);
+    h.set("__page", json!("lighting"));
     for _ in 0..11 {
-        h.click(h.rect("Add Light").center());
+        h.press("Add Light");
     }
-    let d = h.app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.fields["lights"].as_array().unwrap().len(), 10);
-    assert_eq!(d.fields["__light"], 9);
-    dialogs::cancel(&mut h.app);
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
+    assert_eq!(h.json("lights").as_array().map(Vec::len), Some(10));
+    assert_eq!(h.json("__light"), json!(9));
+    h.cancel();
+    assert_eq!(doc(&h), before);
 }
 
 #[test]
 fn lighting_presets_preview_custom_edits_reset_and_commit_as_one_undo_step() {
-    for effect in [REVOLVE, EXTRUDE, INFLATE, vectorcraft_effects::ROTATE] {
-        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
-        let before = h.app.session.doc().unwrap().doc.clone();
-        h.settle();
-        h.click(h.rect("Lighting").center());
-        let view = h.app.ui.dialog.as_ref().unwrap().fields["rotationX"].clone();
-        h.click(h.rect("Standard").center());
-        h.click(h.rect("Right").center());
-        assert_eq!(h.value("lightRotation"), 0.0);
-        assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields["rotationX"], view);
-        h.drag(h.rect("Height").center(), vec2(20.0, 0.0));
-        assert!(!h.rect("Custom").is_negative());
-        h.click(h.rect("Custom").center());
-        h.click(h.rect("Diffuse").center());
-        assert_eq!(h.value("lightSoftness"), 100.0);
-        assert_eq!(h.value("ambient"), 35.0);
-        h.click(h.rect("Add Light").center());
-        assert!(!h.rect("Custom").is_negative());
-        h.click(h.rect("Custom").center());
-        h.click(h.rect("Top Left").center());
-        let d = h.app.ui.dialog.as_ref().unwrap();
-        assert!(d.fields["lights"].is_null());
-        assert_eq!(d.fields["__light"], 0);
-        assert_eq!(d.f64("lightRotation", 0.0), 135.0);
-        h.click(h.response("revolve-reset-all").center());
-        assert!(!h.rect("Standard").is_negative());
-        h.click(h.rect("Standard").center());
-        h.click(h.rect("Right").center());
-        dialogs::confirm(&mut h.app).unwrap();
-        h.app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(h.app.session.doc().unwrap().doc, before);
-    }
+    let mut h = drawn(SQUARE, REVOLVE);
+    let before = source(&h);
+    h.set("__page", json!("lighting"));
+    let view = h.json("rotationX");
+    let pick = |h: &mut ThreeD, from: &str, to: &str| h.choose("Presets", from, to);
+    pick(&mut h, "Standard", "Right");
+    assert_eq!(number(&h, "lightRotation"), 0.0);
+    assert_eq!(h.json("rotationX"), view, "a preset keeps the view");
+    h.set("lightHeight", json!(70.0));
+    pick(&mut h, "Custom", "Diffuse");
+    assert_eq!((number(&h, "lightSoftness"), number(&h, "ambient")), (100.0, 35.0));
+    h.press("Add Light");
+    pick(&mut h, "Custom", "Top Left");
+    assert!(h.json("lights").is_null());
+    assert_eq!((h.json("__light"), number(&h, "lightRotation")), (json!(0), 135.0));
+    h.press("Reset all");
+    pick(&mut h, "Standard", "Right");
+    h.ok();
+    undo(&h);
+    assert_eq!(doc(&h), before);
 }
 
 #[test]
 fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
-    let mut h = Harness::new(vec2(1280.0, 900.0));
-    h.settle();
-    dialogs::confirm(&mut h.app).unwrap();
-    h.app
-        .run(
-            "effect.setParams",
-            json!({"index":0,"item":null,"params":{
-                "ambient":19,"lights":[{"color":"#ff8040"},{"color":"#4080ff"}]
-            }}),
-        )
+    let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
+    h.ok();
+    h.app()
+        .run("effect.setParams", json!({"index":0,"item":null,"params":{"ambient":19,"lights":[{"color":"#ff8040"},{"color":"#4080ff"}]}}))
         .unwrap();
-    let before = h.app.session.doc().unwrap().doc.clone();
-    h.app.run("effect.dialog", json!({"effect":REVOLVE,"index":0,"item":null})).unwrap();
-    h.settle();
-    h.click(h.rect("Lighting").center());
-    h.click(h.rect("Custom").center());
-    h.click(h.rect("Right").center());
-    assert_ne!(h.app.session.doc().unwrap().doc, before);
-    dialogs::cancel(&mut h.app);
-    assert_eq!(h.app.session.doc().unwrap().doc, before);
+    let before = doc(&h);
+    reopen(&mut h, json!({"effect":REVOLVE,"index":0,"item":null}));
+    h.set("__page", json!("lighting"));
+    h.choose("Presets", "Custom", "Right");
+    assert_ne!(doc(&h), before);
+    h.cancel();
+    assert_eq!(doc(&h), before);
 }
