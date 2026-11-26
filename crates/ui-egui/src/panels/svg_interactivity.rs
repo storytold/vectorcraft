@@ -6,11 +6,16 @@
 //! remove them; Link JavaScript Files… opens the JavaScript Files dialog (`ui.javascriptFilesDialog`).
 //! Everything reads `svgInteractivity.info`.
 
-use craft::behavior::{IconId, Selection, keyed};
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+use craft::behavior::{IconId, Selection, SelectionChange, keyed};
 use craft::keymap::CommandRef;
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _, Sizing};
+use craft::ui::contract::{
+    Bind, CollectionEvent, Entry, Politeness, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, announce,
+};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
+use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -34,6 +39,7 @@ const CLEAR_EVENTS: &str = "svgInteractivity.clearEvents";
 pub(crate) struct SvgInteractivityPanel {
     /// The event picked to edit ([`picked`] reads it).
     pub(crate) event: String,
+    list_stamp: u64,
 }
 
 /// The panel's values: whether there are targets, and their events (`None` where they differ).
@@ -96,6 +102,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let out = Select::new(caption("Event:"), Bind::given(event.to_string()), &names).enabled(info.has).show(ui);
         pick = out.events.committed().cloned();
     });
+    let menu_changed = pick.as_deref().is_some_and(|picked| picked != event);
+    let reveal = pick.as_ref().filter(|picked| menu_changed && events.iter().any(|(key, _)| key == *picked)).cloned();
     // Blank where the objects' events differ; empty where none of them has the event.
     let script = info.events.as_ref().map(|l| l.iter().find(|(e, _)| e == event).map_or("", |(_, js)| js.as_str()));
     let shown = script.unwrap_or_default();
@@ -105,44 +113,90 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         typed = out.events.committed().filter(|js| js.as_str() != shown).cloned();
     });
     let source = keyed(events, |(e, _): &(String, String)| e.clone());
-    let selection = if events.iter().any(|(e, _)| e == event) { Selection::single(event.to_string()) } else { Default::default() };
-    let list = List::<String>::options(tl!("Events"))
-        .selection(Bind::given(selection))
-        .sizing(Sizing::Fill)
-        // Event names and scripts are data: shown as they are.
-        .show_items(ui, &source, &mut |key, _| {
-            let js = events.iter().find(|(e, _)| e == key).map_or("", |(_, js)| js.as_str());
-            ListRow::new(format!("{key}: {js}"))
-        });
-    for e in list.events {
-        if let CollectionEvent::Activate(key) = e {
-            pick = Some(key);
-        }
+    let mut stamp = DefaultHasher::new();
+    app.ui.svg_interactivity_panel.list_stamp.hash(&mut stamp);
+    for (key, _) in events {
+        key.hash(&mut stamp);
     }
-    if !info.has && selection_len(app) == 0 {
-        Text::new(tl!("No Selection")).shade(Shade::Muted).show(ui);
-    }
+    let rows_stamp = stamp.finish();
+    let mut remove = None;
+    let mut footer_pick = None;
     let has_doc = app.session.active().is_some();
     let listed = events.iter().any(|(e, _)| e == event);
-    let footer = FooterBar::actions([
-        FooterAction::new(IconId::new("trash"), tl!("Remove Selected Entry")).enabled(listed),
-        FooterAction::new(IconId::new("new_file"), tl!("Link JavaScript Files…")).enabled(has_doc),
-    ])
-    .show_footer(ui);
+    Stack::new()
+        .fill()
+        .footer(|ui, _| {
+            let footer = FooterBar::actions([
+                FooterAction::new(IconId::new("trash"), tl!("Remove Selected Entry")).enabled(listed),
+                FooterAction::new(IconId::new("new_file"), tl!("Link JavaScript Files…")).enabled(has_doc),
+            ])
+            .show_footer(ui);
+            if !ui.is_sizing_pass() {
+                footer_pick = footer.picked;
+            }
+        })
+        .show(ui, |ui, _| {
+            if !info.has && selection_len(app) == 0 {
+                Text::new(tl!("No Selection")).shade(Shade::Muted).show(ui);
+                return;
+            }
+            let selection = if listed { Selection::single(event.to_string()) } else { Default::default() };
+            let mut list = List::<String>::new(tl!("Events"))
+                .select(SelectMode::Single)
+                .arrows_select(true)
+                .deletable(true)
+                .rows_stamp(rows_stamp)
+                .selection(Bind::given(selection))
+                .sizing(Sizing::Fill);
+            if let Some(key) = reveal.as_ref() {
+                list = list.reveal(key.clone());
+            }
+            // Event names and scripts are data: shown as they are.
+            let list = list.show_items(ui, &source, &mut |key, _| {
+                let js = events.iter().find(|(e, _)| e == key).map_or("", |(_, js)| js.as_str());
+                ListRow::new(format!("{key}: {js}"))
+            });
+            if ui.is_sizing_pass() {
+                return;
+            }
+            for e in list.events {
+                match e {
+                    CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => {
+                        if let Some(key) = keys.into_iter().next() {
+                            pick = Some(key);
+                        }
+                    }
+                    CollectionEvent::Activate(key) => pick = Some(key),
+                    CollectionEvent::Delete(_) => {
+                        remove = pick.as_deref().or(listed.then_some(event)).map(str::to_owned);
+                    }
+                    _ => {}
+                }
+            }
+        });
     if let Some(e) = pick {
-        app.ui.svg_interactivity_panel.event = e;
+        let state = &mut app.ui.svg_interactivity_panel;
+        state.event = e;
+        if menu_changed {
+            // The list must seed its keyboard position from the new picker selection.
+            state.list_stamp = state.list_stamp.wrapping_add(1);
+        }
     }
     if let Some(js) = typed {
         app.run("svgInteractivity.setEvent", json!({ "event": event, "script": js })).ok();
     }
-    match footer.picked {
-        Some(0) => {
-            app.run("svgInteractivity.removeEvent", json!({ "event": event })).ok();
-        }
+    match footer_pick {
+        Some(0) => remove = Some(event.to_string()),
         Some(1) => {
             crate::menus::invoke(app, "ui.javascriptFilesDialog", json!({}));
         }
         _ => {}
+    }
+    if let Some(event) = remove
+        && app.run("svgInteractivity.removeEvent", json!({ "event": event })).is_ok_and(|out| out["changed"].as_u64().unwrap_or(0) > 0)
+    {
+        let message = crate::i18n::fmt(tl!("Removed SVG event {event}"), &[("event", &event)]);
+        announce(ui.ctx(), message, Politeness::Polite);
     }
 }
 
@@ -214,5 +268,72 @@ mod tests {
         assert!(!panel.shows("onclick: alert(1)"));
         assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some(""));
         assert!(info(&mut panel.app()).events.is_none());
+    }
+
+    #[test]
+    fn keyboard_selection_edits_and_removes_the_chosen_event() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        run(&mut app, "svgInteractivity.setEvent", json!({"event": "onclick", "script": "1;"}));
+        run(&mut app, "svgInteractivity.setEvent", json!({"event": "onmouseover", "script": "2;"}));
+        let mut panel = Panel::new(app, show);
+
+        panel.click("onclick: 1;");
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("1;"));
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("2;"));
+
+        panel.click(caption("Event:"));
+        panel.click("onclick");
+        panel.focus(tl!("Events"));
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("2;"));
+
+        panel.key(egui::Key::ArrowUp, egui::Modifiers::SHIFT);
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("2;"));
+        let delete =
+            |pressed| egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+        panel.frame_with(vec![delete(true)]);
+        let removed = crate::i18n::fmt(tl!("Removed SVG event {event}"), &[("event", "onmouseover")]);
+        assert!(panel.announces(&removed), "the removal is announced");
+        panel.frame_with(vec![delete(false)]);
+        panel.frame();
+        assert!(panel.shows("onclick: 1;"));
+        assert!(!panel.shows("onmouseover: 2;"));
+        assert_eq!(panel.app().session.active().unwrap().selection.objects.len(), 1);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("2;"));
+        panel.key(egui::Key::Delete, egui::Modifiers::NONE);
+        assert!(!panel.shows("onmouseover: 2;"));
+        panel.key(egui::Key::Delete, egui::Modifiers::NONE);
+        assert!(panel.shows("onclick: 1;"), "Delete must leave an unselected event alone");
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some("1;"));
+        panel.click("Remove Selected Entry");
+        assert!(!panel.shows("onclick: 1;"));
+    }
+
+    #[test]
+    fn picking_an_event_reveals_its_row_in_a_short_panel() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({ "width": 100, "height": 100 }));
+        run(&mut app, "shape.rectangle", json!({ "x": 0, "y": 0, "width": 50, "height": 50 }));
+        for (i, event) in SVG_EVENTS.into_iter().enumerate() {
+            run(&mut app, "svgInteractivity.setEvent", json!({ "event": event, "script": i.to_string() }));
+        }
+        let script = (SVG_EVENTS.len() - 1).to_string();
+        let last = format!("{}: {script}", SVG_EVENTS.last().unwrap());
+        let mut panel = Panel::new(app, show);
+        panel.room(egui::vec2(300.0, 220.0));
+        panel.frame();
+        assert!(!panel.shows(&last) || !panel.in_view(&last));
+
+        panel.click(caption("Event:"));
+        panel.key(egui::Key::End, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(panel.value(caption("JavaScript:")).as_deref(), Some(script.as_str()));
+        assert!(panel.in_view(&last), "the picker scrolls the selected event into view");
     }
 }
