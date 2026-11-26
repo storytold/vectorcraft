@@ -73,7 +73,7 @@ fn check_tool_switch_cancels(app: &mut VectorcraftApp, widget: Widget, at: Pos2,
     advance(app, &mut held, widget, Gesture::Move(v.to_doc(q)), Mods::default());
     assert_ne!(*app.session.active().unwrap().doc, *before, "the drag previews");
     app.select_tool("directSelection");
-    let visible = shown(app);
+    let visible = shown(app, app.session.tool_id());
     let l = layout(app, visible);
     end_hidden(app, &mut held, &l);
     assert!(held.is_none(), "a tool switch cancels the drag");
@@ -353,4 +353,53 @@ fn app_with_radial() -> VectorcraftApp {
     app.run("shape.rectangle", json!({"x": 180, "y": 40, "width": 40, "height": 40})).unwrap();
     app.run("object.repeat.radial", json!({"instances": 6, "radius": 60})).unwrap();
     app
+}
+
+/// The widgets only the Selection tool presses (a Shaper Group's mode widget, a mirror repeat's axis, a grid or radial
+/// repeat's handles) hide while Cmd lends Direct Selection, and come back when the key is let go.
+#[test]
+fn selection_tool_widgets_hide_while_cmd_lends_direct_selection() {
+    let count = |app: &mut VectorcraftApp, held: egui::Modifiers, widget: Widget| {
+        let tool = app.session.hover_tool_id(&crate::canvas::mods(held, false));
+        let visible = shown(app, tool);
+        widgets(&layout(app, visible), widget)
+    };
+    // Each widget that does not show, hide or come back as it should.
+    let mut wrong = vec![];
+    let mut check = |app: &mut VectorcraftApp, widget: Widget| {
+        app.select_tool("selection");
+        let plain = count(app, egui::Modifiers::NONE, widget);
+        let cmd = count(app, egui::Modifiers::COMMAND, widget);
+        let back = count(app, egui::Modifiers::NONE, widget);
+        if plain == 0 || cmd != 0 || back != plain {
+            wrong.push(format!("{widget:?}: {plain} shown, {cmd} with Cmd held, {back} after"));
+        }
+    };
+    let mut shaper = app();
+    for x in [0, 50] {
+        shaper.run("shape.rectangle", json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
+    }
+    shaper.run("shaper.scribble", json!({"points": [[25, 20], [75, 35], [30, 50], [125, 65]]})).unwrap();
+    check(&mut shaper, Widget::Shaper);
+    check(&mut mirror_app().0, Widget::Mirror);
+    let mut grid = app();
+    grid.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 40, "height": 40})).unwrap();
+    grid.run("object.repeat.grid", json!({"hSpacing": 10, "vSpacing": 10})).unwrap();
+    check(&mut grid, Widget::Grid);
+    check(&mut app_with_radial(), Widget::Radial);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// With Direct Selection, Cmd held lends the Selection tool, and its widgets show.
+#[test]
+fn cmd_held_with_direct_selection_shows_the_selection_tools_widgets() {
+    let (mut app, _) = mirror_app();
+    app.select_tool("directSelection");
+    let tool = |app: &VectorcraftApp, held| app.session.hover_tool_id(&crate::canvas::mods(held, false));
+    let own = shown(&app, tool(&app, egui::Modifiers::NONE));
+    assert_eq!(widgets(&layout(&mut app, own), Widget::Mirror), 0, "Direct Selection's own");
+    let lent = tool(&app, egui::Modifiers::COMMAND);
+    assert_eq!(lent, "selection");
+    let visible = shown(&app, lent);
+    assert!(widgets(&layout(&mut app, visible), Widget::Mirror) > 0, "the Selection tool's, lent by Cmd");
 }

@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries, its transparent colors taking one slot together (the transparent pixels' slot when there are any), its shifted and then its locked colors kept first; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries, its transparent colors taking one slot together (the transparent pixels' slot when there are any), its shifted and then its locked colors kept first; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), transparencyDither?: none (default: pixels under half opacity become transparent)|diffusion|pattern|noise (gif/png8 with transparency: partly transparent pixels become transparent or keep their color in a dither, about as many keeping it as their opacity says with pattern, noise or diffusion at amount 100; fully transparent and opaque pixels do not change), transparencyDitherAmount?: 100 (0–100: the diffusion dither's strength, a lower amount closer to none, 0 as none), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -340,10 +340,15 @@ pub struct ColorTable {
 type Shift = ([u8; 3], [u8; 3]);
 
 /// The most colours a colour table list holds.
-const MAX_TABLE: usize = 256;
+pub const MAX_TABLE: usize = 256;
 
 /// The error for a deletion that would leave the color table no color for the pixels.
 pub const KEEP_ONE: &str = "colorTable.deleted: at least one color has to stay in the color table";
+
+/// The error for a colour table list `what` (`colorTable.<what>`) with more than [`MAX_TABLE`] colours.
+pub fn too_many(what: &str) -> String {
+    format!("colorTable.{what}: at most {MAX_TABLE} colours")
+}
 
 impl ColorTable {
     /// Whether the table is a Custom one: a color was deleted or the palette is fixed.
@@ -353,7 +358,7 @@ impl ColorTable {
 
     fn colors(list: &[String], what: &str) -> std::result::Result<Vec<[u8; 3]>, String> {
         if list.len() > MAX_TABLE {
-            return Err(format!("colorTable.{what}: at most {MAX_TABLE} colours"));
+            return Err(too_many(what));
         }
         list.iter().map(|h| Self::rgb(h).ok_or_else(|| format!("colorTable.{what}: `{h}` is not a colour such as \"#ff8800\""))).collect()
     }
@@ -398,6 +403,12 @@ pub struct WebSettings {
     pub dither_amount: u8,
     /// Keep transparent pixels transparent (GIF, PNG-8, PNG-24).
     pub transparency: bool,
+    /// GIF and PNG-8 with `transparency`: how partly transparent pixels are split between the
+    /// transparent entry and their color (`none`: under half opacity is transparent).
+    #[serde(serialize_with = "ser_key", deserialize_with = "de_key")]
+    pub transparency_dither: Dither,
+    /// 0–100: the strength of the `diffusion` transparency dither.
+    pub transparency_dither_amount: u8,
     /// What partly transparent edges blend into (JPEG and opaque PNG-24: the background): `white`,
     /// `black`, `none` or `#rrggbb`.
     pub matte: String,
@@ -444,6 +455,8 @@ impl Default for WebSettings {
             dither: Dither::Diffusion,
             dither_amount: 100,
             transparency: true,
+            transparency_dither: Dither::None,
+            transparency_dither_amount: 100,
             matte: "white".into(),
             interlaced: false,
             web_snap: 0,
@@ -492,6 +505,10 @@ impl WebSettings {
     fn checked(mut self) -> std::result::Result<Self, String> {
         self.colors = self.colors.clamp(2, 256);
         self.dither_amount = self.dither_amount.min(100);
+        if self.transparency_dither_amount > 100 {
+            let key = "transparencyDitherAmount";
+            return Err(format!("`{key}` must be from 0 to 100"));
+        }
         self.web_snap = self.web_snap.min(100);
         self.lossy = self.lossy.min(100);
         self.quality = self.quality.min(100);
@@ -799,6 +816,8 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
         dither_amount: s.dither_amount,
         transparency: s.transparency,
         matte,
+        transparency_dither: s.transparency_dither,
+        transparency_dither_amount: s.transparency_dither_amount,
     };
     let (mut ix, dropped) = reduced(rgba, w, h, s, &o, &kept)?;
     // Map to transparent works on the colours the reduction made.
@@ -905,7 +924,7 @@ fn reduced(
         return Ok((quantize::quantize_to(rgba, w, h, o, &left), vec![]));
     }
     // A fixed palette holds at most `colors` entries, the transparent one included.
-    let has_clear = s.transparency && rgba.as_chunks::<4>().0.iter().any(|p| p[3] < 128);
+    let has_clear = quantize::clear_mask(rgba, w, o).contains(&true);
     let removed = custom.iter().any(|c| deleted.contains(c));
     let mut left: Vec<[u8; 3]> = vec![];
     for c in custom {
@@ -972,12 +991,13 @@ fn clear_dropped(ix: &mut Indexed, rgba: &[u8], o: &PaletteOptions, kept: &[[u8;
         return vec![];
     }
     let all: Vec<[u8; 3]> = kept.iter().chain(&dropped).copied().collect();
+    let width = ix.width;
     let Indexed { palette, transparent, indices, .. } = ix;
     // The entry such pixels take, looked up at the first of them.
     let mut entry: Option<Option<u8>> = None;
     let mut taken = vec![false; dropped.len()];
     let mut pixel = 0;
-    quantize::nearest_entries(rgba, o, &all, |n| {
+    quantize::nearest_entries(rgba, width, o, &all, |n| {
         if let Some(d) = n.and_then(|n| n.checked_sub(kept.len())) {
             let e = *entry.get_or_insert_with(|| {
                 transparent.or_else(|| palette.iter().position(|c| to_clear.contains(c)).and_then(|i| u8::try_from(i).ok())).or_else(|| {

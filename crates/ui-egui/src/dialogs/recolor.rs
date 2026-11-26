@@ -212,8 +212,6 @@ const ARROW: ColumnKey = ColumnKey::new("arrow");
 const NEW: ColumnKey = ColumnKey::new("new");
 const HEX: ColumnKey = ColumnKey::new("hex");
 /// The arrow of a row that is recolored, and of one that is excluded (a dashed line without a head).
-// PLAN: assumed icons `dc-recolor-arrow` and `dc-recolor-arrow-off` (VectorCraft's own solid and dashed arrows);
-// the assets owner draws them and adds them to `assets/icons`, `icon_data.rs` and `ASSETS.md`.
 const ARROW_ON: &str = "dc-recolor-arrow";
 const ARROW_OFF: &str = "dc-recolor-arrow-off";
 
@@ -264,16 +262,45 @@ pub(crate) struct Open {
     pub preview: LivePreview,
 }
 
-/// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
-/// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
-/// which become their new colours; without art the rows are the group's colours. `colors` is a
-/// count (an n-colour job) or the new colours to assign (without art or a group they are the
+/// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?, preset?}`) on the selected
+/// art and, with `group`, on that colour group: art is reduced to as many rows as the group has
+/// colours, which become their new colours; without art the rows are the group's colours. `colors`
+/// is a count (an n-colour job) or the new colours to assign (without art or a group they are the
 /// rows, which OK saves as a new colour group); `library` limits to a library or "document" (""
-/// picks the first library).
+/// picks the first library). With `preset: true` the Recolor with Preset dialog opens first.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    match p.get("preset") {
+        None | Some(Value::Bool(false)) => {}
+        Some(Value::Bool(true)) => return super::recolor_preset::open(app, p),
+        Some(_) => return Err("`preset` must be true or false".into()),
+    }
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
-    let group = p.get("group").and_then(Value::as_str);
+    let group = match p.get("group") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(g)) => Some(g.as_str()),
+        Some(_) => return Err("`group` must be a colour group name".into()),
+    };
+    // The group is looked for in the document without the preview of a Recolor Artwork this one
+    // replaces (which can rename the group), as that dialog's rollback below leaves it.
+    let unpreviewed = match &st.interaction {
+        Some(it) if app.color_dialogs.recolor.is_some() => &it.doc,
+        _ => &st.doc,
+    };
+    if let Some(g) = group
+        && !unpreviewed.swatch_groups.iter().any(|x| x.name == g)
+    {
+        return Err(format!("no colour group `{g}`"));
+    }
+    // Colours alone (no art, no group) become a new colour group.
+    let new_group = !art && group.is_none();
+    if new_group && !matches!(p.get("colors"), Some(Value::Array(cs)) if cs.iter().any(|c| color_value(c).is_some())) {
+        return Err("select artwork (or a colour group) to recolor".into());
+    }
+    let limit = library_param(app, p)?;
+    // A Recolor Artwork still open is replaced: its preview goes before the group's colours are read.
+    cancel_open(app);
+    let st = app.session.active().ok_or("no document open")?;
     let group_colors: Option<Vec<Color>> = match group {
         Some(g) => {
             let g = st.doc.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| format!("no colour group `{g}`"))?;
@@ -286,20 +313,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (None, Some(Value::Array(cs))) => cs.iter().filter_map(color_value).map(|c| key(&c)).collect(),
         _ => vec![],
     };
-    // Colours alone (no art, no group) become a new colour group.
-    let new_group = !art && group.is_none();
-    if new_group && assign.is_empty() {
-        return Err("select artwork (or a colour group) to recolor".into());
-    }
     let count = match p.get("colors").and_then(Value::as_u64) {
         Some(n) => json!(n.max(1)),
         None if !assign.is_empty() => json!(assign.len()),
         None => Value::Null,
-    };
-    let limit = match p.get("library").and_then(Value::as_str) {
-        Some("") => first_library(app).unwrap_or_default(),
-        Some(l) => limit_key(app, l)?,
-        None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
     let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
@@ -319,10 +336,6 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut rs = rows(&d);
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
-    // A Recolor Artwork still open is replaced: its preview goes before this one's starts.
-    if let Some(old) = app.color_dialogs.recolor.take() {
-        old.preview.cancel(app);
-    }
     let dialog = RecolorDialog::new(app, d);
     let options = HeldOptions { cancel: Some(Box::new(cancelled)), ..HeldOptions::default() };
     let id = open_held_with(app, dialog, confirm, options).ok_or("no window to show Recolor Artwork in")?;
@@ -348,8 +361,41 @@ fn key(c: &Color) -> Value {
 /// The name a new colour group (opened on colours alone) starts with.
 const NEW_GROUP: &str = "Color Group";
 
+/// Ends an open Recolor Artwork as Cancel ends it: its preview is rolled back and it closes.
+pub(super) fn cancel_open(app: &mut VectorcraftApp) {
+    let Some(old) = app.color_dialogs.recolor.take() else { return };
+    let id = old.id;
+    old.preview.cancel(app);
+    if let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
+        dialogs.with(|host| {
+            host.cancel_by_id(&ctx, id);
+        });
+    }
+}
+
 fn first_library(app: &VectorcraftApp) -> Option<String> {
     colour_libraries(app).into_iter().next().map(|l| l.id)
+}
+
+/// Limit to Library's choices: the key `limitTo` takes and the name the menu shows. None, the
+/// document's swatches, then the colour libraries: the built-in ones translated, those the user
+/// saved or loaded by their names.
+pub(super) fn library_choices(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let libs = colour_libraries(app);
+    let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
+    let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
+    fixed.into_iter().chain(named).collect()
+}
+
+/// The `limitTo` key of `ui.recolorDialog`'s `library`: none without it or for null, the first
+/// library for ""; a `library` that is not a string is an error.
+pub(super) fn library_param(app: &VectorcraftApp, p: &Value) -> Result<String, String> {
+    match p.get("library") {
+        Some(Value::String(l)) if l.is_empty() => Ok(first_library(app).unwrap_or_default()),
+        Some(Value::String(l)) => limit_key(app, l),
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(_) => Err("`library` must be a library id or name".into()),
+    }
 }
 
 /// `recolor.reduce` parameters (Method only picks each row's colour, so changing it keeps the rows).
@@ -1443,15 +1489,11 @@ struct Feed {
 
 impl Feed {
     fn of(app: &VectorcraftApp, d: &Fields) -> Feed {
-        // None, the document's swatches, then the colour libraries: the built-in ones translated,
-        // those the user saved or loaded by their names.
-        let libs = colour_libraries(app);
-        let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
-        let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
-        let libraries = fixed.into_iter().chain(named).collect();
+        let libraries = library_choices(app);
         Feed {
+            // The colour libraries follow None and the document's swatches.
+            first_library: libraries.get(2).map(|(k, _)| k.clone()),
             libraries,
-            first_library: libs.first().map(|l| l.id.clone()),
             groups: doc_groups(app),
             other_paints: other_paint_groups(app),
             previewing: app.session.in_interaction(),
@@ -2094,9 +2136,6 @@ fn assign_tab(
             }
         });
     }
-    if rows.is_empty() {
-        Text::new(tl!("No colors to recolor (preserved colors are left out).")).shade(Shade::Muted).show(ui);
-    }
     let columns = vec![
         ColumnSpec::new(
             CURRENT,
@@ -2124,10 +2163,12 @@ fn assign_tab(
     let source = keyed(&keys, |k| *k).with_text(|k| Cow::Owned(names.get(*k).cloned().unwrap_or_default()));
     let edits: RefCell<Vec<RowEdit>> = RefCell::new(Vec::new());
     let shown_rows: &[Value] = rows;
-    let out = Table::<usize>::new(tl!("Colors"), columns).min_rows(5).max_rows(8).selection(Bind::bound(&mut sel)).show_items(
-        ui,
-        &source,
-        &mut |key, icx| {
+    let out = Table::<usize>::new(tl!("Colors"), columns)
+        .min_rows(5)
+        .max_rows(8)
+        .empty(tl!("No colors to recolor (preserved colors are left out)."))
+        .selection(Bind::bound(&mut sel))
+        .show_items(ui, &source, &mut |key, icx| {
             let i = *key;
             let edits = &edits;
             let row = shown_rows.get(i).cloned().unwrap_or_default();
@@ -2161,8 +2202,7 @@ fn assign_tab(
                         edits.borrow_mut().push(RowEdit::Hex(i, *c));
                     }
                 })
-        },
-    );
+        });
     let mut items = sel.items.clone();
     items.sort_unstable();
     items.dedup();

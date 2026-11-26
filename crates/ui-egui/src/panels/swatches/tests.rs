@@ -551,6 +551,44 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
     }
 }
 
+/// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that
+/// the find field hides, which the browser leaves out of the drag, as a click on Delete Swatch
+/// takes them too. The copies are selected in panel order. A grabbed swatch outside the selection
+/// carries only itself.
+#[test]
+fn footer_drops_carry_selected_swatches_that_find_hides() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    app.ui.swatches_panel.show_find = true;
+    app.ui.swatches_panel.state.browser.filter = "Orange".into();
+    let order = names_of(&app, None);
+    let at = |n: &str| order.iter().position(|x| x == n).unwrap_or_else(|| panic!("no swatch {n}"));
+    let mut copies = vec![("Lime", "Lime copy"), ("Orange", "Orange copy")];
+    copies.sort_by_key(|(n, _)| at(n));
+    let copies: Vec<String> = copies.into_iter().map(|(_, c)| c.to_string()).collect();
+    // With Find set to Orange, the browser's drag holds only the selected row it shows.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    select_rows(&mut app, &["Lime", "Orange"]);
+    let undo = undo_steps(&app);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    let d = doc(&app);
+    assert!(d.swatch("Orange copy").is_some() && d.swatch("Lime copy").is_some(), "the hidden selected swatch is duplicated too");
+    assert_eq!(selected(&app), copies, "both copies are selected, in panel order");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for both");
+    select_rows(&mut app, &["Lime", "Orange"]);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(dialog_open(&app, key), "Delete asks first");
+    confirm(&mut app, key);
+    let d = doc(&app);
+    assert!(d.swatch("Orange").is_none() && d.swatch("Lime").is_none(), "the hidden selected swatch is deleted too");
+    // A grabbed swatch outside the selection carries only itself.
+    let drag = rows_drag(&app, "Orange copy", &["Orange copy"]);
+    select_rows(&mut app, &["Lime copy"]);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    let d = doc(&app);
+    assert!(d.swatch("Orange copy copy").is_some() && d.swatch("Lime copy copy").is_none(), "only the grabbed swatch is duplicated");
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();

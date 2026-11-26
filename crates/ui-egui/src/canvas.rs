@@ -50,6 +50,7 @@ pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 pub(crate) use rulers::{general_lengths, stroke_lengths};
+pub use selection::HoverObjectKey;
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
 pub(crate) use tool_adapter::{busy_tool, in_gesture, pose_on_page, tool_enter};
@@ -146,9 +147,19 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     // A measuring run applies no view request: the view, its request and its fit wait for the pass
     // that shows the canvas.
     let measuring = craft::ui::runtime::measure::active(ui.ctx());
-    let Some(view) = doc_windows::view_mut(app, win) else { return false };
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
-    let refit = !view.fitted || (presenting && view.rect != area);
+    let refits = |v: &crate::state::View| !v.fitted || (presenting && v.rect != area);
+    // The view command this pass runs, made for the display the window is on (Display Print Size at 100% Zoom).
+    let command = doc_windows::view(app, win)
+        .filter(|_| !measuring)
+        .and_then(|v| v.request.map(|(r, _)| r.command()).or_else(|| refits(v).then_some(ViewCommands::FitArtboard)));
+    if let Some(command) = command {
+        app.before_view_command(win, command);
+    }
+    let ppp = ui.ctx().pixels_per_point();
+    let scheme = crate::app::view::zoom_scheme(app.print_ppi_of(Some(win)), ppp / ui.ctx().zoom_factor());
+    let Some(view) = doc_windows::view_mut(app, win) else { return false };
+    let refit = refits(view);
     let (request, moved) = if measuring {
         (view.request, view.moved)
     } else {
@@ -164,6 +175,16 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     }
     let mut cv = view.canvas(scaling, area);
     let given = cv;
+    // A zoom percentage (Actual Size) counts from the density of the display that shows this
+    // window: it runs here with that display's zoom stops, which the canvas's own may not be.
+    let mut moved = moved;
+    if let Some(request) = queued.first().copied().filter(|r| crate::app::view::fits_window(r.command()) == Some(false)) {
+        let layers = move || bounds;
+        if request.command().apply(&mut cv, &target, Some(&layers), ppp, &scheme) && matches!(request, ViewRequest::Command(_)) {
+            moved = Some(ViewMove::Ease(given));
+        }
+        queued.clear();
+    }
     let (x, y, zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
         Some(rulers::strips(zero, kind))
@@ -222,6 +243,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         // An edit of the compass or a scroll bar reaches the next pass, which stops a running ease.
         view.moved = jumped.then_some(ViewMove::Jump);
     }
+    if let Some(command) = command {
+        app.after_view_command(win, command);
+    }
     if kind == BodyKind::Pane || presenting {
         return pressed;
     }
@@ -243,6 +267,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     let presenting = app.ui.screen_mode == 3;
     let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
     grids(app, ui, space, win);
+    if live {
+        find_shown_tool(app, ui.ctx(), space);
+    }
     marks::show(app, ui, space, win, kind);
     if !presenting {
         crate::panels::tabs::stop_guide(app, ui, space);
@@ -291,13 +318,45 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
     out
 }
 
+/// The keys held now, as the engine's tools read them, with `space` set while Space is down.
+pub(crate) fn held_mods(ctx: &egui::Context) -> vectorcraft_tools::Mods {
+    let (m, space) = ctx.input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    mods(m, space)
+}
+
+/// The tool whose marks and widgets the canvas draws with the keys held now: while Cmd is held, the selection tool
+/// a press at the pointer borrows ([`find_shown_tool`]), else the active tool.
+pub(crate) fn shown_tool(app: &VectorcraftApp, ctx: &egui::Context) -> &'static str {
+    app.session.hover_tool_id(&held_mods(ctx))
+}
+
+/// Finds the tool whose marks and widgets the canvas draws this frame for the pointer where it is now
+/// ([`vectorcraft_engine::Session::hover_tool_at`]), which [`shown_tool`] then answers. While the view moves, the art
+/// under the pointer is not hit-tested again (#2452), and the last answer stays.
+fn find_shown_tool(app: &mut VectorcraftApp, ctx: &egui::Context, space: &CanvasSpace) {
+    let wait = cursor::hover_wait(&mut app.canvas.view_moved, ViewKey::of(&space.view), craft::ui::runtime::frame::clock(ctx));
+    if wait.is_some() {
+        return;
+    }
+    let held = held_mods(ctx);
+    let named = app.session.shown_tool_id(&held);
+    let at = ctx.input(|i| i.pointer.hover_pos()).filter(|p| space.view.rect.contains(*p)).map(|p| space.view.to_doc(p));
+    let view = app.view_info();
+    app.session.hover_tool_at(at, &held, view);
+    // The status bar and the help bar are drawn before the canvas: when the tool they name changes with this
+    // frame's pointer, they are drawn again.
+    if app.session.shown_tool_id(&held) != named {
+        ctx.request_repaint();
+    }
+}
+
 /// The document grid, in the picture slot under the art when Grids In Back is on and over it
 /// otherwise, and the pixel grid over the art.
 fn grids(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win) {
     if let Some((grid, in_back)) = app.session.documents().get(win.0).and_then(|st| grid::document_grid(app, st)) {
         let _ = if in_back { grid.picture() } else { grid }.show_at(ui, space.view.rect);
     }
-    if let Some(grid) = grid::pixel_grid(app) {
+    if let Some(grid) = grid::pixel_grid(app, app.print_ppi_of(Some(win))) {
         let _ = grid.show_at(ui, space.view.rect);
     }
 }

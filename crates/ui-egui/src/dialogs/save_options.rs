@@ -35,7 +35,9 @@ use vectorcraft_eps::{Level, Overprint, Preview};
 
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, TooltipSpec};
+use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, ShowContainer as _, TooltipSpec};
+use craft::ui::display::Text;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{ThumbAspect, ToggleState};
 use craft::ui::notices::Notice;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
@@ -399,10 +401,12 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
     let mut boards = picked_boards(fields, n);
     let before = boards.clone();
     let files = board_files(menus.doc.as_deref(), fields.text("path").unwrap_or_default(), &boards);
-    let response = ui
-        .vertical(|ui| {
-            ui.label(tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file."));
-            ui.horizontal(|ui| {
+    let response = Stack::new()
+        .show(ui, |ui, _| {
+            // Each run of the body starts from the checks as they stood: a check flips them, and the body may run twice.
+            boards.clone_from(&before);
+            Notice::new(Tone::Info, tl!("A legacy .ai file holds one artboard: each artboard you check is saved as a separate file.")).show(ui);
+            Row::new().show(ui, |ui, _| {
                 if Button::new(tl!("Select All")).show(ui).clicks > 0 {
                     boards.iter_mut().for_each(|b| *b = true);
                 }
@@ -411,7 +415,7 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
                 }
                 let checked = boards.iter().filter(|b| **b).count();
                 let (count, total) = (checked.to_string(), n.to_string());
-                ui.label(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)]));
+                Text::new(crate::i18n::fmt(tl!("{count} of {total} artboards"), &[("count", &count), ("total", &total)])).show(ui);
             });
             if !boards.iter().any(|b| *b) {
                 Notice::new(Tone::Warn, tl!("Check an artboard to save.")).show(ui);
@@ -444,7 +448,7 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
                 }
             }
         })
-        .response;
+        .output;
     if boards != before || boards_in(fields).is_none() {
         fields.set("boards", FieldValue::Json(json!(boards)));
     }

@@ -102,9 +102,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Art",
             [],
             None,
-            "{id, add?: bool} the Layers panel's selection column: select the visible, unlocked art of a layer (its sublayers' too), or the object itself; `add` (Shift-click) adds it to the selection, or removes it when it is all selected already → {selected: [..]}",
+            "{id, add?: bool} or {range: [id…], add?: bool} the Layers panel's selection column: select the visible, unlocked art of a layer (its sublayers' too), or the object itself; `add` (Shift-click with no square clicked before, or Ctrl/Cmd-click) adds it to the selection, or removes it when it is all selected already. `range` (Shift-click, the rows from the last square clicked to this one): the art of every listed row that is visible, unlocked and inside the isolated art is selected, or added to the selection with `add` (Shift+Ctrl/Cmd-click); a range with no such row is an error. Not an undo step; the highlighted rows stay → {selected: [..]} (with `range`: {range, selected})",
             has_doc,
             select_art
+        ),
+        cmd!(
+            "layer.selectHighlighted",
+            "Select Art of Highlighted Rows",
+            [],
+            None,
+            "{add?: bool} select the art of the Layers panel's highlighted rows, as clicking each row's selection square does: a layer's or sublayer's visible, unlocked art (its sublayers' too), or the group or object itself; hidden and locked rows and rows outside the isolated art are left out. `add` adds the art to the selection. No highlighted row, or none that is visible and unlocked, is an error. Not an undo step; the highlighted rows stay → {rows, selected: [..]}",
+            has_doc,
+            select_highlighted
         ),
         cmd!(
             "layer.move",
@@ -156,7 +165,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index | artboards: [{index, name?, color?, guideLabel?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…] (several artboards in one undo step, each with its own fields; the art inside each before any of them changes goes with it, and an object inside several goes with the first listed that moves or scales its art), name?, color?: color (\"#rrggbb\", {c,m,y,k}, … as the paint commands take, #rrggbbaa and #rgba refused: the background color the canvas draws the artboard's paper in, multiplied with the Simulate Colored Paper color while that is on; exports and print leave it out) | null (no background color), guideLabel?: name | \"#rrggbb\" | null (the guide label: the canvas draws the artboard's own guides (guide.add with artboard) in this color instead of the guide color preference, selected ones still in the selection color; a layer color's name spelled exactly as Layer Options lists it (\"Light Blue\", \"Red\", …) or #rrggbb; null for none, which new artboards and older files have; screen-only, so exports and print leave it out; it can change on a locked artboard; an invalid value anywhere in the list changes nothing), locked?: bool (the Artboards panel's lock column: a locked artboard keeps its rectangle (a new x, y, width or height is an error unless locked is false), can't be moved, deleted or cut, and Rearrange and Fit to Artwork Bounds leave it as it is; the art on it (each object of a layer or sublayer whose bounds with strokes overlap it, a group as one object) acts as locked art until it is unlocked: clicks, marquees, select.set, select.all and the tools pass over it (art drawn or pasted onto it stays selected and editable until a selection leaves it out or it is moved off the locked artboards), it is deselected, and when another artboard moves or scales it stays unless lockedAndHidden), showCenterMark?: bool (Artboard Options' Show Center Mark: the canvas draws a mark at the artboard's center), showCrossHairs?: bool (Show Cross Hairs: the canvas draws a line from the middle of each side through the center), showVideoSafeAreas?: bool (Show Video Safe Areas: the canvas draws the action-safe area 3.5% and the title-safe area 5% in from each edge, as EBU R 95 sets them; the three are screen-only, as the artboard's edges are: exports and print leave them out), videoRulerPixelAspectRatio?: number 0.1–10 (Video Ruler Pixel Aspect Ratio: the width of one video pixel over its height, which View › Rulers › Show Video Rulers counts the artboard in; default 1, square pixels), x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}; no undo step when nothing changes",
+            "{index | artboards: [{index, name?, color?, guideLabel?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…] (several artboards in one undo step, each with its own fields; the art inside each before any of them changes goes with it, and an object inside several goes with the first listed that moves or scales its art), name?, color?: color (\"#rrggbb\", {c,m,y,k}, … as the paint commands take, #rrggbbaa and #rgba refused: the background color the canvas draws the artboard's paper in, multiplied with the Simulate Colored Paper color while that is on. Supported artboard exports and printing include it by default. This includes raster exports with `selectedOnly: true` when the output area is an artboard. Set `includeArtboardFill: false` on the export or print command to omit it. Exports cropped to selection bounds, artwork bounds, or an explicit raster region leave it out, as do formats that do not support artboard fills) | null (no background color), guideLabel?: name | \"#rrggbb\" | null (the guide label: the canvas draws the artboard's own guides (guide.add with artboard) in this color instead of the guide color preference, selected ones still in the selection color; a layer color's name spelled exactly as Layer Options lists it (\"Light Blue\", \"Red\", …) or #rrggbb; null for none, which new artboards and older files have; screen-only, so exports and print leave it out; it can change on a locked artboard; an invalid value anywhere in the list changes nothing), locked?: bool (the Artboards panel's lock column: a locked artboard keeps its rectangle (a new x, y, width or height is an error unless locked is false), can't be moved, deleted or cut, and Rearrange and Fit to Artwork Bounds leave it as it is; the art on it (each object of a layer or sublayer whose bounds with strokes overlap it, a group as one object) acts as locked art until it is unlocked: clicks, marquees, select.set, select.all and the tools pass over it (art drawn or pasted onto it stays selected and editable until a selection leaves it out or it is moved off the locked artboards), it is deselected, and when another artboard moves or scales it stays unless lockedAndHidden), showCenterMark?: bool (Artboard Options' Show Center Mark: the canvas draws a mark at the artboard's center), showCrossHairs?: bool (Show Cross Hairs: the canvas draws a line from the middle of each side through the center), showVideoSafeAreas?: bool (Show Video Safe Areas: the canvas draws the action-safe area 3.5% and the title-safe area 5% in from each edge, as EBU R 95 sets them; the three are screen-only, as the artboard's edges are: exports and print leave them out), videoRulerPixelAspectRatio?: number 0.1–10 (Video Ruler Pixel Aspect Ratio: the width of one video pixel over its height, which View › Rulers › Show Video Rulers counts the artboard in; default 1, square pixels), x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}; no undo step when nothing changes",
             has_doc,
             artboard_set
         ),
@@ -756,6 +765,11 @@ fn in_isolation(doc: &Document, isolation: Option<NodeId>, id: NodeId) -> bool {
 /// The selection column: select a row's art.
 fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.selectAll";
+    if let Some(ids) = ids_param(p, "range", C)? {
+        let add = switch_or(p, "add", false, C)?;
+        let (range, selected) = select_rows_art(s, ids, add, C, "no row in the range is visible, unlocked and inside the isolated art")?;
+        return Ok(json!({ "range": range, "selected": selected }));
+    }
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let add = switch_or(p, "add", false, C)?;
     let st = s.doc()?;
@@ -790,6 +804,51 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     // The selection column leaves the highlighted rows as they are.
     st.layer_rows = rows;
     Ok(json!({ "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Select Art of Highlighted Rows: the art of the highlighted rows, as their selection squares
+/// select it.
+fn select_highlighted(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "layer.selectHighlighted";
+    let add = switch_or(p, "add", false, C)?;
+    let rows = s.doc()?.highlighted_rows();
+    if rows.is_empty() {
+        return Err(bad(C, "no row is highlighted"));
+    }
+    let (rows, selected) = select_rows_art(s, rows, add, C, "no highlighted row is visible, unlocked and inside the isolated art")?;
+    Ok(json!({ "rows": rows, "selected": selected }))
+}
+
+/// Selects the art of the Layers panel rows `ids` (at most [`MAX_ROWS`]), or adds it to the
+/// selection with `add`: each row that is visible, unlocked and inside the isolated art (or is the
+/// isolated layer) gives what its selection square selects, a layer's visible, unlocked art (its
+/// sublayers' too) or the group or object itself, as [`Selection::target_range`] gathers it for a
+/// range of target circles. Nothing is targeted and the highlighted rows stay. Without such a row it
+/// is the error `none`. Returns the rows used and the selected objects.
+///
+/// [`Selection::target_range`]: vectorcraft_doc::Selection::target_range
+fn select_rows_art(s: &mut Session, mut ids: Vec<NodeId>, add: bool, c: &str, none: &str) -> Result<(Vec<u64>, Vec<u64>)> {
+    ids.truncate(MAX_ROWS);
+    let rows = {
+        let st = s.doc()?;
+        // Measures the locked artboards once for every row, not once per row.
+        let editable = st.doc.editable();
+        ids.retain(|id| {
+            st.doc.node(*id).is_some_and(|n| {
+                let isolated_layer = st.isolation == Some(*id) && n.is_layer();
+                !n.is_ruler_guide() && editable(*id) && (isolated_layer || in_isolation(&st.doc, st.isolation, *id))
+            })
+        });
+        st.layer_rows.clone()
+    };
+    if ids.is_empty() {
+        return Err(bad(c, none));
+    }
+    s.select(|d, sel| sel.target_range(d, &ids, add))?;
+    let st = s.doc_mut()?;
+    // The selection column leaves the highlighted rows as they are.
+    st.layer_rows = rows;
+    Ok((ids.iter().map(|i| i.0).collect(), st.selection.objects.iter().map(|i| i.0).collect()))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
