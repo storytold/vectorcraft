@@ -19,6 +19,17 @@
 //! the release turns it the other way, and a dot beside the pointer shows when it is in effect), the
 //! segments the circle touches get an anchor point at each touch, which splits them without changing
 //! their shape, in the same undo step as the circle; a touch at an existing anchor adds none.
+//!
+//! The tool's options (its options dialog, `tool.setOption`; kept with the preferences): `radius`;
+//! `addPoints`; `center` and `radii` show or hide the circle's center cross and the lines from its center to the
+//! two points it touches; `color` is the color of the circle, the cross, those lines and the note
+//! (one of [`COLORS`]); `snapTolerance` is how near (screen pixels) the pointer picks a segment
+//! with Smart Guides on, where Smart Guides' Snapping Tolerance counts instead when it is larger,
+//! or with Smart Guides off while `snapWithoutGuides` is on. Without snapping a segment is picked
+//! within the selection tolerance, as a click on a path picks it, and that is also the least reach
+//! snapping has. Of the segments within reach the nearest is picked ([`pick_at`]). By default
+//! `addPoints` is off, the cross and the lines show, the color is red, the tolerance is 3 px and
+//! `snapWithoutGuides` is on.
 
 use kurbo::{CubicBez, ParamCurveNearest, Shape};
 use serde_json::{Value, json};
@@ -51,6 +62,22 @@ pub const ADD_POINTS: &str = "Add Points to Existing Paths";
 /// effect, and its size.
 const DOT_PX: f64 = 10.0;
 const DOT_SIZE: f32 = 4.0;
+/// The colors the `color` option takes, by option value, with the color the circle, its center
+/// cross, its radii and the note are drawn in. Red is the first.
+pub const COLORS: &[(&str, [u8; 3])] = &[
+    ("red", RED),
+    ("blue", crate::draw2::FEEDBACK),
+    ("magenta", [0xd6, 0x2c, 0xd6]),
+    ("green", [0x1f, 0xb4, 0x4b]),
+    ("black", [0x00, 0x00, 0x00]),
+    ("gray", GREY),
+];
+/// The snapping tolerance the tool starts with (screen pixels).
+pub const SNAP_PX: f64 = 3.0;
+/// The snapping tolerance the `snapTolerance` option takes (screen pixels).
+pub const SNAP_RANGE: (f64, f64) = (0.0, 25.0);
+/// The option keys that are true or false.
+const SWITCHES: &[&str] = &["addPoints", "center", "radii", "snapWithoutGuides"];
 
 /// A segment under the pointer: where on it, and the segment itself.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,6 +113,14 @@ pub struct TangentCircleTool {
     /// The keys held at the last pointer event, and whether the pointer is over the canvas.
     mods: Mods,
     over: bool,
+    /// Whether the preview shows the center cross and the radii.
+    center: bool,
+    radii: bool,
+    /// An entry of [`COLORS`].
+    color: usize,
+    /// The snapping tolerance (screen pixels), and whether the tool snaps with Smart Guides off.
+    snap_px: f64,
+    snap_without_guides: bool,
     first: Option<Pick>,
     hover: Option<Pick>,
     press: Option<Press>,
@@ -110,6 +145,11 @@ impl Default for TangentCircleTool {
             add_points: false,
             mods: Mods::default(),
             over: false,
+            center: true,
+            radii: true,
+            color: 0,
+            snap_px: SNAP_PX,
+            snap_without_guides: true,
             first: None,
             hover: None,
             press: None,
@@ -122,9 +162,26 @@ impl Default for TangentCircleTool {
     }
 }
 
-/// The path segment under `p`, of any editable path.
-fn pick_at(cx: &ToolContext, p: Point) -> Option<Pick> {
-    let (id, subpath, segment, t) = crate::draw2::hit_segment(cx, p, cx.pick_tol())?;
+/// The nearest path segment within `reach` of `p`, of any editable path; of segments at the same
+/// distance, one of a selected path, then the one on top.
+fn pick_at(cx: &ToolContext, p: Point, reach: f64) -> Option<Pick> {
+    let mut best: Option<((NodeId, usize, usize, f64), f64)> = None;
+    for id in crate::draw2::candidate_paths(cx) {
+        let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) else { continue };
+        // A path whose control points' box, with its edges, lies out of reach holds no point within
+        // reach.
+        let near = |b: vectorcraft_geom::Rect| p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach;
+        if pd.control_bounds().is_none_or(|b| !near(b)) {
+            continue;
+        }
+        if let Some((subpath, segment, t, _, d)) = pd.nearest(p)
+            && d <= reach
+            && best.is_none_or(|(_, b)| d < b)
+        {
+            best = Some(((id, subpath, segment, t), d));
+        }
+    }
+    let ((id, subpath, segment, t), _) = best?;
     let sp = cx.doc.node(id)?.path_data()?.subpaths.get(subpath)?;
     if segment >= sp.segment_count() {
         return None;
@@ -266,6 +323,26 @@ fn segment_path(c: &CubicBez) -> BezPath {
 }
 
 impl TangentCircleTool {
+    /// How near (document units) the pointer picks a segment: with Smart Guides on, the snapping
+    /// tolerance or Smart Guides' Snapping Tolerance, whichever is larger; with them off, the
+    /// snapping tolerance while `snapWithoutGuides` is on, and otherwise none. Never less than the
+    /// selection tolerance.
+    fn reach(&self, cx: &ToolContext) -> f64 {
+        let pick = cx.pick_tol();
+        if cx.smart_guides {
+            pick.max(cx.tol(self.snap_px)).max(cx.snap_tol())
+        } else if self.snap_without_guides {
+            pick.max(cx.tol(self.snap_px))
+        } else {
+            pick
+        }
+    }
+
+    /// The color the preview is drawn in.
+    fn preview_color(&self) -> [u8; 3] {
+        COLORS.get(self.color).map_or(RED, |(_, rgb)| *rgb)
+    }
+
     /// The radius a drag gives, with Shift in round steps.
     fn shown_radius(cx: &ToolContext, r: f64, shift: bool) -> f64 {
         if !shift {
@@ -375,12 +452,12 @@ impl Tool for TangentCircleTool {
         self.over = true;
         match ev.kind {
             PointerKind::Move => {
-                self.hover = pick_at(cx, ev.pos);
+                self.hover = pick_at(cx, ev.pos, self.reach(cx));
                 self.look(cx, ev.pos, ev.mods);
                 vec![]
             }
             PointerKind::Down => {
-                let Some(pick) = pick_at(cx, ev.pos) else { return vec![] };
+                let Some(pick) = pick_at(cx, ev.pos, self.reach(cx)) else { return vec![] };
                 self.forget_if_changed(cx);
                 let Some(first) = self.first.clone() else {
                     self.first = Some(pick);
@@ -506,21 +583,26 @@ impl Tool for TangentCircleTool {
         {
             out.push(Overlay::Line { a: press.at, b: self.pointer, color: GREY, dashed: false });
         }
+        let color = self.preview_color();
         if let Some(c) = &self.found {
             let (at, r) = (c.circle.center, c.circle.radius);
             // A tolerance of at least a ten-thousandth of the radius keeps a huge circle to a few
             // dozen segments.
             let tol = cx.tol(0.1).max(r * 1e-4);
-            out.push(Overlay::Path { path: kurbo::Circle::new(at, r).to_path(tol), color: RED, width: 1.0, dashed: false });
-            let arm = cx.tol(4.0);
-            out.push(Overlay::Line { a: at - kurbo::Vec2::new(arm, 0.0), b: at + kurbo::Vec2::new(arm, 0.0), color: RED, dashed: false });
-            out.push(Overlay::Line { a: at - kurbo::Vec2::new(0.0, arm), b: at + kurbo::Vec2::new(0.0, arm), color: RED, dashed: false });
-            out.push(Overlay::Line { a: at, b: c.first, color: RED, dashed: true });
-            out.push(Overlay::Line { a: at, b: c.second, color: RED, dashed: true });
+            out.push(Overlay::Path { path: kurbo::Circle::new(at, r).to_path(tol), color, width: 1.0, dashed: false });
+            if self.center {
+                let arm = cx.tol(4.0);
+                out.push(Overlay::Line { a: at - kurbo::Vec2::new(arm, 0.0), b: at + kurbo::Vec2::new(arm, 0.0), color, dashed: false });
+                out.push(Overlay::Line { a: at - kurbo::Vec2::new(0.0, arm), b: at + kurbo::Vec2::new(0.0, arm), color, dashed: false });
+            }
+            if self.radii {
+                out.push(Overlay::Line { a: at, b: c.first, color, dashed: true });
+                out.push(Overlay::Line { a: at, b: c.second, color, dashed: true });
+            }
             out.push(Overlay::Measure { p: self.pointer, text: format!("R: {}", cx.len(r)) });
         } else if self.looked {
             // A label, which the canvas shows in the interface language.
-            out.push(Overlay::Label { p: self.pointer, text: NO_CIRCLE.into(), color: RED });
+            out.push(Overlay::Label { p: self.pointer, text: NO_CIRCLE.into(), color });
         }
         // `addPoints` in effect, with Alt as it is now.
         if (self.over || self.press.is_some()) && self.add_points != self.mods.alt {
@@ -535,21 +617,30 @@ impl Tool for TangentCircleTool {
     }
 
     fn options(&self) -> Value {
-        json!({ "radius": self.radius, "addPoints": self.add_points })
+        json!({
+            "radius": self.radius,
+            "addPoints": self.add_points,
+            "center": self.center,
+            "radii": self.radii,
+            "color": COLORS.get(self.color).map_or("red", |(name, _)| *name),
+            "snapTolerance": self.snap_px,
+            "snapWithoutGuides": self.snap_without_guides,
+        })
     }
 
+    /// Sets one option; a value the option does not take leaves it as it was.
     fn set_option(&mut self, key: &str, v: &Value) {
+        if self.check_option(key, v).is_err() {
+            return;
+        }
         match key {
-            "radius" => {
-                if let Some(r) = v.as_f64().filter(|r| (RADIUS_RANGE.0..=RADIUS_RANGE.1).contains(r)) {
-                    self.radius = r;
-                }
-            }
-            "addPoints" => {
-                if let Some(on) = v.as_bool() {
-                    self.add_points = on;
-                }
-            }
+            "radius" => self.radius = v.as_f64().unwrap_or(self.radius),
+            "addPoints" => self.add_points = v.as_bool().unwrap_or(self.add_points),
+            "center" => self.center = v.as_bool().unwrap_or(self.center),
+            "radii" => self.radii = v.as_bool().unwrap_or(self.radii),
+            "color" => self.color = v.as_str().and_then(|s| COLORS.iter().position(|(name, _)| *name == s)).unwrap_or(self.color),
+            "snapTolerance" => self.snap_px = v.as_f64().unwrap_or(self.snap_px),
+            "snapWithoutGuides" => self.snap_without_guides = v.as_bool().unwrap_or(self.snap_without_guides),
             _ => {}
         }
     }
@@ -558,7 +649,9 @@ impl Tool for TangentCircleTool {
         use crate::option_check as c;
         match key {
             "radius" => c::number(key, v, RADIUS_RANGE.0, RADIUS_RANGE.1),
-            "addPoints" => c::boolean(key, v),
+            "snapTolerance" => c::number(key, v, SNAP_RANGE.0, SNAP_RANGE.1),
+            "color" => c::one_of(key, v, &COLORS.iter().map(|(name, _)| *name).collect::<Vec<_>>()),
+            k if SWITCHES.contains(&k) => c::boolean(key, v),
             _ => Err(c::unknown(key)),
         }
     }
@@ -701,6 +794,123 @@ mod tests {
         t.pointer(&cx, &shifted(PointerKind::Down, 200.0, 139.0));
         let released = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
         assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
+    }
+
+    #[test]
+    fn the_preview_options_set_its_cross_radii_and_color() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let green = COLORS.iter().find(|(name, _)| *name == "green").map(|(_, rgb)| *rgb);
+        let lines =
+            |ov: &[Overlay], dashed_lines: bool| ov.iter().filter(|o| matches!(o, Overlay::Line { dashed, .. } if *dashed == dashed_lines)).count();
+        let mut t = TangentCircleTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Move, 200.0, 139.0));
+        // By default: the red circle, its center cross (two lines) and its two radii.
+        let ov = t.overlays(&cx);
+        assert_eq!((lines(&ov, false), lines(&ov, true)), (2, 2), "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color, width, .. } if *color == RED && *width == 1.0)), "{ov:?}");
+        t.set_option("center", &json!(false));
+        let ov = t.overlays(&cx);
+        assert_eq!((lines(&ov, false), lines(&ov, true)), (0, 2), "no cross: {ov:?}");
+        t.set_option("radii", &json!(false));
+        t.set_option("color", &json!("green"));
+        let ov = t.overlays(&cx);
+        assert_eq!((lines(&ov, false), lines(&ov, true)), (0, 0), "no radii: {ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Path { color, .. } if Some(*color) == green)), "{ov:?}");
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text.starts_with("R: 20.00"))), "the radius still shows: {ov:?}");
+        // The note takes the color too.
+        t.set_option("radius", &json!(5));
+        t.pointer(&cx, &shifted(PointerKind::Move, 200.0, 140.0));
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, color, .. } if text == NO_CIRCLE && Some(*color) == green)));
+    }
+
+    #[test]
+    fn the_preview_and_snap_options_take_only_their_values() {
+        let mut t = TangentCircleTool::default();
+        let o = t.options();
+        assert_eq!(
+            (&o["center"], &o["radii"], &o["color"], &o["snapTolerance"], &o["snapWithoutGuides"]),
+            (&json!(true), &json!(true), &json!("red"), &json!(3.0), &json!(true))
+        );
+        for (key, good) in [
+            ("center", json!(false)),
+            ("radii", json!(false)),
+            ("snapWithoutGuides", json!(false)),
+            ("color", json!("gray")),
+            ("snapTolerance", json!(0)),
+            ("snapTolerance", json!(25)),
+            ("snapTolerance", json!(7.5)),
+        ] {
+            assert_eq!(t.check_option(key, &good), Ok(()), "{key} {good}");
+            t.set_option(key, &good);
+            let now = t.options()[key].clone();
+            assert!(now == good || (good.is_number() && now.as_f64() == good.as_f64()), "{key}: {now} for {good}");
+        }
+        let colors = "`color` must be one of `red`, `blue`, `magenta`, `green`, `black`, `gray`";
+        for (key, bad, error) in [
+            ("center", json!(1), "`center` must be true or false"),
+            ("radii", json!("no"), "`radii` must be true or false"),
+            ("snapWithoutGuides", Value::Null, "`snapWithoutGuides` must be true or false"),
+            ("color", json!("orange"), colors),
+            ("color", json!("Red"), colors),
+            ("color", json!(0), colors),
+            ("snapTolerance", json!(-1), "`snapTolerance` must be a number from 0 to 25"),
+            ("snapTolerance", json!(26), "`snapTolerance` must be a number from 0 to 25"),
+            ("snapTolerance", json!("3"), "`snapTolerance` must be a number from 0 to 25"),
+        ] {
+            assert_eq!(t.check_option(key, &bad), Err(error.into()), "{key} {bad}");
+            let before = t.options();
+            t.set_option(key, &bad);
+            assert_eq!(t.options(), before, "{key} {bad}");
+        }
+    }
+
+    #[test]
+    fn the_snap_options_set_how_near_a_segment_is_picked() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        // At 100%, Selection Tolerance 3 px; the first line is at y = 100.
+        let picks = |t: &mut TangentCircleTool, cx: &ToolContext, y: f64| {
+            t.forget();
+            t.pointer(cx, &ev(PointerKind::Down, 150.0, y));
+            t.pointer(cx, &ev(PointerKind::Up, 150.0, y));
+            t.first.is_some()
+        };
+        let guides = |tolerance: f64| ToolContext { smart_guides: true, snapping_tolerance: tolerance, ..cx(&d, &sel, &p) };
+        let no_guides = ToolContext { smart_guides: false, ..cx(&d, &sel, &p) };
+        let mut t = TangentCircleTool::default();
+        // Smart Guides on: their Snapping Tolerance when it is larger than the tool's.
+        assert!(picks(&mut t, &guides(10.0), 109.0));
+        assert!(!picks(&mut t, &guides(10.0), 111.0));
+        t.set_option("snapTolerance", &json!(12));
+        assert!(picks(&mut t, &guides(4.0), 111.0), "the tool's when it is larger");
+        assert!(!picks(&mut t, &guides(4.0), 113.0));
+        // Smart Guides off: the tool's tolerance while it snaps without them.
+        t.set_option("snapTolerance", &json!(8));
+        assert!(picks(&mut t, &no_guides, 107.0));
+        assert!(!picks(&mut t, &no_guides, 109.0));
+        // Without snapping, only the Selection Tolerance; a tolerance below it does not shrink it.
+        t.set_option("snapWithoutGuides", &json!(false));
+        assert!(!picks(&mut t, &no_guides, 105.0));
+        assert!(picks(&mut t, &no_guides, 102.5));
+        t.set_option("snapWithoutGuides", &json!(true));
+        t.set_option("snapTolerance", &json!(0));
+        assert!(picks(&mut t, &no_guides, 102.5));
+        // Over the gap between the two lines, the nearer one is picked, though both are in reach.
+        t.set_option("snapTolerance", &json!(25));
+        t.forget();
+        t.pointer(&no_guides, &ev(PointerKind::Move, 150.0, 122.0));
+        assert!(t.hover.as_ref().is_some_and(|h| (h.p.y - 140.0).abs() < 1e-9), "{:?}", t.hover);
+        t.pointer(&no_guides, &ev(PointerKind::Move, 150.0, 118.0));
+        assert!(t.hover.as_ref().is_some_and(|h| (h.p.y - 100.0).abs() < 1e-9), "{:?}", t.hover);
+        // A segment exactly at the reach is in reach, on either side of it.
+        t.pointer(&no_guides, &ev(PointerKind::Move, 150.0, 75.0));
+        assert!(t.hover.as_ref().is_some_and(|h| (h.p.y - 100.0).abs() < 1e-9), "{:?}", t.hover);
+        t.pointer(&no_guides, &ev(PointerKind::Move, 150.0, 165.0));
+        assert!(t.hover.as_ref().is_some_and(|h| (h.p.y - 140.0).abs() < 1e-9), "{:?}", t.hover);
     }
 
     #[test]
@@ -941,7 +1151,7 @@ mod tests {
         let d = doc();
         let (sel, p) = (Selection::default(), paint());
         let cx = cx(&d, &sel, &p);
-        let line_at = |y: f64| pick_at(&cx, Point::new(150.0, y)).map(|p| p.id.0).unwrap();
+        let line_at = |y: f64| pick_at(&cx, Point::new(150.0, y), cx.pick_tol()).map(|p| p.id.0).unwrap();
         let (top, below) = (line_at(100.0), line_at(140.0));
         let mut t = TangentCircleTool::default();
         t.set_option("addPoints", &json!(true));
@@ -1007,7 +1217,7 @@ mod tests {
         t.pointer(&cx, &shifted(PointerKind::Down, 300.0, 350.0));
         let steps = batch_steps(&up(&mut t, &cx, &shifted(PointerKind::Up, 300.0, 350.0)));
         assert_eq!(steps.len(), 4, "{steps:?}");
-        let l = pick_at(&cx, Point::new(300.0, 350.0)).map(|p| p.id.0);
+        let l = pick_at(&cx, Point::new(300.0, 350.0), cx.pick_tol()).map(|p| p.id.0);
         let anchors: Vec<(u64, u64, u64, Point)> = steps[..2].iter().map(|(_, p)| inserted(&cx, p)).collect();
         let want = [(1, Point::new(300.0, 310.0)), (0, Point::new(290.0, 300.0))];
         assert!(anchors.iter().zip(want).all(|(a, (seg, at))| Some(a.0) == l && a.1 == 0 && a.2 == seg && a.3.distance(at) < 1e-6), "{anchors:?}");
