@@ -30,9 +30,20 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         }
         // Graph tool click: the graph's size.
         "graph" => {
+            let Some(document) = app.session.active().map(|doc| doc.uid) else {
+                app.status(tl!("Open a document before drawing a graph").to_string());
+                return;
+            };
             let at = click_of(&p).map_or(Point::new(0.0, 0.0), |c| c.at);
             let graph_type = p.get("type").cloned().unwrap_or(json!("column"));
-            let params = [("type", graph_type), ("x", json!(at.x)), ("y", json!(at.y)), ("width", json!(200)), ("height", json!(150))];
+            let params = [
+                ("type", graph_type),
+                ("x", json!(at.x)),
+                ("y", json!(at.y)),
+                ("width", json!(200)),
+                ("height", json!(150)),
+                ("__doc", json!(document)),
+            ];
             let params = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
             let r = command::open(app, "graph.create", "Graph", params);
             reported(app, r);
