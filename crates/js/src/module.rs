@@ -22,7 +22,7 @@ use std::rc::Rc;
 
 use crate::ast::{ExportEntry, ImportName, ModuleInfo};
 use crate::bytecode::Code;
-use crate::heap::{Binding, EnvId, ObjId, Prop, key};
+use crate::heap::{Binding, Env, EnvId, ObjId, Prop, key};
 use crate::interp::{Abrupt, CompileError, ErrorType, Interp};
 use crate::value::Value;
 
@@ -73,9 +73,38 @@ const MAX_MODULES: usize = 1024;
 /// The most `(module, name)` pairs one export's resolution visits.
 const MAX_RESOLVE_STEPS: usize = 1024;
 
+#[derive(Default)]
+struct ResolveSeen {
+    pairs: HashSet<ResolveKey>,
+    count: usize,
+}
+
+struct ResolveKey {
+    module: usize,
+    name: String,
+}
+
+impl PartialEq for ResolveKey {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(test)]
+        RESOLVE_MEMBERSHIP_CHECKS.with(|count| count.set(count.get() + 1));
+        self.module == other.module && self.name == other.name
+    }
+}
+
+impl Eq for ResolveKey {}
+
+impl std::hash::Hash for ResolveKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&(self.module, &self.name), state);
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static RESOLVED_STAR_EDGES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static RESOLVE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static RESOLVE_MEMBERSHIP_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// A loaded module.
@@ -267,6 +296,11 @@ impl Graph<'_, '_> {
             let code = self.records[i].code.clone();
             let envs = self.interp.instantiate_module(&code).map_err(LinkFail::Run)?;
             self.records[i].envs = Some(envs);
+            for import in &self.records[i].info.imports {
+                if matches!(&import.import, ImportName::Namespace) {
+                    self.interp.add_import(envs.1, key(&import.local.name), Binding::lexical(true)).map_err(LinkFail::Run)?;
+                }
+            }
         }
         Ok(())
     }
@@ -283,16 +317,20 @@ impl Graph<'_, '_> {
 
     /// ResolveExport (section 15.2.1.16.3): where the export `name` of module `m` comes from,
     /// `None` when the module has no such export (or only through a cycle).
-    fn resolve_export(&mut self, m: usize, name: &str, seen: &mut Vec<(usize, String)>) -> Result<Result<Option<Resolution>, Ambiguous>, LinkFail> {
-        if seen.iter().any(|(sm, sn)| *sm == m && sn == name) {
+    fn resolve_export(&mut self, m: usize, name: &str, seen: &mut ResolveSeen) -> Result<Result<Option<Resolution>, Ambiguous>, LinkFail> {
+        #[cfg(test)]
+        RESOLVE_CALLS.with(|count| count.set(count.get() + 1));
+        let visit = ResolveKey { module: m, name: name.to_string() };
+        if seen.pairs.contains(&visit) {
             return Ok(Ok(None));
         }
-        if seen.len() >= MAX_RESOLVE_STEPS {
+        if seen.count >= MAX_RESOLVE_STEPS {
             let message = format!("export resolution limit ({MAX_RESOLVE_STEPS} steps) reached for '{name}'");
             return Err(LinkFail::Run(self.interp.throw(ErrorType::Range, &message)));
         }
         self.interp.use_fuel().map_err(LinkFail::Run)?;
-        seen.push((m, name.to_string()));
+        seen.pairs.insert(visit);
+        seen.count += 1;
         let Some(record) = self.records.get(m) else { return Ok(Ok(None)) };
         // The module's own export of the name, looked up in its index, comes before any `export *`.
         let explicit = record.explicit.get(name).and_then(|&i| record.info.exports.get(i));
@@ -381,7 +419,7 @@ impl Graph<'_, '_> {
         self.exported_names(m, false, &mut Vec::new(), &mut names, &mut HashSet::new())?;
         let mut resolved = Vec::new();
         for name in names {
-            if let Ok(Some(r)) = self.resolve_export(m, &name, &mut Vec::new())? {
+            if let Ok(Some(r)) = self.resolve_export(m, &name, &mut ResolveSeen::default())? {
                 resolved.push((key(&name), r));
             }
         }
@@ -424,7 +462,7 @@ impl Graph<'_, '_> {
                 if self.target(m, *request).is_none() {
                     continue;
                 }
-                match self.resolve_export(m, export_name, &mut Vec::new())? {
+                match self.resolve_export(m, export_name, &mut ResolveSeen::default())? {
                     Ok(Some(_)) => {}
                     Ok(None) => {
                         let message = format!("the module '{}' has no export to give as '{export_name}'", self.specifier(m, *request));
@@ -443,7 +481,7 @@ impl Graph<'_, '_> {
                 let local = key(&imp.local.name);
                 let binding = match &imp.import {
                     ImportName::Namespace => self.namespace_binding(t)?,
-                    ImportName::Name(n) => match self.resolve_export(t, n, &mut Vec::new())? {
+                    ImportName::Name(n) => match self.resolve_export(t, n, &mut ResolveSeen::default())? {
                         Ok(Some(Resolution::Binding { module, name })) => match self.binding_of(module, &name) {
                             Some((target_env, target_name)) => Binding::import(target_env, target_name),
                             None => return Err(LinkFail::Run(Abrupt::Internal(format!("module binding '{name}' not found")))),
@@ -459,7 +497,18 @@ impl Graph<'_, '_> {
                         }
                     },
                 };
-                self.interp.add_import(env, local, binding).map_err(LinkFail::Run)?;
+                if matches!(&imp.import, ImportName::Namespace) {
+                    self.interp.use_fuel().map_err(LinkFail::Run)?;
+                    let Some(Env::Decl { bindings, .. }) = self.interp.heap.env_mut(env) else {
+                        return Err(LinkFail::Run(Abrupt::Internal("namespace import environment not found".into())));
+                    };
+                    let Some(slot) = bindings.get_mut(&local) else {
+                        return Err(LinkFail::Run(Abrupt::Internal("namespace import binding not found".into())));
+                    };
+                    *slot = binding;
+                } else {
+                    self.interp.add_import(env, local, binding).map_err(LinkFail::Run)?;
+                }
             }
         }
         Ok(())

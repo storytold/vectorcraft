@@ -605,16 +605,17 @@ impl Realm {
         self.interp.script_name = name;
     }
 
-    /// Which source the last error's `line` and `column` are in: 0 for the script last given to
-    /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
-    /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
-    /// includes code from an earlier script and from the sources given during its run.
+    /// Which source the last error's `line` and `column` are in: 0 for the most recent script or
+    /// module entry source. Later sources are numbered from 1 as tags are assigned: modules in
+    /// load order, then sources a [`crate::HostItem::Evaluator`] gives. Module execution order
+    /// can differ from load order. A script run without modules numbers only evaluator sources.
+    /// [`UNKNOWN_SOURCE`] includes code from earlier runs and their module or evaluator sources.
     pub fn error_source(&self) -> u32 {
         self.source_of(self.interp.error_tag)
     }
 
     /// The source tag of the code the last error's `line` and `column` are in, which stays the same
-    /// from run to run: each script given to [`Realm::run`] or [`Realm::start`] and each source a
+    /// from run to run: each script or module entry, each dependency loaded, and each source a
     /// [`crate::HostItem::Evaluator`] gives gets the next tag, so a function an earlier script
     /// defined has its script's tag. [`UNKNOWN_SOURCE`] for code that `eval` or `Function`
     /// compiled, an error with no place, and sources given once the tags are used up.
@@ -622,9 +623,10 @@ impl Realm {
         self.interp.error_tag
     }
 
-    /// The source tag ([`Realm::error_tag`]) of the script the last [`Realm::run`] or
-    /// [`Realm::start`] compiled; the `n`th source an evaluator gave during that run has this tag
-    /// plus `n`. [`UNKNOWN_SOURCE`] when that call compiled nothing.
+    /// The source tag ([`Realm::error_tag`]) of the most recent script or module entry source.
+    /// Dependency modules receive subsequent tags in load order, followed by evaluator sources
+    /// as they are given. A script run without modules assigns subsequent tags only to evaluator
+    /// sources. [`UNKNOWN_SOURCE`] when no entry tag has been assigned or the tags are used up.
     pub fn script_tag(&self) -> u32 {
         self.script_tag
     }

@@ -322,8 +322,8 @@ impl Parser<'_> {
 
     /// The early errors of the exports as a whole (section 15.2.1.1): no name exported twice, and
     /// each name an `export { … }` list takes from the module itself declared or imported there. An
-    /// exported import becomes a re-export of what it imports (section 15.2.1.16.1; a namespace
-    /// import as ECMA-262 2020 reads `export * as ns from`).
+    /// exported named import becomes a re-export of its imported binding (section 15.2.1.16.1).
+    /// A namespace import keeps its local binding.
     fn finish_exports(&self, info: &mut ModuleInfo, clause: Vec<ClauseExport>) -> Result<()> {
         #[cfg(test)]
         EXPORT_SEARCH_STEPS.with(|steps| steps.set(0));
@@ -339,8 +339,10 @@ impl Parser<'_> {
             }
             let imported = imports.get(&ImportLocal(&c.local));
             let entry = match imported {
-                Some(i) => ExportEntry::Indirect { export_name: c.export_name, request: i.request, import: i.import.clone(), span: c.span },
-                None => ExportEntry::Local { export_name: c.export_name, local: c.local, span: c.span },
+                Some(i) if matches!(&i.import, ImportName::Name(_)) => {
+                    ExportEntry::Indirect { export_name: c.export_name, request: i.request, import: i.import.clone(), span: c.span }
+                }
+                _ => ExportEntry::Local { export_name: c.export_name, local: c.local, span: c.span },
             };
             info.exports.push(entry);
         }
@@ -362,6 +364,49 @@ impl Parser<'_> {
 mod tests {
     use super::{EXPORT_SEARCH_STEPS, REQUEST_SEARCH_STEPS};
     use crate::{Options, parse_module};
+
+    fn run_namespace_modules(main: &str, files: &[(&str, &str)]) -> (Result<crate::JsValue, crate::RunError>, crate::Realm) {
+        let mut realm = crate::Realm::with_options(Options { es2015: true, ..Options::default() }, crate::Limits::default());
+        realm.run("var out = [];").unwrap();
+        let mut load = |_: &str, specifier: &str| {
+            files.iter().find(|(name, _)| *name == specifier).map_or_else(
+                || Err(crate::LoadError::Other(format!("missing module {specifier}"))),
+                |(_, source)| Ok(crate::LoadedModule { key: specifier.into(), source: Some((*source).into()) }),
+            )
+        };
+        let result = realm.run_module("main.mjs", main, crate::ModuleLimits::default(), &mut load);
+        (result, realm)
+    }
+
+    #[test]
+    fn namespace_reexport_bindings_keep_their_origin() {
+        let files = [
+            ("./a.mjs", "import * as ns from './shared.mjs'; export {ns};"),
+            ("./b.mjs", "import * as ns from './shared.mjs'; export {ns};"),
+            ("./barrel.mjs", "export * from './a.mjs'; export * from './b.mjs';"),
+            ("./shared.mjs", "export var value = 7;"),
+        ];
+        let (result, _) = run_namespace_modules("import {ns} from './barrel.mjs'; out.push(ns.value);", &files);
+        assert!(result.as_ref().is_err_and(|error| error.message.contains("ambiguous")), "{result:?}");
+        let files = [
+            ("./a.mjs", "import {value} from './shared.mjs'; export {value};"),
+            ("./b.mjs", "import {value} from './shared.mjs'; export {value};"),
+            ("./barrel.mjs", "export * from './a.mjs'; export * from './b.mjs';"),
+            ("./shared.mjs", "export var value = 7; export function change() { value = 9; }"),
+        ];
+        let (result, mut realm) =
+            run_namespace_modules("import {value} from './barrel.mjs'; import {change} from './shared.mjs'; change(); out.push(value);", &files);
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(realm.run("out.join('|')"), Ok(crate::JsValue::String("9".into())));
+    }
+
+    #[test]
+    fn namespace_reexports_link_through_cycles() {
+        let files = [("./a.mjs", "import * as ns from './b.mjs'; export {ns};"), ("./b.mjs", "import * as ns from './a.mjs'; export {ns};")];
+        let (result, mut realm) = run_namespace_modules("import * as a from './a.mjs'; out.push(a.ns.ns === a);", &files);
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(realm.run("out.join('|')"), Ok(crate::JsValue::String("true".into())));
+    }
 
     #[test]
     fn module_specifiers_reject_legacy_octal_escapes() {
@@ -417,7 +462,7 @@ mod tests {
             assert!(matches!(export, crate::ExportEntry::Indirect { export_name, request: 0, import: crate::ast::ImportName::Name(name), .. }
                     if export_name == &format!("exported{index}") && name == "value"));
         }
-        assert!(matches!(info.exports[count], crate::ExportEntry::Indirect { request: 1, import: crate::ast::ImportName::Namespace, .. }));
+        assert!(matches!(&info.exports[count], crate::ExportEntry::Local { export_name, local, .. } if export_name == "namespace" && local == "ns"));
         assert!(
             matches!(&info.exports[count + 1], crate::ExportEntry::Indirect { request: 0, import: crate::ast::ImportName::Name(name), .. } if name == "value")
         );

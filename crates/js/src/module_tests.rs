@@ -12,6 +12,53 @@ fn es() -> Realm {
 }
 
 #[test]
+fn global_var_records_survive_deleting_only_an_inherited_property() {
+    let mut realm = es();
+    realm.run("Object.defineProperty(this, 'w', {value: 1, writable: true, configurable: true});").unwrap();
+    assert_eq!(realm.run("var w; delete this.w; Object.prototype.w = 7; delete w;"), Ok(JsValue::Bool(true)));
+    let error = realm.run("let w = 2; w;").unwrap_err();
+    assert!(matches!(error.kind, RunErrorKind::Syntax | RunErrorKind::Thrown), "{error:?}");
+
+    let mut realm = es();
+    realm.run("Object.defineProperty(this, 'w', {value: 1, writable: true, configurable: true});").unwrap();
+    assert_eq!(realm.run("var w; delete w;"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("let w = 2; w;"), Ok(JsValue::Number(2.0)));
+}
+
+#[test]
+fn namespace_allocations_charge_binding_tables_and_symbols() {
+    use crate::heap::{OBJECT_BYTES, PROP_BYTES, key};
+    let mut realm = es();
+    let interp = realm.interp();
+    let before = interp.heap.bytes;
+    let exports = (0..128).map(|n| (key(&format!("v{n}")), None)).collect();
+    let namespace = interp.module_namespace(exports, &[]).unwrap();
+    let symbols = interp.heap.object(namespace).unwrap().syms.as_ref().map_or(0, |symbols| symbols.len());
+    let required = OBJECT_BYTES + PROP_BYTES * (128 * 2 + symbols);
+    assert!(interp.heap.bytes - before >= required, "namespace charged {} bytes, needs at least {required}", interp.heap.bytes - before);
+}
+
+#[test]
+fn export_resolution_membership_work_is_bounded_per_visit() {
+    let mut files: Vec<(String, String)> = (0..31).map(|n| (format!("./m{n}.mjs"), format!("export * from './m{}.mjs';", n + 1))).collect();
+    let source = (0..32).map(|n| format!("export var v{n} = {n};")).collect();
+    files.push(("./m31.mjs".into(), source));
+    let references: Vec<_> = files.iter().map(|(name, source)| (name.as_str(), source.as_str())).collect();
+    let mut load = loader(&references);
+    let mut realm = es();
+    crate::module::RESOLVE_CALLS.with(|count| count.set(0));
+    crate::module::RESOLVE_MEMBERSHIP_CHECKS.with(|count| count.set(0));
+    realm
+        .run_module("main.mjs", "import * as ns from './m0.mjs'; out.push(ns.v0, ns.v31);", ModuleLimits { modules: 64, depth: 64 }, &mut load)
+        .unwrap();
+    let visits = crate::module::RESOLVE_CALLS.with(std::cell::Cell::get);
+    let checks = crate::module::RESOLVE_MEMBERSHIP_CHECKS.with(std::cell::Cell::get);
+    assert!(visits > 32);
+    assert!(checks <= visits * 4, "{checks} membership checks for {visits} export visits");
+    assert_eq!(realm.run("out.join('|')"), Ok(JsValue::String("0|31".into())));
+}
+
+#[test]
 fn star_aliases_resolve_each_canonical_target_once_per_name() {
     let exports: String = (0..100).map(|n| format!("export var v{n} = {n};")).collect();
     let stars: String = (0..100).map(|n| format!("export * from './alias{n}.mjs';")).collect();

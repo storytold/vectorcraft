@@ -1545,12 +1545,13 @@ impl Interp {
                 _ => return internal("not a declarative environment"),
             },
             Resolved::Obj { object, with_this } => {
+                let owned = !with_this && object == self.global && self.get_own_property(object, &name)?.is_some();
                 let deleted = self.delete(object, &name, false)?;
                 // A deleted global variable no longer stops a `let` or `const` of its name: the
                 // global environment's DeleteBinding drops it from its var names (ECMA-262 2015
                 // section 8.1.1.4.7). Deleting the global object's property by any other route
                 // leaves the name recorded.
-                if deleted && !with_this && object == self.global {
+                if deleted && owned {
                     self.global_vars.remove(&name);
                 }
                 deleted
@@ -3767,10 +3768,14 @@ impl Interp {
     /// binding it reads or, for `None`, the value `fixed` gives. The names must be in code unit
     /// order and distinct.
     pub(crate) fn module_namespace(&mut self, exports: Vec<(Key, Option<(EnvId, Key)>)>, fixed: &[(Key, Value)]) -> JsResult<ObjId> {
-        let bytes = exports.iter().map(|(k, _)| binding_bytes(k.len()).saturating_mul(2)).sum::<usize>();
-        self.reserve_heap(OBJECT_BYTES.saturating_add(bytes).saturating_add(PROP_BYTES))?;
+        let names = exports.iter().map(|(name, _)| string_bytes(name.len())).sum::<usize>();
+        let bindings = PROP_BYTES.saturating_mul(exports.len());
+        let tag = self.well_known(|symbols| &symbols.to_string_tag);
+        let tagged = if tag.is_some() { PROP_BYTES.saturating_add(string_bytes(6)) } else { 0 };
+        let extra = bindings.saturating_add(names).saturating_add(tagged);
+        self.reserve_heap(OBJECT_BYTES.saturating_add(bindings).saturating_add(extra))?;
         let mut object = Object::new(Class::ModuleNamespace(Box::default()), None);
-        if let Some(tag) = self.well_known(|symbols| &symbols.to_string_tag) {
+        if let Some(tag) = tag {
             object.syms.get_or_insert_with(Default::default).insert(tag, Prop::Data { value: Value::str("Module"), flags: 0 });
         }
         object.extensible = false;
@@ -3780,7 +3785,9 @@ impl Interp {
             object.props.insert(name.clone(), Prop::Data { value, flags: WRITABLE | ENUMERABLE });
         }
         object.class = Class::ModuleNamespace(Box::new(ModuleExports { bindings: exports }));
-        Ok(self.heap.alloc_object(object))
+        let namespace = self.heap.alloc_object(object);
+        self.heap.bytes = self.heap.bytes.saturating_add(extra);
+        Ok(namespace)
     }
 
     /// Pushes the frames of a run of modules: `modules` in the order they run, each with its code,
