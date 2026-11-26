@@ -479,17 +479,16 @@ fn mine_commands(app: &VectorcraftApp) -> Vec<String> {
     crate::custom_toolbars::find(&app.ui, "Mine").unwrap().commands.clone()
 }
 
-/// `f` run with `app` and a `Ui` of a pass of `ctx`.
+/// `f` run with `app` and a `Ui` of one frame of `ctx` as the hosts run it ([`crate::testing::part_frame`]).
 fn in_pass<T>(app: &mut VectorcraftApp, ctx: &egui::Context, f: impl FnOnce(&mut VectorcraftApp, &egui::Ui) -> T) -> T {
     let mut f = Some(f);
     let mut got = None;
-    let mut out = ctx.run_ui(RawInput::default(), |ui| {
+    let _ = crate::testing::part_frame(app, ctx, RawInput::default(), |app, ui| {
         if let Some(f) = f.take() {
             got = Some(f(app, ui));
         }
     });
-    out.textures_delta.clear();
-    got.expect("the pass ran")
+    got.expect("the frame ran")
 }
 
 /// `toolbar.addCommand` puts command buttons on a toolbar made with New Toolbar and moves them,

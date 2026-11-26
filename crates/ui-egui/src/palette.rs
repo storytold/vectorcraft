@@ -622,7 +622,7 @@ pub(crate) fn button_texts(app: &mut VectorcraftApp, ui: &egui::Ui, ids: &[Strin
     if ids.is_empty() {
         return Vec::new();
     }
-    let built = kept_build(app, ui);
+    let built = kept_commands(app, ui);
     ids.iter().map(|id| if is_command(id) { built.by_id.get(id).and_then(|&i| built.entries.get(i)).map(button_text_of) } else { None }).collect()
 }
 
@@ -683,6 +683,20 @@ pub(crate) fn is_command(id: &str) -> bool {
         ids
     });
     ids.contains(id)
+}
+
+/// The kept build for the current [`BuildKey`] as it is, without re-homing its tool entries, for
+/// looking up results other than tools, whose entries a toolbar's change leaves as they are: a
+/// toolbar's footer looks its command buttons up on every pass. Without a build for the key, it is
+/// [`kept_build`].
+fn kept_commands(app: &mut VectorcraftApp, ui: &egui::Ui) -> Arc<Built> {
+    let key = BuildKey { catalog: app.menus.catalog_generation(), native: app.services.native_menu.is_some() };
+    if let Some((kept, built)) = &app.canvas.palette
+        && *kept == key
+    {
+        return built.clone();
+    }
+    kept_build(app, ui)
 }
 
 /// The built entries for the current [`BuildKey`]: built again when the key moves (the index is
