@@ -480,6 +480,26 @@ fn the_marks_leave_out_template_layers_and_guides_the_view_hides() {
         }
     }
     assert!(wrong.is_empty(), "the marks count only what the view draws: {wrong:?}");
+    // A compound path made into a guide draws every path, so each stays outlined while the guides are hidden.
+    let guide_rect = |id: u64, r: vectorcraft_geom::Rect| {
+        let mut n = rect(id, r);
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        Arc::new(n)
+    };
+    let compound = Node::new(
+        NodeId(7),
+        NodeKind::Compound {
+            children: vec![
+                guide_rect(8, vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0)),
+                guide_rect(9, vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0)),
+            ],
+            rule: vectorcraft_geom::FillRule::EvenOdd,
+        },
+    );
+    let contours = |hides| node_outline(&compound, &symbols, hides).elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count();
+    assert_eq!(contours(ViewHides { templates: false, guides: true }), contours(ViewHides::default()), "a compound path keeps its guide paths");
 }
 
 /// The overlay's limit counts the points of the members the highlight outlines: a hidden member of a group, a blend, a

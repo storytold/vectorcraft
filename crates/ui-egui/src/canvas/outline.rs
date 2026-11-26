@@ -23,15 +23,18 @@ impl ViewHides {
         Self { templates: !app.ui.view.templates, guides: !app.ui.view.guides_shown() }
     }
 
-    /// Whether the view leaves `n` out.
-    fn hides(self, n: &Node) -> bool {
-        n.hidden_by_view(self.templates, self.guides)
+    /// [`Node::drawn_children`] of `n` without the members the view leaves out. Every path of a
+    /// compound path stays, since the compound path draws all of them, guides or not.
+    fn children(self, n: &Node) -> impl Iterator<Item = &std::sync::Arc<Node>> {
+        let hide_guides = self.guides && !matches!(n.kind, NodeKind::Compound { .. });
+        n.drawn_children().filter(move |c| !c.hidden_by_view(self.templates, hide_guides))
     }
 }
 
-/// Outline of a node for highlighting (paths, compound children, area type frames, other text
-/// bounds, images' frames, symbol instances' bounds measured by their art from `symbols`; a clip
-/// group's clipping path only, as [`walk_drawn`] visits it, without the members `hides` leaves out).
+/// Outline of a node for highlighting (paths, compound children, area type frames, image bounds,
+/// the box as drawn of type in perspective and of symbol instances, whose art `symbols` measures
+/// ([`Node::drawn_corners`]); a clip group's clipping path only, as [`walk_drawn`] visits it,
+/// without the members `hides` leaves out).
 pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes, hides: ViewHides) -> BezPath {
     let mut bp = BezPath::new();
     walk_drawn(n, hides, &mut |c| match &c.kind {
@@ -48,8 +51,8 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes, hides: ViewHides) ->
                         bp.line_to(t.xf * b);
                     }
                 }
-            } else if let Some(b) = c.geometric_bounds_with(symbols) {
-                bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
+            } else if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
             }
         }
         // An image shows its frame, turned or distorted with it.
@@ -58,9 +61,10 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes, hides: ViewHides) ->
                 bp.extend(frame);
             }
         }
+        // A symbol instance shows its art's box, turned, skewed or in perspective with it.
         NodeKind::SymbolInstance { .. } => {
-            if let Some(b) = c.geometric_bounds_with(symbols) {
-                bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
+            if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
             }
         }
         // A placed document shows its box, turned with it.
@@ -115,6 +119,14 @@ pub(super) fn linked_crosses(n: &Node, hides: ViewHides) -> BezPath {
     bp
 }
 
+/// Adds the closed outline through the four corners `q` to `bp`.
+fn corners(bp: &mut BezPath, q: [Point; 4]) {
+    let [a, b, c, d] = q;
+    bp.move_to(a);
+    [b, c, d].into_iter().for_each(|p| bp.line_to(p));
+    bp.close_path();
+}
+
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
 /// highlight, are drawn for: an Image Trace of a photo selects hundreds of thousands of paths at
 /// once, and selecting all of an opened PDF can select as many type objects, images and gradient
@@ -148,7 +160,7 @@ fn over_limit<'a>(nodes: impl IntoIterator<Item = &'a Node>, crosses: bool, hide
         if n.clips() {
             return n.children().and_then(|children| children.first()).is_some_and(|clip| over(clip, left, crosses, hides));
         }
-        !matches!(n.kind, NodeKind::Envelope { .. }) && n.drawn_children().filter(|c| !hides.hides(c)).any(|c| over(c, left, crosses, hides))
+        !matches!(n.kind, NodeKind::Envelope { .. }) && hides.children(n).any(|c| over(c, left, crosses, hides))
     }
     let mut left = OVERLAY_MAX_ANCHORS;
     nodes.into_iter().any(|n| over(n, &mut left, crosses, hides))
@@ -193,7 +205,7 @@ pub(super) fn walk_drawn<'a>(n: &'a Node, hides: ViewHides, f: &mut impl FnMut(&
         }
         return;
     }
-    for c in n.drawn_children().filter(|c| !hides.hides(c)) {
+    for c in hides.children(n) {
         walk_drawn(c, hides, f);
     }
 }

@@ -241,6 +241,13 @@ its variation grid; the panel draws the same grid. `ui.colorGuideOptions` opens 
 as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches runs `swatch.new {colors: [...]}`
 (one swatch per colour, one undo step).
 
+Color Wheel contrast: `color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio of the active
+proxy's color against the color drawn behind the selection (`against: "below"`, the default) or against a given color,
+with the AA and AAA results for normal text and large text and the AA result for graphics (docs/mcp.md). The Color Wheel panel's Show
+Contrast row shows the same answer for the category picked under Contrast For; `ui.colorWheel {contrast?, contrastFor?,
+contrastBackground?}` sets the row, its category and a pinned background, and `ui.inspect` reports them as
+`ui.color_wheel`.
+
 Color Guide Limit to Library: `ui.colorGuideLimit {library}` (a swatch library id or name, `"document"` for the
 document's swatches, `""` for none) limits the panel's colours; `ui.inspect` reports it as `ui.color_guide_limit`, and
 `color.harmony {..., limitTo}` answers the limited guide (every colour snaps to the library's nearest colour, ΔE 2000).
@@ -288,9 +295,13 @@ canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
 
-Recolor Artwork: `ui.recolorDialog {colors?, library?, group?}` opens the `recolor` dialog on the selected art
+Recolor Artwork: `ui.recolorDialog {colors?, library?, group?, preset?}` opens the `recolor` dialog on the selected art
 (`colors`: a count for an n-colour job, or colours to assign as the new colours; `library`: Limit to Library, a library
-or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
+or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). With `preset: true`
+(the Edit › Edit Colors › Recolor with Preset items) it first opens the `recolorPreset` dialog, which asks whether to
+limit the colors to a swatch library: its field `limitTo` (a library id, `"document"`, or `""` for None) starts on
+`library`, and its OK opens the `recolor` dialog with `colors` and that library; `preset: true` with `group` is an
+error. Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
 as `recolor.reduce` returns them), `colors` (null for Auto), `method`, `preserveWhite`, `preserveBlack`,
 `preserveGrays`, `limitTo`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 `sliderMode` (the mode of the color sliders under the rows: `hsb`, `rgb`, `cmyk`, `lab`, or `tint` for a row whose new
@@ -483,9 +494,8 @@ button (Add Tool…) opens a menu of every tool under the drawer's headings: a c
 there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
 it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
 two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
-`window.toolbar.dock {name, side?, order?}` docks a toolbar in the lane along the window's left or right edge, and
-`window.toolbar.float {name, x?, y?}` floats it again; dropping its title bar on an edge or dragging it out of its
-lane does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
+`window.toolbar.dock {name, side?, order?}` docks a toolbar as a column of the dock along the window's left or right
+edge, and `window.toolbar.float {name, x?, y?}` floats it again; dragging its title bar does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 
@@ -806,7 +816,9 @@ lists to the system clipboard (once they are written, the status bar shows the f
 another message has replaced the Copy or Cut's meanwhile), and every Paste command first loads what another app copied (`clipboard.importSvg`,
 `importPdf`, `importEps`, `importText` or `importImage`, centred in the view; the desktop app reads PDF and EPS from
 the Windows clipboard and, with SVG, from the macOS pasteboard, and an `.eps` file, or a `.ai` or `.ait` file that holds a PDF or PostScript, copied in a file manager anywhere; a copied `.ai` or `.ait` file that holds a PDF loads with `importPdf {editingData: true}`, which reads its editing data); an import error answers the Paste with that error
-and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
+and pastes nothing. After a Copy or Cut whose formats could not be written to the system clipboard, every Paste
+command takes the internal clipboard instead until another app copies something (only while the clipboard held text
+that could be read when the write failed). Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
 Paste event for it). Screenshots paste on every platform: Windows reads `PNG`, else `CF_DIBV5`/`CF_DIB`, macOS the
 pasteboard's PNG or TIFF, Linux `image/png`, and the web the picture the browser's paste event carries (#457).
 In the desktop app a Paste from the menus or the keys (`ui.key`) decodes a bitmap off the UI thread: `ui.inspect` lists
