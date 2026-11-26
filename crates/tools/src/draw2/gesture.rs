@@ -1583,8 +1583,9 @@ impl GestureTool {
 
     /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
     /// redraws a selected path is shown as it is drawn, joined at its start to the point of the
-    /// path nearest to it, with no fill, and leaves the path and the selection as they are: where
-    /// the stroke ends is only known at the release, which redraws the path (`finish`).
+    /// path nearest to it, with no fill, on top in any drawing mode, and leaves the path and the
+    /// selection as they are: where the stroke ends is only known at the release, which redraws
+    /// the path (`finish`).
     fn drawing_params(&self, cx: &ToolContext) -> Value {
         let mut v = self.freehand_params(cx, false);
         let Some((id, _)) = self.redraw else { return v };
@@ -1593,7 +1594,7 @@ impl GestureTool {
         }
         v["fill"] = json!(false);
         v["keepSelected"] = json!(false);
-        v["leaveSelection"] = json!(true);
+        v["preview"] = json!(true);
         let on = self.points.first().and_then(|&p| cx.doc.node(id)?.path_data()?.nearest(p)).map(|n| n.3);
         if let (Some(on), Some(pts)) = (on, v["points"].as_array_mut()) {
             pts.insert(0, json!([on.x, on.y]));
