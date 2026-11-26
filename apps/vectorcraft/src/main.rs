@@ -74,6 +74,7 @@ mod windows_cores;
 mod windows_display_size;
 mod windows_stylus;
 mod windows_symbol_chars;
+mod windows_wintab;
 mod xwayland;
 
 use std::sync::{Arc, Mutex};
