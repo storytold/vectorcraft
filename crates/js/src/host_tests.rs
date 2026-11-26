@@ -757,6 +757,53 @@ fn objects_of_a_host_class_report_its_available_members_as_their_own() {
 }
 
 #[test]
+fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![("size".to_string(), HostMember::Get(value.clone())), ("grow".to_string(), HostMember::Method(value))],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("size".to_string(), HostMember::Unavailable(missing))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start("[it.hasOwnProperty('size'), it.propertyIsEnumerable('size'), it.hasOwnProperty('grow')].join()").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::String("false,false,true".into()));
+}
+
+#[test]
+fn assigning_a_name_a_prototype_has_does_not_call_the_indexer() {
+    let mut r = realm(1_000_000);
+    let calls: Rc<Cell<u32>> = Rc::default();
+    let seen = calls.clone();
+    let index: HostFunction = Rc::new(move |a| {
+        seen.set(seen.get() + 1);
+        match a.get(1) {
+            Some(Data::Number(_)) => Ok(Data::Undefined),
+            _ => Err(HostError::Error("no such member".into())),
+        }
+    });
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("List", &[1.0]))]).unwrap();
+    r.start("Object.prototype.extra = 1; it.extra = 2; it.extra").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::Number(1.0));
+    assert_eq!(calls.get(), 0);
+    // A name nothing has still goes to the indexer, which throws.
+    r.start("it.nope = 2").unwrap();
+    assert!(finish(&mut r, 1_000_000).0.is_err());
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
 fn a_converted_function_reads_each_argument_as_its_list_says() {
     let mut r = realm(1_000_000);
     let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();

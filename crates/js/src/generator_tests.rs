@@ -46,6 +46,31 @@ fn syntax(src: &str) {
 }
 
 #[test]
+fn promise_jobs_resume_generator_callbacks() {
+    let mut realm = es2015(Limits::default());
+    realm
+        .run(
+            "var log = []; var it = (function* () { log.push('start'); var value = yield 7; \
+             log.push('resume:' + value); return 9; })(); \
+             Promise.resolve().then(it.next.bind(it)).then(function (result) { \
+             log.push(result.value + ':' + result.done); return it.next(5); \
+             }).then(function (result) { log.push(result.value + ':' + result.done); });",
+        )
+        .unwrap();
+    assert_eq!(realm.run("log.join(',')").unwrap(), JsValue::String("start,7:false,resume:5,9:true".into()));
+}
+
+#[test]
+fn promise_static_methods_reject_generator_constructors() {
+    truth(
+        "var g = function* () {}, count = 0; [g, g.bind(null)].forEach(function (C) { \
+         try { Promise.resolve.call(C, 1); } catch (error) { if (error instanceof TypeError) count++; } \
+         try { Promise.reject.call(C, 1).catch(function () {}); } \
+         catch (error) { if (error instanceof TypeError) count++; } }); count === 4",
+    );
+}
+
+#[test]
 fn a_generator_runs_its_body_one_yield_at_a_time() {
     assert_eq!(
         string(

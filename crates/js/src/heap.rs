@@ -272,6 +272,10 @@ pub(crate) enum Class {
     Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
+    /// A promise (ECMA-262 11th edition, section 25.6) and its state.
+    Promise(Box<crate::builtins::promise::PromiseData>),
+    /// The state that the functions a promise operation makes share; scripts never see it.
+    PromiseRecord(Box<crate::builtins::promise::Record>),
 }
 
 /// What an XML value is.
@@ -335,7 +339,8 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) => "Object",
+            Class::XmlFilter(_) | Class::PromiseRecord(_) => "Object",
+            Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary
@@ -807,6 +812,21 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Promise(p) => {
+            for v in p.values() {
+                mark_value(&v, work, strings);
+            }
+            if let Some((code, _)) = &p.site {
+                mark_code(code, strings);
+            }
+            extra = p.bytes();
+        }
+        Class::PromiseRecord(r) => {
+            for v in r.values() {
+                mark_value(&v, work, strings);
+            }
+            extra = crate::builtins::promise::RECORD_BYTES;
+        }
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra
