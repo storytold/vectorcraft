@@ -538,3 +538,40 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     pump(&mut app);
     assert_eq!(inks(&app), json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
 }
+
+/// The names screen readers give the number and text fields in `out`'s accessibility tree: a field's own
+/// name, else the text of a label it is labeled by, else "".
+pub(super) fn field_names(out: &egui::FullOutput) -> Vec<String> {
+    use egui::accesskit::Role;
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let text_of = |id| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
+    nodes
+        .iter()
+        .filter(|(_, n)| matches!(n.role(), Role::TextInput | Role::SpinButton))
+        .map(|(_, n)| n.label().map(str::to_string).or_else(|| n.labelled_by().iter().find_map(|l| text_of(*l))).unwrap_or_default())
+        .collect()
+}
+
+/// Every number and length field of the dialog's sections has a name that tells it from the others in its row.
+#[test]
+fn every_number_and_length_field_is_named() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let sections: [(&str, &[&str]); 4] = [
+        ("General", &["Copies", "Range", "Width", "Height", "Overlap", "Tile Range", "Gutter", "Scale 1", "Scale 2"]),
+        ("Marks and Bleed", &["Offset", "Top", "Bottom", "Left", "Right"]),
+        ("Graphics", &["Flatness"]),
+        ("Advanced", &["Unprintable margin"]),
+    ];
+    for (section, expected) in sections {
+        set(&mut app, "section", json!(section));
+        pump(&mut app);
+        let ctx = ctx(&app);
+        let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+        let names = field_names(&out);
+        for name in expected {
+            assert!(names.iter().any(|n| n == name), "{section}: {name} in {names:?}");
+        }
+    }
+}

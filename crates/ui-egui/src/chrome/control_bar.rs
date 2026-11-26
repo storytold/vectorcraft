@@ -609,9 +609,8 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     if typed && paragraph {
-        ranked(ui, rank::TYPE, |ui| {
-            crate::panels::paragraph::control_bar(app, ui);
-        });
+        // The Paragraph group ranks its link and its Align buttons as two members, so the buttons leave first.
+        crate::panels::paragraph::control_bar(app, ui);
     }
     let vertical = group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some();
     if vertical {

@@ -5,9 +5,10 @@
 //! stay attached and deleted objects leave nothing stale behind.
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_geom::{Homography, Rect};
+use vectorcraft_geom::{Homography, Point, Rect};
 
-use crate::{Node, NodeKind};
+use crate::symbols::SYMBOL_SQUARE;
+use crate::{Node, NodeKind, SymbolBoxes};
 
 /// The plane an object in perspective lies on.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -56,6 +57,33 @@ impl Node {
             (Some(h), Some(b)) => h.map_rect_bbox(b).or(Some(b)),
             (_, b) => b,
         }
+    }
+
+    /// The corners of the box a symbol instance or type is drawn in, on the page (top left, top
+    /// right, bottom right, bottom left): an instance's art box (measured from `symbols`, or
+    /// `SYMBOL_SQUARE` when it has none) placed by its transform, and type's flat bounds, both
+    /// through the projection of type or an instance in perspective. Joined by straight lines,
+    /// they outline the box as drawn. When the projection sends a corner to infinity the corners
+    /// stay flat, as the flat box is kept for [`Node::geometric_bounds_with`]. `None` for other
+    /// objects and for type without bounds.
+    pub fn drawn_corners(&self, symbols: &SymbolBoxes) -> Option<[Point; 4]> {
+        let flat = match &self.kind {
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let art = symbols.art(symbol).map_or(SYMBOL_SQUARE, |a| a.geometric);
+                [(art.x0, art.y0), (art.x1, art.y0), (art.x1, art.y1), (art.x0, art.y1)].map(|(x, y)| *xf * Point::new(x, y))
+            }
+            NodeKind::Text(t) => {
+                let b = t.bounds()?;
+                [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].map(|(x, y)| Point::new(x, y))
+            }
+            _ => return None,
+        };
+        let Some(h) = self.projection() else { return Some(flat) };
+        let [a, b, c, d] = flat.map(|p| h.apply(p));
+        Some(match (a, b, c, d) {
+            (Some(a), Some(b), Some(c), Some(d)) => [a, b, c, d],
+            _ => flat,
+        })
     }
 
     /// Keep a projection drawing the same picture moved by `a` (the flat art moves by `a` too). An
