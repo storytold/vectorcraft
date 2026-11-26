@@ -415,7 +415,7 @@ fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, one: &str, other: &str) -> Opt
         return Some(changed_on_disk_status(ids.len()));
     }
     let detail = crate::i18n::tn(ids.len() as u64, one, other);
-    super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
+    super::confirm::ask_in_document(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
     None
 }
 
@@ -892,5 +892,53 @@ mod tests {
         assert!(super::super::confirm::open_question(&app).is_none());
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn accepting_a_modified_link_offer_does_not_update_another_drawing() {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-modified-switch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = drive::app();
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.session.prefs.update_links = "askWhenModified".into();
+        let mut ids = vec![];
+        for name in ["first.png", "second.png"] {
+            let path = dir.join(name);
+            std::fs::write(&path, png([200, 0, 0])).unwrap();
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("file.place", json!({"path": path.to_string_lossy()})).unwrap();
+            let links = app.run("links.list", json!({})).unwrap();
+            ids.push(links["links"][0]["id"].as_u64().unwrap());
+            let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
+            std::fs::write(&path, png([0, 0, 200])).unwrap();
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2)))
+                .unwrap();
+        }
+        assert_eq!(ids[0], ids[1], "the same ID refers to different files");
+        let answer = |app: &mut VectorcraftApp| {
+            let question = crate::tests::picks::open_dialogs(app).pop().unwrap().id;
+            crate::tests::picks::answer_dialog(app, question, &[], true);
+        };
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        answer(&mut app);
+        let foreign_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        answer(&mut app);
+        let original_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+        let _ = std::fs::remove_dir_all(dir);
+        assert_eq!(foreign_modified, 1, "the second drawing's link still needs approval");
+        assert_eq!(original_modified, 0, "approval updates the first drawing's link");
     }
 }
