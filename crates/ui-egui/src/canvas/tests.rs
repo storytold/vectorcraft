@@ -166,6 +166,99 @@ fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
     assert_eq!(cmd_frame(&mut app, Point::new(200.0, 380.0)), "directSelection", "away from it, in the same frame");
 }
 
+/// One headless canvas frame with `events` → the points it paints: the centres of circles and rectangles and the
+/// points of lines and paths.
+fn painted_points(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Pos2> {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let mut points = vec![];
+    for shape in flat_shapes(out.shapes) {
+        match shape {
+            Shape::Circle(c) => points.push(c.center),
+            Shape::Rect(r) => points.push(r.rect.center()),
+            Shape::LineSegment { points: ends, .. } => points.extend_from_slice(&ends),
+            Shape::Path(p) => points.extend_from_slice(&p.points),
+            _ => {}
+        }
+    }
+    points
+}
+
+/// A document with smart guides and the task bar off, every frame drawn on this thread.
+fn drag_app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.task_bar = false;
+    app.canvas.worker_started = true;
+    app
+}
+
+fn press(at: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+/// A drag with the Selection tool draws the moved object's marks in the frame the pointer moves: at the corner the
+/// object has after that frame's event, and none at the corner it had before it.
+#[test]
+fn a_selection_drag_draws_its_marks_in_the_frame_the_pointer_moves() {
+    let mut app = drag_app();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let xf = app.canvas_view().unwrap();
+    let corner = |app: &VectorcraftApp| {
+        let b = app.session.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap();
+        xf.to_screen(Point::new(b.x0, b.y0))
+    };
+    let start = xf.to_screen(Point::new(180.0, 120.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start)]);
+    frame(&mut app, &ctx, vec![press(start, true)]);
+    let mut moved = 0;
+    for i in 1..=6 {
+        let before = corner(&app);
+        let points = painted_points(&mut app, &ctx, vec![egui::Event::PointerMoved(start + vec2(12.0, 7.0) * i as f32)]);
+        let after = corner(&app);
+        if after.distance(before) < 4.0 {
+            continue;
+        }
+        moved += 1;
+        let near = |q: Pos2| points.iter().any(|p| p.distance(q) < 1.0);
+        assert!(near(after), "move {i}: a mark at the corner after the move, {after:?}");
+        assert!(!near(before), "move {i}: no mark at the corner before it, {before:?}");
+    }
+    assert!(moved >= 4, "the drag moves the object: {moved} frames");
+}
+
+/// A Pen drag draws the handle it pulls out in the frame the pointer moves: its end at that frame's pointer, and
+/// none at the pointer of the frame before.
+#[test]
+fn a_pen_drag_draws_its_handle_in_the_frame_the_pointer_moves() {
+    let mut app = drag_app();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("pen");
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let xf = app.canvas_view().unwrap();
+    let start = xf.to_screen(Point::new(105.0, 155.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start)]);
+    frame(&mut app, &ctx, vec![press(start, true)]);
+    let mut before = start;
+    for i in 1..=6 {
+        let at = start + vec2(9.0, 5.0) * i as f32;
+        let points = painted_points(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let near = |q: Pos2| points.iter().any(|p| p.distance(q) < 1.0);
+        assert!(near(at), "move {i}: the handle's end at this frame's pointer, {at:?}");
+        if i > 1 {
+            assert!(!near(before), "move {i}: no handle end at the pointer of the frame before, {before:?}");
+        }
+        before = at;
+    }
+}
+
 /// A click with the Selection tool inside an artboard makes it the active one, and Paste in
 /// Place then pastes onto it, where the objects were on their own artboard (#693).
 #[test]
