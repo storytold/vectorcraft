@@ -267,7 +267,7 @@ fn dock_columns(layout: &Layout<String>) -> Vec<&Column<String>> {
 }
 
 /// The columns of the dock on `edge`, from the window edge inwards; none when that edge has no dock.
-fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
+pub(crate) fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
     let dock = layout.dock_path(edge).and_then(|path| node_at(layout.root.as_ref()?, &path));
     match dock {
         Some(Node::Dock { columns, .. }) => columns,
@@ -1113,14 +1113,18 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, pos: egui::P
     }
     // A rail's window is a stepped column, which the dock fits to the rail's grid; it keeps the steps it had.
     let steps = is_rail(&id).then(|| column_of(layout, &id).and_then(|(_, column)| column.steps).unwrap_or(1));
-    actions.push(match floating_window(layout, &id) {
-        Some(window) if window.panels().count() == 1 => Action::move_floating(id.clone(), rect),
-        _ => Action::float(id.clone(), rect),
-    });
+    let ctx = app.ui_ctx.clone();
+    match floating_window(layout, &id) {
+        // An open OS window moves with its window: the dock keeps it where its record says.
+        Some(window) if window.panels().count() == 1 => {
+            actions.push(Action::move_floating(id.clone(), rect));
+            actions.extend(native_moved(ctx.as_ref(), window, rect));
+        }
+        _ => actions.push(Action::float(id.clone(), rect)),
+    }
     if let Some(steps) = steps {
         actions.push(Action::set_column_steps(id, steps));
     }
-    let ctx = app.ui_ctx.clone();
     apply(app, ctx.as_ref(), actions).map(drop)
 }
 
