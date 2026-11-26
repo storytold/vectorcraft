@@ -610,14 +610,19 @@ pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
 }
 
-/// Where type made from the file's text document draws: its visual box, point type laid out
-/// first. Made type has no layout during the import, and without one the box of point type is an
-/// estimate that runs right from its anchor ([`vectorcraft_doc::TextObject::estimate_bounds`]):
-/// beside where right-aligned type draws, over one half of centered type, across vertical type, and
-/// as wide as an average font would set it. The node keeps no layout: the document's type is
-/// measured when it opens. Any other object's box is its visual box. `made_only`
-/// matches made type with the page's type by this box, and the page comparison counts what differs
-/// in it as type; `plan` doesn't match by it yet.
+/// Where a text object draws: its visual box, point type that has no layout laid out first, in
+/// the fonts the import has ([`vectorcraft_text::FontDb::global`]), so the box depends on which
+/// fonts are installed, as the opened document's does. Any point type without a layout is laid
+/// out, not only type made from the file's text document, which is the type that has none during
+/// the import (the page's own type is measured when it is read). Without a layout the box of point
+/// type is an estimate that runs right from its anchor
+/// ([`vectorcraft_doc::TextObject::estimate_bounds`]): beside where right-aligned type draws, over
+/// one half of centered type, across vertical type, and as wide as an average font would set it,
+/// which can be wider than the type is. The node keeps no layout: the document's type is measured
+/// when it opens. Any other object's box is its visual box.
+///
+/// `made_only` matches made type with the page's type by this box; `plan` doesn't match by it yet.
+/// The page comparison's type areas use it for every file's layers, those `plan` fills included.
 pub(super) fn drawn_box(node: &Node) -> Option<Rect> {
     if let NodeKind::Text(t) = &node.kind
         && matches!(t.kind, vectorcraft_doc::TextKind::Point)
