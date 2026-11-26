@@ -482,7 +482,7 @@ impl Plugin {
         if manifest.len() > MAX_MANIFEST_BYTES {
             return Err(Error::Manifest(format!("manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)")));
         }
-        let Code::Wasm { module, .. } = &p.code else { unreachable!() };
+        let module = p.wasm_module()?;
         exports_func(module, "vc_abi_version", &[], &[ValType::I32])?;
         exports_func(module, "vc_manifest", &[], &[ValType::I64])?;
         exports_func(module, "vc_alloc", &[ValType::I32], &[ValType::I32])?;
@@ -505,12 +505,12 @@ impl Plugin {
     /// ([`section_manifest`]) and checks the exports and tables a run needs, running none of the
     /// module's code; `bytes` is the module → false, with nothing read, when it has no such section.
     fn read_section(&mut self, bytes: &[u8], imports: &[&Import]) -> Result<bool> {
-        let Code::Wasm { module, .. } = &self.code else { unreachable!() };
+        let module = self.wasm_module()?;
         let Some((manifest, text)) = section_manifest(module)? else {
             return Ok(false);
         };
         self.take(manifest, text, imports)?;
-        let Code::Wasm { module, .. } = &self.code else { unreachable!() };
+        let module = self.wasm_module()?;
         check_exports(module, self.limits.max_memory_bytes)?;
         check_tables(bytes)?;
         Ok(true)
@@ -583,6 +583,13 @@ impl Plugin {
     /// What runs its code ([`Manifest::runtime`]).
     pub fn runtime(&self) -> Runtime {
         self.manifest.runtime
+    }
+
+    fn wasm_module(&self) -> Result<&Module> {
+        match &self.code {
+            Code::Wasm { module, .. } => Ok(module),
+            Code::Js(_) => Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into())),
+        }
     }
 
     /// A JavaScript plug-in's script file name; `None` for a WebAssembly module.
