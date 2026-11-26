@@ -6624,6 +6624,8 @@ arrowhead	Feather	Перо
 	VectorCraft Default	По подразбиране за VectorCraft
 	VectorCraft Defaults	Стандартни настройки на VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Общ CMYK за VectorCraft (подобен на SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	Мелиран CMYK за VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Немелиран CMYK за VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Образци на VectorCraft (.vcswatches)
 	Vertical Align	Вертикално подравняване
 	Vertical Area Type	Вертикално въвеждане в област
@@ -8601,6 +8603,11 @@ breakText	Glyphs	Глифи
 	No objects are selected.	Няма избрани обекти.
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
+	Fold Angle	Ъгъл на сгъване
+	Set Fold Angle…	Задай ъгъл на сгъване…
+	Set Fold Angle	Задай ъгъл на сгъване
+	Reset Fold Angle	Нулирай ъгъла на сгъване
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	изберете линия за биговане, частично рязане или перфорация, която не е заключена или скрита
 	Check	Провери
 	Check Fold Lines	Провери линиите на сгъване
 @msg	No cut lines are in the selection.	В селекцията няма линии за рязане.
