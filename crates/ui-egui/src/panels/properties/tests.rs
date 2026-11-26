@@ -1003,6 +1003,66 @@ fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
     assert_eq!(profile, None);
 }
 
+/// Two selected strokes, the shown one uniform and the other with a variable width: the Width
+/// Profile row still shows, and its Uniform removes the other stroke's profile. With brushes on both
+/// strokes the list holds only Uniform. Once both are uniform the row is hidden again.
+#[test]
+fn the_width_profile_shows_while_another_selected_stroke_has_a_variable_width() {
+    for brushed in [false, true] {
+        let mut app = new_app();
+        let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+        let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+        if brushed {
+            app.run("brush.apply", json!({"ids": [a, b], "name": "3 pt. Round"})).unwrap();
+        }
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(super::super::current_stroke(&app).and_then(|s| s.profile), None, "the shown stroke is uniform");
+        let mut panel = Panel::new(app, show);
+        assert!(panel.shows("Profile"), "brushed {brushed}");
+        panel.click("Profile");
+        assert_eq!(panel.shows("Taper Start"), !brushed, "brushed {brushed}");
+        panel.click("Uniform");
+        let profile = panel
+            .app()
+            .session
+            .active()
+            .unwrap()
+            .doc
+            .node(vectorcraft_doc::NodeId(b.as_u64().unwrap()))
+            .unwrap()
+            .appearance
+            .stroke()
+            .unwrap()
+            .profile
+            .clone();
+        assert_eq!(profile, None, "brushed {brushed}");
+        assert!(!panel.shows("Profile"), "brushed {brushed}: every stroke is uniform");
+    }
+}
+
+/// The Width Profile row follows a change of selection that leaves the document as it was: it
+/// hides when the stroke with a variable width leaves the selection and shows again when it comes
+/// back.
+#[test]
+fn the_width_profile_row_follows_a_selection_change() {
+    let mut app = new_app();
+    let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("Profile"), "the other stroke has a variable width");
+    panel.app().run("select.set", json!({"ids": [a]})).unwrap();
+    panel.frame();
+    assert!(!panel.shows("Profile"), "the uniform stroke alone");
+    panel.app().run("select.set", json!({"ids": [a, b]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Profile"), "both strokes again");
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.

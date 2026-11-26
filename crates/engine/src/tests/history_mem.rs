@@ -2,7 +2,7 @@
 //! shared between steps, and past a memory budget the oldest steps go (never the last few).
 
 use serde_json::json;
-use vectorcraft_doc::{Appearance, Node};
+use vectorcraft_doc::{Appearance, Node, NodeId};
 use vectorcraft_geom::shapes;
 
 use crate::*;
@@ -460,4 +460,70 @@ fn color_mode_paint_snapshots_count_toward_the_history_budget() {
         s.paint.appearance.as_ref().unwrap().effects[0].params["retainedTemplateData"],
         original.appearance.unwrap().effects[0].params["retainedTemplateData"]
     );
+}
+
+/// A step that applies an effect keeps the effect, through undo and redo too. A step named like an
+/// effect by anything else keeps none: a plain edit, an undo group named like the effect, and a
+/// group another command started that an effect only extends.
+#[test]
+fn only_steps_an_effect_records_keep_the_effect() {
+    let mut s = session_with_rects(2);
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| (e.label.clone(), e.effect()));
+    assert_eq!(last(&s), Some(("Add".into(), None)), "a plain edit named like Pathfinder › Add");
+    s.execute("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.redo.last().and_then(|e| e.effect()), Some("stylize.feather"), "an undone step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "a redone step");
+    s.begin_named_undo_group(Some("Feather".into()));
+    s.execute("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    s.end_undo_group(false);
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "a group named like the effect");
+    s.begin_undo_group();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.transform"})).unwrap();
+    s.end_undo_group(false);
+    assert_eq!(last(&s), Some(("Transform".into(), None)), "a group a transform started");
+    // An interaction's step keeps the effect its last preview applied, and none when a later
+    // preview replaced it with another command.
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.apply", &json!({"effect": "stylize.feather"})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "a kept preview");
+    s.begin_interaction("Transform").unwrap();
+    s.preview("effect.apply", &json!({"effect": "distort.transform"})).unwrap();
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Transform".into(), None)), "a replaced preview");
+    s.begin_interaction("Feather").unwrap();
+    s.preview("command.batch", &json!({"commands": [{"command": "effect.apply", "params": {"effect": "stylize.feather"}}]})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "a batch the preview ran");
+}
+
+/// An `effect.setParams` step keeps the effect it edited only when every target has that effect at
+/// the index: with one target lacking it, the step keeps none, and the target that has it is still
+/// edited.
+#[test]
+fn effect_options_keep_the_effect_only_when_every_target_has_it() {
+    let mut s = session_with_rects(2);
+    let ids: Vec<u64> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [ids[0]], "item": null})).unwrap();
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| (e.label.clone(), e.effect()));
+    let radius = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        d.node(NodeId(ids[0])).unwrap().appearance.effects[0].params["radius"].as_f64()
+    };
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.setParams", &json!({"ids": ids, "item": null, "index": 0, "params": {"radius": 7}})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "one target without the effect");
+    assert_eq!(radius(&s), Some(7.0), "the target with the effect is edited");
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [ids[1]], "item": null})).unwrap();
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.setParams", &json!({"ids": ids, "item": null, "index": 0, "params": {"radius": 9}})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "every target with the effect");
+    assert_eq!(radius(&s), Some(9.0));
 }
