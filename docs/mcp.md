@@ -1393,9 +1393,12 @@ Each coordinate goes to the nearest step of its stored binary value, and a value
 zero (`0.125` at 2 places is `0.13`); `1.005` is stored as slightly less than that and is written as `1.0`. Each anchor is rounded on
 its own, so a closed path stays closed and a shape smaller than one step keeps its anchors on one point. Opening the
 file and saving it again does not bring back the dropped digits. The embedded preview and the PDF that `pdfCompatible: true` adds show the rounded paths. Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
-`precision`. A save writes
-a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
-document uses are written, and document keys written by a newer version are kept.
+`precision`. A save first writes and flushes a temporary file, then renames it over the destination or copies the complete
+content into the destination. The copy path keeps a flushed copy of any existing content before overwriting it.
+A failure during that copy reports the locations of the new content and any saved original.
+Only the images the document uses are written, and document keys written by a newer version are kept.
+On Unix, a save flushes the destination directory after writing or replacing the file. If that flush fails,
+the save reports an error stating that the file was written.
 An uncompressed file is indented JSON when the document has at most 2,000 layers and objects and the indented
 document, as the chosen version writes it, is at most 1 MiB; otherwise the file is compact JSON.
 
@@ -3421,6 +3424,9 @@ rules for these objects:
   After a successful update, an open `File` reader with a UTF-8 byte order mark or UTF-16 encoding
   restarts in UTF-8 at the beginning of the replacement packet. A UTF-8 reader without a byte order mark keeps its position,
   limited to the replacement packet's length.
+- On Unix, `closeFile()` flushes the destination folder after writing the packet. If that flush fails,
+  it throws `Script file could not be written`, and the file already contains the replacement packet.
+  Open readers use that packet, `written` names the file, and the `XMPFile` keeps its pending packet for retry.
 - Registered namespace storage and expanded XML values count toward the script's heap limit.
   `canPutXMP` checks string packets without retaining their expanded XML values.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,

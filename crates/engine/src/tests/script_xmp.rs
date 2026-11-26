@@ -601,6 +601,45 @@ fn a_failed_write_keeps_the_packet_for_a_later_close() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_directory_flush_failure_keeps_the_written_packet_and_allows_retry() {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            crate::script::files::XMP_DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+        }
+    }
+    let _reset = Reset;
+    let base = folder("directory-flush");
+    let mut session = with_data(&base);
+    let dir = logged(&mut session, &base, "vc.log(Folder.userData.fsName);");
+    let path = PathBuf::from(dir[0].as_str().unwrap()).join("packet.xmp");
+    write(&path, format!("\u{FEFF}{PACKET}").as_bytes());
+    crate::script::files::XMP_DIRECTORY_SYNC_FAILS.with(|flag| flag.set(true));
+    start_framed(
+        &mut session,
+        &base,
+        &format!(
+            "Folder.userData; var p = {:?}, reader = new File(p); reader.open('r'); reader.read(7);\n\
+             var kept = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+             var meta = kept.getXMP(); meta.setProperty(XMPConst.NS_DC, 'format', 'changed'); kept.putXMP(meta);\n\
+             var out = []; try {{ kept.closeFile(); out.push('closed'); }} catch (e) {{ out.push(e.message, kept.getXMP().getProperty(XMPConst.NS_DC, 'format').value); }}\n\
+             out.push(reader.tell() === 0, reader.read().indexOf('changed') >= 0); reader.close();\n\
+             File.saveDialog('pause'); kept.closeFile(); out.push('closed'); vc.log(out);",
+            path.to_string_lossy()
+        ),
+    );
+    let paused = pump_to_picker(&mut session);
+    crate::script::files::XMP_DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+    assert!(paused.is_none(), "the run waits before retrying: {paused:?}");
+    assert!(std::fs::read_to_string(&path).unwrap().contains("<dc:format>changed</dc:format>"), "the replacement already wrote the packet");
+    assert!(session.script_pick(crate::script::files::PickAnswer::Deny));
+    let report = pump_to_picker(&mut session).unwrap().unwrap();
+    assert_eq!(report["log"][0], json!(["Script file could not be written", "changed", true, true, "closed"]));
+    assert_eq!(report["written"], json!([path.to_string_lossy()]), "the written replacement is reported once");
+}
+
 /// An `XMPFile` from an earlier run of a named engine is closed.
 #[test]
 fn an_xmp_file_from_an_earlier_run_is_closed() {

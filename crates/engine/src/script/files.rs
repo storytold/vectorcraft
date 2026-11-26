@@ -1940,6 +1940,8 @@ fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
 /// the rules for writing. The packet goes to a temporary file in the same folder that then takes the
 /// file's name, when the run may write there; otherwise to the file itself, unless `safely`, which
 /// fails and leaves the file as it is. Open objects of the file hold the new bytes.
+/// On Unix, the destination folder is flushed after writing. A folder flush failure returns an
+/// error after the written path is recorded and open readers receive the replacement packet.
 fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let path = arg_text(a, 0);
     let packet = arg_text(a, 1).into_bytes();
@@ -2052,6 +2054,14 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
             file.dirty = false;
         }
     }
+    #[cfg(all(unix, not(target_arch = "wasm32")))]
+    let r = r.and_then(|()| {
+        #[cfg(test)]
+        if XMP_DIRECTORY_SYNC_FAILS.with(std::cell::Cell::get) {
+            return Err(std::io::Error::other("directory flush failed"));
+        }
+        vectorcraft_format::sync_parent(&target)
+    });
     Ok(done(r.map_err(|_| WRITE_FAILED)))
 }
 
@@ -2686,6 +2696,8 @@ thread_local! {
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: while set, `xmpWrite` fails after its checks and before it writes.
     pub(crate) static XMP_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    #[cfg(unix)]
+    pub(crate) static XMP_DIRECTORY_SYNC_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: the permission bits of the last temporary file `xmpWrite` made, before it wrote to it.
     #[cfg(unix)]
     pub(crate) static XMP_TEMP_MODE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
