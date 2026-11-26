@@ -274,6 +274,18 @@ fn a_built_in_result_on_the_path_before_it_is_taken_near_the_budget() {
 /// effect (a piece is one path, with nothing to combine), an unknown effect or parameter, a value
 /// of another type or out of range, and a geometry effect on a fill or stroke.
 #[test]
+fn returned_effects_refuse_nested_fields_as_top_level_parameters() {
+    for key in ["active", "curve", "swatch"] {
+        let mut params = serde_json::Map::new();
+        params.insert(key.into(), json!(false));
+        let effect = Effect { id: "addon.color.duotone".into(), params: params.into(), visible: true };
+        assert!(crate::check_returned_effect(&effect, false).is_err(), "{key}");
+    }
+    let valid = Effect { id: "addon.color.duotone".into(), params: json!({"tones": []}), visible: true };
+    assert_eq!(crate::check_returned_effect(&valid, false), Ok(()));
+}
+
+#[test]
 fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
     let check = crate::check_returned_effect;
@@ -622,6 +634,62 @@ fn a_piece_s_transform_without_copies_scaling_strokes_moves_it() {
     n.walk(&mut |c| paths.extend(c.path_data().and_then(PathData::bounds)));
     assert_eq!(paths.len(), 1, "{paths:?}");
     assert!((paths[0].x0 - 30.0).abs() < 0.5 && (paths[0].x1 - 50.0).abs() < 0.5, "{paths:?}");
+}
+
+#[test]
+fn a_piece_s_copies_keep_separate_rotated_and_scaled_shadows() {
+    for transform in [json!({"copies": 1, "moveH": 40.0, "rotate": 90.0}), json!({"copies": 1, "moveH": 40.0, "scaleH": 200, "scaleV": 200})] {
+        let mut source = Node::path(
+            NodeId(9),
+            shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let effects = vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0, "blur": 2.0}), visible: true },
+            Effect { id: "distort.transform".into(), params: transform, visible: true },
+        ];
+        let mut ordinary = source.clone();
+        ordinary.appearance.effects = effects.clone();
+        let expected = reshape(None, &ordinary, None).unwrap();
+        let shadows = |n: &Node| {
+            let mut values = vec![];
+            n.walk(&mut |c| {
+                values.extend(c.appearance.effects.iter().filter(|e| e.id == "stylize.dropShadow").map(|e| e.params.to_string()));
+            });
+            values.sort();
+            values
+        };
+        let expected = shadows(&expected);
+        assert_eq!(expected.len(), 2);
+        assert_ne!(expected[0], expected[1]);
+        let look = vectorcraft_plugins::painted::Look { effects, ..Default::default() };
+        crate::reshape::dress_piece(&mut source, &look, Budget::EFFECTS, None).unwrap();
+        assert_eq!(shadows(&source), expected);
+    }
+}
+
+#[test]
+fn copied_piece_effects_share_the_remaining_geometry_budget() {
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true };
+    let offset = Effect { id: "path.offsetPath".into(), params: json!({"offset": 2.0}), visible: true };
+    let copies = Effect { id: "distort.transform".into(), params: json!({"copies": 2, "moveH": 40.0}), visible: true };
+    for effects in [
+        vec![offset.clone(), shadow.clone(), copies.clone()],
+        vec![shadow.clone(), copies.clone(), offset],
+        vec![shadow.clone(), copies.clone(), shadow, copies],
+    ] {
+        let source = Node::path(
+            NodeId(9),
+            shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let look = vectorcraft_plugins::painted::Look { effects, ..Default::default() };
+        let cost = crate::reshape::dress_piece(&mut source.clone(), &look, Budget::EFFECTS, None).unwrap();
+        assert!(cost.anchors > 0);
+        assert!(crate::reshape::dress_piece(&mut source.clone(), &look, cost, None).is_some());
+        let short = Budget { anchors: cost.anchors - 1, lines: cost.lines };
+        assert!(crate::reshape::dress_piece(&mut source.clone(), &look, short, None).is_none());
+    }
 }
 
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's

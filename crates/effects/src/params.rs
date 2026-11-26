@@ -321,11 +321,38 @@ fn is_color(v: &Value) -> bool {
 
 /// Does parameter documentation `doc` (`{edgeWidth: pt 1..14 (2), …}`) name parameter `key`?
 fn documents_key(doc: &str, key: &str) -> bool {
-    doc.match_indices(key).any(|(at, _)| {
-        let before = doc.get(..at).and_then(|s| s.chars().last());
-        let after = doc.get(at + key.len()..).unwrap_or_default();
-        matches!(before, Some('{' | ' ' | ',' | '|')) && (after.starts_with(':') || after.starts_with('?'))
-    })
+    let mut nesting = Vec::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut before = None;
+    for (at, ch) in doc.char_indices() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                quoted = false;
+            }
+        } else {
+            if nesting == ['{'] && matches!(before, Some('{' | ' ' | ',' | '|')) && doc[at..].starts_with(key) {
+                let after = &doc[at + key.len()..];
+                if after.starts_with(':') || after.starts_with('?') {
+                    return true;
+                }
+            }
+            match ch {
+                '"' => quoted = true,
+                '{' | '[' | '(' => nesting.push(ch),
+                '}' | ']' | ')' => {
+                    nesting.pop();
+                }
+                _ => {}
+            }
+        }
+        before = Some(ch);
+    }
+    false
 }
 
 /// Makes [`check_returned_effect`] how this process checks the effect records painted live-effect

@@ -1384,11 +1384,23 @@ fn dressed_keeping_effects(mut art: Node, n: &Node) -> Node {
 /// and an instance as its symbol's art, whose members take their own geometry effects first
 /// ([`crate::group::members_as_drawn`]). `None` when `outlined` gives no art.
 fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, outlined: &dyn Fn(&Node) -> Option<Node>) -> Option<Node> {
+    copied_raster_art_checked(doc, n, t, apart, outlined, None)
+}
+
+fn copied_raster_art_checked(
+    doc: Option<&Document>,
+    n: &Node,
+    t: usize,
+    apart: bool,
+    outlined: &dyn Fn(&Node) -> Option<Node>,
+    limit: Option<Budget>,
+) -> Option<Node> {
+    let budget = limit.unwrap_or(Budget::EFFECTS);
     let (before, rest) = n.appearance.effects.split_at(t);
     let mut source = n.clone();
     source.appearance.effects = before.to_vec();
     let piece = match copied_raster_at(&source) {
-        Some(at) => copied_raster_art(doc, &source, at, apart, outlined)?,
+        Some(at) => copied_raster_art_checked(doc, &source, at, apart, outlined, limit)?,
         None if needs_outline(&source) => {
             let mut art = outlined(&source)?;
             if matches!(source.kind, NodeKind::SymbolInstance { .. }) && geometry_effects(&source).is_empty() {
@@ -1404,7 +1416,19 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
         None => {
             let mut art = one_piece(&source);
             let rows = has_copied_row_raster(&source);
-            let carry = reshape_leaves_apart(&mut art, &geometry_effects(&source), &source.appearance.effects, Budget::EFFECTS, (apart, rows), doc);
+            let mut complete = true;
+            let carry = reshape_leaves_checked(
+                &mut art,
+                &geometry_effects(&source),
+                &source.appearance.effects,
+                budget,
+                (apart, rows),
+                doc,
+                limit.is_some().then_some(&mut complete),
+            );
+            if !complete {
+                return None;
+            }
             if apart {
                 hoist_copies(&mut art);
             }
@@ -1417,6 +1441,9 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
             art
         }
     };
+    if limit.is_some() && !budget.fits(art_cost(&piece)) {
+        return None;
+    }
     let mut art = Node::group(n.id, vec![Arc::new(piece)]);
     if let (Some(e), Some(bounds)) = (rest.first(), art.geometric_bounds()) {
         let params = merged_params(&e.id, &e.params);
@@ -1425,8 +1452,11 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
         // The raster effects follow the copies below; Scale Strokes & Effects scales the others.
         let mut scaling = copy_scaling(options);
         scaling.effects = options.strokes.then_some(scale_unfollowed as fn(&mut Effect, f64));
-        let max = Budget::EFFECTS.at_least(art_cost(&art));
+        let max = if limit.is_some() { budget } else { budget.at_least(art_cost(&art)) };
         copy_art(&mut art, m, copies, scaling, max);
+        if limit.is_some() && art.children().is_none_or(|children| children.len() != copies.saturating_add(1)) {
+            return None;
+        }
         if let Some(children) = art.children_mut() {
             // The original is last, and each copy above it is mapped once more by `m`.
             let step = m.with_translation(vectorcraft_geom::Vec2::ZERO);
@@ -1445,7 +1475,19 @@ fn copied_raster_art(doc: Option<&Document>, n: &Node, t: usize, apart: bool, ou
         }
     }
     let later: Vec<&Effect> = rest.iter().skip(1).filter(|e| e.visible && is_geometry(&e.id)).collect();
-    let carry = reshape_leaves_apart(&mut art, &later, &n.appearance.effects, Budget::EFFECTS, (apart, has_copied_row_raster(n)), doc);
+    let mut complete = true;
+    let carry = reshape_leaves_checked(
+        &mut art,
+        &later,
+        &n.appearance.effects,
+        budget,
+        (apart, has_copied_row_raster(n)),
+        doc,
+        limit.is_some().then_some(&mut complete),
+    );
+    if !complete || (limit.is_some() && !budget.fits(art_cost(&art))) {
+        return None;
+    }
     let mut ran = n.appearance.effects.clone();
     if carry.skipped() {
         carry.hide_skipped(&mut ran);
@@ -2603,6 +2645,25 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
     }
     if let Some(b) = look.blend {
         one.blend = b;
+    }
+    let mut source = one.clone();
+    source.appearance.effects.extend(look.effects.iter().cloned());
+    if let Some(at) = copied_raster_at(&source) {
+        let before = art_cost(one);
+        let art = copied_raster_art_checked(doc, &source, at, false, &|_| None, Some(room.plus(before)))?;
+        let extra = art_cost(&art).minus(before);
+        if !room.fits(extra) {
+            return None;
+        }
+        #[cfg(test)]
+        DRESSED.with(|d| d.set(d.get().plus(art_cost(&art))));
+        *one = dressed_keeping_effects(art, one);
+        if let Some(blend) = outer {
+            let mut g = Node::group(one.id, vec![Arc::new(one.clone())]);
+            g.blend = blend;
+            *one = g;
+        }
+        return Some(extra);
     }
     let shape: Vec<Effect> = look.effects.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect();
     // The raster effects before a Transform effect follow it, as an object's do once its geometry
