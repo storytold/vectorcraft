@@ -806,6 +806,28 @@ fn set_zoom_100_matches_actual_size_with_display_print_size() {
     assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12);
 }
 
+/// At UI Scaling 150% the zoom field shows the zoom `view.setZoom` set, and a zoom typed into it is the zoom the view
+/// gets, as at 100%: 200% gives the view the zoom `view.setZoom` gives for 200%.
+#[test]
+fn the_zoom_field_sets_the_typed_zoom_at_any_ui_scaling() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.session.prefs.ui_scaling = 1.5;
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0));
+    app.run("view.setZoom", json!({"zoom": 200})).unwrap();
+    let wanted = app.view().unwrap().zoom;
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    let mut bar = crate::tests::panel_harness::Panel::new(app, super::status_bar);
+    assert!((bar.ctx().zoom_factor() - 1.5).abs() < 1e-6, "the interface is zoomed by UI Scaling");
+    let shown = |bar: &crate::tests::panel_harness::Panel| bar.value("Zoom").unwrap_or_default();
+    assert!(shown(&bar).starts_with("100"), "the field shows the zoom view.setZoom set: {}", shown(&bar));
+    bar.type_into("Zoom", "200");
+    let zoom = bar.app().view().unwrap().zoom;
+    assert!((zoom - wanted).abs() < 1e-9, "typing 200% gives the zoom of view.setZoom 200%: {zoom}, not {wanted}");
+    assert!(shown(&bar).starts_with("200"), "the field shows the typed zoom: {}", shown(&bar));
+}
+
 /// Read the painted coordinates while checking that drawing never changes the source
 /// position, document, selection or either branch of its edit history.
 fn assert_status_coordinates(bar: &mut Shown, expected: Option<&str>) {
