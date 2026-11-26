@@ -235,8 +235,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
-/// engine's reason when the engine's check of an engine command fails. The engine's check runs at
-/// most once.
+/// engine's reason when the engine's check of an engine command fails, and with the reason of
+/// [`crate::panels::align::why_off`] for an Align panel button. The engine's check runs at most
+/// once.
 pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
         return Some(None);
@@ -249,6 +250,9 @@ pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> 
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
         return (!facts.any_empty).then_some(None);
+    }
+    if let Some(b) = crate::panels::align::button(id) {
+        return crate::panels::align::why_off(app, &b);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return match (c.enabled)(&app.session) {
@@ -279,7 +283,6 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
-        id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::button_enabled(app, &b) && enabled(app, b.command_now(app)),
         id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
@@ -383,6 +386,10 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::one_generated_selected(app),
+        // A filter may take no objects and add new ones, so no selection is needed.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
+            app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()
+        }
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()

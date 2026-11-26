@@ -169,6 +169,7 @@ pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, Retire
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
+pub use document_guides::GuideTransform;
 pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};
 pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]

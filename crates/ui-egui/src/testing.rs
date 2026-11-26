@@ -14,7 +14,9 @@ pub(crate) fn install(ctx: &egui::Context) {
     if embed::install(ctx, craft::ui::testing::install_spec(), &fonts).is_err() {
         fonts.install(ctx);
     }
-    set_input(ctx, FrameInput::new(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)));
+    let prefs = vectorcraft_engine::Prefs::default();
+    let print = crate::state::print_ppi(prefs.display_print_size, None);
+    set_input(ctx, FrameInput::new(crate::app::root_env(&prefs, 1.0, print)));
 }
 
 /// `app` shown in a window of its own: its context is the one every frame of the test runs on, so its dialogs open on
