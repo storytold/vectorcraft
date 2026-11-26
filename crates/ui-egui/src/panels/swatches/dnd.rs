@@ -125,6 +125,9 @@ pub(super) enum FooterTarget {
 /// the button does. Other drags are left to their own targets.
 pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
     let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
+    if !app.session.active().is_some_and(|state| state.uid == r.document) {
+        return;
+    }
     let rows = footer_rows(app, r);
     match target {
         FooterTarget::Delete => {

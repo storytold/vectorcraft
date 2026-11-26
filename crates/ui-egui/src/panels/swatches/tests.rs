@@ -605,6 +605,22 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
     }
 }
 
+#[test]
+fn footer_drops_ignore_rows_from_another_document() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#ff8000"})).unwrap();
+    let before = doc(&app);
+    let undo = undo_steps(&app);
+    for target in [dnd::FooterTarget::New, dnd::FooterTarget::Delete] {
+        dnd::on_footer_drop(&mut app, target, &drag);
+        assert_eq!(doc(&app), before);
+        assert_eq!(undo_steps(&app), undo);
+        assert!(!dialog_open(&app, crate::dialogs::confirm::KIND));
+    }
+}
+
 /// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that
 /// the find field hides, which the browser leaves out of the drag, as a click on Delete Swatch
 /// takes them too. The copies are selected in panel order. A grabbed swatch outside the selection

@@ -18,9 +18,9 @@
 //! 25.6.1.9); one that still has none when the run ends successfully is reported by
 //! [`crate::Realm::unhandled_rejections`], with the place it was rejected at when known.
 //!
-//! Until the language has iterators, `all`, `allSettled` and `race` read an array or another object
-//! whose `length` is a whole number by index, and a string by code point; other values reject the
-//! promise they return with a `TypeError`. The statics need a constructor as `this`, and the
+//! `all`, `allSettled` and `race` read their input through `Symbol.iterator` and close the iterator
+//! when processing a yielded value throws. Noniterable values reject the promise they return
+//! with a `TypeError`. The statics need a constructor as `this`, and the
 //! promises they and `then` make are always built-in promises: subclasses and `Symbol.species`
 //! are not read.
 
@@ -32,7 +32,6 @@ use crate::LimitKind;
 use crate::bytecode::Code;
 use crate::heap::{BOUND_ARG_BYTES, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
-use crate::string_builtins::flat_charged;
 use crate::value::Value;
 
 /// Where a promise was rejected: the code and the instruction.
@@ -1028,67 +1027,41 @@ fn combine(interp: &mut Interp, this: Value, input: Value, how: Combine) -> JsRe
     })
 }
 
-/// Where the inputs of `Promise.all`, `allSettled` and `race` come from. An array is read up to
-/// its length at each step, as an array iterator reads it, and another object up to the `length`
-/// it had at the start.
-enum Inputs {
-    Indexed { object: ObjId, length: f64 },
-    CodePoints(Rc<[u16]>),
-}
-
-impl Inputs {
-    fn new(interp: &mut Interp, input: &Value, how: Combine) -> JsResult<Self> {
-        match input {
-            Value::Object(o) => match interp.get_from(*o, &key("length"), input)? {
-                Value::Number(length) if length >= 0.0 && length.fract() == 0.0 && length <= 9_007_199_254_740_991.0 => {
-                    Ok(Inputs::Indexed { object: *o, length })
-                }
-                _ => Err(interp.type_error(&format!("Promise.{} needs an array, a string or an object with a whole-number length", how.name()))),
-            },
-            Value::String(s) => Ok(Inputs::CodePoints(flat_charged(interp, s)?)),
-            _ => Err(interp.type_error(&format!("Promise.{} needs an array, a string or an object with a whole-number length", how.name()))),
-        }
-    }
-
-    /// The input at `index`, which counts code units for a string; `None` past the end.
-    fn get(&self, interp: &mut Interp, index: &mut f64) -> JsResult<Option<Value>> {
-        match self {
-            Inputs::Indexed { object, length } => {
-                let end = match interp.heap.object(*object).map(|o| &o.class) {
-                    Some(Class::Array { length, .. }) => f64::from(*length),
-                    _ => *length,
-                };
-                if *index >= end {
-                    return Ok(None);
-                }
-                let v = super::get_at(interp, *object, *index)?;
-                *index += 1.0;
-                Ok(Some(v))
-            }
-            Inputs::CodePoints(units) => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let i = *index as usize;
-                let Some(&first) = units.get(i) else { return Ok(None) };
-                let pair = (0xD800..0xDC00).contains(&first) && units.get(i + 1).is_some_and(|u| (0xDC00..0xE000).contains(u));
-                let n = if pair { 2 } else { 1 };
-                let piece = units.get(i..i + n).unwrap_or_default().to_vec();
-                *index += n as f64;
-                let bytes = crate::heap::string_bytes(piece.len());
-                interp.reserve_heap(bytes)?;
-                interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
-                Ok(Some(Value::String(crate::value::Str::from_units(piece))))
-            }
-        }
-    }
-}
-
 fn combine_inputs(interp: &mut Interp, this: &Value, input: &Value, how: Combine, rec: ObjId, resolve: &Value, reject: &Value) -> JsResult<()> {
     let resolve_fn = interp.get_value(this, &key("resolve"))?;
     if !interp.is_callable(&resolve_fn) {
         return Err(interp.type_error(&format!("Promise.{}: the constructor's resolve is not a function", how.name())));
     }
     root(interp, &resolve_fn);
-    let inputs = Inputs::new(interp, input, how)?;
+    let iterator = interp.get_iterator(input)?;
+    root(interp, &Value::Object(iterator));
+    let result = combine_iterator(interp, this, iterator, how, rec, &resolve_fn, (resolve, reject));
+    if let Err(Abrupt::Throw(reason)) = &result {
+        root(interp, reason);
+        let site = interp.throw_site.clone();
+        let mark = interp.thrown_mark;
+        match interp.iter_close(iterator) {
+            Ok(()) | Err(Abrupt::Throw(_)) => {
+                interp.throw_site = site;
+                interp.thrown_mark = mark;
+                interp.passing = reason.clone();
+            }
+            Err(other) => return Err(other),
+        }
+    }
+    result
+}
+
+fn combine_iterator(
+    interp: &mut Interp,
+    this: &Value,
+    iterator: ObjId,
+    how: Combine,
+    rec: ObjId,
+    resolve_fn: &Value,
+    handlers: (&Value, &Value),
+) -> JsResult<()> {
+    let (resolve, reject) = handlers;
     let combinator = if how == Combine::Race {
         None
     } else {
@@ -1098,14 +1071,12 @@ fn combine_inputs(interp: &mut Interp, this: &Value, input: &Value, how: Combine
         root(interp, &Value::Object(c));
         Some((c, values))
     };
-    let mut position = 0.0;
     let mut index: u32 = 0;
     loop {
-        interp.use_fuel()?;
         let mark = interp.temp_roots.len();
-        let Some(next) = inputs.get(interp, &mut position)? else { break };
+        let Some(next) = interp.iter_next(iterator)? else { break };
         root(interp, &next);
-        let next_promise = interp.call(&resolve_fn, this, &[next])?;
+        let next_promise = interp.call(resolve_fn, this, &[next])?;
         root(interp, &next_promise);
         match combinator {
             None => {

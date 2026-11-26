@@ -767,7 +767,8 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     let opts = actions::editable(app, &sel);
     let group = actions::selected_group(app, &sel).filter(|_| opts.is_none());
     let icon = |id: &'static str| IconSpec::svg(IconId::new(id));
-    let rows_drag = |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(_), .. });
+    let document = app.session.active().map(|state| state.uid);
+    let rows_drag = move |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(rows), .. } if Some(rows.document) == document);
     let edit = if group.is_some() {
         FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
     } else {
