@@ -1,5 +1,7 @@
-//! Safe saving: a file is written to a temporary file beside it, then renamed over it, so a failed
-//! or interrupted write never leaves a damaged file behind (the old one stays as it was).
+//! [`write_atomic_with`] writes and flushes a temporary file, then renames it over its destination.
+//! A failure while writing or flushing the temporary file leaves the original file unchanged.
+//! On Unix, saves also flush the destination directory after the complete file is written.
+//! An error at that step reports that the file was written.
 //! [`write_new_with`] creates a file the same way without ever replacing one.
 //!
 //! Where a folder refuses the temporary file or the rename (some network shares, a file another
@@ -22,11 +24,29 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Whether the returned write error refuses this location. Recovery errors must still be shown:
-/// their message names copies the user may need, even when their kind is PermissionDenied.
+/// Reports whether a write error identifies a read-only location.
+/// It returns false for recovery errors and for errors flushing a directory after a completed write, including PermissionDenied.
 pub fn read_only_location(error: &io::Error) -> bool {
     matches!(error.kind(), io::ErrorKind::ReadOnlyFilesystem | io::ErrorKind::PermissionDenied)
-        && !error.get_ref().is_some_and(|e| e.is::<RecoveryError>())
+        && !error.get_ref().is_some_and(|e| e.is::<RecoveryError>() || e.is::<WrittenError>())
+}
+
+#[derive(Debug)]
+struct WrittenError {
+    path: PathBuf,
+    error: io::Error,
+}
+
+impl std::fmt::Display for WrittenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "The file was written to {}. Its folder could not be flushed: {}", self.path.display(), self.error)
+    }
+}
+
+impl std::error::Error for WrittenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
 }
 
 /// Marks the existing recovery message without changing its text or the returned error kind.
@@ -46,11 +66,10 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, |f| f.write_all(bytes))
 }
 
-/// Write `path` atomically with `fill`, which writes the content into the temporary file. When
-/// `fill` or flushing fails, or the work was canceled meanwhile ([`vectorcraft_doc::cancel`]), the
-/// temporary file is removed and `path` is left untouched. When the
-/// folder refuses the temporary file or the rename, the content is copied into `path` instead (see
-/// the module docs).
+/// This function writes `path` atomically with `fill`, which writes content into a temporary file.
+/// A failure from `fill`, flushing that file, or cancellation ([`vectorcraft_doc::cancel`]) leaves `path` unchanged.
+/// Cleanup attempts to remove the temporary file and ignores removal errors.
+/// When the folder refuses the temporary file or the rename, the content is copied into `path` instead (see the module docs).
 pub fn write_atomic_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
     // Replacing a file: its staging copy starts owner-only, so a private document is never readable
     // beside the target before `keep_permissions` has run (#1712). A new file keeps the default mode.
@@ -97,7 +116,7 @@ fn write_atomic_stepping(
             // Best effort: a volume without Unix permissions (SMB, FAT) refuses them, and has none
             // to keep.
             let _ = keep_permissions(&target, &tmp);
-            let Err(e) = rename(&tmp, &target) else { return Ok(()) };
+            let Err(e) = rename(&tmp, &target) else { return sync_written_parent(&target) };
             e
         }
     };
@@ -137,7 +156,7 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
             if let Some(old) = old {
                 let _ = std::fs::remove_file(old);
             }
-            Ok(())
+            sync_written_parent(target)
         }
         (Err(e), Some(old)) => Err(io::Error::new(
             e.kind(),
@@ -168,7 +187,7 @@ fn create_private(path: &Path) -> io::Result<File> {
 /// (`std::fs::hard_link`, which fails with `AlreadyExists` when the name is taken, also when it was
 /// taken meanwhile). The file appears whole or not at all. Where hard links fail for another
 /// reason, `path` is created with `create_new` and the content copied in; a failed copy removes
-/// it. The temporary file is always removed.
+/// it. Cleanup attempts to remove the temporary file and ignores removal errors.
 pub fn write_new_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
     write_new_linking(path, fill, |tmp, path| std::fs::hard_link(tmp, path))
 }
@@ -189,7 +208,31 @@ fn write_new_linking(
     });
     // Best effort: the temporary file is all there is to clean up.
     let _ = std::fs::remove_file(&tmp);
-    placed
+    placed.and_then(|()| sync_written_parent(path))
+}
+
+fn sync_written_parent(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        sync_parent(path).map_err(|error| io::Error::new(error.kind(), WrittenError { path: path.to_path_buf(), error }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
+/// This function flushes the directory containing `path` with `fsync`.
+/// It returns errors from opening or flushing the directory.
+#[cfg(unix)]
+pub fn sync_parent(path: &Path) -> io::Result<()> {
+    #[cfg(test)]
+    if DIRECTORY_SYNC_FAILS.with(std::cell::Cell::get) {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "directory flush failed"));
+    }
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+    rustix::fs::fsync(&File::open(parent)?).map_err(io::Error::from)
 }
 
 /// `Err` wrapping [`vectorcraft_doc::cancel::Cancelled`] when the work running on this thread has
@@ -272,6 +315,8 @@ const ENOTTY: i32 = 25;
 
 #[cfg(test)]
 thread_local! {
+    #[cfg(unix)]
+    static DIRECTORY_SYNC_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: every full flush on this thread fails as on an SMB share mounted by macOS.
     static REFUSE_FULL_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: the plain `fsync` fallback fails too, with this OS error.
@@ -470,6 +515,68 @@ mod tests {
         // A folder that doesn't exist: an error, nothing written.
         assert!(write_atomic(&d.join("missing").join("x.vectorcraft"), b"x").is_err());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_sync_failure_reports_the_completed_replacement() {
+        let directory = vectorcraft_testkit::TempDir::new("atomic-directory-sync-replace");
+        let path = directory.join("doc.vectorcraft");
+        std::fs::write(&path, b"old").unwrap();
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(true));
+        let result = write_atomic(&path, b"new");
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+        assert!(result.is_err(), "a failed directory flush was reported as success");
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(error.to_string().contains("The file was written to"), "{error}");
+        assert!(!read_only_location(&error), "the file was already replaced: {error}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert!(leftovers(&directory, "doc.vectorcraft").is_empty());
+        write_atomic(&path, b"retried").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"retried");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_sync_failure_preserves_the_completed_new_file() {
+        let directory = vectorcraft_testkit::TempDir::new("atomic-directory-sync-create");
+        let path = directory.join("doc.vectorcraft");
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(true));
+        let result = write_new_with(&path, |file| file.write_all(b"created"));
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+        assert!(result.is_err(), "a failed directory flush was reported as success");
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(error.to_string().contains("The file was written to"), "{error}");
+        assert!(!read_only_location(&error), "the file was already created: {error}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"created");
+        assert!(leftovers(&directory, "doc.vectorcraft").is_empty());
+        let result = write_new_with(&path, |file| file.write_all(b"replacement"));
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&path).unwrap(), b"created");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_sync_failure_is_reported_after_copy_fallbacks() {
+        let directory = vectorcraft_testkit::TempDir::new("atomic-directory-sync-copy");
+        let path = directory.join("doc.vectorcraft");
+        std::fs::write(&path, b"old").unwrap();
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(true));
+        let replaced = write_atomic_stepping(&path, |file| file.write_all(b"new"), create_new, |_, _| denied());
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+        let error = replaced.unwrap_err();
+        assert!(!read_only_location(&error), "the file was already replaced: {error}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        let new_path = directory.join("new.vectorcraft");
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(true));
+        let created = write_new_linking(&new_path, |file| file.write_all(b"created"), |_, _| denied());
+        DIRECTORY_SYNC_FAILS.with(|flag| flag.set(false));
+        let error = created.unwrap_err();
+        assert!(!read_only_location(&error), "the file was already created: {error}");
+        assert_eq!(std::fs::read(&new_path).unwrap(), b"created");
+        assert_eq!(std::fs::read_dir(&*directory).unwrap().count(), 2);
     }
 
     /// A save to an SMB share (#1620): macOS refuses the full flush there with `ENOTSUP`, so the

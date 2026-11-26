@@ -460,7 +460,7 @@ fn stack_batch_params(stack: &[StackEntry]) -> Value {
 }
 
 fn effect_label(id: &str) -> String {
-    vectorcraft_effects::effect_info(id).map(|e| tl!(e.label).trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string())
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or_else(|| id.to_string())
 }
 
 /// Where the preview rasters sit: one document point per pixel, origin at the top-left.
