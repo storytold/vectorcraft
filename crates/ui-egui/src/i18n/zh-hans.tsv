@@ -6212,6 +6212,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 通用 CMYK (类 SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft 涂布纸 CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft 非涂布纸 CMYK (FOGRA52)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%

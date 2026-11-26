@@ -8403,6 +8403,8 @@ mark-style	Japanese	იაპონური
 	Variation	ვარიაცია
 	VectorCraft Default	VectorCraft-ის ნაგულისხმევი
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-ის ზოგადი CMYK (SWOP-ის მსგავსი)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft-ის ცარციანი ქაღალდის CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft-ის უცარცო ქაღალდის CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft-ის ფერის ნიმუშები (.vcswatches)
 	Vertical Area Type	ვერტიკალური არის ტექსტი
 	Vertical Type	ვერტიკალური ტექსტი

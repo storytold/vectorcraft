@@ -6773,6 +6773,8 @@ mark-style	Japanese	Japonesas
 	Variation	Variação
 	VectorCraft Default	Padrão do VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMYK Genérico do VectorCraft (tipo SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK Revestido do VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK Não Revestido do VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Amostras do VectorCraft (.vcswatches)
 	Vertical Area Type	Texto de Área Vertical
 	Vertical Type	Texto Vertical
