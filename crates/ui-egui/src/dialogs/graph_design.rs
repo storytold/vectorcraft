@@ -519,12 +519,14 @@ impl GraphDesignDialog {
             }
             true
         });
+        if shown.closed.is_some() {
+            return Some(DialogResult::Cancel);
+        }
         if shown.picked == Some(0) && !waiting {
             let answer = self.answer();
             self.held.file(answer);
-            return None;
         }
-        shown.closed.map(|_| DialogResult::Cancel)
+        None
     }
 }
 
@@ -880,8 +882,8 @@ mod tests {
     }
 
     #[test]
-    fn graph_design_footer_ok_applies_column_and_marker_designs() {
-        for (graph_type, command) in [("column", "graph.column"), ("line", "graph.marker")] {
+    fn graph_design_footer_ok_applies_column_and_marker_designs_unless_dismissed() {
+        for (graph_type, command, dismiss) in [("column", "graph.column", false), ("line", "graph.marker", false), ("column", "graph.column", true)] {
             let (mut app, ctx) = app_with_design();
             select_graph(&mut app, graph_type);
             crate::menus::invoke(&mut app, command, json!({}));
@@ -900,12 +902,26 @@ mod tests {
                 app,
             );
             h.run_steps(4);
-            h.get_by_label("OK").click();
+            if dismiss {
+                let pos = h.get_by_label("OK").rect().center();
+                let button =
+                    |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+                h.hover_at(pos);
+                h.event(button(true));
+                h.step();
+                h.input_mut().events.extend([
+                    button(false),
+                    egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+                ]);
+            } else {
+                h.get_by_label("OK").click();
+            }
             h.run_steps(4);
 
             let app = h.state_mut();
             assert!(!app.dialogs().unwrap().with(|host| host.is_open::<GraphDesignDialog>()));
-            assert_eq!(app.session.execute(command, &json!({})).unwrap()["design"], "New Design");
+            let expected = if dismiss { Value::Null } else { json!("New Design") };
+            assert_eq!(app.session.execute(command, &json!({})).unwrap()["design"], expected);
         }
     }
 
