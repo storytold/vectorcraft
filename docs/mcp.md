@@ -7779,13 +7779,16 @@ perspective grid shows with an active plane, a Shift-click opens the size dialog
 
 ## Curvature circle
 
-`shape.curvatureCircle {id, subpath?, segment, t, convex?}` draws the circle that touches path `id` at `t` (0 to 1) on
-segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there (its circle of curvature),
-as a live ellipse with the current paint, and selects it. The circle goes on the side the path bends toward; with
-`convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc of 90° or less (its two
-ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for an arc of θ) gives a
-circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the circle itself. The
-result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
+`shape.curvatureCircle {id, subpath?, segment, t, convex?, constantRadius?, anchors?}` draws the circle that touches
+path `id` at `t` (0 to 1) on segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there
+(its circle of curvature), as a live ellipse with the current paint, and selects it. The circle goes on the side the
+path bends toward; with `convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc
+of 90° or less (its two ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for
+an arc of θ) gives a circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the
+circle itself. With `constantRadius: false` (true when left out), such a segment gives the cubic's own curvature at
+`t` instead. The circle's four anchors are at 0°, 90°, 180° and 270°; with `anchors: "touch"` (`"standard"` when left
+out) the circle is a plain path with an anchor where it touches the path and one every 90° from there. The result is
+`{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
 The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
 The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
 at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
@@ -7795,8 +7798,10 @@ marked smooth), when the circle would reach past the canvas (4,000,000 pt from t
 origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
 
 The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
-pointer snaps to the nearest path that is not a guide within 5 screen points, or within Smart Guides › Snapping
-Tolerance when that is larger, and the tool shows the circle that matches the path there as a dashed outline (solid
+pointer snaps to the nearest path that is not a guide within the tool's Snap Tolerance (`snapTolerance` below, 5
+screen points by default), or within Smart Guides › Snapping Tolerance when that is larger; with Snap with Smart
+Guides Off turned off, the reach while Smart Guides are off is no more than Selection & Anchor Display › Tolerance.
+The tool shows the circle that matches the path there as a dashed outline (solid
 once it is more than 50,000 screen points around), a small cross at its center, a line from the center to the point
 it touches and, with Measurement Labels on, its radius by the pointer, followed by an asterisk for an arc's own
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
@@ -7806,6 +7811,21 @@ anchor, or where the circle would reach past the canvas, the pointer shows "Stra
 selection made outside the tool leaves none of them selected, another tool is chosen, another document becomes
 active, or an edit, Undo or Redo is made outside the tool. Selecting one of them again does not put it back out of
 reach.
+
+Curvature Circle Tool Options (`tool.options {tool: "curvatureCircle"}`, or a double-click on the tool, dialog
+`curvatureCircleOptions`) sets the tool's options, which `tool.setOption {tool: "curvatureCircle", values}` also sets
+and the preferences keep. The range, the default and the rule for Snap with Smart Guides Off are VectorCraft's own.
+Every switch is on by default, and the tool draws as it did before the options existed until one is changed:
+
+- `snapTolerance` (Snap Tolerance, 1 to 40 screen points, 5 by default) is how near a path pulls the pointer. Smart
+  Guides › Snapping Tolerance applies when it is larger.
+- `snapWithoutGuides` (Snap with Smart Guides Off) off makes the pointer reach no further than Selection & Anchor
+  Display › Tolerance while Smart Guides are off. When that tolerance is as large as the reach above, turning the
+  switch off does not change the reach.
+- `annotateRadius` (Annotate Radius) off hides the radius label. The label also needs Measurement Labels on.
+- `standardAnchors` (Anchors at Standard Positions) off draws the circle with `anchors: "touch"`.
+- `constantRadius` (Use the Radius of Circular Arcs) off draws with `constantRadius: false`, and the label has no
+  asterisk.
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}
