@@ -96,7 +96,7 @@ the two can still win that race.
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
 | `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected. With the Artboard tool it lists the artboard entries (see `docs/mcp.md`), after selecting the artboard there unless it is already selected. While a menu opened over locked objects is open, it has an `Unlock` submenu with one item for each locked object under the pointer, topmost first and at most 20, labeled with the object's name, which runs `layer.setProps {ids: [id], locked: false}`. A locked group gets one item, and the locked objects inside it get none. Hidden objects, objects on hidden, locked or template layers, and in isolation mode objects outside the isolated group get no item |
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
-| `ui.pointer` | `{events:[{kind: down\|drag\|up\|move\|doubleclick\|tripleclick, x, y, space?: "doc"\|"screen", mods?}]}` | drive the active tool exactly like the mouse (`doubleclick` follows the second click's `up`, and `tripleclick` the third's): `mods.cmd` held at a press with any tool but a selection tool drags with the selection tool chosen last (Direct Selection with the Pen until one is), and the release gives the tool back as it was; the reply lists `selection`, `key` (the key object, null without one) and `tool`. With the Shape Builder or the Live Paint Bucket and a selection of more than 128 segments, the app finds the regions off the UI thread, so a `move` replies before the region under the pointer is highlighted, and the highlight shows in the first frame after the regions are found. With the Shape Builder and such a selection, the app also merges off the UI thread: the reply to the events that end a click or drag comes once the merge is applied. A click or drag made before the regions are found does not wait for them; the app records it and makes it once they are found. Until then the canvas keeps drawing, with the touched regions highlighted and the busy pointer. A click or drag sent meanwhile, with `mods.cmd` too, and the Shape Builder's arrow keys are made after the merge in the order sent, and the reply to such a request comes once its events are made and any merge they start is applied; a request of `move` events alone is answered at once. A command that can edit, select, save or redraw the documents (an edit, an undo, a selection, a save or an export, a tool option, another tool, another document, closing, a dialog's preview, a menu item, a command of the app's own such as `ui.recolorDialog`, the proof and separations views, a preference, added fonts) waits for the merge and the input sent before it, and runs after them; queries that only read, such as `document.inspect`, run at once on the document before the merge |
+| `ui.pointer` | `{events:[{kind: down\|drag\|up\|move\|doubleclick\|tripleclick, x, y, space?: "doc"\|"screen", mods?}]}` | drive the active tool exactly like the mouse (`doubleclick` follows the second click's `up`, and `tripleclick` the third's): `mods.cmd` held at a press with any tool but a selection tool drags with the selection tool chosen last (Direct Selection with the Pen until one is); with Direct Selection or Group Selection it drags with the Selection tool (with Direct Selection and `mods.alt` held too, with Group Selection), and with the Selection tool it drags with Direct Selection or Group Selection, whichever was chosen last, except on a selected object (or a group holding a selected member) with another object under the pointer, away from its anchors, direction handles, mesh points, blend spine and the bounding box's handles and rotate zones while `ctrlClickSelectsBehind` is on, where the press selects the object behind; the release gives the tool back as it was; the reply lists `selection`, `key` (the key object, null without one) and `tool`. With the Shape Builder or the Live Paint Bucket and a selection of more than 128 segments, the app finds the regions off the UI thread, so a `move` replies before the region under the pointer is highlighted, and the highlight shows in the first frame after the regions are found. With the Shape Builder and such a selection, the app also merges off the UI thread: the reply to the events that end a click or drag comes once the merge is applied. A click or drag made before the regions are found does not wait for them; the app records it and makes it once they are found. Until then the canvas keeps drawing, with the touched regions highlighted and the busy pointer. A click or drag sent meanwhile, with `mods.cmd` too, and the Shape Builder's arrow keys are made after the merge in the order sent, and the reply to such a request comes once its events are made and any merge they start is applied; a request of `move` events alone is answered at once. A command that can edit, select, save or redraw the documents (an edit, an undo, a selection, a save or an export, a tool option, another tool, another document, closing, a dialog's preview, a menu item, a command of the app's own such as `ui.recolorDialog`, the proof and separations views, a preference, added fonts) waits for the merge and the input sent before it, and runs after them; queries that only read, such as `document.inspect`, run at once on the document before the merge |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
 | `ui.move` | `{x, y}` | screen-point pointer move |
 | `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
@@ -241,6 +241,13 @@ its variation grid; the panel draws the same grid. `ui.colorGuideOptions` opens 
 as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches runs `swatch.new {colors: [...]}`
 (one swatch per colour, one undo step).
 
+Color Wheel contrast: `color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio of the active
+proxy's color against the color drawn behind the selection (`against: "below"`, the default) or against a given color,
+with the AA and AAA results for normal text and large text and the AA result for graphics (docs/mcp.md). The Color Wheel panel's Show
+Contrast row shows the same answer for the category picked under Contrast For; `ui.colorWheel {contrast?, contrastFor?,
+contrastBackground?}` sets the row, its category and a pinned background, and `ui.inspect` reports them as
+`ui.color_wheel`.
+
 Color Guide Limit to Library: `ui.colorGuideLimit {library}` (a swatch library id or name, `"document"` for the
 document's swatches, `""` for none) limits the panel's colours; `ui.inspect` reports it as `ui.color_guide_limit`, and
 `color.harmony {..., limitTo}` answers the limited guide (every colour snaps to the library's nearest colour, ΔE 2000).
@@ -273,10 +280,11 @@ Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a sa
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
 point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?,
-harmonyRule?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
+harmonyRule?, opacity?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
 channel, shows OKLCH Sliders, HSL Sliders or neither, grays out the colors the CMYK space cannot print, shows the
-other colors of a harmony rule as markers on the wheel's ring, and shows or hides the color vision row; it returns the
-settings, and `ui.inspect` reports them as `ui.color_wheel`.
+other colors of a harmony rule as markers on the wheel's ring, checks or unchecks Show Opacity (an opacity row under
+the wheel or the box), and shows or hides the color vision row; it returns the settings, and `ui.inspect` reports them
+as `ui.color_wheel`.
 The key `sliders` takes (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
 profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
@@ -287,9 +295,13 @@ canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
 
-Recolor Artwork: `ui.recolorDialog {colors?, library?, group?}` opens the `recolor` dialog on the selected art
+Recolor Artwork: `ui.recolorDialog {colors?, library?, group?, preset?}` opens the `recolor` dialog on the selected art
 (`colors`: a count for an n-colour job, or colours to assign as the new colours; `library`: Limit to Library, a library
-or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
+or `"document"`, `""` for the first library; `group`: a colour group, Edit or Apply Color Group). With `preset: true`
+(the Edit › Edit Colors › Recolor with Preset items) it first opens the `recolorPreset` dialog, which asks whether to
+limit the colors to a swatch library: its field `limitTo` (a library id, `"document"`, or `""` for None) starts on
+`library`, and its OK opens the `recolor` dialog with `colors` and that library; `preset: true` with `group` is an
+error. Fields: `rows` (`[{from: [keys], to: key, exclude?, tint?, model?}]`
 as `recolor.reduce` returns them), `colors` (null for Auto), `method`, `preserveWhite`, `preserveBlack`,
 `preserveGrays`, `limitTo`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 `sliderMode` (the mode of the color sliders under the rows: `hsb`, `rgb`, `cmyk`, `lab`, or `tint` for a row whose new
@@ -482,9 +494,8 @@ button (Add Tool…) opens a menu of every tool under the drawer's headings: a c
 there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
 it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
 two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
-`window.toolbar.dock {name, side?, order?}` docks a toolbar in the lane along the window's left or right edge, and
-`window.toolbar.float {name, x?, y?}` floats it again; dropping its title bar on an edge or dragging it out of its
-lane does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
+`window.toolbar.dock {name, side?, order?}` docks a toolbar as a column of the dock along the window's left or right
+edge, and `window.toolbar.float {name, x?, y?}` floats it again; dragging its title bar does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 
@@ -656,7 +667,8 @@ as it was; `totalWidth` scales each point's own two sides to that total; a null 
 `stroke.widthPoint.remove {id, indices}`. With `adjustAdjoining`, each changed point changes the nearest unselected
 point at another place before and after it in proportion to its change since the dialog opened; a point next to two
 changed points takes both changes. These rules for several points are VectorCraft's own. Confirm and Delete on existing
-points, one or several, are refused when those points changed since the dialog opened or another document is active.
+points, one or several, are refused when those points changed since the dialog opened (their place, their widths, or
+which of them pair as a discontinuous point) or another document is active.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
@@ -804,7 +816,9 @@ lists to the system clipboard (once they are written, the status bar shows the f
 another message has replaced the Copy or Cut's meanwhile), and every Paste command first loads what another app copied (`clipboard.importSvg`,
 `importPdf`, `importEps`, `importText` or `importImage`, centred in the view; the desktop app reads PDF and EPS from
 the Windows clipboard and, with SVG, from the macOS pasteboard, and an `.eps` file, or a `.ai` or `.ait` file that holds a PDF or PostScript, copied in a file manager anywhere; a copied `.ai` or `.ait` file that holds a PDF loads with `importPdf {editingData: true}`, which reads its editing data); an import error answers the Paste with that error
-and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
+and pastes nothing. After a Copy or Cut whose formats could not be written to the system clipboard, every Paste
+command takes the internal clipboard instead until another app copies something (only while the clipboard held text
+that could be read when the write failed). Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
 Paste event for it). Screenshots paste on every platform: Windows reads `PNG`, else `CF_DIBV5`/`CF_DIB`, macOS the
 pasteboard's PNG or TIFF, Linux `image/png`, and the web the picture the browser's paste event carries (#457).
 In the desktop app a Paste from the menus or the keys (`ui.key`) decodes a bitmap off the UI thread: `ui.inspect` lists

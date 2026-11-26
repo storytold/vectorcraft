@@ -4,48 +4,48 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::runtime::frame::take_output;
+use craft::ui::shell::embed;
 use egui::{Event, Key, Modifiers};
 use serde_json::json;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::PathData;
-use vectorcraft_ui_egui::{UiState, VectorcraftApp, i18n, shortcut_editor, shortcuts};
+use vectorcraft_ui_egui::{UiState, VectorcraftApp, i18n};
 
 const SWITCH: &str = "tool.switchSelectionTools";
 static CASE: Mutex<()> = Mutex::new(());
 
-// Integration binaries use process-wide locale/keymap mirrors. Every case owns the guard,
-// starts from the same neutral keymap, and restores that keymap even if an assertion fails.
+// Integration binaries use a process-wide locale. Every case owns the guard and restores the
+// language even if an assertion fails.
 struct Globals {
     _lock: MutexGuard<'static, ()>,
     language: i18n::Lang,
-    neutral: UiState,
 }
 impl Globals {
     fn new() -> Self {
         let lock = CASE.lock().unwrap_or_else(|e| e.into_inner());
         let language = i18n::current();
-        let neutral = UiState::default();
         i18n::set_current(i18n::Lang::EN);
-        shortcut_editor::sync(&neutral);
-        Self { _lock: lock, language, neutral }
+        Self { _lock: lock, language }
     }
 }
 impl Drop for Globals {
     fn drop(&mut self) {
-        shortcut_editor::sync(&self.neutral);
         i18n::set_current(self.language);
     }
 }
 
-fn app() -> (VectorcraftApp, NodeId) {
+/// The app with a rectangle, Selection chosen, shown in a window that has drawn a frame, where shortcuts are edited.
+fn app() -> (VectorcraftApp, NodeId, Keyboard) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300, "profile": null})).unwrap();
     let shape = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
     let id = NodeId(shape["id"].as_u64().unwrap());
     app.select_tool("selection");
-    shortcut_editor::sync(&app.ui);
-    (app, id)
+    let mut keys = Keyboard::new();
+    keys.frame(&mut app, vec![]);
+    (app, id, keys)
 }
 
 fn path_state(app: &VectorcraftApp, id: NodeId) -> (PathData, Vec<NodeId>, usize) {
@@ -59,11 +59,15 @@ struct Keyboard {
 }
 impl Keyboard {
     fn new() -> Self {
-        Self { ctx: egui::Context::default(), time: 0.0 }
+        let ctx = egui::Context::default();
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+        Self { ctx, time: 0.0 }
     }
 
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) {
         self.time += 0.05;
+        app.adopt_context(&self.ctx);
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(
             egui::RawInput {
                 events,
@@ -73,10 +77,12 @@ impl Keyboard {
                 ..Default::default()
             },
             |ui| {
-                app.logic(ui.ctx());
-                shortcuts::handle(app, ui.ctx());
+                app.tick(ui.ctx());
+                app.ui(ui);
             },
         );
+        // The commands the pass fired run as the host's next frame begins; the next frame gives the input.
+        let _ = app.frame_input(take_output(&self.ctx));
         out.textures_delta.clear();
     }
 
@@ -116,10 +122,9 @@ fn configure_control_backtick(app: &mut VectorcraftApp) {
 #[test]
 fn selection_tools_existing_v_and_a_defaults_keep_their_choices() {
     let _globals = Globals::new();
-    let (mut app, id) = app();
+    let (mut app, id, mut keys) = app();
     let before = path_state(&app, id);
     app.select_tool("pen");
-    let mut keys = Keyboard::new();
     keys.tap(&mut app, Key::V, Modifiers::NONE);
     assert_eq!(app.session.tool_id(), "selection");
     keys.tap(&mut app, Key::A, Modifiers::NONE);
@@ -130,7 +135,7 @@ fn selection_tools_existing_v_and_a_defaults_keep_their_choices() {
 #[test]
 fn selection_tools_configured_control_backtick_toggles_both_arrows() {
     let _globals = Globals::new();
-    let (mut app, id) = app();
+    let (mut app, id, mut keys) = app();
     let before = path_state(&app, id);
     let rows = app.run("shortcuts.list", json!({"query": SWITCH})).unwrap();
     let rows = rows.as_array().unwrap();
@@ -140,7 +145,6 @@ fn selection_tools_configured_control_backtick_toggles_both_arrows() {
     assert!(rows[0]["default"].is_null());
     assert!(rows[0]["shortcut"].is_null());
     configure_control_backtick(&mut app);
-    let mut keys = Keyboard::new();
     keys.tap(&mut app, Key::Backtick, control());
     assert_eq!(app.session.tool_id(), "directSelection");
     keys.tap(&mut app, Key::Backtick, control());
@@ -151,14 +155,14 @@ fn selection_tools_configured_control_backtick_toggles_both_arrows() {
 #[test]
 fn selection_tools_saved_binding_runs_and_reset_removes_it() {
     let _globals = Globals::new();
-    let (mut original, _) = app();
+    let (mut original, _, _) = app();
     configure_control_backtick(&mut original);
     let saved = serde_json::to_string(&original.ui).unwrap();
-    let (mut restored, id) = app();
+    let (mut restored, id, mut keys) = app();
+    // As the host loads saved preferences: the UI state, then what it restores.
     restored.ui = serde_json::from_str::<UiState>(&saved).unwrap();
-    shortcut_editor::sync(&restored.ui);
+    vectorcraft_ui_egui::prefs_dialog::restore(&mut restored);
     let before = path_state(&restored, id);
-    let mut keys = Keyboard::new();
     keys.tap(&mut restored, Key::Backtick, control());
     assert_eq!(restored.session.tool_id(), "directSelection");
     restored.run("shortcuts.set", json!({"id": SWITCH, "shortcut": null})).unwrap();
@@ -173,7 +177,7 @@ fn selection_tools_saved_binding_runs_and_reset_removes_it() {
 #[test]
 fn selection_tools_other_tools_enter_selection_and_explicit_choice_survives_release() {
     let _globals = Globals::new();
-    let (mut app, id) = app();
+    let (mut app, id, mut keys) = app();
     let before = path_state(&app, id);
     for third in ["pen", "groupSelection"] {
         app.select_tool(third);
@@ -184,7 +188,6 @@ fn selection_tools_other_tools_enter_selection_and_explicit_choice_survives_rele
     }
     configure_control_backtick(&mut app);
     app.select_tool("pen");
-    let mut keys = Keyboard::new();
     keys.key(&mut app, Key::V, true, Modifiers::NONE);
     assert_eq!(app.session.tool_id(), "selection");
     keys.tap(&mut app, Key::Backtick, control());

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool, anchors?: bool, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), releaseOutside?: bool, interpolate?: bool (with anchors and a matrix that only moves them: the handles of each segment with one moved end are re-mapped, as path.moveAnchors's; default: prefs interpolateControlPoints)} apply an affine to the selection (or ids); anchors (without ids or copy): paths with anchors selected with Direct Selection have only those anchors and their handles transformed, as the Transform tools and object.move/rotate/scale/reflect/shear do (default: the whole objects); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too); releaseOutside (without copy or anchors): a Shaper Group's original shape that ends wholly outside the bounds the group's original shapes had before takes shaper.releaseSource in the same undo step, named Remove from Shaper Group, as the Selection tool's moves in Construction mode do",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool, anchors?: bool, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), releaseOutside?: bool, interpolate?: bool (with anchors and a matrix that only moves them: the handles of each segment with one moved end are re-mapped, as path.moveAnchors's; default: prefs interpolateControlPoints), drawBehind?: bool (with copy: in Draw Behind, view.drawMode, each copy goes directly below its original instead of above it, as the Selection and Direct Selection tools' Alt-drags send; default false)} apply an affine to the selection (or ids); anchors (without ids or copy): paths with anchors selected with Direct Selection have only those anchors and their handles transformed, as the Transform tools and object.move/rotate/scale/reflect/shear do (default: the whole objects); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too); releaseOutside (without copy or anchors): a Shaper Group's original shape that ends wholly outside the bounds the group's original shapes had before takes shaper.releaseSource in the same undo step, named Remove from Shaper Group, as the Selection tool's moves in Construction mode do",
             has_doc,
             transform
         ),
@@ -34,8 +34,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
-            has_selection,
+            "{ids?: [id…] (selected first; default: the selection), angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box. Selected ruler guides that can be edited rotate too (without ids), each as the line view.guides.release makes of it, and the default origin is the center of the objects' box and those lines together: a guide that ends up vertical or horizontal stays a ruler guide, and one at any other angle becomes a selected guide path along its line. absolute with only ruler guides selected is an error.",
+            has_selection_or_guides,
             rotate
         ),
         cmd!(
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Transform"],
             Some("Cmd+D"),
             "{copy?, strokes?, corners?, patterns?, typeAreas?, interpolate?: bool (as object.transform's; default: the value the transform it repeats used, else object.transform's default)} the last transform's matrix on the selection (after a perspective move or scale: that plane-space transform, without these params)",
-            has_selection,
+            has_selection_or_guides,
             transform_again
         ),
         cmd!(
@@ -79,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Nudge",
             [],
             None,
-            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move), interpolate?: bool (as path.moveAnchors's; default: prefs interpolateControlPoints)} arrow-key nudge by the keyboard increment (the selected anchors, else objects, along the x and y axes turned by the constrainAngle preference; else ruler guides, along the page axes)",
+            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move), interpolate?: bool (as path.moveAnchors's; default: prefs interpolateControlPoints)} arrow-key nudge by the keyboard increment (the selected anchors (a selected curved segment bends instead: its anchors stay and its handles keep their directions while its middle moves by the step), else objects, along the x and y axes turned by the constrainAngle preference; else ruler guides, along the page axes)",
             has_selection_or_guides,
             nudge
         ),

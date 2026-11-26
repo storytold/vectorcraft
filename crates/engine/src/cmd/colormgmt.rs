@@ -169,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint Black…",
             ["Edit", "Edit Colors"],
             None,
-            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
+            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters; a grayscale or 1-bit image colorized by paint.setFill: its color, as a fill) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
             has_doc,
             super::overprint::overprint_black
         ),
@@ -704,7 +704,7 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
 /// from. → a note for each profile, and whether `d` changed.
 pub(crate) fn apply_open_policies(d: &mut vectorcraft_doc::Document) -> (Vec<String>, bool) {
     // Without a choice nothing can fail.
-    apply_open_policies_choosing(d, None).unwrap_or_default()
+    apply_open_policies_choosing(d, None, &cms::working_settings()).unwrap_or_default()
 }
 
 /// What opening a document can ask about its profile (Edit › Color Settings' Ask When Opening
@@ -879,10 +879,14 @@ impl ProfileQuestion {
 /// mismatch choice takes the place of the policy of the document's color mode, and a missing
 /// choice tags the document after the policies ran. A choice for the other kind of question, or
 /// for a document with none, is not used. → as [`apply_open_policies`]; an error when the profile
-/// to assign is not a profile of that model.
-pub(crate) fn apply_open_policies_choosing(d: &mut vectorcraft_doc::Document, choice: Option<&ProfileChoice>) -> Result<(Vec<String>, bool)> {
-    let working = cms::working_settings();
-    let question = ProfileQuestion::of(d, &working);
+/// to assign is not a profile of that model. `working` is the settings snapshot the question is
+/// built from and the policies are read from.
+pub(crate) fn apply_open_policies_choosing(
+    d: &mut vectorcraft_doc::Document,
+    choice: Option<&ProfileChoice>,
+    working: &ColorSettings,
+) -> Result<(Vec<String>, bool)> {
+    let question = ProfileQuestion::of(d, working);
     let choice = choice.filter(|c| question.as_ref().is_some_and(|q| q.issue == c.issue()));
     // A mismatch answer stands in for the policy of the document's color mode.
     let chosen = |model: ColorMode, policy: Policy| -> (Policy, bool) {
@@ -1595,4 +1599,23 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
     }
     Ok(json!({"name": name, "spot": spot}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The policies come from the settings snapshot the question was built from, not from the
+    /// working settings as they are when the policies run.
+    #[test]
+    fn open_policies_use_the_snapshot_they_are_given() {
+        let tagged = |d: &mut vectorcraft_doc::Document| d.color_profiles.rgb = Some(cms::canonical_name(cms::WIDE_GAMUT_RGB).to_string());
+        let snapshot = ColorSettings { rgb_policy: Policy::Off, ..ColorSettings::default() };
+        let mut d = vectorcraft_doc::Document::new(100.0, 100.0);
+        tagged(&mut d);
+        let (notes, changed) = apply_open_policies_choosing(&mut d, None, &snapshot).unwrap();
+        assert!(changed, "the Off policy of the snapshot takes the profile off");
+        assert_eq!(d.color_profiles.rgb, None);
+        assert!(notes.iter().any(|n| n.contains("policy is")), "{notes:?}");
+    }
 }

@@ -1,8 +1,8 @@
 //! Linux: a drawing tablet's pen pressure, tilt, barrel rotation and airbrush finger wheel under
 //! X11, XWayland included
 //! (#764). winit 0.30 hands a pen to the window there as a mouse, without any of them, so the app
-//! reads them from XInput2 itself and writes them into the UI's [`StylusFeed`]
-//! (`Services::stylus`), which the canvas reads.
+//! reads them from XInput2 itself and writes them into the framework's [`PenSource`], which the
+//! tool host reads.
 //!
 //! The reader opens a second connection to the X server (x11rb's `RustConnection`, without
 //! `unsafe` or libxcb) and selects XInput2 raw events for every device on the root window. Raw
@@ -43,7 +43,8 @@
 
 use std::collections::HashMap;
 
-use vectorcraft_ui_egui::stylus::{PenPose, PenSample, StylusFeed};
+use craft::behavior::PointerSample;
+use craft::ui::runtime::pen::PenSource;
 
 /// The tilt of a valuator whose range does not fit in ±90 (so does not give degrees), at the ends
 /// of its range.
@@ -180,7 +181,7 @@ enum Update {
     /// Nothing: a device the last listing didn't have (a master, or one added since).
     Keep,
     /// The pressure, end, tilt and rotation of a pen, or `None` for another pointer.
-    Set(Option<PenSample>),
+    Set(Option<PointerSample>),
 }
 
 /// The pointer devices and the last pressure, tilt and rotation of each pen.
@@ -217,17 +218,21 @@ impl Pens {
         // An axis the pen has reads 0 until an event carries it; one it lacks reads nothing. The
         // wheel reads nothing until an event carries it: XWayland lists the axis for every pen.
         let value = |kind: AxisKind| device.axis(kind).map(|_| last.get(kind.slot()).copied().flatten().unwrap_or(0.0));
-        let tilt = value(AxisKind::TiltX).zip(value(AxisKind::TiltY)).map(|(x, y)| [x, y]);
-        let wheel = device.axis(AxisKind::Wheel).and_then(|_| last.get(AxisKind::Wheel.slot()).copied().flatten());
-        let pose = PenPose { tilt, rotation: value(AxisKind::Rotation), wheel };
-        Update::Set(Some(PenSample { pressure: value(AxisKind::Pressure).unwrap_or(0.0), eraser: device.eraser, pose }))
+        // The valuators give degrees; the framework's samples are in radians.
+        let tilt = value(AxisKind::TiltX).zip(value(AxisKind::TiltY)).map_or([0.0, 0.0], |(x, y)| [x.to_radians(), y.to_radians()]);
+        let mut sample = PointerSample::new(value(AxisKind::Pressure).unwrap_or(0.0));
+        sample.tilt = tilt;
+        sample.rotation = value(AxisKind::Rotation).map_or(0.0, f32::to_radians);
+        sample.eraser = device.eraser;
+        sample.wheel = device.axis(AxisKind::Wheel).and_then(|_| last.get(AxisKind::Wheel.slot()).copied().flatten());
+        Update::Set(Some(sample))
     }
 
     /// A raw event as the X server sends it: its valuator mask and the values of the valuators
-    /// set in it. A pen's sample or another pointer's `None` goes into `feed`.
-    fn raw_event(&mut self, feed: &StylusFeed, id: u16, mask: &[u32], values: &[f64]) {
+    /// set in it. A pen's sample or another pointer's `None` goes into `pen`.
+    fn raw_event(&mut self, pen: &PenSource, id: u16, mask: &[u32], values: &[f64]) {
         if let Update::Set(sample) = self.handle(id, valuators(mask, values)) {
-            feed.set_sample(sample);
+            pen.set(sample);
         }
     }
 }
@@ -247,13 +252,13 @@ fn fp3232(integral: i32, frac: u32) -> f64 {
     f64::from(integral) + f64::from(frac) / 4_294_967_296.0
 }
 
-/// Start reading pen pressure, tilt and rotation for a window on X11: the feed the reader writes
+/// Start reading pen pressure, tilt and rotation for a window on X11: the source the reader writes
 /// into, or `None` (logged) when the X server can't be reached or has no XInput 2.1.
 #[cfg(target_os = "linux")]
-pub fn start() -> Option<StylusFeed> {
-    let feed = StylusFeed::default();
-    match x11::spawn(feed.clone()) {
-        Ok(()) => Some(feed),
+pub fn start() -> Option<PenSource> {
+    let pen = PenSource::default();
+    match x11::spawn(pen.clone()) {
+        Ok(()) => Some(pen),
         Err(e) => {
             log::warn!("tablet pressure: {e}");
             None
@@ -265,7 +270,7 @@ pub fn start() -> Option<StylusFeed> {
 mod x11 {
     use std::collections::HashMap;
 
-    use vectorcraft_ui_egui::stylus::StylusFeed;
+    use craft::ui::runtime::pen::PenSource;
     use x11rb::connection::{Connection as _, RequestConnection as _};
     use x11rb::protocol::Event;
     use x11rb::protocol::xinput::{self, ConnectionExt as _, DeviceClassData, DeviceType, XIEventMask};
@@ -280,7 +285,7 @@ mod x11 {
     /// Connect to `$DISPLAY` (the display winit opened the window on), check for XInput 2.1 (raw
     /// events for every client that selects them), select the raw events, and read them on a
     /// thread of its own until the connection closes.
-    pub fn spawn(feed: StylusFeed) -> Result<(), String> {
+    pub fn spawn(pen: PenSource) -> Result<(), String> {
         let (conn, screen) = RustConnection::connect(None).map_err(|e| format!("can't connect to the X server: {e}"))?;
         let root = conn.setup().roots.get(screen).map(|s| s.root).ok_or_else(|| format!("X screen {screen} not found"))?;
         let version =
@@ -301,12 +306,12 @@ mod x11 {
         pens.set_devices(query_devices(&conn));
         std::thread::Builder::new()
             .name("vectorcraft-tablet-x11".into())
-            .spawn(move || run(&conn, &mut pens, &feed))
+            .spawn(move || run(&conn, &mut pens, &pen))
             .map(drop)
             .map_err(|e| format!("can't start the tablet thread: {e}"))
     }
 
-    fn run(conn: &RustConnection, pens: &mut Pens, feed: &StylusFeed) {
+    fn run(conn: &RustConnection, pens: &mut Pens, pen: &PenSource) {
         // A connection error (the display went away) ends the loop; an event that x11rb cannot
         // parse is skipped, and `Pens` bounds what the rest can hold.
         while let Ok(raw) = conn.wait_for_raw_event() {
@@ -314,7 +319,7 @@ mod x11 {
             match event {
                 Event::XinputRawMotion(e) | Event::XinputRawButtonPress(e) | Event::XinputRawButtonRelease(e) => {
                     let values: Vec<f64> = e.axisvalues.iter().map(|v| fp3232(v.integral, v.frac)).collect();
-                    pens.raw_event(feed, e.deviceid, &e.valuator_mask, &values);
+                    pens.raw_event(pen, e.deviceid, &e.valuator_mask, &values);
                 }
                 Event::XinputHierarchy(_) | Event::XinputDeviceChanged(_) => pens.set_devices(query_devices(conn)),
                 _ => {}
@@ -384,6 +389,16 @@ mod tests {
         Device::new(id, "Logitech USB Optical Mouse", Some("MOUSE"), [(0, "Rel X".to_string(), -1.0, -1.0), (1, "Rel Y".to_string(), -1.0, -1.0)])
     }
 
+    /// A reading as the reader gives it: tilt and rotation in radians.
+    fn reading(pressure: f32, eraser: bool, tilt: [f32; 2], rotation: f32, wheel: Option<f32>) -> PointerSample {
+        let mut sample = PointerSample::new(pressure);
+        sample.eraser = eraser;
+        sample.tilt = tilt;
+        sample.rotation = rotation;
+        sample.wheel = wheel;
+        sample
+    }
+
     #[test]
     fn the_mask_pairs_valuator_numbers_with_values() {
         let v: Vec<_> = valuators(&[0b10_0101, 1], &[1.0, 2.0, 3.0, 4.0]).collect();
@@ -445,58 +460,57 @@ mod tests {
     fn the_eraser_device_sets_the_eraser_end() {
         let mut pens = Pens::default();
         pens.set_devices([pen(9), Device::new(10, "Wacom Intuos Pro M Pen eraser", Some("ERASER"), pen_valuators()), mouse(12)]);
-        let feed = StylusFeed::default();
-        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
-        pens.raw_event(&feed, 9, &[0b100], &[32767.5]);
-        assert_eq!(pens.handle(9, []), Update::Set(Some(PenSample { pressure: 0.5, eraser: false, pose })));
-        assert_eq!(feed.eraser(), Some(false));
+        let pen = PenSource::default();
+        let end = || pen.current().map(|s| (s.eraser, s.pressure));
+        pens.raw_event(&pen, 9, &[0b100], &[32767.5]);
+        assert_eq!(pens.handle(9, []), Update::Set(Some(reading(0.5, false, [0.0, 0.0], 0.0, None))));
+        assert_eq!(end(), Some((false, 0.5)));
         // Turned over, the pen hovers with its eraser end: the eraser device's first event, with
         // no pressure yet.
-        pens.raw_event(&feed, 10, &[0b1], &[100.0]);
-        assert_eq!(pens.handle(10, []), Update::Set(Some(PenSample { pressure: 0.0, eraser: true, pose })));
-        assert_eq!((feed.eraser(), feed.held()), (Some(true), Some(0.0)));
-        pens.raw_event(&feed, 10, &[0b100], &[65535.0]);
-        assert_eq!((feed.eraser(), feed.held()), (Some(true), Some(1.0)));
+        pens.raw_event(&pen, 10, &[0b1], &[100.0]);
+        assert_eq!(pens.handle(10, []), Update::Set(Some(reading(0.0, true, [0.0, 0.0], 0.0, None))));
+        assert_eq!(end(), Some((true, 0.0)));
+        pens.raw_event(&pen, 10, &[0b100], &[65535.0]);
+        assert_eq!(end(), Some((true, 1.0)));
         // Back to the tip, with the tip's own last pressure.
-        pens.raw_event(&feed, 9, &[0b1], &[200.0]);
-        assert_eq!((feed.eraser(), feed.held()), (Some(false), Some(0.5)));
+        pens.raw_event(&pen, 9, &[0b1], &[200.0]);
+        assert_eq!(end(), Some((false, 0.5)));
         // A mouse: no pen end.
-        pens.raw_event(&feed, 12, &[0b1], &[3.0]);
-        assert_eq!(feed.eraser(), None);
+        pens.raw_event(&pen, 12, &[0b1], &[3.0]);
+        assert_eq!(end(), None);
     }
 
-    /// #764: a pen's tilt goes into the feed in degrees and its barrel rotation as a turn, the
-    /// middle of the valuator's range at 0°; a pen without those valuators reads neither.
+    /// #764: a pen's tilt goes into the source in radians and its barrel rotation as a turn, the
+    /// middle of the valuator's range at 0; a pen without those valuators reads neither.
     #[test]
     fn a_pens_tilt_and_rotation_go_into_the_feed() {
         let mut pens = Pens::default();
         let pressure_only = Device::new(10, "", Some("STYLUS"), pen_valuators().into_iter().take(3));
         let one_tilt = Device::new(11, "", Some("STYLUS"), pen_valuators().into_iter().take(4));
         pens.set_devices([pen(9), pressure_only, one_tilt, mouse(12)]);
-        let feed = StylusFeed::default();
+        let pen_source = PenSource::default();
         // Pressure, tilt x, tilt y and rotation: valuators 2 to 5.
-        pens.raw_event(&feed, 9, &[0b11_1100], &[32767.5, -30.0, 45.0, 0.0]);
-        let pose = feed.pose().unwrap();
-        assert_eq!((feed.held(), pose.tilt), (Some(0.5), Some([-30.0, 45.0])));
-        assert!(pose.rotation.is_some_and(|r| r < 0.2), "{pose:?}");
+        pens.raw_event(&pen_source, 9, &[0b11_1100], &[32767.5, -30.0, 45.0, 0.0]);
+        let sample = pen_source.current().unwrap();
+        assert_eq!((sample.pressure, sample.tilt), (0.5, [(-30.0f32).to_radians(), 45.0f32.to_radians()]));
+        assert!(sample.rotation < 0.2f32.to_radians(), "{sample:?}");
         // A quarter of the range back is a quarter turn back; the tilt stays as it was.
-        pens.raw_event(&feed, 9, &[0b10_0000], &[-450.0]);
-        let pose = feed.pose().unwrap();
-        assert_eq!(pose.tilt, Some([-30.0, 45.0]));
-        assert!(pose.rotation.is_some_and(|r| (r - 270.0).abs() < 0.2), "{pose:?}");
+        pens.raw_event(&pen_source, 9, &[0b10_0000], &[-450.0]);
+        let sample = pen_source.current().unwrap();
+        assert_eq!(sample.tilt, [(-30.0f32).to_radians(), 45.0f32.to_radians()]);
+        assert!((sample.rotation - (-90.0f32).to_radians()).abs() < 0.2f32.to_radians(), "{sample:?}");
         // A pen with no tilt or rotation valuators, or with one tilt valuator only, reads none.
-        pens.raw_event(&feed, 10, &[0b100], &[65535.0]);
-        assert_eq!((feed.held(), feed.pose()), (Some(1.0), None));
-        pens.raw_event(&feed, 11, &[0b1100], &[65535.0, 20.0]);
-        assert_eq!(feed.pose(), None);
+        pens.raw_event(&pen_source, 10, &[0b100], &[65535.0]);
+        assert_eq!(pen_source.current(), Some(reading(1.0, false, [0.0, 0.0], 0.0, None)));
+        pens.raw_event(&pen_source, 11, &[0b1100], &[65535.0, 20.0]);
+        assert_eq!(pen_source.current().map(|s| s.tilt), Some([0.0, 0.0]));
         // The mouse: none.
-        pens.raw_event(&feed, 12, &[0b1], &[3.0]);
-        assert_eq!(feed.pose(), None);
+        pens.raw_event(&pen_source, 12, &[0b1], &[3.0]);
+        assert_eq!(pen_source.current(), None);
         // A pen whose tilt and rotation no event has carried yet is upright and unturned.
         let mut fresh = Pens::default();
         fresh.set_devices([pen(9)]);
-        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
-        assert_eq!(fresh.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
+        assert_eq!(fresh.handle(9, [(2, 0.0)]), Update::Set(Some(reading(0.0, false, [0.0, 0.0], 0.0, None))));
     }
 
     /// An airbrush pen's "Abs Wheel" valuator goes into the feed as 0..1 of its range, once an
@@ -510,19 +524,20 @@ mod tests {
         let pad = Device::new(13, "Wacom Intuos Pro M Pad pad", Some("PAD"), [(6, "Abs Wheel".to_string(), 0.0, 71.0)]);
         let mut pens = Pens::default();
         pens.set_devices([airbrush, pad, pen(10)]);
-        let feed = StylusFeed::default();
-        pens.raw_event(&feed, 9, &[0b100], &[32767.5]);
-        assert_eq!(feed.pose().and_then(|q| q.wheel), None, "no event has carried the wheel yet");
-        pens.raw_event(&feed, 9, &[0b100_0000], &[255.75]);
-        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(0.25));
-        pens.raw_event(&feed, 9, &[0b100_0000], &[5000.0]);
-        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(1.0), "clamped to the range");
-        pens.raw_event(&feed, 9, &[0b100], &[100.0]);
-        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(1.0), "kept while other valuators move");
-        pens.raw_event(&feed, 13, &[0b100_0000], &[30.0]);
-        assert_eq!((feed.held(), feed.pose()), (None, None), "the pad is not a pen");
-        pens.raw_event(&feed, 10, &[0b100_0000], &[512.0]);
-        assert_eq!(feed.pose().and_then(|q| q.wheel), None, "a pen without the valuator");
+        let pen_source = PenSource::default();
+        let wheel = || pen_source.current().and_then(|s| s.wheel);
+        pens.raw_event(&pen_source, 9, &[0b100], &[32767.5]);
+        assert_eq!(wheel(), None, "no event has carried the wheel yet");
+        pens.raw_event(&pen_source, 9, &[0b100_0000], &[255.75]);
+        assert_eq!(wheel(), Some(0.25));
+        pens.raw_event(&pen_source, 9, &[0b100_0000], &[5000.0]);
+        assert_eq!(wheel(), Some(1.0), "clamped to the range");
+        pens.raw_event(&pen_source, 9, &[0b100], &[100.0]);
+        assert_eq!(wheel(), Some(1.0), "kept while other valuators move");
+        pens.raw_event(&pen_source, 13, &[0b100_0000], &[30.0]);
+        assert_eq!(pen_source.current(), None, "the pad is not a pen");
+        pens.raw_event(&pen_source, 10, &[0b100_0000], &[512.0]);
+        assert_eq!(wheel(), None, "a pen without the valuator");
     }
 
     /// A device listed again unchanged keeps its last tilt and rotation; another device listed
@@ -533,12 +548,11 @@ mod tests {
         pens.set_devices([pen(9)]);
         pens.handle(9, [(3, -30.0), (4, 45.0), (5, -450.0)]);
         pens.set_devices([pen(9)]);
-        let Update::Set(Some(PenSample { pose, .. })) = pens.handle(9, [(2, 0.0)]) else { panic!("no pen") };
-        assert_eq!(pose.tilt, Some([-30.0, 45.0]));
+        let Update::Set(Some(sample)) = pens.handle(9, [(2, 0.0)]) else { panic!("no pen") };
+        assert_eq!(sample.tilt, [(-30.0f32).to_radians(), 45.0f32.to_radians()]);
         let other = Device::new(9, "HUION Kamvas Pen Pen (0x1)", Some("STYLUS"), pen_valuators());
         pens.set_devices([other]);
-        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
-        assert_eq!(pens.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
+        assert_eq!(pens.handle(9, [(2, 0.0)]), Update::Set(Some(reading(0.0, false, [0.0, 0.0], 0.0, None))));
     }
 
     /// Tilt valuators whose range does not fit in ±90 are scaled to ±60°.
@@ -552,34 +566,35 @@ mod tests {
         );
         let mut pens = Pens::default();
         pens.set_devices([d]);
-        let Update::Set(Some(PenSample { pose, .. })) = pens.handle(1, [(3, 127.0), (4, -1000.0)]) else { panic!("no pen") };
-        assert_eq!(pose.tilt, Some([60.0, -60.0]));
+        let Update::Set(Some(sample)) = pens.handle(1, [(3, 127.0), (4, -1000.0)]) else { panic!("no pen") };
+        assert_eq!(sample.tilt, [60.0f32.to_radians(), (-60.0f32).to_radians()]);
     }
 
     #[test]
     fn a_pens_valuator_becomes_its_pressure_and_another_pointer_clears_it() {
         let mut pens = Pens::default();
         pens.set_devices([pen(9), mouse(12)]);
-        let feed = StylusFeed::default();
-        pens.raw_event(&feed, 9, &[0b101], &[100.0, 32767.5]);
-        assert_eq!(feed.held(), Some(0.5));
+        let pen_source = PenSource::default();
+        let pressure = || pen_source.current().map(|s| s.pressure);
+        pens.raw_event(&pen_source, 9, &[0b101], &[100.0, 32767.5]);
+        assert_eq!(pressure(), Some(0.5));
         // Raw events carry only the valuators that changed: a move without pressure keeps it.
-        pens.raw_event(&feed, 9, &[0b1], &[200.0]);
-        assert_eq!(feed.held(), Some(0.5));
-        pens.raw_event(&feed, 9, &[0b100], &[65535.0]);
-        assert_eq!(feed.held(), Some(1.0));
+        pens.raw_event(&pen_source, 9, &[0b1], &[200.0]);
+        assert_eq!(pressure(), Some(0.5));
+        pens.raw_event(&pen_source, 9, &[0b100], &[65535.0]);
+        assert_eq!(pressure(), Some(1.0));
         // The mouse moves: no pen pressure until the pen moves again.
-        pens.raw_event(&feed, 12, &[0b1], &[3.0]);
-        assert_eq!(feed.held(), None);
-        pens.raw_event(&feed, 9, &[0b1], &[300.0]);
-        assert_eq!(feed.held(), Some(1.0), "the pen's last pressure");
+        pens.raw_event(&pen_source, 12, &[0b1], &[3.0]);
+        assert_eq!(pressure(), None);
+        pens.raw_event(&pen_source, 9, &[0b1], &[300.0]);
+        assert_eq!(pressure(), Some(1.0), "the pen's last pressure");
         // A master device or one not listed yet changes nothing.
-        pens.raw_event(&feed, 2, &[0b100], &[0.0]);
-        assert_eq!(feed.held(), Some(1.0));
-        // A pen whose first event carries no pressure is hovering: it presses with 0.
+        pens.raw_event(&pen_source, 2, &[0b100], &[0.0]);
+        assert_eq!(pressure(), Some(1.0));
+        // A pen whose first event carries no pressure is hovering: it reads 0.
         pens.set_devices([pen(9), pen(10)]);
-        pens.raw_event(&feed, 10, &[0b1], &[5.0]);
-        assert_eq!(feed.press(), Some(0.0));
+        pens.raw_event(&pen_source, 10, &[0b1], &[5.0]);
+        assert_eq!(pressure(), Some(0.0));
     }
 
     #[test]
@@ -590,13 +605,11 @@ mod tests {
             let labels = ["Abs Pressure", "Abs Tilt X", "Abs Tilt Y", "Abs Rotary Z"];
             pens.set_devices([Device::new(1, "", None, (2..).zip(labels).map(|(n, l)| (n, l.to_string(), min, max)))]);
             for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MAX, f64::MIN, -0.0, 1e300, 0.5] {
-                let Update::Set(Some(PenSample { pressure: p, pose, .. })) = pens.handle(1, (2..6).map(|n| (n, v))) else {
-                    panic!("{min}..{max}: {v} gave no pressure")
-                };
-                assert!((0.0..=1.0).contains(&p), "{min}..{max}: {v} gave {p}");
-                let tilt = pose.tilt.unwrap_or_default();
-                assert!(tilt.iter().all(|t| (-90.0..=90.0).contains(t)), "{min}..{max}: {v} gave {pose:?}");
-                assert!(pose.rotation.is_some_and(|r| (-180.0..=180.0).contains(&r)), "{min}..{max}: {v} gave {pose:?}");
+                let Update::Set(Some(s)) = pens.handle(1, (2..6).map(|n| (n, v))) else { panic!("{min}..{max}: {v} gave no pressure") };
+                assert!((0.0..=1.0).contains(&s.pressure), "{min}..{max}: {v} gave {s:?}");
+                let quarter = std::f32::consts::FRAC_PI_2 + 1e-6;
+                assert!(s.tilt.iter().all(|t| t.abs() <= quarter), "{min}..{max}: {v} gave {s:?}");
+                assert!(s.rotation.abs() <= std::f32::consts::PI + 1e-6, "{min}..{max}: {v} gave {s:?}");
             }
         }
         let mut pens = Pens::default();
@@ -604,10 +617,10 @@ mod tests {
         assert!(pens.devices.len() <= MAX_DEVICES, "the device list is bounded");
         // Values for valuators the pen doesn't have are ignored.
         pens.set_devices([pen(3)]);
-        let Update::Set(Some(PenSample { pressure: p, .. })) = pens.handle(3, valuators(&[u32::MAX; 2048], &[0.5; 4096]).collect::<Vec<_>>()) else {
+        let Update::Set(Some(s)) = pens.handle(3, valuators(&[u32::MAX; 2048], &[0.5; 4096]).collect::<Vec<_>>()) else {
             panic!("the pen gave no pressure")
         };
-        assert!(p < 0.001, "{p}");
+        assert!(s.pressure < 0.001, "{}", s.pressure);
     }
 
     #[test]

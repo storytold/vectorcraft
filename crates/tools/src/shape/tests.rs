@@ -667,6 +667,37 @@ fn the_circle_preview_passes_through_the_snapped_pointer() {
     assert!(matches!(&a[..], [Action::Exec(_, v)] if v["points"][2] == json!([100.0, 100.0])), "{a:?}");
 }
 
+/// A circle through the Shift-clicked points more than 50,000 screen points around is previewed
+/// solid, as the Circle tool previews it: points nearly on one line give a radius of about
+/// 1,250,000 pt.
+#[test]
+fn a_huge_circle_through_shift_clicked_points_is_previewed_solid() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(0.0, 0.0), (1000.0, 0.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    let paths = |t: &ShapeTool| {
+        t.overlays(&cx)
+            .into_iter()
+            .filter_map(|o| match o {
+                Overlay::Path { dashed, .. } => Some(dashed),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 500.0, 0.1));
+    assert_eq!(paths(&t), vec![false]);
+    // At 100% a circle 100 pt across is dashed.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 500.0, 300.0));
+    assert_eq!(paths(&t), vec![true]);
+}
+
 /// Escape, a plain click and a drag drop the points Shift-clicks placed, so the next Shift-click
 /// starts a new circle.
 #[test]
@@ -966,6 +997,23 @@ fn corners_snap_to_smart_guides() {
     let from = Point::new(300.0, 300.0);
     let to = Point::new(200.0, 300.0);
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.segment_measure_label(from, to))));
+}
+
+/// The "anchor" label a hover shows goes when the pointer leaves the canvas, for every shape tool.
+#[test]
+fn leaving_the_canvas_drops_the_hover_label() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let label = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor"));
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+        assert!(label(&t.overlays(&cx)), "{id}");
+        t.hover_ended(&cx);
+        assert!(!label(&t.overlays(&cx)), "{id}: {:?}", t.overlays(&cx));
+    }
 }
 
 /// Line Segment Tool Options: Length and Angle are options (for a click's dialog), and Fill
