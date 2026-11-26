@@ -105,6 +105,26 @@ impl PrefsWindow {
         self.touched.remove(key);
     }
 
+    fn explicitly_edited(&self, key: &str) -> bool {
+        if self.touched.contains(key) {
+            return true;
+        }
+        let (now, opened) = (self.draft.get::<Value>(key), self.opened.get::<Value>(key));
+        match (now.as_ref().and_then(Value::as_f64), opened.as_ref().and_then(Value::as_f64)) {
+            (Some(a), Some(b)) => a != b,
+            _ => now != opened,
+        }
+    }
+
+    fn read_external(&mut self, key: &str, value: &Value) {
+        if self.explicitly_edited(key) {
+            self.source.set(key, value);
+        } else {
+            self.read(key, value);
+            self.opened.set(key, value);
+        }
+    }
+
     /// Sets the row `key` in the window, as the user or a reset does.
     fn set_row(&mut self, key: &str, value: &Value) {
         self.draft.set(key, value);
@@ -127,6 +147,7 @@ impl PrefsWindow {
         for (k, v) in prefs.as_object().into_iter().flatten() {
             if self.draft.get::<Value>(k).is_some() {
                 self.read(k, v);
+                self.opened.set(k, v);
             }
         }
         self.reset_units = self.draft.get::<String>("unitsGeneral");
@@ -408,7 +429,7 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
         }
         // The window shows the reset row, so OK keeps it.
         if let Some(w) = w.as_deref_mut() {
-            w.read(key, &json!(value));
+            w.read_external(key, &json!(value));
         }
     }
     // And the reset preferences, the groups with a reset of every category; Units ▸ General then leaves the open
@@ -419,8 +440,9 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
         for (k, v) in prefs.as_object().into_iter().flatten() {
             let reset = spec(k).map_or(every && PREF_GROUPS.contains(&k.as_str()), |s| in_reset(s.category));
             if reset && w.draft.get::<Value>(k).is_some() {
-                w.read(k, v);
-                if k == "unitsGeneral" {
+                let edited = w.explicitly_edited(k);
+                w.read_external(k, v);
+                if k == "unitsGeneral" && !edited {
                     w.reset_units = v.as_str().map(str::to_string);
                 }
             }
@@ -429,7 +451,9 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
     }
     // The Edit Original row shows the app's Edit Original choice.
     if spec("editOriginalSystemDefaults").is_some_and(|s| in_reset(s.category)) {
+        let before = app.ui.original_editor.clone();
         crate::original_editor::reset_saved(app);
+        app.prefs_changed |= before != app.ui.original_editor;
     }
     true
 }

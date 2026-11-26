@@ -427,8 +427,20 @@ impl PreferencesDraft for Live<'_> {
         // A `prefs.reset` run since the last frame shows in the draft before OK reads it.
         super::apply_prefs_resets_to(self.app, Some(&mut *self.w));
         // Only the rows changed in the window: a setting changed outside it while it is open keeps its new value.
-        let edited: Map<String, Value> =
-            self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| self.w.edited(k)).collect();
+        let current = self.app.session.prefs.to_json();
+        let edited: Map<String, Value> = self
+            .w
+            .draft
+            .to::<Map<String, Value>>()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(k, _)| {
+                self.w.edited(k)
+                    && (k != "keyHoldDelay"
+                        || self.w.explicitly_edited(k)
+                        || current.get(k).and_then(Value::as_f64) == self.w.source.get::<Value>(k).as_ref().and_then(Value::as_f64))
+            })
+            .collect();
         let values: Map<String, Value> = edited.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
         let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
         let document_units = self.w.reset_units.as_deref().is_none_or(|u| values.get("unitsGeneral").and_then(Value::as_str) != Some(u));
@@ -463,10 +475,23 @@ impl PreferencesDraft for Live<'_> {
         }
         // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
         // took, so a later Apply does not give the workspace left's value to Touch.
+        let current = self.app.session.prefs.to_json();
+        for (key, value) in current.as_object().into_iter().flatten() {
+            if self.w.draft.get::<Value>(key).is_some() {
+                self.w.draft.set(key, value);
+            }
+        }
+        if let Some(state) = self.app.session.active() {
+            self.w.draft.set("unitsGeneral", &state.doc.units.key());
+        }
+        self.w.draft.set("__smartGuides", &self.app.ui.view.smart_guides);
+        self.w.draft.set("__snapToGrid", &self.app.ui.view.snap_to_grid);
         self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
         self.w.source = self.w.draft.clone();
         self.w.touched.clear();
+        self.w.reset_units = None;
+        self.w.sync_strings();
         Ok(())
     }
 

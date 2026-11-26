@@ -61,6 +61,84 @@ fn field(a: &VectorcraftApp, key: &str) -> Value {
     fields(a).and_then(|f| f.get(key).cloned()).unwrap_or(Value::Null)
 }
 
+#[test]
+fn applying_a_reset_allows_a_later_explicit_document_units_edit() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Inches"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    let mut window = a.prefs.take().unwrap();
+    model::Live { app: &mut a, w: &mut window }.apply().unwrap();
+    a.prefs = Some(window);
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Inches);
+    set_field(&mut a, "unitsGeneral", json!("points")).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+}
+
+#[test]
+fn imported_rows_follow_a_later_external_reset() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    a.run("prefs.import", json!({"data": data})).unwrap();
+    a.run("prefs.reset", json!({"category": "General"})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+}
+
+#[test]
+fn a_command_changed_delay_survives_opening_time_normalization() {
+    let mut a = app();
+    a.session.prefs.key_hold_delay = 5.0;
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyHoldDelay", "value": 0.6})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.key_hold_delay, 0.6);
+}
+
+#[test]
+fn an_external_reset_keeps_rows_edited_in_preferences() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    let smart = !a.ui.view.smart_guides;
+    set_field(&mut a, "__smartGuides", json!(smart)).unwrap();
+    a.run("prefs.reset", json!({})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 9.0);
+    assert_eq!(a.ui.view.smart_guides, smart);
+}
+
+#[test]
+fn an_external_editor_reset_requests_a_settings_save() {
+    let mut a = app();
+    a.ui.original_editor = serde_json::from_value(json!({"path": "editor"})).unwrap();
+    a.prefs_changed = false;
+    a.session.execute("prefs.reset", &json!({"category": "File Handling"})).unwrap();
+    a.prefs_changed = false;
+    apply_prefs_resets(&mut a);
+    assert!(a.prefs_changed);
+}
+
+#[test]
+fn apply_refreshes_untouched_rows_from_current_preferences() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 9})).unwrap();
+    set_field(&mut a, "constrainAngle", json!(30)).unwrap();
+    let mut w = a.prefs.take().unwrap();
+    model::Live { app: &mut a, w: &mut w }.apply().unwrap();
+    assert_eq!(w.draft.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert_eq!(w.opened.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert_eq!(w.source.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert!(!w.edited("keyboardIncrement"));
+}
+
 /// One row per kind is saved by OK: the model's value conversion reaches `prefs.set` for each.
 #[test]
 fn ok_saves_every_row_kind() {
