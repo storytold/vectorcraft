@@ -260,6 +260,52 @@ fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
     assert_eq!(kept(&s), None);
 }
 
+/// A blend mode a graph mark or axis label already has still replaces the blend mode another object
+/// of its series or kind left on the graph, and is refused in a hidden or locked layer.
+#[test]
+fn a_blend_mode_a_graph_mark_or_label_already_has_replaces_the_one_the_graph_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let r = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let spec = |s: &Session| s.active().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().clone();
+    let kept_mark = |s: &Session| spec(s).series_paints.first().and_then(|p| p.blend);
+    let kept_label = |s: &Session| spec(s).label_styles.values_rows.as_ref().and_then(|r| r.paint.blend);
+    let graph = s.active().unwrap().doc.node(id).unwrap().clone();
+    let group = graph.children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().clone();
+    let marks: Vec<NodeId> = group.children().unwrap().iter().map(|m| m.id).collect();
+    let axes = graph.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Axes")).unwrap().clone();
+    // The value axis numbers come first among the Axes group's labels.
+    let labels: Vec<NodeId> = axes.children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Text(_))).map(|c| c.id).collect();
+    s.execute("object.setProps", &json!({"id": marks[0].0, "blend": "Multiply"})).unwrap();
+    s.execute("object.setProps", &json!({"id": labels[0].0, "blend": "Screen"})).unwrap();
+    let both = (Some(vectorcraft_color::BlendMode::Multiply), Some(vectorcraft_color::BlendMode::Screen));
+    assert_eq!((kept_mark(&s), kept_label(&s)), both);
+    s.execute("object.setProps", &json!({"id": marks[1].0, "name": "mark"})).unwrap();
+    s.execute("object.setProps", &json!({"id": labels[1].0, "name": "label"})).unwrap();
+    let layer = s.active().unwrap().doc.layers[0].id;
+    for (on, off) in [
+        (json!({"ids": [layer.0], "visible": false}), json!({"ids": [layer.0], "visible": true})),
+        (json!({"ids": [layer.0], "locked": true}), json!({"ids": [layer.0], "locked": false})),
+    ] {
+        s.execute("object.setProps", &on).unwrap();
+        for name in ["mark", "label"] {
+            let steps = undo_steps(&s);
+            let e = failure(&mut s, &format!("var m = app.activeDocument.pageItems.getByName('{name}'); m.blendingMode = m.blendingMode;"));
+            assert!(e.contains("Cannot edit"), "{on} {name}: {e}");
+            assert_eq!((kept_mark(&s), kept_label(&s)), both, "{on} {name}");
+            assert_eq!(undo_steps(&s), steps, "{on} {name}");
+        }
+        s.execute("object.setProps", &off).unwrap();
+    }
+    log(
+        &mut s,
+        "var p = app.activeDocument.pageItems; p.getByName('mark').blendingMode = BlendModes.NORMAL; p.getByName('label').blendingMode = BlendModes.NORMAL;",
+    );
+    assert_eq!((kept_mark(&s), kept_label(&s)), (None, None));
+}
+
 /// Assigning an item the opacity it reports, rounded to four decimals, changes nothing.
 #[test]
 fn assigning_the_reported_opacity_changes_nothing() {
