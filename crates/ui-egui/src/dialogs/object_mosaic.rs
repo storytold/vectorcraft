@@ -44,6 +44,7 @@ pub const COMMAND: &str = "object.createObjectMosaic";
 
 /// What the dialog says while no image is selected.
 const NO_IMAGE: &str = "select an image";
+const WRONG_DOCUMENT: &str = "Object Mosaic belongs to the document that opened the dialog.";
 
 /// The new sizes the command takes, in points or percentages (`object.createObjectMosaic`).
 const SIZE_RANGE: RangeInclusive<f64> = 0.1..=1.0e6;
@@ -203,7 +204,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
         let _ = host.take::<ObjectMosaicDialog>();
         let dialog = host.get_mut::<ObjectMosaicDialog>()?;
         if document != Some(dialog.document) {
-            let reason = || Label::from(tl!("Object Mosaic belongs to the document that opened the dialog."));
+            let reason = || Label::from(tl!(WRONG_DOCUMENT));
             if std::mem::take(&mut dialog.use_ratio) {
                 dialog.note = Some(reason());
             }
@@ -272,11 +273,11 @@ impl ObjectMosaicDialog {
     fn sync(&mut self, size: Option<(f64, f64)>, lengths: LengthUnits) {
         self.lengths = lengths;
         self.selected = size.is_some();
+        if self.note.as_ref().is_some_and(|n| n.as_str() == tl!(WRONG_DOCUMENT) || (self.selected && n.as_str() == NO_IMAGE)) {
+            self.note = None;
+        }
         if let Some(size) = size {
             self.image = size;
-            if self.note.as_ref().is_some_and(|n| n.as_str() == NO_IMAGE) {
-                self.note = None;
-            }
         }
     }
 }
@@ -719,6 +720,23 @@ mod tests {
         set(&mut app, "gray", json!(true)).unwrap();
         ok(&mut app);
         assert_eq!(mosaic(&app), Some((300.0, 150.0, 32)));
+    }
+
+    #[test]
+    fn returning_to_the_mosaic_drawing_clears_the_use_ratio_warning() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"columns": 10})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        with_dialog(&mut app, |d| d.use_ratio = true);
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(with_dialog(&mut app, |d| d.note.is_some()).unwrap());
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        sync(&mut app);
+        assert!(with_dialog(&mut app, |d| d.note.is_none() && !d.selected).unwrap());
+        assert_eq!(number_of(&mut app, "columns"), 10.0);
     }
 
     /// With Constrain Ratio on, a kept width of 0.1 pt over a 100 × 50 pt image sets a height of
