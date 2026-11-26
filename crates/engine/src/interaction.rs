@@ -22,6 +22,10 @@ pub struct Interaction {
     /// Conversion of new-art paints waits until a color-mode preview is accepted.
     pub(crate) deferred_color_mode: Option<crate::cmd::colormgmt::DeferredColorMode>,
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
+    /// A preview ran while the active tool painted with the chosen fill or stroke
+    /// ([`crate::Session::tool_paints`]): the next preview and a cancel put back the new-art paints
+    /// from before the interaction, whichever tool is active then.
+    pub(crate) tool_paints: bool,
     /// Per-document state restored on cancel (current layer, highlighted Layers panel rows,
     /// isolation).
     pub active_layer: Option<NodeId>,

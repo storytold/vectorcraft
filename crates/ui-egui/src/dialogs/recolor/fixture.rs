@@ -103,6 +103,11 @@ impl Recolor {
         self
     }
 
+    /// The widget that has the keyboard focus.
+    pub(crate) fn focused(&self) -> Option<egui::Id> {
+        self.fixture.focused()
+    }
+
     /// Sets `field` as `ui.dialog.set` does, before the next frame; a refused value leaves the
     /// dialog as it was.
     pub(crate) fn set(&mut self, field: &str, value: Value) -> Result<(), String> {

@@ -247,7 +247,10 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove("showImportOptions");
         set_aside = o.remove(SET_ASIDE);
     }
-    if !ask {
+    // A file placed with an importer plug-in `importer` names goes to that importer, without the
+    // import options of a built-in format that reads its extension.
+    let builtin = p.get("importer").is_none_or(Value::is_null);
+    if !ask && builtin {
         // Placed with the options confirmed last for the format.
         if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
             p["text"] = crate::dialogs::text_import::last_options(app);
@@ -257,13 +260,13 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         }
         crate::dialogs::psd_import::last_options(app, &mut p);
     }
-    if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
+    if builtin && p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
     }
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
         let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
-            Some(a) => a.iter().filter_map(Value::as_str).map(|path| json!({ "path": path })).collect(),
-            None => return Ok(pick(app)),
+            Some(a) => a.iter().filter_map(Value::as_str).map(|path| with_importer(json!({ "path": path }), &p)).collect(),
+            None => return Ok(pick(app, &p)),
         };
         if files.is_empty() {
             return Err("paths: give at least one file".into());
@@ -273,18 +276,18 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
     // A PDF with several pages or a password asks for the page, box and password first; with
     // Show Import Options off, or with a `page` given, only an encrypted one asks, for its password.
-    let offered = (ask && crate::dialogs::import_pdf::offer_place(app, &p)) || crate::dialogs::import_pdf::offer_place_password(app, &p);
+    let offered = builtin && ((ask && crate::dialogs::import_pdf::offer_place(app, &p)) || crate::dialogs::import_pdf::offer_place_password(app, &p));
     if offered {
         return Ok(Value::Null);
     }
     // A DXF drawing asks for its import options.
-    if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
+    if builtin && ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
     // A PSD file with several layers or with slices that the user embeds asks for its import
     // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
     // `importSlices` itself.
-    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+    if builtin && ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
     }
     if let (Some(Value::Object(kept)), Some(o)) = (set_aside, p.as_object_mut()) {
@@ -316,19 +319,22 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
 }
 
-/// Pick files to place: the Place dialog opens with them (on the web once they arrive). Returns
-/// what [`crate::file_asks::ask`] returns.
-fn pick(app: &mut VectorcraftApp) -> Value {
-    let request = fileio::place_filters().fold(PickRequest::open_many("place"), |request, (name, extensions)| request.filter(name, extensions));
+/// Pick files to place: the Place dialog opens with them (on the web once they arrive), placed with
+/// the importer plug-in and parameters `p` names ([`with_importer`]). Returns what
+/// [`crate::file_asks::ask`] returns.
+fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
+    let request =
+        fileio::place_dialog_filters().fold(PickRequest::open_many("place"), |request, (name, extensions)| request.filter(name, extensions));
+    let with = with_importer(json!({}), p);
     // The web answers with the files' contents instead of paths.
-    crate::file_asks::ask(app, request, Owner::Document, |app, picked| {
+    crate::file_asks::ask(app, request, Owner::Document, move |app, picked| {
         let files = match picked {
-            Picked::Paths(paths) => paths.into_iter().map(|path| json!({ "path": path.to_string_lossy() })).collect(),
+            Picked::Paths(paths) => paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect(),
             Picked::Contents(files) => files
                 .into_iter()
                 .map(|(name, bytes)| {
                     app.place.picked.retain(|(n, _)| *n != name);
-                    let entry = json!({ "name": name });
+                    let entry = with_importer(json!({ "name": name }), &with);
                     app.place.picked.push((name, bytes));
                     entry
                 })
@@ -339,6 +345,21 @@ fn pick(app: &mut VectorcraftApp) -> Value {
         open_dialog(app, files, None);
         Ok(Value::Null)
     })
+}
+
+/// The params of `file.place` that name an importer plug-in and its parameters: a Place dialog file
+/// entry carries them, and its file is read and placed with them.
+const IMPORTER_KEYS: [&str; 2] = ["importer", "params"];
+
+/// Place dialog file entry `file` with the importer plug-in and parameters `p` names
+/// ([`IMPORTER_KEYS`]).
+fn with_importer(mut file: Value, p: &Value) -> Value {
+    for k in IMPORTER_KEYS {
+        if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+            file[k] = v.clone();
+        }
+    }
+    file
 }
 
 /// The Place dialog for `files` (`{path}`, or `{name}` with the bytes in [`PlaceState`]), with Show
@@ -385,9 +406,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// object), or a PDF, `.ai`, EPS or PostScript file on disk? A DCS file (an EPS file naming its
 /// plates) is placed as a linked image instead. Where the platform reads part of a file, only the
 /// file's start is read; a file longer than that is taken to be at least as long as its binary EPS
-/// header says, and one whose header can't be told from it counts as a document.
+/// header says, and one whose header can't be told from it counts as a document. A file that names
+/// an importer plug-in is none of these, and none of it is read here.
 fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
     use vectorcraft_engine::cmd::place::{DCS_HEAD_BYTES, head_is_dcs};
+    if file.get("importer").is_some() {
+        return false;
+    }
     let Some(path) = file.get("path").and_then(Value::as_str) else { return false };
     let native = ["vectorcraft", vectorcraft_format::LEGACY_EXTENSION, "vctemplate"];
     // The file's start, and the file's length when that is all of it.
@@ -416,14 +441,15 @@ fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
     }
 }
 
-/// The engine params naming `file` (a dialog file entry).
+/// The engine params naming `file` (a dialog file entry), with the importer plug-in and parameters
+/// it carries ([`IMPORTER_KEYS`]).
 fn source(app: &VectorcraftApp, file: &Value) -> Option<Value> {
     if let Some(path) = file.get("path").and_then(Value::as_str) {
-        return Some(json!({ "path": path }));
+        return Some(with_importer(json!({ "path": path }), file));
     }
     let name = file.get("name").and_then(Value::as_str)?;
     let bytes = app.place.picked.iter().find(|(n, _)| n == name).map(|(_, b)| b)?;
-    Some(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }))
+    Some(with_importer(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }), file))
 }
 
 /// The Place dialog's line about each of `files`, read at once, or where the files the user places
@@ -538,7 +564,9 @@ pub fn confirm(app: &mut VectorcraftApp, files: Vec<Value>, options: PlaceOption
         many => {
             let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
-            let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
+            // The files of one dialog come from one `file.place`, with one importer plug-in and its
+            // parameters, if any.
+            let mut q = with_importer(json!({ "paths": paths, "files": files, "link": link, "template": template }), &many[0]);
             if !ask {
                 // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
                 // confirmed last.
