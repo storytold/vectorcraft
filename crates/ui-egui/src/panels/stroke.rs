@@ -551,24 +551,155 @@ pub(crate) fn arrow_thumb(cx: &ContentPainterCx, rect: Rect, arrow: Option<&Arro
     thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false).tint(DataColor::new(cx.ink())));
 }
 
-/// The silhouette of a width profile (its points; None: the plain bar) in `r` as its top and bottom edges. A profile
-/// made with the Width tool can be many times the stroke's weight: the silhouette is scaled to fit `r` by its widest
-/// point (#909).
-fn profile_outline(r: Rect, points: Option<&[(f64, f64, f64)]>) -> (Vec<egui::Pos2>, Vec<egui::Pos2>) {
-    let n = 32;
+/// The widths entering and leaving one position in a thumbnail's stroke profile.
+#[derive(Clone, Copy)]
+struct ProfileKnot {
+    t: f64,
+    incoming: (f64, f64),
+    outgoing: (f64, f64),
+}
+
+const PROFILE_KNOT_SPACING: f64 = 1e-9;
+
+/// Extracts the knots to draw. Long profiles keep sharp changes and their adjacent knots over smooth detail.
+fn profile_knots(mut points: &[(f64, f64, f64)]) -> Vec<ProfileKnot> {
+    const MAX_KNOTS: usize = 512;
+    let long = points.len() > MAX_KNOTS;
+    let mut groups = std::iter::from_fn(|| {
+        let (&(t, left, right), rest) = points.split_first()?;
+        let joined = rest.iter().take_while(|point| point.0 - t <= PROFILE_KNOT_SPACING).count();
+        let &(_, outgoing_left, outgoing_right) = &points[joined];
+        points = &rest[joined..];
+        Some(ProfileKnot { t, incoming: (left, right), outgoing: (outgoing_left, outgoing_right) })
+    })
+    .filter(|knot| (0.0..=1.0).contains(&knot.t))
+    .peekable();
+    let mut knots: Vec<ProfileKnot> = Vec::new();
+    let mut previous: Option<ProfileKnot> = None;
+    let mut keep_next = false;
+    let mut steps = 0;
+    let mut turning_points = 0;
+    while let Some(knot) = groups.next() {
+        let endpoint = knot.t == 0.0 || knot.t == 1.0;
+        let keep_step = long && !endpoint && knot.incoming != knot.outgoing && steps < MAX_KNOTS;
+        let choose_turn = |before: f64, middle: f64, after: f64| middle.total_cmp(&before) != after.total_cmp(&middle);
+        let keep_turn = long
+            && turning_points < MAX_KNOTS
+            && previous.zip(groups.peek()).is_some_and(|(before, after)| {
+                choose_turn(before.outgoing.0, knot.incoming.0, after.incoming.0) || choose_turn(before.outgoing.1, knot.incoming.1, after.incoming.1)
+            });
+        let shape_knot = keep_step || keep_turn;
+        if shape_knot
+            && let Some(before) = previous
+            && knots.last().is_none_or(|last| last.t < before.t)
+        {
+            knots.push(before);
+        }
+        if !long || endpoint || keep_next || shape_knot {
+            knots.push(knot);
+        }
+        if keep_step {
+            steps += 1;
+        }
+        if keep_turn && !keep_step && !endpoint {
+            turning_points += 1;
+        }
+        previous = Some(knot);
+        keep_next = shape_knot;
+    }
+    knots
+}
+
+/// Widest factor that occupies at least half a physical pixel in the piecewise-linear mesh.
+fn profile_scale(widths: &[(f64, f64, f64)], pixel_width: f64) -> f64 {
+    let maximum = widths.iter().flat_map(|&(_, left, right)| [left, right]).filter(|w| w.is_finite()).fold(1.0, f64::max);
+    if maximum == 1.0 || pixel_width <= 0.0 {
+        return 1.0;
+    }
+    let has_span = |factor: f64| {
+        let mut length = [0.0; 2];
+        for pair in widths.windows(2) {
+            let [(from, left, right), (to, next_left, next_right)] = pair else { continue };
+            let span = to - from;
+            for (side, (&before, &after)) in [left, right].into_iter().zip([next_left, next_right]).enumerate() {
+                let before = if before.is_finite() { before } else { 0.0 };
+                let after = if after.is_finite() { after } else { 0.0 };
+                let continues = after >= factor;
+                length[side] = match (before >= factor, continues) {
+                    (true, true) => length[side] + span,
+                    (true, false) => length[side] + span * (before - factor) / (before - after),
+                    (false, true) => span * (after - factor) / (after - before),
+                    (false, false) => 0.0,
+                };
+                if length[side] * pixel_width >= 0.5 {
+                    return true;
+                }
+                if !continues {
+                    length[side] = 0.0;
+                }
+            }
+        }
+        false
+    };
+    if has_span(maximum) {
+        return maximum;
+    }
+    // Search exponents so even a huge imported width at a subpixel spike cannot dominate the result.
+    let (mut low, mut high) = (0.0, maximum.log2());
+    for _ in 0..20 {
+        let middle = (low + high) * 0.5;
+        if has_span(middle.exp2()) {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    low.exp2()
+}
+
+/// The silhouette of a width profile (its points; None: the plain bar) in `r` as its top and bottom edges.
+/// A profile made with the Width tool can be many times the stroke's weight, so scale its silhouette to fit `r`.
+fn profile_outline(r: Rect, pixels_per_point: f32, points: Option<&[(f64, f64, f64)]>) -> (Vec<egui::Pos2>, Vec<egui::Pos2>) {
+    const SEGMENTS: usize = 32;
     let half = r.height() / 2.0 - 1.0;
-    let widths: Vec<(f64, f64)> = (0..=n).map(|i| points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, i as f64 / n as f64))).collect();
-    let widest = widths.iter().map(|(l, rr)| l.max(*rr)).filter(|w| w.is_finite()).fold(1.0, f64::max);
+    let mut widths = Vec::new();
+    let mut covered = [false; SEGMENTS + 1];
+    for knot in profile_knots(points.unwrap_or_default()) {
+        let ProfileKnot { t, incoming: (left, right), outgoing: (outgoing_left, outgoing_right) } = knot;
+        let nearby = (t * SEGMENTS as f64).round() as usize;
+        let grid = nearby as f64 / SEGMENTS as f64;
+        if t == grid || ((1..SEGMENTS).contains(&nearby) && (t - grid).abs() <= PROFILE_KNOT_SPACING) {
+            covered[nearby] = true;
+        }
+        // The first point contributes only its outgoing width, the last only its incoming width.
+        if t > 0.0 {
+            widths.push((t, left, right));
+        }
+        if t == 0.0 || (t < 1.0 && knot.incoming != knot.outgoing) {
+            widths.push((t, outgoing_left, outgoing_right));
+        }
+    }
+    for (i, covered) in covered.into_iter().enumerate() {
+        if !covered {
+            let t = i as f64 / SEGMENTS as f64;
+            let (l, r) = points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, t));
+            widths.push((t, l, r));
+        }
+    }
+    // Keep incoming and outgoing values in order where they share an x coordinate.
+    widths.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let x = |t: f64| r.left() + t as f32 * r.width();
+    let pixel_width = f64::from(r.width()) * f64::from(pixels_per_point);
+    let widest = profile_scale(&widths, pixel_width);
     let side = |w: f64| if w.is_finite() { (w / widest).clamp(0.0, 1.0) as f32 * half } else { 0.0 };
-    let x = |i: usize| r.left() + i as f32 / n as f32 * r.width();
-    let top = widths.iter().enumerate().map(|(i, (l, _))| pos2(x(i), r.center().y - side(*l))).collect();
-    let bottom = widths.iter().enumerate().map(|(i, (_, rr))| pos2(x(i), r.center().y + side(*rr))).collect();
+    let top = widths.iter().map(|(t, left, _)| pos2(x(*t), r.center().y - side(*left))).collect();
+    let bottom = widths.iter().map(|(t, _, right)| pos2(x(*t), r.center().y + side(*right))).collect();
     (top, bottom)
 }
 
 /// Draws a width profile's silhouette ([`profile_outline`]) into `rect` in the surface's ink, clipped to it.
 pub fn paint_profile(cx: &ContentPainterCx, rect: Rect, points: Option<&[(f64, f64, f64)]>) {
-    let (top, bottom) = profile_outline(rect, points);
+    let (top, bottom) = profile_outline(rect, cx.pixels_per_point(), points);
     let ink = cx.ink();
     let mut mesh = egui::Mesh::default();
     for (t, b) in top.iter().zip(&bottom) {
@@ -732,12 +863,12 @@ mod tests {
     #[test]
     fn wide_profiles_fit_their_preview() {
         let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
-        let (top, bottom) = profile_outline(r, Some(&[(0.0, 1.0, 1.0), (0.5, 10.0, 10.0), (1.0, 1.0, 1.0)]));
+        let (top, bottom) = profile_outline(r, 1.0, Some(&[(0.0, 1.0, 1.0), (0.5, 10.0, 10.0), (1.0, 1.0, 1.0)]));
         let all: Vec<_> = top.iter().chain(&bottom).collect();
         assert!(all.iter().all(|p| p.y >= r.top() && p.y <= r.bottom()), "{all:?}");
         let middle = all.iter().map(|p| (p.y - r.center().y).abs()).fold(0.0, f32::max);
         assert!((middle - (r.height() / 2.0 - 1.0)).abs() < 1e-3, "the widest point fills the box ({middle})");
-        let (top, bottom) = profile_outline(r, None);
+        let (top, bottom) = profile_outline(r, 1.0, None);
         assert!(top.iter().chain(&bottom).all(|p| (p.y - r.center().y).abs() <= 0.35 * (r.height() / 2.0 - 1.0) + 1e-3));
     }
 
@@ -759,6 +890,78 @@ mod tests {
         };
         // The preview has 10 points above the line. At the minimum weight, 60 units would need 15.
         assert_eq!(head.stop, Some(0.5));
+    }
+
+    #[test]
+    fn width_profile_thumbnails_keep_sharp_changes_and_visible_endpoints() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let pulse =
+            [(0.0, 1.0, 1.0), (0.47, 1.0, 1.0), (0.47, 10.0, 10.0), (0.475, 10.0, 10.0), (0.49, 10.0, 10.0), (0.49, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let long_pulse: Vec<_> = std::iter::once(pulse[0])
+            .chain((1..=512).flat_map(|i| [(f64::from(i) / 1200.0, 1.0, 1.0); 2]))
+            .chain(pulse[1..].iter().copied())
+            .collect();
+        for profile in [&pulse[..], long_pulse.as_slice()] {
+            let (top, _) = profile_outline(r, 1.0, Some(profile));
+            for t in [0.47, 0.49] {
+                let x = r.left() + t * r.width();
+                let edge: Vec<_> = top.iter().filter(|point| (point.x - x).abs() < 1e-3).collect();
+                assert_eq!(edge.len(), 2, "both sides of each step remain");
+                assert!((edge[1].y - edge[0].y).abs() > 5.0, "the step keeps its height");
+            }
+        }
+
+        let with_taper: Vec<_> =
+            long_pulse.iter().copied().filter(|p| p.0 < 0.47).chain([(0.475, 1.0, 1.0), (0.475, 10.0, 10.0), (0.485, 1.0, 1.0), pulse[6]]).collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&with_taper));
+        let taper_end = r.left() + 0.485 * r.width();
+        assert!(top.iter().any(|p| (p.x - taper_end).abs() < 1e-3 && p.y > r.top() + 5.0), "the continuous knot sets where the taper ends");
+
+        let plateau = [(0.0, 1.0, 1.0), (0.4945, 1.0, 1.0), (0.4945, 10.0, 10.0), (0.502, 10.0, 10.0), (0.502, 1.0, 1.0), pulse[6]];
+        let (top, _) = profile_outline(r, 1.0, Some(&plateau));
+        assert!(top[0].y > r.top() + 5.0, "a grid sample cannot split a visible plateau for scaling");
+
+        let narrow: Vec<_> = long_pulse
+            .iter()
+            .copied()
+            .filter(|p| p.0 < 0.47)
+            .chain([(0.47, 1.0, 1.0), (0.47, 100.0, 100.0), (0.4701, 100.0, 100.0), (0.4702, 1.0, 1.0), pulse[6]])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&narrow));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "adding distant knots cannot make a subpixel spike visible");
+
+        let continuous: Vec<_> = long_pulse
+            .iter()
+            .copied()
+            .filter(|p| p.0 < 0.47)
+            .chain([(0.47, 1.0, 1.0), (0.4799, 1.1, 1.1), (0.48, 100.0, 100.0), (0.4801, 1.1, 1.1), (0.49, 1.0, 1.0), pulse[6]])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&continuous));
+        assert!(top[0].y < r.top() + 3.0, "a subpixel continuous peak cannot shrink the whole stroke");
+
+        let endpoints = [(0.0, 100.0, 100.0), (0.0, 1.0, 1.0), (1.0, 1.0, 1.0), (1.0, 100.0, 100.0)];
+        let (top, bottom) = profile_outline(r, 1.0, Some(&endpoints));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3));
+        assert!(bottom.iter().all(|p| (p.y - (r.bottom() - 1.0)).abs() < 1e-3));
+
+        let cluster = [(0.0, 1.0, 1.0), (0.48, 1.0, 1.0), (0.48 + 2e-10, 100.0, 100.0), (0.48 + 5e-10, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let (top, _) = profile_outline(r, 1.0, Some(&cluster));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "the preview samples the same exposed widths as the stroke");
+
+        let nearby = [(0.0, 1.0, 1.0), (0.48, 1.0, 1.0), (0.48, 10.0, 10.0), (0.48000005, 10.0, 10.0), (0.48000005, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let wide = Rect::from_min_size(r.min, egui::vec2(20_000_000.0, r.height()));
+        let (top, _) = profile_outline(wide, 1.0, Some(&nearby));
+        let falling = wide.left() + 0.48000005_f32 * wide.width();
+        let outgoing = top.iter().rfind(|point| point.x == falling).unwrap();
+        assert!(outgoing.y > wide.top() + 5.0, "the second step ends the pulse");
+        for thumbnail in [r, r.translate(egui::vec2(1000.0, 0.0))] {
+            let (top, _) = profile_outline(thumbnail, 1.0, Some(&nearby));
+            assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "a subpixel pulse cannot change the scale as the panel moves");
+        }
+
+        let collapsed = [(0.0, 1.0, 1.0), (0.48 - 2e-9, 1.0, 1.0), (0.48, 100.0, 100.0), (0.48 + 2e-9, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let (top, _) = profile_outline(r, 1.0, Some(&collapsed));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "a peak collapsed to one x cannot scale the thumbnail");
     }
 
     #[test]
