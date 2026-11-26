@@ -143,7 +143,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["pencil", "smooth", "pathEraser", "join"],
             &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen", "smartPen"],
             &["curvature"],
         ],
     ),
@@ -560,8 +560,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 }
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
-/// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`]. The bar's rows drop the controls that do not fit.
+/// Warp's mesh and pins, the Circle tool's From Center (set through `tool.setOption`). The Artboard
+/// tool's options are drawn by [`crate::panels::artboards::control_bar`]. The bar's rows drop the
+/// controls that do not fit.
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `addons::shapes::control_bar(app, ui)` and `dimension::controls(app, ui)` lose their `reserve` (chrome-w16 ranks).
     if crate::addons::shapes::control_bar(app, ui) {
@@ -583,6 +584,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return crop_options(app, ui);
     }
+    if app.session.tool_id() == vectorcraft_tools::circle::ID {
+        return circle_options(app, ui);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -597,6 +601,16 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(value) = picked {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
+    }
+}
+
+/// The Circle tool's Control bar: From Center (the first point is the circle's center and the
+/// outline passes through the second), set through `tool.setOption`.
+fn circle_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.tool_options()["fromCenter"].as_bool().unwrap_or(false);
+    let picked = Checkbox::new(Bind::given(on)).label(tl!("From Center")).id_salt("fromCenter").show(ui).value().copied();
+    if let Some(value) = picked.filter(|value| *value != on) {
+        app.run("tool.setOption", json!({ "key": "fromCenter", "value": value })).ok();
     }
 }
 
@@ -740,9 +754,14 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: bool| {
+    // `on` is the pressed state of one of the three side-by-side buttons; the single one-column button has none.
+    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: Option<bool>| {
         let tip = format!("{} (Shift+D)", tl!(name));
-        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on);
+        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip);
+        let button = match on {
+            Some(on) => button.selected(on),
+            None => button,
+        };
         // Small in two columns, where the three sit side by side in the rail's width.
         let button = if two { button.size(ControlSize::Sm) } else { button };
         button.show(ui).clicked()
@@ -754,15 +773,16 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
                 // Side by side, each one a click away, a tight gap apart to fit the rail's width.
                 Row::new().gap(Gap::Tight).show(ui, |ui, _| {
                     for (mode, icon, name, id) in modes {
-                        if mode_button(ui, icon, name, app.session.draw_mode == mode) {
+                        if mode_button(ui, icon, name, Some(app.session.draw_mode == mode)) {
                             run = Some(("view.drawMode", json!({ "mode": id })));
                         }
                     }
                 });
-            } else if let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
-                && mode_button(ui, icon, name, mode != vectorcraft_engine::DrawMode::Normal)
+            } else if let Some((_, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
+                && mode_button(ui, icon, name, None)
             {
-                // One column: the current mode's button, which cycles them.
+                // One column: the current mode's button, named for it, which cycles them; it is always the
+                // current mode, so it has no pressed state.
                 run = Some(("view.drawMode", json!({})));
             }
         }

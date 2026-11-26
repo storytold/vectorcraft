@@ -75,16 +75,16 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
-         DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
-         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
-         ZOrderMethod",
+        "activeDocument activeDocument= app Application Artboard Artboards CompoundPathItem CompoundPathItems \
+         CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
+         DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents Documents ElementPlacement \
+         GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits selection selection= ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+         selection selection= toString typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -92,17 +92,17 @@ const INSIDE: &[(&str, &str)] = &[
         "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
          colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
          height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
-         transparencyGrid transparencyGrid= typename units units= width width=",
+         toString transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
-    ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent toString typename"),
     ("Document.", "prototype"),
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
          documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
-         views views= width",
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
+         typename views views= width",
     ),
     ("Layer.", "prototype"),
     (
@@ -111,10 +111,10 @@ const INSIDE: &[(&str, &str)] = &[
          dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
          locked= move name name= opacity opacity= pageItems parent pathItems pathItems= placedItems placedItems= preview \
          preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
-         textFrames= typename visible visible= zOrder zOrderPosition",
+         textFrames= toString typename visible visible= zOrder zOrderPosition",
     ),
     ("Layers.", "prototype"),
-    ("Layers.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Layers.prototype.", "add constructor getByName index length parent removeAll toString typename"),
     ("GroupItem.", "prototype"),
     (
         "GroupItem.prototype.",
@@ -122,32 +122,32 @@ const INSIDE: &[(&str, &str)] = &[
          rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
     ),
     ("GroupItems.", "prototype"),
-    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll typename"),
+    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll toString typename"),
     ("CompoundPathItem.", "prototype"),
     ("CompoundPathItem.prototype.", "constructor pathItems"),
     ("CompoundPathItems.", "prototype"),
-    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll toString typename"),
     ("Artboard.", "prototype"),
     (
         "Artboard.prototype.",
         "artboardRect artboardRect= constructor name name= parent remove rulerOrigin rulerOrigin= rulerPAR rulerPAR= \
-         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= typename",
+         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= toString typename",
     ),
     ("Artboards.", "prototype"),
     (
         "Artboards.prototype.",
         "add constructor getActiveArtboardIndex getByName index insert length parent remove setActiveArtboardIndex \
-         typename",
+         toString typename",
     ),
     ("PageItems.", "prototype"),
-    ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll toString typename"),
     ("PageItem.", "prototype"),
     (
         "PageItem.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
          left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
@@ -191,6 +191,9 @@ const LIST: &str = r#"(function () {
     var globals = Object.getOwnPropertyNames(g);
     add(g, "");
     for (var i = 0; i < globals.length; i++) {
+        // A global with a getter, such as `activeDocument`, is not read: it throws with no document open.
+        var gd = Object.getOwnPropertyDescriptor(g, globals[i]);
+        if (gd && gd.get) continue;
         var v = g[globals[i]];
         if (v !== null && (typeof v == "object" || typeof v == "function")) {
             add(v, globals[i] + ".");

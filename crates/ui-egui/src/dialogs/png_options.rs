@@ -248,7 +248,7 @@ fn resolution_row() -> Param {
 fn size_row(w: f64, h: f64) -> Param {
     Param::custom("__sizeText", tl!("Size:"), move |ui, fields, _| {
         let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), fields.number("ppi").unwrap_or(72.0) / 72.0);
-        ui.label(format!("{pw} × {ph} px"))
+        Text::new(format!("{pw} × {ph} px")).show(ui)
     })
 }
 

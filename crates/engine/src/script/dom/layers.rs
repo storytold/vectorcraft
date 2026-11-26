@@ -41,8 +41,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
-    boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
-    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, reported_opacity, text, typename, whole, with_doc,
+    boolean, class_text, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of,
+    item_ref, later, method, named, named_text, num, number, on_doc, on_doc_layer, page_items, placement_of, probing, property, reported_opacity,
+    text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -270,6 +271,10 @@ fn layer_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("Layer"))
 }
 
+fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
+    named_text("Layer", layer_name(h, a))
+}
+
 /// The layer's place among the layers beside it, from 1 at the bottom. Art beside a sublayer is
 /// not counted.
 fn layer_z_position(h: &Host, a: &[Data]) -> Answer {
@@ -495,8 +500,20 @@ fn layers_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("Layers"))
 }
 
+/// `collection["name"]` as `getByName` reads it, or `undefined` for `"name" in collection` when
+/// nothing has the name, as the document's `pageItems` does.
+fn read_by_name(h: &Host, a: &[Data], by_name: fn(&Host, &[Data]) -> Answer) -> Answer {
+    match by_name(h, a) {
+        Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
+        r => r,
+    }
+}
+
 fn layers_at(h: &Host, a: &[Data]) -> Answer {
     let (doc, parent) = layers_scope(h, arg(a, 0))?;
+    if let Data::String(_) = arg(a, 1) {
+        return read_by_name(h, a, layers_by_name);
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     Ok(with_doc(h, doc, |_, st| layer_list(&st.doc, parent).get(i).map_or(Data::Undefined, |id| layer_ref(h, st.uid, *id))))
@@ -649,6 +666,12 @@ fn art_parent(h: &Host, a: &[Data], kind: Kind) -> Answer {
 
 fn art_at(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
+    if let Data::String(_) = arg(a, 1) {
+        return match art_by_name(h, a, kind) {
+            Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
+            r => r,
+        };
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     with_doc(h, doc, |_, st| Ok(art_list(h, st, kind, c)?.get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id))))
@@ -1076,6 +1099,10 @@ fn board_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("Artboard"))
 }
 
+fn board_to_string(h: &Host, a: &[Data]) -> Answer {
+    named_text("Artboard", board_name(h, a))
+}
+
 /// `rulerOrigin`: where the rulers measure from with this artboard active, from its top-left corner
 /// with Y down.
 fn board_ruler_origin(h: &Host, a: &[Data]) -> Answer {
@@ -1173,6 +1200,9 @@ fn board_index_arg(d: &Data, len: usize, what: &str) -> Result<usize> {
 
 fn boards_at(h: &Host, a: &[Data]) -> Answer {
     let doc = boards_doc(h, a)?;
+    if let Data::String(_) = arg(a, 1) {
+        return read_by_name(h, a, boards_by_name);
+    }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
     Ok(with_doc(h, doc, |_, st| st.doc.artboards.get(i).map_or(Data::Undefined, |ab| board_ref(h, st.uid, ab.id))))
@@ -1326,6 +1356,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("move", method(l, layer_move)),
         ("remove", method(l, layer_remove)),
         ("zOrder", method(l, layer_z_order)),
+        ("toString", method(l, layer_to_string)),
     ]);
     layer.extend(
         ["pathItems", "textFrames", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"]
@@ -1344,6 +1375,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("getByName", method(l, layers_by_name)),
                 ("add", method(l, layers_add)),
                 ("removeAll", method(l, layers_remove_all)),
+                ("toString", class_text("Layers")),
             ]),
             Some(super::function(l, layers_at)),
         ),
@@ -1359,6 +1391,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                     ("getByName", method(l, groups_by_name)),
                     ("add", method(l, groups_add)),
                     ("removeAll", method(l, groups_remove_all)),
+                    ("toString", class_text("GroupItems")),
                 ]);
                 m.push(later(l, "GroupItems", "createFromFile"));
                 m
@@ -1376,6 +1409,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("getByName", method(l, compounds_by_name)),
                 ("add", method(l, compounds_add)),
                 ("removeAll", method(l, compounds_remove_all)),
+                ("toString", class_text("CompoundPathItems")),
             ]),
             Some(super::function(l, compounds_at)),
         ),
@@ -1393,6 +1427,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("showCrossHairs", property(l, board_cross_hairs, board_set_cross_hairs)),
                 ("showSafeAreas", property(l, board_safe_areas, board_set_safe_areas)),
                 ("remove", method(l, board_remove)),
+                ("toString", method(l, board_to_string)),
             ]),
             None,
         ),
@@ -1410,6 +1445,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("remove", method(l, boards_remove)),
                 ("getActiveArtboardIndex", method(l, boards_active)),
                 ("setActiveArtboardIndex", method(l, boards_set_active)),
+                ("toString", class_text("Artboards")),
             ]),
             Some(super::function(l, boards_at)),
         ),

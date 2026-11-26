@@ -327,6 +327,28 @@ pub(crate) fn button_enabled(app: &VectorcraftApp, b: &Button) -> bool {
     }
 }
 
+/// Why the Align or Distribute button `b` can't run now, as [`crate::menus::why_off`] answers for
+/// its command: `None` while it can, else `Some` with the reason when one is known. While
+/// [`button_enabled`] dims it, the reason is how many artboards it needs with the Artboard tool
+/// chosen, else the engine's for the object command it runs, whose check `button_enabled` repeats;
+/// otherwise the engine's for the command a click runs.
+pub(crate) fn why_off(app: &VectorcraftApp, b: &Button) -> Option<Option<String>> {
+    if button_enabled(app, b) {
+        return crate::menus::why_off(app, b.command_now(app));
+    }
+    if !on_artboards(app) || app.session.active().is_none() {
+        return Some(vectorcraft_engine::find_command(b.command()).and_then(|c| (c.enabled)(&app.session).err()));
+    }
+    Some(Some(
+        match b {
+            Button::Align(..) | Button::AlignCenters => "select an artboard",
+            Button::Distribute(..) | Button::Spacing(_) if app.ui.align_to == AlignTo::Artboard => "select at least two artboards",
+            Button::Distribute(..) | Button::Spacing(_) => "select at least three artboards",
+        }
+        .to_string(),
+    ))
+}
+
 /// The Control bar's Align content: the align buttons, the Align To menu button showing the choice
 /// of [`shown_align_to`], and the Distribute buttons while they can act (the artboards the Artboard
 /// tool has selected, else two or more objects). The bar's row decides what leaves when it is
