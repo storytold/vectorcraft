@@ -112,6 +112,44 @@ fn the_parametric_shape_panel_edits_the_selected_shape_or_the_tools_next_one() {
     assert!(id.is_none() && super::shape::plain_selected(&app));
 }
 
+/// The panel's W and H keep the point of the selection's box that the Transform panel and the
+/// Control bar share in place, as their own W and H do, on upright and turned shapes.
+#[test]
+fn the_parametric_shape_panels_size_fields_keep_the_shared_reference_point() {
+    for (refi, rotation) in [(0usize, 0.0), (8, 0.0), (2, 30.0), (0, 180.0)] {
+        let mut app = app();
+        let params = json!({"kind": "rectangle", "center": [150, 150], "width": 100, "height": 60, "rotation": rotation});
+        let id = vectorcraft_doc::NodeId(app.run("addon.pathtools.shape.create", params).unwrap()["id"].as_u64().unwrap());
+        let shape =
+            |app: &VectorcraftApp| vectorcraft_tools::addons::parametric_shape::read(app.session.active().unwrap().doc.node(id).unwrap()).unwrap();
+        app.ui.transform_panel.reference_point = refi;
+        let (before, was) = (shape(&app), app.selection_box().unwrap().reference_point(refi));
+        let mut panel = Panel::new(app, super::shape::show);
+        panel.type_into("W", "160");
+        panel.type_into("H", "20");
+        let mut app = panel.app();
+        let after = shape(&app);
+        assert!(after.width > before.width && after.height < before.height, "reference {refi}: W and H took {after:?}");
+        let moved = app.selection_box().unwrap().reference_point(refi).distance(was);
+        assert!(moved < 1e-6, "reference {refi}, rotation {rotation}: the reference point moved {moved} pt");
+    }
+    // With an anchor direct-selected the locator shows the anchors' box, so W keeps the shape's center.
+    let mut app = app();
+    let params = json!({"kind": "rectangle", "center": [150, 150], "width": 100, "height": 60});
+    let id = vectorcraft_doc::NodeId(app.run("addon.pathtools.shape.create", params).unwrap()["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    app.ui.transform_panel.reference_point = 0;
+    let mut panel = Panel::new(app, super::shape::show);
+    panel.type_into("W", "160");
+    let app = panel.app();
+    let after = vectorcraft_tools::addons::parametric_shape::read(app.session.active().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!((after.width - 160.0).abs() < 1e-6 && after.center.distance(vectorcraft_geom::Point::new(150.0, 150.0)) < 1e-6, "{after:?}");
+}
+
 /// The Corner Tool and Shared Edge Merge Tool items leave a floating Anchor Inspector showing
 /// instead of closing it, and in Presentation Mode they choose the tool without failing.
 #[test]

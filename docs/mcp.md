@@ -15178,8 +15178,12 @@ Commands:
   roundness (0 to 1; 0.4 and 0); gear, tooth height (0.01 to 0.9, 0.2); bubble, the tail's height (0.05 to 0.9, 0.25)
   and where its tip is across (−1 to 1, −0.4). → `{id, shape}`.
 - `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
-  defaults for the values not given) and redraws it in place. With no change it makes no step. → `{id, shape}` (its
-  numbers now, so `{id}` alone reads them).
+  defaults for the values not given) and redraws it in place. With `reference` (0 to 8 on the 9-point grid of the
+  bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
+  keeps its place, as with the Transform panel's W and H; otherwise the shape's center stays. Snapping to the pixel
+  grid and an attachment to a path apply after that, as they do for the Transform panel's W and H, and can move the
+  point. A `reference` outside 0 to 8 is an error. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
+  `null` when snapping to the pixel grid left a plain path).
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
   outline. → `{ids}` (those converted).
