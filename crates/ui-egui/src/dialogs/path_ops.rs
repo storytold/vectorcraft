@@ -13,6 +13,7 @@ use craft::ui::layout::GridFit;
 use craft::ui::layout_components::Grid;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::runtime::measure;
 use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
 use craft::ui::text::{NumberField, NumberOutput};
 use craft::ui::value_drag::SliderScale;
@@ -200,38 +201,45 @@ fn split_grid(ui: &mut egui::Ui, f: &mut DialogFields, lengths: LengthUnits) -> 
         ("rows", tl!("Rows:"), tl!("Height:"), "rowGutter", "totalHeight", 2.0),
         ("columns", tl!("Columns:"), tl!("Width:"), "columnGutter", "totalWidth", 2.0),
     ];
-    Grid::new(&AXES)
-        .fit(GridFit::Fixed)
-        .id_salt("split-grid")
-        .show(ui, |ui, _| {
-            for (number, label, _, _, _, default) in axes {
-                let n = f.number(number).unwrap_or(default);
-                if let Some(v) = cell(ui, label, label.to_string(), false, n, None) {
-                    f.set(number, v);
-                }
+    // The grid can run its body twice in a pass, so the body edits a copy, kept only from the run that takes effect.
+    let before = f.clone();
+    let mut edited = None;
+    let shown = Grid::new(&AXES).fit(GridFit::Fixed).id_salt("split-grid").show(ui, |ui, _| {
+        let mut f = before.clone();
+        for (number, label, _, _, _, default) in axes {
+            let n = f.number(number).unwrap_or(default);
+            if let Some(v) = cell(ui, label, label.to_string(), false, n, None) {
+                f.set(number, v);
             }
-            for (number, _, label, gutter, total, default) in axes {
-                let n = f.number(number).unwrap_or(default).max(1.0);
-                let gaps = f.number(gutter).unwrap_or(0.0) * (n - 1.0);
-                let size = (f.number(total).unwrap_or(0.0) - gaps) / n;
-                if let Some(v) = cell(ui, label, label.to_string(), false, size, Some(lengths)) {
-                    f.set(total, n * v + gaps);
-                }
+        }
+        for (number, _, label, gutter, total, default) in axes {
+            let n = f.number(number).unwrap_or(default).max(1.0);
+            let gaps = f.number(gutter).unwrap_or(0.0) * (n - 1.0);
+            let size = (f.number(total).unwrap_or(0.0) - gaps) / n;
+            if let Some(v) = cell(ui, label, label.to_string(), false, size, Some(lengths)) {
+                f.set(total, n * v + gaps);
             }
-            for (_, axis, _, gutter, _, _) in axes {
-                let label = tl!("Gutter:");
-                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(gutter).unwrap_or(0.0), Some(lengths)) {
-                    f.set(gutter, v);
-                }
+        }
+        for (_, axis, _, gutter, _, _) in axes {
+            let label = tl!("Gutter:");
+            if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(gutter).unwrap_or(0.0), Some(lengths)) {
+                f.set(gutter, v);
             }
-            for (_, axis, _, _, total, _) in axes {
-                let label = tl!("Total:");
-                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(total).unwrap_or(0.0), Some(lengths)) {
-                    f.set(total, v);
-                }
+        }
+        for (_, axis, _, _, total, _) in axes {
+            let label = tl!("Total:");
+            if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(total).unwrap_or(0.0), Some(lengths)) {
+                f.set(total, v);
             }
-        })
-        .output
+        }
+        if measure::effect(ui.ctx(), "Split Into Grid's fields edit their values") {
+            edited = Some(f);
+        }
+    });
+    if let Some(edited) = edited {
+        *f = edited;
+    }
+    shown.output
 }
 
 /// Split Into Grid's rows: the grid and Add Guides.
