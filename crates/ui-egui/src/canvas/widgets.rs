@@ -40,34 +40,34 @@ fn doc_point(p: vectorcraft_geom::Point) -> Point {
     Point::new(p.x, p.y)
 }
 
-/// Is the active tool a shape tool that is not drawing a shape? While it draws it shows none of its widgets;
-/// adjusting a widget, it shows them.
-fn shape_tool_idle(app: &VectorcraftApp) -> bool {
-    vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id()) && !(app.session.tool_busy() && !app.session.tool_transforming())
+/// Is the active tool a shape tool that is not drawing a shape, and `tool`, the tool whose widgets the canvas shows,
+/// is that tool (Cmd lends no other)? While it draws it shows none of its widgets; adjusting a widget, it shows them.
+fn shape_tool_idle(app: &VectorcraftApp, tool: &str) -> bool {
+    tool == app.session.tool_id()
+        && vectorcraft_tools::shape::shows_shape_widgets(tool)
+        && !(app.session.tool_busy() && !app.session.tool_transforming())
 }
 
 /// The bounding box to draw, if any: the Selection tool's (rotated with the objects after a rotation), also
-/// shown by the shape tools that keep a shape just drawn ready to adjust, and by Cmd held over another tool,
-/// which lends the Selection tool to a press. It hides while a drag moves, rotates or resizes the selection, so
+/// shown by the shape tools that keep a shape just drawn ready to adjust, and by Cmd held over another tool
+/// where it lends the Selection tool to a press. It hides while a drag moves, rotates or resizes the selection, so
 /// only the art is seen going with the pointer; a handle resize keeps it at the changing bounds. With General ›
 /// Show Bounding Box While Moving and Drawing on, a move draws it where the drag has moved the selection and a
 /// shape tool draws it around the shape being drawn. With Real-time Drawing off the document stays at the
 /// drag's snapshot, so a resize or a shape being drawn measures the box from the pending preview; a shape being
-/// drawn shows no box until a preview has made it. `held` is the modifiers held now; a second pass of a frame
-/// reads the same held state, which is not an event.
+/// drawn shows no box until a preview has made it. `tool` is the tool whose marks the canvas shows
+/// ([`super::shown_tool`]): while Cmd is held, the selection tool a press borrows, so the box shows only when that
+/// is the Selection tool, whose handles take the press.
 // PLAN: the sheet's `(app, st)` cannot work: `selection_box` and `deferred_transform_box` need `&mut app`, so the
 // active document is read inside.
-pub(super) fn bounding_box(app: &mut VectorcraftApp, held: egui::Modifiers) -> Option<ShownBox> {
+pub(super) fn bounding_box(app: &mut VectorcraftApp, tool: &str) -> Option<ShownBox> {
     let resizing = app.session.tool_resizing();
     let move_box = app.session.move_drag_box();
     let drawing_boxed = app.session.draws_new_shape_box();
     let follows = resizing || move_box.is_some() || drawing_boxed;
-    let selection_tool = app.session.tool_id() == "selection";
-    let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
-    // PLAN: assumed `super::mods(egui::Modifiers, bool) -> Mods` stays at `canvas` (sheet w20).
-    let held = super::mods(held, false);
-    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
-    let show_box = (selection_tool || lends_selection || (shape_tool && (!app.session.tool_busy() || follows)))
+    let own = tool == app.session.tool_id();
+    let shape_tool = own && vectorcraft_tools::shape::shows_shape_widgets(tool);
+    let show_box = (tool == "selection" || (shape_tool && (!app.session.tool_busy() || follows)))
         && (follows || !app.session.tool_transforming())
         && app.ui.view.bounding_box;
     if !show_box {
@@ -114,11 +114,10 @@ fn corner_target(doc: &Document, id: NodeId, indices: &[usize]) -> Option<Corner
 
 /// The tool's Live Corners widgets on show: Selection and the shape tools on a live rectangle or polygon while
 /// Show Shape Widgets is on, Direct Selection on any path. Only the corners the tool hit-tests are listed, those
-/// within the Hide Corner Widget angle.
-fn shown_corners(app: &VectorcraftApp, zoom: f64) -> Option<vectorcraft_tools::corners::CornerWidgets> {
-    let tool = app.session.tool_id();
+/// within the Hide Corner Widget angle. `tool` is the tool whose widgets the canvas shows ([`super::shown_tool`]).
+fn shown_corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<vectorcraft_tools::corners::CornerWidgets> {
     let direct = tool == "directSelection";
-    if !(matches!(tool, "selection" | "directSelection") || shape_tool_idle(app)) {
+    if !(matches!(tool, "selection" | "directSelection") || shape_tool_idle(app, tool)) {
         return None;
     }
     let st = app.session.active()?;
@@ -128,11 +127,12 @@ fn shown_corners(app: &VectorcraftApp, zoom: f64) -> Option<vectorcraft_tools::c
 
 /// The Live Corners widgets of the picked corners on show, one group per layer color so each draws in its
 /// object's color, with a dot at its center. Every corner on show is picked, except with Direct Selection while
-/// some corners are picked: the widgets of the others are [`hollow_corners`].
+/// some corners are picked: the widgets of the others are [`hollow_corners`]. `tool` is the tool whose widgets the
+/// canvas shows ([`super::shown_tool`]).
 // PLAN: the decision's `(.., f64)` is dropped: the corners listed are already those within the angle, so no
 // angle is left to hand on.
-pub(super) fn corners(app: &VectorcraftApp, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
-    let shown = shown_corners(app, zoom)?;
+pub(super) fn corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
+    let shown = shown_corners(app, tool, zoom)?;
     let st = app.session.active()?;
     // `visible_on` and `corners` list the same corners in the same order: path after path.
     let mut per_path: Vec<(NodeId, Vec<usize>)> = vec![];
@@ -160,8 +160,8 @@ pub(super) fn corners(app: &VectorcraftApp, zoom: f64) -> Option<Vec<(DataColor,
 /// The Live Corners widgets of the corners on show that are not picked: with Direct Selection while some corners
 /// are picked, every other corner's widget shows too, so a click or a Shift-click on it picks its corner. Each is
 /// listed with its place and its object's layer color.
-pub(super) fn hollow_corners(app: &VectorcraftApp, zoom: f64) -> Vec<(Point, DataColor)> {
-    let (Some(shown), Some(st)) = (shown_corners(app, zoom), app.session.active()) else { return vec![] };
+pub(super) fn hollow_corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Vec<(Point, DataColor)> {
+    let (Some(shown), Some(st)) = (shown_corners(app, tool, zoom), app.session.active()) else { return vec![] };
     shown.visible_on().filter(|&(_, _, picked)| !picked).map(|(id, at, _)| (doc_point(at), data_color(st.doc.layer_color(id)))).collect()
 }
 
@@ -304,11 +304,11 @@ impl ShapeWidgets {
     /// The widgets of the active document at `zoom` (screen points per document unit) under a view turned by
     /// `rotation`. `edges` is View › Show Edges: the type, side and pie widgets go with it, the blend and Objects
     /// on Path widgets are controls and stay. `shown` is the bounding box on show, which the type and side
-    /// widgets sit beside; a shape being drawn has neither.
-    fn of(app: &VectorcraftApp, edges: bool, shown: Option<&ShownBox>, zoom: f64, rotation: f64) -> Self {
+    /// widgets sit beside; a shape being drawn has neither. `tool` is the tool whose widgets the canvas shows
+    /// ([`super::shown_tool`]): while Cmd is held, the selection tool a press borrows.
+    fn of(app: &VectorcraftApp, tool: &str, edges: bool, shown: Option<&ShownBox>, zoom: f64, rotation: f64) -> Self {
         let mut marks = vec![];
         let Some(st) = app.session.active() else { return Self::new(marks) };
-        let tool = app.session.tool_id();
         let layer = |id| data_color(st.doc.layer_color(id));
         let shape_widgets = app.ui.view.shape_widgets;
         if edges {
@@ -322,7 +322,7 @@ impl ShapeWidgets {
                 }
             }
             // Pie widgets stay while one is dragged, each joined to the outline's point at its angle.
-            if app.ui.view.bounding_box && shape_widgets && (tool == "selection" || shape_tool_idle(app)) {
+            if app.ui.view.bounding_box && shape_widgets && (tool == "selection" || shape_tool_idle(app, tool)) {
                 for w in pie::PieWidget::of(&st.doc, &st.selection, zoom) {
                     marks.push(Mark::new(Form::Disc, Filling::Hollow, w.at, pie::RADIUS_PX, layer(w.id)).joined(w.on));
                 }
@@ -435,16 +435,18 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::u
     // PLAN: assumed the body's rect is the canvas rect the controls are shown at.
     let rect = ui.max_rect();
     let edges = app.ui.view.edges;
-    let shown = if edges { bounding_box(app, ui.input(|i| i.modifiers)) } else { None };
+    // While Cmd is held, the widgets of the selection tool a press borrows.
+    let tool = super::shown_tool(app, ui.ctx());
+    let shown = if edges { bounding_box(app, tool) } else { None };
     if edges {
-        for (at, (color, targets)) in corners(app, space.view.zoom).into_iter().flatten().enumerate() {
+        for (at, (color, targets)) in corners(app, tool, space.view.zoom).into_iter().flatten().enumerate() {
             CornerWidgets::new("Live Corners", Bind::given(targets)).id_salt(at).reach(TransformReach::Shown).color(color).show_at(ui, rect);
         }
         if let Some(b) = &shown {
             show_box(ui, rect, b);
         }
     }
-    let widgets = ShapeWidgets::of(app, edges, shown.as_ref(), space.view.zoom, space.view.rotation);
+    let widgets = ShapeWidgets::of(app, tool, edges, shown.as_ref(), space.view.zoom, space.view.rotation);
     if !widgets.marks.is_empty() {
         widgets.show_at(ui, rect);
     }
@@ -457,7 +459,7 @@ pub(super) fn show_hollow_corners(app: &VectorcraftApp, ui: &mut egui::Ui, space
     if kind != BodyKind::Live || super::revolve_editing(app) || !app.ui.view.edges {
         return;
     }
-    let widgets = hollow_corners(app, space.view.zoom);
+    let widgets = hollow_corners(app, super::shown_tool(app, ui.ctx()), space.view.zoom);
     if !widgets.is_empty() {
         HollowCorners::new(widgets).show_at(ui, ui.max_rect());
     }

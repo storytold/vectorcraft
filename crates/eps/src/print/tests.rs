@@ -133,6 +133,15 @@ fn over(under: Option<Paint>, art: &[Node]) -> Document {
 /// separation at `level` read back, both drawn at 1 px a point.
 fn plate_of(d: &Document, ink: &str, level: Level) -> (Image, Image) {
     let area = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let (plate, out) = separation(d, ink, level);
+    let back = crate::import(&out.bytes).unwrap().document;
+    (render_region(&plate, area, 1.0), render_region(&back, area, 1.0))
+}
+
+/// Ink `ink`'s plate of `d` as the print plan separates it for PostScript, and that plate written
+/// as a PostScript separation at `level`.
+fn separation(d: &Document, ink: &str, level: Level) -> (Document, EpsOutput) {
+    let area = Rect::new(0.0, 0.0, 200.0, 100.0);
     let settings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
     let plan = vectorcraft_pdf::plan(d, &vectorcraft_pdf::PrintOptions { settings, postscript: true, ..Default::default() }).unwrap();
     let i = plan.sheets.iter().find(|s| s.ink.as_ref().is_some_and(|p| p.name == ink)).and_then(|s| s.plate).unwrap();
@@ -151,8 +160,7 @@ fn plate_of(d: &Document, ink: &str, level: Level) -> (Image, Image) {
     };
     let out = print(&[page], &[0], &PrintJob { level, ..PrintJob::default() }).unwrap();
     assert!(level == Level::Three || !text(&out).contains("shfill"), "Level 2 has no smooth shadings");
-    let back = crate::import(&out.bytes).unwrap().document;
-    (render_region(plate, area, 1.0), render_region(&back, area, 1.0))
+    (plate.clone(), out)
 }
 
 /// Ink `ink`'s PostScript plate of `art` over a page of 100% `ink` (`under`), checked against the
@@ -232,6 +240,44 @@ fn an_overprinting_gradient_keeps_the_ink_below_where_it_puts_none_on_a_postscri
     let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
     let cases: Vec<_> = fills.map(|(name, fill)| (name, overprinting(fill, Paint::None), cyan.clone(), "Cyan")).collect();
     assert_keeps_the_ink_below(&cases);
+}
+
+/// With Discard White Overprint, a process white fill or stroke marked to overprint knocks out the
+/// cyan below it on the Cyan plate and is written without overprinting, as in composite output.
+/// Without the setting, and for a white linked to a spot swatch with a color at a tint above 0%,
+/// the cyan below it prints.
+#[test]
+fn white_overprints_knock_out_on_postscript_plates_with_discard_white_overprint() {
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let white = Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let spot_white = Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 0.0), swatch: Some("White Ink".into()), tint: 1.0 };
+    // The fill is sampled in the rectangle's middle, the stroke on its top edge.
+    let (fill_at, stroke_at) = ((100, 50), (100, 10));
+    let cases = [
+        ("process white fill", overprinting(white.clone(), Paint::None), fill_at, true, true),
+        ("process white stroke", overprinting(Paint::None, white.clone()), stroke_at, true, true),
+        ("process white fill without the setting", overprinting(white.clone(), Paint::None), fill_at, false, false),
+        ("process white stroke without the setting", overprinting(Paint::None, white), stroke_at, false, false),
+        ("spot white fill", overprinting(spot_white.clone(), Paint::None), fill_at, true, false),
+        ("spot white stroke", overprinting(Paint::None, spot_white), stroke_at, true, false),
+    ];
+    let mut failed = vec![];
+    for (name, art, (x, y), discard, knocks_out) in cases {
+        let mut d = over(Some(cyan.clone()), &[art]);
+        d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+        d.setup.discard_white_overprint = discard;
+        for level in [Level::Three, Level::Two] {
+            let (_, printed) = plate_of(&d, "Cyan", level);
+            let paper = printed.over_white(x, y)[0] >= 254;
+            if paper != knocks_out {
+                failed.push(format!("{name} at level {level:?}: knocked out {paper}, expected {knocks_out}"));
+            }
+            if text(&separation(&d, "Cyan", level).1).contains("true op") {
+                failed.push(format!("{name} at level {level:?}: overprints on the plate"));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
 }
 
 #[test]

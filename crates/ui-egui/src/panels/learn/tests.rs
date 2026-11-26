@@ -102,18 +102,6 @@ fn the_catalog_is_valid() {
     }
 }
 
-/// Explore tutorials at the right end of the app bar shows the Learn panel, and hides it again.
-#[test]
-fn explore_tutorials_on_the_app_bar_shows_and_hides_the_learn_panel() {
-    let mut app = app();
-    let ctx = app.ui_ctx.clone().expect("a window");
-    assert!(!shown(&app));
-    click_with(&mut app, "Explore tutorials", |app, events| shell_frame(app, &ctx, events));
-    assert!(shown(&app), "{}", app.ui.status);
-    click_with(&mut app, "Explore tutorials", |app, events| shell_frame(app, &ctx, events));
-    assert!(!shown(&app));
-}
-
 /// The command and params of Window › Learn.
 fn window_learn(app: &VectorcraftApp) -> (String, serde_json::Value) {
     let entry = crate::menus::menu_entries(app).into_iter().find(|e| e.path == ["Window"] && e.label == "Learn").expect("Window › Learn");
@@ -138,8 +126,8 @@ fn window_learn_shows_and_hides_the_panel() {
     assert!(!shown(&app));
 }
 
-/// With the dock hidden, Learn as the front panel is not visible: `window.learn`, Window › Learn
-/// and Explore tutorials show the dock instead of closing the panel.
+/// With the dock hidden, Learn as the front panel is not visible: `window.learn` and Window › Learn
+/// show the dock instead of closing the panel.
 #[test]
 fn window_learn_shows_a_hidden_dock() {
     let mut app = app();
@@ -410,6 +398,55 @@ fn the_tabs_rows_and_back_run_their_commands() {
     press(&mut app, "Skills", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
     press(&mut app, "Back", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
     press(&mut app, "Back", View { tab: Tab::Skills, skill: None, tutorial: None });
+}
+
+/// A click on the skill or the tutorial that was opened before, after Back, opens it again.
+#[test]
+fn a_click_on_the_skill_or_tutorial_opened_before_opens_it_again() {
+    let mut app = app();
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let (skill, tutorial) = catalog::tutorial("gradient").unwrap();
+    let open_skill = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None };
+    let open_tutorial = View { tutorial: Some(tutorial.id), ..open_skill.clone() };
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    for (name, view) in [
+        ("Skills", skills.clone()),
+        (skill.title, open_skill.clone()),
+        (tutorial.title, open_tutorial.clone()),
+        ("Back", open_skill.clone()),
+        (tutorial.title, open_tutorial.clone()),
+        ("Back", open_skill.clone()),
+        ("Back", skills.clone()),
+        (skill.title, open_skill.clone()),
+    ] {
+        click(&mut app, &ctx, name, show);
+        assert_eq!(app.ui.learn, view, "{name}");
+    }
+}
+
+/// Enter on the tutorial that was opened before, after Back and Tab into the list, opens it again.
+#[test]
+fn enter_on_the_tutorial_opened_before_opens_it_again() {
+    let mut app = app();
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let (_, tutorial) = catalog::tutorial("gradient").unwrap();
+    app.run("learn.show", json!({"tutorial": tutorial.id})).unwrap();
+    let opened = app.ui.learn.clone();
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    click(&mut app, &ctx, "Back", show);
+    click(&mut app, &ctx, tutorial.title, show);
+    assert_eq!(app.ui.learn, opened, "a click opens it");
+    click(&mut app, &ctx, "Back", show);
+    let focused = |app: &mut VectorcraftApp, events| {
+        let input = egui::RawInput { events, screen_rect: Some(SCREEN), ..Default::default() };
+        let update = crate::testing::part_frame(app, &ctx, input, show).platform_output.accesskit_update?;
+        update.nodes.into_iter().find(|(id, _)| *id == update.focus).and_then(|(_, n)| n.label().map(str::to_owned))
+    };
+    let on_row = (0..10).any(|_| focused(&mut app, vec![key(egui::Key::Tab)]).as_deref() == Some(tutorial.title));
+    assert!(on_row, "Tab reaches the tutorial's row");
+    frame(&mut app, &ctx, vec![key(egui::Key::Enter)], show);
+    frame(&mut app, &ctx, vec![], show);
+    assert_eq!(app.ui.learn, opened, "Enter opens it");
 }
 
 /// `learn.tab` switches tabs and keeps what the Skills tab had open; `learn.skill` opens a skill's

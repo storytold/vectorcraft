@@ -15,12 +15,14 @@
 //! Behavior reference: the help page
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html>.
 
+use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Politeness, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
+use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::presets::{
     NameCheck, NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
 };
@@ -408,9 +410,8 @@ impl KinsokuDialog {
     }
 
     fn show_problem(&self, ui: &mut Ui) {
-        // PLAN: craft_ui does not re-export `Tone`, which `Notice` needs, so the reason shows as plain text.
         if let Some(problem) = &self.problem {
-            Text::new(problem.clone()).show(ui);
+            Notice::new(Tone::Bad, problem.clone()).layout(NoticeLayout::Inline).announce(Politeness::Assertive).show(ui);
         }
     }
 }
