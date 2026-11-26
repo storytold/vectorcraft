@@ -261,14 +261,16 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
     let pixel = bar.app().session.prefs.pixel_snap;
     bar.click(tl!("Pixel Snapping Options.")).settle();
     {
-        let mut app = bar.app();
-        let dialog = app.ui.dialog.as_ref().expect("the existing Pixel Snapping Options dialog");
-        assert_eq!(dialog.kind, crate::dialogs::pixel_snap_options::KIND);
-        assert_eq!(
-            serde_json::Value::Object(dialog.fields.clone()),
-            json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling})
-        );
-        app.ui.dialog = None;
+        let app = bar.app();
+        let dialogs = app.dialogs().expect("the native dialog host");
+        let id = craft::ui::dialog::dialog_id(crate::dialogs::pixel_snap_options::KIND);
+        dialogs.with(|host| {
+            let dialog = host.open_dialogs().into_iter().find(|dialog| dialog.id == id).expect("the existing Pixel Snapping Options dialog");
+            assert_eq!(dialog.key.as_deref(), Some(crate::dialogs::pixel_snap_options::KIND));
+            assert_eq!(dialog.fields, Some(json!({"drawing": pixel.drawing, "moving": pixel.moving, "scaling": pixel.scaling})));
+            assert!(host.cancel_by_id(bar.fixture.ctx(), id));
+            assert!(!host.open_dialogs().iter().any(|dialog| dialog.id == id));
+        });
         assert_eq!(app.session.prefs.pixel_snap, pixel, "closing without OK changes no option");
         let st = app.session.active().unwrap();
         assert_eq!(json!(st.doc.as_ref()), document);
