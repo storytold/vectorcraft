@@ -21,6 +21,8 @@ use crate::VectorcraftApp;
 use crate::dialogs::confirm::{ReplaceFiles, ReplaceFilesPrompt};
 
 type Then = Box<dyn FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String>>;
+/// Whether the part of the app that requested a pick is still waiting for it.
+type PickGuard = Box<dyn FnOnce(&VectorcraftApp) -> bool>;
 /// What proceeding past a replace question runs.
 type Proceed = Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Value, String>>;
 
@@ -45,6 +47,7 @@ struct Waiting {
     scope: ScopeHandle,
     /// Automation asked ([`VectorcraftApp::automation_asked`]): the continuation runs as its.
     automated: bool,
+    current: Option<PickGuard>,
     then: Then,
 }
 
@@ -120,7 +123,18 @@ pub(crate) fn ask(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), then)
+    start(app, owner, |files| files.pick(request), None, then)
+}
+
+/// Like [`ask`], but drops a reply if its requester is gone, before choosing a document or reporting a picker error.
+pub(crate) fn ask_while(
+    app: &mut VectorcraftApp,
+    request: PickRequest,
+    owner: Owner,
+    current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
+) -> Value {
+    start(app, owner, |files| files.pick(request), Some(Box::new(current)), then)
 }
 
 /// Save `bytes` as the file service saves them (`Files::save`: the desktop asks where with `request` and
@@ -133,7 +147,7 @@ pub(crate) fn save(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.save(request, bytes), then)
+    start(app, owner, |files| files.save(request, bytes), None, then)
 }
 
 /// Asks the file service with `ask` and files `then` for its answer.
@@ -141,6 +155,7 @@ fn start(
     app: &mut VectorcraftApp,
     owner: Owner,
     ask: impl FnOnce(&dyn Files) -> PickId,
+    current: Option<PickGuard>,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
     let Some(host) = app.ui_ctx.as_ref().and_then(Host::try_of_ctx) else { return Value::Null };
@@ -150,7 +165,7 @@ fn start(
         Owner::Free => None,
     };
     let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
-    app.file_asks.waiting.push(Waiting { ticket, owner, doc, scope, automated, then: Box::new(then) });
+    app.file_asks.waiting.push(Waiting { ticket, owner, doc, scope, automated, current, then: Box::new(then) });
     json!({ "pending": "fileDialog" })
 }
 
@@ -289,6 +304,9 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
         }
     }
     for (w, picked) in answered {
+        if w.current.is_some_and(|current| !current(app)) {
+            continue;
+        }
         match &picked {
             Picked::Cancelled => continue,
             Picked::Unavailable(why) => {
