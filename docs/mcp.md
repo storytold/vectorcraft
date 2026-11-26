@@ -2912,8 +2912,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   that would make a loop and a story with a hidden or locked frame are refused with nothing changed, and assigning the
   link that is already there, or `null` where there is none, runs no command. `postFix` is true when it is left out,
   and a `baseFrame` given with a path inside a compound path is refused before the path is turned into type.
-  `Document.stories` lists one story for each type object in no thread and one for each thread, in the paint order of
-  their first frames, and `index` with a string finds the first story whose first frame has that name. A frame that
+  `Document.stories` lists one story for each type object in no thread and one for each thread, in the order of
+  their first frames in `Document.textFrames`, topmost first, and `index` with a string finds the first story whose first frame has that name. A frame that
   a stored thread lists twice is in its story once. A `Story` is
   the story of the frame it was read from, as that frame is threaded now, and throws `Stale story` once that frame is
   deleted. The text of a story of one frame is that frame's text, with its ranges. The text of a longer story is its

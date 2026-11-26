@@ -73,14 +73,14 @@ fn stories_list_one_story_for_each_thread_and_each_frame_in_none() {
     area(&mut s, 400.0, 120.0, 40.0, "Alone");
     let out = log(
         &mut s,
-        "var d = app.activeDocument, st = d.stories[0];\
+        "var d = app.activeDocument, st = d.stories[1];\
          vc.log(d.stories.length); vc.log(st.typename); vc.log(st.textFrames.length);\
          vc.log(st.textFrames[0].nextFrame.previousFrame.contents === st.textFrames[0].contents);\
          vc.log(st.textFrames[1].nextFrame === null && st.textFrames[0].previousFrame === null);\
-         vc.log(d.stories[1].textFrames[0].contents); vc.log(d.stories[1].textFrames.length);\
+         vc.log(d.stories[0].textFrames[0].contents); vc.log(d.stories[0].textFrames.length);\
          d.textFrames.add(); vc.log(d.stories.length);\
          vc.log(d.stories.parent.typename); vc.log(st.parent.typename); vc.log(d.stories.typename);\
-         vc.log(d.textFrames[2].story.textFrames[0].contents);",
+         vc.log(d.textFrames[1].story.textFrames[0].contents);",
     );
     assert_eq!(
         out,
@@ -262,9 +262,9 @@ fn next_frame_joins_two_stories_in_one_undo_step_keeping_the_selection() {
     let before = undo_steps(&s);
     let out = log(
         &mut s,
-        "var t = app.activeDocument.textFrames; t[0].nextFrame = t[1];\
-         vc.log(app.activeDocument.stories.length); vc.log(t[1].previousFrame.contents); vc.log(t[0].story.textRange.contents);\
-         t[0].nextFrame = t[1];",
+        "var t = app.activeDocument.textFrames; t[2].nextFrame = t[1];\
+         vc.log(app.activeDocument.stories.length); vc.log(t[1].previousFrame.contents); vc.log(t[2].story.textRange.contents);\
+         t[2].nextFrame = t[1];",
     );
     assert_eq!(out, vec![json!(2), json!("First story.Second."), json!("First story.Second.")]);
     assert_eq!(threads(&s), vec![vec![a, b]]);
@@ -275,7 +275,7 @@ fn next_frame_joins_two_stories_in_one_undo_step_keeping_the_selection() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(threads(&s).is_empty());
     assert_eq!((plain(&s, a), plain(&s, b)), ("First story.".into(), "Second.".into()));
-    log(&mut s, "var t = app.activeDocument.textFrames; t[0].previousFrame = t[1];");
+    log(&mut s, "var t = app.activeDocument.textFrames; t[2].previousFrame = t[1];");
     assert_eq!(threads(&s), vec![vec![b, a]]);
     assert_eq!(story(&s, &[b, a]), "Second.First story.");
 }
@@ -287,9 +287,9 @@ fn null_breaks_the_link_and_each_frame_keeps_its_text() {
     let before = undo_steps(&s);
     let out = log(
         &mut s,
-        "var t = app.activeDocument.textFrames, st = t[1].story; t[1].previousFrame = null;\
-         vc.log(app.activeDocument.stories.length); vc.log(st.textFrames.length); vc.log(t[0].nextFrame);\
-         t[0].nextFrame = null;",
+        "var t = app.activeDocument.textFrames, st = t[0].story; t[0].previousFrame = null;\
+         vc.log(app.activeDocument.stories.length); vc.log(st.textFrames.length); vc.log(t[1].nextFrame);\
+         t[1].nextFrame = null;",
     );
     assert_eq!(out, vec![json!(2), json!(1), json!(null)]);
     assert!(threads(&s).is_empty());
@@ -310,9 +310,9 @@ fn area_and_path_text_thread_the_new_frame_to_a_base_frame() {
     let out = log(
         &mut s,
         "var d = app.activeDocument, p = d.pageItems, base = d.textFrames[0];\
-         var after = d.textFrames.areaText(p[1], undefined, base);\
-         var first = d.textFrames.areaText(p[2], TextOrientation.HORIZONTAL, base, false);\
-         var last = d.textFrames.pathText(p[3], undefined, undefined, undefined, after, true);\
+         var after = d.textFrames.areaText(p[2], undefined, base);\
+         var first = d.textFrames.areaText(p[1], TextOrientation.HORIZONTAL, base, false);\
+         var last = d.textFrames.pathText(p[0], undefined, undefined, undefined, after, true);\
          vc.log(base.story.textFrames.length); vc.log(base.previousFrame.kind); vc.log(after.nextFrame.kind); vc.log(d.stories.length);",
     );
     assert_eq!(out, vec![json!(4), json!("TextType.AREATEXT"), json!("TextType.PATHTEXT"), json!(1)]);
@@ -330,9 +330,9 @@ fn a_bad_base_frame_is_refused_before_a_frame_is_made() {
     let count = |s: &Session| s.active().unwrap().doc.node_count();
     let (n, before) = (count(&s), undo_steps(&s));
     let d = "var d = app.activeDocument, p = d.pageItems;";
-    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[1], undefined, d.textFrames[0]);")).contains("only area type"));
-    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[1], undefined, p[1]);")).contains("baseFrame must be a TextFrame"));
-    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[1], undefined, d.textFrames[0], 'yes');")).contains("postFix"));
+    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[0], undefined, d.textFrames[0]);")).contains("only area type"));
+    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[0], undefined, p[0]);")).contains("baseFrame must be a TextFrame"));
+    assert!(failure(&mut s, &format!("{d} d.textFrames.areaText(p[0], undefined, d.textFrames[0], 'yes');")).contains("postFix"));
     assert_eq!((count(&s), undo_steps(&s)), (n, before));
 }
 
@@ -389,9 +389,9 @@ fn a_link_to_the_frame_itself_is_refused() {
 fn a_link_that_makes_a_loop_is_refused() {
     let (mut s, ids) = three();
     let before = state(&s, &ids);
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[1].nextFrame = t[0];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[2].nextFrame = t[3];");
     assert!(m.contains("loop"), "{m}");
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[0].previousFrame = t[1];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[3].previousFrame = t[2];");
     assert!(m.contains("loop"), "{m}");
     unchanged(&s, &ids, &before);
 }
@@ -400,9 +400,9 @@ fn a_link_that_makes_a_loop_is_refused() {
 fn a_link_into_the_middle_of_a_story_is_refused() {
     let (mut s, ids) = three();
     let before = state(&s, &ids);
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[2].nextFrame = t[1];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[1].nextFrame = t[2];");
     assert!(m.contains("already has a previous frame"), "{m}");
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[2].previousFrame = t[0];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[1].previousFrame = t[3];");
     assert!(m.contains("already has a next frame"), "{m}");
     unchanged(&s, &ids, &before);
 }
@@ -411,13 +411,13 @@ fn a_link_into_the_middle_of_a_story_is_refused() {
 fn point_type_and_other_values_cannot_be_linked() {
     let (mut s, ids) = three();
     let before = state(&s, &ids);
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[2].nextFrame = t[3];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[1].nextFrame = t[0];");
     assert!(m.contains("only area type"), "{m}");
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[3].previousFrame = t[2];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[0].previousFrame = t[1];");
     assert!(m.contains("only area type"), "{m}");
-    let m = failure(&mut s, "app.activeDocument.textFrames[2].nextFrame = 5;");
+    let m = failure(&mut s, "app.activeDocument.textFrames[1].nextFrame = 5;");
     assert!(m.contains("TypeError") && m.contains("TextFrame or null"), "{m}");
-    let m = failure(&mut s, "app.activeDocument.textFrames[2].nextFrame = undefined;");
+    let m = failure(&mut s, "app.activeDocument.textFrames[1].nextFrame = undefined;");
     assert!(m.contains("TextFrame or null"), "{m}");
     unchanged(&s, &ids, &before);
 }
@@ -425,11 +425,11 @@ fn point_type_and_other_values_cannot_be_linked() {
 #[test]
 fn a_hidden_or_locked_frame_in_either_story_stops_a_link() {
     let (mut s, ids) = three();
-    log(&mut s, "app.activeDocument.textFrames[1].locked = true;");
+    log(&mut s, "app.activeDocument.textFrames[2].locked = true;");
     let before = state(&s, &ids);
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[1].nextFrame = t[2];");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[2].nextFrame = t[1];");
     assert!(m.contains("hidden or locked"), "{m}");
-    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[0].nextFrame = null;");
+    let m = failure(&mut s, "var t = app.activeDocument.textFrames; t[3].nextFrame = null;");
     assert!(m.contains("hidden or locked"), "{m}");
     unchanged(&s, &ids, &before);
 }
@@ -441,12 +441,12 @@ fn a_frame_of_another_document_cannot_be_linked() {
     s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
     area(&mut s, 10.0, 100.0, 40.0, "Elsewhere");
     s.execute("shape.rectangle", &json!({"x": 150, "y": 10, "width": 80, "height": 60})).unwrap();
-    let m = failure(&mut s, "app.documents[0].textFrames[2].nextFrame = app.documents[1].textFrames[0];");
+    let m = failure(&mut s, "app.documents[0].textFrames[1].nextFrame = app.documents[1].textFrames[0];");
     assert!(m.contains("different documents"), "{m}");
     let out = log(
         &mut s,
-        "var d = app.documents[1], p = d.pageItems[1];\
-         try { d.textFrames.areaText(p, undefined, app.documents[0].textFrames[2]); } catch (e) { vc.log(String(e.message)); }\
+        "var d = app.documents[1], p = d.pageItems[0];\
+         try { d.textFrames.areaText(p, undefined, app.documents[0].textFrames[1]); } catch (e) { vc.log(String(e.message)); }\
          vc.log(p.typename); vc.log(d.textFrames.length);",
     );
     assert_eq!(out, vec![json!("baseFrame: the frame is in another document"), json!("PathItem"), json!(1)]);
@@ -457,16 +457,16 @@ fn a_frame_of_another_document_cannot_be_linked() {
 #[test]
 fn a_deleted_frame_makes_its_story_and_links_stale() {
     let (mut s, _, _) = threaded(STORY);
-    let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], st = f.story; f.remove(); st.length;");
+    let m = failure(&mut s, "var f = app.activeDocument.textFrames[0], st = f.story; f.remove(); st.length;");
     assert!(m.contains("Stale story"), "{m}");
-    let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], st = f.story; f.remove(); st.lines;");
+    let m = failure(&mut s, "var f = app.activeDocument.textFrames[0], st = f.story; f.remove(); st.lines;");
     assert!(m.contains("Stale story"), "{m}");
-    let m = failure(&mut s, "var f = app.activeDocument.textFrames[0], g = app.activeDocument.textFrames[1]; g.remove(); f.nextFrame = g;");
+    let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], g = app.activeDocument.textFrames[0]; g.remove(); f.nextFrame = g;");
     assert!(m.contains("Stale page item"), "{m}");
-    let m = failure(&mut s, "var f = app.activeDocument.textFrames[0], r = f.story.textRange; f.remove(); r.contents;");
+    let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], r = f.story.textRange; f.remove(); r.contents;");
     assert!(m.contains("Stale text range"), "{m}");
     // A story read from a frame that stays follows it when its link is broken.
-    let out = log(&mut s, "var t = app.activeDocument.textFrames, st = t[1].story; t[0].nextFrame = null; vc.log(st.textFrames.length);");
+    let out = log(&mut s, "var t = app.activeDocument.textFrames, st = t[0].story; t[1].nextFrame = null; vc.log(st.textFrames.length);");
     assert_eq!(out, vec![json!(1)]);
 }
 
@@ -481,7 +481,7 @@ fn stories_refuse_bad_keys_and_huge_numbers() {
     assert!(failure(&mut s, "app.activeDocument.stories.index(1e20);").contains("Not found"));
     assert!(failure(&mut s, "app.activeDocument.stories.index('nobody');").contains("Not found"));
     assert!(failure(&mut s, "app.activeDocument.stories.index({});").contains("TypeError"));
-    log(&mut s, "app.activeDocument.textFrames[0].name = 'Lead';");
+    log(&mut s, "app.activeDocument.textFrames[1].name = 'Lead';");
     assert_eq!(log(&mut s, "vc.log(app.activeDocument.stories.index('Lead').textFrames.length);"), vec![json!(2)]);
 }
 
@@ -537,7 +537,7 @@ fn stories_of_threads_that_share_a_frame_keep_their_own_text() {
     let b = area(&mut s, 150.0, 120.0, 60.0, "Two.");
     let c = area(&mut s, 300.0, 120.0, 60.0, "Three!");
     std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).text_threads = vec![vec![a, b], vec![b, c]];
-    let out = log(&mut s, "var t = app.activeDocument.textFrames; vc.log(t[1].story.length); vc.log(t[2].story.length);");
+    let out = log(&mut s, "var t = app.activeDocument.textFrames; vc.log(t[1].story.length); vc.log(t[0].story.length);");
     let (ab, bc) = (story(&s, &[a, b]).encode_utf16().count(), story(&s, &[b, c]).encode_utf16().count());
     assert_ne!(ab, bc);
     assert_eq!(out, vec![json!(ab), json!(bc)]);

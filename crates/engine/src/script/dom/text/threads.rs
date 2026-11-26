@@ -14,7 +14,7 @@
 //! - A `Story` is the story of the frame it was read from as that frame is threaded now; when the
 //!   frame is deleted, it throws `Stale story`.
 //! - `document.stories` lists one story for each type object in no thread and one for each thread,
-//!   in the paint order of their first frames. `index` with a string finds the first story whose
+//!   in the order of their first frames in `document.textFrames`, topmost first. `index` with a string finds the first story whose
 //!   first frame has that name.
 //! - The text of a story of two or more frames is its frames' text in thread order. Its ranges keep
 //!   their place through edits made through them, as a frame's ranges do, and are stale after any
