@@ -38,6 +38,8 @@ pub(crate) struct Open {
     /// under its rows with OK off; `None` while there is one.
     note: Option<String>,
     preview: LivePreview,
+    /// The document that was active when the preview last ran (`DocState::uid`).
+    shown_in: Option<u64>,
 }
 
 /// Open the dialog on what the tool found (its [`tangent_circle::RADIUS_DIALOG`] parameters).
@@ -49,8 +51,8 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
         return;
     };
     // An open the host replaces leaves its preview behind unless it is rolled back here.
-    if let Some(old) = app.addon_dialogs.tangent_radius.take() {
-        old.preview.cancel(app);
+    if let Some(mut old) = app.addon_dialogs.tangent_radius.take() {
+        take_preview(app, &mut old).cancel(app);
     }
     let lengths = general_lengths(app);
     let fields = DialogFields::from_pairs([("radius", FieldValue::Number(radius))]);
@@ -60,13 +62,14 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
         ParamDialog::new(KIND, tl!("Tangent Circle"), rows).values(Bind::bound(fields)).previews(true)
     });
     let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(|app| {
-        if let Some(open) = app.addon_dialogs.tangent_radius.take() {
-            open.preview.cancel(app);
+        if let Some(mut open) = app.addon_dialogs.tangent_radius.take() {
+            take_preview(app, &mut open).cancel(app);
         }
     });
     match open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }) {
         Some(id) => {
-            app.addon_dialogs.tangent_radius = Some(Open { id, click: p.clone(), doc, tried: None, note: None, preview: LivePreview::default() });
+            app.addon_dialogs.tangent_radius =
+                Some(Open { id, click: p.clone(), doc, tried: None, note: None, preview: LivePreview::default(), shown_in: doc });
         }
         None => app.status("no window"),
     }
@@ -77,6 +80,19 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
 fn doc<'a>(app: &'a VectorcraftApp, open: &Open) -> Option<&'a Document> {
     let clicked = open.doc?;
     app.session.doc().ok().filter(|s| s.uid == clicked).map(|s| &*s.doc)
+}
+
+/// The id of the active document (`DocState::uid`).
+fn active_uid(app: &VectorcraftApp) -> Option<u64> {
+    app.session.doc().ok().map(|s| s.uid)
+}
+
+/// The dialog's live preview, taken out of `open`. With another document active than the one it previewed in, the
+/// preview is forgotten instead: the switch already rolled it back there, and rolling back here would cancel an
+/// interaction of the document now active.
+fn take_preview(app: &VectorcraftApp, open: &mut Open) -> LivePreview {
+    let preview = std::mem::take(&mut open.preview);
+    if open.shown_in == active_uid(app) { preview } else { LivePreview::default() }
 }
 
 /// Whether `r` is in the tool's radius range.
@@ -137,7 +153,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         app.addon_dialogs.tangent_radius = Some(open);
         return;
     };
-    let mut preview = std::mem::take(&mut open.preview);
+    let mut preview = take_preview(app, &mut open);
     let found = circle(app, &mut open, &fields);
     // Without a circle the preview rolls back; the preview reports its own failures on the status line.
     let previewed = match &found {
@@ -146,6 +162,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     };
     let _ = preview.run(app, previewed.0, "Tangent Circle", DRAW, &previewed.1);
     open.preview = preview;
+    open.shown_in = active_uid(app);
     // A target layer locked or hidden after the circle previewed refuses the draw: OK stays off. The preview stays,
     // since rolling it back would also roll back the edit that locked or hid the layer.
     open.note = found.err().or_else(|| target_refusal(app));
@@ -368,6 +385,31 @@ mod tests {
         assert!(press_ok(&mut app), "{}", app.ui.status);
         assert_eq!((count(&app), undo_steps(&app)), (paths + 1, steps + 1));
         assert_eq!(app.session.tool_options_of(tool::ID)["radius"], json!(tool::RADIUS));
+    }
+
+    #[test]
+    fn a_switch_to_another_document_leaves_its_interaction_alone() {
+        let mut app = app_with_lines(&[100, 140]);
+        let paths = count(&app);
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(count(&app), paths + 1);
+        // Another document comes to the front (which rolls the preview back in the first) and starts an interaction
+        // of its own before the dialog's next frame: the dialog leaves that interaction running.
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.begin_interaction("Other").unwrap();
+        app.session.preview("path.create", &json!({"anchors": [{"x": 10, "y": 10}, {"x": 50, "y": 10}]})).unwrap();
+        frame(&mut app);
+        assert_eq!(note(&app).as_deref(), Some(tool::NO_CIRCLE));
+        assert!(app.session.in_interaction());
+        assert_eq!(count(&app), 1);
+        // Cancel leaves it running too.
+        cancel(&app, dialog_id(&app));
+        frame(&mut app);
+        assert!(!is_open(&app));
+        assert!(app.session.in_interaction());
+        assert_eq!(count(&app), 1);
     }
 
     #[test]
