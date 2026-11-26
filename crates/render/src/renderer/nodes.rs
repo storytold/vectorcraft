@@ -7,6 +7,18 @@ use super::{
 use crate::kept_paths::{self, KeptPath};
 use crate::node_checks::{holds_measured_three_d, measures_three_d};
 
+fn needs_three_d_bounds(symbols: &SymbolBoxes, node: &Node) -> bool {
+    measures_three_d(node)
+        || matches!(&node.kind, NodeKind::SymbolInstance { symbol, .. } if symbols.symbol(symbol).is_some_and(
+            |s| holds_measured_three_d(&s.art) || holds_instance(&s.art) && symbols.has_effects(symbol)
+        ))
+}
+
+fn subtree_needs_three_d_bounds(symbols: &SymbolBoxes, node: &Node) -> bool {
+    needs_three_d_bounds(symbols, node)
+        || node.children().is_some_and(|children| children.iter().any(|child| subtree_needs_three_d_bounds(symbols, child)))
+}
+
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
     /// measured by their art box from `symbols`.
@@ -29,18 +41,10 @@ impl Renderer {
             e.stamp = self.stamp;
             return e.bounds;
         }
-        if let Some(f) = patch {
-            // The full renderer can reuse its 3D art. A cold scratch renderer may otherwise
-            // build it while calculating cull bounds, including bounds of symbol definitions.
-            let symbol_needs_full = match &a.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.symbol(symbol).is_some_and(|s| holds_measured_three_d(&s.art) || holds_instance(&s.art) && symbols.has_effects(symbol))
-                }
-                _ => false,
-            };
-            if (measures_three_d(a) || symbol_needs_full) && f.reject_patch() {
-                return None;
-            }
+        // The full renderer can reuse its 3D art. A cold scratch renderer may otherwise
+        // build it while calculating cull bounds, including bounds of symbol definitions.
+        if patch.is_some_and(|f| needs_three_d_bounds(symbols, a) && f.reject_patch()) {
+            return None;
         }
         let b = match &a.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
@@ -74,6 +78,14 @@ impl Renderer {
                 }
                 let pad = brush_fx::pad(symbols, a);
                 b.map(|b| fx::with_own_raster_reach(symbols, a, b).inflate(pad, pad))
+            }
+            // The fallback measures the whole subtree without going through the cached
+            // child traversal above. Reject cold measurement before entering it.
+            _ if patch.is_some_and(|f| {
+                a.children().is_some_and(|children| children.iter().any(|child| subtree_needs_three_d_bounds(symbols, child))) && f.reject_patch()
+            }) =>
+            {
+                return None;
             }
             _ => self.kept_bounds(symbols, a).unwrap_or_else(|| brush_fx::cull_bounds(symbols, a)),
         };

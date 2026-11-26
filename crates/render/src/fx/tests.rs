@@ -1578,6 +1578,13 @@ fn a_plain_patch_does_not_build_unrelated_3d_art_to_cull_it() {
     let layer = doc.layers[0].id;
     let art = doc.layers[0].children().unwrap()[0].clone();
     doc.remove(art.id).unwrap();
+    let mut group = Node::group(doc.alloc_id(), vec![art.clone()]);
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 4}), visible: true });
+    assert!(super::has_object_fx(&group), "this group uses the alternate bounds path");
+    let group = doc.insert(Some(layer), 0, group).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "alternate group bounds also need the 3D child");
+    doc.remove(group).unwrap();
+
     let mut template = Node::layer(doc.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(0));
     if let vectorcraft_doc::NodeKind::Layer { template: flag, children, .. } = &mut template.kind {
         *flag = true;
