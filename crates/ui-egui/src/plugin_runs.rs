@@ -69,6 +69,11 @@ pub struct Inbox {
 }
 
 impl Inbox {
+    #[cfg(test)]
+    pub(crate) fn has_waiting_call(&self) -> bool {
+        self.messages.iter().any(|m| matches!(m, FromWorker::Call { .. }))
+    }
+
     /// Takes message `msg` that the worker posted.
     pub fn push(&mut self, msg: &[u8]) {
         match FromWorker::decode(msg) {
@@ -150,6 +155,9 @@ impl InWorker {
         match inbox.messages.pop_front() {
             Some(FromWorker::Ready { protocol }) if protocol == PROTOCOL => {
                 drop(inbox);
+                if now >= self.deadline {
+                    return Err(vectorcraft_plugins::Error::Limit("time budget".into()).to_string());
+                }
                 let request = self.request.take().ok_or_else(unexpected)?;
                 self.link.post(request)?;
                 Ok(None)
@@ -165,7 +173,7 @@ impl InWorker {
     /// deadline.
     fn watch(&mut self, now: f64) -> Option<String> {
         while matches!(self.inbox.borrow().messages.front(), Some(FromWorker::Ready { .. })) {
-            if let Err(e) = self.next(f64::NEG_INFINITY) {
+            if let Err(e) = self.next(now) {
                 return Some(e);
             }
         }
@@ -232,6 +240,7 @@ struct Check {
     module: Value,
     hash: String,
     automated: bool,
+    open_error: Option<String>,
 }
 
 /// The heavy filters running, and the installs being checked.
@@ -390,6 +399,20 @@ fn start_in_worker(app: &mut VectorcraftApp, c: &str, p: Value) -> Result<Value,
 /// page loads the module without running any of its code. `None`: nothing to check here (no
 /// workers, bytes already checked, or a module the page refuses before it runs anything).
 pub fn check_install(app: &mut VectorcraftApp, module: &Value, automated: bool) -> Option<Result<Value, String>> {
+    check_install_with_context(app, module, automated, None)
+}
+
+pub(crate) fn check_open_install(app: &mut VectorcraftApp, module: &Value, name: &str) -> Option<Result<Value, String>> {
+    let automated = app.automation_asked();
+    check_install_with_context(app, module, automated, Some(name.to_string()))
+}
+
+fn check_install_with_context(
+    app: &mut VectorcraftApp,
+    module: &Value,
+    automated: bool,
+    open_error: Option<String>,
+) -> Option<Result<Value, String>> {
     if !in_workers(app) {
         return None;
     }
@@ -411,7 +434,7 @@ pub fn check_install(app: &mut VectorcraftApp, module: &Value, automated: bool) 
         Ok(w) => w,
         Err(e) => return Some(Err(e)),
     };
-    app.plugin_runs.checks.push(Check { worker, module: module.clone(), hash, automated });
+    app.plugin_runs.checks.push(Check { worker, module: module.clone(), hash, automated, open_error });
     Some(Ok(json!({ "pending": true })))
 }
 
@@ -480,6 +503,15 @@ fn watch_worker(app: &mut VectorcraftApp, i: usize) -> Option<Ended> {
     }
     if worker.held.is_some() {
         return None;
+    }
+    let failed = {
+        let mut inbox = worker.inbox.borrow_mut();
+        let at = inbox.messages.iter().position(|message| matches!(message, FromWorker::Done(Err(_), _)));
+        at.and_then(|at| inbox.messages.remove(at))
+    };
+    if let Some(FromWorker::Done(Err(error), lines)) = failed {
+        vectorcraft_plugins::worker::log_lines(&r.plugin, &lines);
+        return Some(Ended::Worker(Some(Err(error.to_string()))));
     }
     worker.watch(t).map(|e| Ended::Worker(Some(Err(e))))
 }
@@ -617,14 +649,18 @@ fn poll_checks(app: &mut VectorcraftApp) {
             continue;
         };
         let c = app.plugin_runs.checks.remove(i);
-        let Check { worker, module, hash, automated } = c;
+        let Check { worker, module, hash, automated, open_error } = c;
         drop(worker);
         let r = checked.and_then(|manifest| {
             app.session.hand_in_checked_plugin(&hash, manifest);
             crate::io::install_module_as(app, module, automated)
         });
         if let Err(e) = r {
-            app.status(e);
+            if let Some(name) = open_error {
+                crate::io::report_open_error(app, &name, &e);
+            } else {
+                app.status(e);
+            }
         }
     }
 }

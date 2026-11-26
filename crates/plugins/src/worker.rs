@@ -304,7 +304,7 @@ impl Worker {
             }
             Some(ToWorker::Run { module, manifest, input, params, limits, calls }) => {
                 self.run = None;
-                let plugin = match Plugin::load_checked(&module, Limits::default(), &manifest) {
+                let plugin = match Plugin::load_checked(&module, limits.clone(), &manifest) {
                     Ok(p) => p,
                     Err(e) => return self.done(Err(e), Report::default()),
                 };
@@ -500,6 +500,18 @@ mod tests {
         assert!(Plugin::load_checked(&module, Limits::default(), b"not json").is_err());
         let no_run = wat::parse_str(r#"(module (memory (export "memory") 1) (func (export "vc_abi_version") (result i32) (i32.const 1)))"#).unwrap();
         assert!(matches!(Plugin::load_checked(&no_run, Limits::default(), b"{}"), Err(Error::Abi(_))));
+    }
+
+    #[test]
+    fn a_worker_run_applies_its_requested_memory_limit() {
+        let (mut w, got) = worker();
+        let manifest = tpl::manifest("test.worker.memorylimit", "filter", "{}");
+        let module = wat::parse_str(tpl::module(&manifest, tpl::ECHO, "", 2)).unwrap();
+        let manifest = checked(&mut w, &got, &module);
+        let limits = Limits { max_memory_bytes: 1 << 16, ..Limits::default() };
+        w.handle(&ToWorker::Run { module, manifest, input: INPUT.into(), params: b"{}".to_vec(), limits, calls: false }.encode());
+        let replies = take(&got);
+        assert!(matches!(replies.as_slice(), [FromWorker::Done(Err(_), _)]), "{replies:?}");
     }
 
     #[test]

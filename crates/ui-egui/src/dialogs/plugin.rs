@@ -702,14 +702,19 @@ fn import_with(app: &mut VectorcraftApp, open: Value, values: Map<String, Value>
 
 /// OK of a filter dialog: a filter keeps its previewed run as one undo step; a heavy one, which has
 /// no preview, and a light one that runs in the background ([`in_background`]) with Preview off or a
-/// failed preview, start in the background ([`run`]). On the web the filter or its command always
-/// starts in a worker. A preview still shown when Preview was just turned off, or one that failed, is
+/// failed preview, start in the background ([`run`]). On the web the filter or its command starts
+/// in a worker, except that automation confirms a command on the page. A preview still shown when Preview was just turned off, or one that failed, is
 /// rolled back first.
 fn confirm_filter(app: &mut VectorcraftApp, kind: Opened, values: Map<String, Value>) -> Result<Value, String> {
     let Opened::Filter { plugin, command: own, preview, light, previewing, refused, .. } = kind else { return Ok(Value::Null) };
     let (cmd, p) = command(&plugin, own.as_deref(), values);
     let kept = light && previewing && app.session.in_interaction() && !refused;
     match registry::get(&plugin) {
+        Some(_) if crate::plugin_runs::in_workers(app) && own.is_some() && app.automation_asked() => {
+            vectorcraft_engine::cmd::plugin::FilterRun::prepare_for(&app.session, &cmd, &p).map_err(|error| error.to_string())?;
+            app.session.settle_for_plugin_run().map_err(|error| error.to_string())?;
+            app.run(&cmd, p)
+        }
         // On the web, with no Preview, the filter or its command always runs in a worker.
         Some(found) if crate::plugin_runs::in_workers(app) => {
             preview.cancel(app);

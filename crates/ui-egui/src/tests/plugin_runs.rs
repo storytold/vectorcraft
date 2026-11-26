@@ -673,6 +673,42 @@ fn on_the_web_a_plugin_command_runs_in_a_worker() {
 /// On the web a plug-in command's dialog has no Preview, and OK runs the command in a worker, also
 /// while an interaction is open.
 #[test]
+fn on_the_web_an_automated_command_confirmation_returns_its_result() {
+    for held in [false, true] {
+        let (mut app, fake) = web_app();
+        let id = format!("test.ui.web.automatedconfirmation.{held}");
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"commands":[{{"id":"same","label":"Same","params":{{"size":{{"type":"number","min":1,"max":9,"default":3}}}}}}]}}"#
+        );
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, TRIANGLE)).unwrap());
+        app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        let original = app.session.doc().unwrap().doc.clone();
+        assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same")));
+        pump(&mut app);
+        let before = app.session.doc().unwrap().history.undo.len();
+        if held {
+            app.session.begin_interaction("Move").unwrap();
+            app.session.preview("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+        }
+        let expected = app.session.doc().unwrap().doc.clone();
+        app.ui.answering_control = true;
+        answer_open(&mut app, true);
+        app.ui.answering_control = false;
+        assert!(fake.started.borrow().is_empty(), "automation must finish on the page");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), before + 1 + usize::from(held));
+        assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1);
+        assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, "Same");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, expected);
+        if held {
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(app.session.doc().unwrap().doc, original);
+        }
+    }
+}
+
+#[test]
 fn on_the_web_a_command_dialog_runs_its_command_in_a_worker() {
     let (mut app, fake) = web_app();
     let id = "test.ui.web.commanddialog";
@@ -976,7 +1012,9 @@ fn on_the_web_a_call_waiting_under_a_dialog_ends_at_the_time_budget() {
     fake.ready(0);
     plugin_runs::poll(&mut app);
     // The worker runs it to its command call, which waits for the dialog.
+    assert_eq!(fake.worker(0).sent.borrow().len(), 1);
     fake.serve(0);
+    assert!(fake.worker(0).inbox.borrow().has_waiting_call());
     fake.clock.set(vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS);
     plugin_runs::poll(&mut app);
     assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
@@ -984,7 +1022,69 @@ fn on_the_web_a_call_waiting_under_a_dialog_ends_at_the_time_budget() {
     assert_eq!(app.session.doc().unwrap().doc, doc);
 }
 
-/// A run whose document changes is stopped at once, also while a dialog is open.
+/// A worker failure rolls back its command calls while another dialog stays open.
+#[test]
+fn on_the_web_a_worker_failure_releases_the_hold_under_a_dialog() {
+    use vectorcraft_plugins::worker::FromWorker;
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.failedhelddialog";
+    install_caller(&mut app, id, TRIANGLE);
+    let first = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("shape.rectangle", json!({"x": 30, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    let selection = app.session.doc().unwrap().selection.objects.clone();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert!(app.session.plugin_calls_open());
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    assert_eq!(fake.worker(0).sent.borrow().len(), 1);
+    fake.serve(0);
+    assert!(fake.worker(0).inbox.borrow().has_waiting_call());
+    plugin_runs::poll(&mut app);
+    assert_eq!(app.session.doc().unwrap().selection.objects.len(), 2);
+    open_dialog(&app);
+    fake.worker(0).inbox.borrow_mut().push(&FromWorker::Done(Err(vectorcraft_plugins::Error::Failed("worker failed".into())), vec![]).encode());
+    plugin_runs::poll(&mut app);
+    assert!(!app.session.plugin_calls_open());
+    assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(app.session.doc().unwrap().selection.objects, selection);
+    assert!(app.ui.status.contains("worker failed"), "{}", app.ui.status);
+}
+
+#[test]
+fn on_the_web_a_picked_plugin_check_failure_opens_an_error_dialog() {
+    let (mut app, fake) = web_app();
+    assert!(!app.any_dialog_open());
+    crate::io::open_bytes(&mut app, "broken.wasm", b"not a module", None).unwrap();
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    assert_eq!(fake.worker(0).sent.borrow().len(), 1);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(app.any_dialog_open());
+    assert!(app.ui.status.contains("Couldn't open broken.wasm"), "{}", app.ui.status);
+}
+
+#[test]
+fn on_the_web_a_ready_worker_does_not_start_at_its_deadline() {
+    for dialog in [false, true] {
+        let (mut app, fake) = web_app();
+        let id = "test.ui.web.lateready";
+        install_light(&mut app, id, false, "{}", "");
+        app.run("plugin.dialog", json!({"id": id})).unwrap();
+        if dialog {
+            open_dialog(&app);
+        }
+        fake.ready(0);
+        fake.clock.set(vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS);
+        plugin_runs::poll(&mut app);
+        assert!(fake.worker(0).sent.borrow().is_empty(), "expired work was posted; dialog={dialog}");
+        assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
+    }
+}
+
 #[test]
 fn on_the_web_an_edit_ends_the_worker_while_a_dialog_is_open() {
     let (mut app, fake) = web_app();
@@ -1071,6 +1171,22 @@ fn on_the_web_a_worker_run_starts_after_the_tool_edit_in_progress() {
     assert!(app.session.tool_editing(), "the merge is being computed");
     assert_eq!(app.run(&format!("plugin.{id}.same"), json!({})).unwrap()["background"], true);
     assert!(!app.session.tool_editing(), "the merge applied before the run was given the document");
+    let mut bounds = vec![];
+    for layer in &app.session.doc().unwrap().doc.layers {
+        layer.walk(&mut |node| {
+            if let Some(bounds_of_path) = node.path_data().and_then(vectorcraft_geom::PathData::bounds) {
+                bounds.push(bounds_of_path);
+            }
+        });
+    }
+    assert!(
+        bounds.iter().any(|bounds| *bounds == vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 20.0)),
+        "the computed geometry must be present: {bounds:?}"
+    );
+    assert!(
+        !bounds.iter().any(|bounds| *bounds == vectorcraft_geom::Rect::new(0.0, 0.0, 20.0, 20.0)),
+        "the original overlapping path must be replaced: {bounds:?}"
+    );
     fake.ready(0);
     plugin_runs::poll(&mut app);
     fake.serve(0);

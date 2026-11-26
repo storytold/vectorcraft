@@ -66,6 +66,16 @@ use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 mod context;
 pub use context::{CONTEXT_FUEL_PER_ITEM, MAX_CONTEXT_BYTES, MAX_CONTEXT_ITEMS};
 
+#[cfg(test)]
+std::thread_local! {
+    static PANIC_ON_FINISH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) fn panic_on_next_finish() {
+    PANIC_ON_FINISH.set(true);
+}
+
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
     match e {
@@ -457,6 +467,10 @@ impl FilterRun {
     /// it was. An output that changes neither the objects nor the kept data records no undo step and
     /// leaves the document unmodified; its objects are still selected.
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
+        #[cfg(test)]
+        if PANIC_ON_FINISH.replace(false) {
+            panic!("finish failed");
+        }
         let m = self.plugin.manifest();
         let may = m.permissions();
         let out = objects::decode_output_writing(output, &self.input, &self.read_only, &m.write_kinds()).map_err(err)?;
@@ -628,8 +642,12 @@ fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) 
         s.plugin_calling = Some(held);
         return Some(Err(EngineError::PluginBusy));
     };
-    let Calling { run, calls, tx, .. } = held;
-    let r = if calls.kept(s) { run.finish(s, &h.output) } else { Err(EngineError::Cancelled) };
+    let Calling { cmd, run, calls, tx, .. } = held;
+    let r = if calls.kept(s) {
+        crate::guard::catch_panic(|| run.finish(s, &h.output)).unwrap_or_else(|msg| Err(EngineError::Internal { cmd, msg }))
+    } else {
+        Err(EngineError::Cancelled)
+    };
     Some(tx.end(s, r))
 }
 
@@ -1264,6 +1282,7 @@ impl Session {
     /// canceled): every document and the session state go back to how they were before it.
     pub fn end_plugin_calls(&mut self) {
         if let Some(c) = self.plugin_calling.take() {
+            self.plugin_output = None;
             let _ = c.tx.end(self, Err(EngineError::Cancelled));
         }
     }

@@ -7762,6 +7762,50 @@ fn a_calling_run_made_away_from_the_session_is_one_undo_step() {
 /// did is undone and the documents are free again. `plugin.run` without its output is refused
 /// while it holds them.
 #[test]
+fn a_cancelled_calling_run_discards_its_handed_output() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.cancelledhanded";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let a = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let params = json!({"id": id});
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &params).unwrap();
+    let output = run_job_away(&mut s, &job);
+    s.hand_in_plugin_calls(output);
+    s.end_plugin_calls();
+    FilterRun::begin_calls(&mut s, "plugin.run", &params).unwrap();
+    assert!(matches!(s.execute("plugin.run", &params), Err(EngineError::PluginBusy)), "the canceled output must not complete a new run");
+    assert!(s.doc().unwrap().doc.node(a).is_some());
+    s.end_plugin_calls();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+#[test]
+fn a_panicking_calling_run_finish_rolls_back_the_calls() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.panickingheldfinish";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 40.0, "#00ff00");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let params = json!({"id": id});
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &params).unwrap();
+    let output = run_job_away(&mut s, &job);
+    assert!(s.doc().unwrap().selection.objects.contains(&b));
+    s.hand_in_plugin_calls(output);
+    cmd::plugin::panic_on_next_finish();
+    assert!(s.execute("plugin.run", &params).is_err());
+    assert!(!s.plugin_calls_open());
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert!(!s.in_interaction());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+#[test]
 fn a_calling_run_made_away_from_the_session_that_ends_changes_nothing() {
     use cmd::plugin::FilterRun;
     let id = "test.engine.callsawayend";

@@ -29,6 +29,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
     // A WebAssembly plug-in is installed.
     if opens == Some(OpensAs::Plugin) {
         let module = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)});
+        if let Some(result) = crate::plugin_runs::check_open_install(app, &module, name) {
+            return result.map(|_| Value::Null);
+        }
         return install_module(app, module).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::ShortcutSet) {
