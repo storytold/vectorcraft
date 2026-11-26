@@ -12165,6 +12165,23 @@ lines. The rest are VectorCraft's own rules:
   Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
   Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
   gap given with no area type in the selection, and no point type that it turns into area type, is an error.
+- A leading change on the frame's text sets `lineGap` to the new leading less the size of the first character changed,
+  within -1,296 to 1,296 pt, in the change's own undo step. That covers `text.setStyle {leading}` and
+  `text.setRangeStyle {leading}` (the Character panel's and the Properties panel's Leading field and its list),
+  `type.step {attribute: "leading"}` (the Type tool's Alt+arrow leading steps), `charStyle.apply` with a style that sets
+  a leading (or with `clearOverrides` when the Normal style sets one), `charStyle.edit` and `charStyle.setAttrs` when
+  the new definition gives its users another leading, and `addon.type.textTweaker {attribute: "leading"}`. Text
+  Tweaker's ramp sets the gap from its first changed character, and every other character then takes its size plus
+  that gap, so the ramp does not vary the leading. `"auto"` takes the first character's Auto leading. Every line then
+  spreads or tightens by the change to that character's leading. The Eyedropper (`appearance.copyFrom`) copies a whole
+  character style, so it leaves `lineGap` as it is. In a shaped frame where the moved lines take another size, the gap
+  is worked out again from the new size, up to four times, and the leading set can then differ by the last change in
+  that size. When the changed characters share one size and the gap is within its range, the Leading field shows the
+  leading set. Otherwise each character takes its own size plus the gap, and the field is blank where those differ.
+  `keepLineGap: true` on `text.setStyle` and `text.setRangeStyle` leaves `lineGap` as it is, and the Character panel's
+  Reset Panel sends it, so a reset to Auto leading keeps the frame's Line Gap. Point type, type on a path and area type
+  with Block off keep their own leading. If Block cannot fit a frame, editing a character style keeps each run's
+  manual leading override. When Block can fit the frame, its generated leading follows the edited style.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at
