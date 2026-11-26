@@ -999,7 +999,7 @@ impl Tool for ShapeTool {
         let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
         // The points Shift-clicks placed, and after two of them the circle through them and the
-        // pointer, dashed.
+        // pointer, dashed (solid when it is too long on screen, as the Circle tool draws it).
         for p in &self.through {
             o.push(Overlay::Anchor { p: *p, color: crate::draw2::FEEDBACK, filled: true, size: 6.0 });
         }
@@ -1007,7 +1007,7 @@ impl Tool for ShapeTool {
             && let Some((c, r)) = vectorcraft_geom::shapes::circle_through(*a, *b, h)
         {
             let path = vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
-            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: true });
+            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: crate::circle::preview_dashed(cx, r) });
         }
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });

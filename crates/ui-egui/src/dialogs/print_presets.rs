@@ -77,9 +77,6 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
             Ok(rows(app).get(preset_manager::above(i, 1)).map(|row| row.name.clone()))
         }
         ManagerAction::Import => preset_manager::import(app, KEY, "print.presets.import", "Print presets", PRESET_EXTS),
-        ManagerAction::Export => {
-            crate::io::save_command_output(app, "print.presets.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
-            Ok(None)
-        }
+        ManagerAction::Export => preset_manager::export(app, "print.presets.export", PRESET_FORMAT, current),
     }
 }

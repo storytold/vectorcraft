@@ -14,6 +14,7 @@ mod fonts;
 mod guide_escape;
 mod home;
 pub(super) mod labels;
+mod last_filter;
 mod lifecycle;
 mod nativemenu;
 mod nativeoptions;

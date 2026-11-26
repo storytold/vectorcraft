@@ -324,10 +324,18 @@ pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
 /// isn't selected becomes the only selected one, and the menu's facts are measured.
 pub(crate) fn right_click(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
     let Some(st) = app.session.active() else { return };
-    let (uid, n, hit) = (st.uid, st.doc.artboards.len(), st.doc.artboard_at(p));
+    let (n, hit) = (st.doc.artboards.len(), st.doc.artboard_at(p));
     if let Some(i) = hit.filter(|i| !picked(app, n).contains(i)) {
         select(app, i);
     }
+    measure_menu(app, p);
+}
+
+/// The canvas menu's facts for the selected artboards, with the menu opened at `p` (a right-click, or the Menu key or
+/// Shift+F10, which select nothing).
+pub(crate) fn measure_menu(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
+    let Some(st) = app.session.active() else { return };
+    let (uid, n) = (st.uid, st.doc.artboards.len());
     let all = picked(app, n);
     let any_empty = vectorcraft_engine::find_command("artboard.deleteEmpty").is_some_and(|c| (c.enabled)(&app.session).is_ok());
     let any_art = fit_has_art(app, &all);
