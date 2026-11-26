@@ -352,11 +352,17 @@ pub fn effect_label(id: &str) -> String {
         .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
-/// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
-/// effect's id wins over the plain row of its English label), a plug-in's as it is.
+/// Is `id` one of our own effects? A plug-in's effect name comes from the plug-in and is shown as
+/// it is.
+fn built_in_effect(id: &str) -> bool {
+    catalog().iter().any(|c| c.0 == id)
+}
+
+/// [`effect_label`] as shown: a built-in effect's name in the UI language as the Effect menu
+/// shows it ([`crate::i18n::effect_name`]), a plug-in's as it is.
 pub(crate) fn shown_effect_label(id: &str) -> String {
-    match catalog().iter().find(|c| c.0 == id) {
-        Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
+    match built_in_effect(id).then(|| crate::i18n::effect_name(crate::i18n::current(), id)).flatten() {
+        Some(name) => name,
         None => effect_label(id),
     }
 }
@@ -1780,9 +1786,10 @@ fn effects_move(
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    // Built-in effects in the UI language; a plug-in's by the name it gives.
-    let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
-    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
+    // Built-in effects named as the Effect menu names them; a plug-in's by the name it gives.
+    let lang = crate::i18n::current();
+    let built_in = catalog().iter().map(|(id, label, menu)| (id, crate::i18n::effect_name(lang, id).unwrap_or_else(|| label.clone()), menu));
+    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.clone(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
         match groups.iter_mut().find(|(n, _)| *n == g) {
             Some((_, v)) => v.push((id.clone(), label.to_string())),

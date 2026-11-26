@@ -242,6 +242,28 @@ fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
     }
 }
 
+/// Swatches and Color as tabs of one native window, with its OS window drawn.
+fn native_tab_group(h: &mut Harness) -> ViewportId {
+    let viewport = h.float("swatches");
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    viewport
+}
+
+#[test]
+fn a_group_float_of_a_tab_group_resizes_its_native_window() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let id = floating_window(layout_of(&h.app.ui), "swatches").unwrap().id;
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(floating_window(layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
 /// `window.toolbar.float` with x, y moves the OS window a toolbar made with New Toolbar already has.
 #[test]
 fn floating_a_toolbar_at_a_point_moves_its_native_window() {

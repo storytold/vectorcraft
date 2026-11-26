@@ -232,6 +232,92 @@ fn leading_follows_the_paragraphs_the_type_tool_selection_covers() {
     }
 }
 
+/// Selected area type of two equal lines with Dynamic Text (Block) on and a Line Gap of 7 pt.
+fn block_app() -> (VectorcraftApp, NodeId) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let id =
+        app.run("text.create", json!({"x": 20, "y": 20, "size": 12, "area": {"width": 300, "height": 2000}, "text": "Hello\nHello"})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("type.dynamicText", json!({"on": true, "lineGap": 7})).unwrap();
+    let leading = shared_leading(&app).expect("both lines share a leading");
+    assert!((leading - block_text(&app, NodeId(id)).runs[0].style.size - 7.0).abs() < 1e-9);
+    (app, NodeId(id))
+}
+
+fn block_text(app: &VectorcraftApp, id: NodeId) -> vectorcraft_doc::TextObject {
+    match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    }
+}
+
+fn pick_leading(panel: &mut crate::tests::panel_harness::Panel, entry: &str) {
+    panel.focus("Leading");
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::ALT);
+    panel.click_role(entry, craft::ui::contract::Role::LIST_BOX_OPTION);
+}
+
+/// Area type with Dynamic Text (Block) on: a leading typed into the Leading field moves the
+/// frame's Line Gap, so the field then shows the leading typed and the lines are spaced by it.
+#[test]
+fn leading_typed_with_block_on_moves_the_line_gap() {
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
+    let size = block_text(&app, id).runs[0].style.size;
+    let mut panel = Panel::new(app, show);
+    panel.type_into("Leading", "200");
+    let app = panel.app();
+    let t = block_text(&app, id);
+    assert!((t.area.line_gap - (200.0 - size)).abs() < 1e-6, "line gap {} for size {size}", t.area.line_gap);
+    assert!(shared_leading(&app).is_some_and(|l| (l - 200.0).abs() < 1e-6), "the field shows {:?}", shared_leading(&app));
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!((lay.lines[1].baseline - lay.lines[0].baseline - 200.0).abs() < 1e-6, "the lines are 200 pt apart");
+}
+
+/// The Properties panel's Leading field does the same on Block text.
+#[test]
+fn leading_typed_in_properties_with_block_on_moves_the_line_gap() {
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
+    let size = block_text(&app, id).runs[0].style.size;
+    let mut panel = Panel::new(app, super::super::properties::show);
+    panel.type_into("Leading", "150");
+    let t = block_text(&panel.app(), id);
+    assert!((t.area.line_gap - (150.0 - size)).abs() < 1e-6, "line gap {} for size {size}", t.area.line_gap);
+}
+
+/// A pick from the Leading field's list on Block text: a preset, then Auto, each moves the Line Gap.
+#[test]
+fn leading_picked_from_the_list_with_block_on_moves_the_line_gap() {
+    use crate::tests::panel_harness::Panel;
+    let (app, id) = block_app();
+    let size = block_text(&app, id).runs[0].style.size;
+    let preset = vectorcraft_doc::Unit::Points.format(72.0);
+    let mut panel = Panel::new(app, show);
+    pick_leading(&mut panel, &preset);
+    let gap = block_text(&panel.app(), id).area.line_gap;
+    assert!((gap - (72.0 - size)).abs() < 1e-6, "{preset}: line gap {gap} for size {size}");
+    pick_leading(&mut panel, tl!("Auto"));
+    let gap = block_text(&panel.app(), id).area.line_gap;
+    assert!(gap > 0.0 && gap < size * 0.5, "Auto: line gap {gap} for size {size}");
+}
+
+/// Reset Panel resets the leading to Auto and leaves Block's Line Gap, which belongs to the frame.
+#[test]
+fn reset_panel_with_block_on_keeps_the_line_gap() {
+    let (mut app, id) = block_app();
+    app.run("text.setFormat", json!({"baselineShift": 3})).unwrap();
+    let reset = CommandRef::with_params("ui.character.reset", json!({}));
+    assert!(listed(&app).contains(&reset), "the panel menu lists Reset Panel");
+    fire(&mut app, &reset);
+    let t = block_text(&app, id);
+    assert_eq!(t.area.line_gap, 7.0);
+    assert_eq!(t.runs[0].style.baseline_shift, 0.0, "the reset ran");
+}
+
 #[test]
 fn scaled_range_fields_follow_the_type_tool_selection() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
