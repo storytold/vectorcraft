@@ -516,3 +516,90 @@ pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod split_tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::dialogs::tests::{app, cancel, confirm, frame, is_open, set};
+
+    fn selected_rectangle(app: &mut VectorcraftApp, width: u32, height: u32) {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": width, "height": height})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+    }
+
+    fn other_document(app: &mut VectorcraftApp) {
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        selected_rectangle(app, 150, 90);
+    }
+
+    #[test]
+    fn split_into_grid_skips_preview_in_the_other_drawing() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        let original = app.session.doc().unwrap().doc.clone();
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        other_document(&mut app);
+        let other = app.session.doc().unwrap().doc.clone();
+        set(&mut app, "preview", json!(true));
+
+        frame(&mut app, vec![]);
+
+        assert!(app.session.doc().unwrap().doc == other, "the other drawing is unchanged by Preview");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        frame(&mut app, vec![]);
+        assert_ne!(app.session.doc().unwrap().doc, original);
+        assert!(app.session.in_interaction());
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 6);
+        assert!(!app.session.in_interaction());
+    }
+
+    #[test]
+    fn split_into_grid_keeps_the_draft_when_ok_is_in_another_drawing() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        other_document(&mut app);
+        let other = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+
+        let closed = confirm(&mut app);
+
+        assert!(app.session.doc().unwrap().doc == other, "the other drawing is unchanged by OK");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(!closed && is_open(&app), "the user can return to confirm");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn split_into_grid_cancel_preserves_the_other_drawings_edit() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        other_document(&mut app);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let opening = app.session.doc().unwrap().doc.clone();
+        open_split(&mut app);
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert!(app.session.in_interaction(), "the opening drawing is previewing");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+        assert!(cancel(&mut app));
+
+        assert!(app.session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(app.session.doc().unwrap().doc, other);
+        app.session.commit_interaction().unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+    }
+}
