@@ -124,11 +124,11 @@ pub enum Cursor {
     /// open end of another path selected at the press, where releasing the mouse button connects the
     /// two. A crosshair with a short line rising to the right.
     PencilContinue,
-    /// The Pencil tool with Use Precise Cursors on (or Caps Lock), where its cursor has no badge:
-    /// before a press that draws a new path, while a stroke is drawn, and over a selected path the
-    /// press would redraw. A cross turned 45°, so it differs at a glance from the crosshair the
-    /// closing, continuing and straight-line cursors keep.
-    PencilPrecise,
+    /// Use Precise Cursors on (or Caps Lock), for the Pencil where its cursor has no badge (before a
+    /// press that draws a new path, while a stroke is drawn, and over a selected path the press would
+    /// redraw) and for the Paintbrush in every state. A cross turned 45°, so it differs at a glance
+    /// from the crosshair the Pencil's closing, continuing and straight-line cursors keep.
+    PreciseCross,
     /// The Paintbrush tool.
     Paintbrush,
     /// The Paintbrush tool with Alt held: releasing the mouse button with Alt still held closes
@@ -267,8 +267,9 @@ impl Cursor {
 
     /// General › Use Precise Cursors: the drawing tools' pointers (the Pen's in every state, the
     /// Anchor Point and Curvature tools', the Eyedropper's, the Slice and Blend tools', the Live
-    /// Paint tools') become a plain crosshair at the hotspot. The Pencil's own and new-path cursors
-    /// become its precise cross ([`Cursor::PencilPrecise`]). Its closing, continuing and straight-line
+    /// Paint tools') become a plain crosshair at the hotspot. The Paintbrush's cursors, and the
+    /// Pencil's own and new-path ones, become the precise cross ([`Cursor::PreciseCross`]). The
+    /// Pencil's closing, continuing and straight-line
     /// cursors are a crosshair already, with a badge that says what the release or the press will do
     /// (close the path, carry it on, draw a straight line): the badge stays, as it says nothing about
     /// where the pointer is.
@@ -293,8 +294,6 @@ impl Cursor {
             | Cursor::ShapeBuilderErase
             | Cursor::Lasso
             | Cursor::MagicWand
-            | Cursor::Paintbrush
-            | Cursor::PaintbrushClose
             | Cursor::BlobBrush
             | Cursor::Eraser
             | Cursor::Smooth
@@ -329,7 +328,7 @@ impl Cursor {
             | Cursor::SlideAnchor
             | Cursor::SharedEdge
             | Cursor::SmartPen => Cursor::Crosshair,
-            Cursor::Pencil | Cursor::PencilNew => Cursor::PencilPrecise,
+            Cursor::Pencil | Cursor::PencilNew | Cursor::Paintbrush | Cursor::PaintbrushClose => Cursor::PreciseCross,
             c => c,
         }
     }

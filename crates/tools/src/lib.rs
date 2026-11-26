@@ -769,7 +769,8 @@ mod cursor_tests {
             ("mesh", Cursor::MeshAdd),
         ] {
             assert_eq!(cursor_of(id), c, "{id}");
-            assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
+            let precise = if id == "paintbrush" { Cursor::PreciseCross } else { Cursor::Crosshair };
+            assert_eq!(c.precise(), precise, "{id}");
             // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
             // Live Paint Bucket's bucket and the Knife's knife are drawn.
             let stand_in = match id {
@@ -782,13 +783,12 @@ mod cursor_tests {
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        // Use Precise Cursors shows the Pencil's precise cross for its own and new-path cursors; its
-        // closing, continuing and straight-line ones are a crosshair already and keep their badge.
-        // The Paintbrush's closing cursor becomes the plain crosshair.
-        for c in [Cursor::Pencil, Cursor::PencilNew] {
-            assert_eq!(c.precise(), Cursor::PencilPrecise, "{c:?}");
+        // Use Precise Cursors shows the precise cross for the Pencil's own and new-path cursors and for
+        // the Paintbrush's closing one; the Pencil's closing, continuing and straight-line ones are a
+        // crosshair already and keep their badge.
+        for c in [Cursor::Pencil, Cursor::PencilNew, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), Cursor::PreciseCross, "{c:?}");
         }
-        assert_eq!(Cursor::PaintbrushClose.precise(), Cursor::Crosshair);
         for c in [Cursor::PencilClose, Cursor::PencilContinue, Cursor::PencilStraight] {
             assert_eq!(c.precise(), c, "{c:?}");
         }
