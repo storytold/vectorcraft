@@ -2335,7 +2335,6 @@ arrowhead	Feather	पंख
 	Reset Retype Panel	फिर से टाइप करें पैनल रीसेट करें
 	List Matching Fonts	मिलते-जुलते फ़ॉन्ट की सूची
 	Retype Preview	फिर से टाइप करें पैनल का प्रीव्यू
-@msg	`installed` must be true, false or null	`installed` को true, false या null होना चाहिए
 @msg	`count` must be a whole number from 1 to 96	`count` 1 से 96 तक पूरी संख्या होना चाहिए
 @msg	`size` must be small, medium or large	`size` को small, medium या large होना चाहिए
 @msg	`text` must be a string of at most 100 characters	`text` अधिकतम 100 वर्णों की स्ट्रिंग होनी चाहिए
@@ -8094,8 +8093,6 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Image Trace failed: {e}	इमेज ट्रेस विफल: {e}
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	इमेज ट्रेस विफल: आंतरिक त्रुटि: इसके धागे को बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	Image Trace finished, but its document was closed	इमेज ट्रेस समाप्त हो गया, लेकिन इसका डॉक्यूमेंट बंद हो गया।
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	फिर से टाइप करना विफल: आंतरिक त्रुटि: इसका थ्रेड रुक गया (कृपया इस बग की रिपोर्ट करें)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	फिर से टाइप करना समाप्त हो गया, लेकिन इस बीच दस्तावेज़ या उसका चयन बदल गया: इसे फिर से चलाएँ
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	इमेज ट्रेस समाप्त हो गया, लेकिन इस बीच इमेज या इसकी सेटिंग्स बदल गई: इसे फिर से ट्रेस करें
 @msg	Image Trace finished, but its document was reverted: trace it again	इमेज ट्रेस समाप्त हो गया, लेकिन इसके डॉक्यूमेंट को मूल स्थिति में लाया गया: इसे फिर से ट्रेस करें
 @msg	Image Trace: the traced image is missing	इमेज ट्रेस: ज्ञात इमेज गायब है

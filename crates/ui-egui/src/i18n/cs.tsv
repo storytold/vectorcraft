@@ -464,7 +464,6 @@
 	Reset Retype Panel	Obnovit panel Přepsat
 	List Matching Fonts	Vypsat odpovídající písma
 	Retype Preview	Náhled v panelu Přepsat
-@msg	`installed` must be true, false or null	`installed` musí být true, false nebo null
 @msg	`count` must be a whole number from 1 to 96	`count` musí být celé číslo od 1 do 96
 @msg	`size` must be small, medium or large	`size` musí být small, medium nebo large
 @msg	`text` must be a string of at most 100 characters	`text` musí být řetězec o nejvýše 100 znacích
@@ -8979,8 +8978,6 @@ breakText	Glyphs	Glyfy
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Vektorizace obrazu selhala: vnitřní chyba: její vlákno se zastavilo (nahlaste prosím tuto chybu)
 @msg	Image Trace failed: {e}	Vektorizace obrazu selhala: {e}
 @msg	Image Trace finished, but its document was closed	Vektorizace obrazu skončila, ale její dokument byl zavřen
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Přepsání selhalo: vnitřní chyba: jeho vlákno se zastavilo (nahlaste prosím tuto chybu)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Přepsání skončilo, ale dokument nebo jeho výběr se mezitím změnil: spusťte ho znovu
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Vektorizace obrazu skončila, ale obraz nebo jeho nastavení se mezitím změnily: vektorizujte ho znovu
 @msg	Image Trace finished, but its document was reverted: trace it again	Vektorizace obrazu skončila, ale její dokument byl vrácen k uložené verzi: vektorizujte ho znovu
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importovat filtr SVG čte soubory SVG, ne SVGZ

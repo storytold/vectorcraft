@@ -1416,7 +1416,6 @@ font-technology	Variable	Варіативні
 	Reset Retype Panel	Скинути панель «Повторний набір»
 	List Matching Fonts	Список відповідних шрифтів
 	Retype Preview	Перегляд у панелі «Повторний набір»
-@msg	`installed` must be true, false or null	`installed` має бути true, false або null
 @msg	`count` must be a whole number from 1 to 96	`count` має бути цілим числом від 1 до 96
 @msg	`size` must be small, medium or large	`size` має бути small, medium або large
 @msg	`text` must be a string of at most 100 characters	`text` має бути рядком довжиною не більше 100 символів
@@ -8620,8 +8619,6 @@ breakText	Glyphs	Гліфи
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Трасування зображення не вдалося: внутрішня помилка: його потік зупинився (будь ласка, повідомте про цю помилку)
 @msg	Image Trace failed: {e}	Трасування зображення не вдалося: {e}
 @msg	Image Trace finished, but its document was closed	Трасування зображення завершено, але його документ закрито
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Повторний набір не вдався: внутрішня помилка: його потік зупинився (будь ласка, повідомте про цю помилку)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Повторний набір завершено, але документ або його виділення тим часом змінилися: виконайте його ще раз
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Трасування зображення завершено, але зображення або його параметри тим часом змінилися: виконайте трасування ще раз
 @msg	Image Trace finished, but its document was reverted: trace it again	Трасування зображення завершено, але його документ було повернуто до збереженої версії: виконайте трасування ще раз
 @msg	Import SVG Filter reads SVG files, not SVGZ	Імпорт фільтра SVG читає файли SVG, а не SVGZ

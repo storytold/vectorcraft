@@ -1035,8 +1035,6 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	Image Trace failed: {e}	Billedsporing mislykkedes: {e}
 @msg	Image Trace finished, but its document was closed	Billedsporing blev færdig, men dens dokument blev lukket
 @msg	Image Trace finished, but its document was reverted: trace it again	Billedsporing blev færdig, men dens dokument blev gendannet: spor det igen
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Genindtast mislykkedes: intern fejl: dens tråd stoppede (rapportér venligst denne fejl)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Genindtast blev færdig, men dokumentet eller dets markering ændrede sig imens: kør det igen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Billedsporing blev færdig, men billedet eller dets indstillinger ændrede sig imens: spor det igen
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importér SVG-filter læser SVG-filer, ikke SVGZ
 @msg	Invalid dimension offset	Ugyldig forskydning af målet
@@ -3213,7 +3211,6 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Reset Retype Panel	Nulstil panelet Genindtast
 	List Matching Fonts	Vis matchende skrifttyper
 	Retype Preview	Forhåndsvisning i panelet Genindtast
-@msg	`installed` must be true, false or null	`installed` skal være true, false eller null
 @msg	`count` must be a whole number from 1 to 96	`count` skal være et heltal fra 1 til 96
 @msg	`size` must be small, medium or large	`size` skal være small, medium eller large
 @msg	`text` must be a string of at most 100 characters	`text` skal være en streng på højst 100 tegn

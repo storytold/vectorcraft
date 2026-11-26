@@ -1744,7 +1744,6 @@ digits	Malayalam	Malajálam
 	Reset Retype Panel	Újragépelés panel visszaállítása
 	List Matching Fonts	Egyező betűtípusok listázása
 	Retype Preview	Újragépelés panel előnézete
-@msg	`installed` must be true, false or null	`installed`: true, false vagy null kell
 @msg	`count` must be a whole number from 1 to 96	`count`: 1 és 96 közötti egész szám kell
 @msg	`size` must be small, medium or large	`size`: small, medium vagy large kell
 @msg	`text` must be a string of at most 100 characters	`text`: legfeljebb 100 karakteres karakterlánc kell
@@ -8850,8 +8849,6 @@ breakText	Glyphs	Glifák
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	A képvektorizálás nem sikerült: belső hiba: a szála leállt (kérjük, jelentsd ezt a hibát)
 @msg	Image Trace failed: {e}	A képvektorizálás nem sikerült: {e}
 @msg	Image Trace finished, but its document was closed	A képvektorizálás elkészült, de a dokumentumát bezárták
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Az újragépelés nem sikerült: belső hiba: a szála leállt (kérjük, jelentsd ezt a hibát)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Az újragépelés elkészült, de a dokumentum vagy a kijelölése közben megváltozott: futtasd újra
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	A képvektorizálás elkészült, de a kép vagy a beállításai közben megváltoztak: vektorizáld újra
 @msg	Image Trace finished, but its document was reverted: trace it again	A képvektorizálás elkészült, de a dokumentumát visszaállították a mentett változatra: vektorizáld újra
 @msg	Import SVG Filter reads SVG files, not SVGZ	Az SVG-szűrő importálása SVG-fájlokat olvas, SVGZ-fájlokat nem

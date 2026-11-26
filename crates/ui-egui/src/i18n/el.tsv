@@ -1329,7 +1329,6 @@ font-technology	Variable	Μεταβλητές
 	Reset Retype Panel	Επαναφορά πίνακα Επαναπληκτρολόγησης
 	List Matching Fonts	Λίστα αντίστοιχων γραμματοσειρών
 	Retype Preview	Προεπισκόπηση πίνακα Επαναπληκτρολόγησης
-@msg	`installed` must be true, false or null	Το `installed` πρέπει να είναι true, false ή null
 @msg	`count` must be a whole number from 1 to 96	Το `count` πρέπει να είναι ακέραιος από 1 έως 96
 @msg	`size` must be small, medium or large	Το `size` πρέπει να είναι small, medium ή large
 @msg	`text` must be a string of at most 100 characters	Το `text` πρέπει να είναι συμβολοσειρά έως 100 χαρακτήρων
@@ -7302,8 +7301,6 @@ axis	Y Axis	Άξονας Y
 	The plug-in is computing…	Το πρόσθετο υπολογίζει…
 	Inspect Plug-in	Επιθεώρηση προσθέτου
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Η Επαναπληκτρολόγηση απέτυχε: εσωτερικό σφάλμα: το νήμα της σταμάτησε (αναφέρετε αυτό το σφάλμα)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Η Επαναπληκτρολόγηση ολοκληρώθηκε, αλλά το έγγραφο ή η επιλογή του άλλαξε στο μεταξύ: εκτελέστε την ξανά
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`

@@ -1385,7 +1385,6 @@ font-technology	Variable	Variabel
 	Reset Retype Panel	Bedienfeld „Neu setzen“ zurücksetzen
 	List Matching Fonts	Passende Schriften auflisten
 	Retype Preview	Vorschau im Bedienfeld „Neu setzen“
-@msg	`installed` must be true, false or null	`installed` muss true, false oder null sein
 @msg	`count` must be a whole number from 1 to 96	`count` muss eine ganze Zahl von 1 bis 96 sein
 @msg	`size` must be small, medium or large	`size` muss small, medium oder large sein
 @msg	`text` must be a string of at most 100 characters	`text` muss eine Zeichenfolge mit höchstens 100 Zeichen sein
@@ -8863,8 +8862,6 @@ breakText	Glyphs	Glyphen
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Bildnachzeichner fehlgeschlagen: interner Fehler: Sein Thread wurde beendet (bitte melden Sie diesen Fehler)
 @msg	Image Trace failed: {e}	Bildnachzeichner fehlgeschlagen: {e}
 @msg	Image Trace finished, but its document was closed	Bildnachzeichner abgeschlossen, aber sein Dokument wurde geschlossen
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Neu setzen fehlgeschlagen: interner Fehler: Sein Thread wurde beendet (bitte melden Sie diesen Fehler)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Neu setzen abgeschlossen, aber das Dokument oder seine Auswahl hat sich inzwischen geändert: Führen Sie es erneut aus
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildnachzeichner abgeschlossen, aber das Bild oder seine Einstellungen haben sich inzwischen geändert: Zeichnen Sie es erneut nach
 @msg	Image Trace finished, but its document was reverted: trace it again	Bildnachzeichner abgeschlossen, aber sein Dokument wurde auf die letzte Version zurückgesetzt: Zeichnen Sie es erneut nach
 @msg	Invalid dimension offset	Ungültiger Bemaßungsversatz

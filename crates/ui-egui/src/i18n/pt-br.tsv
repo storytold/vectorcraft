@@ -1278,7 +1278,6 @@ antiAlias	Sharp	Nítido
 	Reset Retype Panel	Redefinir Painel Redigitar
 	List Matching Fonts	Listar Fontes Correspondentes
 	Retype Preview	Visualização do Painel Redigitar
-@msg	`installed` must be true, false or null	`installed` deve ser true, false ou null
 @msg	`count` must be a whole number from 1 to 96	`count` deve ser um número inteiro de 1 a 96
 @msg	`size` must be small, medium or large	`size` deve ser small, medium ou large
 @msg	`text` must be a string of at most 100 characters	`text` deve ser uma string de no máximo 100 caracteres
@@ -9032,8 +9031,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	O Rastreamento de Imagem falhou: erro interno: a thread dele parou (informe este erro)
 @msg	Image Trace failed: {e}	O Rastreamento de Imagem falhou: {e}
 @msg	Image Trace finished, but its document was closed	O Rastreamento de Imagem terminou, mas o documento dele foi fechado
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	O Redigitar falhou: erro interno: a thread dele parou (informe este erro)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	O Redigitar terminou, mas o documento ou a seleção dele mudou nesse meio-tempo: execute-o novamente
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	O Rastreamento de Imagem terminou, mas a imagem ou as configurações dela mudaram nesse meio-tempo: rastreie-a novamente
 @msg	Image Trace finished, but its document was reverted: trace it again	O Rastreamento de Imagem terminou, mas o documento dele foi revertido: rastreie-a novamente
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importar Filtro SVG lê arquivos SVG, não SVGZ

@@ -1407,7 +1407,6 @@ font-technology	Variable	Вариативные
 	Reset Retype Panel	Сбросить панель «Перенабор»
 	List Matching Fonts	Список подходящих шрифтов
 	Retype Preview	Просмотр в панели «Перенабор»
-@msg	`installed` must be true, false or null	`installed` должно быть true, false или null
 @msg	`count` must be a whole number from 1 to 96	`count` должно быть целым числом от 1 до 96
 @msg	`size` must be small, medium or large	`size` должно быть small, medium или large
 @msg	`text` must be a string of at most 100 characters	`text` должно быть строкой длиной не более 100 символов
@@ -8967,8 +8966,6 @@ shape	Open	Открытый
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Трассировка изображения не выполнена: внутренняя ошибка: её поток остановился (сообщите об этой ошибке)
 @msg	Image Trace failed: {e}	Трассировка изображения не выполнена: {e}
 @msg	Image Trace finished, but its document was closed	Трассировка изображения завершена, но её документ был закрыт
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Перенабор не выполнен: внутренняя ошибка: его поток остановился (сообщите об этой ошибке)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Перенабор завершён, но документ или его выделение за это время изменились: выполните его снова
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Трассировка изображения завершена, но изображение или его настройки за это время изменились: выполните трассировку снова
 @msg	Import SVG Filter reads SVG files, not SVGZ	Импорт фильтра SVG читает файлы SVG, а не SVGZ
 @msg	Invalid dimension offset	Недопустимое смещение размера

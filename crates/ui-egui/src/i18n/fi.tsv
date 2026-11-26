@@ -461,7 +461,6 @@
 	Reset Retype Panel	Palauta Kirjoita uudelleen -paneeli
 	List Matching Fonts	Luettele vastaavat fontit
 	Retype Preview	Kirjoita uudelleen -paneelin esikatselu
-@msg	`installed` must be true, false or null	`installed` on oltava true, false tai null
 @msg	`count` must be a whole number from 1 to 96	`count` on oltava kokonaisluku 1–96
 @msg	`size` must be small, medium or large	`size` on oltava small, medium tai large
 @msg	`text` must be a string of at most 100 characters	`text` on oltava enintään 100 merkin merkkijono
@@ -7379,8 +7378,6 @@ axis	Y Axis	Y-akseli
 	The plug-in is computing…	Laajennus laskee…
 	Inspect Plug-in	Tarkastele laajennusta
 	Cancel Plug-in Run	Peruuta laajennuksen ajo
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Kirjoita uudelleen epäonnistui: sisäinen virhe: sen säie pysähtyi (ilmoita tästä virheestä)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Kirjoita uudelleen valmistui, mutta asiakirja tai sen valinta muuttui sillä välin: suorita se uudelleen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} valmistui, mutta asiakirja tai laajennus muuttui sillä välin: suorita se uudelleen
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`

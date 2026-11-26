@@ -35,10 +35,9 @@ fn has_type(app: &VectorcraftApp) -> bool {
     found
 }
 
-/// Draws the progress window at `time` seconds → the texts it drew.
+/// Draws the progress window at `time` seconds in a frame as the hosts run it → the texts it drew.
 fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| export_progress::show(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::part_frame(app, ctx, egui::RawInput { time: Some(time), ..Default::default() }, export_progress::show);
     let mut texts = String::new();
     for shape in out.shapes {
         if let egui::epaint::Shape::Text(t) = shape.shape {
@@ -67,14 +66,12 @@ fn type_retype_searches_off_the_ui_thread_then_retypes_as_one_undo_step() {
 #[test]
 fn starting_a_search_asks_for_a_frame() {
     let (mut app, _) = outlined();
-    let ctx = egui::Context::default();
-    app.adopt_context(&ctx);
+    let ctx = crate::testing::ui_context();
     for _ in 0..5 {
+        crate::testing::part_frame(&mut app, &ctx, Default::default(), |_, _| {});
         if !ctx.has_requested_repaint() {
             break;
         }
-        let mut out = ctx.run_ui(Default::default(), |_| {});
-        out.textures_delta.clear();
     }
     assert!(!ctx.has_requested_repaint(), "the context settled");
     crate::menus::invoke(&mut app, "type.retype", json!({}));

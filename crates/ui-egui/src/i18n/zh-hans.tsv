@@ -1352,7 +1352,6 @@ antiAlias	Sharp	锐利
 	Reset Retype Panel	重置重新键入面板
 	List Matching Fonts	列出匹配字体
 	Retype Preview	重新键入面板预览
-@msg	`installed` must be true, false or null	`installed` 必须是 true、false 或 null
 @msg	`count` must be a whole number from 1 to 96	`count` 必须是 1 到 96 之间的整数
 @msg	`size` must be small, medium or large	`size` 必须是 small、medium 或 large
 @msg	`text` must be a string of at most 100 characters	`text` 必须是不超过 100 个字符的字符串
@@ -9135,8 +9134,6 @@ breakText	Glyphs	字形
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	图像描摹失败：内部错误：其线程已停止 (请报告此错误)
 @msg	Image Trace failed: {e}	图像描摹失败：{e}
 @msg	Image Trace finished, but its document was closed	图像描摹已完成，但其文档已关闭
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	重新键入失败：内部错误：其线程已停止 (请报告此错误)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	重新键入已完成，但文档或其选区在此期间发生了更改：请重新运行
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	图像描摹已完成，但图像或其设置在此期间发生了更改：请重新描摹
 @msg	Image Trace finished, but its document was reverted: trace it again	图像描摹已完成，但其文档已恢复：请重新描摹
 @msg	Invalid dimension offset	尺寸标注的偏移无效

@@ -1409,7 +1409,6 @@ font-technology	Variable	Variables
 	Reset Retype Panel	Restablecer panel Reescribir
 	List Matching Fonts	Enumerar fuentes coincidentes
 	Retype Preview	Vista previa del panel Reescribir
-@msg	`installed` must be true, false or null	`installed` debe ser true, false o null
 @msg	`count` must be a whole number from 1 to 96	`count` debe ser un número entero entre 1 y 96
 @msg	`size` must be small, medium or large	`size` debe ser small, medium o large
 @msg	`text` must be a string of at most 100 characters	`text` debe ser una cadena de 100 caracteres como máximo
@@ -9317,8 +9316,6 @@ breakText	Glyphs	Glifos
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Error de Calco de imagen: error interno: su hilo se detuvo (informa de este error)
 @msg	Image Trace failed: {e}	Error de Calco de imagen: {e}
 @msg	Image Trace finished, but its document was closed	Calco de imagen terminó, pero su documento se cerró
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Error de Reescribir: error interno: su hilo se detuvo (informa de este error)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Reescribir terminó, pero el documento o su selección cambiaron mientras tanto: ejecútalo de nuevo
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Calco de imagen terminó, pero la imagen o sus ajustes cambiaron mientras tanto: cálcala de nuevo
 @msg	Invalid dimension offset	Desplazamiento de cota no válido
 @msg	Invalid point	Punto no válido

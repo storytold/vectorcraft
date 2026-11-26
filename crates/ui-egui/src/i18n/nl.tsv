@@ -1072,7 +1072,6 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Reset Retype Panel	Paneel Opnieuw typen herstellen
 	List Matching Fonts	Overeenkomende lettertypen weergeven
 	Retype Preview	Voorbeeld in paneel Opnieuw typen
-@msg	`installed` must be true, false or null	`installed` moet true, false of null zijn
 @msg	`count` must be a whole number from 1 to 96	`count` moet een geheel getal van 1 tot 96 zijn
 @msg	`size` must be small, medium or large	`size` moet small, medium of large zijn
 @msg	`text` must be a string of at most 100 characters	`text` moet een tekenreeks van hoogstens 100 tekens zijn
@@ -6481,8 +6480,6 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Afbeelding traceren is mislukt: interne fout: de thread ervan is gestopt (meld deze bug alsjeblieft)
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Opnieuw typen is mislukt: interne fout: de thread ervan is gestopt (meld deze bug alsjeblieft)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Opnieuw typen is voltooid, maar het document of de selectie ervan is intussen gewijzigd: voer het opnieuw uit
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
 @msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ

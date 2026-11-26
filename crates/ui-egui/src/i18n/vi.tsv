@@ -1656,7 +1656,6 @@ digits	Malayalam	Malayalam
 	Reset Retype Panel	Đặt lại bảng Gõ lại
 	List Matching Fonts	Liệt kê phông khớp
 	Retype Preview	Xem trước trong bảng Gõ lại
-@msg	`installed` must be true, false or null	`installed` phải là true, false hoặc null
 @msg	`count` must be a whole number from 1 to 96	`count` phải là số nguyên từ 1 đến 96
 @msg	`size` must be small, medium or large	`size` phải là small, medium hoặc large
 @msg	`text` must be a string of at most 100 characters	`text` phải là chuỗi tối đa 100 ký tự
@@ -6963,8 +6962,6 @@ axis	Y Axis	Trục Y
 	The plug-in is computing…	Plug-in đang tính toán…
 	Inspect Plug-in	Kiểm tra plug-in
 	Cancel Plug-in Run	Hủy lần chạy plug-in
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Gõ lại thất bại: lỗi nội bộ: luồng của nó đã dừng (vui lòng báo cáo lỗi này)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Gõ lại đã chạy xong, nhưng tài liệu hoặc vùng chọn của nó đã thay đổi trong lúc đó: hãy chạy lại
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} đã chạy xong, nhưng tài liệu hoặc plug-in đã thay đổi trong lúc đó: hãy chạy lại
 @msg	Running “{name}”…	Đang chạy “{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	hiệu ứng trực tiếp chạy trong lúc tài liệu được vẽ nên không thể là `heavy`

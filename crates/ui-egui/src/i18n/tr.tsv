@@ -1358,7 +1358,6 @@ font-technology	Variable	Değişken
 	Reset Retype Panel	Yeniden Yaz Panelini Sıfırla
 	List Matching Fonts	Eşleşen Yazı Tiplerini Listele
 	Retype Preview	Yeniden Yaz Paneli Önizlemesi
-@msg	`installed` must be true, false or null	`installed` true, false veya null olmalıdır
 @msg	`count` must be a whole number from 1 to 96	`count` 1 ile 96 arasında bir tam sayı olmalıdır
 @msg	`size` must be small, medium or large	`size` small, medium veya large olmalıdır
 @msg	`text` must be a string of at most 100 characters	`text` en fazla 100 karakterlik bir dize olmalıdır
@@ -8114,8 +8113,6 @@ axis	Y Axis	Y ekseni
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Görüntü İzleme başarısız oldu: iç hata: iş parçacığı durdu (lütfen bu hatayı bildirin)
 @msg	Image Trace failed: {e}	Görüntü İzleme başarısız oldu: {e}
 @msg	Image Trace finished, but its document was closed	Görüntü İzleme tamamlandı, ancak belgesi kapatılmıştı
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Yeniden Yaz başarısız oldu: iç hata: iş parçacığı durdu (lütfen bu hatayı bildirin)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Yeniden Yaz tamamlandı, ancak bu sırada belge veya seçimi değişti: yeniden çalıştırın
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Görüntü İzleme tamamlandı, ancak bu sırada görüntü veya ayarları değişti: yeniden izleyin
 @msg	Image Trace finished, but its document was reverted: trace it again	Görüntü İzleme tamamlandı, ancak belgesi geri döndürüldü: yeniden izleyin
 @msg	Invalid dimension offset	Geçersiz boyut ofseti

@@ -1387,7 +1387,6 @@ font-technology	Variable	可變
 	Reset Retype Panel	重設重新鍵入面板
 	List Matching Fonts	列出相符字體
 	Retype Preview	重新鍵入面板預覽
-@msg	`installed` must be true, false or null	`installed` 必須是 true、false 或 null
 @msg	`count` must be a whole number from 1 to 96	`count` 必須是介於 1 到 96 的整數
 @msg	`size` must be small, medium or large	`size` 必須是 small、medium 或 large
 @msg	`text` must be a string of at most 100 characters	`text` 必須是不超過 100 個字元的字串
@@ -9071,8 +9070,6 @@ breakText	Glyphs	字符
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	影像描圖失敗：內部錯誤：其執行緒已停止 (請回報此錯誤)
 @msg	Image Trace failed: {e}	影像描圖失敗：{e}
 @msg	Image Trace finished, but its document was closed	影像描圖已完成，但其文件已關閉
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	重新鍵入失敗：內部錯誤：其執行緒已停止 (請回報此錯誤)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	重新鍵入已完成，但文件或其選取範圍在此期間已變更：請重新執行
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	影像描圖已完成，但影像或其設定在此期間已變更：請重新描圖
 @msg	Image Trace finished, but its document was reverted: trace it again	影像描圖已完成，但其文件已回復：請重新描圖
 @msg	Invalid dimension offset	尺寸標註位移無效

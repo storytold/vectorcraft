@@ -518,7 +518,6 @@ digits	Malayalam	말라얄람어
 	Reset Retype Panel	리타입 패널 재설정
 	List Matching Fonts	일치하는 글꼴 목록
 	Retype Preview	리타입 패널 미리 보기
-@msg	`installed` must be true, false or null	`installed`은(는) true, false 또는 null이어야 합니다
 @msg	`count` must be a whole number from 1 to 96	`count`는 1에서 96 사이의 정수여야 합니다
 @msg	`size` must be small, medium or large	`size`는 small, medium 또는 large여야 합니다
 @msg	`text` must be a string of at most 100 characters	`text`는 최대 100자의 문자열이어야 합니다
@@ -8618,8 +8617,6 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	이미지 추적 실패: 내부 오류: 스레드가 멈췄습니다(이 버그를 보고해 주세요)
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	리타입 실패: 내부 오류: 스레드가 멈췄습니다(이 버그를 보고해 주세요)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	리타입이 끝났지만 그 사이에 문서나 선택 영역이 바뀌었습니다: 다시 실행하세요
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
 @msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다

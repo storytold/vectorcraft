@@ -525,7 +525,6 @@ digits	Malayalam	マラヤーラム数字
 	Reset Retype Panel	リタイプパネルをリセット
 	List Matching Fonts	一致するフォントの一覧
 	Retype Preview	リタイプパネルのプレビュー
-@msg	`installed` must be true, false or null	`installed` には true、false または null を指定してください
 @msg	`count` must be a whole number from 1 to 96	`count` には 1 から 96 の整数を指定してください
 @msg	`size` must be small, medium or large	`size` には small、medium、large のいずれかを指定してください
 @msg	`text` must be a string of at most 100 characters	`text` には 100 文字以内の文字列を指定してください
@@ -7733,8 +7732,6 @@ axis	Y Axis	Y 軸
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	画像トレースに失敗しました: 内部エラー: スレッドが停止しました (このバグを報告してください)
 @msg	Image Trace failed: {e}	画像トレースに失敗しました: {e}
 @msg	Image Trace finished, but its document was closed	画像トレースは完了しましたが、ドキュメントが閉じられています
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	リタイプに失敗しました: 内部エラー: スレッドが停止しました (このバグを報告してください)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	リタイプは完了しましたが、その間にドキュメントまたは選択範囲が変更されました: もう一度実行してください
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	画像トレースは完了しましたが、その間に画像または設定が変更されました: もう一度トレースしてください
 @msg	Image Trace finished, but its document was reverted: trace it again	画像トレースは完了しましたが、ドキュメントは保存済みの状態に戻されました: もう一度トレースしてください
 @msg	Invalid dimension offset	寸法のオフセットが無効です

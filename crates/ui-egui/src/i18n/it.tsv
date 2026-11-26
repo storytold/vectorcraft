@@ -1422,7 +1422,6 @@ font-technology	Variable	Variabili
 	Reset Retype Panel	Reimposta pannello Ridigita
 	List Matching Fonts	Elenca font corrispondenti
 	Retype Preview	Anteprima del pannello Ridigita
-@msg	`installed` must be true, false or null	`installed` deve essere true, false o null
 @msg	`count` must be a whole number from 1 to 96	`count` deve essere un numero intero compreso tra 1 e 96
 @msg	`size` must be small, medium or large	`size` deve essere small, medium o large
 @msg	`text` must be a string of at most 100 characters	`text` deve essere una stringa di al massimo 100 caratteri
@@ -8916,8 +8915,6 @@ breakText	Glyphs	Glifi
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Ricalco immagine non riuscito: errore interno: il suo thread si è fermato (segnala questo bug)
 @msg	Image Trace failed: {e}	Ricalco immagine non riuscito: {e}
 @msg	Image Trace finished, but its document was closed	Ricalco immagine terminato, ma il suo documento è stato chiuso
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Ridigita non riuscito: errore interno: il suo thread si è fermato (segnala questo bug)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Ridigita terminato, ma nel frattempo il documento o la sua selezione sono cambiati: eseguilo di nuovo
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Ricalco immagine terminato, ma nel frattempo l'immagine o le sue impostazioni sono cambiate: ricalcala di nuovo
 @msg	Image Trace finished, but its document was reverted: trace it again	Ricalco immagine terminato, ma il suo documento è stato ripristinato: ricalcala di nuovo
 @msg	Invalid dimension offset	Distanza della quota non valida

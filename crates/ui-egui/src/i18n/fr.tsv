@@ -1399,7 +1399,6 @@ font-technology	Variable	Variables
 	Reset Retype Panel	Réinitialiser le panneau Retaper
 	List Matching Fonts	Lister les polices correspondantes
 	Retype Preview	Aperçu du panneau Retaper
-@msg	`installed` must be true, false or null	`installed` doit valoir true, false ou null
 @msg	`count` must be a whole number from 1 to 96	`count` doit être un nombre entier compris entre 1 et 96
 @msg	`size` must be small, medium or large	`size` doit valoir small, medium ou large
 @msg	`text` must be a string of at most 100 characters	`text` doit être une chaîne d’au plus 100 caractères
@@ -8848,8 +8847,6 @@ breakText	Glyphs	Glyphes
 @msg	Image Trace failed: {e}	Échec de la vectorisation de l’image : {e}
 @msg	Image Trace finished, but its document was closed	La vectorisation de l’image est terminée, mais son document a été fermé
 @msg	Image Trace finished, but its document was reverted: trace it again	La vectorisation de l’image est terminée, mais son document a été rétabli à la version précédente : vectorisez-la à nouveau
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Échec de Retaper. Erreur interne. Son thread s’est arrêté (merci de signaler ce bogue)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Retaper est terminé, mais le document ou sa sélection a changé entre-temps. Relancez-le
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	La vectorisation de l’image est terminée, mais l’image ou ses réglages ont changé entre-temps : vectorisez-la à nouveau
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importer un filtre SVG lit les fichiers SVG, pas SVGZ
 @msg	Invalid dimension offset	Décalage de cote non valide

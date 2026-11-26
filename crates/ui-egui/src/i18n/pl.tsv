@@ -423,7 +423,6 @@
 	Reset Retype Panel	Resetuj panel Przepisz
 	List Matching Fonts	Wyświetl pasujące czcionki
 	Retype Preview	Podgląd w panelu Przepisz
-@msg	`installed` must be true, false or null	`installed` musi mieć wartość true, false lub null
 @msg	`count` must be a whole number from 1 to 96	`count` musi być liczbą całkowitą od 1 do 96
 @msg	`size` must be small, medium or large	`size` musi mieć wartość small, medium lub large
 @msg	`text` must be a string of at most 100 characters	`text` musi być ciągiem o długości co najwyżej 100 znaków
@@ -9126,8 +9125,6 @@ breakText	Glyphs	Glify
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Obrys obrazu nie powiódł się: błąd wewnętrzny: jego wątek został zatrzymany (zgłoś ten błąd)
 @msg	Image Trace failed: {e}	Obrys obrazu nie powiódł się: {e}
 @msg	Image Trace finished, but its document was closed	Obrys obrazu został ukończony, ale jego dokument został zamknięty
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Przepisywanie nie powiodło się: błąd wewnętrzny: jego wątek został zatrzymany (zgłoś ten błąd)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Przepisywanie zostało ukończone, ale dokument lub jego zaznaczenie zmieniły się w międzyczasie: uruchom je ponownie
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Obrys obrazu został ukończony, ale obraz lub jego ustawienia zmieniły się w międzyczasie: obrysuj go ponownie
 @msg	Image Trace finished, but its document was reverted: trace it again	Obrys obrazu został ukończony, ale jego dokument został przywrócony: obrysuj go ponownie
 @msg	Join: a subpath went missing	Połącz: brakuje ścieżki podrzędnej

@@ -411,8 +411,6 @@
 @msg	`spread` must be pad, repeat or reflect	`spread` harus pad, repeat atau reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` harus berupa bilangan bulat dari 1 sampai {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` berlaku untuk gradien linear, radial, conic, dan diamond
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	Ketik Ulang gagal: kesalahan internal: utasnya berhenti (harap laporkan bug ini)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	Ketik Ulang selesai, tetapi dokumen atau pilihannya berubah sementara itu: jalankan lagi
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} selesai, tetapi dokumen atau plug-in berubah sementara itu: jalankan lagi
 @msg	Running “{name}”…	Menjalankan “{name}”…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efek langsung berjalan saat dokumen digambar, sehingga tidak dapat `heavy`
@@ -1088,7 +1086,6 @@
 	Reset Retype Panel	Setel ulang panel Ketik Ulang
 	List Matching Fonts	Daftar font yang cocok
 	Retype Preview	Pratinjau panel Ketik Ulang
-@msg	`installed` must be true, false or null	`installed` harus true, false, atau null
 @msg	`count` must be a whole number from 1 to 96	`count` harus bilangan bulat dari 1 sampai 96
 @msg	`size` must be small, medium or large	`size` harus small, medium, atau large
 @msg	`text` must be a string of at most 100 characters	`text` harus string dengan paling banyak 100 karakter

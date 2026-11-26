@@ -90,8 +90,6 @@
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	გამოსახულების ვექტორიზაცია ვერ მოხერხდა: შიდა შეცდომა: მისი ნაკადი შეჩერდა (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	Image Trace failed: {e}	გამოსახულების ვექტორიზაცია ვერ მოხერხდა: {e}
 @msg	Image Trace finished, but its document was closed	გამოსახულების ვექტორიზაცია დასრულდა, მაგრამ მისი დოკუმენტი დაიხურა
-@msg	Retype failed: internal error: its thread stopped (please report this bug)	ხელახლა აკრეფა ვერ მოხერხდა: შიდა შეცდომა: მისი ნაკადი შეჩერდა (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
-@msg	Retype finished, but the document or its selection changed meanwhile: run it again	ხელახლა აკრეფა დასრულდა, მაგრამ ამასობაში დოკუმენტი ან მისი მონიშვნა შეიცვალა: გაუშვით ხელახლა
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	გამოსახულების ვექტორიზაცია დასრულდა, მაგრამ ამასობაში გამოსახულება ან მისი პარამეტრები შეიცვალა: გაუშვით ვექტორიზაცია ხელახლა
 @msg	Import SVG Filter reads SVG files, not SVGZ	„SVG ფილტრის იმპორტი“ კითხულობს SVG ფაილებს და არა SVGZ-ს
 @msg	Invalid dimension offset	ზომის არასწორი წანაცვლება
@@ -2598,7 +2596,6 @@
 	Reset Retype Panel	ხელახლა აკრეფის პანელის ჩამოყრა
 	List Matching Fonts	შესაბამისი შრიფტების სია
 	Retype Preview	ხელახლა აკრეფის პანელის წინასწარი ნახვა
-@msg	`installed` must be true, false or null	`installed` უნდა იყოს true, false ან null
 @msg	`count` must be a whole number from 1 to 96	`count` უნდა იყოს მთელი რიცხვი 1-დან 96-მდე
 @msg	`size` must be small, medium or large	`size` უნდა იყოს small, medium ან large
 @msg	`text` must be a string of at most 100 characters	`text` უნდა იყოს არაუმეტეს 100 სიმბოლოს სტრიქონი
