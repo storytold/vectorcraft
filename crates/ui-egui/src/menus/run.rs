@@ -469,12 +469,13 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
-            let print = app.session.prefs.display_print_size;
+            let print = app.print_ppi();
             // Selection & Anchor Display › Zoom to Selection: the selection comes to the middle.
             let focus = if app.session.prefs.zoom_to_selection { app.selection_box().map(|b| b.center()) } else { None };
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = next_zoom(v.zoom, up, print);
+                    v.fit_zoom = None;
                     if let Some(c) = focus {
                         v.center = c;
                     }
@@ -484,7 +485,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "view.setZoom" => {
-            let print = app.session.prefs.display_print_size;
+            let print = app.print_ppi();
             let (zoom, center) = match opt_number(p, "zoom").and_then(|z| Ok((z, opt_point(p, "center")?))) {
                 Ok(given) => given,
                 Err(e) => return Some(Err(e)),
@@ -493,6 +494,8 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = z.clamp(0.0313, 640.0);
+                    // A percentage, not a fit: the first reading of the display keeps it.
+                    v.fit_zoom = None;
                     v.fitted = true;
                     if let Some(c) = center {
                         v.center = c;
@@ -1209,6 +1212,8 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
         "plugin.dialog" => crate::dialogs::plugin::open(app, p),
+        crate::dialogs::plugin::APPLY_LAST => crate::dialogs::plugin::apply_last(app),
+        crate::dialogs::plugin::LAST => crate::dialogs::plugin::open_last(app),
         "ui.installPlugin" => io::install_plugin(app, p),
         "plugin.cancelRuns" => Ok(crate::plugin_runs::cancel_all(app)),
         "plugin.hideRuns" => Ok(crate::plugin_runs::hide_all(app)),
