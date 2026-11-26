@@ -75,6 +75,96 @@ fn an_ended_run_leaves_the_realm_ready_for_the_next() {
     r.end();
 }
 
+fn paused_for_replacement(promise: bool) -> Realm {
+    let mut r = Realm::with_options(Options { es2015: promise, ..Options::default() }, Limits::default());
+    let pause = r.pause_flag();
+    r.define_function("pauseNow", move |_| {
+        pause.set(true);
+        Ok(JsValue::Undefined)
+    });
+    let source = if promise {
+        "var kept = 'yes', after = false, queued = false;\n\
+         Promise.resolve().then(function () { pauseNow(); after = true; });\n\
+         Promise.resolve().then(function () { queued = true; }); 'old'"
+    } else {
+        "var kept = 'yes', after = false, queued = false; pauseNow(); after = true; 'old'"
+    };
+    r.start(source).unwrap();
+    assert_eq!(r.advance(1_000_000).unwrap(), Progress::Paused);
+    assert!(r.is_running());
+    if promise {
+        assert!(r.interp().promises.draining);
+    }
+    r
+}
+
+fn replacement(r: &mut Realm, sliced: bool, source: &str) -> Result<JsValue, RunError> {
+    if sliced {
+        r.start(source)?;
+        finish(r, 1_000).0
+    } else {
+        r.run(source)
+    }
+}
+
+#[test]
+fn replacing_a_paused_promise_run_discards_its_reaction_and_queued_jobs() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(true);
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.is_running());
+        assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+    }
+}
+
+#[test]
+fn replacing_a_paused_script_discards_its_remaining_code() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(false);
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.is_running());
+        assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+    }
+}
+
+#[test]
+fn replacing_a_waiting_run_discards_its_host_call() {
+    for sliced in [false, true] {
+        let mut r = realm(1_000_000);
+        let calls = with_ask(&mut r);
+        r.start("var after = false; ask('old'); after = true").unwrap();
+        assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+        assert!(r.waits());
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.waits());
+        assert_eq!(r.run("after").unwrap(), JsValue::Bool(false));
+        assert_eq!(calls.get(), 1);
+        assert!(r.answer(Data::Null).is_err());
+    }
+}
+
+#[test]
+fn replacing_a_paused_run_with_invalid_source_still_ends_it() {
+    for promise in [false, true] {
+        for sliced in [false, true] {
+            let mut r = paused_for_replacement(promise);
+            assert_eq!(replacement(&mut r, sliced, "(").unwrap_err().kind, RunErrorKind::Syntax);
+            assert!(!r.is_running());
+            assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+        }
+    }
+}
+
+#[test]
+fn replacing_a_paused_run_applies_its_pending_language_setting() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(false);
+        r.set_es2015(true);
+        assert_eq!(replacement(&mut r, sliced, "let fresh = 7; fresh").unwrap(), JsValue::Number(7.0));
+        assert_eq!(r.run("after").unwrap(), JsValue::Bool(false));
+    }
+}
+
 /// Setting `Folder.current` back for the next run drops what only the last run's uncaught
 /// exception held, so a full heap from that exception does not stop the next run.
 #[test]

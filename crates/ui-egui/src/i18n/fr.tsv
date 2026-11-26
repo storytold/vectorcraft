@@ -6906,6 +6906,8 @@ arrowhead	Feather	Empennage
 	VectorCraft Default	VectorCraft par défaut
 	VectorCraft Defaults	Valeurs par défaut de VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMJN générique VectorCraft (de type SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMJN couché VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMJN non couché VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Nuances VectorCraft (.vcswatches)
 	Vertical Align	Alignement vertical
 	Vertical Area Type	Texte captif vertical
@@ -10827,6 +10829,11 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Fold Angle	Angle de pliage
+	Set Fold Angle…	Définir l’angle de pliage…
+	Set Fold Angle	Définir l’angle de pliage
+	Reset Fold Angle	Réinitialiser l’angle de pliage
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	sélectionnez une ligne de rainage, de découpe partielle ou de perforation qui n’est ni verrouillée ni masquée
 	Tap	Appui bref
 	Clear Hold	Effacer le maintien
 	Hold Shortcuts	Raccourcis de maintien
