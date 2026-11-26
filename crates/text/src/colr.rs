@@ -73,6 +73,10 @@ pub(crate) fn colour_glyph(
         return (None, false);
     }
     let used = tree.foreground_used;
+    // Over the budget nothing is drawn, not even the raster fallback: it would replay the graph.
+    if tree.too_large {
+        return (None, used);
+    }
     if tree.unsupported.is_some() {
         // What it paints, y up, for a glyph without a clip box.
         let painted = tree.painted.map(|b| FLIP.transform_rect_bbox(b));
