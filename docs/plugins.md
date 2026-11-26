@@ -740,10 +740,12 @@ declares them still installs there:
 | `help` | Shows what the parameter does when the pointer rests on its label (1–1,000 characters; line breaks allowed). |
 | `helpUrl` | Opens this `https://` page (at most 512 bytes) from a button after the field. |
 | `visibleWhen` | `{"pattern": ["lines", "crosshatch"], "outline": [true]}` shows the parameter only while each parameter it names (a checkbox or a choice declared before it) has one of the values listed and is shown itself. |
+| `widget` | `"slider"` shows an `int` parameter as a slider over `min..max` with its number field, moving by 1. A `number` parameter with `min` below `max` always shows a slider with its field, with or without the key. The key needs `min` below `max`, and an `int`'s range within ±9,007,199,254,740,992; on any other parameter, or with another value, the manifest is refused at install. |
 
 A hidden parameter still goes to the plug-in with its value: what the dialog showed never changes a run. The
 filter, live-effect and exporter dialogs use all of these keys. The Appearance panel's editor of a plug-in effect's
-parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the parameters without sections or help buttons.
+parameters uses `label`, `unit`, `help`, `visibleWhen` and `widget`, and lists the parameters without sections or
+help buttons.
 
 ### Input
 
