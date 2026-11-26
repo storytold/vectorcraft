@@ -2850,7 +2850,8 @@ other files through `$`:
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
   panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
-  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  deleted, that a named engine kept from an earlier run, or whose document was reverted with `file.revert`, throws
+  `Stale page item`. Layer objects also become stale after their document is reverted. `remove()` on an object that
   is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
   when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
   a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`
