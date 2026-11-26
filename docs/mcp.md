@@ -2721,9 +2721,17 @@ value, assignment target or property they are first given to, with `get ` or `se
 Symbol key's description in brackets; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and
 an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-international.org/12.0/, section
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
-ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. A `.js` script also has
+generator functions (ECMA-262 11th edition, sections 14.4 and 25.4, https://262.ecma-international.org/11.0/):
+`function*` declarations and expressions, `*name() {…}` methods in object literals, `yield`, and `yield*`, which
+passes `next`, `throw` and `return` on to the iterator it delegates to. Calling a generator function returns a
+generator object whose `next`, `return` and `throw` run its body to the next `yield`; `return` runs the body's
+`finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each resumption takes fuel and
+counts against the call depth. A generator function called in an engine that `#targetengine` kept from a `.jsx` run
+throws a `TypeError`, since that engine was made without the ECMAScript 2015 built-ins. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there; there
+`yield` is a name like any other. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
