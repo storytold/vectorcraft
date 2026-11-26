@@ -163,6 +163,92 @@ fn gif_transparency_index_and_map_to_transparent() {
     assert_eq!(pixels(&gif).get_pixel(25, 15)[3], 0, "index {i}");
 }
 
+/// 40×30: red at 25% opacity on the left half, blue at 75% on the right, nothing behind them.
+fn see_through() -> Session {
+    let mut s = session(40.0, 30.0);
+    rect(&mut s, [0.0, 0.0, 20.0, 30.0], "#ff0000");
+    run(&mut s, "transparency.set", json!({"opacity": 25}));
+    rect(&mut s, [20.0, 0.0, 20.0, 30.0], "#0000ff");
+    run(&mut s, "transparency.set", json!({"opacity": 75}));
+    s
+}
+
+/// The shares of the left and right halves' pixels that are opaque.
+fn opaque_halves(img: &image::RgbaImage) -> [f64; 2] {
+    [0, 20].map(|x0| (x0..x0 + 20).flat_map(|x| (0..30).map(move |y| (x, y))).filter(|&(x, y)| img.get_pixel(x, y)[3] == 255).count() as f64 / 600.0)
+}
+
+#[test]
+fn transparency_dither_keeps_a_share_of_partly_transparent_pixels() {
+    let mut s = see_through();
+    for format in ["gif", "png8"] {
+        let file = |s: &mut Session, extra: Value| {
+            let mut p = json!({"format": format, "antiAlias": "none"});
+            p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            one(s, p)
+        };
+        // By default the pixels under half opacity are transparent and the others opaque.
+        let none = file(&mut s, json!({}));
+        assert_eq!(opaque_halves(&pixels(&none)), [0.0, 1.0], "{format}");
+        assert_eq!(file(&mut s, json!({"transparencyDither": "none"})), none, "{format}");
+        assert_eq!(file(&mut s, json!({"transparencyDither": "diffusion", "transparencyDitherAmount": 0})), none, "{format}");
+        for method in ["diffusion", "pattern", "noise"] {
+            let p = json!({"transparencyDither": method});
+            let dithered = file(&mut s, p.clone());
+            let [left, right] = opaque_halves(&pixels(&dithered));
+            assert!((left - 0.25).abs() < 0.1 && (right - 0.75).abs() < 0.1, "{format} {method}: {left} {right}");
+            if format == "gif" {
+                assert_eq!(gif_transparent_index(&dithered), Some(0), "{method}");
+            }
+            assert_eq!(file(&mut s, p.clone()), dithered, "{format} {method}: the same art gives the same file");
+            // The preview shows what Save writes.
+            let mut pv = json!({"format": format, "antiAlias": "none", "image": true});
+            pv["transparencyDither"] = json!(method);
+            let shown = run(&mut s, "document.exportForWeb.preview", pv);
+            assert_eq!(vectorcraft_format::base64_decode(shown["dataBase64"].as_str().unwrap()).unwrap(), dithered, "{format} {method}");
+            // Without transparency the dither does nothing.
+            let opaque = file(&mut s, json!({"transparencyDither": method, "transparency": false}));
+            assert_eq!(opaque, file(&mut s, json!({"transparency": false})), "{format} {method}");
+        }
+        // A fixed palette keeps the transparent entry for the dithered pixels.
+        let fixed = file(&mut s, json!({"transparencyDither": "pattern", "colorTable": {"customPalette": ["#ffbfbf", "#4040ff"]}}));
+        let [left, right] = opaque_halves(&pixels(&fixed));
+        assert!(left > 0.0 && left < 1.0 && right > 0.0 && right < 1.0, "{format}: {left} {right}");
+    }
+}
+
+#[test]
+fn transparency_dither_settings_are_checked_and_remembered() {
+    let mut s = see_through();
+    for bad in [
+        json!({"transparencyDither": "spray"}),
+        json!({"transparencyDither": 3}),
+        json!({"transparencyDitherAmount": 101}),
+        json!({"transparencyDitherAmount": -1}),
+    ] {
+        assert!(s.execute("document.exportForWeb", &bad).is_err(), "{bad}");
+        assert!(s.execute("webExport.settings", &bad).is_err(), "{bad}");
+    }
+    let e = s.execute("document.exportForWeb", &json!({"transparencyDitherAmount": 101})).unwrap_err().to_string();
+    assert!(e.contains("`transparencyDitherAmount` must be from 0 to 100"), "{e}");
+    assert_eq!(defaults()["transparencyDither"], "none");
+    assert_eq!(defaults()["transparencyDitherAmount"], 100);
+    // The remembered settings and a saved preset keep both.
+    let set = run(&mut s, "webExport.settings", json!({"transparencyDither": "diffusion", "transparencyDitherAmount": 40}));
+    assert_eq!((&set["settings"]["transparencyDither"], &set["settings"]["transparencyDitherAmount"]), (&json!("diffusion"), &json!(40)));
+    let read = run(&mut s, "webExport.settings", json!({}));
+    assert_eq!(read["settings"], set["settings"]);
+    run(&mut s, "webExport.presets.save", json!({"name": "Soft edges", "transparencyDither": "noise", "transparencyDitherAmount": 60}));
+    let list = run(&mut s, "webExport.presets.list", json!({}));
+    let saved = list["presets"].as_array().unwrap().iter().find(|p| p["name"] == "Soft edges").unwrap();
+    assert_eq!((&saved["settings"]["transparencyDither"], &saved["settings"]["transparencyDitherAmount"]), (&json!("noise"), &json!(60)));
+    let by_preset = one(&mut s, json!({"preset": "Soft edges", "format": "gif", "antiAlias": "none"}));
+    assert_eq!(by_preset, one(&mut s, json!({"format": "gif", "antiAlias": "none", "transparencyDither": "noise", "transparencyDitherAmount": 60})));
+    // Settings saved before the keys existed take the defaults.
+    let old: cmd::webexport::WebSettings = serde_json::from_value(json!({"format": "png8", "dither": "pattern"})).unwrap();
+    assert_eq!((old.transparency_dither.id(), old.transparency_dither_amount), ("none", 100));
+}
+
 #[test]
 fn jpeg_size_grows_with_quality() {
     let mut s = many_colours();
