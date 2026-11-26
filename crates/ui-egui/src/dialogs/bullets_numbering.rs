@@ -641,6 +641,79 @@ mod tests {
         with_dialog(app, |d| params(d))
     }
 
+    fn other_drawing(app: &mut VectorcraftApp) -> u64 {
+        app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+        let id = app
+            .run("text.create", json!({"x": 15, "y": 10, "text": "Other\nDrawing", "area": {"width": 200, "height": 100}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        id
+    }
+
+    #[test]
+    fn bullets_preview_pauses_in_another_drawing() {
+        let (mut app, id) = app();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        let other = other_drawing(&mut app);
+        let before = first(&app, other);
+
+        frame(&mut app);
+
+        assert_eq!(first(&app, other), before, "the other drawing's paragraphs are unchanged by preview");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        frame(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+        ok(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+    }
+
+    #[test]
+    fn bullets_ok_does_not_change_the_other_drawings_type() {
+        let (mut app, id) = app();
+        let opening = first(&app, id);
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "number", Some("arabic"));
+        let other = other_drawing(&mut app);
+        let before = first(&app, other);
+        let undo = app.session.doc().unwrap().history.undo.len();
+
+        ok(&mut app);
+
+        assert_eq!(first(&app, other), before, "the other drawing's paragraphs are unchanged by OK");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(first(&app, id), opening);
+    }
+
+    #[test]
+    fn bullets_cancel_keeps_the_other_drawings_pending_edit() {
+        let (mut app, id) = app();
+        let opening = first(&app, id);
+        let other = other_drawing(&mut app);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        frame(&mut app);
+        assert!(app.session.in_interaction());
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other paragraph edit").unwrap();
+        app.session.preview("text.setFormat", &json!({"ids": [other], "leftIndent": 41})).unwrap();
+        let editing = first(&app, other);
+        assert_eq!(editing.1, 41.0);
+        cancel(&mut app);
+
+        assert!(app.session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(first(&app, other), editing);
+        app.session.commit_interaction().unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(first(&app, id), opening);
+    }
+
     /// `ui.bulletsAndNumbering` opens on the selected type's values; a preset, Alignment and the
     /// indents show on the type at once, and OK keeps them as one `text.setFormat`, which one Undo
     /// takes back.
