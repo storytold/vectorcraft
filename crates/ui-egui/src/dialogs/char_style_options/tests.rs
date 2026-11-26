@@ -191,6 +191,27 @@ fn cancelling_style_options_leaves_the_other_documents_gesture() {
 }
 
 #[test]
+fn switching_back_leaves_a_new_gesture_in_the_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
 fn unchanged_basic_fields_preserve_original_keys() {
     for attrs in [
         json!({"all_caps": false}),
