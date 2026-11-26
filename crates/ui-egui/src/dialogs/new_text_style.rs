@@ -103,3 +103,53 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::{HeldOk, StackDialog};
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    fn style_exists(app: &VectorcraftApp, para: bool, name: &str) -> bool {
+        let doc = &app.session.doc().unwrap().doc;
+        if para { doc.para_styles.iter().any(|style| style.name == name) } else { doc.char_styles.iter().any(|style| style.name == name) }
+    }
+
+    fn assert_style_stays_in_its_opening_document(para: bool) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let opening = app.session.doc().unwrap().uid;
+        app.run(if para { "ui.newParaStyle" } else { "ui.newCharStyle" }, json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.get::<NewTextStyle>().unwrap().id());
+        let name = "Opening Document Style";
+        host.with(|h| h.set_json_field(&ctx, dialog, "name", json!(name))).unwrap();
+
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        assert_ne!(app.session.doc().unwrap().uid, opening);
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+
+        assert!(!style_exists(&app, para, name), "OK must leave styles in the other document unchanged");
+        assert!(app.ui.text_styles.made.is_empty(), "the other document must not highlight a style");
+        assert!(matches!(host.with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+        assert!(style_exists(&app, para, name), "the original document can accept the same draft");
+        assert_eq!(app.ui.text_styles.made, [(opening, para, name.to_string())]);
+    }
+
+    #[test]
+    fn new_character_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(false);
+    }
+
+    #[test]
+    fn new_paragraph_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(true);
+    }
+}
