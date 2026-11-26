@@ -4535,6 +4535,115 @@ fn release_guides_turns_ruler_guides_into_paths() {
     assert_eq!(guides(&s).len(), 1);
 }
 
+/// The direction of a two-anchor line, in degrees from the page's x axis (y down), from 0 to 180.
+fn line_angle(ends: &[(f64, f64)]) -> f64 {
+    let [(x0, y0), (x1, y1)] = ends[..] else { panic!("not a line of two anchors") };
+    (y1 - y0).atan2(x1 - x0).to_degrees().rem_euclid(180.0)
+}
+
+/// A selected ruler guide rotates with `object.rotate` on its own, in one undo step, about the
+/// middle of the line Release Guides makes of it. At 30° it becomes a selected guide path along
+/// the turned line; Transform Again turns that path on, and undo gives the ruler guide back.
+#[test]
+fn rotating_a_ruler_guide_makes_an_angled_guide() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let line = s.doc().unwrap().doc.guide_line(&s.doc().unwrap().doc.ruler_guides()[0]).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(guides(&s).is_empty(), "the ruler guide is replaced");
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert!(selected_guides(&s).is_empty());
+    let (ends, guide) = line_ends(&s, path);
+    assert!(guide, "the path is a guide");
+    let (mid, len) = (line.0.midpoint(line.1), line.0.distance(line.1));
+    let (a, b) = (vectorcraft_geom::Point::new(ends[0].0, ends[0].1), vectorcraft_geom::Point::new(ends[1].0, ends[1].1));
+    assert!(a.midpoint(b).distance(mid) < 1e-6 && close(a.distance(b), len), "it turns about its middle");
+    // Counter-clockwise on the page: the downward vertical line now points 30° toward the right.
+    assert!(close(line_angle(&ends), 60.0), "{ends:?}");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert!(close(line_angle(&line_ends(&s, path).0), 30.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 100.0)]);
+    assert!(s.doc().unwrap().doc.node(path).is_none());
+}
+
+/// A ruler guide turned by a quarter turn stays a ruler guide, horizontal now, through the same
+/// middle; a turn of 0 changes nothing and records no undo step; a copy leaves the guide where it
+/// was; and locked guides cannot be rotated.
+#[test]
+fn ruler_guides_turned_square_stay_ruler_guides() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let mid = {
+        let d = &s.doc().unwrap().doc;
+        let (a, b) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        a.midpoint(b)
+    };
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 0})).unwrap();
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    // Guides alone have no bounding box angle for `absolute` to set.
+    assert!(s.execute("object.rotate", &json!({"angle": 90, "absolute": true})).is_err());
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(!vertical && close(pos, mid.y), "{pos}");
+    assert_eq!((selected_guides(&s), undo_len(&s)), (vec![0], n + 1));
+    // A copy at 45° adds a guide path and keeps the ruler guide.
+    s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 1);
+    let [path] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert!(line_ends(&s, path).1);
+    // Locked guides are deselected, and nothing is left to rotate.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert!(s.execute("object.rotate", &json!({"angle": 30})).is_err());
+    assert_eq!(guides(&s).len(), 1);
+}
+
+/// Art and a ruler guide selected together rotate about the center of the art's box and the
+/// guide's line together, and the angled guide survives a save and reopen as a guide path.
+#[test]
+fn a_ruler_guide_rotates_with_the_selected_art() {
+    let mut s = session();
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0]));
+    let center = {
+        let d = &s.doc().unwrap().doc;
+        let (p, q) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        Rect::from_points(p, q).union(bounds(&s, a)).center()
+    };
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(vertical && close(pos, center.x + (50.0 - center.y)), "{pos}");
+    let turned = bounds(&s, a);
+    assert!(close(turned.center().x, center.x + (150.0 - center.y)), "{turned:?}");
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [path] = paths[..] else { panic!("the guide path is selected with the art") };
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let saved = back.node(path).unwrap();
+    assert!(matches!(&saved.kind, NodeKind::Path { guide: true, path: p, .. } if *p == match &node(&s, path).kind {
+        NodeKind::Path { path, .. } => path.clone(),
+        _ => panic!("not a path"),
+    }));
+    // With anchors selected with Direct Selection, the selected guide turns with them.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert!(!guides(&s)[0].0, "the vertical guide is horizontal now: {:?}", guides(&s));
+}
+
 #[test]
 fn ruler_guides_and_lock() {
     let mut s = session();

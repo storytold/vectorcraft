@@ -48,6 +48,7 @@ fn shift_clicking_a_name_toggles_selection_and_a_plain_click_activates() {
 
 #[test]
 fn outline_has_a_white_canvas_line_edges_and_no_paper() {
+    let _view = crate::testing::DefaultProofView::new();
     let app = app_with(2);
     let st = app.session.active().unwrap();
     assert_eq!(pasteboard_color(&app, st, true), PasteboardColor::Custom(DataColor::new(Color32::WHITE)));
@@ -58,9 +59,43 @@ fn outline_has_a_white_canvas_line_edges_and_no_paper() {
     assert!(frames_of(&app, false).iter().all(|f| f.fill.is_some()));
 }
 
+/// Overprint Preview, and Separations Preview, which turns it on, draw a white canvas around the artboards and no
+/// shadows, in every Canvas Color; the artboards keep their paper. Outline keeps its line edges, and Hide Artboards its
+/// paper canvas. Turning the preview off brings back the pasteboard color and the shadows.
+#[test]
+fn overprint_preview_draws_a_white_canvas_without_shadows() {
+    let _view = crate::testing::DefaultProofView::new();
+    let mut app = app_with(2);
+    let white = PasteboardColor::Custom(DataColor::new(Color32::WHITE));
+    let (overprint, separations) = ("view.overprintPreview", "view.separationsPreview");
+    for canvas_color in ["matchUi", "darkGray", "lightGray"] {
+        app.run("prefs.set", json!({"key": "canvasColor", "value": canvas_color})).unwrap();
+        let before = pasteboard_color(&app, app.session.active().unwrap(), false);
+        for (id, on) in [(overprint, true), (overprint, false), (separations, true), (separations, false)] {
+            app.run(id, json!({"on": on})).unwrap();
+            let st = app.session.active().unwrap();
+            let at = format!("{id} {on}, canvas color {canvas_color}");
+            if on {
+                assert_eq!(pasteboard_color(&app, st, false), white, "{at}");
+                assert_eq!(border(false), PageBorder::None, "{at}");
+            } else {
+                assert_eq!(pasteboard_color(&app, st, false), before, "{at}");
+                assert_eq!(border(false), PageBorder::DropShadow, "{at}");
+            }
+            assert_eq!(border(true), PageBorder::Line, "{at}");
+            assert!(frames_of(&app, false).iter().all(|f| f.fill.is_some()), "{at}");
+        }
+    }
+    app.run("view.overprintPreview", json!({"on": true})).unwrap();
+    app.ui.view.artboards = false;
+    let st = app.session.active().unwrap();
+    assert_eq!(pasteboard_color(&app, st, false), PasteboardColor::Custom(DataColor::new(paper_color(&st.doc.setup))));
+}
+
 /// User Interface › Canvas Color paints the pasteboard in Preview; Outline keeps its white one.
 #[test]
 fn the_canvas_color_preference_paints_the_pasteboard() {
+    let _view = crate::testing::DefaultProofView::new();
     let mut app = app_with(1);
     app.run("prefs.set", json!({"key": "canvasColor", "value": "darkGray"})).unwrap();
     let st = app.session.active().unwrap();

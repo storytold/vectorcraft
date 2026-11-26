@@ -66,6 +66,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let (selection, params) = take_selection(params)?;
     let params = &params;
+    // An exporter plug-in, or a live effect's, that the launch is still loading is installed
+    // before the format is looked up and the document drawn.
+    app.session.finish_plugin_loads();
     let f = fileio::writable_format(format, path.as_deref())?;
     // A Shape Builder merge still being computed for a click is exported with the document.
     let r = app.session.finish_tool_edit();
@@ -154,6 +157,8 @@ fn write_export(app: &mut VectorcraftApp, export: Export, path: String) -> Resul
     let (exists, allowed) = checks_replaced(app);
     let allowed_before = allowed.clone();
     let rerun = with_path(&again, &path);
+    // The question whether the export may replace files is asked under the request's scope.
+    let asked_access = (vectorcraft_engine::file_access::ScopeHandle::capture(), app.automation_asked());
     let work = move |write: Writer| {
         progress::scope(&reporting, || {
             cancel::check().map_err(|e| e.to_string())?;
@@ -189,7 +194,7 @@ fn write_export(app: &mut VectorcraftApp, export: Export, path: String) -> Resul
         // Nothing written: asked first.
         if let Some(files) = r.get("replaces").and_then(Value::as_array) {
             let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
-            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun));
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun, asked_access));
         }
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
@@ -224,8 +229,8 @@ pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
-/// (Export Selection, Save for Office Documents, Text Export Options and the presets dialogs'
-/// Export…), reported with the command's warnings ([`report_saved`]); `then` gets where they went.
+/// (Export Selection, Save for Office Documents, Text Export Options and the Tracing Presets
+/// dialog's Export…), reported with the command's warnings ([`report_saved`]); `then` gets where they went.
 // PLAN: callers outside io (print.rs, dialogs/office_export.rs, text_export.rs, the presets dialogs, menus/run.rs,
 // composite_fonts.rs) get the path from this synchronously; their owners move the code after it into `then`.
 pub fn save_command_output(

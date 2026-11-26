@@ -267,6 +267,12 @@ pub trait Tool: Send {
     fn wants_rehover(&self) -> bool {
         false
     }
+    /// The object a click at `p` with `mods` would act on, which Smart Guides › Object
+    /// Highlighting outlines while the pointer rests there (the Eyedropper's source). None when a
+    /// click there acts on no object, or the tool does not name one.
+    fn hover_object(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Option<NodeId> {
+        None
+    }
     /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
     /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
     /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
@@ -633,6 +639,7 @@ pub(crate) mod testutil {
             shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
+            tool_paints: false,
             appearance_item: None,
             constrain_angle: 0.0,
             keyboard_increment: 1.0,
