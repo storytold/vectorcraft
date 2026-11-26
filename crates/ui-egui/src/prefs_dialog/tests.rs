@@ -641,6 +641,33 @@ fn ok_keeps_settings_changed_by_commands_while_preferences_is_open() {
     assert_eq!(a.session.prefs.keyboard_increment, default, "the reset is written");
 }
 
+/// A reset in Preferences that leaves a row showing the value it opened with, after a command changed the setting,
+/// still enables Apply, and Apply writes it.
+#[test]
+fn apply_writes_a_reset_of_a_row_a_command_changed() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let live = |a: &mut VectorcraftApp, apply: bool| {
+        let mut w = a.prefs.take().expect("Preferences is open");
+        let mut m = model::Live { app: &mut *a, w: &mut w };
+        let differs = m.differs();
+        if apply {
+            m.apply().unwrap();
+        }
+        a.prefs = Some(w);
+        differs
+    };
+    let mut a = app();
+    let on = a.ui.view.smart_guides;
+    open(&mut a, Some("General"));
+    assert!(!live(&mut a, false), "nothing to apply at open");
+    a.run("view.smartGuides", json!({})).unwrap();
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "__smartGuides"), json!(on), "the row shows the value it opened with");
+    assert!(live(&mut a, true), "Apply is enabled");
+    assert_eq!(a.ui.view.smart_guides, on, "Apply writes the reset");
+    assert!(!live(&mut a, false), "nothing left to apply");
+}
+
 /// OK with nothing changed in Preferences writes nothing: no preference, no undo step in the document and no save
 /// of the settings.
 #[test]

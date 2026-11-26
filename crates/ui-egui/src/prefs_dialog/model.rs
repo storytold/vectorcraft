@@ -417,8 +417,10 @@ impl PreferencesModel for Live<'_> {
 }
 
 impl PreferencesDraft for Live<'_> {
+    /// A row set in the window counts even when it shows the value it opened with: a reset of a row a command changed
+    /// while the window is open is still applied.
     fn differs(&self) -> bool {
-        self.w.draft != self.w.opened
+        self.w.draft != self.w.opened || !self.w.touched.is_empty()
     }
 
     fn apply(&mut self) -> Result<(), String> {
