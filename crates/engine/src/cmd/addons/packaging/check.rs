@@ -155,7 +155,7 @@ fn lines_of(d: &Document, scope: &'static str, targets: Vec<NodeId>) -> Lines {
             non_printing.push(id.0);
         }
         segments = segments.saturating_add(path.subpaths.iter().map(|sp| sp.segment_count()).sum());
-        lines.push(FoldLine { path, kind: kind(role), key: id.0 });
+        lines.push(FoldLine { path, kind: kind(role), key: id.0, angle: None });
     }
     Lines { scope, lines, non_printing }
 }

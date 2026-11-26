@@ -519,6 +519,8 @@ fn the_status_line_reports_open_joints_crossing_panels_and_other_blanks() {
         order: vec![],
         hinges: vec![hinge(true, true, 0.0), hinge(false, false, 12.34), hinge(false, false, 3.0), hinge(false, true, 0.05)],
         collisions: vec![(0, 1)],
+        stack: Default::default(),
+        origin: [0.0; 3],
     };
     // The summary, the fold line errors, the other blanks, the open joint, the crossing panels.
     assert_eq!(status(3, Some((&Blank::default(), &f)), true).len(), 5);

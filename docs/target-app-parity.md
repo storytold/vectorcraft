@@ -32,6 +32,8 @@
 
 ## Feature submission evidence
 
+- Fold Preview orders overlapping panels by their fold tree, keeps distinct parallel planes in depth order, and calculates poses relative to the blank's center. A hinge uses its longest line across all split pieces. Tests cover flat, near-flat, nested and offset folds in `crates/three-d/src/fold/tests.rs` and `crates/three-d/src/fold/raster/tests.rs`.
+
 Variables panel row context menus (2026-11-20, G12): Right-click highlights the clicked variable without changing the canvas selection and offers Select Bound Object, Variable Options…, Unbind Variable, the four Make Dynamic actions, and Delete Variable. Shift+F10 opens the same menu for the focused row; Escape dismisses it. Row actions target that variable; dynamic actions use the canvas selection. Lock and selection checks disable unavailable actions. Headless pointer/accessibility tests cover opening the menu, highlighting, bound-object selection, deletion in one undo step and restoration, and disabled actions. Scores and estimates unchanged.
 
 Actions panel item context menus (2026-11-20): Right-clicking an Action Set row selects it and presents a context menu with New Action…, New Set…, Duplicate Set, Delete Set, and Set Options…. Right-clicking an Action row selects it and presents a context menu with Play, Record, Duplicate, Delete, Action Options…, and Batch…. Duplicate on an action duplicates that action and selects the duplicate; Delete removes it. Headless tests in `crates/ui-egui/src/panels/actions.rs`: `right_clicking_an_action_set_selects_it_and_presents_set_context_options`, `right_clicking_an_action_selects_it_and_presents_action_options`, and `clicking_duplicate_on_an_action_duplicates_that_action_in_the_set`. Scores and estimates unchanged.

@@ -16351,6 +16351,11 @@ turn about and `closing` for the others. `collisions` lists the panels that pass
 one plane, such as the top flaps of a closed box, are not listed. Without a blank (`ok` false), `blank` and `base` are
 null and the lists are empty; `issues` are those of `addon.packaging.check`.
 
+Overlapping panels in one plane stack according to the fold tree from the largest panel. Choosing another base
+preserves that order when both trees place the panels in the same positions. Panels in different planes draw by
+depth, including when their separation is smaller than the depth tie tolerance. A hinge uses the role of the line
+with the most total length along it; the lowest line id wins a tie.
+
 The Fold Preview window (Object › Plug-ins › Packaging Tools › Fold Preview, or the Fold Lines panel's Fold Preview
 button) shows the blank that the document's shown fold lines make, folded, with the document's printed art on the
 outside of each panel and the board's inside color on the back. The print leaves out the fold lines, unless Show Fold
