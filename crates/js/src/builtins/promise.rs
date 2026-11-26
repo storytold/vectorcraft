@@ -214,7 +214,11 @@ impl Promises {
         roots.objects.extend(self.proto.iter().chain(&self.ctor).chain(&self.natives).chain(&self.rejected));
         roots.values.extend(self.completion.iter());
         match &self.running {
-            Some(Then::Settle(o, _) | Then::Reject(o)) => roots.objects.push(*o),
+            Some(Then::Settle(o, site)) => {
+                roots.objects.push(*o);
+                roots.codes.extend(site.iter().map(|(code, _)| &**code));
+            }
+            Some(Then::Reject(o)) => roots.objects.push(*o),
             Some(Then::Finally { derived, value, .. }) => {
                 roots.objects.push(*derived);
                 roots.values.push(value);
