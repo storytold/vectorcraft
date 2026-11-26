@@ -1105,7 +1105,7 @@ error names the kind. An importer that lists no kinds is read as before, and the
   `name`. All the images of one output hold at most 33,554,432 bytes of RGBA. The host checks both limits from the
   sizes the images give, and the length of `pixelsBase64`, before it decodes any pixels.
 - `transform` is six finite numbers `[a, b, c, d, e, f]` within ±4,000,000 that don't flatten the object; left out,
-  the identity.
+  the identity. Type or an image that then reaches more than 4,000,000 pt from the origin is refused.
 - `layers` (kind `layer`): 1–256 top-level layers, bottom first. Each has a `name`, `visible` (default `true`),
   `locked` (default `false`) and `objects`, the indexes of its objects in `objects` in increasing order. Every object
   is in exactly one layer, and a layer may hold none. Without `layers`, every object goes in one layer.

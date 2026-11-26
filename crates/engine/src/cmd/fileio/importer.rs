@@ -277,7 +277,8 @@ pub(super) fn load(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value) -> Resu
 /// that one layer when there are none. Paths are made as a filter's new ones are (their effects let
 /// in by `admit`), type is laid out, and each image is stored in the document as a PNG of its
 /// pixels. A warning for type whose font isn't there, or doesn't have its style, goes to `warnings`.
-/// Returns the objects' ids in order.
+/// An object that reaches more than [`MAX_COORD`] from the origin is an error. Returns the objects'
+/// ids in order.
 fn build(
     doc: &mut Document,
     objects: Vec<ImportObject>,
@@ -312,6 +313,9 @@ fn build(
             }
             ImportObject::Image(im) => image_node(doc, im).map_err(|e| e.to_string())?,
         };
+        if node.geometric_bounds().is_some_and(|b| ![b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)) {
+            return Err(format!("plug-in output: {at}: it reaches more than {MAX_COORD} pt from the origin"));
+        }
         ids.push(node.id);
         if let Some(list) = owner.get(i).and_then(|&li| members.get_mut(li)) {
             list.push(Arc::new(node));

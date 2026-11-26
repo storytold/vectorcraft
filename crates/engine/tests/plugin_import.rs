@@ -537,7 +537,7 @@ fn an_api_4_importer_opens_type_images_layers_and_artboards() {
 }
 
 /// An importer at API level 4 that lists only some kinds: output with another kind, a malformed
-/// image or a bad layer opens nothing and leaves the open document as it was; a blank document of
+/// image, a bad layer, or an image or type that reaches past the canvas opens nothing and leaves the open document as it was; a blank document of
 /// artboards alone opens.
 #[test]
 fn rich_output_that_fails_its_checks_changes_nothing() {
@@ -548,10 +548,16 @@ fn rich_output_that_fails_its_checks_changes_nothing() {
     short["objects"][1]["pixelsBase64"] = json!(vectorcraft_format::base64_encode(&PIXELS[..4]));
     let mut twice = rich_output();
     twice["layers"][1]["objects"] = json!([0, 2]);
+    let mut wide = rich_output();
+    wide["objects"][1]["transform"] = json!([4000000, 0, 0, 1, 0, 0]);
+    let mut far = rich_output();
+    far["objects"][0]["transform"] = json!([1, 0, 0, 1, 4000000, 40]);
     let cases = [
         (rich_output(), "`artboard`"),
         (short, "= 8 bytes"),
         (twice, "exactly one layer"),
+        (wide, "objects[1]: it reaches more than 4000000 pt"),
+        (far, "objects[0]: it reaches more than 4000000 pt"),
         (json!({"objects": [], "layers": [{"name": "A\u{202E}B"}]}), "text direction"),
     ];
     for (mut output, says) in cases {

@@ -13867,7 +13867,10 @@ with `read: true`, and `openExtensions` holds the extensions File › Open opens
 extension, with the installed importer that lists the extension (the one whose id sorts first, when several do).
 `importer` names the importer to use, which must list the file's extension, also one a built-in format reads, such
 as `svg`. The importer is given at most 128 MiB of the file; its objects become a new document whose artboard is
-their bounds, Save then asks for a name, and `warnings` holds the importer's warnings. An importer whose manifest sets
+their bounds, Save then asks for a name, and `warnings` holds the importer's warnings. An importer at plug-in API
+level 4 whose manifest lists `outputKinds` (in its `plugin.list` entry) may also return point type, embedded images,
+top-level layers and artboards, which replace the one around the art; output that fails a check, or an image or type
+that reaches more than 4,000,000 pt from the origin, opens nothing (see docs/plugins.md). An importer whose manifest sets
 `place` (`place: true` in `document.formats` and `plugin.list`) also places its files: `file.place`, `file.place.info`
 and `file.place.queue` take `importer?: "plugin.<id>"` (one that sets `place` and lists the file's extension) and
 `params?`, and without `importer` a file no built-in format reads goes to the first such importer by id that lists its
