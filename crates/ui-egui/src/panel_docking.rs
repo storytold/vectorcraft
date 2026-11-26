@@ -155,6 +155,12 @@ fn rail_owner_among(toolbars: impl Iterator<Item = u32>, id: &str) -> Option<Own
 /// canvas, and at the end edge the Properties · Layers · Libraries column and the icon column.
 /// Each of `fronts` comes to the front of the group that holds it.
 pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
+    builtin_workspace(fronts, 1)
+}
+
+/// [`default_workspace`] with the Tools panel laying its tools out in `tools_steps` columns, as a
+/// built-in workspace defines it.
+pub(crate) fn builtin_workspace(fronts: &[&str], tools_steps: u16) -> Workspace<String> {
     let mut placed: Vec<String> = Vec::new();
     let mut group = |ids: &[&str]| {
         let fresh: Vec<String> = ids.iter().filter(|id| registered(id) && !placed.iter().any(|p| p == *id)).map(|id| (*id).to_owned()).collect();
@@ -168,7 +174,7 @@ pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
     if !icons.is_empty() {
         columns.push(Column::new(icons).with_iconic(true));
     }
-    let tools = Column::new(vec![Group::new(vec![crate::toolbar::TOOLS.to_owned()], 0)]).with_steps(1);
+    let tools = Column::new(vec![Group::new(vec![crate::toolbar::TOOLS.to_owned()], 0)]).with_steps(tools_steps);
     let centre = Node::split(Axis::X, BESIDE_DOCK, Node::tabs(vec![CANVAS.to_owned()], 0), Node::dock(DockEdge::End, columns));
     let root = Node::split(Axis::X, BESIDE_DOCK, Node::dock(DockEdge::Start, vec![tools]), centre);
     Workspace::new(Layout::new(Some(root), Vec::new()))
