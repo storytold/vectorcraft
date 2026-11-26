@@ -1601,16 +1601,23 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
-/// is hidden or locked. Its name and note may still change.
-fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+/// Refuses appearance, place, stacking order and size changes in hidden or locked layers and on
+/// locked artboards. Names and notes may still change.
+fn refuse_protected_edit(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+        let why = if d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)) {
+            Some("a layer it is in is hidden or locked")
+        } else if on_locked_artboard(h, st, item.id) {
+            Some("it is on a locked artboard")
+        } else {
+            None
+        };
+        why.map(|why| (d.node(item.id).and_then(typename).unwrap_or("page item"), why))
     });
     match refused {
-        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        Some((name, why)) => Err(HostError::Error(format!("Cannot edit {name} {}: {why}", item.id.0))),
         None => Ok(()),
     }
 }
@@ -1621,7 +1628,7 @@ fn item_hidden(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1631,7 +1638,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1659,7 +1666,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
         (now, keeps_other)
     });
     if now.is_none() || keeps_other {
-        refuse_in_closed_layer(h, item)?;
+        refuse_protected_edit(h, item)?;
     }
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
@@ -1743,7 +1750,8 @@ fn item_height(h: &Host, a: &[Data]) -> Answer {
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
@@ -1780,7 +1788,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
@@ -2026,7 +2035,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused, and so is an object in a hidden or locked layer.
+/// compound path is refused. The item must be selectable and outside hidden or locked layers and
+/// locked artboards.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -2039,7 +2049,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
