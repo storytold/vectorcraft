@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use craft::behavior::IconId;
-use craft::host::{Host, PickId, PickKind, PickRequest};
+use craft::host::{Host, PickId, PickKind, PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Rating};
@@ -111,6 +111,8 @@ enum Request {
     Folder,
     /// Save the fields as a template at the path the save pick answered.
     SaveTo(PathBuf),
+    /// A browser picker returned a template larger than the import limit.
+    TemplateTooLarge,
     /// Merge the template `source` into the fields as `mode` says.
     Import { source: Info, mode: &'static str },
 }
@@ -151,6 +153,15 @@ impl Templates {
             && let Some(answer) = cx.take_pick_answer(id)
         {
             self.ticket = None;
+            if let (Pick::Open, Picked::Contents(files)) = (kind, &answer) {
+                let Some((_, bytes)) = files.first() else { return };
+                if bytes.len() > vectorcraft_pdf::MAX_TEMPLATE_BYTES {
+                    self.requests.push(Request::TemplateTooLarge);
+                } else {
+                    *import = Some(source("dataBase64", vectorcraft_format::base64_encode(bytes)));
+                }
+                return;
+            }
             let Some(path) = answer.first_path() else { return };
             match kind {
                 Pick::Open => *import = Some(source("path", path.to_string_lossy().into_owned())),
@@ -602,6 +613,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                 Some(fields) => save_template(app, path, fields),
                 None => Ok(()),
             },
+            Request::TemplateTooLarge => Err(tl!("The metadata template is larger than 8 MB.").to_owned()),
             Request::Import { source, mode } => {
                 dialogs.with(|host| host.get_mut_by_id::<FileInfoDialog>(id).map(|d| import(app, d, source, mode))).unwrap_or(Ok(()))
             }
@@ -765,6 +777,54 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.doc.metadata.author.as_str(), st.doc.metadata.rating), ("Ada", 3));
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    #[test]
+    fn browser_picked_templates_enter_the_merge_choice_and_edit_only_the_draft() {
+        use std::sync::Arc;
+
+        use craft::host::{Files, PickRequest, Picked, ScriptedFiles};
+
+        let template = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo {
+            description: Some("À l’affiche 版".into()),
+            rating: Some(3),
+            ..Default::default()
+        });
+        let utf16 = std::iter::once(0xfeff).chain(template.encode_utf16()).flat_map(u16::to_le_bytes).collect::<Vec<_>>();
+        for bytes in [template.into_bytes(), utf16] {
+            let mut app = windowed();
+            let files = Arc::new(ScriptedFiles::held());
+            crate::tests::picks::install_files(&mut app, files.clone());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("ui.fileInfoDialog", json!({})).unwrap();
+            set(&app, "author", json!("Ada")).unwrap();
+            let ticket = files.pick(PickRequest::open(super::PURPOSE));
+            with_dialog(&app, |d| d.templates.ticket = Some((ticket, super::Pick::Open))).unwrap();
+            assert!(files.answer(Picked::Contents(vec![("Studio.xmp".into(), bytes)])).is_some());
+            let ctx = app.ui_ctx.clone().unwrap();
+            for _ in 0..3 {
+                crate::tests::synthetic::key_frame(&mut app, &ctx, Vec::new());
+            }
+            with_dialog(&app, |d| {
+                assert!(d.templates.ticket.is_none(), "the File Info form consumed the picker answer");
+                assert!(d.import.is_some(), "a browser-selected template reaches the merge choice");
+                assert!(super::choose_mode(&mut d.import_mode, "append"));
+                super::ask_import(&mut d.templates, &d.import, d.import_mode);
+            })
+            .unwrap();
+
+            super::pump(&mut app, &ctx);
+            let fields = with_dialog(&app, |d| d.filed_fields()).unwrap();
+            assert_eq!(
+                (fields["author"].clone(), fields["description"].clone(), fields["rating"].clone()),
+                (json!("Ada"), json!("À l’affiche 版"), json!(3))
+            );
+            assert_eq!(app.session.active().unwrap().history.undo.len(), 0, "the template updates the draft before OK");
+            assert!(press_ok(&mut app));
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc.metadata.description, "À l’affiche 版");
+            assert_eq!(st.history.undo.len(), 1);
+        }
     }
 
     #[test]
