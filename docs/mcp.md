@@ -1393,9 +1393,12 @@ Each coordinate goes to the nearest step of its stored binary value, and a value
 zero (`0.125` at 2 places is `0.13`); `1.005` is stored as slightly less than that and is written as `1.0`. Each anchor is rounded on
 its own, so a closed path stays closed and a shape smaller than one step keeps its anchors on one point. Opening the
 file and saving it again does not bring back the dropped digits. The embedded preview and the PDF that `pdfCompatible: true` adds show the rounded paths. Without `precision` a save writes the coordinates exactly, and Save does not remember it. A `.ai` file ignores
-`precision`. A save writes
-a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
-document uses are written, and document keys written by a newer version are kept.
+`precision`. A save first writes and flushes a temporary file, then renames it over the destination or copies the complete
+content into the destination. The copy path keeps a flushed copy of any existing content before overwriting it.
+A failure during that copy reports the locations of the new content and any saved original.
+Only the images the document uses are written, and document keys written by a newer version are kept.
+On Unix, a save flushes the destination directory after writing or replacing the file. If that flush fails,
+the save reports an error stating that the file was written.
 An uncompressed file is indented JSON when the document has at most 2,000 layers and objects and the indented
 document, as the chosen version writes it, is at most 1 MiB; otherwise the file is compact JSON.
 

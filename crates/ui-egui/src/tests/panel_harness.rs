@@ -224,6 +224,13 @@ impl Panel {
         self.after();
     }
 
+    /// Turns the wheel by `dy` points over `at`.
+    pub(crate) fn scroll_at(&mut self, at: Pos2, dy: f32) {
+        self.frame_with(vec![Event::PointerMoved(at)]);
+        self.frame_with(vec![craft::ui::testing::pointer::wheel(dy)]);
+        self.after();
+    }
+
     /// Drags from the control named `from` to the one named `to`.
     pub(crate) fn drag(&mut self, from: &str, to: &str, mods: Modifiers) {
         let to = self.find(to).center();
