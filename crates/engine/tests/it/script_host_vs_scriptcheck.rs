@@ -2,8 +2,8 @@
 //! the tables below, and each name that reaches outside the document has the `outside` id
 //! `script.check` (`vectorcraft-scriptcheck`) gives it. The names are read from a run: the own
 //! properties of the global object, of each object or function it holds and of each function's
-//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` also
-//! has are the language's, which reach files and other apps only through the host; `eval` and
+//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` with
+//! E4X also has are the language's, which reach files and other apps only through the host; `eval` and
 //! `Function` still have rows, since they run code the checker can't read. A name the host adds
 //! without a row fails the test.
 
@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_js::{DirectiveName, JsValue, Realm};
+use vectorcraft_js::{DirectiveName, JsValue, Options, Realm};
 use vectorcraft_scriptcheck::{Limits, check};
 
 /// The names that reach outside the document: each with a script that uses it and the `outside` id
@@ -75,17 +75,17 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
-         DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
-         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems PathItem \
-         PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits StrokeCap StrokeJoin \
-         Transformation ZOrderMethod",
+        "activeDocument activeDocument= app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem \
+         Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode \
+         DocumentRasterResolution DocumentTransparencyGrid documents Documents ElementPlacement GroupItem GroupItems Layer \
+         Layers PageItem PageItems PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues \
+         RulerUnits selection selection= StrokeCap StrokeJoin Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+         selection selection= toString typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -93,17 +93,17 @@ const INSIDE: &[(&str, &str)] = &[
         "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
          colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
          height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
-         transparencyGrid transparencyGrid= typename units units= width width=",
+         toString transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
-    ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent toString typename"),
     ("Document.", "prototype"),
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
          documentColorSpace groupItems height layers name pageItems parent pathItems rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
-         views views= width",
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
+         typename views views= width",
     ),
     ("Layer.", "prototype"),
     (
@@ -112,10 +112,10 @@ const INSIDE: &[(&str, &str)] = &[
          dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
          locked= move name name= opacity opacity= pageItems parent pathItems placedItems placedItems= preview \
          preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
-         textFrames= typename visible visible= zOrder zOrderPosition",
+         textFrames= toString typename visible visible= zOrder zOrderPosition",
     ),
     ("Layers.", "prototype"),
-    ("Layers.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Layers.prototype.", "add constructor getByName index length parent removeAll toString typename"),
     ("GroupItem.", "prototype"),
     (
         "GroupItem.prototype.",
@@ -123,37 +123,37 @@ const INSIDE: &[(&str, &str)] = &[
          rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
     ),
     ("GroupItems.", "prototype"),
-    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll typename"),
+    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll toString typename"),
     ("CompoundPathItem.", "prototype"),
     ("CompoundPathItem.prototype.", "constructor pathItems"),
     ("CompoundPathItems.", "prototype"),
-    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll toString typename"),
     ("Artboard.", "prototype"),
     (
         "Artboard.prototype.",
         "artboardRect artboardRect= constructor name name= parent remove rulerOrigin rulerOrigin= rulerPAR rulerPAR= \
-         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= typename",
+         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= toString typename",
     ),
     ("Artboards.", "prototype"),
     (
         "Artboards.prototype.",
         "add constructor getActiveArtboardIndex getByName index insert length parent remove setActiveArtboardIndex \
-         typename",
+         toString typename",
     ),
     ("PageItems.", "prototype"),
-    ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll toString typename"),
     ("PageItem.", "prototype"),
     (
         "PageItem.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
          left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
     ("PathItems.", "prototype"),
-    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star typename"),
+    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star toString typename"),
     ("PathItem.", "prototype"),
     (
         "PathItem.prototype.",
@@ -164,12 +164,12 @@ const INSIDE: &[(&str, &str)] = &[
          strokeWidth strokeWidth= stroked stroked= translate",
     ),
     ("PathPoints.", "prototype"),
-    ("PathPoints.prototype.", "add constructor index length parent removeAll typename"),
+    ("PathPoints.prototype.", "add constructor index length parent removeAll toString typename"),
     ("PathPoint.", "prototype"),
     (
         "PathPoint.prototype.",
         "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
-         rightDirection= selected selected= typename",
+         rightDirection= selected selected= toString typename",
     ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
@@ -218,6 +218,9 @@ const LIST: &str = r#"(function () {
     var globals = Object.getOwnPropertyNames(g);
     add(g, "");
     for (var i = 0; i < globals.length; i++) {
+        // A global with a getter, such as `activeDocument`, is not read: it throws with no document open.
+        var gd = Object.getOwnPropertyDescriptor(g, globals[i]);
+        if (gd && gd.get) continue;
         var v = g[globals[i]];
         if (v !== null && (typeof v == "object" || typeof v == "function")) {
             add(v, globals[i] + ".");
@@ -235,9 +238,9 @@ fn host_names() -> BTreeSet<String> {
     text.lines().map(str::to_string).collect()
 }
 
-/// The names a plain JavaScript engine has.
+/// The names a plain JavaScript engine with E4X has.
 fn language_names() -> BTreeSet<String> {
-    match Realm::new().run(LIST) {
+    match Realm::with_options(Options { e4x: true, ..Options::default() }, vectorcraft_js::Limits::default()).run(LIST) {
         Ok(JsValue::String(text)) => text.lines().map(str::to_string).collect(),
         other => panic!("no list: {other:?}"),
     }

@@ -41,8 +41,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
-    boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
-    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, text, typename, whole, with_doc,
+    boolean, class_text, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of,
+    item_ref, later, method, named, named_text, num, number, on_doc, on_doc_layer, page_items, placement_of, property, text, typename, whole,
+    with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -263,6 +264,14 @@ fn layer_parent(h: &Host, a: &[Data]) -> Answer {
         Some(p) => layer_ref(h, st.uid, p),
         None => doc_ref(h, st.uid),
     }))
+}
+
+fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
+    named_text("Layer", layer_name(h, a))
+}
+
+fn board_to_string(h: &Host, a: &[Data]) -> Answer {
+    named_text("Artboard", board_name(h, a))
 }
 
 fn layer_typename(h: &Host, a: &[Data]) -> Answer {
@@ -1379,6 +1388,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("move", method(l, layer_move)),
         ("remove", method(l, layer_remove)),
         ("zOrder", method(l, layer_z_order)),
+        ("toString", method(l, layer_to_string)),
     ]);
     layer.extend(
         ["textFrames", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"].map(|m| later(l, "Layer", m)),
@@ -1396,6 +1406,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("getByName", method(l, layers_by_name)),
                 ("add", method(l, layers_add)),
                 ("removeAll", method(l, layers_remove_all)),
+                ("toString", class_text("Layers")),
             ]),
             Some(super::function(l, layers_at)),
         ),
@@ -1411,6 +1422,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                     ("getByName", method(l, groups_by_name)),
                     ("add", method(l, groups_add)),
                     ("removeAll", method(l, groups_remove_all)),
+                    ("toString", class_text("GroupItems")),
                 ]);
                 m.push(later(l, "GroupItems", "createFromFile"));
                 m
@@ -1428,6 +1440,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("getByName", method(l, compounds_by_name)),
                 ("add", method(l, compounds_add)),
                 ("removeAll", method(l, compounds_remove_all)),
+                ("toString", class_text("CompoundPathItems")),
             ]),
             Some(super::function(l, compounds_at)),
         ),
@@ -1445,6 +1458,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("showCrossHairs", property(l, board_cross_hairs, board_set_cross_hairs)),
                 ("showSafeAreas", property(l, board_safe_areas, board_set_safe_areas)),
                 ("remove", method(l, board_remove)),
+                ("toString", method(l, board_to_string)),
             ]),
             None,
         ),
@@ -1462,6 +1476,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("remove", method(l, boards_remove)),
                 ("getActiveArtboardIndex", method(l, boards_active)),
                 ("setActiveArtboardIndex", method(l, boards_set_active)),
+                ("toString", class_text("Artboards")),
             ]),
             Some(super::function(l, boards_at)),
         ),

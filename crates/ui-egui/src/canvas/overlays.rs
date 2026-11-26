@@ -9,7 +9,7 @@ use craft::draw::ui::{HandleStyle, PathOptionsSettings};
 use craft::ui::canvas::{CanvasSpace, canvas_space, hud};
 use craft::ui::canvas_controls::{Marquee, MarqueeLook, Measure, SelectionOutline, SmartGuides, path_runs};
 use craft::ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Role, Show as _};
-use craft::ui::primitives::{DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
+use craft::ui::primitives::{Dashes, DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
 use craft::ui::runtime::env::Label;
 use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
 use egui::{Color32, CornerRadius, Pos2, Rect as ScreenRect, Response, Vec2};
@@ -191,8 +191,15 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
                     stroke_run(draw, points, closed, *dashed, DataWidth::points(*width), data(*color));
                 }
             }
-            Overlay::Line { a, b, color, dashed } => {
-                stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, *dashed, StrokeWidth::Thin, data(*color));
+            Overlay::Line { a, b, color, dashed: true } => {
+                let pattern = draw.dashes();
+                let margin = pattern.dash + pattern.gap + draw.width(StrokeWidth::Thin);
+                if let Some((run, from)) = visible_run(view, *a, *b, view.rect.expand(margin)) {
+                    draw.dashed(&run, dashes_from(pattern, from), StrokeWidth::Thin, data(*color));
+                }
+            }
+            Overlay::Line { a, b, color, dashed: false } => {
+                stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data(*color));
             }
             Overlay::GridLine { a, b, color } => {
                 stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data_rgba(*color));
@@ -260,6 +267,69 @@ fn stroke_run(
     } else {
         draw.stroke(&PaintShape::Path(points), width, color);
     }
+}
+
+/// The part inside `clip` of the screen line that `view` draws from document point `a` to `b`, with how far along the
+/// whole line that part starts, in points. The line is clipped in `f64`, so a line millions of points long keeps its
+/// part on the canvas. None when no part of it is inside `clip`, or when an end does not map to a finite point.
+fn visible_run(view: &CanvasView, a: vectorcraft_geom::Point, b: vectorcraft_geom::Point, clip: ScreenRect) -> Option<([Pos2; 2], f64)> {
+    let affine = view.affine();
+    let (a, b) = (affine * a, affine * b);
+    if !(a.is_finite() && b.is_finite()) {
+        return None;
+    }
+    let screen = |p: vectorcraft_geom::Point| Pos2::new(p.x as f32, p.y as f32);
+    // Halved, so ends near the largest `f64` do not overflow.
+    let half = b.to_vec2() * 0.5 - a.to_vec2() * 0.5;
+    let length = half.hypot();
+    if length == 0.0 {
+        let c = screen(a);
+        return clip.contains(c).then_some(([c, c], 0.0));
+    }
+    let u = half / length;
+    // The run is measured from the point of the line nearest the middle of `clip`, so the clipped ends keep their
+    // precision when the line's ends are far off.
+    // That point is found from the line's distance to the middle, taken from the cross product of its ends, so a line
+    // whose ends are far off and not on one diagonal keeps its place on the canvas.
+    let c = vectorcraft_geom::Point::new(f64::from(clip.center().x), f64::from(clip.center().y));
+    let offset = (half.cross(c.to_vec2()) + 2.0 * exact_cross(a.to_vec2() * 0.5, b.to_vec2() * 0.5)) / length;
+    let origin = if offset.is_finite() { c - vectorcraft_geom::Vec2::new(-u.y, u.x) * offset } else { a + u * (c - a).dot(u) };
+    let (mut s0, mut s1) = ((a - origin).dot(u), (b - origin).dot(u));
+    let start = s0;
+    let axes = [(origin.x, u.x, f64::from(clip.left()), f64::from(clip.right())), (origin.y, u.y, f64::from(clip.top()), f64::from(clip.bottom()))];
+    for (at, step, lo, hi) in axes {
+        if step == 0.0 {
+            if at < lo || at > hi {
+                return None;
+            }
+        } else {
+            let (enter, leave) = ((lo - at) / step, (hi - at) / step);
+            s0 = s0.max(enter.min(leave));
+            s1 = s1.min(enter.max(leave));
+        }
+    }
+    if s0 > s1 {
+        return None;
+    }
+    Some(([screen(origin + u * s0), screen(origin + u * s1)], s0 - start))
+}
+
+/// `p.x * q.y - p.y * q.x`, with the rounding error of the second product added back (Kahan's method), so two far-off
+/// points whose products nearly cancel keep the small difference between them.
+fn exact_cross(p: vectorcraft_geom::Vec2, q: vectorcraft_geom::Vec2) -> f64 {
+    let w = p.y * q.x;
+    let error = (-p.y).mul_add(q.x, w);
+    p.x.mul_add(q.y, -w) + error
+}
+
+/// `pattern` for a run that starts `from` points along its line, so its dashes fall where the whole line has them.
+fn dashes_from(pattern: Dashes, from: f64) -> Dashes {
+    let period = f64::from(pattern.dash) + f64::from(pattern.gap);
+    if !(period.is_finite() && period > 0.0 && from.is_finite()) {
+        return pattern;
+    }
+    let phase = (f64::from(pattern.phase) - from).rem_euclid(period);
+    pattern.phase(phase as f32)
 }
 
 /// An anchor or curve point: filled in `color` when selected, else a white body with a `color` edge.

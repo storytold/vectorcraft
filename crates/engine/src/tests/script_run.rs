@@ -166,7 +166,8 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "new Window('dialog');").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "activeDocument;").unwrap_err().to_string().contains("`app.activeDocument`"));
+    // The application's members need no `app.`, so naming one alone is not an error.
+    assert_eq!(run(&mut s, "activeDocument;").unwrap()["ok"], true);
     assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
@@ -389,6 +390,40 @@ fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() 
     }
     // Script text given without a file keeps the ExtendScript language.
     assert!(run(&mut s, "vc.log(null ?? 1);").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn every_script_reads_e4x_and_has_the_xml_objects() {
+    let dir = fresh_folder("e4x");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    // Script text: literals, selectors, for each and the four constructors.
+    let text = "var x = <list><item id=\"a\">1</item><item id=\"b\">2</item></list>;\n\
+                vc.log(x.item.length() + ' ' + x.item.(@id == 'b').toString() + ' ' + x..item[0].@id);\n\
+                var sum = 0; for each (var i in x.item) sum += Number(i); vc.log(sum);\n\
+                vc.log(new XML('<a><b/></a>').b.length() + new XMLList('<c/><c/>').length());\n\
+                vc.log(new Namespace('p', 'urn:p').prefix + ' ' + new QName('urn:q', 'n').localName + ' ' + isXMLName('ok'));\n\
+                vc.log(typeof setDefaultXMLNamespace + ' ' + (1 < 2));\n";
+    let r = run(&mut s, text).unwrap();
+    assert_eq!(r["log"], json!(["2 2 a", 3, 3, "p n true", "function true"]), "{r}");
+    // A .js file, a file it includes, eval, Function and $.evalFile read XML as well.
+    write("lib.jsxinc", "var fromLib = <lib n=\"7\"/>.@n.toString();\n");
+    write("more.jsx", "<m>{fromLib}</m>.toString();\n");
+    let modern = "#include \"lib.jsxinc\"\nlet tag = <t>{fromLib}</t>;\nvc.log(tag.toString());\n\
+                  vc.log(eval('<e>5</e>').toString());\nvc.log(new Function('return <f>6</f>.toString()')());\n\
+                  vc.log($.evalFile(File($.fileName).parent + '/more.jsx'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["7", "5", "6", "7"]), "{r}");
+    // A named engine first made by a .js run gives a later .jsx run the XML objects too.
+    s.execute("script.run", &path(&write("first.js", "#targetengine xmlkept\nlet k = 1;"))).unwrap();
+    let later = s.execute("script.run", &path(&write("second.jsx", "#targetengine xmlkept\nvc.log(XML('<k>2</k>').toString());"))).unwrap();
+    assert_eq!(later["log"], json!(["2"]), "{later}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

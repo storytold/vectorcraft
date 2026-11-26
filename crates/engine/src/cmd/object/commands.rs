@@ -34,8 +34,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{ids?: [id…] (selected first; default: the selection), angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box.",
-            has_selection,
+            "{ids?: [id…] (selected first; default: the selection), angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?, objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size)} → {ids}. With anchors selected with Direct Selection (and no copy), only those anchors and their handles transform, about the centre of their own box. Selected ruler guides that can be edited rotate too (without ids), each as the line view.guides.release makes of it, and the default origin is the center of the objects' box and those lines together: a guide that ends up vertical or horizontal stays a ruler guide, and one at any other angle becomes a selected guide path along its line. absolute with only ruler guides selected is an error.",
+            has_selection_or_guides,
             rotate
         ),
         cmd!(
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Transform"],
             Some("Cmd+D"),
             "{copy?, strokes?, corners?, patterns?, typeAreas?, interpolate?: bool (as object.transform's; default: the value the transform it repeats used, else object.transform's default)} the last transform's matrix on the selection (after a perspective move or scale: that plane-space transform, without these params)",
-            has_selection,
+            has_selection_or_guides,
             transform_again
         ),
         cmd!(

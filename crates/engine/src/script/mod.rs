@@ -1630,16 +1630,10 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
     const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
-    const APP_MEMBERS: &[&str] = &["activeDocument", "documents", "selection"];
     let message = &e.message;
     let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
     let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
-    if e.kind == RunErrorKind::Thrown
-        && !e.authored
-        && let Some(member) = first.filter(|f| APP_MEMBERS.contains(f))
-    {
-        format!("{message} (use `app.{member}`)")
-    } else if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
+    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -2041,7 +2035,7 @@ impl Session {
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
         // code the way the script does.
         let es2015 = include::es2015_script(request.file.as_deref());
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {

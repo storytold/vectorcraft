@@ -58,7 +58,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, command_value, coordinate, edit_item, editable,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, class_text, colors, command, command_value, coordinate, edit_item, editable,
     find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point,
     point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
@@ -1599,6 +1599,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("ellipse", method(l, items_ellipse)),
                 ("polygon", method(l, items_polygon)),
                 ("star", method(l, items_star)),
+                ("toString", class_text("PathItems")),
             ]),
             Some(super::function(l, items_at)),
         ),
@@ -1612,6 +1613,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("index", point_method(l, points_index)),
                 ("add", point_method(l, points_add)),
                 ("removeAll", point_method(l, points_remove_all)),
+                ("toString", class_text("PathPoints")),
             ]),
             Some(super::point_function(l, points_at)),
         ),
@@ -1627,6 +1629,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                     ("rightDirection", point_property(l, pt_right, pt_set_right)),
                     ("pointType", point_property(l, pt_type, pt_set_type)),
                     ("remove", point_method(l, pt_remove)),
+                    ("toString", class_text("PathPoint")),
                 ]);
                 m.push(later(l, "PathPoint", "selected"));
                 m
