@@ -216,7 +216,7 @@ fn save_panels_show_the_file_type_they_write() {
     ];
     for (save, params, export, label, exts) in presets {
         app.run(save, params).unwrap();
-        let run = |a: &mut VectorcraftApp| io::save_command_output(a, export, exts[0], json!({"names": ["Mine"]}), |_, _| Ok(Value::Null));
+        let run = |a: &mut VectorcraftApp| crate::dialogs::preset_manager::export(a, export, exts[0], "Mine").map(|_| Value::Null);
         shows(&mut app, &picker, run, &[(label, exts)], &format!("{export}: the presets dialog's Export…"));
     }
 }
