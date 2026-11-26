@@ -96,11 +96,13 @@ fn steps(st: &DocState) -> [u64; 4] {
     [serial(&h.undo, 1), serial(&h.undo, 2), serial(&h.redo, 1), serial(&h.redo, 2)]
 }
 
-/// A document as a drag from the list finds it: its `uid`, its state, its newest steps ([`steps`])
-/// and the state undoing the newest undo step gives back (that step's document).
+/// A document as a drag from the list finds it: its `uid` and its count of File › Revert
+/// ([`DocState::reverts`]), its state, its newest steps ([`steps`]) and the state undoing the newest
+/// undo step gives back (that step's document).
 #[derive(Clone)]
 pub(super) struct DragStart {
     uid: u64,
+    reverts: u64,
     doc: Arc<Document>,
     steps: [u64; 4],
     back: Option<Arc<Document>>,
@@ -109,24 +111,25 @@ pub(super) struct DragStart {
 impl DragStart {
     pub(super) fn of(st: &DocState) -> Self {
         let back = st.history.undo.last().map(|e| Arc::clone(&e.doc));
-        DragStart { uid: st.uid, doc: Arc::clone(&st.doc), steps: steps(st), back }
+        DragStart { uid: st.uid, reverts: st.reverts, doc: Arc::clone(&st.doc), steps: steps(st), back }
     }
 
     /// Rows `names` as this document holds them.
     fn rows(&self, names: &[String]) -> HeldRows {
         let rows: Vec<_> = names.iter().map(|n| (n.clone(), HeldRow::of(&self.doc, n))).collect();
         let back = rows.iter().map(|(_, r)| r.as_ref().zip(self.back.as_deref()).is_some_and(|(r, d)| r.unchanged_in(d))).collect();
-        HeldRows { uid: self.uid, doc: Arc::downgrade(&self.doc), steps: self.steps, rows, back }
+        HeldRows { uid: self.uid, reverts: self.reverts, doc: Arc::downgrade(&self.doc), steps: self.steps, rows, back }
     }
 }
 
-/// The rows a drag from the list carries, in the order of its names, and the document (`uid`) and
-/// the state and undo history they were last checked against. A row is `None` once a state of the
-/// document since the drag started did not hold it unchanged: deleted, edited, or deleted and made
-/// again under its name, also with the same paint.
+/// The rows a drag from the list carries, in the order of its names, and the document (`uid`, and
+/// its count of File › Revert) and the state and undo history they were last checked against. A
+/// row is `None` once a state of the document since the drag started did not hold it unchanged:
+/// deleted, edited, or deleted and made again under its name, also with the same paint.
 #[derive(Clone)]
 pub(crate) struct HeldRows {
     uid: u64,
+    reverts: u64,
     doc: Weak<Document>,
     /// The newest undo step of the document and the one under it, and the next redo step and the
     /// one under it ([`steps`]).
@@ -139,7 +142,12 @@ pub(crate) struct HeldRows {
 
 impl PartialEq for HeldRows {
     fn eq(&self, other: &Self) -> bool {
-        self.uid == other.uid && self.doc.ptr_eq(&other.doc) && self.steps == other.steps && self.rows == other.rows && self.back == other.back
+        self.uid == other.uid
+            && self.reverts == other.reverts
+            && self.doc.ptr_eq(&other.doc)
+            && self.steps == other.steps
+            && self.rows == other.rows
+            && self.back == other.back
     }
 }
 
@@ -200,15 +208,16 @@ fn checked(held: HeldRows, st: &DocState) -> HeldRows {
         .collect();
     let last = undo.last();
     let back = rows.iter().map(|(_, r)| r.as_ref().zip(last).is_some_and(|(r, e)| r.unchanged_in(&e.doc))).collect();
-    HeldRows { uid: held.uid, doc: Arc::downgrade(&st.doc), steps: now, rows, back }
+    HeldRows { uid: held.uid, reverts: held.reverts, doc: Arc::downgrade(&st.doc), steps: now, rows, back }
 }
 
 /// The names of drag `r` that the active document has held unchanged since the drag started
-/// ([`checked`]), in the drag's order. Empty when the drag started in another document. The panel
-/// keeps what it found for the drag, so the next check starts from there.
+/// ([`checked`]), in the drag's order. Empty when the drag started in another document, or before
+/// File › Revert replaced the document. The panel keeps what it found for the drag, so the next
+/// check starts from there.
 pub(super) fn follow(app: &mut VectorcraftApp, r: &SwatchRows) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
-    if st.uid != r.held.uid {
+    if st.uid != r.held.uid || st.reverts != r.held.reverts {
         return vec![];
     }
     let kept = &mut app.ui.swatches_panel.drag;

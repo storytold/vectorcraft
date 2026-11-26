@@ -665,6 +665,25 @@ fn new_swatch_skips_rows_replaced_during_the_drag() {
     assert_eq!(undo_steps(&app), undo + 1);
 }
 
+/// A drag started before File › Revert replaced the document duplicates and deletes nothing, also
+/// when the reverted document holds the same swatches.
+#[test]
+fn rows_dragged_before_a_revert_are_left_alone() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    let at = app.session.active_index().expect("a document");
+    let copy = doc(&app);
+    assert!(app.session.replace_document(at, copy));
+    let reverted = doc_and_steps(&app);
+    assert!(reverted.0.swatch("Orange").is_some(), "the reverted document has Orange");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    assert_eq!(doc_and_steps(&app), reverted, "the reverted document's Orange is not duplicated");
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(!dialog_open(&app, key), "the reverted document asks nothing");
+    assert_eq!(doc_and_steps(&app), reverted, "the reverted document keeps Orange");
+}
+
 /// The rows of a drag running in the drag session are checked after every command the app runs:
 /// a swatch deleted and brought back by an undo, then an edit that clears the redo steps, all with
 /// no pass of the panel in between, is neither duplicated by New Swatch nor deleted by Delete
