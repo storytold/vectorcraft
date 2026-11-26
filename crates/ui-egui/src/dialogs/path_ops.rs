@@ -7,6 +7,7 @@
 // runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
 use craft::ui::contract::{Bind, FieldLabelRole, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::DialogId;
+use craft::ui::display::Text;
 use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
@@ -286,7 +287,7 @@ fn counts_row(ui: &mut egui::Ui, f: &DialogFields) {
     if let Some(FieldValue::Json(c)) = f.get(COUNTS)
         && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
     {
-        ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
+        Text::new(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points")))).show(ui);
     }
 }
 

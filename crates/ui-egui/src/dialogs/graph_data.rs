@@ -712,7 +712,6 @@ impl StackDialog for GraphDataDialog {
             .ok_label(tl!("Apply"))
             .ok_enabled(!held.is_waiting())
             .accept_stays_open(true)
-            .enter_confirms(false)
             // The sheet owns the scroll; the controls above it stay in view.
             .collection_body(true)
             .shaped(|dialog| dialog.initial_focus(Initial::Default))
@@ -1013,6 +1012,41 @@ mod tests {
         app.dialogs().expect("a window").with(|host| host.cancel::<GraphDataDialog>(&ctx));
         super::super::tools::open_tool_dialog(app, "graphData", json!({}));
         assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())));
+    }
+
+    /// Enter in the entry box and in the sheet moves the picked cell down and applies nothing. Enter in a field that
+    /// does not use it is Apply: the graph is redrawn and the window stays open.
+    #[test]
+    fn enter_moves_in_the_entry_box_and_the_sheet_and_applies_elsewhere() {
+        let (mut app, id) = app_with(",a,b\nQ1,1,2\nQ2,3,4\nQ3,5,6", "column");
+        let before = data(&mut app, id);
+        open(&mut app).unwrap();
+        set_field(&app, "sel", json!([1, 1])).unwrap();
+        let mut h = harness(app);
+        h.run_steps(4);
+        // The entry box.
+        h.get_by_label("Cell Value").click();
+        h.run_steps(2);
+        edit(h.state(), |d| d.entry.text = "9".into());
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(read(h.state(), |d| (active(&d.state), cell_of(&d.sheet.grid, 1, 1))), ((2, 1), "9".to_string()), "Enter moves down");
+        assert_eq!(data(h.state_mut(), id), before, "Enter in the entry box applies nothing");
+        // The sheet.
+        h.get_by_label("Q1").click();
+        h.run_steps(2);
+        assert_eq!(read(h.state(), |d| active(&d.state)), (1, 0), "the click picks the cell");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(read(h.state(), |d| active(&d.state)), (2, 0), "Enter moves down in the sheet");
+        assert_eq!(data(h.state_mut(), id), before, "Enter in the sheet applies nothing");
+        // A field that does not use Enter.
+        h.get_by_label("Column Width").click();
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(4);
+        assert_eq!(data(h.state_mut(), id)["rows"][0][0], json!(9.0), "Enter applies the sheet");
+        assert!(h.state().dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())), "the window stays open");
     }
 
     #[test]

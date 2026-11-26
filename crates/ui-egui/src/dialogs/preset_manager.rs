@@ -183,6 +183,23 @@ pub(crate) fn import(
     Ok(None)
 }
 
+/// Export…: run `command` on the preset `name` and write its file through a save panel that suggests
+/// [`export_file_name`] (the web downloads it under that name). Returns at once: the answer arrives later.
+pub(crate) fn export(app: &mut VectorcraftApp, command: &str, ext: &str, name: &str) -> Result<Option<String>, String> {
+    let file = export_file_name(name, ext);
+    crate::io::save_command_output_named(app, command, &file, serde_json::json!({ "names": [name] }), |_, _| Ok(Value::Null))?;
+    Ok(None)
+}
+
+/// The file name Export… suggests for the preset `name`: the name without a built-in preset's brackets
+/// (`[Default]`), made safe as a file name as Export Library… makes a library's
+/// (`library::file_stem_for`), with the extension `ext`; "Preset" when no name is left.
+pub(crate) fn export_file_name(name: &str, ext: &str) -> String {
+    let stem = name.trim().trim_start_matches('[').trim_end_matches(']').trim();
+    let stem = if stem.is_empty() { "Preset" } else { stem };
+    format!("{}.{ext}", vectorcraft_engine::cmd::library::file_stem_for(stem))
+}
+
 /// Opens the manager of `source` on the preset `selected` (the first one when none has that name).
 pub(crate) fn open(app: &mut VectorcraftApp, source: &'static Source, selected: &str) {
     let rows = (source.rows)(app);
