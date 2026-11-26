@@ -1621,6 +1621,12 @@ fn preview_params(d: &Fields) -> Option<(bool, &'static str, Value)> {
     })
 }
 
+/// The Limit to Library key (`"document"` or a library id) of `parent` when it is a Recolor Artwork
+/// dialog that limits to a library: the library a Color Picker over it shows in its swatches view.
+pub(super) fn limit_to(dialogs: &craft::ui::shell::WindowDialogs, parent: DialogId) -> Option<String> {
+    dialogs.with(|host| host.get_by_id::<RecolorDialog>(parent).map(|d| d.fields.str("limitTo"))).filter(|limit| !limit.is_empty())
+}
+
 /// Runs the open dialog's live preview with `(on, command, params)`.
 fn run_preview(app: &mut VectorcraftApp, (on, cmd, params): (bool, &'static str, Value)) {
     let Some(mut live) = app.color_dialogs.recolor.as_mut().map(|open| std::mem::take(&mut open.preview)) else { return };
