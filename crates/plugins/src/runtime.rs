@@ -10,7 +10,7 @@ use wasmi::{
 use wasmparser::{CompositeInnerType, Parser, Payload, Validator, WasmFeatures};
 
 use crate::host::{self, Bridge, CallFailure, Deadline, Host, Import, Report, Run};
-use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest};
+use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest, Runtime};
 use crate::permissions::Permission;
 use crate::{Error, Kind, Result};
 
@@ -181,17 +181,22 @@ pub fn keep_modules(on: bool) {
     KEEP_MODULES.store(on, Ordering::Relaxed);
 }
 
+/// A plug-in's code: a WebAssembly module, or a JavaScript file ([`crate::js`]).
+enum Code {
+    Wasm { engine: Engine, module: Module },
+    Js(crate::js::Script),
+}
+
 /// A loaded, validated plug-in. Cheap to share (`Arc`) and safe to run from several threads:
-/// every run gets its own store and instance.
+/// every run gets its own store and instance, or for a JavaScript plug-in its own realm.
 pub struct Plugin {
     manifest: Manifest,
     /// The manifest JSON as `vc_manifest` returned it, or as the module's [`MANIFEST_SECTION`]
     /// custom section holds it.
     manifest_text: Vec<u8>,
-    engine: Engine,
-    module: Module,
     /// The module's bytes, kept while [`keep_modules`] is on.
     bytes: Option<Arc<[u8]>>,
+    code: Code,
     limits: Limits,
     size: usize,
     hash: String,
@@ -417,9 +422,24 @@ impl Plugin {
     /// is one the host offers ([`crate::host::IMPORTS`]) and its manifest allows, and checks the
     /// exports. A module that carries its manifest in a [`MANIFEST_SECTION`] custom section is
     /// checked without being instantiated, so none of its code runs; one without that section is
-    /// instantiated to call `vc_abi_version` and `vc_manifest`. In Safe Mode nothing is loaded
-    /// ([`Error::SafeMode`]).
+    /// instantiated to call `vc_abi_version` and `vc_manifest`. Bytes that hold a JSON object with
+    /// `"runtime": "js"` are a JavaScript plug-in ([`crate::js`]): its manifest is checked and its
+    /// script parsed, and none of it runs. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
+        crate::safe_mode::check()?;
+        if bytes.len() > limits.max_module_bytes {
+            return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
+        }
+        if bytes.trim_ascii_start().starts_with(b"{") {
+            let (manifest, script) = crate::js::read_bundle(bytes)?;
+            let manifest_text = serde_json::to_vec(&manifest).map_err(|e| Error::Manifest(e.to_string()))?;
+            let hash = crate::permissions::sha256_hex(bytes);
+            let size = bytes.len();
+            let bytes = KEEP_MODULES.load(Ordering::Relaxed).then(|| Arc::from(bytes));
+            let mut p = Plugin { manifest, manifest_text, code: Code::Js(script), limits, size, hash, source: None, serial: 0, bytes };
+            p.heavy_limits();
+            return Ok(p);
+        }
         let (mut p, imports) = Self::compile(bytes, limits)?;
         if p.read_section(bytes, &imports)? {
             return Ok(p);
@@ -452,6 +472,9 @@ impl Plugin {
     /// function, `vc_abi_version` and `vc_manifest` don't run. A module with a [`MANIFEST_SECTION`]
     /// custom section loads as [`Plugin::load`] loads it, from that section, and `manifest` is unused.
     pub fn load_checked(bytes: &[u8], limits: Limits, manifest: &[u8]) -> Result<Plugin> {
+        if bytes.trim_ascii_start().starts_with(b"{") {
+            return Self::load(bytes, limits);
+        }
         let (mut p, imports) = Self::compile(bytes, limits)?;
         if p.read_section(bytes, &imports)? {
             return Ok(p);
@@ -459,11 +482,12 @@ impl Plugin {
         if manifest.len() > MAX_MANIFEST_BYTES {
             return Err(Error::Manifest(format!("manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)")));
         }
-        exports_func(&p.module, "vc_abi_version", &[], &[ValType::I32])?;
-        exports_func(&p.module, "vc_manifest", &[], &[ValType::I64])?;
-        exports_func(&p.module, "vc_alloc", &[ValType::I32], &[ValType::I32])?;
-        exports_func(&p.module, "vc_run", &[ValType::I32; 4], &[ValType::I64])?;
-        if !matches!(p.module.get_export("memory"), Some(ExternType::Memory(_))) {
+        let Code::Wasm { module, .. } = &p.code else { unreachable!() };
+        exports_func(module, "vc_abi_version", &[], &[ValType::I32])?;
+        exports_func(module, "vc_manifest", &[], &[ValType::I64])?;
+        exports_func(module, "vc_alloc", &[ValType::I32], &[ValType::I32])?;
+        exports_func(module, "vc_run", &[ValType::I32; 4], &[ValType::I64])?;
+        if !matches!(module.get_export("memory"), Some(ExternType::Memory(_))) {
             return Err(Error::Abi("the module must export its linear memory as `memory`".into()));
         }
         p.read(manifest.to_vec(), &imports)?;
@@ -481,11 +505,13 @@ impl Plugin {
     /// ([`section_manifest`]) and checks the exports and tables a run needs, running none of the
     /// module's code; `bytes` is the module → false, with nothing read, when it has no such section.
     fn read_section(&mut self, bytes: &[u8], imports: &[&Import]) -> Result<bool> {
-        let Some((manifest, text)) = section_manifest(&self.module)? else {
+        let Code::Wasm { module, .. } = &self.code else { unreachable!() };
+        let Some((manifest, text)) = section_manifest(module)? else {
             return Ok(false);
         };
         self.take(manifest, text, imports)?;
-        check_exports(&self.module, self.limits.max_memory_bytes)?;
+        let Code::Wasm { module, .. } = &self.code else { unreachable!() };
+        check_exports(module, self.limits.max_memory_bytes)?;
         check_tables(bytes)?;
         Ok(true)
     }
@@ -493,6 +519,9 @@ impl Plugin {
     /// Takes `manifest`, parsed from JSON `text`, as the plug-in's: checks that it allows each host
     /// import of `imports`, and gives a heavy filter its larger budget.
     fn take(&mut self, manifest: Manifest, text: Vec<u8>, imports: &[&Import]) -> Result<()> {
+        if manifest.runtime != Runtime::Wasm {
+            return Err(Error::Manifest("a WebAssembly module's manifest leaves `runtime` out: \"js\" is for a JavaScript plug-in".into()));
+        }
         self.manifest = manifest;
         host::check_granted(&self.manifest, imports)?;
         // A heavy filter's runs get the larger budget the host allows for one, which the host
@@ -531,8 +560,7 @@ impl Plugin {
         let p = Plugin {
             manifest: Manifest::placeholder(),
             manifest_text: Vec::new(),
-            engine,
-            module,
+            code: Code::Wasm { engine, module },
             bytes: kept,
             limits,
             size: bytes.len(),
@@ -541,6 +569,28 @@ impl Plugin {
             serial: 0,
         };
         Ok((p, imports))
+    }
+
+    /// A heavy filter's runs get the larger budget the host allows for one, which the host lets the
+    /// user allow or refuse before installing it.
+    fn heavy_limits(&mut self) {
+        if self.manifest.budget == crate::Budget::Heavy {
+            self.limits.fuel_base = self.limits.fuel_base.max(self.limits.heavy_fuel);
+            self.limits.wall_time_ms = self.limits.wall_time_ms.max(self.limits.heavy_wall_time_ms);
+        }
+    }
+
+    /// What runs its code ([`Manifest::runtime`]).
+    pub fn runtime(&self) -> Runtime {
+        self.manifest.runtime
+    }
+
+    /// A JavaScript plug-in's script file name; `None` for a WebAssembly module.
+    pub fn script(&self) -> Option<&str> {
+        match &self.code {
+            Code::Js(script) => Some(&script.name),
+            Code::Wasm { .. } => None,
+        }
     }
 
     pub fn manifest(&self) -> &Manifest {
@@ -595,6 +645,7 @@ impl Plugin {
     /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
     /// module's start function fails, what it reported through the host imports goes to `report`.
     fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
+        let Code::Wasm { engine, module } = &self.code else { return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into())) };
         let limits = StoreLimitsBuilder::new()
             .memory_size(self.limits.max_memory_bytes)
             .memories(1)
@@ -602,13 +653,13 @@ impl Plugin {
             .table_elements(MAX_TABLE_ELEMENTS as usize)
             .instances(1)
             .build();
-        let mut store = Store::new(&self.engine, Host { limits, run });
+        let mut store = Store::new(engine, Host { limits, run });
         store.limiter(|h| &mut h.limits);
         // The start function (if any) runs on one slice of fuel: it runs before `call` can check
         // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
         store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
-        let linker = host::linker(&self.engine, granted);
-        let instance = match linker.instantiate_and_start(&mut store, &self.module) {
+        let linker = host::linker(engine, granted);
+        let instance = match linker.instantiate_and_start(&mut store, module) {
             Ok(instance) => instance,
             Err(e) => {
                 *report = std::mem::take(&mut store.data_mut().run.report);
@@ -792,6 +843,14 @@ impl Plugin {
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
         let mut report = Report::default();
+        if let Code::Js(script) = &self.code {
+            if calls {
+                return (None, Step::Done(Err(Error::Abi("a JavaScript plug-in makes no command calls".into())), report));
+            }
+            let call = crate::js::Call { input, params, limits, max_memory: self.limits.max_memory_bytes, deadline };
+            let result = crate::js::run(script, m, &call, run, &mut report);
+            return (None, Step::Done(result, report));
+        }
         let mut live = match self.instantiate(run, &m.permissions(), &mut report) {
             Ok(live) => live,
             Err(e) => return (None, Step::Done(Err(e), report)),

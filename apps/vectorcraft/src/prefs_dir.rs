@@ -66,6 +66,14 @@ pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Have `script.startup.run` run the scripts of the `Startup Scripts` folder. The folder is only
+/// read: the user makes it.
+pub fn attach_startup_scripts_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Startup Scripts") {
+        session.attach_startup_scripts_dir(dir);
+    }
+}
+
 /// Keep File Info's metadata templates in the `Metadata Templates` folder, which a saved template
 /// makes.
 pub fn attach_metadata_templates_dir(session: &mut vectorcraft_engine::Session) {

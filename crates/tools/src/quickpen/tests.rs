@@ -196,6 +196,34 @@ fn the_first_click_starts_a_path() {
     assert_eq!(t.cursor(&cx, pt(400.0, 400.0), Mods::default()), Cursor::Pen);
 }
 
+/// With no path being drawn, the cursor over a selected path shows what a press there does: an
+/// anchor is selected and moved, a selected anchor shows as one, and a segment moves. A press there
+/// waits for a drag or a release instead of starting a path.
+#[test]
+fn a_selected_paths_anchors_and_segments_show_the_edit_cursors() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = QuickPenTool::default();
+    assert_eq!(t.cursor(&cx, pt(100.0, 100.0), Mods::default()), Cursor::DirectAnchor);
+    assert_eq!(t.cursor(&cx, pt(150.0, 100.0), Mods::default()), Cursor::Move);
+    assert_eq!(t.cursor(&cx, pt(400.0, 400.0), Mods::default()), Cursor::Pen);
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 100.0)).is_empty());
+    assert!(t.busy());
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 130.0));
+    assert!(matches!(&a[0], Action::Exec(c, v) if c == "select.segments" && v["mode"] == "set"), "{a:?}");
+    assert!(matches!(&a[2], Action::Preview(c, v) if c == "path.moveAnchors" && v["dy"] == 30.0 && v["interpolate"] == true), "{a:?}");
+    assert_eq!(t.cursor(&cx, pt(150.0, 130.0), Mods::default()), Cursor::Move);
+    let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 130.0));
+    assert_eq!(up.last(), Some(&Action::Commit));
+    assert!(!t.busy());
+    s.anchors.insert(id, (0..4).map(|ai| (0, ai)).collect());
+    let cx = crate::testutil::cx(&d, &s, &p);
+    assert_eq!(t.cursor(&cx, pt(100.0, 100.0), Mods::default()), Cursor::DirectAnchorSelected);
+}
+
 /// The circle `arc_circle` gives is the one `append` draws the arc on, for sharp-corner arcs of
 /// less and more than a half circle, flipped, and continuous arcs; a line has none.
 #[test]

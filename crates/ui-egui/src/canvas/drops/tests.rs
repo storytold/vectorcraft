@@ -12,6 +12,7 @@ use vectorcraft_geom::Point;
 use super::{CarriedArt, Dropped, Payload, apply_drop};
 use crate::panel_drag::PanelDrag;
 use crate::panels::brushes::{BrushKey, BrushLibraries};
+use crate::panels::graphic_styles::StyleDrag;
 use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
 use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 use crate::{VectorcraftApp, canvas};
@@ -43,6 +44,36 @@ fn drop_at(app: &mut VectorcraftApp, payload: Payload, at: Point, op: DropOperat
 
 fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
+}
+
+#[test]
+fn a_foreign_graphic_style_drop_does_not_apply_a_style_with_the_same_name() {
+    let (mut app, ctx) = app_with_canvas();
+    let add = |app: &mut VectorcraftApp, x| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    add(&mut app, 20);
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Shared name"})).unwrap();
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    add(&mut app, 20);
+    app.run("paint.setFill", json!({"color": "#ed1c24"})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Shared name"})).unwrap();
+    let target = add(&mut app, 200);
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+    let before = fill(&app);
+    let history = undo_len(&app);
+    let at = Point::new(250.0, 70.0);
+    let payload = Payload::Style(StyleDrag { document, name: "Shared name".into() });
+    for operation in [DropOperation::Move, DropOperation::Copy] {
+        drop_at(&mut app, payload.clone(), at, operation).unwrap();
+        assert_eq!(fill(&app), before);
+        assert_eq!(undo_len(&app), history, "neither kind of foreign drop makes an edit");
+    }
 }
 
 fn drop_dithered_rgb_gradient(app: &mut VectorcraftApp, fill: bool) -> NodeId {
@@ -102,12 +133,14 @@ fn a_drop_runs_the_effect_of_its_payload() {
     drop_at(&mut app, Payload::Panel(swatch), on_b, Move).unwrap();
     assert_eq!(app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint(), red);
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "the selection stays");
-    let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
-    drop_at(&mut app, Payload::Style(name.clone()), on_b, Move).unwrap();
+    let st = app.session.active().unwrap();
+    let name = st.doc.graphic_styles[2].name.clone();
+    let style = Payload::Style(StyleDrag { document: st.uid, name: name.clone() });
+    drop_at(&mut app, style.clone(), on_b, Move).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
     let items = st.doc.node(b).unwrap().appearance.items.len();
-    drop_at(&mut app, Payload::Style(name.clone()), on_b, Copy).unwrap();
+    drop_at(&mut app, style, on_b, Copy).unwrap();
     let added = app.session.active().unwrap().doc.node(b).unwrap();
     assert!(added.appearance.items.len() > items && added.extras().graphic_style.is_none(), "with Alt the style goes on top, unlinked");
     let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint();

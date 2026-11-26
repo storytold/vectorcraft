@@ -460,7 +460,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             Action::Import => {
                 let request = PickRequest::open("document").filter("Text", &["txt", "tsv", "csv"]);
                 let owner = import_owner.clone();
-                file_asks::ask(app, request, Owner::Document, move |app, picked| import(app, &owner, picked));
+                let current = import_owner.clone();
+                file_asks::ask_while(
+                    app,
+                    request,
+                    Owner::Document,
+                    move |app| {
+                        app.dialogs().is_some_and(|dialogs| {
+                            dialogs.with(|host| host.get::<GraphDataDialog>().is_some_and(|d| Arc::ptr_eq(&d.import_owner, &current)))
+                        })
+                    },
+                    move |app, picked| import(app, &owner, picked),
+                );
             }
             Action::Revert => match graph_grid(app, graph) {
                 Ok(grid) => {
@@ -996,6 +1007,31 @@ mod tests {
         assert!(files.answer(Picked::Contents(vec![("second.txt".into(), b"\timported\nQ2\t8".to_vec())])).is_some());
         h.run_steps(4);
         assert_eq!(series(&h), "imported");
+    }
+
+    #[test]
+    fn graph_data_import_does_not_reactivate_the_document_of_a_closed_sheet() {
+        let (mut app, _) = app_with(",first\nQ1,1", "column");
+        let picker = crate::tests::picks::scripted(&mut app);
+        let ctx = app.ui_ctx.as_ref().unwrap().clone();
+        let first = app.session.active().unwrap().uid;
+        open(&mut app).unwrap();
+        edit(&app, |d| d.actions.push(Action::Import));
+        pump(&mut app, &ctx);
+        assert_eq!(picker.requests().len(), 1);
+
+        app.dialogs().unwrap().with(|host| host.cancel::<GraphDataDialog>(&ctx));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("graph.create", json!({"type": "column", "x": 20, "y": 20, "width": 100, "height": 100, "csv": ",second\nQ2,2"})).unwrap();
+        let second = app.session.active().unwrap().uid;
+        assert_ne!(first, second);
+        assert_eq!(app.session.documents().len(), 2);
+        open(&mut app).unwrap();
+
+        picker.answer_contents(&[("first.txt", b"\tstale\nQ1\t7")]);
+        file_asks::poll(&mut app);
+        assert_eq!(app.session.active().unwrap().uid, second);
+        assert_eq!(read(&app, |d| cell_of(&d.sheet.grid, 0, 1)), "second");
     }
 
     #[test]

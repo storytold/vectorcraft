@@ -8797,6 +8797,7 @@ dependencies = [
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
+ "vectorcraft-js",
  "wasmi",
  "wasmparser 0.228.0",
  "wat",
@@ -8941,6 +8942,7 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
+ "vectorcraft-tools",
 ]
 
 [[package]]
