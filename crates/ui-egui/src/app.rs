@@ -232,6 +232,7 @@ impl VectorcraftApp {
             shortcuts_dialog: None,
             shortcut_overrides: Default::default(),
             told: Default::default(),
+            missing_font_edit_token: None,
             held: Default::default(),
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
@@ -445,6 +446,11 @@ impl VectorcraftApp {
         let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // With no document open too, so closing the last one stops the host reading the wheel. A
+        // held press, whose previews change the document each frame, keeps what it was told.
+        if self.canvas.grab.is_none() {
+            crate::stylus::sync_wheel_use(self);
+        }
         // A document that moved between the main window and a floating OS window, or opened, takes
         // the density of the display that shows it.
         self.settle_screen_ppi_if_changed();
@@ -544,6 +550,9 @@ impl VectorcraftApp {
         if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+        // A `prefs.reset` run in this frame outside `Self::run` (a script's, say): the pass that follows draws the
+        // reset rows.
+        prefs_dialog::apply_prefs_resets(self);
     }
 
     /// The canvas panel's body: the document tabs, then the canvas (a pane for each document while

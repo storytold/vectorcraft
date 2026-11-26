@@ -389,7 +389,14 @@ fn grid_colors_row(setup: DocSetup) -> Param {
             picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
             Row::new().show(ui, |ui, _| {
                 for (i, color) in resolved.iter().enumerate() {
-                    let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+                    let number = (i + 1).to_string();
+                    let template = tl!("Grid Colors: {number}");
+                    let name = if template == "Grid Colors: {number}" {
+                        // Keep the translated prefix for catalogs that have yet to add the complete label.
+                        format!("{} {number}", tl!("Grid Colors:"))
+                    } else {
+                        crate::i18n::fmt(template, &[("number", &number)])
+                    };
                     let [r, g, b, _] = color.to_rgba8(1.0);
                     let srgb = box_color(color);
                     wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
