@@ -9,22 +9,22 @@ use craft::ui::tabs::{DocumentTab, DocumentTabs, DocumentTabsEvent};
 
 /// [`view_tab_title`] for a document with one view.
 #[cfg(test)]
-pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool, display_print_size: bool) -> String {
-    view_tab_title(d, None, true, zoom, outline, display_print_size)
+pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool, print: Option<f64>) -> String {
+    view_tab_title(d, None, true, zoom, outline, print)
 }
 
 /// A document tab's title: "Name* @ 66.67 % (RGB/Preview)", or while an opacity mask is edited
 /// "Name* @ 66.67 % (<Opacity Mask>/Opacity Mask)". For a view of a document with more than one
 /// view, the view's `number` follows the name: "Name:2* @ 66.67 % (RGB/Preview)". The `*` of unsaved changes shows
 /// when `marked`; a document tab shows its own modified mark instead.
-fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: bool, zoom: f64, outline: bool, display_print_size: bool) -> String {
+fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: bool, zoom: f64, outline: bool, print: Option<f64>) -> String {
     let mode = if d.doc.mask_edit.is_some() {
         format!("<{0}>/{0}", tl!("Opacity Mask"))
     } else {
         let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
         format!("{color}/{}", if outline { tl!("Outline") } else { tl!("Preview") })
     };
-    format!("{} @ {} ({mode})", view_tab_name(d, number, marked), zoom_label(zoom, display_print_size).replace('%', " %"))
+    format!("{} @ {} ({mode})", view_tab_name(d, number, marked), zoom_label(zoom, print).replace('%', " %"))
 }
 
 /// The start of [`view_tab_title`], which an inactive document tab shows alone (#8582): "Name*",
@@ -39,7 +39,7 @@ fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: 
 fn window_tab_title(app: &VectorcraftApp, w: crate::doc_windows::Win, d: &vectorcraft_engine::DocState, marked: bool) -> String {
     let view = crate::doc_windows::view(app, w);
     let zoom = view.map_or(1.0, |v| v.zoom);
-    view_tab_title(d, crate::doc_windows::label(app, w), marked, zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
+    view_tab_title(d, crate::doc_windows::label(app, w), marked, zoom, view.is_some_and(|v| v.outline), app.print_ppi_of(Some(w)))
 }
 
 /// The title of window `w`'s tab and floating window ([`crate::doc_windows`]).

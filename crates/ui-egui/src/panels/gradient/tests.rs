@@ -38,6 +38,34 @@ fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
     assert_eq!(g.freeform.map(|f| f.points[1].color), Some(orange));
 }
 
+/// While the Shape Builder paints with a freeform fill, which lies on no object, the panel shows
+/// that fill's stops, and a swatch color recolors the selected stop instead of a point. Lines
+/// mode gives the fill a freeform state without points, which the stops edit keeps.
+#[test]
+fn the_shape_builders_freeform_fill_is_edited_by_its_stops() {
+    let mut app = app(json!({"color": "#000000"}));
+    app.select_tool("shapeBuilder");
+    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform", "mode": "lines"})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.editGradient", json!({"stroke": false, "stops": stops})).unwrap();
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.freeform.as_ref().map(|f| (f.points.len(), f.mode)), Some((0, FreeformMode::Lines)));
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0), "the stops edit keeps the supplied stops");
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    let orange = Color::rgb8(255, 128, 0);
+    assert!(recolor_selected(&mut app, orange, &json!({})), "the selected stop takes the color");
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.gradient.kind, GradientKind::Freeform);
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert_eq!(g.gradient.stops[1].color, orange);
+    assert_eq!(g.freeform.map(|f| f.mode), Some(FreeformMode::Lines));
+    let rig = Rig::new(app);
+    for label in ["Draw", "Location", "Opacity", "Delete Stop"] {
+        let _ = rig.target(label);
+    }
+    assert!(rig.fixture.by_label("Delete Point").is_none(), "no point controls for the tool's fill");
+}
+
 /// In a CMYK document Add to Swatches and Save to Swatches keep the gradient's RGB stops RGB.
 #[test]
 fn a_gradient_saved_as_a_swatch_keeps_its_stops_models_in_a_cmyk_document() {
@@ -334,4 +362,83 @@ fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
     assert_eq!(app.session.tool_id(), "gradient");
     assert_eq!(current(&app), paint, "the stop keeps its color");
     assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
+}
+
+/// The paints of the selected object's appearance rows, in stack order.
+fn row_paints(app: &VectorcraftApp) -> Vec<Paint> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().map(|i| i.paint().clone()).collect()
+}
+
+/// The indices of the selected object's fill (`fill`) or stroke rows.
+fn rows_of_kind(app: &VectorcraftApp, fill: bool) -> Vec<usize> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().enumerate().filter(|(_, i)| i.is_fill() == fill).map(|(n, _)| n).collect()
+}
+
+/// A selected rectangle with a gradient fill and a gradient stroke.
+fn gradient_fill_and_stroke() -> VectorcraftApp {
+    let mut app = app(json!({"gradient": {}}));
+    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
+    app
+}
+
+/// With appearance row `active` active and the Fill (`front_fill`) or Stroke proxy in front,
+/// chooses Soft Spectrum from the Presets picker and checks that row `target` takes the preset
+/// while every other row keeps its paint.
+fn assert_preset_goes_to(mut app: VectorcraftApp, active: usize, front_fill: bool, target: usize) {
+    let soft = app.session.gradient_preset("Soft Spectrum").unwrap().gradient.stops;
+    app.run("appearance.setActiveItem", json!({ "index": active })).unwrap();
+    app.session.fill_active = front_fill;
+    let before = row_paints(&app);
+    let mut rig = Rig::new(app);
+    assert_eq!(rig.app().session.appearance_item(), Some(active), "the row stays active");
+    rig.click("Presets");
+    rig.click("Soft Spectrum");
+    let after = row_paints(&rig.app());
+    assert_eq!(after.len(), before.len());
+    for (n, (was, now)) in before.iter().zip(&after).enumerate() {
+        if n == target {
+            assert!(matches!(now, Paint::Gradient(g) if g.gradient.stops == soft), "row {n} takes the preset: {now:?}");
+        } else {
+            assert_eq!(now, was, "row {n} keeps its paint");
+        }
+    }
+}
+
+/// With a fill row active and the Stroke proxy in front, the Presets picker applies the preset to
+/// the stroke.
+#[test]
+fn the_presets_menu_applies_to_the_stroke_in_front_over_an_active_fill_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, fill_row, false, stroke_row);
+}
+
+/// With a stroke row active and the Fill proxy in front, the Presets picker applies the preset to
+/// the fill.
+#[test]
+fn the_presets_menu_applies_to_the_fill_in_front_over_an_active_stroke_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, stroke_row, true, fill_row);
+}
+
+/// With the proxy of the active row's kind in front, the Presets picker applies the preset to the
+/// active row, not to the topmost row of that kind.
+#[test]
+fn the_presets_menu_applies_to_the_active_row_of_the_kind_in_front() {
+    for fill in [true, false] {
+        let mut app = gradient_fill_and_stroke();
+        app.run(if fill { "appearance.addFill" } else { "appearance.addStroke" }, json!({})).unwrap();
+        // Without an active row a solid goes to the topmost row of the kind; the other stays a gradient.
+        app.run(if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"color": "#ff0000", "focus": false})).unwrap();
+        let paints = row_paints(&app);
+        let rows = rows_of_kind(&app, fill);
+        assert_eq!(rows.len(), 2);
+        let lower = rows.into_iter().find(|&n| matches!(paints[n], Paint::Gradient(_))).expect("a gradient row under the solid one");
+        assert_preset_goes_to(app, lower, fill, lower);
+    }
 }

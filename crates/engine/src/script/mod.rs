@@ -51,6 +51,7 @@
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
+pub mod dom;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -799,6 +800,8 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
+    /// The run's state of the script object model (`app`).
+    dom: dom::State,
     /// The documents open when the run began as the person last left them, each with its own file
     /// and the file it was read from ([`crate::DocState::as_person_left`],
     /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
@@ -1072,7 +1075,7 @@ impl Host {
         }
         let bridge = self.bridge.get().saturating_add(bytes);
         self.bridge.set(bridge);
-        if bridge > MAX_BRIDGE_BYTES {
+        if bridge > bridge_bytes() {
             return Err(self.over(OVER_BRIDGE));
         }
         let n = self.calls_this_slice.get() + 1;
@@ -1263,7 +1266,8 @@ fn note_ids(s: &mut Session) {
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
     let mutating = waits_for_tool_edit(id);
-    let save = mutating.then(|| Savepoint::take(s, id));
+    // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
+    let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
@@ -1332,6 +1336,20 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     let bytes = args.iter().map(data_size).sum();
     host.charge_call(bytes)?;
     bump(&host.counts.vc_run);
+    command(host, &id, &params)
+}
+
+/// Runs command `id` for the script as `vc.run` does, its call already charged: it joins the run's
+/// transaction, its growth is counted, and a command that fails, or whose result cannot cross to
+/// the script, is put back. → its result.
+fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    command_value(host, id, params).map(|(data, _)| data)
+}
+
+/// [`command`], with the command's result as it gave it as well as the script's copy of it.
+fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    let id = id.to_string();
+    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
     let r = {
@@ -1367,7 +1385,7 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
-    crossed
+    crossed.map(|data| (data, value))
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
@@ -1603,10 +1621,10 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
     let message = &e.message;
-    let names_host_object =
-        message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
+    let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
+    let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
     if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
@@ -2009,7 +2027,7 @@ impl Session {
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
         // code the way the script does.
         let es2015 = include::es2015_script(request.file.as_deref());
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
@@ -2084,6 +2102,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
+            dom: dom::State::default(),
             run_docs: RefCell::new(
                 self.docs
                     .iter()
@@ -2130,6 +2149,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
@@ -2537,6 +2557,15 @@ fn growth_objects() -> u64 {
     GROWTH_OBJECTS
 }
 
+/// The data a run may pass to and from commands.
+fn bridge_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_BRIDGE_BYTES.with(Cell::get) {
+        return n;
+    }
+    MAX_BRIDGE_BYTES
+}
+
 /// The limits of a command's result on its way to the script.
 fn result_limits() -> DataLimits {
     #[cfg(test)]
@@ -2554,6 +2583,8 @@ thread_local! {
     pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
     /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the data a run may pass to and from commands in place of [`MAX_BRIDGE_BYTES`].
+    pub(crate) static TEST_BRIDGE_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].

@@ -1,8 +1,9 @@
 //! The Save for Web colour table model: the edits the table's buttons and menu make, applied to the
 //! engine's `colorTable` value (`webexport::ColorTable`), and the marks the table shows from it.
 //!
-//! The value is user input (automation sets it), so every read skips what is not a `#rrggbb`
-//! string. Lists hold lowercase `#rrggbb` and colours compare case-insensitively.
+//! The value is user input (automation sets it), so every read skips what is not a colour.
+//! Entries compare as the colours they name, however each is written (`#F00`, `#ff0000`), as the
+//! engine reads them; the edits write lowercase `#rrggbb`.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::webexport;
@@ -15,14 +16,30 @@ fn hex(c: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// The colour a `#rrggbb` string names.
+/// The colour `s` names, read as the engine reads the table's colours: `None` for text that is not
+/// a colour and for a spelling with alpha (four or eight hex digits).
 fn parse(s: &str) -> Option<[u8; 3]> {
-    let digits = s.strip_prefix('#')?;
-    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+    let t = s.trim();
+    let digits = t.strip_prefix('#').unwrap_or(t);
+    if matches!(digits.len(), 4 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    let channel = |i: usize| u8::from_str_radix(digits.get(i..i + 2)?, 16).ok();
-    Some([channel(0)?, channel(2)?, channel(4)?])
+    let [r, g, b, _] = vectorcraft_color::Color::from_hex(t)?.to_rgba8(1.0);
+    Some([r, g, b])
+}
+
+/// Whether `a` and `b` name one colour, however each is written; text that names no colour matches
+/// only the same text in any case.
+fn same(a: &str, b: &str) -> bool {
+    match (parse(a), parse(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => a.eq_ignore_ascii_case(b),
+    }
+}
+
+/// Whether `list` holds an entry that names `color`.
+fn holds(list: &[String], color: &str) -> bool {
+    list.iter().any(|c| same(c, color))
 }
 
 /// The strings of the table's list `key`, lowercase.
@@ -50,30 +67,31 @@ fn toggle(table: &mut Value, key: &str, colors: &[String]) {
         return;
     }
     let mut v = list(table, key);
-    if colors.iter().all(|c| v.contains(c)) {
-        v.retain(|c| !colors.contains(c));
+    if colors.iter().all(|c| holds(&v, c)) {
+        v.retain(|c| !holds(colors, c));
     } else {
-        let missing: Vec<String> = colors.iter().filter(|c| !v.contains(c)).cloned().collect();
+        let missing: Vec<String> = colors.iter().filter(|c| !holds(&v, c)).cloned().collect();
         v.extend(missing);
     }
     set_table(table, key, json!(v));
 }
 
-/// Take `colors` out of the table's list `key`; the list is left alone when none is in it.
+/// Take `colors` out of the table's list `key` (every entry that names one of them); the list is
+/// left alone when none is in it.
 fn remove(table: &mut Value, key: &str, colors: &[String]) {
     let mut v = list(table, key);
     let before = v.len();
-    v.retain(|c| !colors.contains(c));
+    v.retain(|c| !holds(colors, c));
     if v.len() != before {
         set_table(table, key, json!(v));
     }
 }
 
-/// Take the shift by hand of the source colour `source` away.
+/// Take the shift by hand of the source colour `source` away: every key that names that colour.
 fn unshift(table: &mut Value, source: &str) {
     let mut map = shifts(table);
     let before = map.len();
-    map.retain(|k, _| !k.eq_ignore_ascii_case(source));
+    map.retain(|k, _| !same(k, source));
     if map.len() != before {
         set_table(table, "shifted", Value::Object(map));
     }
@@ -111,7 +129,7 @@ pub(crate) fn apply(table: &mut Value, edit: &ColorTableEdit, colors: &[[u8; 3]]
         // first selected colour is shifted to.
         ColorTableEdit::Shift(to) => {
             if let Some(&from) = colors.first().filter(|c| shown.contains(c)) {
-                shift(table, from, *to);
+                return shift(table, from, *to);
             }
             return Ok(());
         }
@@ -130,12 +148,13 @@ pub(crate) fn apply(table: &mut Value, edit: &ColorTableEdit, colors: &[[u8; 3]]
     match edit {
         ColorTableEdit::Lock => {
             let by_hand = shifts(table);
-            let free: Vec<String> = picked.into_iter().filter(|c| !by_hand.keys().any(|k| k.eq_ignore_ascii_case(c))).collect();
+            let free: Vec<String> = picked.into_iter().filter(|c| !by_hand.keys().any(|k| same(k, c))).collect();
             toggle(table, "locked", &free);
         }
         ColorTableEdit::Transparent => toggle(table, "transparent", &picked),
         ColorTableEdit::WebShift => {
-            let adds = !picked.iter().all(|c| list(table, "webShift").contains(c));
+            let web = list(table, "webShift");
+            let adds = !picked.iter().all(|c| holds(&web, c));
             toggle(table, "webShift", &picked);
             if adds {
                 picked.iter().for_each(|c| unshift(table, c));
@@ -157,12 +176,12 @@ fn delete(table: &mut Value, picked: &[String], shown: &[[u8; 3]]) -> Result<(),
     }
     let mut deleted = list(table, "deleted");
     for c in picked {
-        if !deleted.contains(c) {
+        if !holds(&deleted, c) {
             deleted.push(c.clone());
         }
     }
-    let clear: Vec<String> = list(table, "transparent").into_iter().filter(|c| !picked.contains(c)).collect();
-    if custom.iter().all(|c| deleted.contains(c) || clear.contains(c)) {
+    let clear: Vec<String> = list(table, "transparent").into_iter().filter(|c| !holds(picked, c)).collect();
+    if custom.iter().all(|c| holds(&deleted, c) || holds(&clear, c)) {
         return Err(webexport::KEEP_ONE.into());
     }
     for key in ["locked", "transparent", "webShift"] {
@@ -177,16 +196,44 @@ fn delete(table: &mut Value, picked: &[String], shown: &[[u8; 3]]) -> Result<(),
 }
 
 /// Shift the source colour `from` to `to`, wherever it is in the image; it is no longer
-/// web-shifted. Shifting a colour to itself takes its shift away.
-pub(crate) fn shift(table: &mut Value, from: [u8; 3], to: [u8; 3]) {
+/// web-shifted. Shifting a colour to itself takes its shift away. A shift that would leave more
+/// than 256 colours shifted is refused with the engine's limit error, and nothing changes. Entries the
+/// engine drops (a colour shifted to itself, a deleted colour) do not count, and a new shift writes
+/// the map without them.
+pub(crate) fn shift(table: &mut Value, from: [u8; 3], to: [u8; 3]) -> Result<(), String> {
     let (source, to) = (hex(from), hex(to));
+    let deleted: Vec<[u8; 3]> = list(table, "deleted").iter().filter_map(|c| parse(c)).collect();
+    let map = shifts(table);
+    // Entries are dropped only from a map the engine accepts (at most 256 entries, every key and
+    // value a colour, no two keys naming one colour); any other map is kept whole for the engine to
+    // refuse.
+    let mut keys: Vec<[u8; 3]> = Vec::new();
+    let valid = map.len() <= webexport::MAX_TABLE
+        && map.iter().all(|(k, v)| match (parse(k), v.as_str().and_then(parse)) {
+            (Some(k), Some(_)) if !keys.contains(&k) => {
+                keys.push(k);
+                true
+            }
+            _ => false,
+        });
+    let live = |k: &str, v: &Value| {
+        let (true, Some(key), Some(to)) = (valid, parse(k), v.as_str().and_then(parse)) else { return true };
+        to != key && !deleted.contains(&key)
+    };
+    let count = map.iter().filter(|(k, v)| live(k, v)).count();
+    let held = usize::from(map.iter().any(|(k, v)| live(k, v) && same(k, &source)));
+    if to != source && count - held >= webexport::MAX_TABLE {
+        return Err(webexport::too_many("shifted"));
+    }
     unshift(table, &source);
     if to != source {
         let mut map = shifts(table);
+        map.retain(|k, v| live(k, v));
         map.insert(source.clone(), json!(to));
         set_table(table, "shifted", Value::Object(map));
     }
     remove(table, "webShift", &[source]);
+    Ok(())
 }
 
 /// Restore Generated Table: no deleted colours and no fixed palette; the reduction makes the
@@ -197,9 +244,17 @@ pub(crate) fn restore(table: &mut Value) {
 }
 
 /// What the table shows of `table`: its locked, transparent and shifted colours. An entry that is
-/// not a colour is skipped.
+/// not a colour is skipped, and a colour written more than once in a list is listed once.
 pub(crate) fn marks(table: &Value) -> TableMarks {
-    let colors = |key: &str| list(table, key).iter().filter_map(|c| parse(c)).collect();
+    let colors = |key: &str| {
+        let mut out: Vec<[u8; 3]> = Vec::new();
+        for c in list(table, key).iter().filter_map(|c| parse(c)) {
+            if !out.contains(&c) {
+                out.push(c);
+            }
+        }
+        out
+    };
     let shifted = shifts(table).iter().filter_map(|(k, v)| Some((parse(k)?, parse(v.as_str()?)?))).collect();
     // PLAN: TableMarks lacks `web_shifted` (ex.W9 request); the Web Shift/Unshift label needs it.
     let mut marks = TableMarks::default();

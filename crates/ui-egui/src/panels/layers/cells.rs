@@ -4,7 +4,8 @@
 //!   ([`rows::target_click`](super::rows::target_click)); dragging it carries the appearance
 //!   ([`PanelDrag::Appearance`]) onto another row's circle (Alt copies it) or the trash. A circle
 //!   lights up while another row's appearance is held over it.
-//! - The selection square selects the row's art (Shift adds or removes); a row whose art is
+//! - The selection square selects the row's art, with the modifier rules of
+//!   [`rows::art_click`](super::rows::art_click) (Shift selects a range of rows); a row whose art is
 //!   selected shows it in its layer's colour, a row holding selected art a small one, and dragging
 //!   either onto another row moves the selected art there (Alt copies it).
 //!
@@ -24,7 +25,7 @@ use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2, vec2};
 
 use super::model::{DocLayers, RowId};
 use super::rows::{TARGET_RADIUS, has_styled_target, shows_targeted, target_marks};
-use super::{NodeId, Value, json};
+use super::{Node, NodeId, Value, json};
 use crate::panel_drag::PanelDrag;
 
 /// The side of the square of a row whose art is selected.
@@ -42,8 +43,9 @@ pub(super) struct ArtDrag(pub(super) Vec<NodeId>);
 enum CellPick {
     /// The circle was clicked with these modifiers.
     Target(Mods),
-    /// The square was clicked: select the row's art (Shift adds or removes).
-    SelectArt { add: bool },
+    /// The square was clicked with these modifiers: select the row's art, by the rules of
+    /// [`rows::art_click`](super::rows::art_click).
+    SelectArt(Mods),
     /// Another row's appearance was dropped on the circle (Alt copies it).
     TakeAppearance { source: NodeId, copy: bool },
 }
@@ -193,8 +195,9 @@ impl Component for TargetCircle {
     }
 }
 
-/// A row's selection square: filled in its layer's colour while the row's art is selected, a small
-/// square while the row holds selected art. Without `id` it is only a mark (a ruler guide's row, a
+/// A row's selection square: filled in its layer's colour while the row's art is selected (for a
+/// layer or sublayer, all of its visible, unlocked art), a small square while the row holds
+/// selected art. Without `id` it is only a mark (a ruler guide's row, a
 /// spine's row) and takes no press.
 #[derive(Component, Props)]
 #[component(sample = SelectionSquare::sample)]
@@ -247,7 +250,7 @@ impl Component for SelectionSquare {
             return;
         }
         if let Some(activation) = cx.activation() {
-            self.pick = Some(CellPick::SelectArt { add: activation.mods.shift });
+            self.pick = Some(CellPick::SelectArt(activation.mods));
         }
         if (self.selected || self.holds) && !self.art.is_empty() && primary_drag_start(cx) {
             cx.start_drag(ArtDrag(self.art.clone()), DragPreview::None);
@@ -346,6 +349,19 @@ impl Component for Cells {
     }
 }
 
+/// The marks of node row `n`'s selection square in the panel over `tree`: whether it shows the
+/// full-sized square (the row is selected, or it is a layer or sublayer whose visible, unlocked art
+/// is all selected), and whether it shows the small one (it holds selected art otherwise).
+pub(super) fn square_marks(tree: &DocLayers<'_>, n: &Node) -> (bool, bool) {
+    let full = tree.is_selected(n.id) || tree.is_full(n.id);
+    let holds = !full && {
+        let mut any = false;
+        n.walk(&mut |c| any |= c.id != n.id && tree.is_selected(c.id));
+        any
+    };
+    (full, holds)
+}
+
 /// The cells of row `row` (shown as `info`) of the panel over `tree`.
 pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cells {
     let st = tree.state();
@@ -355,15 +371,11 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
         RowId::Node(id) => {
             let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(None, false, false, color, vec![])) };
             let is_sel = selected(id);
-            let holds = !is_sel && {
-                let mut any = false;
-                n.walk(&mut |c| any |= c.id != id && selected(c.id));
-                any
-            };
-            let art = if is_sel || holds { st.selection.objects.clone() } else { vec![] };
+            let (full, holds) = square_marks(tree, n);
+            let art = if full || holds { st.selection.objects.clone() } else { vec![] };
             let circle = TargetCircle::new(id, shows_targeted(tree, n, is_sel), has_styled_target(n))
                 .label(crate::i18n::fmt(tl!("Target {row}"), &[("row", info.name.as_str())]));
-            let square = SelectionSquare::new(Some(id), is_sel, holds, color, art)
+            let square = SelectionSquare::new(Some(id), full, holds, color, art)
                 .label(crate::i18n::fmt(tl!("Select art of {row}"), &[("row", info.name.as_str())]));
             Cells::new(Some(circle), square)
         }
@@ -372,14 +384,21 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
     }
 }
 
-/// What row `row`'s cells reported: the commands `layer.selectAll` and `appearance.transfer` on the row's node, added to
-/// `out`, and a click on its target circle with its modifiers, which the panel resolves once it knows its rows.
-pub(super) fn output(out: &mut Vec<(String, Value)>, target: &mut Option<(NodeId, Mods)>, row: &RowId, shown: CellsOutput) {
+/// What row `row`'s cells reported: the command `appearance.transfer` on the row's node, added to `out`, and a click on
+/// its target circle (`target`) or its selection square (`art`) with its modifiers, which the panel resolves once it
+/// knows its rows.
+pub(super) fn output(
+    out: &mut Vec<(String, Value)>,
+    target: &mut Option<(NodeId, Mods)>,
+    art: &mut Option<(NodeId, Mods)>,
+    row: &RowId,
+    shown: CellsOutput,
+) {
     let RowId::Node(id) = *row else { return };
     for pick in shown.picks {
         match pick {
             CellPick::Target(mods) => *target = Some((id, mods)),
-            CellPick::SelectArt { add } => out.push(("layer.selectAll".to_string(), json!({"id": id.0, "add": add}))),
+            CellPick::SelectArt(mods) => *art = Some((id, mods)),
             CellPick::TakeAppearance { source, copy } => {
                 out.push(("appearance.transfer".to_string(), json!({"source": source.0, "target": id.0, "copy": copy})));
             }

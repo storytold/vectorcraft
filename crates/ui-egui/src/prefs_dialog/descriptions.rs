@@ -28,7 +28,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "usePreviewBounds",
         "Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.",
     ),
-    ("displayPrintSize", "At 100% zoom, one inch of the document takes 96 screen points instead of 72."),
+    (
+        "displayPrintSize",
+        "At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.",
+    ),
     ("doubleClickToIsolate", "Double-clicking a group, path or image with the Selection tool opens it in isolation mode."),
     (
         "transformPatternTiles",
@@ -42,6 +45,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
     ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("deleteKeepsPathsJoined", "Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there."),
+    ("doubleClickAddsAnchorPoints", "Double-clicking a path segment with the Direct Selection tool adds an anchor point there."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
     ("holdShortcuts", "Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut."),
     ("keyHoldDelay", "How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut."),

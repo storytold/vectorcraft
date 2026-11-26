@@ -56,6 +56,7 @@ pub mod layout_migration;
 pub mod menus;
 pub mod opening;
 mod original_editor;
+pub mod os_window;
 #[doc(hidden)]
 pub use original_editor::Choice as OriginalEditorChoice;
 mod page_glyphs;
@@ -126,7 +127,7 @@ pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 #[cfg(test)]
 pub(crate) use services::browsable_url;
-pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, Services, WriteFn};
+pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, ScreenDensity, ScreenPpi, Services, WriteFn};
 pub use ui_fonts::ui_fonts;
 
 pub struct VectorcraftApp {
@@ -162,6 +163,8 @@ pub struct VectorcraftApp {
     pub last_effect: Option<(String, serde_json::Value)>,
     /// Last successful destructive Pathfinder operation, repeated on the current selection.
     pub last_pathfinder: Option<String>,
+    /// The parameters each object filter plug-in last ran with (Object › Plug-ins › Apply Last Filter).
+    pub last_filters: dialogs::plugin::LastFilters,
     /// The Character panel field that takes the keyboard focus when the panel next draws it
     /// ([`panels::character::highlight`]).
     pub(crate) character_focus: Option<panels::character::Field>,

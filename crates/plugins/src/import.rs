@@ -7,6 +7,10 @@
 //! sorts first opens it ([`for_extension`]). File › Open With and `document.open {importer}` pick an
 //! importer by its format id (`plugin.<id>`), also for an extension a built-in format reads.
 //!
+//! An importer whose manifest sets `place` also reads its files for File › Place (`file.place`),
+//! by the same rules among the importers that set it ([`placing`]): its objects become one group in
+//! the open document, and it is told so in `_context.mode` ([`Mode::Place`]).
+//!
 //! The host hands the importer the file's bytes as they are, at most [`MAX_INPUT_BYTES`] of them,
 //! and reads back the objects of the new document in the same form filters return them
 //! ([`crate::objects`]): `{"objects": [...], "warnings"?: ["…"]}`, or `{"error": "…"}` to decline.
@@ -61,6 +65,38 @@ pub fn for_extension(ext: &str) -> Vec<Arc<Plugin>> {
     installed().into_iter().filter(|p| p.manifest().extensions.contains(&ext)).collect()
 }
 
+/// The installed importers whose manifests set `place` and that list extension `ext` (any case,
+/// leading dot allowed), by plug-in id: the first is the one File › Place uses.
+pub fn placing(ext: &str) -> Vec<Arc<Plugin>> {
+    for_extension(ext).into_iter().filter(|p| p.manifest().place).collect()
+}
+
+/// The error of importer `m`, whose manifest doesn't set `place`, asked to place a file.
+pub fn not_placing(m: &crate::Manifest) -> Error {
+    let shown = crate::permissions::display_text(&m.name, crate::permissions::MAX_SHOWN_NAME);
+    Error::Params(format!("“{shown}” opens files but doesn't place them: its manifest doesn't set `place`"))
+}
+
+/// What an import is for, which the importer is told as `_context.mode`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    /// File › Open: the objects become a new document (`"import"`).
+    Import,
+    /// File › Place: the objects become one group in the open document (`"place"`). Only an
+    /// importer whose manifest sets `place` runs for it.
+    Place,
+}
+
+impl Mode {
+    /// Its name in `_context.mode`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Import => "import",
+            Mode::Place => "place",
+        }
+    }
+}
+
 /// What an importer returned.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Imported {
@@ -93,15 +129,24 @@ pub fn limits(plugin: &Plugin) -> Limits {
 /// Runs importer `plugin` on `file`, the bytes of the file being opened, with `params` (checked
 /// against its manifest: missing ones take their defaults) for the file `source`.
 pub fn run(plugin: &Plugin, file: &[u8], params: &Value, source: Source) -> Result<Imported> {
+    run_as(plugin, file, params, source, Mode::Import)
+}
+
+/// [`run`] for `mode`. [`Mode::Place`] is refused for an importer whose manifest doesn't set `place`
+/// ([`not_placing`]), before it runs.
+pub fn run_as(plugin: &Plugin, file: &[u8], params: &Value, source: Source, mode: Mode) -> Result<Imported> {
     let m = plugin.manifest();
     if m.kind != Kind::Importer {
         return Err(not_importer(m));
+    }
+    if mode == Mode::Place && !m.place {
+        return Err(not_placing(m));
     }
     if file.len() > MAX_INPUT_BYTES {
         return Err(too_large());
     }
     let mut params = Value::Object(m.resolve_params(params)?);
-    params["_context"] = json!({"mode": "import", "extension": source.extension, "name": source.name});
+    params["_context"] = json!({"mode": mode.name(), "extension": source.extension, "name": source.name});
     let params = serde_json::to_vec(&params).map_err(|e| Error::Params(e.to_string()))?;
     decode(&plugin.run_limited(file, &params, &limits(plugin))?)
 }
