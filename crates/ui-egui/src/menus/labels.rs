@@ -1,9 +1,10 @@
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
-use super::state::{hidden_when_disabled, shortcut_of};
+use super::state::{command_shortcuts, hidden_when_disabled};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
-use super::{Node, TODO, Value, VectorcraftApp};
-use craft::keymap::Chord;
+use super::{Node, Value, VectorcraftApp, unbound};
+use craft::keymap::{Chord, CommandRef};
+use vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
 pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
@@ -97,6 +98,12 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
     let text: String = match id {
         "effect.last" => match &app.last_effect {
             Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
+            None => label.into(),
+        },
+        // Apply Last Filter and Last Filter… are named after the filter that ran last.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => match crate::dialogs::plugin::last_filter_name(app) {
+            Some(name) if id == crate::dialogs::plugin::APPLY_LAST => format!("Apply {name}"),
+            Some(name) => format!("{name}…"),
             None => label.into(),
         },
         // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
@@ -195,6 +202,12 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             }
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
+        // The filter's name is the plug-in's own text, never translated.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => match crate::dialogs::plugin::last_filter_name(app) {
+            Some(name) if id == crate::dialogs::plugin::APPLY_LAST => fmt(tl!("Apply {filter}"), &[("filter", &name)]),
+            Some(name) => format!("{name}…"),
+            None => crate::i18n::tr_id(lang, id, label).to_string(),
+        },
         _ => {
             let shown = dynamic_label(app, id, label);
             // PLAN: is_builtin needs the UI state, which shows_a_name has no access to; a custom
@@ -238,11 +251,18 @@ pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
 
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
-/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
+/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items. Settings' first page shows
+/// Preferences' shortcut.
 pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord> {
+    item_shortcut_in(&command_shortcuts(app), id, p)
+}
+
+/// [`item_shortcut`] with each entry's command looked up in `chord` ([`command_shortcuts`]).
+pub(crate) fn item_shortcut_in(chord: &dyn Fn(&CommandRef) -> Option<Chord>, id: &str, p: &Value) -> Option<Chord> {
     let field = |name: &str| p.get(name).and_then(Value::as_str);
     let key = match (id, field("panel")) {
         ("window.panel", Some(panel)) => format!("panel:{panel}"),
+        ("edit.preferences", _) if field("category") == PREF_CATEGORIES.first().copied() => id.to_string(),
         ("effect.dialog" | "effect.apply", _) => format!("effect:{}", field("effect")?),
         ("plugin.dialog", _) => format!("plugin:{}", field("id")?),
         // The Artboard tool's canvas menu passes the point its Paste goes to.
@@ -253,7 +273,7 @@ pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord>
         _ if p.is_null() => id.to_string(),
         _ => return None,
     };
-    shortcut_of(app, &key)
+    chord(&crate::keymap::command_of(&key))
 }
 
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
@@ -344,9 +364,14 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Advanced",
 ];
 
-/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares, and only items
+/// that list plug-ins? A built-in submenu that a plug-in's manifest places a command in is not.
 pub(crate) fn holds_plugin_commands(children: &[Node]) -> bool {
     children.iter().any(|c| matches!(c, Node::Item(i) if vectorcraft_engine::cmd::plugin::is_command_id(&i.command.id)))
+        && children.iter().all(|c| match c {
+            Node::Item(i) => lists_plugin(&i.command.id, &i.command.params),
+            _ => true,
+        })
 }
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
@@ -366,7 +391,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     fn walk(nodes: &[Node], under: &str, out: &mut BTreeSet<String>) {
         for node in nodes {
             match node {
-                Node::Item(it) if it.command.id == TODO => {
+                Node::Item(it) if unbound(&it.command.id) => {
                     out.insert(it.label.clone());
                 }
                 Node::Item(it) => {

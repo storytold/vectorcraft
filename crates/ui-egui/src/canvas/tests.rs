@@ -53,6 +53,94 @@ fn a_symbol_instance_is_outlined_around_its_art() {
     assert_eq!(node_outline(inst.unwrap(), &st.doc.symbol_boxes()).bounding_box(), Rect::new(20.0, 30.0, 40.0, 50.0));
 }
 
+/// The points of `bp`'s move and line elements, in order.
+fn outline_points(bp: &vectorcraft_geom::BezPath) -> Vec<Point> {
+    use vectorcraft_geom::kurbo::PathEl;
+    bp.elements()
+        .iter()
+        .filter_map(|el| match el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) => Some(*p),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether `got` are the points `want`, each within 1e-9, a last point of `got` that repeats its
+/// first left out.
+fn same_points(got: &[Point], want: &[Point]) -> bool {
+    let near = |a: &Point, b: &Point| a.distance(*b) < 1e-9;
+    let got = match got {
+        [first, rest @ .., last] if !rest.is_empty() && near(first, last) => &got[..got.len() - 1],
+        _ => got,
+    };
+    got.len() == want.len() && got.iter().zip(want).all(|(a, b)| near(a, b))
+}
+
+/// Puts `n` in perspective, drawn through `h`.
+fn in_perspective(n: &mut Node, h: vectorcraft_geom::Homography) {
+    let at = vectorcraft_doc::PerspectiveAttachment { projection: Some(h.to_array()), ..vectorcraft_doc::PerspectiveAttachment::new("left", 0.0) };
+    n.extras_mut().perspective = Some(Box::new(at));
+}
+
+#[test]
+fn a_turned_or_skewed_symbol_instance_is_outlined_along_its_frame() {
+    // The 20 × 20 square symbol of the test above, its instance at (20, 30).
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><defs><symbol id="Star"><path d="M0 0H20V20H0Z" fill="#e0a000"/></symbol></defs><use href="#Star" x="20" y="30"/></svg>"##;
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "star.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let st = s.active().unwrap();
+    let mut inst = None;
+    st.doc.walk(|n| {
+        if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+            inst = Some(n.clone());
+        }
+    });
+    let inst = inst.unwrap();
+    let symbols = st.doc.symbol_boxes();
+    let square = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0)].map(|(x, y)| Point::new(x, y));
+    let placed = |a: Affine| {
+        let mut n = inst.clone();
+        let NodeKind::SymbolInstance { xf, .. } = &mut n.kind else { panic!("an instance") };
+        *xf = a * *xf;
+        let xf = *xf;
+        (n, square.map(|p| xf * p))
+    };
+    for (case, a) in [
+        ("unturned", Affine::IDENTITY),
+        ("turned 30 degrees", Affine::rotate_about(30f64.to_radians(), Point::new(30.0, 40.0))),
+        ("skewed", Affine::skew(0.5, 0.0)),
+    ] {
+        let (n, frame) = placed(a);
+        let got = outline_points(&node_outline(&n, &symbols));
+        assert!(same_points(&got, &frame), "{case}: {got:?} is not the frame {frame:?}");
+    }
+    // In perspective, the frame's corners go through the projection.
+    let h = vectorcraft_geom::Homography([[1.0, 0.0, 0.0], [0.1, 1.0, 0.0], [0.004, 0.0, 1.0]]);
+    let mut n = inst.clone();
+    in_perspective(&mut n, h);
+    let (_, flat) = placed(Affine::IDENTITY);
+    let drawn = flat.map(|p| h.apply(p).unwrap());
+    let got = outline_points(&node_outline(&n, &symbols));
+    assert!(same_points(&got, &drawn), "in perspective: {got:?} is not the projected frame {drawn:?}");
+}
+
+#[test]
+fn type_in_perspective_is_outlined_by_its_projected_box() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    let st = s.active().unwrap();
+    let mut n = st.doc.node(id).unwrap().clone();
+    let NodeKind::Text(t) = &n.kind else { panic!("type") };
+    let b = t.bounds().unwrap();
+    let h = vectorcraft_geom::Homography([[1.0, 0.0, 0.0], [0.1, 1.0, 0.0], [0.002, 0.0, 1.0]]);
+    in_perspective(&mut n, h);
+    let drawn = [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].map(|(x, y)| h.apply(Point::new(x, y)).unwrap());
+    let got = outline_points(&node_outline(&n, &st.doc.symbol_boxes()));
+    assert!(same_points(&got, &drawn), "{got:?} is not the projected box {drawn:?}");
+}
+
 /// One headless canvas frame on an 800 × 600 window.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
@@ -136,6 +224,34 @@ fn a_release_ends_the_image_trace_hold_without_the_panel() {
     frame(&mut app, &ctx, vec![press(true)]);
     assert_eq!(app.ui.trace_hold_source, None, "a later press does not show the source image");
     frame(&mut app, &ctx, vec![press(false)]);
+}
+
+/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: over the
+/// selected blend a Cmd press selects behind, so the Selection tool's stay; moved away in the next frame, where Cmd
+/// lends Direct Selection, they are Direct Selection's in that frame.
+#[test]
+fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    // Behind the blend, an object to select behind.
+    app.session.execute("shape.rectangle", &json!({"x": 20, "y": 120, "width": 360, "height": 160})).unwrap();
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 60, "y": 160, "width": 80, "height": 80})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 260, "y": 160, "width": 80, "height": 80})).unwrap());
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let xf = app.canvas_view().unwrap();
+    let cmd_frame = |app: &mut VectorcraftApp, at: Point| {
+        frame(app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::COMMAND), egui::Event::PointerMoved(xf.to_screen(at))]);
+        app.session.hover_tool_id(&Mods { cmd: true, ..Default::default() })
+    };
+    // Inside the first key object, away from its anchors and the spine.
+    assert_eq!(cmd_frame(&mut app, Point::new(80.0, 175.0)), "selection", "over the selected blend, the press selects behind");
+    assert_eq!(cmd_frame(&mut app, Point::new(200.0, 380.0)), "directSelection", "away from it, in the same frame");
 }
 
 /// A click with the Selection tool inside an artboard makes it the active one, and Paste in
@@ -520,7 +636,8 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     app.ui_ctx = Some(ctx.clone());
     // Whether the selection shows its objects' outlines; the box around it shows throughout.
     let outlined = |app: &mut VectorcraftApp| {
-        assert!(super::widgets::bounding_box(app, egui::Modifiers::NONE).is_some(), "the selection box is still drawn");
+        let tool = app.session.tool_id();
+        assert!(super::widgets::bounding_box(app, tool).is_some(), "the selection box is still drawn");
         let app = &*app;
         let st = app.session.active().unwrap();
         !super::selection::outlines(app, st).is_empty()
@@ -874,6 +991,88 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     assert_eq!(count(&mut app, shown), Some(srgb));
     app.display_profile.report(reading(Found::System("test".into())));
     assert_eq!(count(&mut app, red), Some(srgb));
+}
+
+/// With a display profile, in Overprint Preview translucent art around the artboards is blended
+/// with the white canvas before the conversion, as art over the paper is. With the preview off it
+/// converts alone, over the pasteboard.
+#[test]
+fn translucent_art_around_the_artboards_is_blended_with_overprint_previews_white_canvas() {
+    keeping_color_settings(translucent_art_around_the_artboards);
+}
+
+fn translucent_art_around_the_artboards() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    // Left of the artboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The whole art raster one frame uploads: its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).filter(|d| d.pos.is_none()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    upload(&mut app).expect("the view at 100%");
+    let p3 = crate::display_profile::tests::p3();
+    let t = crate::display_profile::tests::transform();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    upload(&mut app).expect("drawn again, converted");
+    let white = convert8(&t, [255; 3]);
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied_rgba8(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // The pixel at the translucent rectangle's center, in sRGB (the display profile's preference
+    // off) and as the canvas shows it (on).
+    let pixel = |app: &mut VectorcraftApp| {
+        app.session.prefs.monitor_profile_display = false;
+        let (width, srgb) = upload(app).expect("drawn in sRGB");
+        let key = app.canvas.key.clone().unwrap();
+        let (_, _, view) =
+            frame_view(None, (key.w, key.h), &CanvasView::new(egui::Rect::NOTHING, Point::new(key.cx, key.cy), key.zoom).rotation(key.rot), key.ppp);
+        let at = view * Point::new(-40.0, 120.0);
+        let at = at.y as usize * width + at.x as usize;
+        app.session.prefs.monitor_profile_display = true;
+        let (_, shown) = upload(app).expect("drawn again, converted");
+        (srgb[at], shown[at], app.canvas.key.clone().unwrap())
+    };
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert!(key.backdrop.as_ref().is_some_and(|b| b.everywhere.is_none()), "Preview: the pasteboard is no paper");
+    assert_eq!(c, plain(s), "over the pasteboard the art converts alone");
+    app.run("view.overprintPreview", json!({"on": true})).unwrap();
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert_eq!(key.backdrop.as_ref().and_then(|b| b.everywhere), Some([255; 3]), "the white canvas is paper");
+    let k = 255 - u32::from(s.a());
+    let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+    let (want, got) = (convert8(&t, mix), over(c, white));
+    assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "{got:?} shown, {want:?} wanted");
+    // The test tells the two apart: the fill converted alone shows another color over the white canvas.
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(got[j]) > 2), "{alone:?} and {got:?}");
 }
 
 /// With a display profile, translucent art and the anti-aliased edges of art over the paper are
@@ -1502,6 +1701,89 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     }
 }
 
+/// A Pen drag over a frame the worker drew draws each move's curve into that frame, here, in the
+/// frame of the move: once the press's frame arrives from the worker, every move shows the
+/// document's revision and queues nothing on the worker. When the frame shown drew effect rasters
+/// from before their objects moved, when a part drawn here would have differed from it, or when
+/// the part's share of the whole frame's time is over 8 ms, the next move renders on the worker,
+/// and the moves after the worker's frame are drawn here again. A frame of an older revision on
+/// its way does not hold a move back.
+#[test]
+fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for i in 0..60 {
+        let (x, y) = (f64::from(i % 10) * 40.0, f64::from(i / 10) * 50.0);
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 30, "height": 30})).unwrap();
+    }
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.canvas.worker_started = true; // the first frame renders on this thread
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let (worker, mut side) = WorkerSide::start();
+    app.canvas.worker = Some(worker);
+    app.canvas.last_ms = 50.0;
+    app.select_tool("pen");
+    let revision = |app: &VectorcraftApp| Some(app.session.active().unwrap().revision);
+    let shown = |app: &VectorcraftApp| app.canvas.key.as_ref().map(|k| k.revision);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let mut at = app.canvas_view().unwrap().to_screen(Point::new(105.0, 155.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, true)]);
+    assert!(shown(&app) < revision(&app), "the press's frame, the first of the drag, renders on the worker");
+    assert!(side.render());
+    let mut drag = |app: &mut VectorcraftApp| {
+        at += vec2(9.0, 5.0);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    };
+    for step in 0..6 {
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "move {step}: the curve is drawn in its own frame");
+        assert!(side.jobs.try_recv().is_err(), "move {step}: nothing is queued on the worker");
+    }
+    for case in ["moved", "differs", "slow"] {
+        match case {
+            "moved" => app.canvas.moved = true,
+            "differs" => app.canvas.worker_parts = true,
+            _ => app.canvas.last_ms = 10_000.0,
+        }
+        drag(&mut app);
+        assert!(shown(&app) < revision(&app), "{case}: the move is not drawn here");
+        assert!(side.render(), "{case}: the move renders on the worker");
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "{case}: after the worker's frame, the next move is drawn here");
+        assert!(!app.canvas.worker_parts, "{case}");
+    }
+    // A worker's frame that drew art in a way that depends on its size: the move after it renders
+    // on the worker too.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    let job = side.jobs.try_iter().last().expect("the move is on the worker");
+    let done = crate::render_worker::render(&mut side.renderer, &mut side.kept, job);
+    side.done.send(crate::render_worker::Done { ms: 50.0, view_sized: true, ..done }).unwrap();
+    drag(&mut app);
+    assert!(app.canvas.worker_parts, "the frame shown drew art that depends on its size");
+    assert!(shown(&app) < revision(&app) && side.render(), "the move after it renders on the worker");
+    drag(&mut app);
+    assert_eq!(shown(&app), revision(&app), "after the next worker frame, the move is drawn here");
+    // A frame on its way of an older revision: the next move is drawn here, and that frame is not
+    // shown when it arrives.
+    app.canvas.worker_parts = true;
+    drag(&mut app);
+    assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "a frame is on its way");
+    app.canvas.worker_parts = false;
+    for late in [false, true] {
+        if late {
+            assert!(side.render());
+        }
+        drag(&mut app);
+        assert_eq!(shown(&app), revision(&app), "drawn here, the frame on its way arrived: {late}");
+    }
+    frame(&mut app, &ctx, vec![button(at, false)]);
+    app.canvas.worker = None;
+}
+
 /// The frame after an interaction renders without `interacting` also when the interaction
 /// leaves the document as it was (#1257): here a drag back to where it started.
 #[test]
@@ -1666,7 +1948,9 @@ fn cached_frames_keep_their_scale() {
         // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed
+            .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false, view_sized: false })
+            .unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -1806,7 +2090,9 @@ fn a_pan_fills_the_area() {
     // The fill arrives; the next frame draws it, and asks for no other fill.
     let img = app.canvas.renderer.render(&fill_job.doc, fill_job.w, fill_job.h, fill_job.view, &fill_job.opts);
     let (doc, opts) = (fill_job.doc, fill_job.opts);
-    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, pixels) = frame(&mut app);
     assert!(fill_jobs.try_recv().is_err(), "the fill covers the canvas");
     assert_eq!(app.canvas.key.as_ref(), Some(&old), "the last frame is still shown");
@@ -1851,11 +2137,15 @@ fn a_pan_fills_the_area() {
     app.view_mut().unwrap().center = Point::new(250.0, 150.0);
     // That fill finishes after the worker's frame: it is taken and not kept.
     let img = app.canvas.renderer.render(&next.doc, next.w, next.h, next.view, &next.opts);
-    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
+    fill_completed
+        .send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     // The worker's frame arrives: it covers the canvas, and the fill is no longer drawn or kept.
     let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
     let expected = job.key.clone();
-    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
+    completed
+        .send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false, view_sized: false })
+        .unwrap();
     let (meshes, _) = frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame is shown");
     assert!(app.canvas.fill.is_none() && meshes.iter().all(|m| m.texture_id != fill_tex), "the fill is dropped");
@@ -2328,6 +2618,157 @@ fn appearance_of_black_on_screen_shows_pure_black_as_rgb_black() {
     assert!(near(middle(&mut app).expect("re-rendered"), accurate), "accurate again");
 }
 
+/// A change of the color settings, and a profile in use loaded again under its name, re-render the
+/// canvas through the new conversion. They raise the documents' revisions but leave the art as it
+/// is, so [`super::raster::changed_pixels`] finds no part of the frame shown that changed: the
+/// frame's key holds the color settings and the loaded profiles' generation. A frame with nothing
+/// changed renders nothing.
+#[test]
+fn color_settings_and_a_reloaded_profile_render_the_canvas_again() {
+    const CHILD: &str = "VECTORCRAFT_TEST_CANVAS_COLOR_SETTINGS";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings and loaded profiles are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "canvas::tests::color_settings_and_a_reloaded_profile_render_the_canvas_again", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated canvas color test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300, "colorMode": "cmyk"})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    // Larger than the view: the middle of the art's raster is its fill.
+    let id = app.run("shape.rectangle", json!({"x": -5000, "y": -5000, "width": 10000, "height": 10000})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [id], "color": {"c": 60, "m": 10, "y": 80, "k": 0}})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The middle pixel of the art's raster uploaded by one frame, None when it was not re-rendered.
+    let middle = |app: &mut VectorcraftApp| -> Option<[u8; 4]> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let px = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            let [w, h] = img.size;
+            img.pixels[h / 2 * w + w / 2].to_array()
+        });
+        delta.clear();
+        px
+    };
+    let ink = vectorcraft_color::Color::cmyk(0.6, 0.1, 0.8, 0.0);
+    let through = |cmyk: &str| {
+        let c = cms::Cms::new(&cms::ColorSettings { cmyk: cmyk.into(), ..cms::working_settings() }).unwrap().display_rgb(&ink);
+        c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+    };
+    let near = |a: [u8; 4], b: [u8; 3]| a[..3].iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
+    let (generic, device) = (through(cms::GENERIC_CMYK), through(cms::DEVICE_CMYK));
+    assert!(!near([generic[0], generic[1], generic[2], 255], device), "the two CMYK spaces draw the ink differently: {generic:?}, {device:?}");
+
+    let first = middle(&mut app).expect("the first frame renders the art");
+    assert!(near(first, generic), "through the working CMYK space: {first:?}, not {generic:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let shown = middle(&mut app).expect("Color Settings re-render the canvas");
+    assert!(near(shown, device), "through the new working CMYK space: {shown:?}, not {device:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+    app.run("edit.colorSettings", json!({"cmyk": cms::GENERIC_CMYK})).unwrap();
+    assert!(near(middle(&mut app).expect("re-rendered"), generic), "back to the first working space");
+
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let name = "Canvas Reload CMYK";
+    let dir = vectorcraft_testkit::temp_dir("canvas-reload-cmyk");
+    let load = |app: &mut VectorcraftApp, builtin: &str| {
+        let path = dir.join(format!("{}.icc", builtin.len()));
+        std::fs::write(&path, renamed(builtin, name)).unwrap();
+        let r = app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+    };
+    load(&mut app, cms::GENERIC_CMYK);
+    app.run("edit.assignProfile", json!({"cmyk": name})).unwrap();
+    let assigned = middle(&mut app).expect("assigning a profile re-renders the canvas");
+    assert!(near(assigned, generic), "through the assigned copy of the working space: {assigned:?}, not {generic:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    // The same name, the settings as they were: only the profile's file is new.
+    load(&mut app, cms::DEVICE_CMYK);
+    let reloaded = middle(&mut app).expect("the profile loaded again re-renders the canvas");
+    assert!(near(reloaded, device), "through the profile's new file: {reloaded:?}, not {device:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+
+    // A proof of the working CMYK space converts through the working settings. With the document's
+    // assigned profile in place of the working CMYK space, a new working CMYK space leaves the
+    // active settings as they were and changes only the proof.
+    app.run("view.proofSetup", json!({"target": "workingCmyk"})).unwrap();
+    app.run("view.proofColors", json!({"on": true})).unwrap();
+    let proofed = middle(&mut app).expect("Proof Colors re-renders the canvas");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    let active = cms::active_settings();
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let reproofed = middle(&mut app).expect("a new working CMYK space re-renders the proof");
+    assert_eq!(cms::active_settings(), active, "the assigned profile keeps the active settings");
+    assert!(!near(reproofed, [proofed[0], proofed[1], proofed[2]]), "the proof through the new working CMYK space: {reproofed:?}, not {proofed:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+}
+
+/// A frame from the render worker whose color key is not the current one is not shown, and the
+/// canvas asks for the frame again. The worker converts colors with the settings in force while it
+/// renders, so a frame asked for before a change of the color settings may hold colors of the new
+/// settings under the old key, and a return to the old settings would keep it.
+#[test]
+fn a_worker_frame_of_other_color_settings_is_not_shown() {
+    keeping_color_settings(a_worker_frame_of_other_color_settings);
+}
+
+fn a_worker_frame_of_other_color_settings() {
+    use vectorcraft_color::cms;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = crate::testing::ui_context();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(1.0), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app);
+    done_tx.send(finished(&jobs.try_recv().expect("the first frame"))).unwrap();
+    frame(&mut app);
+    let first = app.canvas.key.clone().expect("the first frame is shown");
+
+    // A pan's frame goes to the worker, and the color settings change before it is finished.
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app);
+    let pan = jobs.try_recv().expect("the pan's frame goes to the worker");
+    let settings = cms::ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..cms::active_settings() };
+    assert_ne!(settings, cms::active_settings(), "other color settings");
+    cms::with_active(std::sync::Arc::new(cms::Cms::new(&settings).unwrap()), || {
+        done_tx.send(finished(&pan)).unwrap();
+        frame(&mut app);
+        assert_eq!(app.canvas.key.as_ref(), Some(&first), "the pan's frame, of other color settings, is not shown");
+        let again = jobs.try_recv().expect("the pan's frame is asked for with the current color settings");
+        assert_ne!(again.key.color, pan.key.color);
+    });
+    // Back to the settings in the pan's key: the pan's frame is asked for again.
+    frame(&mut app);
+    let back = jobs.try_recv().expect("the pan's frame is asked for again");
+    assert_eq!(back.key, pan.key);
+}
+
 #[test]
 fn top_bounding_box_handle_scales_a_default_mirror_repeat() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -2684,12 +3125,14 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
     assert_eq!((plain, dots(&t)), (2, 2));
 }
 
-/// General › Display Print Size at 100% Zoom (#394): Actual Size shows the document larger with it
-/// on (an inch at 96 screen points) than off (a point at a point), and reads 100% either way.
+/// General › Display Print Size at 100% Zoom (#394, #9051): Actual Size shows the document larger
+/// with it on (an inch at 96 screen points where no display was measured) than off (a point at a
+/// point), and reads 100% either way.
 #[test]
 fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
     // Frames as the hosts run them: the zoom stops come from the preferences through the app's frame input.
     let frame = |app: &mut VectorcraftApp, ctx: &egui::Context, _: Vec<egui::Event>| {
@@ -2704,7 +3147,7 @@ fn view_actual_size_follows_display_print_size() {
         app.run("view.actualSize", json!({})).unwrap();
         frame(app, &ctx, vec![]);
         let view = app.canvas_view().unwrap();
-        let scheme = crate::app::view::zoom_scheme(&app.session.prefs, ctx.pixels_per_point() / ctx.zoom_factor());
+        let scheme = crate::app::view::zoom_scheme(app.print_ppi(), ctx.pixels_per_point() / ctx.zoom_factor());
         (view.zoom, scheme.percent(craft::behavior::canvas::zoom::device(&view, ctx.pixels_per_point())))
     };
     let (off, off_percent) = actual(&mut app);
@@ -2712,6 +3155,42 @@ fn view_actual_size_follows_display_print_size() {
     let (on, on_percent) = actual(&mut app);
     assert!(on > off, "an inch at 96 screen points shows the document larger: {off} → {on}");
     assert!((off_percent - 100.0).abs() < 1e-9 && (on_percent - 100.0).abs() < 1e-9, "both read 100%: {off_percent}, {on_percent}");
+}
+
+/// #9051: with Display Print Size on, Actual Size shows a document inch in an inch of the display
+/// the window is on, from the density the host measured for it. When the window moves to a display
+/// of another density, the view keeps its zoom percentage, so the art keeps its physical size there.
+#[test]
+fn view_actual_size_fills_an_inch_of_the_measured_display() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    let ctx = crate::testing::ui_context();
+    let frame = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        crate::testing::part_frame(app, ctx, raw, show);
+    };
+    let run = |app: &mut VectorcraftApp, id: &str| {
+        app.run(id, json!({})).unwrap();
+        frame(app, &ctx);
+    };
+    frame(&mut app, &ctx);
+    run(&mut app, "view.fitArtboard");
+    let fitted = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert_eq!(app.view().unwrap().zoom, fitted, "the first measurement leaves a fitted view alone");
+    run(&mut app, "view.actualSize");
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-6, "72 pt take the display's 127 points to an inch");
+    assert!(app.set_screen_ppi(Some(91.0)), "the window moved to a sparser display");
+    assert!(!app.set_screen_ppi(Some(91.0)), "the same reading changes nothing");
+    assert!((app.view().unwrap().zoom * 72.0 - 91.0).abs() < 1e-6, "100% still fills an inch");
+    assert_eq!(crate::state::zoom_label(app.view().unwrap().zoom, app.print_ppi()), "100%");
+    assert!(app.set_screen_ppi(None), "the window moved to a display that reports no size");
+    assert!((app.view().unwrap().zoom * 72.0 - 96.0).abs() < 1e-6, "100% there is 96 points to an inch");
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let zoom = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(110.0)));
+    assert_eq!(app.view().unwrap().zoom, zoom, "off, a move leaves the zoom alone");
 }
 
 /// Fit Artboard in Window fits the active artboard as a turned view shows it: with the second of
@@ -2768,11 +3247,7 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     assert_ne!(shown(&mut app), editing, "Cmd+Space shows the magnifier");
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
-    assert_eq!(
-        app.view().unwrap().zoom,
-        crate::state::next_zoom(before.zoom, true, app.session.prefs.display_print_size),
-        "Cmd+Space click zooms in"
-    );
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, app.print_ppi()), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
@@ -2904,9 +3379,11 @@ fn double_clicking_type_with_the_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes hands the text
+    // to the Type tool two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts (X would swap fill and stroke).
     assert_eq!(app.session.tool_id(), "type");
@@ -3047,9 +3524,11 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes hands the text
+    // to the Type tool two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts.
     assert_eq!(app.session.tool_id(), "type");
@@ -3107,9 +3586,11 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     let double_click = |app: &mut VectorcraftApp, time: f64| {
         timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-        // The framework holds a frame's second press for the next pass.
+        // The framework holds a frame's second press for the next frame; the double-click it completes asks two
+        // frames after that.
         timed(app, time + 0.05, vec![]);
         timed(app, time + 0.1, vec![]);
+        timed(app, time + 0.15, vec![]);
     };
     let asking = |app: &VectorcraftApp| app.dialogs().unwrap().with(|h| h.is_open::<crate::dialogs::confirm::MissingFontQuestion>());
     double_click(&mut app, 1.0);
@@ -3209,9 +3690,11 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
 
     // 1st double-click on group enters isolation mode.
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
-    // The framework holds a frame's second press for the next pass.
+    // The framework holds a frame's second press for the next frame; the double-click it completes isolates the group
+    // two frames after that.
     timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
+    timed(&mut app, 1.15, vec![]);
     assert!(app.session.active().unwrap().isolation.is_some(), "should be in isolation mode");
     assert_eq!(app.session.tool_id(), "selection");
 
@@ -4227,9 +4710,9 @@ fn task_bar_actions(app: &mut VectorcraftApp) -> Vec<&'static str> {
 }
 
 /// The Artboard tool's Contextual Task Bar buttons act on its selected artboards: Resize opens
-/// Artboard Options for the active one, Rearrange All opens Rearrange All Artboards, Export opens
-/// Export for Screens with the selected artboards checked, and Duplicate copies each selected
-/// artboard in one undo step and selects the copies.
+/// Artboard Options for the active one, Rearrange opens Rearrange for the selected artboards,
+/// Export opens Export for Screens with the selected artboards checked, and Duplicate copies each
+/// selected artboard in one undo step and selects the copies.
 #[test]
 fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4245,8 +4728,8 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     }
     click(&mut app, "Resize");
     assert_eq!(fields_then_cancel::<crate::dialogs::artboard_options::ArtboardOptionsDialog>(&mut app)["index"], json!(2), "Artboard Options");
-    click(&mut app, "Rearrange All");
-    fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app);
+    click(&mut app, "Rearrange");
+    assert_eq!(fields_then_cancel::<crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog>(&mut app)["indices"], json!([0, 2]), "Rearrange");
     click(&mut app, "Export");
     assert_eq!(fields_then_cancel::<crate::dialogs::ExportForScreensDialog>(&mut app)["boards"], json!([true, false, true]), "Export for Screens");
 
@@ -4739,6 +5222,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -4762,6 +5246,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -4784,6 +5269,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -4806,6 +5292,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             ms: 2.5,
             moved: 0,
             reused: false,
+            view_sized: false,
         })
         .unwrap();
 
@@ -4866,7 +5353,16 @@ fn the_contour_bar_sets_corners_and_bakes() {
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
-    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0, reused: false }
+    crate::render_worker::Done {
+        key: job.key.clone(),
+        doc: job.doc.clone(),
+        opts: job.opts.clone(),
+        img,
+        ms: 40.0,
+        moved: 0,
+        reused: false,
+        view_sized: false,
+    }
 }
 
 /// A job for the render worker to pan over a document of `doc`: a view at 100% moved by `(dx, dy)`
@@ -5332,7 +5828,8 @@ fn a_pan_after_the_settling_frame() {
         let job = jobs.try_recv().unwrap_or_else(|_| panic!("{name}: the canvas asks for a frame"));
         let f = render_job(&mut r, &mut kept, &job);
         assert_eq!(f.reused, copies, "{name}");
-        let done = crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img: f.img, ms: 40.0, moved: f.moved, reused: f.reused };
+        let (key, doc, opts, img) = (job.key, job.doc, job.opts, f.img);
+        let done = crate::render_worker::Done { key, doc, opts, img, ms: 40.0, moved: f.moved, reused: f.reused, view_sized: f.view_sized };
         done_tx.send(done).unwrap();
     };
     frame(&mut app, 1.0);

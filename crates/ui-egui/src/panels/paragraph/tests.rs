@@ -558,6 +558,24 @@ fn more_options_opens_bullets_and_numbering_on_its_tab() {
     assert!(shown_tab(&app).is_some());
 }
 
+/// Bullets and Numbering draws every preset of each tab, and its buttons.
+#[test]
+fn bullets_and_numbering_draws_every_preset_and_its_buttons() {
+    use vectorcraft_doc::text::NumberStyle;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (app, _) = editing_text("One\nTwo");
+    let mut p = crate::tests::panel_harness::Panel::new(crate::testing::windowed(app), crate::tests::picks::dialogs);
+    select_range(&mut p.app(), 0, 0);
+    let last_number = NumberStyle::ALL.last().map(|&style| crate::panels::paragraph::number_sample(style, 3)).unwrap_or_default();
+    for (tab, last) in [("bullets", "Filled Square".to_owned()), ("numbers", last_number)] {
+        p.app().run("ui.bulletsAndNumbering", json!({ "tab": tab })).unwrap();
+        p.frame();
+        for name in ["None", last.as_str(), "OK", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn on {tab}");
+        }
+    }
+}
+
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the
 /// paragraphs the Type tool's selection touches: their numbers become characters of the text
 /// and their list goes, while the other paragraphs stay in the list, and the Type tool's caret
@@ -733,7 +751,6 @@ fn bar_names(app: &mut VectorcraftApp) -> Vec<String> {
 /// #5372: with type selected the Control bar shows a Paragraph section: the Paragraph: link and the
 /// Align left, Align center and Align right buttons (the justifying four are in the panel the link
 /// opens); with no type selected it shows none of them.
-// PLAN: the trimming order as the bar narrows (toggles out before the link, ch.K30) is chrome-w16's `Row::fit_rank` and is tested with its fixture.
 #[test]
 fn the_control_bar_shows_its_paragraph_section_for_selected_type_only() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

@@ -20,14 +20,15 @@ use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
 use craft::ui::contract::SelectMode;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
-use craft::ui::display::Text;
-use craft::ui::layout_components::Row;
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow};
 // PLAN: assumed `craft::ui::patterns::form_dialogs::FieldValue` and `craft::ui::runtime::env::Label` paths.
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::style::TypeRole;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
 
@@ -123,46 +124,55 @@ impl StackDialog for Manager {
         let (data, action) = (&self.data, &mut self.action);
         let dialog = Dialog::new(tl!("Tracing Presets")).buttons([FooterButton::new(tl!("Close"), DialogRole::Cancel)]);
         let shown = dialog.show(ui, |ui, _| {
-            Text::new(tl!("Presets:")).show(ui);
-            let out = List::new(tl!("Presets"))
-                .select(SelectMode::Single)
-                .max_rows(LIST_ROWS)
-                .selection(Bind::given(Selection::single(at)))
-                .show_items(ui, &Labels(&labels), &mut |&k, _| ListRow::new(labels[k].clone()));
-            for event in out.events {
-                if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
-                    && let Some(p) = keys.last().and_then(|&k| list.presets.get(k))
-                {
-                    *action = Some(Action::Select(p.0.clone()));
-                }
-            }
-            Row::new().show(ui, |ui, _| {
-                let buttons = [
-                    (Button::new(tl!("New…")).tooltip(tl!("A new preset starting from the selected one")), Action::New, true),
-                    (Button::new(tl!("Edit…")), Action::Edit, !builtin),
-                    (Button::new(tl!("Delete")), Action::Delete, !builtin),
-                    (Button::new(tl!("Import…")), Action::Import, true),
-                    (Button::new(tl!("Export…")), Action::Export, any_saved),
-                ];
-                for (button, act, enabled) in buttons {
-                    if clicked(&button.enabled(enabled).show(ui)) {
-                        *action = Some(act);
+            // The list and its buttons on the left, the selected preset's name and settings on the right.
+            Row::new().id_salt("presets-body").show(ui, |ui, _| {
+                Stack::new().id_salt("presets-list").show(ui, |ui, _| {
+                    Text::new(tl!("Presets:")).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
+                    let out = List::new(tl!("Presets"))
+                        .select(SelectMode::Single)
+                        .max_rows(LIST_ROWS)
+                        .selection(Bind::given(Selection::single(at)))
+                        .show_items(ui, &Labels(&labels), &mut |&k, _| ListRow::new(labels[k].clone()));
+                    for event in out.events {
+                        if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
+                            && let Some(p) = keys.last().and_then(|&k| list.presets.get(k))
+                        {
+                            *action = Some(Action::Select(p.0.clone()));
+                        }
                     }
-                }
+                    Row::new().show(ui, |ui, _| {
+                        let buttons = [
+                            (Button::new(tl!("New…")).tooltip(tl!("A new preset starting from the selected one")), Action::New, true),
+                            (Button::new(tl!("Edit…")), Action::Edit, !builtin),
+                            (Button::new(tl!("Delete")), Action::Delete, !builtin),
+                            (Button::new(tl!("Import…")), Action::Import, true),
+                            (Button::new(tl!("Export…")), Action::Export, any_saved),
+                        ];
+                        for (button, act, enabled) in buttons {
+                            if clicked(&button.enabled(enabled).show(ui)) {
+                                *action = Some(act);
+                            }
+                        }
+                    });
+                });
+                Stack::new().id_salt("presets-details").show(ui, |ui, _| {
+                    Text::new(list_label(preset)).role(TypeRole::BodyStrong).show(ui);
+                    // The selected preset's settings, as the editor shows them, to read only: edits land in a copy.
+                    let mut params = preset.1.clone();
+                    // PLAN: the rows components take no `enabled` prop; the scope's `Ui` is disabled for them.
+                    ui.scope(|ui| {
+                        ui.disable();
+                        rows::main_rows(ui, &mut params, data, RowsHost::Dialog);
+                        rows::advanced_rows(ui, &mut params, data, RowsHost::Dialog, None);
+                    });
+                    if builtin {
+                        Text::new(tl!("Built-in presets don't change: New makes a copy you can edit."))
+                            .role(TypeRole::Caption)
+                            .shade(Shade::Muted)
+                            .show(ui);
+                    }
+                });
             });
-            // PLAN: the sheet's two columns and a strong name need layout and text variants that are not in the bundle; stacked and plain here.
-            Text::new(list_label(preset)).show(ui);
-            // The selected preset's settings, as the editor shows them, to read only: edits land in a copy.
-            let mut params = preset.1.clone();
-            // PLAN: the rows components take no `enabled` prop; the scope's `Ui` is disabled for them.
-            ui.scope(|ui| {
-                ui.disable();
-                rows::main_rows(ui, &mut params, data, RowsHost::Dialog);
-                rows::advanced_rows(ui, &mut params, data, RowsHost::Dialog, None);
-            });
-            if builtin {
-                Text::new(tl!("Built-in presets don't change: New makes a copy you can edit.")).show(ui);
-            }
         });
         shown.output.result(|| ())
     }
@@ -241,7 +251,8 @@ fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Result<(), Strin
             select(app, next.as_deref().unwrap_or("Default"));
         }
         Action::Import => {
-            let request = PickRequest::open("tracingPresets").filter("Tracing presets", TRACE_PRESET_EXTS);
+            let name = file_asks::filter_name(crate::i18n::current(), "Tracing presets");
+            let request = PickRequest::open("tracingPresets").filter(name, TRACE_PRESET_EXTS);
             // The answer, or its failure, reaches the status bar from the continuation; nothing is pending here.
             let _ = file_asks::ask(app, request, Owner::Free, picked);
         }

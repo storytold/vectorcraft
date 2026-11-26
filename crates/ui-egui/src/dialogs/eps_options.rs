@@ -15,9 +15,12 @@
 use std::sync::Arc;
 
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Show as _, TooltipSpec};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _, TooltipSpec};
 use craft::ui::dialog::DialogId;
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::style::TypeRole;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset, fileio};
 use vectorcraft_eps::{Level, Overprint, Preview};
@@ -76,14 +79,16 @@ fn rows(presets: &Arc<[(String, String)]>) -> Vec<Param> {
         Param::section(tl!("Transparency")),
         choice_param("overprints", tl!("Overprints:"), Overprint::ALL.iter().map(|o| (o.id(), o.label()))),
         Param::custom("flattenerPreset", tl!("Preset:"), move |ui, fields, cx| {
-            ui.horizontal(|ui| {
-                let custom = fields.contains("flattener");
+            let custom = fields.contains("flattener");
+            let mut pressed = false;
+            let shown = Row::new().show(ui, |ui, _| {
                 flatten::preset_picker(ui, fields, "flattenerPreset", &presets, custom);
-                if Button::new(tl!("Custom…")).show(ui).clicks > 0 {
-                    cx.request_action("custom");
-                }
-            })
-            .response
+                pressed = Button::new(tl!("Custom…")).show(ui).clicks > 0;
+            });
+            if pressed {
+                cx.request_action("custom");
+            }
+            shown.output
         })
         .resets(["flattener"]),
         Param::section(tl!("Fonts")),
@@ -136,11 +141,14 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
         builtin_label(fields);
         normalise_level(fields);
         ParamDialog::new(KIND, tl!("EPS Options"), rows(&presets)).values(Bind::bound(fields)).ok_label(tl!("Export").into()).below(|ui, fields| {
-            ui.weak(if fields.text("level").and_then(Level::from_id) == Some(Level::Two) || fields.bool("compatibleGradients") == Some(true) {
+            Text::new(if fields.text("level").and_then(Level::from_id) == Some(Level::Two) || fields.bool("compatibleGradients") == Some(true) {
                 tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
             } else {
                 tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
-            });
+            })
+            .role(TypeRole::Caption)
+            .shade(Shade::Muted)
+            .show(ui);
         })
     });
     export_host::open(app, Export::Eps, selection, dialog);
@@ -195,7 +203,10 @@ pub(super) fn custom_dialog(app: &VectorcraftApp, parent: DialogId, fields: &Dia
         ParamDialog::new(CUSTOM_KIND, tl!("Custom Transparency Flattener Options"), flatten::option_params(&FIXED, FIXED_REASON))
             .values(Bind::bound(fields))
             .below(|ui, _| {
-                ui.weak(tl!("EPS has no alpha transparency, and Overprints sets whether overprints are kept."));
+                Text::new(tl!("EPS has no alpha transparency, and Overprints sets whether overprints are kept."))
+                    .role(TypeRole::Caption)
+                    .shade(Shade::Muted)
+                    .show(ui);
             })
     })
 }
