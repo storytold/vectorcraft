@@ -2,8 +2,8 @@
 //! the tables below, and each name that reaches outside the document has the `outside` id
 //! `script.check` (`vectorcraft-scriptcheck`) gives it. The names are read from a run: the own
 //! properties of the global object, of each object or function it holds and of each function's
-//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` also
-//! has are the language's, which reach files and other apps only through the host; `eval` and
+//! `prototype`, with a setter listed again as `name=`. The names a plain `vectorcraft_js::Realm` with
+//! E4X also has are the language's, which reach files and other apps only through the host; `eval` and
 //! `Function` still have rows, since they run code the checker can't read. A name the host adds
 //! without a row fails the test.
 
@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_js::{DirectiveName, JsValue, Realm};
+use vectorcraft_js::{DirectiveName, JsValue, Options, Realm};
 use vectorcraft_scriptcheck::{Limits, check};
 
 /// The names that reach outside the document: each with a script that uses it and the `outside` id
@@ -59,7 +59,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "File.prototype.",
         "absoluteURI alias changePath close constructor created creator displayName encoding encoding= eof error error= \
-         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= modified name openDlg parent path read \
+         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= localizedName modified name openDlg parent path read \
          readch readln readonly relativeURI resolve saveDlg seek tell toString type",
     ),
     (
@@ -70,7 +70,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Folder.prototype.",
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
-         getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
+         getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
 ];
 
@@ -110,9 +110,9 @@ fn host_names() -> BTreeSet<String> {
     text.lines().map(str::to_string).collect()
 }
 
-/// The names a plain JavaScript engine has.
+/// The names a plain JavaScript engine with E4X has.
 fn language_names() -> BTreeSet<String> {
-    match Realm::new().run(LIST) {
+    match Realm::with_options(Options { e4x: true, ..Options::default() }, vectorcraft_js::Limits::default()).run(LIST) {
         Ok(JsValue::String(text)) => text.lines().map(str::to_string).collect(),
         other => panic!("no list: {other:?}"),
     }

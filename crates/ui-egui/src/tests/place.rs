@@ -937,6 +937,22 @@ fn crop_image_shows_a_box_that_apply_crops_to() {
     assert!(!crate::menus::enabled(&app, "ui.cropImage") && app.run("ui.cropImage", json!({})).is_err());
 }
 
+/// With Crop Image in use and room to spare, the Control bar shows the cropping options: the
+/// resolution, the box's position and size, and Apply and Cancel.
+#[test]
+fn the_control_bar_shows_crop_image_s_options_with_apply_and_cancel() {
+    use crate::tests_removeanchors::{control_frame, has};
+    let mut app = app();
+    let dir = Folder::new("ui-place-crop-bar");
+    app.run("file.place", json!({"path": dir.file("crop.png", &png(100, 50, 72.0)), "link": false})).unwrap();
+    app.run("ui.cropImage", json!({})).unwrap();
+    let ctx = window(&app);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["PPI", "X", "Y", "W", "H", "Apply", "Cancel"] {
+        assert!(has(&bar, s), "Crop Image: {s} missing from {:?}", bar.iter().map(|(t, _)| t).collect::<Vec<_>>());
+    }
+}
+
 /// Crop Image's Apply and Object › Rasterize say in the status bar when the image couldn't be
 /// decoded, as raster exports do.
 #[test]
