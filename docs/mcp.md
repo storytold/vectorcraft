@@ -2809,12 +2809,14 @@ other files through `$`:
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
   object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
-  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer
+  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer or on a locked artboard
   throws `Cannot edit` and changes nothing, even when the value is the one the object has, and `zOrder()` on such
   an object throws `Cannot edit` too. The one exception is `opacity` given the value the object already has, which
   changes nothing and does not throw; on a graph's mark or label whose series or kind keeps another opacity, that
   value would still change the graph, so it throws `Cannot edit` as well. Its `name` and `note` still change, and an
-  object that is hidden or locked itself takes all of them (VectorCraft's own rule). `move` with the object itself
+  object that is hidden or locked itself takes `hidden`, `locked` and `opacity` (VectorCraft's own rule). Position,
+  size and stacking-order changes also require a selectable object. Other targets excluded by selection filtering,
+  including guide paths while Lock Guides is on, throw `Cannot select`. `move` with the object itself
   as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
   or `remove()` takes the last path out of a compound path, the compound path stays, empty, so a script that holds
   it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). An object with nothing in it, such
@@ -2900,12 +2902,18 @@ own rules:
 - The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
   the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
   A promise still pending when no job is left stays pending, and the run ends.
+- In the host API, `Realm::run` and `Realm::start` end a paused or waiting run before compiling the new source.
+  The earlier run's globals remain available; its remaining code and queued jobs do not run.
 - The jobs run on the run's fuel and limits, and each job takes 1 unit of fuel. A chain of callbacks that never ends
   stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
   `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
   `script.stop` drops the jobs still waiting, and the documents go back as for any failed run.
-- `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
-  item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
+- `all`, `allSettled` and `race` read their input through `Symbol.iterator`, including user-defined iterables and
+  overridden array iterators. In a kept engine with no `Symbol.iterator`, they walk arrays, `arguments` objects and
+  strings. String iterators keep surrogate pairs together. A noniterable object, including one
+  with only a `length`, rejects the promise they return with a `TypeError`. When processing a yielded value throws,
+  the combinator calls the iterator's `return` method if present; the original exception remains the rejection reason
+  even when `return` throws. An iterator whose step threw or finished is not closed. The promises `then` and the
   statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
 - A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
   report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
@@ -7772,13 +7780,16 @@ perspective grid shows with an active plane, a Shift-click opens the size dialog
 
 ## Curvature circle
 
-`shape.curvatureCircle {id, subpath?, segment, t, convex?}` draws the circle that touches path `id` at `t` (0 to 1) on
-segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there (its circle of curvature),
-as a live ellipse with the current paint, and selects it. The circle goes on the side the path bends toward; with
-`convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc of 90° or less (its two
-ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for an arc of θ) gives a
-circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the circle itself. The
-result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
+`shape.curvatureCircle {id, subpath?, segment, t, convex?, constantRadius?, anchors?}` draws the circle that touches
+path `id` at `t` (0 to 1) on segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there
+(its circle of curvature), as a live ellipse with the current paint, and selects it. The circle goes on the side the
+path bends toward; with `convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc
+of 90° or less (its two ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for
+an arc of θ) gives a circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the
+circle itself. With `constantRadius: false` (true when left out), such a segment gives the cubic's own curvature at
+`t` instead. The circle's four anchors are at 0°, 90°, 180° and 270°; with `anchors: "touch"` (`"standard"` when left
+out) the circle is a plain path with an anchor where it touches the path and one every 90° from there. The result is
+`{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
 The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
 The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
 at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
@@ -7788,8 +7799,10 @@ marked smooth), when the circle would reach past the canvas (4,000,000 pt from t
 origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
 
 The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
-pointer snaps to the nearest path that is not a guide within 5 screen points, or within Smart Guides › Snapping
-Tolerance when that is larger, and the tool shows the circle that matches the path there as a dashed outline (solid
+pointer snaps to the nearest path that is not a guide within the tool's Snap Tolerance (`snapTolerance` below, 5
+screen points by default), or within Smart Guides › Snapping Tolerance when that is larger; with Snap with Smart
+Guides Off turned off, the reach while Smart Guides are off is no more than Selection & Anchor Display › Tolerance.
+The tool shows the circle that matches the path there as a dashed outline (solid
 once it is more than 50,000 screen points around), a small cross at its center, a line from the center to the point
 it touches and, with Measurement Labels on, its radius by the pointer, followed by an asterisk for an arc's own
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
@@ -7799,6 +7812,21 @@ anchor, or where the circle would reach past the canvas, the pointer shows "Stra
 selection made outside the tool leaves none of them selected, another tool is chosen, another document becomes
 active, or an edit, Undo or Redo is made outside the tool. Selecting one of them again does not put it back out of
 reach.
+
+Curvature Circle Tool Options (`tool.options {tool: "curvatureCircle"}`, or a double-click on the tool, dialog
+`curvatureCircleOptions`) sets the tool's options, which `tool.setOption {tool: "curvatureCircle", values}` also sets
+and the preferences keep. The range, the default and the rule for Snap with Smart Guides Off are VectorCraft's own.
+Every switch is on by default, and the tool draws as it did before the options existed until one is changed:
+
+- `snapTolerance` (Snap Tolerance, 1 to 40 screen points, 5 by default) is how near a path pulls the pointer. Smart
+  Guides › Snapping Tolerance applies when it is larger.
+- `snapWithoutGuides` (Snap with Smart Guides Off) off makes the pointer reach no further than Selection & Anchor
+  Display › Tolerance while Smart Guides are off. When that tolerance is as large as the reach above, turning the
+  switch off does not change the reach.
+- `annotateRadius` (Annotate Radius) off hides the radius label. The label also needs Measurement Labels on.
+- `standardAnchors` (Anchors at Standard Positions) off draws the circle with `anchors: "touch"`.
+- `constantRadius` (Use the Radius of Circular Arcs) off draws with `constantRadius: false`, and the label has no
+  asterisk.
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}
@@ -8296,6 +8324,17 @@ and those shape tools: hidden widgets are not drawn, and those tools do not answ
 on them. `on`, when given and not `null`, must be `true` or `false` and sets the state; without it, or with `null`, the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
+In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
+Direct Selection, while a corner is selected or one live rectangle or polygon is selected) opens the Corners pop-up for the picked corners of every selected path:
+the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
+hold no corner is left out. The pop-up has the corner kind, the radius (blank while the picked corners differ) and the
+rounding, Relative or Absolute (`relativeRadii`, which applies to each path as a whole; neither is chosen while the
+paths differ). A path without Live Corners is Absolute: Relative leaves it, an ellipse or a line as it is, with no
+undo step. Editing a path's anchors (for example `path.moveAnchors`) ends its Live Corners, so it is Absolute again.
+With Relative rounding, a radius is
+compared as the fraction it stores (its share of the corner's maximum, at most all of it), so typing the radius
+shown again adds no undo step. The Corner Radius field beside the link sets the same corners. Each change runs one
+`object.setLiveShape` with `items`, one undo step, and the corners that were not picked keep their radius and kind.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}
@@ -11800,6 +11839,18 @@ PDF/X-3 a name that isn't a profile needs `output.registry`, a registered printi
 PDF/X-4 always embeds one), a TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion`, a title (`Untitled` when the
 document has none) and dates; type is outlined or embedded; editing data, passwords and, in PDF/X-1a and PDF/X-3, PDF
 layers are refused.
+
+The built-in CMYK working spaces `VectorCraft Coated CMYK (FOGRA51)` and `VectorCraft Uncoated CMYK (FOGRA52)` are
+VectorCraft's own press models, computed when first used from the FOGRA51 and FOGRA52 characterization data that Fogra
+publishes (<https://fogra.org/en/downloads/work-tools/characterisation-data>); the data files ship unmodified in
+`crates/color/data/`. An output intent with one of them, and with `output.outputConditionId` blank, has the
+`/OutputConditionIdentifier` `FOGRA51` or `FOGRA52` and, unless `output.registry` names another, the `/RegistryName`
+`http://www.color.org` (<https://registry.color.org/cmyk-registry/>), with the profile embedded. Their total ink limit
+(300%) and black generation are VectorCraft's own values.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-4:2010","output":{"outputIntent":"VectorCraft Coated CMYK (FOGRA51)"}}}}
+```
 
 - **pdfX1a** (PDF/X-1a:2001, written as PDF 1.3): CMYK, grey and spot colours only. Every colour and image is converted
   to `output.destination` (blank: the output intent's CMYK profile, else the working CMYK profile), untagged; an RGB
@@ -16271,10 +16322,11 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 ## Packaging Tools add-on
 
 Packaging Tools is a built-in add-on for the dielines of boxes and other folded packaging. Its commands are
-`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`, `addon.packaging.check` and
-`addon.packaging.fold`. In the desktop app, Object › Plug-ins › Packaging Tools › Fold Lines opens the Fold Lines panel,
-Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line run `addon.packaging.setRole` on the
-selection, Check Fold Lines runs `addon.packaging.check`, and Fold Preview runs `ui.foldPreview`.
+`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`, `addon.packaging.check`,
+`addon.packaging.setFoldAngle` and `addon.packaging.fold`. In the desktop app, Object › Plug-ins › Packaging Tools › Fold
+Lines opens the Fold Lines panel, Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line run
+`addon.packaging.setRole` on the selection, Check Fold Lines runs `addon.packaging.check`, Set Fold Angle… opens the
+options of `addon.packaging.setFoldAngle`, and Fold Preview runs `ui.foldPreview`.
 
 ### Fold line roles
 
@@ -16305,11 +16357,17 @@ the color it shows, no longer linked to the swatch, and stops overprinting. Text
 objects are skipped and counted. The command fails with an unknown role and when the objects hold no path it can change. One undo
 step, none when nothing changes. Result: `{ids, changed, skipped}`.
 
-`addon.packaging.roles` (`{ids?}`) returns `{roles: [{role, name, swatch, exists, count}], scope, selected}`: each role's
-swatch, whether the document has it, and how many of the objects have the role. It counts the selection, or every object
-of the document while nothing is selected and `ids` is left out (`scope` says which). Locked and hidden objects are
-counted in every scope, and an object is counted once when both it and its group are given. The Fold Lines panel shows
-these counts; clicking a role gives the selected paths that role. With nothing selected the panel says so.
+`addon.packaging.roles` (`{ids?}`) returns `{roles: [{role, name, swatch, exists, count}], scope, selected, foldLines,
+foldAngle, ownAngles, storedAngles}`: each role's swatch, whether the document has it, and how many of the objects have
+the role. It counts the selection, or every object of the document while nothing is selected and `ids` is left out
+(`scope` says which). Locked and hidden objects are counted in every scope, and an object is counted once when both it
+and its group are given. `foldLines` is how many of the Crease, Partial Cut and Perforation lines among them
+`addon.packaging.setFoldAngle` can change, which leaves out locked and hidden lines; it is 0 while nothing is selected
+and `ids` is left out, and while the selection holds only a layer and objects in it. `foldAngle` is the angle in degrees
+those lines all fold at (see Fold angles), or null when they fold at different angles or there are none; `ownAngles` is
+how many of them have an angle of their own, and `storedAngles` how many hold stored angle text, an angle or not, which
+`reset: true` removes. The Fold Lines panel shows these counts; clicking a role gives the selected paths that role. With
+nothing selected the panel says so.
 
 `addon.packaging.setRoleSwatch` (`{role, swatch}`) makes another global or spot color swatch carry the role. Objects
 stroked with the old swatch keep their color and no longer have the role. It fails with a missing swatch, a gradient or
@@ -16370,17 +16428,47 @@ The list is shown until the document changes.
 {"name":"run_command","arguments":{"command":"addon.packaging.check","params":{"tolerance":0.5,"select":true}}}
 ```
 
+### Fold angles
+
+A Crease or a Perforation folds 90° away from the printed side, so the print ends up outside, and a Partial Cut folds
+90° toward it. A Crease, Partial Cut or Perforation line can have an angle of its own instead, from -180° to 180°: a
+positive angle folds away from the printed side and a negative one toward it. The angle is stored in the line's data
+under `vc-fold-angle` as a number of degrees, rounded to the millionth of a degree (a stored value with more places
+folds at it rounded the same way). Native files keep it. SVG export leaves it out of the path's attributes; an SVG with
+`preserveEditing` keeps it in the document the SVG carries. A value that is not a number from -180 to 180 counts as no
+angle of its own. A cut line ignores it. A line keeps its own angle when `addon.packaging.setRole` gives it another
+role, or `none`, so a line made a Partial Cut after it was given 45° still folds at 45°; `reset: true` takes the angle
+away. In the Fold Preview window, a panel folded flat onto another (180°) is drawn behind that panel's printed side, and
+at -180° in front of it. Panels folded flat onto each other stack as they do when the blank is folded about its largest
+panel, whichever panel the window folds about.
+
+`addon.packaging.setFoldAngle` (`{angle?: -180..180, reset?: false, ids?}`) gives each Crease, Partial Cut and
+Perforation line among the objects (the selection by default), through groups and clip groups, the angle, or with
+`reset: true` takes the line's own angle away. Give exactly one of `angle` and `reset: true`. Locked and hidden objects
+are skipped as `addon.packaging.setRole` skips them; cut lines and objects without a role are skipped and counted. The
+command fails when the objects hold no Crease, Partial Cut or Perforation line it can change, and with an angle outside
+the range or one that is not a number. One undo step, none when nothing changes. Result: `{ids, changed, skipped}`.
+
+Set Fold Angle… opens its options (`ui.menuDialog {command: "addon.packaging.setFoldAngle"}`, kind `command`) on the
+angle that the selected lines it can change fold at (90° when they differ), shown with every decimal place it has.
+While the selection holds no such line, `ui.menuDialog` fails with the reason the command gives. While the selection
+holds such lines, the Fold Lines panel shows a Fold Angle field with that angle, empty when they differ. Typing an angle there sets it, and the Reset button beside it takes their own angles away.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.packaging.setFoldAngle","params":{"angle":135}}}
+```
+
 ### Fold Preview
 
 `addon.packaging.fold` (`{ids?, base?: [x, y], amount?: 1, tolerance?: 0.1}`) folds a blank into its 3D shape. It reads
 the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
 the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
-to the base, each by its angle times `amount` (0 is flat, 1 is folded): a Crease or a Perforation folds 90° away from
-the printed side, so the print ends up outside, and a Partial Cut folds 90° toward it. A hinge that closes a loop of
-panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all the way,
-whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no chain of
-hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel; anything
-else is an error. The command does not change the document.
+to the base, each by its angle times `amount` (0 is flat, 1 is folded). A hinge's angle is the fold angle of the line
+with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A hinge that closes
+a loop of panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all
+the way, whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no
+chain of hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel;
+anything else is an error. The command does not change the document.
 
 Result: `{ok, blank, blanks, base, panels: [{outline, frame: {x, y, z, origin}, parent, depth}], hinges: [{a, b,
 angle, kind, closes, gap}], collisions: [[a, b]], issues}`. `outline` is the panel's SVG path data in document

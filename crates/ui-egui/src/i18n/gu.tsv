@@ -5666,6 +5666,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
 	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
 	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Fold Angle	ફોલ્ડ ખૂણો
+	Set Fold Angle…	ફોલ્ડ ખૂણો સેટ કરો…
+	Set Fold Angle	ફોલ્ડ ખૂણો સેટ કરો
+	Reset Fold Angle	ફોલ્ડ ખૂણો રીસેટ કરો
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	એવી ક્રીઝ, આંશિક કટ અથવા પર્ફોરેશન લાઇન પસંદ કરો જે લૉક કે છુપાયેલી ન હોય
 	Check	ચેક કરો
 	Check Fold Lines	ફોલ્ડ લાઇન્સ ચેક કરો
 @msg	No cut lines are in the selection.	પસંદગીમાં કોઈ કટ લાઇન નથી.

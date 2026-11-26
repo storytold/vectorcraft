@@ -77,6 +77,7 @@ fn ok_sets_each_tools_options() {
     let layers = app.session.doc().unwrap().doc.layers.clone();
     let circle = vectorcraft_tools::circle::ID;
     let arc = vectorcraft_tools::three_point_arc::ID;
+    let curvature = vectorcraft_tools::curvature_circle::ID;
     // The tool opened, the fields set, the tool whose options are read, and the options expected there.
     let rows: Vec<(&str, Value, &str, Value)> = vec![
         (
@@ -106,6 +107,12 @@ fn ok_sets_each_tools_options() {
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
             circle,
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
+        ),
+        (
+            curvature,
+            json!({"snapTolerance": 8, "annotateRadius": false, "standardAnchors": false}),
+            curvature,
+            json!({"snapTolerance": 8.0, "snapWithoutGuides": true, "annotateRadius": false, "standardAnchors": false, "constantRadius": true}),
         ),
         (arc, json!({"direction": true}), arc, json!({"direction": true})),
         ("objectsOnPath", json!({"pivot": 7, "rotate": 30}), "objectsOnPath", json!({"pivot": 7, "rotate": 30.0})),
