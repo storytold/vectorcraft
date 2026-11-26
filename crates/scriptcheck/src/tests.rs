@@ -19,6 +19,20 @@ fn feature<'r>(r: &'r Report, id: &str) -> Option<&'r Feature> {
     r.features.iter().find(|f| f.id == id)
 }
 
+#[test]
+fn save_changes_text_requires_enumeration_member_context() {
+    for source in ["vc.log('SAVECHANGES');", "var text = 'SAVECHANGES';", "other['SAVECHANGES'];"] {
+        let r = report(source);
+        assert!(feature(&r, "file.write").is_none(), "{source}");
+        assert!(!r.outside.iter().any(|outside| outside.id == "filesWritten"), "{source}");
+    }
+    for source in ["SaveOptions['SAVECHANGES'];", "'SaveOptions.SAVECHANGES';"] {
+        let r = report(source);
+        assert!(feature(&r, "file.write").is_some(), "{source}");
+        assert!(r.outside.iter().any(|outside| outside.id == "filesWritten"), "{source}");
+    }
+}
+
 fn problems(r: &Report) -> Vec<(&'static str, Option<usize>, Option<&str>)> {
     r.problems.iter().map(|p| (p.code, p.line, p.detail.as_deref())).collect()
 }

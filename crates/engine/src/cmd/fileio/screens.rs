@@ -282,7 +282,11 @@ impl Row {
                 // The resolution is stored in the file too.
                 ScreenSize::Ppi(ppi) => o["ppi"] = json!(ppi),
                 size => {
-                    o["scale"] = json!(size.scale_for(C, region)?);
+                    let scale = size.scale_for(C, region)?;
+                    if !scale.is_finite() || !(0.01..=64.0).contains(&scale) {
+                        return Err(bad(C, "the effective raster scale must be between 0.01 and 64 pixels per point"));
+                    }
+                    o["scale"] = json!(scale);
                     if let Some(m) = o.as_object_mut() {
                         m.remove("ppi");
                     }
@@ -1207,6 +1211,11 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     let ungrown = (grown && o.assets.is_none() && o.layers.is_none() && o.selection.is_none()).then_some(original);
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
+    for row in rows.iter().filter(|row| row.format.raster) {
+        for item in &items {
+            row.options_for(item.region, item.artboard)?;
+        }
+    }
     // Before the folder is made or any row is written, with the artboards each file holds.
     let single: Option<Vec<usize>> = items.iter().map(|i| i.artboard).collect::<Option<Vec<_>>>().filter(|a| naming.single_pdf && a.len() > 1);
     let st = s.doc()?;

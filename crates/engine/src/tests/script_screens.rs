@@ -10,6 +10,29 @@ use crate::*;
 const DENIED: &str = "Script file access denied";
 
 #[test]
+fn screen_width_and_height_reject_effective_scales_outside_the_encoder_range() {
+    for mode in ["SCALEBYWIDTH", "SCALEBYHEIGHT"] {
+        for pixels in [65.0, 0.001] {
+            let base = vectorcraft_testkit::TempDir::new("screen-size-limit");
+            std::fs::create_dir_all(base.join("main")).unwrap();
+            let mut s = session(&base);
+            let dir = data_folder(&mut s, &base);
+            let output = dir.join("scaled");
+            let source = format!(
+                "Folder.userData; var d = app.documents.add(DocumentColorSpace.RGB, 1, 1); \
+                 var o = new ExportForScreensOptionsPNG24(); \
+                 o.scaleType = ExportForScreensScaleType.{mode}; o.scaleTypeValue = {pixels}; \
+                 d.exportForScreens(new Folder({}), ExportForScreensType.SE_PNG24, o);",
+                quoted(&output)
+            );
+            let error = failure(&mut s, &base, &source);
+            assert!(error.contains("scale"), "{mode}: {pixels}: {error}");
+            assert!(!output.exists(), "{mode}: {pixels}");
+        }
+    }
+}
+
+#[test]
 fn screen_png8_without_matting_keeps_transparent_edge_colors() {
     let base = vectorcraft_testkit::TempDir::new("screen-png8-unmatted");
     std::fs::create_dir_all(base.join("main")).unwrap();

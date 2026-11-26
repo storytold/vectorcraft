@@ -2953,7 +2953,10 @@ other files through `$`:
   https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsWebOptimizedSVG.html,
   https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensPDFOptions.html). The raster classes map
   `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR` as a multiplier from 0.01 to 64, so 2 doubles the
-  size, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels, `SCALEBYRESOLUTION` in ppi from 0.72 to 4608); JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
+  size, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels, `SCALEBYRESOLUTION` in ppi from 0.72 to 4608).
+  Width and height requests must imply a raster scale from 0.01 to 64 for every exported region; an invalid scale
+  is rejected before that export command creates its output folder. Earlier artboard, asset or document exports in
+  the same script call can have written files. JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
   PNG24 maps `transparency`, `backgroundBlack` and `interlaced`; PNG8 maps `colorCount` (2 to 256), `interlaced`,
   `matte` and `transparency`. With PNG8 transparency enabled, `matte: false` preserves transparency without a white background. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
   `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`. SVG `RasterImageLocation.LINK` throws; `EMBED` and `PRESERVE` embed raster images. The PDF class maps `pdfPreset` (at most 255

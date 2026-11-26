@@ -571,7 +571,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         // `SaveOptions['SAVECHANGES']`, or the value written as the string `"SaveOptions.SAVECHANGES"`.
         let value = unquote(t.text, 32);
-        if value == catalog::SAVE_CHANGES
+        if (value == catalog::SAVE_CHANGES && is(h0, "[") && word(h1, catalog::SAVE_OPTIONS))
             || value.strip_prefix(catalog::SAVE_OPTIONS).and_then(|r| r.strip_prefix('.')) == Some(catalog::SAVE_CHANGES)
         {
             self.save_changes(line);
