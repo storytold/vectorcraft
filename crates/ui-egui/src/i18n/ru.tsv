@@ -8005,6 +8005,8 @@ arrowhead	Target	Мишень
 	VectorCraft Default	VectorCraft по умолчанию
 	VectorCraft Defaults	Стандартные VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Общий CMYK VectorCraft (как SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK VectorCraft для мелованной бумаги (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK VectorCraft для немелованной бумаги (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Образцы VectorCraft (.vcswatches)
 	Vertical Align	Вертикальное выравнивание
 	Vertical Area Type	Вертикальный текст в области
@@ -10939,6 +10941,11 @@ shape	Open	Открытый
 	No objects are selected.	Объекты не выделены.
 	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
 	Remove Fold Line Role	Убрать тип линии
+	Fold Angle	Угол сгиба
+	Set Fold Angle…	Задать угол сгиба…
+	Set Fold Angle	Задать угол сгиба
+	Reset Fold Angle	Сбросить угол сгиба
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	выделите линию биговки, надреза или перфорации, которая не закреплена и не скрыта
 	Check	Проверить
 	Check Fold Lines	Проверить линии сгиба
 @msg	No cut lines are in the selection.	В выделении нет линий реза.

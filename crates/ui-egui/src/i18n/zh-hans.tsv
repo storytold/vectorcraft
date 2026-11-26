@@ -6212,6 +6212,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Photo Low Fidelity	低保真照片
 	Restricted Colors	受限颜色
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft 通用 CMYK (类 SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft 涂布纸 CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft 非涂布纸 CMYK (FOGRA52)
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	Working RGB	工作 RGB
 	Dot Gain 15%	网点扩大 15%
@@ -10728,6 +10730,11 @@ breakText	Glyphs	字形
 	No objects are selected.	未选择任何对象。
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
+	Fold Angle	折叠角度
+	Set Fold Angle…	设置折叠角度…
+	Set Fold Angle	设置折叠角度
+	Reset Fold Angle	重置折叠角度
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	请选择未锁定且未隐藏的压痕线、半切线或打孔线
 	Check	检查
 	Check Fold Lines	检查折线
 @msg	No cut lines are in the selection.	所选内容中没有切割线。

@@ -6662,6 +6662,8 @@ arrowhead	Feather	Tüy
 	VectorCraft Default	VectorCraft Varsayılanı
 	VectorCraft Defaults	VectorCraft Varsayılanları
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft Genel CMYK (SWOP benzeri)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft Kaplamalı CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft Kaplamasız CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft Renk Örnekleri (.vcswatches)
 	Vertical Align	Dikey Hizalama
 	Vertical Area Type	Dikey Alan Türü
@@ -10810,6 +10812,11 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Fold Angle	Katlama Açısı
+	Set Fold Angle…	Katlama Açısını Ayarla…
+	Set Fold Angle	Katlama Açısını Ayarla
+	Reset Fold Angle	Katlama Açısını Sıfırla
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	kilitli ya da gizli olmayan bir pilyaj, yarım kesim veya perforaj çizgisi seçin
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Araç çubuğundaki bir aracın ve tuşlarının ne yaptığını ipucu yerine bir kartta gösterir; Araç İpuçlarını Göster gerekir.
 	Selects whole objects and groups to move, resize or rotate them.	Taşımak, yeniden boyutlandırmak veya döndürmek için nesnelerin ve grupların tamamını seçer.

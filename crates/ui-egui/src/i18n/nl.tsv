@@ -1323,6 +1323,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	Generieke VectorCraft-CMYK (SWOP-achtig)
+	VectorCraft Coated CMYK (FOGRA51)	Gestreken VectorCraft-CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Ongestreken VectorCraft-CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Verouderde Macintosh-RGB (Gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetstandaard-RGB (sRGB)
 	Monitor RGB	Monitor-RGB
@@ -10891,6 +10893,11 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Fold Angle	Vouwhoek
+	Set Fold Angle…	Vouwhoek instellen…
+	Set Fold Angle	Vouwhoek instellen
+	Reset Fold Angle	Vouwhoek herstellen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecteer een rillijn, halve snijlijn of perforatielijn die niet vergrendeld of verborgen is
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Toont in plaats van de tooltip een kaart met wat een gereedschap in de werkbalk en zijn toetsen doen; vereist Tooltips tonen.
 	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.

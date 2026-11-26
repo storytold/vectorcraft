@@ -8403,6 +8403,8 @@ mark-style	Japanese	იაპონური
 	Variation	ვარიაცია
 	VectorCraft Default	VectorCraft-ის ნაგულისხმევი
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-ის ზოგადი CMYK (SWOP-ის მსგავსი)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft-ის ცარციანი ქაღალდის CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft-ის უცარცო ქაღალდის CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft-ის ფერის ნიმუშები (.vcswatches)
 	Vertical Area Type	ვერტიკალური არის ტექსტი
 	Vertical Type	ვერტიკალური ტექსტი
@@ -11170,6 +11172,11 @@ font-script	Japanese	იაპონური
 	No objects are selected.	ობიექტები არ არის მონიშნული.
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მარკირებისთვის.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Fold Angle	მოკეცვის კუთხე
+	Set Fold Angle…	მოკეცვის კუთხის დაყენება…
+	Set Fold Angle	მოკეცვის კუთხის დაყენება
+	Reset Fold Angle	მოკეცვის კუთხის ჩამოყრა
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	მონიშნეთ ბიგის, ნაწილობრივი ჭრის ან პერფორაციის ხაზი, რომელიც არც ჩაკეტილია და არც დამალული
 	Check	შემოწმება
 	Check Fold Lines	მოკეცვის ხაზების შემოწმება
 @msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.

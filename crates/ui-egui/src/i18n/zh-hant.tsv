@@ -10544,6 +10544,11 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Fold Angle	摺疊角度
+	Set Fold Angle…	設定摺疊角度…
+	Set Fold Angle	設定摺疊角度
+	Reset Fold Angle	重設摺疊角度
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	請選取未鎖定且未隱藏的壓痕線、半切線或打孔線
 	Check	檢查
 	Check Fold Lines	檢查摺線
 @msg	No cut lines are in the selection.	選取範圍中沒有切割線。

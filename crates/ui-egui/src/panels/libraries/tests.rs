@@ -248,6 +248,34 @@ fn an_empty_library_takes_art_anywhere() {
     assert_eq!(graphics(&mut panel.app()).len(), 1);
 }
 
+#[test]
+fn a_library_drop_does_not_collect_unrelated_artwork_after_a_document_switch() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    let first = art_drag(&mut app, 10.0);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let second = art_drag(&mut app, 50.0);
+    assert!(matches!((&first, &second), (PanelDrag::Art { ids: a, .. }, PanelDrag::Art { ids: b, .. }) if a == b));
+    assert!(app.session.set_active(0));
+
+    let mut panel = Harness::new(app, with_source);
+    let from = panel.rect(SOURCE).center();
+    let to = panel.rect("This library is empty").center();
+    CARRIED.with(|carried| *carried.borrow_mut() = Some(first.clone()));
+    panel.drag_hold_role(SOURCE, craft::ui::contract::Role::LIST_ITEM, to - from);
+    assert!(craft::ui::runtime::drag::mark(panel.ctx()).is_some());
+    assert!(panel.app().session.set_active(1));
+    panel.frame();
+    let drag = craft::ui::runtime::drag::active::<PanelDrag>(panel.ctx());
+    assert_eq!(drag.as_deref(), Some(&first));
+    assert!(craft::ui::runtime::drag::mark(panel.ctx()).is_none());
+    panel.release();
+    assert!(graphics(&mut panel.app()).is_empty(), "the library never collects the target document's same-ID artwork");
+
+    drop_at(&mut panel, second, to);
+    assert_eq!(graphics(&mut panel.app()).len(), 1, "artwork from the current document can still be added");
+}
+
 fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
     let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();

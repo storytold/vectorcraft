@@ -84,11 +84,18 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
     ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift.
+    // The Tangent Circle tool's radius for Shift, and Add Points to Existing Paths (off to start).
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
-    assert_eq!(held(&app, |d| d.expect("the held dialog").fields().number("radius")), Some(36.0));
-    ok(&mut app, &[("radius", FieldValue::Number(12.5))]);
+    let shown = held(&app, |d| {
+        let f = d.expect("the held dialog").fields();
+        (f.number("radius"), f.bool("addPoints"))
+    });
+    assert_eq!(shown, (Some(36.0), Some(false)));
+    let rows = super::options_params("tangentCircle", crate::canvas::rulers::general_lengths(&app));
+    assert!(rows.iter().any(|p| p.key == "addPoints" && p.label.as_str() == "Add Points to Existing Paths"), "the option has a row");
+    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("addPoints", FieldValue::Bool(true))]);
     assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
+    assert_eq!(app.session.tool_options_of("tangentCircle")["addPoints"], json!(true));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
     assert_eq!(KIND, "pathToolOptions");
 }
@@ -150,6 +157,7 @@ fn the_tangent_circle_options_have_their_rows_and_a_fractional_tolerance() {
         rows,
         [
             ("radius", "Radius"),
+            ("addPoints", "Add Points to Existing Paths"),
             ("center", "Circle Center"),
             ("radii", "Circle Radii Lines"),
             ("color", "Color"),

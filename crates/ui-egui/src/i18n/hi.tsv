@@ -6399,6 +6399,8 @@ arrowhead	Feather	पंख
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	पिछली बार VectorCraft सामान्य तरीके से बंद नहीं हुआ था। इन डॉक्यूमेंट्स में बिना सेव किए बदलाव थे:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft डॉक्यूमेंट्स: एक लॉक्ड ऑब्जेक्ट, जो फ़ाइल बदलने पर अपडेट होता है।
 	VectorCraft Generic CMYK (SWOP-like)	वेक्टर क्रेफ्ट जेनेरिक CMYK (SWOP-like)
+	VectorCraft Coated CMYK (FOGRA51)	वेक्टर क्रेफ्ट कोटेड CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	वेक्टर क्रेफ्ट अनकोटेड CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft मदद…
 	VectorCraft on getartcraft.com	getartcraft.com पर VectorCraft
 	VectorCraft on GitHub	GitHub पर VectorCraft
@@ -10471,6 +10473,11 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Fold Angle	फ़ोल्ड कोण
+	Set Fold Angle…	फ़ोल्ड कोण सेट करें…
+	Set Fold Angle	फ़ोल्ड कोण सेट करें
+	Reset Fold Angle	फ़ोल्ड कोण रीसेट करें
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ऐसी क्रीज़, आंशिक कट या परफ़ोरेशन लाइन चुनें जो न लॉक हो न छिपी हो
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	टूलबार का टूल और उसकी कुंजियाँ क्या करती हैं, यह टिप की जगह एक कार्ड में दिखाता है; इसके लिए टूल युक्तियाँ दिखाएँ चालू होना चाहिए।
 	Selects whole objects and groups to move, resize or rotate them.	पूरे ऑब्जेक्ट और समूह चुनता है, ताकि उन्हें खिसकाया, आकार बदला या घुमाया जा सके।
