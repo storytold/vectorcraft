@@ -15048,8 +15048,9 @@ Tools:
   preferences): `diameter` (0.25 to 200 pt, 20), `tolerance` (how near two anchors count as coincident, 0 to 3 pt,
   0.002) and `together` (Keep Shared Points Together).
 - **Tangent Circle Tool** (`tangentCircle`): draws a circle on two path segments of any unlocked paths, selected or
-  not. A click picks the first segment; over a second segment the circle that would be drawn shows (red) with its
-  center, its radii to the two touch points and its radius, or a note that there is none. A click there draws the
+  not. A click picks the segment nearest the pointer within reach (see `snapTolerance` below) as the first segment;
+  over a second segment the circle that would be drawn shows (in `color`) with its center cross, its radii to the two
+  touch points (`center`, `radii`) and its radius, or a note that there is none. A click there draws the
   circle that is tangent to the first segment at the point clicked and touches the second (its center on the first
   segment's normal there). With Shift the circle instead has the tool's `radius` and may touch the first segment
   anywhere along it. A drag from the second segment sets the radius to the drag's length, and the circle may again
@@ -15069,8 +15070,14 @@ Tools:
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
   segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
   canceled preview does not leave a circle worked out on the previewed paths.
-  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
-  gives an error for a value outside that range or one that is not a number, and for any other option.
+  Options (`tool.setOption`, or a double-click on the tool; kept with the preferences): `radius` (pt, 0.01 to
+  1000000, 36); `center` and `radii` (true or false, both true) show the center cross and the radii; `color` (`red`,
+  `blue`, `magenta`, `green`, `black` or `gray`; `red`) is the color of the circle, the cross, the radii and the note;
+  `snapTolerance` (screen pixels, 0 to 25, 3; VectorCraft's own range and default) is how near the pointer picks a
+  segment while Smart Guides are on (their Snapping Tolerance counts instead when it is larger) or while they are off
+  with `snapWithoutGuides` (true or false, true) on. Otherwise a segment is picked within the Selection Tolerance, which is also the least reach with snapping.
+  `tool.setOption` gives an error for a value outside an option's range, of the wrong type, or a color not listed, and
+  for any other option, and then sets none of the values.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
