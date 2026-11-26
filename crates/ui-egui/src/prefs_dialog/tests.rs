@@ -581,9 +581,8 @@ fn prefs_reset_outside_run_resets_the_ui_only_rows_in_the_next_frame() {
     let default = ui_rows(&a);
     set_ui_rows(&mut a, (!default.0, !default.1, !default.2));
     a.session.execute("prefs.reset", &json!({})).unwrap();
-    let ctx = crate::testing::ui_context();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| a.tick(ui.ctx()));
-    out.textures_delta.clear();
+    let ctx = a.ui_ctx.clone().expect("a window context");
+    crate::testing::app_frame(&mut a, &ctx, egui::RawInput::default());
     assert_eq!(ui_rows(&a), default);
 
     // Before the next command switches workspaces: the workspace left keeps the reset value.
