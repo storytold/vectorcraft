@@ -136,6 +136,8 @@ pub struct Session {
     /// Set when a command that draws a shape was journaled outside saved steps
     /// ([`Session::take_shape_drawn`]).
     shape_drawn: bool,
+    /// The categories `prefs.reset` reset, `None` for every one ([`Session::take_prefs_resets`]).
+    prefs_resets: Vec<Option<&'static str>>,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the

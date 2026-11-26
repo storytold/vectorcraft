@@ -201,6 +201,69 @@ fn a_heavy_filter_s_result_needs_the_document_as_it_was() {
     assert_eq!(app.ui.status, format!("“Test {id}” finished, but the document or the plug-in changed meanwhile: run it again"));
 }
 
+/// A heavy filter that writes type, run while typing is in progress with Real-time Drawing off:
+/// the typing is kept before the run starts, so the plug-in is given the typed text and its result
+/// applies once it is done. A run that can't start keeps no typing. Typing started with Real-time
+/// Drawing off while it runs isn't in what it was given: nothing changes, and the status bar says
+/// to run it again.
+#[test]
+fn a_heavy_filter_is_given_the_typing_in_progress() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_engine::ViewInfo;
+    use vectorcraft_engine::tools::{PointerEvent, PointerKind};
+    let id = "test.ui.heavy.typing";
+    let plain = |app: &VectorcraftApp, t: NodeId| match &app.session.doc().unwrap().doc.node(t).unwrap().kind {
+        NodeKind::Text(x) => x.plain_text(),
+        _ => panic!("type"),
+    };
+    // Clicks into the end of `t` with the Type tool and types `text`.
+    let type_into = |app: &mut VectorcraftApp, t: NodeId, text: &str| {
+        let v = ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        let b = app.session.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        app.session.tool_text(text, v).unwrap();
+    };
+    let mut app = app();
+    app.session.prefs.real_time_drawing = false;
+    let t = NodeId(app.run("text.create", json!({"x": 100, "y": 100, "text": "A", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let style = match &app.session.doc().unwrap().doc.node(t).unwrap().kind {
+        NodeKind::Text(x) => serde_json::to_value(&x.runs[0].style).unwrap(),
+        _ => panic!("type"),
+    };
+    let retyped = |text: &str| json!({"objects": [{"id": t.0, "text": {"runs": [{"text": text, "style": style}]}}]}).to_string();
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","budget":"heavy","api":3,"permissions":["doc.read","doc.write"],"inputs":["type"],"writes":["type"]}}"#
+    );
+    // It adds "!" to the text it is given: "AB" or, given only "A", "A".
+    let src = tpl::when_given_else(&manifest, tpl::Given::Input, r#""AB""#, &retyped("AB!"), &retyped("A!"));
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "allowHeavy": true, "grant": ["doc.read", "doc.write"]})).unwrap();
+    type_into(&mut app, t, "B");
+    assert_eq!(plain(&app, t), "A", "Real-time Drawing off leaves the typing out of the document");
+    // A run that can't start leaves the typing in progress, out of the document.
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(plugin_runs::start(&mut app, json!({"id": "test.ui.heavy.missing", "ids": [t.0]})).is_err());
+    assert_eq!(plain(&app, t), "A", "a run that can't start keeps no typing");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    assert!(app.session.in_interaction(), "the typing is still in progress");
+    let p = json!({"id": id, "ids": [t.0]});
+    assert_eq!(plugin_runs::start(&mut app, p.clone()).unwrap()["background"], true);
+    assert_eq!(plain(&app, t), "AB", "the typing is kept before the run starts");
+    finish_runs(&mut app);
+    assert_eq!(plain(&app, t), "AB!", "{}", app.ui.status);
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    // Typing started while it runs, Real-time Drawing off.
+    plugin_runs::start(&mut app, p).unwrap();
+    type_into(&mut app, t, "C");
+    let doc = app.session.doc().unwrap().doc.clone();
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, doc, "nothing changed");
+    assert_eq!(app.ui.status, format!("“Test {id}” finished, but the document or the plug-in changed meanwhile: run it again"));
+}
+
 /// The progress window is the run's: headed by it, with Cancel and Continue in Background; Cancel
 /// stops the run, which changes nothing, and the window goes.
 #[test]
@@ -476,6 +539,49 @@ fn answer_open(app: &mut VectorcraftApp, ok: bool) {
 
 /// On the web a filter without a progress report runs in a worker too: nothing runs on the page,
 /// and the result applies as one undo step once the worker posts it.
+#[test]
+fn on_the_web_deferred_typing_discards_worker_output() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_engine::ViewInfo;
+    use vectorcraft_engine::tools::{PointerEvent, PointerKind};
+
+    let (mut app, fake) = web_app();
+    app.session.prefs.real_time_drawing = false;
+    let id = "test.ui.web.deferredtyping";
+    let text = NodeId(app.run("text.create", json!({"x": 100, "y": 100, "text": "A", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":3,"inputs":["type"],"writes":["type"],"permissions":["doc.read","doc.write"]}}"#
+    );
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, "{}")).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
+    let view = ViewInfo::default();
+    app.session.select_tool("type", view).unwrap();
+    let bounds = app.session.doc().unwrap().doc.bounds_of(&[text], false).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        app.session.pointer(&PointerEvent::new(kind, bounds.x1 - 1.0, bounds.center().y), view).unwrap();
+    }
+    plugin_runs::start(&mut app, json!({"id": id, "ids": [text.0]})).unwrap();
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    let revision = app.session.doc().unwrap().revision;
+    app.session.tool_text("B", view).unwrap();
+    assert_eq!(app.session.doc().unwrap().revision, revision, "deferred typing preserves the worker's document revision");
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(plugin_runs::in_workers(&app));
+    assert!(app.session.in_interaction());
+    assert!(matches!(&before.node(text).unwrap().kind, NodeKind::Text(value) if value.plain_text() == "A"));
+
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(app.plugin_runs.running.is_empty());
+    assert!(fake.worker(0).terminated.get());
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    assert!(app.session.in_interaction());
+    assert!(app.ui.status.contains("the document or the plug-in changed meanwhile"), "{}", app.ui.status);
+}
+
 #[test]
 fn on_the_web_a_filter_runs_in_a_worker_and_applies_as_one_undo_step() {
     let (mut app, fake) = web_app();

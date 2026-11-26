@@ -62,6 +62,9 @@ pub struct Services {
     /// The pen the host reads itself (tablet APIs the window system doesn't route): the same
     /// handle the host installs for the framework's pointer feed.
     pub pen: Option<PenSource>,
+    /// Told whether the active tool reads an airbrush pen's finger wheel (Windows: the host opens
+    /// the tablet driver's Wintab context only while it does). Without it nothing is told.
+    pub stylus_wheel: Option<Box<dyn FnMut(bool)>>,
     pub read: Option<ReadFn>,
     /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
     /// byte past the limit, so a larger file is refused without reading all of it. Without it, the

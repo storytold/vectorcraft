@@ -387,8 +387,10 @@ capability model proposed for PhotoCraft plug-ins
   `grants.json`, and installs a module that lists permissions only under a grant recorded for this very module,
   also when it loads the Additional Plug-ins Folder. The approval does not protect against native code linked into
   VectorCraft or against another program running as the same user, which can change the files in the `Plug-ins`
-  folder. `grants.json` is not signed, so such a program can add a grant to it. `--allow-plugin-grants` is a choice
-  the person starting a headless session makes.
+  folder. `grants.json` carries a MAC made with a key kept in the system key store ([grants file
+  integrity](#grants-file-integrity)), so a program that only edits the file can't add a grant to it; one running as
+  the same user can still read the key or change VectorCraft. `--allow-plugin-grants` is a choice the person starting
+  a headless session makes.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
@@ -409,7 +411,8 @@ capability model proposed for PhotoCraft plug-ins
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
-  tries again. A refused install leaves the grant, the plug-in installed with the id, the `Plug-ins` folder and the
+  tries again. The same happens when it can't delete the plug-in's stored module, and the grant stays in `grants.json`.
+  A refused install leaves the grant, the plug-in installed with the id, the `Plug-ins` folder and the
   list of disabled plug-ins as they are. When another session installs a plug-in with the id or changes its grant
   while `plugin.install` checks a module, the install is refused, before anything is written to the `Plug-ins` folder,
   if the other plug-in would need `replace: true` or the changed grant no longer approves the module. A
@@ -426,8 +429,8 @@ capability model proposed for PhotoCraft plug-ins
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
   the grant stops counting. The grant also stops counting when the folder held no module for that id. A
-  `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
-  and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
+  `grants.json` larger than 1 MiB, or one that is neither a grants object nor a JSON list, grants nothing: the new
+  module stays in the folder, and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
   permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
   including for the next load, which tries the removal again. When a later file in the folder holds a module with the
@@ -444,8 +447,8 @@ capability model proposed for PhotoCraft plug-ins
   covers. An entry of `grants.json` that this version can't use (a permission it doesn't know, an invalid id) is
   skipped and stays in the file until its plug-in is granted again, replaced by a module that lists no permissions, or
   removed. When such an entry can't be removed from the file, `plugin.install` and `plugin.remove` treat it as a grant
-  that can't be removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written
-  larger than 1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept in it count for
+  that can't be removed. A `grants.json` that is neither a grants object nor a JSON list is never overwritten, and
+  the file is never written larger than 1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept in it count for
   `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup, a stored plug-in
   is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins Folder and
   `plugin.reload` install only plug-ins that such a grant covers, and report the others. A module without a
@@ -456,7 +459,8 @@ capability model proposed for PhotoCraft plug-ins
 - `api` is the plug-in API level the manifest is written for: `1` (the default); `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
   symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); or `3`, which
-  adds `context` ([document information](#document-information)). A higher one is refused. `plugin.list` and
+  adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)) and `context`
+  ([document information](#document-information)). A higher one is refused. `plugin.list` and
   `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which
   a filter that lists `inputs` must list in `permissions`, so installing it asks the user to grant them. `context` is
   not a permission either: it is read under `doc.read` in the same way, and the install prompt says that the plug-in
@@ -484,6 +488,67 @@ Drawing evaluates effects often, so live-effect results are cached by plug-in in
 geometry, fill rule, reference box and the paints the effect is given: a plug-in runs again only when one of them
 changes. Failures are cached too. The swatches and patterns a painted result names are checked against the document
 each time it is drawn, and a paint linked to a global swatch is drawn in that swatch's current color at its own tint.
+
+#### Grants file integrity
+
+`grants.json` holds the grants in a JSON object, `{"version": 1, "generation": 3, "grants": [...], "mac": "..."}`.
+`mac` is an HMAC-SHA-256 ([RFC 2104](https://www.rfc-editor.org/rfc/rfc2104)), in lower-case hexadecimal, of the
+folder the file is in, the `generation` and the `grants` list written as compact JSON. The key is 32 random bytes that
+VectorCraft makes when it records the first grant. VectorCraft keeps the key in the system key store, as the secret of
+the account `hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, written as 64 lower-case
+hexadecimal digits, and never in a file:
+
+- On macOS the key is in the user's Keychain.
+- On Windows the key is a generic credential in Credential Manager.
+- On Linux and the BSDs the key is in the Secret Service, for example GNOME Keyring. When its collection is locked,
+  the desktop may ask to unlock it.
+
+When VectorCraft can't connect to the key store, it tries again the next time it needs the key, so a key store that
+starts after VectorCraft is used without a restart. VectorCraft reads the key from the key store each time it checks or
+signs `grants.json`, so a key removed or replaced there is not used.
+
+VectorCraft makes the key while it holds `vectorcraft-plugin-grant-key.lock` in `%LOCALAPPDATA%` on Windows, in the
+temporary folder on macOS, and in `$XDG_RUNTIME_DIR` elsewhere. When that file can't be locked, or `%LOCALAPPDATA%` or
+`$XDG_RUNTIME_DIR` is not set, no key is made, and approvals last for the session only, as when the key store can't be
+reached.
+
+The key store also keeps a generation for each `Plug-ins` folder, as a secret of 16 lower-case hexadecimal digits (the
+generation as an 8-byte big-endian number) of the account `generation-v1-` followed by the SHA-256 of the folder's
+resolved path in hexadecimal, in the same service. A key store that holds no generation for a folder counts as
+generation 0. VectorCraft reads the generation from the key store only, never from `grants.json`. Each time VectorCraft writes a signed `grants.json`, in the folder's turn (`disabled.lock`), it first
+raises the kept generation by two, then writes the file at the generation after the raised one, and then keeps that
+generation. When it removes a signed `grants.json`, it raises the generation by two first. The kept generation never
+goes down: when the file can't be written or removed after the raise, the generation stays raised, the file left in
+place grants nothing, and each plug-in it names that lists permissions asks for approval again. VectorCraft checks
+before the raise whether the signed file would be larger than 1 MiB; when it would, VectorCraft logs a warning and
+leaves the file and the generation as they are, and the file keeps its grants. When the key store can't keep the generation of a write, the file
+just written grants nothing, and the write reports a failure. That file is one generation past the kept one, so the
+next raise by two moves past it. When the kept generation is within two of the largest 64-bit value, VectorCraft
+logs a warning and leaves the file and the generation as they are.
+
+VectorCraft compares the MAC in constant time. A `grants.json` without the MAC of its generation, its grants and its
+folder, or at another generation than the one the key store keeps for the folder, grants nothing, and each plug-in it
+names that lists permissions asks for approval again. This covers a file that an earlier version wrote (a plain JSON
+list), a grant that another program edited or added, a file whose `mac` was removed or changed, a file copied from
+another `Plug-ins` folder or another computer, an earlier copy of the file put back after a grant was revoked or the
+file was removed, a write whose generation the key store didn't keep, a file left in place by a write or removal that
+failed after the generation was raised, and a file whose key is no longer in the key store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
+the key store has none. When a grant is forgotten without an approval (`plugin.remove`, installing a module that lists
+no permissions under that id, or a folder load that forgets the grant), VectorCraft raises the generation by two, then
+takes that entry out of such a file and leaves the rest unsigned, so no earlier signed copy brings the entry back. It
+also raises the generation by two when a grant is forgotten while there is no `grants.json`, or while the file in its
+place grants nothing (no valid MAC, too large, or neither a grants object nor a JSON list) and has no entry to take out,
+whenever the key store holds a key. A `generation` written into such a file has no effect on the raise. When the key
+store can't raise the generation, VectorCraft logs a warning.
+
+When the key store can't be reached (it is locked, or a headless Linux session has no Secret Service), no
+`grants.json` grants anything and VectorCraft writes none: an approval lasts for the session only, the module stored
+for the id is not replaced, and `plugin.remove` of a plug-in returns an error and leaves the plug-in installed, as for a
+grant that can't be removed. This also happens when there is no `grants.json` or the file doesn't name the plug-in.
+`plugin.remove` of an id that isn't installed deletes the module stored for it that didn't load, such as one an
+earlier version's `grants.json` approved, and returns `{removed}`. With `VECTORCRAFT_NO_PREFS` set there is no plug-in store, and the web build keeps no grants file. The
+MAC does not protect against another program running as the same user, which can read the key from the key store or
+change VectorCraft itself.
 
 ## ABI v1
 
@@ -703,11 +768,17 @@ the module's start function, in a run that isn't a filter's run on a document, o
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
-- `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of
+- `inputs` (filters at `api` 2 or later): the kinds of object besides paths and compound paths the filter reads, any of
   `"type"`, `"image"` and `"symbolInstance"`, each at most once (`"inputs": ["type", "image"]`). Left out or `[]`, the
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
   another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
   installed, and so is `api` 2 on hosts from before it.
+- `writes` (filters at `api` 3 only): the kinds among `inputs` the filter may change ([writing type, images and
+  symbols](#writing-type-images-and-symbols)), each at most once (`"writes": ["type"]`). Left out or `[]`, everything
+  the filter reads stays read-only. An unknown, repeated or wrongly typed entry, a kind `inputs` doesn't list, `writes`
+  on another kind, below `api` 3, or without `doc.write` in `permissions`, is refused when the plug-in is installed.
+  Hosts from before `api` 3 refuse the manifest. A host at `api` 3 that doesn't read `writes` installs the filter,
+  ignores the key and keeps everything the filter reads read-only, so an output that changes those objects is refused.
 - `context` (filters, and live effects with `commands`, at `api` 3 only): the parts of the active document a run reads
   in `_context.document`, any of `"settings"`, `"artboards"`, `"layers"` and `"swatches"`, each at most once
   (`"context": ["artboards", "layers"]`). Left out or `[]`, a run gets none, as before. An unknown, repeated or wrongly
@@ -765,10 +836,12 @@ declares them still installs there:
 | `help` | Shows what the parameter does when the pointer rests on its label (1–1,000 characters; line breaks allowed). |
 | `helpUrl` | Opens this `https://` page (at most 512 bytes) from a button after the field. |
 | `visibleWhen` | `{"pattern": ["lines", "crosshatch"], "outline": [true]}` shows the parameter only while each parameter it names (a checkbox or a choice declared before it) has one of the values listed and is shown itself. |
+| `widget` | `"slider"` shows an `int` parameter as a slider over `min..max` with its number field, moving by 1. A `number` parameter with `min` below `max` always shows a slider with its field, with or without the key. The key needs `min` below `max`, and an `int`'s range within ±9,007,199,254,740,992; on any other parameter, or with another value, the manifest is refused at install. |
 
 A hidden parameter still goes to the plug-in with its value: what the dialog showed never changes a run. The
 filter, live-effect and exporter dialogs use all of these keys. The Appearance panel's editor of a plug-in effect's
-parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the parameters without sections or help buttons.
+parameters uses `label`, `unit`, `help`, `visibleWhen` and `widget`, and lists the parameters without sections or
+help buttons.
 
 ### Input
 
@@ -842,7 +915,7 @@ every attribute:
             "runs": [{"text": "Hello\nthere", "style": {"font_family": "Source Sans 3", "size": 12}}],
             "paragraphs": [{"justify": "Left"}, {"justify": "Center"}]},
    "truncated": false},
-  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "pixelSize": [2, 1],
+  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "opacity": 1, "pixelSize": [2, 1],
    "colorMode": "rgb", "linked": false, "pixelsOmitted": false, "pixelsBase64": "AAAegGQAHoA="},
   {"id": 19, "type": "symbolInstance", "bounds": [100, 0, 110, 10], "transform": [1, 0, 0, 1, 100, 0],
    "symbolId": "Star", "overrides": {}}
@@ -856,7 +929,7 @@ every attribute:
   true` and empty `runs` and `paragraphs`. The runs and paragraphs of all the type in one input take at most 16 MiB
   of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
   `truncated: true` too.
-- An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
+- An image (`"image"`): `opacity` is its opacity, 0 to 1; `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An image whose corners Perspective Distort or Free Distort moved to a shape
   that is not a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right,
   bottom right, bottom left), and its `transform` is then the affine placement nearest them, the one that matches the
@@ -876,10 +949,13 @@ every attribute:
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
 
-These objects are read only. The output must list each of them exactly once, as `{"id": 17}` alone or exactly as it
-was given (numbers compare by value, so `1` and `1.0` are the same). A changed or added field, one left out, an object
-listed twice or left out, and a new object with one of these types are refused, and the document and undo history
-stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
+Objects of a kind that the manifest's `writes` doesn't list are read only. The output must list each of them exactly
+once, as `{"id": 17}` alone or exactly as it was given (numbers compare by value, so `1` and `1.0` are the same). An
+image may leave out `opacity`, which hosts before `api` 3 don't give. An object of a kind that `writes` lists is also
+listed exactly once, and its entry may give only the fields it changes ([writing type, images and
+symbols](#writing-type-images-and-symbols)). An output deletes the paths and compound paths it leaves out
+([output](#output)), but none of these objects. A changed or added field, one left out, an object listed twice or left
+out, and a new object with one of these types are refused, and the document and undo history stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
 object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
 characters. New objects listed after one of them go just above it.
 
@@ -892,6 +968,61 @@ that doesn't fit fails it with `plug-in exceeded its memory budget (the selectio
 the objects after it are written. An output lists at most 100,000 objects, so a run given more than 100,000 of these
 objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
 toward the 64 MiB output cap.
+
+### Writing type, images and symbols
+
+A filter at `api` 3 whose manifest lists some of its `inputs` kinds in `writes`, with `doc.write` in its
+`permissions`, may change the objects of those kinds it is given. It returns such an object as `{"id": 17}` alone,
+exactly as given, or with the fields it changes; a field it leaves out keeps its value. Each kind takes these fields:
+
+| Kind | Fields a filter may change |
+|------|----------------------------|
+| `type` | `name`, `transform`, `text.runs`, `text.paragraphs` |
+| `image` | `name`, `transform`, `opacity` |
+| `symbolInstance` | `name`, `transform`, `symbolId` |
+
+```json
+{"objects": [
+  {"id": 17, "text": {"runs": [{"text": "Goodbye", "style": {"font_family": "Source Sans 3", "size": 14}}]}},
+  {"id": 18, "transform": [2, 0, 0, 2, 50, 60], "opacity": 0.5},
+  {"id": 19, "symbolId": "Moon"}
+]}
+```
+
+- `name` is a string, or `null` for no name.
+- `transform` is six finite numbers, each within ±4,000,000, that don't flatten the object to a line. The object moves
+  by the change from its given transform, so an image's distorted corners move with it.
+- `text.runs` replaces the type's runs: each is `{text, style, inline?}` with the character attributes as the native
+  file stores them, and an attribute the host doesn't know is refused, as is a key of a fill or stroke that its `type`
+  doesn't read. There is at least one run, at most 4,096, at most 4,096 paragraphs, and at most 256 KiB of UTF-8 text;
+  the runs written in one output take at most 16 MiB. Every number in every run's style is
+  checked against the range `charStyle.new` keeps it to, including a style one of the type's runs already has: size
+  0.1 to 1296 pt, leading 0.1 to 5000 pt, tracking and kerning -1000 to 10000, horizontal and vertical scale 1 to
+  10000 %, baseline shift -1296 to 1296 pt, rotation -360 to 360°, and the ranges `docs/mcp.md` gives for
+  `charStyle.new` for the East Asian, Warichu and stroke attributes. A style that none of the type's runs has also needs a font family of 1 to 256
+  printable characters, and fills and strokes that a path's appearance would take. Inline graphics stay where they
+  were: the runs keep each `inline` run as it was given, in the same order. The characters of threaded type, and of
+  type with ruby, can't change, though their attributes can. The runs and paragraphs of type given with
+  `truncated: true` can't change.
+- `text.paragraphs` holds one paragraph style per paragraph of the new text, each checked as `paraStyle.new` checks
+  its attributes: indents and space before and after within ±1296 pt, the Hyphenation and Justification options in
+  their ranges, at most 256 tab stops at 0 to 100,000 pt, and a custom Kinsoku set only by the name of one of the
+  document's sets, whose characters the paragraph takes. A `text.paragraphs` list returned as it was given next to
+  changed `text.runs` must also hold one style per paragraph of the new text. With `text.runs` alone, each paragraph keeps its style when
+  the number of paragraphs stays the same. When runs add or join paragraphs, the host matches the old and new
+  paragraphs by their text: a paragraph whose text is unchanged keeps its style, changed paragraphs take the styles of
+  the paragraphs they replace in order, and a paragraph added between others takes the style of the one before it (of
+  the next one at the start), without a list number. Apart from the paragraphs both texts start and end with, when
+  the old paragraphs times the new ones pass 262,144, the host pairs them in order instead.
+- `opacity` is a number from 0 to 1.
+- `symbolId` names a symbol in the document. An instance that shows another symbol loses its overrides, as Replace
+  Symbol does.
+
+Every other field, including `type`, `bounds`, `text.kind` and an image's pixels, stays read-only, and objects of these
+kinds can't be added or left out. A changed read-only field or a value out of range refuses the whole output, naming
+the object and the field (`objects[2] (id 18).opacity: must be a number from 0 to 1`), and the document and undo history
+stay as they were. The changes of one run are one undo step, with the type laid out again; an output that changes
+nothing records no undo step. The host never reads or gives a linked image's file when a filter writes.
 
 ### Document information
 
@@ -980,7 +1111,9 @@ For an **object filter**, the output is the new state of the input objects:
 - An object without an `id` is new and needs a `path`. It goes just above the object listed before it, or, listed
   before any input object, just below the first one listed after it. New objects take a path's defaults: no fills or
   strokes, full opacity.
-- Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
+- Input paths and compound paths missing from the output are deleted; type, images and symbol instances can't be left
+  out ([reading type, images and symbols](#reading-type-images-and-symbols)). The order of the input objects themselves
+  doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
 - `guide: true` makes the object a guide, as View › Guides › Make Guides does (a compound path's members become
   guide paths), and `guide: false` a plain path again; `locked: true` locks it and `locked: false` unlocks it. Objects
@@ -1134,7 +1267,7 @@ per change of their input, parameters or paints (results are cached), not per fr
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
   that make type, images, layers or artboards, and placed importer files that stay linked to their file.
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
-  [`inputs`](#reading-type-images-and-symbols)).
+  it returns), filters that add or delete type, images or symbol instances or change their pixels and other fields
+  (a filter at `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
 - Scripts can't run object filters (`plugin.*` commands are refused there), so a script doesn't change what Apply
   Last Filter runs.
