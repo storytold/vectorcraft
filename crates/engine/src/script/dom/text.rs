@@ -24,11 +24,17 @@
 //!   text.
 //! - The model keeps the frame's last [`MAX_EDITS`] edits; a range made before an edit that is no
 //!   longer kept is stale.
+//! - Setting a range's `length` moves its end and leaves the text as it is; each read of a member
+//!   that gives a range gives a new object.
+//! - `add` on `characters`, `words` or `paragraphs` inserts after the collection's last item, and
+//!   `addBefore` before its first. An added word is kept apart from the characters next to it by a
+//!   space, and an added paragraph by a paragraph break.
 //! - A character attribute read on a range whose characters differ gives the first character's
 //!   value; set on an empty range it changes nothing. A paragraph attribute reads the first
-//!   paragraph the range touches and sets every one of them.
+//!   paragraph the range touches and sets every one of them. A text range has the members of
+//!   both its `characterAttributes` and its `paragraphAttributes`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
@@ -191,6 +197,10 @@ pub(in crate::script) struct TextState {
     /// names that is not installed is added at the end.
     fonts: RefCell<Option<Vec<(String, String)>>>,
     stories: threads::StoryState,
+    /// The number of text range objects made, which numbers the next one.
+    made: Cell<u64>,
+    /// The span of each range object, by its number, whose `length` the script set.
+    resized: RefCell<HashMap<u64, (usize, usize, u64)>>,
 }
 
 fn text_of(st: &DocState, id: NodeId) -> Option<&TextObject> {
@@ -323,20 +333,32 @@ fn usize_of(n: f64) -> Option<usize> {
     whole(n).and_then(|v| usize::try_from(v).ok())
 }
 
+/// A new object of `class` for the span `s..e` of the frame `item` at generation `stamp`. Each
+/// object is numbered, so setting one range's `length` leaves every other range as it is.
 fn range_ref(h: &Host, item: Item, s: usize, e: usize, stamp: u64, class: &str) -> Data {
     let [high, low] = id_parts(item.id);
-    host_ref(class, &[float(h.run), float(item.doc.uid), high, low, float(s as u64), float(e as u64), float(stamp)])
+    let made = &h.dom.text.made;
+    made.set(made.get() + 1);
+    host_ref(class, &[float(h.run), float(item.doc.uid), high, low, float(s as u64), float(e as u64), float(stamp), float(made.get())])
 }
 
 /// The span `d` names, when it is an object of one of `classes`.
 fn span_of(h: &Host, d: &Data, classes: &[&str]) -> std::result::Result<Span, HostError> {
+    span_and_number(h, d, classes).map(|(span, _)| span)
+}
+
+/// The span `d` names and the number of its object, when it is an object of one of `classes`.
+fn span_and_number(h: &Host, d: &Data, classes: &[&str]) -> std::result::Result<(Span, u64), HostError> {
     let handle = classes.iter().find_map(|c| handle_of(d, c));
-    let Some(&[run, uid, high, low, s, e, stamp]) = handle.as_deref() else {
+    let Some(&[run, uid, high, low, s, e, stamp, number]) = handle.as_deref() else {
         return Err(HostError::Type(format!("this is not a {}", classes.first().copied().unwrap_or("TextRange"))));
     };
     let frame = item_of(h, &host_ref("TextFrame", &[run, uid, high, low])).map_err(|_| HostError::Error(STALE_RANGE.into()))?;
-    let (Some(start), Some(end), Some(stamp)) = (usize_of(s), usize_of(e), whole(stamp)) else { return Err(HostError::Error(STALE_RANGE.into())) };
-    Ok(Span { item: frame, start, end, stamp })
+    let (Some(start), Some(end), Some(stamp), Some(number)) = (usize_of(s), usize_of(e), whole(stamp), whole(number)) else {
+        return Err(HostError::Error(STALE_RANGE.into()));
+    };
+    let (start, end, stamp) = h.dom.text.resized.borrow().get(&number).copied().unwrap_or((start, end, stamp));
+    Ok((Span { item: frame, start, end, stamp }, number))
 }
 
 /// The text frame `this` names.
@@ -404,10 +426,18 @@ fn read_contents(h: &Host, r: Span) -> Answer {
     Ok(text(to_script(&index.text[a..b])))
 }
 
+/// The text a script gives as `contents`: a string, or a number as `String(number)` writes it.
+fn contents_of(value: &Data) -> std::result::Result<String, HostError> {
+    match value {
+        Data::String(v) => Ok(from_script(v)),
+        Data::Number(n) => Ok(vectorcraft_js::number_to_string(*n)),
+        _ => Err(HostError::Type("contents must be a string or a number".into())),
+    }
+}
+
 /// Replaces the text of `r` with `value`, as one `text.editRange`.
 fn write_contents(h: &Host, r: Span, value: &Data) -> Answer {
-    let Data::String(v) = value else { return Err(HostError::Type("contents must be a string".into())) };
-    let insert = from_script(v);
+    let insert = contents_of(value)?;
     let (index, s, e, _) = resolve(h, r)?;
     let (a, b) = (index.byte(s, false), index.byte(e, true));
     if index.text[a..b] == insert {
@@ -565,6 +595,21 @@ fn range_length(h: &Host, a: &[Data]) -> Answer {
     Ok(num(float((e - s) as u64)))
 }
 
+/// Setting `length` moves the range's end to that many UTF-16 units after its start; the text
+/// does not change. A length that is not a whole number from 0 to the units left in the frame
+/// throws.
+fn range_set_length(h: &Host, a: &[Data]) -> Answer {
+    let (r, number) = span_and_number(h, arg(a, 0), &["TextRange"])?;
+    let (index, s, _, stamp) = resolve(h, r)?;
+    let n = super::number(arg(a, 1), "length")?;
+    let left = index.len() - s;
+    let Some(n) = usize_of(n).filter(|n| *n <= left) else {
+        return Err(HostError::Range(format!("length must be a whole number from 0 to {left}")));
+    };
+    h.dom.text.resized.borrow_mut().insert(number, (s, s + n, stamp));
+    Ok(Data::Undefined)
+}
+
 /// `remove()`: deletes the range's text.
 fn range_remove(h: &Host, a: &[Data]) -> Answer {
     write_contents(h, this_range(h, a)?, &text(""))
@@ -651,6 +696,85 @@ fn part_at(h: &Host, a: &[Data]) -> Answer {
         Some(list) => list.get(k).copied(),
     };
     Ok(span.map_or(Data::Undefined, |(x, y)| range_ref(h, r.item, x, y, stamp, "TextRange")))
+}
+
+/// Where `add` puts its text: before or after the relative object.
+fn text_placement(d: &Data) -> std::result::Result<bool, HostError> {
+    match d {
+        Data::Undefined => Ok(true),
+        Data::String(s) if s == "ElementPlacement.PLACEBEFORE" || s == "ElementPlacement.PLACEATBEGINNING" => Ok(false),
+        Data::String(s) if s == "ElementPlacement.PLACEAFTER" || s == "ElementPlacement.PLACEATEND" => Ok(true),
+        _ => Err(HostError::Type("insertionLocation must be PLACEBEFORE, PLACEAFTER, PLACEATBEGINNING or PLACEATEND".into())),
+    }
+}
+
+/// `add(contents, relativeObject?, insertionLocation?)` and, with `before`, `addBefore(contents)`:
+/// inserts `contents` after the collection's last item (`addBefore`: before its first item), or
+/// before or after `relativeObject`, a text range or text frame of the same frame, as one
+/// `text.editRange`. A word gets a space on each side that touches another character that is not
+/// white space; a paragraph gets a paragraph break on each side that touches another paragraph.
+/// → the range of `contents`.
+fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
+    let (r, part) = this_part(h, a)?;
+    let contents = contents_of(arg(a, 1))?;
+    let (index, s, e, _) = resolve(h, r)?;
+    let at = if before || matches!(arg(a, 2), Data::Undefined) {
+        let (items, spans) = part_spans(&index, part, s, e);
+        let span = |k: usize| match spans {
+            None => index.char_span(k),
+            Some(list) => list.get(k).copied(),
+        };
+        if before {
+            items.clone().next().and_then(span).map_or(s, |(x, _)| x)
+        } else {
+            items.clone().next_back().and_then(span).map_or(e, |(_, y)| y)
+        }
+    } else {
+        let rel = arg(a, 2);
+        let target = if handle_of(rel, "TextFrame").is_some() {
+            whole_span(h, item_of(h, rel)?)?.1
+        } else {
+            span_of(h, rel, &["TextRange"]).map_err(|_| HostError::Type("relativeObject must be a TextRange or a TextFrame".into()))?
+        };
+        if target.item.doc.uid != r.item.doc.uid || target.item.id != r.item.id {
+            return Err(HostError::Error("relativeObject must be text of the same text frame".into()));
+        }
+        let (_, ts, te, _) = resolve(h, target)?;
+        if text_placement(arg(a, 3))? { te } else { ts }
+    };
+    if contents.is_empty() {
+        let (_, stamp) = with_doc(h, r.item.doc, |_, st| observe(h, st, r.item.id))?;
+        return Ok(range_ref(h, r.item, at, at, stamp, "TextRange"));
+    }
+    let b = index.byte(at, false);
+    let (prev, next) = (index.text[..b].chars().next_back(), index.text[b..].chars().next());
+    let (lead, trail) = match part {
+        Part::Characters => ("", ""),
+        Part::Words => {
+            let apart = |c: Option<char>| c.is_some_and(|c| !c.is_whitespace());
+            let lead = if apart(prev) && !contents.starts_with(char::is_whitespace) { " " } else { "" };
+            let trail = if apart(next) && !contents.ends_with(char::is_whitespace) { " " } else { "" };
+            (lead, trail)
+        }
+        Part::Paragraphs => (
+            if prev.is_some_and(|c| c != '\n') && !contents.starts_with('\n') { "\n" } else { "" },
+            if next.is_some() && !contents.ends_with('\n') { "\n" } else { "" },
+        ),
+    };
+    let insert = format!("{lead}{contents}{trail}");
+    edit_item(h, r.item, "text.editRange", &json!({"id": r.item.id.0, "start": b, "end": b, "insert": insert}))?;
+    record(h, r.item, &index, at, 0, &insert)?;
+    let (_, stamp) = with_doc(h, r.item.doc, |_, st| observe(h, st, r.item.id))?;
+    let start = at + lead.encode_utf16().count();
+    Ok(range_ref(h, r.item, start, start + contents.encode_utf16().count(), stamp, "TextRange"))
+}
+
+fn part_add_after(h: &Host, a: &[Data]) -> Answer {
+    part_add(h, a, false)
+}
+
+fn part_add_before(h: &Host, a: &[Data]) -> Answer {
+    part_add(h, a, true)
 }
 
 // ---- character attributes ----
@@ -1291,19 +1415,24 @@ fn fonts_at(h: &Host, a: &[Data]) -> Answer {
     Ok(if found { host_ref("TextFont", &[float(h.run), float(i as u64)]) } else { Data::Undefined })
 }
 
-/// `textFonts.getByName(name)`: the PostScript name, then the family and style with a space.
+/// `textFonts.getByName(name)`: the PostScript name of a bundled or installed face, then the family
+/// and style with a space.
 fn fonts_by_name(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     if name.len() > super::MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
-    let named = vectorcraft_text::FontDb::global().by_postscript_name(name);
+    let named = vectorcraft_text::FontDb::global().find_postscript(name).map(|f| (f.family.clone(), f.style.clone()));
     let i = with_fonts(h, |l| {
         h.charge_call(l.len() as u64)?;
         let by_ps = named.as_ref().and_then(|(f, s)| l.iter().position(|(lf, ls)| lf.eq_ignore_ascii_case(f) && ls.eq_ignore_ascii_case(s)));
         Ok::<_, HostError>(by_ps.or_else(|| l.iter().position(|(f, s)| format!("{f} {s}").eq_ignore_ascii_case(name))))
     })?;
-    i.map(|i| host_ref("TextFont", &[float(h.run), float(i as u64)])).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
+    match (i, named) {
+        (Some(i), _) => Ok(host_ref("TextFont", &[float(h.run), float(i as u64)])),
+        (None, Some((family, style))) => Ok(font_ref(h, &family, &style)),
+        (None, None) => Err(HostError::Error(NOT_FOUND.into())),
+    }
 }
 
 fn fonts_index(h: &Host, a: &[Data]) -> Answer {
@@ -1502,7 +1631,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("start", read_only(l, range_start, "TextRange", "start")),
         ("end", read_only(l, range_end, "TextRange", "end")),
         ("characterOffset", read_only(l, range_start, "TextRange", "characterOffset")),
-        ("length", read_only(l, range_length, "TextRange", "length")),
+        ("length", property(l, range_length, range_set_length)),
         ("characters", get(l, characters)),
         ("words", get(l, words)),
         ("paragraphs", get(l, paragraphs)),
@@ -1514,6 +1643,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     ]);
     range.extend(attr_members(l));
     range.push(threads::range_member(l));
+    range.extend(para_members(l));
     range.extend(
         [
             "lines",
@@ -1538,7 +1668,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         class(
             name,
             None,
-            named(vec![("typename", get(l, part_typename)), ("length", get(l, part_length)), ("parent", get(l, part_parent))]),
+            named(vec![
+                ("typename", get(l, part_typename)),
+                ("length", get(l, part_length)),
+                ("parent", get(l, part_parent)),
+                ("add", method(l, part_add_after)),
+                ("addBefore", method(l, part_add_before)),
+            ]),
             Some(function(l, part_at)),
         )
     };
