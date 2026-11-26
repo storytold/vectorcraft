@@ -7194,6 +7194,21 @@ axis	Y Axis	Вісь Y
 @msg	time budget	бюджет часу
 @msg	memory budget (the selection is too large to hand over)	бюджет пам’яті (виділення завелике для передавання)
 @msg	output size ({what} is {len} bytes, limit {max})	розмір виводу ({what}: {len} байтів, межа {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, рядок {line}, стовпець {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	бюджет пам’яті
+@msg	call depth	глибина викликів
+@msg	run(input, params) returned no output object	run(input, params) не повернула об’єкт виводу
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	для `runtime` "js" потрібен `script`: ім’я файлу .js модуля поруч із маніфестом
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` має бути ім’ям файлу .js у теці маніфесту: 1-128 байтів, без теки, без `:`, не починаючись із `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` містить текст скрипту й задається лише в JSON, який приймає dataBase64 команди plugin.install: файл .vcplugin називає свій скрипт у `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	маніфест модуля JavaScript задає `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" призначено для фільтра об’єктів (`kind` "filter"), а не для `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	модуль JavaScript не може перелічувати дозвіл `{name}`: із дозволів хоста він може перелічити `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	маніфест модуля WebAssembly не вказує `runtime`: "js" призначено для модуля JavaScript
+@msg	a JavaScript plug-in makes no command calls	модуль JavaScript не викликає команд
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) приймає два числа
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) приймає рівень, 0 (помилка), 1 (попередження), 2 (інформація) або 3 (налагодження), і рядок
 @msg	the plug-in's grant can't be removed from the plug-in store	дозвіл модуля не вдається вилучити зі сховища модулів
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`

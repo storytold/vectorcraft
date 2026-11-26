@@ -7592,6 +7592,21 @@ axis	Y Axis	osa Y
 @msg	time budget	časový rozpočet
 @msg	memory budget (the selection is too large to hand over)	rozpočet paměti (výběr je příliš velký na předání)
 @msg	output size ({what} is {len} bytes, limit {max})	velikost výstupu ({what} má {len} bajtů, limit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} řádek {line}, sloupec {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	rozpočet paměti
+@msg	call depth	hloubka volání
+@msg	run(input, params) returned no output object	run(input, params) nevrátila žádný výstupní objekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" vyžaduje `script`: název souboru .js zásuvného modulu vedle manifestu
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` musí být název souboru .js ve složce manifestu: 1-128 bajtů, bez složky, bez `:`, nesmí začínat `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` je text skriptu a uvádí se jen v JSON, které přijímá dataBase64 příkazu plugin.install: soubor .vcplugin uvádí svůj skript v `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest zásuvného modulu v JavaScriptu uvádí `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" je pro filtr objektů (`kind` "filter"), ne pro `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	zásuvný modul v JavaScriptu nemůže uvést oprávnění `{name}`: z oprávnění hostitele smí uvést `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest modulu WebAssembly vynechává `runtime`: "js" je pro zásuvný modul v JavaScriptu
+@msg	a JavaScript plug-in makes no command calls	zásuvný modul v JavaScriptu nevolá žádné příkazy
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) přijímá dvě čísla
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) přijímá úroveň, 0 (chyba), 1 (varování), 2 (informace) nebo 3 (ladění), a řetězec
 @msg	the plug-in's grant can't be removed from the plug-in store	oprávnění zásuvného modulu nelze odebrat z úložiště zásuvných modulů
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`

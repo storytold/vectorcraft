@@ -8824,6 +8824,21 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	outlineText {v}: true or false	outlineText {v}: true या false
 @msg	output intent profile: {e}	उत्पादन आशय प्रोफ़ाइल: {e}
 @msg	output size ({what} is {len} bytes, limit {max})	आउटपुट का आकार ({what} {len} बाइट्स का है, सीमा {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} पंक्ति {line}, स्तंभ {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	स्मृति बजट
+@msg	call depth	कॉल गहराई
+@msg	run(input, params) returned no output object	run(input, params) ने कोई आउटपुट ऑब्जेक्ट नहीं लौटाया
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" को `script` चाहिए: मैनिफ़ेस्ट के पास प्लग-इन की .js फ़ाइल का नाम
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` मैनिफ़ेस्ट के फ़ोल्डर में किसी .js फ़ाइल का नाम होना चाहिए: 1-128 बाइट्स, कोई फ़ोल्डर नहीं, कोई `:` नहीं, `.` से शुरू नहीं
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` स्क्रिप्ट का टेक्स्ट है, जो केवल उस JSON में दिया जाता है जिसे plugin.install का dataBase64 लेता है: .vcplugin फ़ाइल अपनी स्क्रिप्ट का नाम `script` में देती है
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript प्लग-इन का मैनिफ़ेस्ट `runtime` "js" देता है
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" ऑब्जेक्ट फ़िल्टर (`kind` "filter") के लिए है, `kind` "{kind}" के लिए नहीं
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript प्लग-इन अनुमति `{name}` सूचीबद्ध नहीं कर सकता: होस्ट की अनुमतियों में से वह `progress` सूचीबद्ध कर सकता है
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly मॉड्यूल का मैनिफ़ेस्ट `runtime` छोड़ देता है: "js" JavaScript प्लग-इन के लिए है
+@msg	a JavaScript plug-in makes no command calls	JavaScript प्लग-इन कोई कमांड कॉल नहीं करता
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) दो संख्याएँ लेता है
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) एक स्तर, 0 (त्रुटि), 1 (चेतावनी), 2 (जानकारी) या 3 (डीबग), और एक स्ट्रिंग लेता है
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1} फ़ाइलें CMYK हैं, और "{name}" एक RGB प्रोफ़ाइल है
 @msg	output.destination: {e}	output.destination: {e}
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: "{name}" नाम की कोई RGB या CMYK प्रोफ़ाइल नहीं है

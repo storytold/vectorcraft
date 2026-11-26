@@ -14122,7 +14122,10 @@ them again at startup (`plugin.remove` deletes them there). A window or process 
 while it changes it, so installs, removals, grants and plug-in settings from two of them do not mix; when the file can't
 be locked, `plugin.install` and `plugin.remove` fail and change nothing:
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
-schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
+schema, defaults). An object filter may also be a JavaScript plug-in: a `.vcplugin` manifest with `"runtime": "js"` and
+`script`, the `.js` file beside it, which `plugin.install {path}`, `plugin.inspect {path}` and `plugin.reload` read
+together (`runtime` and `script` in its entry); it runs in an interpreter of its own with no file, command or clock
+access ([plugins.md](plugins.md#javascript-filters)). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected; a run that changes no object and no kept
 data records no undo step and leaves the document unmodified) → `{plugin, ids, notice?, pluginName?}`.
 `notice` is the text the filter's output reports in its `notice` key, escaped and cut at 200 characters

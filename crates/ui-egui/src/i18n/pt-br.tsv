@@ -7491,6 +7491,21 @@ axis	Y Axis	Eixo Y
 @msg	time budget	orçamento de tempo
 @msg	memory budget (the selection is too large to hand over)	orçamento de memória (a seleção é grande demais para ser entregue)
 @msg	output size ({what} is {len} bytes, limit {max})	tamanho da saída ({what} tem {len} bytes, limite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linha {line}, coluna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	orçamento de memória
+@msg	call depth	profundidade de chamadas
+@msg	run(input, params) returned no output object	run(input, params) não retornou nenhum objeto de saída
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" precisa de `script`: o nome do arquivo .js do plug-in, ao lado do manifesto
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` deve ser o nome de um arquivo .js na pasta do manifesto: 1-128 bytes, sem pasta, sem `:`, sem começar com `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` é o texto do script, dado só no JSON que o dataBase64 de plugin.install recebe: um arquivo .vcplugin indica seu script em `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	o manifesto de um plug-in JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" é para um filtro de objetos (`kind` "filter"), não para `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	um plug-in JavaScript não pode listar a permissão `{name}`: das permissões do host, ele pode listar `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	o manifesto de um módulo WebAssembly omite `runtime`: "js" é para um plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	um plug-in JavaScript não chama comandos
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) recebe dois números
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) recebe um nível, 0 (erro), 1 (aviso), 2 (informação) ou 3 (depuração), e uma string
 @msg	the plug-in's grant can't be removed from the plug-in store	a permissão do plug-in não pode ser removida do armazenamento de plug-ins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`

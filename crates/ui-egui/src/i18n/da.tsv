@@ -762,6 +762,21 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	time budget	tidsbudget
 @msg	memory budget (the selection is too large to hand over)	hukommelsesbudget (markeringen er for stor til at blive overdraget)
 @msg	output size ({what} is {len} bytes, limit {max})	outputstørrelse ({what} fylder {len} byte, grænse {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linje {line}, kolonne {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	hukommelsesbudget
+@msg	call depth	kaldedybde
+@msg	run(input, params) returned no output object	run(input, params) returnerede intet outputobjekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" kræver `script`: navnet på plug-in'ets .js-fil ved siden af manifestet
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` skal være navnet på en .js-fil i manifestets mappe: 1-128 byte, ingen mappe, intet `:`, må ikke starte med `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` er scriptets tekst og angives kun i den JSON, som dataBase64 i plugin.install tager: en .vcplugin-fil navngiver sit script i `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	et JavaScript-plug-ins manifest angiver `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" er til et objektfilter (`kind` "filter"), ikke `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	et JavaScript-plug-in kan ikke angive tilladelsen `{name}`: af værtens tilladelser må det angive `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	et WebAssembly-moduls manifest udelader `runtime`: "js" er til et JavaScript-plug-in
+@msg	a JavaScript plug-in makes no command calls	et JavaScript-plug-in kalder ingen kommandoer
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) tager to tal
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) tager et niveau, 0 (fejl), 1 (advarsel), 2 (information) eller 3 (fejlsøgning), og en streng
 @msg	the plug-in's grant can't be removed from the plug-in store	plug-in'ets tilladelse kan ikke fjernes fra plug-in-lageret
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	tilladelsen `{shown}` er reserveret til et senere plug-in-API; denne vært tildeler den ikke
 @msg	unknown permission `{shown}`	ukendt tilladelse `{shown}`

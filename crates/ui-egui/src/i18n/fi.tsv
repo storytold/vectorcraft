@@ -7659,6 +7659,21 @@ axis	Y Axis	Y-akseli
 @msg	time budget	aikabudjetti
 @msg	memory budget (the selection is too large to hand over)	muistibudjetti (valinta on liian suuri luovutettavaksi)
 @msg	output size ({what} is {len} bytes, limit {max})	tulosteen koko ({what}: {len} tavua, raja {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} rivi {line}, sarake {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	muistibudjetti
+@msg	call depth	kutsusyvyys
+@msg	run(input, params) returned no output object	run(input, params) ei palauttanut tulosobjektia
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" tarvitsee avaimen `script`: laajennuksen .js-tiedoston nimen manifestin vieressä
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` on oltava manifestin kansiossa olevan .js-tiedoston nimi: 1-128 tavua, ei kansiota, ei merkkiä `:`, ei alussa merkkiä `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` on komentosarjan teksti, ja se annetaan vain JSONissa, jonka plugin.install-komennon dataBase64 ottaa: .vcplugin-tiedosto nimeää komentosarjansa avaimessa `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript-laajennuksen manifesti antaa `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" on objektisuodattimelle (`kind` "filter"), ei arvolle `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript-laajennus ei voi luetella lupaa `{name}`: isännän luvista se voi luetella luvan `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly-moduulin manifesti jättää avaimen `runtime` pois: "js" on JavaScript-laajennukselle
+@msg	a JavaScript plug-in makes no command calls	JavaScript-laajennus ei kutsu komentoja
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) ottaa kaksi lukua
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) ottaa tason, 0 (virhe), 1 (varoitus), 2 (tieto) tai 3 (virheenjäljitys), ja merkkijonon
 @msg	the plug-in's grant can't be removed from the plug-in store	laajennuksen käyttöoikeutta ei voi poistaa laajennusvarastosta
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`

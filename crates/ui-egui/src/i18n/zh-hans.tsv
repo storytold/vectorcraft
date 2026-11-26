@@ -7424,6 +7424,21 @@ axis	Y Axis	Y 轴
 @msg	time budget	时间预算
 @msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
 @msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}（{id}，{script} 第 {line} 行，第 {column} 列）
+@msg	{reason} ({id}, {script})	{reason}（{id}，{script}）
+@msg	memory budget	内存预算
+@msg	call depth	调用深度
+@msg	run(input, params) returned no output object	run(input, params) 未返回输出对象
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" 需要 `script`：清单旁边增效工具 .js 文件的名称
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` 必须是清单所在文件夹中 .js 文件的名称：1-128 字节，不含文件夹，不含 `:`，不以 `.` 开头
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` 是脚本的文本，只在 plugin.install 的 dataBase64 接受的 JSON 中给出：.vcplugin 文件在 `script` 中指定其脚本
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 增效工具的清单指定 `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" 用于对象滤镜（`kind` "filter"），而不是 `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 增效工具不能列出权限 `{name}`：在主机的权限中，它可以列出 `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 模块的清单省略 `runtime`："js" 用于 JavaScript 增效工具
+@msg	a JavaScript plug-in makes no command calls	JavaScript 增效工具不调用命令
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) 接受两个数字
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) 接受一个级别（0（错误）、1（警告）、2（信息）或 3（调试））和一个字符串
 @msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`

@@ -9697,6 +9697,21 @@ axis	Y Axis	Y ღერძი
 @msg	time budget	დროის ბიუჯეტი
 @msg	memory budget (the selection is too large to hand over)	მეხსიერების ბიუჯეტი (მონიშნული ზედმეტად დიდია გადასაცემად)
 @msg	output size ({what} is {len} bytes, limit {max})	გამოტანის ზომა ({what}: {len} ბაიტი, ლიმიტი {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, სტრიქონი {line}, სვეტი {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	მეხსიერების ბიუჯეტი
+@msg	call depth	გამოძახების სიღრმე
+@msg	run(input, params) returned no output object	run(input, params)-მა გამოტანის ობიექტი არ დააბრუნა
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" საჭიროებს `script`-ს: პლაგინის .js ფაილის სახელს მანიფესტის გვერდით
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` უნდა იყოს მანიფესტის საქაღალდეში მყოფი .js ფაილის სახელი: 1-128 ბაიტი, საქაღალდის გარეშე, `:` სიმბოლოს გარეშე, `.` სიმბოლოთი არ უნდა იწყებოდეს
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` სკრიპტის ტექსტია და მიეთითება მხოლოდ JSON-ში, რომელსაც plugin.install-ის dataBase64 იღებს: .vcplugin ფაილი თავის სკრიპტს `script` გასაღებში ასახელებს
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript პლაგინის მანიფესტი მიუთითებს `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" ობიექტების ფილტრისთვისაა (`kind` "filter"), არა `kind` "{kind}" მნიშვნელობისთვის
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript პლაგინს არ შეუძლია ნებართვის `{name}` ჩამოთვლა: ჰოსტის ნებართვებიდან მას შეუძლია ჩამოთვალოს `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly მოდულის მანიფესტი გამოტოვებს `runtime` გასაღებს: "js" JavaScript პლაგინისთვისაა
+@msg	a JavaScript plug-in makes no command calls	JavaScript პლაგინი ბრძანებებს არ იძახებს
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) იღებს ორ რიცხვს
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) იღებს დონეს, 0 (შეცდომა), 1 (გაფრთხილება), 2 (ინფორმაცია) ან 3 (გამართვა), და სტრიქონს
 @msg	the plug-in's grant can't be removed from the plug-in store	პლაგინის ნებართვის წაშლა პლაგინების საცავიდან შეუძლებელია
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`

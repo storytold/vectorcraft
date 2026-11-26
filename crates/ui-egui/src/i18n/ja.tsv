@@ -7287,6 +7287,21 @@ axis	Y Axis	Y 軸
 @msg	time budget	時間予算
 @msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
 @msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}、{script} {line} 行 {column} 列)
+@msg	{reason} ({id}, {script})	{reason} ({id}、{script})
+@msg	memory budget	メモリ予算
+@msg	call depth	呼び出しの深さ
+@msg	run(input, params) returned no output object	run(input, params) が出力オブジェクトを返しませんでした
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" には `script` が必要です: マニフェストと同じ場所にあるプラグインの .js ファイルの名前
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` はマニフェストのフォルダーにある .js ファイルの名前にしてください: 1-128 バイト、フォルダーなし、`:` なし、`.` で始まらないこと
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` はスクリプトのテキストで、plugin.install の dataBase64 が受け取る JSON でだけ指定します: .vcplugin ファイルはスクリプトを `script` で指定します
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript プラグインのマニフェストは `runtime` "js" を指定します
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" はオブジェクトフィルター (`kind` "filter") 用で、`kind` "{kind}" 用ではありません
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript プラグインは権限 `{name}` を指定できません: ホストの権限のうち指定できるのは `progress` です
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly モジュールのマニフェストでは `runtime` を省略します: "js" は JavaScript プラグイン用です
+@msg	a JavaScript plug-in makes no command calls	JavaScript プラグインはコマンドを呼び出しません
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) には数値を 2 つ指定します
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) にはレベル 0 (エラー)、1 (警告)、2 (情報)、3 (デバッグ) のいずれかと文字列を指定します
 @msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`

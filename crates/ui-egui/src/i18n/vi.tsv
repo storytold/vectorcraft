@@ -7241,6 +7241,21 @@ axis	Y Axis	Trục Y
 @msg	time budget	ngân sách thời gian
 @msg	memory budget (the selection is too large to hand over)	ngân sách bộ nhớ (vùng chọn quá lớn để chuyển giao)
 @msg	output size ({what} is {len} bytes, limit {max})	kích thước đầu ra ({what} là {len} byte, giới hạn {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} dòng {line}, cột {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	ngân sách bộ nhớ
+@msg	call depth	độ sâu lời gọi
+@msg	run(input, params) returned no output object	run(input, params) không trả về đối tượng đầu ra nào
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" cần `script`: tên tệp .js của plug-in, nằm cạnh manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` phải là tên một tệp .js trong thư mục của manifest: 1-128 byte, không có thư mục, không có `:`, không bắt đầu bằng `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` là văn bản của tập lệnh, chỉ được cung cấp trong JSON mà dataBase64 của plugin.install nhận: tệp .vcplugin nêu tên tập lệnh của nó trong `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest của plug-in JavaScript cho `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" dành cho bộ lọc đối tượng (`kind` "filter"), không phải `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	plug-in JavaScript không thể liệt kê quyền `{name}`: trong các quyền của máy chủ, nó có thể liệt kê `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest của mô-đun WebAssembly bỏ qua `runtime`: "js" dành cho plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	plug-in JavaScript không gọi lệnh
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) nhận hai số
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) nhận một mức, 0 (lỗi), 1 (cảnh báo), 2 (thông tin) hoặc 3 (gỡ lỗi), và một chuỗi
 @msg	the plug-in's grant can't be removed from the plug-in store	không thể xóa quyền của plug-in khỏi kho plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`

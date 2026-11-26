@@ -7582,6 +7582,21 @@ axis	Y Axis	Άξονας Y
 @msg	time budget	χρονικός προϋπολογισμός
 @msg	memory budget (the selection is too large to hand over)	προϋπολογισμός μνήμης (η επιλογή είναι πολύ μεγάλη για να παραδοθεί)
 @msg	output size ({what} is {len} bytes, limit {max})	μέγεθος εξόδου ({what}: {len} byte, όριο {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} γραμμή {line}, στήλη {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	προϋπολογισμός μνήμης
+@msg	call depth	βάθος κλήσεων
+@msg	run(input, params) returned no output object	η run(input, params) δεν επέστρεψε αντικείμενο εξόδου
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	το `runtime` "js" χρειάζεται `script`: το όνομα του αρχείου .js του προσθέτου, δίπλα στο αρχείο δηλώσεων
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	το `script` πρέπει να είναι το όνομα ενός αρχείου .js στον φάκελο του αρχείου δηλώσεων: 1-128 byte, χωρίς φάκελο, χωρίς `:`, χωρίς να αρχίζει με `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	το `source` είναι το κείμενο του σεναρίου και δίνεται μόνο στο JSON που δέχεται το dataBase64 της plugin.install: ένα αρχείο .vcplugin ονομάζει το σενάριό του στο `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	το αρχείο δηλώσεων ενός προσθέτου JavaScript δίνει `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	το `runtime` "js" είναι για φίλτρο αντικειμένων (`kind` "filter"), όχι για `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ένα πρόσθετο JavaScript δεν μπορεί να δηλώσει την άδεια `{name}`: από τις άδειες του κεντρικού υπολογιστή μπορεί να δηλώσει την `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	το αρχείο δηλώσεων μιας μονάδας WebAssembly παραλείπει το `runtime`: το "js" είναι για πρόσθετο JavaScript
+@msg	a JavaScript plug-in makes no command calls	ένα πρόσθετο JavaScript δεν καλεί εντολές
+@msg	vc.progress(done, total) takes two numbers	η vc.progress(done, total) δέχεται δύο αριθμούς
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	η vc.log(level, text) δέχεται ένα επίπεδο, 0 (σφάλμα), 1 (προειδοποίηση), 2 (πληροφορία) ή 3 (εντοπισμός σφαλμάτων), και μια συμβολοσειρά
 @msg	the plug-in's grant can't be removed from the plug-in store	η άδεια του πρόσθετου δεν μπορεί να αφαιρεθεί από τον χώρο αποθήκευσης πρόσθετων
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
