@@ -2782,7 +2782,7 @@ digits	Malayalam	Malaiala
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seleção › Igual › Cor de Preenchimento, Cor do Traçado e Preenchimento e Traçado encontram apenas o mesmo tom de uma amostra global ou de cor especial, não qualquer tom dela.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra a tela Início quando nenhum documento está aberto; desativada, a janela fica vazia até você clicar em Início.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mede os objetos com seus traçados e efeitos que mudam a forma para tamanho, posição e alinhamento; sombras, brilhos e desfoques não são medidos.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Com zoom de 100%, uma polegada do documento ocupa 96 pontos de tela em vez de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Com zoom de 100%, uma polegada do documento ocupa uma polegada da tela, ou 96 pontos de tela quando o sistema não informa um tamanho de tela utilizável.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Clicar duas vezes em um grupo, demarcador ou imagem com a ferramenta Seleção o abre no modo de isolamento.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Preenchimentos e traçados de padrão se transformam com a arte, a menos que uma transformação ou o menu do painel Transformar escolha outra coisa.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Os raios de canto dinâmicos mudam de escala com a arte, a menos que a escala escolha outra coisa.
@@ -4125,6 +4125,17 @@ font-technology	Variable	Variáveis
 	Symbol Set Density:	Densidade do conjunto de símbolos:
 	Flatten Artwork	Achatar arte-final
 	Graphics	Gráficos
+	Show Contrast	Mostrar Contraste
+	Contrast For	Contraste Para
+	Normal Text	Texto Normal
+	Large Text	Texto Grande
+	Contrast Background	Fundo do Contraste
+	Behind Selection	Atrás da Seleção
+	Current Color	Cor Atual
+	Pass	Aprovado
+	Fail	Reprovado
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo da WCAG 2.2: texto normal AA 4.5:1 (1.4.3) e AAA 7:1 (1.4.6), texto grande AA 3:1 e AAA 4.5:1, gráficos e controles AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	O fundo é lido no centro da seleção.
 	Highlight Rows	Destacar linhas
 	Highlight Variable	Destacar variável
 	Sort Variables	Ordenar variáveis
@@ -4843,6 +4854,12 @@ axis	Both	Ambos
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
 @msg	nothing encoded	nada codificado
 @msg	nothing selected	nada selecionado
+@msg	`{key}` must be a color or {_1}	`{key}` deve ser uma cor ou {_1}
+@msg	the selected objects' colors differ: give `color`	as cores dos objetos selecionados são diferentes: informe `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	as cores dos objetos selecionados são diferentes: informe `opacity` ou `color`
+@msg	the active fill or stroke has no color: give `color`	o preenchimento ou traçado ativo não tem cor: informe `color`
+@msg	the active fill or stroke is hidden: give `color`	o preenchimento ou traçado ativo está oculto: informe `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	o preenchimento ou traçado ativo é desenhado através de uma máscara de opacidade: informe `color`
 @msg	nothing selected is in a group	nada do que está selecionado está em um grupo
 @msg	nothing to align	nada para alinhar
 @msg	nothing to distort	nada para distorcer
@@ -7215,6 +7232,8 @@ axis	Y Axis	Eixo Y
 	Cancel Plug-in Run	Cancelar Execução do Plug-in
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} terminou, mas o documento ou o plug-in mudou nesse meio-tempo: execute-o novamente
 @msg	Running “{name}”…	Executando “{name}”…
+@msg	Plug-in “{name}”: {notice}	Do plug-in “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` deve ser uma string com texto visível
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	um efeito dinâmico é executado enquanto o documento é desenhado, então não pode ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	um plug-in de exportação sempre recebe o orçamento de uma exportação: omita `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pede um orçamento de processamento grande (cada execução até {minutes} minutos e {times} vezes as instruções habituais): uma pessoa precisa aprová-lo no aplicativo de desktop, ou passe `allowHeavy: true` em uma sessão iniciada com --allow-plugin-grants
@@ -7306,7 +7325,7 @@ axis	Y Axis	Eixo Y
 @msg	a list of {min_items} to {max_items} numbers	uma lista de {min_items} a {max_items} números
 @msg	a new object needs a `path`	um objeto novo precisa de um `path`
 @msg	a number	um número
-@msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
+@msg	a painted live effect returns only `objects` and `notice`	um efeito dinâmico de pintura retorna apenas `objects` e `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	um objeto somente leitura foi omitido
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
@@ -7411,6 +7430,8 @@ axis	Y Axis	Eixo Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` é {_1}; este host aceita os níveis de API de plug-in de 1 a {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` só pode ser true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` é só para um efeito dinâmico (`kind` "effect") com `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` é só para um importador (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” abre arquivos, mas não os insere: seu manifesto não define `place`
 @msg	`grant` must be a list of permission names	`grant` deve ser uma lista de nomes de permissões
 @msg	`grant` names an unknown permission `{shown}`	`grant` cita uma permissão desconhecida `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	um plug-in do tipo `{_1}` precisa da permissão `{_2}`

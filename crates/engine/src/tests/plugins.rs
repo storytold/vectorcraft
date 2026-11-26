@@ -333,6 +333,59 @@ fn failing_plugins_leave_the_document_and_history_alone() {
     }
 }
 
+/// A filter's output may report a `notice`, which `plugin.run` returns once the output is applied,
+/// escaped and capped by the host, with the plug-in's name as `pluginName`. It needs no permission: a filter granted none reports one too.
+/// A `notice` that is not a string refuses the output, and the document and history stay as they
+/// were.
+#[test]
+fn a_filter_s_notice_is_returned_once_its_output_is_applied() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000").0;
+    let quiet = "test.engine.notice.none";
+    install(&mut s, &asking(quiet, "[]", &json!({"objects": [], "notice": "Nothing to tidy"})));
+    let r = run(&mut s, "plugin.run", json!({"id": quiet}));
+    assert_eq!((&r["plugin"], &r["notice"]), (&json!(quiet), &json!("Nothing to tidy")));
+    assert_eq!(r["pluginName"], json!(format!("Test {quiet}")));
+    let reading = |s: &mut Session, id: &str, output: &Value| {
+        let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, output));
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"], "replace": true}))
+    };
+    let noisy = "test.engine.notice.escaped";
+    let long = format!("Done\u{202E}\n{}", "x".repeat(500));
+    reading(&mut s, noisy, &json!({"objects": [{"id": id}], "notice": long}));
+    let shown = run(&mut s, "plugin.run", json!({"id": noisy, "ids": [id]}))["notice"].as_str().unwrap_or_default().to_string();
+    assert!(shown.starts_with("Done\\u{202E}\\u{000A}xx") && shown.ends_with('…'), "{shown}");
+    assert_eq!(shown.chars().count(), vectorcraft_plugins::objects::MAX_NOTICE_CHARS);
+    let plain = "test.engine.notice.plain";
+    reading(&mut s, plain, &json!({"objects": [{"id": id}]}));
+    let r = run(&mut s, "plugin.run", json!({"id": plain, "ids": [id]}));
+    assert!(r.get("notice").is_none() && r.get("pluginName").is_none(), "{r}");
+    let bad = "test.engine.notice.bad";
+    install(&mut s, &asking(bad, "[]", &json!({"objects": [], "notice": 3})));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let e = s.execute("plugin.run", &json!({"id": bad})).unwrap_err().to_string();
+    assert!(e.contains("`notice` must be a string with visible text"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+/// A plug-in command's result carries its run's `notice` beside the command's id, and so does the
+/// step of a batch that runs it.
+#[test]
+fn a_plugin_command_returns_its_run_s_notice() {
+    let mut s = session();
+    let id = "test.engine.notice.command";
+    let commands = r#"[{"id":"count","label":"Count"}]"#;
+    install_wat(&mut s, &tpl::returning(&with_commands(id, "filter", commands), r#"{"objects":[],"notice":"Counted 0 objects"}"#));
+    let count = crate::cmd::plugin::command_id(id, "count");
+    let r = run(&mut s, &count, json!({}));
+    assert_eq!((&r["command"], &r["notice"]), (&json!("count"), &json!("Counted 0 objects")));
+    let batch = run(&mut s, "command.batch", json!({"commands": [{"command": count, "params": {}}]}));
+    assert!(batch.to_string().contains("Counted 0 objects"), "{batch}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 #[test]
 fn live_effect_plugins_reshape_editable_art_and_expand() {
     let mut s = session();
@@ -2124,6 +2177,43 @@ fn plugin_list_leaves_out_paths_outside_the_read_root() {
     let listed = confine(wider.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
     assert_eq!(listed["folder"]["folder"], json!(folder), "{listed}");
     run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command a script runs loads a plug-in folder's files through the script's read gate also
+/// without automation roots: a link in a folder the script may read, to a module outside it, is
+/// refused whether or not its name is valid text.
+#[cfg(unix)]
+#[test]
+fn a_script_loads_no_plugin_from_outside_its_folder_through_a_name_that_is_not_text() {
+    use crate::file_access::{ScriptGate, ScriptScope, with_script_gate};
+    use std::os::unix::ffi::OsStrExt;
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let base = crate::tests_links::Folder::new("plugin-script-name-not-text");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let (text_id, bytes_id) = ("test.engine.script.textname", "test.engine.script.bytesname");
+    for (id, file, link) in [(text_id, "text.wasm", &b"a.wasm"[..]), (bytes_id, "bytes.wasm", &b"b\xff.wasm"[..])] {
+        let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+        std::fs::write(outside.join(file), wat::parse_str(src).unwrap()).unwrap();
+        std::os::unix::fs::symlink(outside.join(file), inside.join(std::ffi::OsStr::from_bytes(link))).unwrap();
+    }
+    let gate = ScriptGate {
+        read: ScriptScope::of_folder(&inside),
+        write: ScriptScope::default(),
+        documents: vec![],
+        held: vec![],
+        linked: Default::default(),
+        also: None,
+    };
+    let mut s = session();
+    let folder = inside.to_string_lossy().to_string();
+    let r = with_script_gate(gate, || s.execute("plugin.reload", &json!({"path": folder})));
+    let installed = [text_id, bytes_id].map(vectorcraft_plugins::registry::remove);
+    assert_eq!(installed, [false, false], "a script loaded a module from outside its folder: {r:?}");
+    let r = r.unwrap();
+    assert_eq!(r["loaded"], json!([]), "{r}");
+    assert_eq!(r["failed"].as_array().map(Vec::len), Some(2), "{r}");
 }
 
 /// Under automation read roots, a plug-in turned off for the next launch is listed with a file
