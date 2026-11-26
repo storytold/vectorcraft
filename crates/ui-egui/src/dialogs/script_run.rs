@@ -43,6 +43,7 @@ use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
+use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
@@ -85,6 +86,11 @@ crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KI
 /// The tag of the warning: the params `script.run` takes once the warning is answered.
 struct RunWarning {
     params: Value,
+    /// The automation roots in force when asked: the script runs under them, and under any in force
+    /// when the warning is answered.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the script runs as automation.
+    automated: bool,
 }
 
 /// What a script's `alert`, `confirm` or `prompt` dialog answers with.
@@ -481,7 +487,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         .dont_show_again()
         .button(PromptChoice::Proceed, tl!("Run"))
         .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(RunWarning { params });
+        .tag(RunWarning { params, scope: ScopeHandle::capture(), automated: app.automation_asked() });
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
 }
@@ -568,10 +574,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        if let Err(e) = stored.and_then(|()| app.run("script.run", params).map(drop)) {
+        let run = |app: &mut VectorcraftApp| app.run("script.run", params).map(drop);
+        let automated = automated || app.automation_asked();
+        if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
             app.status(e);
         }
     }

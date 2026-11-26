@@ -208,8 +208,7 @@ pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines 
     });
     let zoom = (app.session.tool_id() == "zoom").then(|| {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        // PLAN: assumed `crate::state::zoom_label(zoom: f64, print: bool) -> String`, kept by hub-w1.
-        format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size))
+        format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.print_ppi()))
     });
     let brush = if let Some(Readout::Brush { name }) = readout { name } else { None };
     let (f, s) = current_paints(app);

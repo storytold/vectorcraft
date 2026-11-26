@@ -228,8 +228,16 @@ pub struct ToolContext<'a> {
     pub shape_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
-    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
+    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator. For
+    /// an Eyedropper pick armed for a stop of the gradient a tool paints with, only a stop still
+    /// selected on that gradient.
     pub gradient_stop: Option<usize>,
+    /// Is [`Self::paint`]'s paint behind the proxy in front ([`Self::fill_active`]) the color the
+    /// active tool, or the tool an armed one-shot pick returns to, paints with (the Live Paint
+    /// Bucket's fill and stroke, the Shape Builder's fill), or was the pick armed for a stop of
+    /// that tool's paint? A pick armed for such a stop then ends once [`Self::gradient_stop`] no
+    /// longer names it, also after the stop was cleared or the other proxy came to the front.
+    pub tool_paints: bool,
     /// The Appearance panel's active fill/stroke (paint-order index into the first selected
     /// object's stack); paint tools show and edit that item.
     pub appearance_item: Option<usize>,

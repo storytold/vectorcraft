@@ -8,6 +8,7 @@
 use craft::behavior::ColumnWidth;
 use craft::ui::contract::{Bind, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::DialogId;
+use craft::ui::display::Text;
 use craft::ui::form::Field;
 use craft::ui::layout::GridFit;
 use craft::ui::layout_components::Grid;
@@ -298,7 +299,7 @@ fn counts_row(ui: &mut egui::Ui, f: &DialogFields) {
     if let Some(FieldValue::Json(c)) = f.get(COUNTS)
         && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
     {
-        ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
+        Text::new(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points")))).show(ui);
     }
 }
 
