@@ -507,6 +507,52 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
 
+#[test]
+fn layer_row_footer_drops_after_next_document_leave_the_new_document_alone() {
+    use crate::tests::panel_harness::Panel;
+    use craft::layers::ui::panel::{LayersDrag, document_hash};
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    for (button, deletes) in [("Delete Selection", true), ("Create New Layer", false)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut setup = |x| {
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let source = app.session.active().unwrap().doc.layers[0].id;
+            name_row(&mut app, source, "Dragged Layer");
+            app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap();
+            app.run("layer.new", json!({"name": "Other Layer"})).unwrap();
+            (app.session.active().unwrap().uid, source)
+        };
+        let (first_doc, first_layer) = setup(10);
+        let (second_doc, second_layer) = setup(60);
+        assert_eq!(first_layer, second_layer, "the documents have different layers with the same local ID");
+        assert!(app.session.set_active(0));
+
+        let mut panel = Panel::new(app, show);
+        let from = panel.rect_role("Dragged Layer", Role::TREE_ITEM).center();
+        let to = panel.rect(button).center();
+        panel.drag_hold_role("Dragged Layer", Role::TREE_ITEM, to - from);
+        assert!(drag::mark(panel.ctx()).is_some(), "{button} accepts a drag from its own list");
+        panel.key(Key::F6, Modifiers::COMMAND);
+        assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+        let carried = drag::active::<LayersDrag<RowId>>(panel.ctx()).expect("the shortcut leaves the drag held");
+        assert_eq!(carried.document(), Some(document_hash(first_doc)));
+        assert!(drag::mark(panel.ctx()).is_none(), "{button} rejects a drag belonging to another document");
+        panel.release();
+        assert_eq!(panel.app().session.active().unwrap().doc.layers.len(), 2);
+        assert!(crate::dialogs::confirm::open_question(&panel.app()).is_none());
+
+        panel.drag("Dragged Layer", button, Modifiers::NONE);
+        if deletes {
+            assert!(crate::dialogs::confirm::open_question(&panel.app()).is_some(), "a same-document drop still asks to delete its layer");
+        } else {
+            assert_eq!(panel.app().session.active().unwrap().doc.layers.len(), 3, "a same-document drop still duplicates its layer");
+        }
+    }
+}
+
 /// The footer's layer count is in the accessibility tree, and it follows the document's layers.
 #[test]
 fn the_footer_counts_the_layers() {
