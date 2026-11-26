@@ -90,6 +90,9 @@ struct Press {
     at: Point,
     /// Whether Shift was held when the click's circle was last looked for.
     shift: bool,
+    /// The tool's `radius` when the button went down: Shift uses it for the whole press, whatever
+    /// `tool.setOption` writes meanwhile.
+    shift_radius: f64,
     /// How far the pointer was from the press last time, and the radius the drag set (none until
     /// the pointer moves far enough).
     reach: f64,
@@ -338,8 +341,8 @@ impl TangentCircleTool {
         // A change without an undo step since the press: a changed first segment is forgotten (the
         // press then draws nothing), and the circle follows the segments it may touch as they are now.
         self.forget_if_changed(cx);
-        let radius = self.radius;
         let (Some(first), Some(press)) = (&self.first, &mut self.press) else { return };
+        let radius = press.shift_radius;
         // A pressed segment that is gone leaves nothing to touch.
         let second = if segment_now(cx, &press.pick).is_some() { second_set(cx, first, &press.pick) } else { vec![] };
         let moved = second != press.second;
@@ -410,7 +413,7 @@ impl Tool for TangentCircleTool {
                 self.found = nearest_to(found, ev.pos, cx.tol(DRAW_PX));
                 self.looked = true;
                 self.hover = None;
-                self.press = Some(Press { pick, second, at: ev.pos, shift: ev.mods.shift, reach: 0.0, radius: None });
+                self.press = Some(Press { pick, second, at: ev.pos, shift: ev.mods.shift, shift_radius: self.radius, reach: 0.0, radius: None });
                 vec![]
             }
             PointerKind::Drag => {
@@ -705,6 +708,24 @@ mod tests {
         t.pointer(&cx, &shifted(PointerKind::Down, 200.0, 139.0));
         let released = t.pointer(&cx, &ev(PointerKind::Up, 200.0, 139.0));
         assert!(close(drawn(&released), (130.0, 100.0, 40.0, 40.0)), "{released:?}");
+    }
+
+    #[test]
+    fn a_press_keeps_the_radius_it_started_with() {
+        let d = doc();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TangentCircleTool::default();
+        t.set_option("radius", &json!(20));
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 101.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 150.0, 101.0));
+        t.pointer(&cx, &shifted(PointerKind::Down, 200.0, 139.0));
+        // A radius written during the press does not reach the circle, however Shift changes.
+        t.set_option("radius", &json!(5));
+        t.pointer(&cx, &ev(PointerKind::Drag, 200.0, 139.0));
+        t.pointer(&cx, &shifted(PointerKind::Drag, 200.0, 139.0));
+        let released = up(&mut t, &cx, &shifted(PointerKind::Up, 200.0, 139.0));
+        assert!(close(drawn(&released), (180.0, 100.0, 40.0, 40.0)), "{released:?}");
     }
 
     #[test]

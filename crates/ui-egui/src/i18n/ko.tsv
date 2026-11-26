@@ -7136,6 +7136,35 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+@msg	only a filter declares `writes`	필터만 `writes`를 선언할 수 있습니다
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes`에 알 수 없는 개체 종류 `{shown}`이(가) 있습니다. type, image 또는 symbolInstance를 사용하세요
+@msg	`writes` lists `{shown}` twice	`writes`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes`에 나열된 `{shown}`이(가) `inputs`에는 없습니다
+@msg	`writes` needs `api` {WRITES_API} or later	`writes`에는 `api` {WRITES_API} 이상이 필요합니다
+@msg	`writes` needs the permission `doc.write`	`writes`에는 `doc.write` 권한이 필요합니다
+@msg	{_1} is not type, an image or a symbol instance	{_1}은(는) 문자, 이미지, 심볼 인스턴스가 아닙니다
+@msg	the text of type given as `truncated` can't be changed	`truncated`로 전달된 문자 개체의 텍스트는 변경할 수 없습니다
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	항목이 최대 {MAX_INPUT_RUNS}개인 목록이어야 합니다
+@msg	type needs at least one run	문자에는 런이 하나 이상 있어야 합니다
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	텍스트 {bytes}바이트(한도 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	단락 {paragraphs}개(한도 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	출력 전체의 텍스트가 {MAX_INPUT_TEXT_TOTAL}바이트를 넘습니다
+@msg	unknown key '{k}'	알 수 없는 키 '{k}'
+@msg	must be a list of 6 numbers	숫자 6개의 목록이어야 합니다
+@msg	a number is out of range (limit ±{MAX_COORD})	숫자가 범위를 벗어났습니다(한도 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	개체를 선이나 점으로 납작하게 만듭니다
+@msg	an object flattened to a line or a point can't be placed again	선이나 점으로 납작해진 개체는 다시 배치할 수 없습니다
+@msg	must be a number from 0 to 1	0에서 1 사이의 숫자여야 합니다
+@msg	must be the name of a symbol	심볼 이름이어야 합니다
+@msg	'{shown}' is not a symbol in this document	'{shown}'은(는) 이 문서의 심볼이 아닙니다
+@msg	a run must be {{"text", "style", "inline"?}}	런은 {{"text", "style", "inline"?}} 형식이어야 합니다
+@msg	`text` holds the character of an inline graphic	`text`에 인라인 그래픽 문자가 들어 있습니다
+@msg	inline graphics can't be added, removed, reordered or changed	인라인 그래픽은 추가, 제거, 순서 변경, 수정할 수 없습니다
+@msg	the characters of threaded type can't be changed	연결된 문자의 글자는 변경할 수 없습니다
+@msg	the characters of type with ruby can't be changed	루비가 있는 문자의 글자는 변경할 수 없습니다
+@msg	expected {count} paragraph styles, one per paragraph	단락마다 하나씩 단락 스타일 {count}개가 필요합니다
+@msg	the document has no Kinsoku set named '{shown}'	문서에 '{shown}'(이)라는 긴소쿠 세트가 없습니다
+@msg	must be 1-{MAX_FAMILY} printable characters	인쇄 가능한 문자 1-{MAX_FAMILY}자여야 합니다
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	전달받은 개체와 문서의 설정, 아트보드, 레이어, 견본 읽기
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`에는 서로 다른 섹션을 나열해야 합니다: settings, artboards, layers 또는 swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context`는 `api` 3 이상이고 `doc.read` 권한이 있는 필터 또는 `commands`가 있는 라이브 효과에만 쓸 수 있습니다
