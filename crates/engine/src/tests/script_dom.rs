@@ -1325,6 +1325,54 @@ fn duplicate_refuses_hidden_or_locked_art() {
     assert!(order.contains(&a) && order.contains(&b));
 }
 
+#[test]
+fn setters_refuse_art_on_a_locked_artboard() {
+    let (mut s, _, _) = doc();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems[0], refused = [];\
+         var setters = [function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.opacity=50},\
+         function(){p.hidden=true},function(){p.locked=true},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 9])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(log(&mut s, "var p=app.activeDocument.pageItems[0];p.opacity=p.opacity;vc.log(p.opacity);"), vec![json!(100)]);
+}
+
+#[test]
+fn geometry_setters_refuse_locked_guide_paths() {
+    let (mut s, _, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p=app.activeDocument.pageItems[0],refused=[];\
+         var setters=[function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 6])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    log(&mut s, "var p=app.activeDocument.pageItems[0];p.left=5;p.width=10;");
+    let bounds = s.active().unwrap().doc.bounds_of(&[b], false).unwrap();
+    assert!((bounds.x0 - 5.0).abs() < 1e-9 && (bounds.width() - 10.0).abs() < 1e-9);
+}
+
 /// Reading `editable` on every member of a group on a locked artboard measures the group once.
 #[test]
 fn editable_measures_a_group_on_a_locked_artboard_once() {
