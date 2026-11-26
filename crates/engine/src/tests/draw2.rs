@@ -3,7 +3,7 @@
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 use crate::tooling::{UiRequest, ViewInfo};
 use crate::*;
@@ -552,6 +552,28 @@ fn pencil_redraws_the_shorter_way_round_a_closed_path() {
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "redraw": {"id": id.0, "within": -1}})).is_err());
 }
 
+/// `preview` draws the stroke as a new path on top, beside the selected path, and leaves the
+/// selection as it was, in Draw Behind and Draw Inside too, as the Pencil previews a stroke that
+/// redraws a selected path.
+#[test]
+fn pencil_preview_draws_on_top_and_leaves_the_selection_as_it_was() {
+    for mode in ["normal", "behind", "inside"] {
+        let mut s = session();
+        let r = rect(&mut s, 400.0, 400.0, 50.0, 50.0);
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        s.execute("view.drawMode", &json!({ "mode": mode })).unwrap();
+        let (parent, _, _) = s.doc().unwrap().doc.position(r).unwrap();
+        let out =
+            s.execute("path.freehand", &json!({"points": [[100, 200], [150, 220], [200, 200]], "keepSelected": false, "preview": true})).unwrap();
+        let id = NodeId(out["id"].as_u64().unwrap());
+        let d = &s.doc().unwrap().doc;
+        let ((rp, ri, _), (np, ni, _)) = (d.position(r).unwrap(), d.position(id).unwrap());
+        assert!(rp == parent && np == parent, "{mode}: beside the path, in no clip group");
+        assert!(ni > ri, "{mode}: on top of the path");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![r], "{mode}: the selection as it was");
+    }
+}
+
 /// With Keep selected off, a new stroke leaves nothing selected (the earlier selection goes too,
 /// as Illustrator starts the stroke by dropping it, #5752); a continued or redrawn path is
 /// deselected and the rest of the selection stays. The stroke is one undo step.
@@ -617,8 +639,14 @@ fn freehand_with_fit_off_joins_the_points_with_straight_segments() {
     .unwrap();
     let sp = path(&s, r).subpaths[0].clone();
     assert!(corners(&sp), "{:?}", sp.anchors);
+    // Each end's bend stops `within` (4) along the stroke, at a point added on its first and last
+    // piece; the drawn points beyond stay as drawn.
     let inner: Vec<_> = at(&sp).into_iter().filter(|p| p.1 < 499.0).collect();
-    assert_eq!(inner, [(125.0, 470.0), (150.0, 460.0), (175.0, 470.0)]);
+    let t = 4.0 / 25f64.hypot(31.0);
+    let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+    assert_eq!(inner.len(), 5, "{inner:?}");
+    assert!(near(inner[0], (100.0 + 25.0 * t, 501.0 - 31.0 * t)) && near(inner[4], (200.0 - 25.0 * t, 501.0 - 31.0 * t)), "{inner:?}");
+    assert_eq!(inner[1..4], [(125.0, 470.0), (150.0, 460.0), (175.0, 470.0)]);
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "fit": "no"})).is_err());
 }
 
@@ -736,6 +764,76 @@ fn blob_brush_size_follows_the_pen_pressure() {
     s.pointer(&ev(PointerKind::Up, 20), v).unwrap();
     let (drawn, _) = paths(&s).into_iter().find(|(_, p)| p.control_bounds().is_some_and(|b| b.y0 > 650.0)).unwrap();
     assert!(inside(&s, drawn, 290.0, 707.0) && !inside(&s, drawn, 110.0, 703.0), "the tool's stroke follows the pen");
+}
+
+/// Blob Brush Tool Options' Size set to Stylus Wheel: the brush is Size − Variation wide where an
+/// airbrush pen's finger wheel was at 0 and Size + Variation where it was at 1, in a drag, a click
+/// and with a tip that is not round. A stroke without a wheel keeps the Size, pressure does not
+/// change it, and an unknown mode or a wheel out of its range is refused with nothing painted.
+#[test]
+fn blob_brush_size_follows_the_stylus_wheel() {
+    let mut s = session();
+    let inside = |s: &Session, id: NodeId, x: f64, y: f64| {
+        vectorcraft_geom::hit::fill_contains(&path(s, id).to_bezpath(), FillRule::NonZero, Point::new(x, y))
+    };
+    let blob = |s: &mut Session, p: serde_json::Value| NodeId(s.execute("path.blob", &p).unwrap()["id"].as_u64().unwrap());
+    // The wheel at 0 at the left end and at 1 at the right: about 2 pt wide to 18 pt wide.
+    let wheeled = |y: f64, wheel: &dyn Fn(f64) -> serde_json::Value| {
+        (0..=20).map(|i| json!([100.0 + f64::from(i) * 10.0, y, null, null, null, null, wheel(f64::from(i) / 20.0)])).collect::<Vec<_>>()
+    };
+    let tip = json!({"size": 10, "sizeMode": "stylusWheel", "sizeVariation": 8, "merge": false});
+    let a = blob(&mut s, with(&tip, json!({"points": wheeled(100.0, &|w| json!(w))})));
+    assert!(inside(&s, a, 290.0, 107.0) && !inside(&s, a, 110.0, 103.0), "wide where the wheel was at 1, thin where at 0");
+    let b = blob(&mut s, with(&tip, json!({"points": wheeled(200.0, &|w| json!(1.0 - w))})));
+    assert!(inside(&s, b, 110.0, 207.0) && !inside(&s, b, 290.0, 203.0), "the other way round");
+    // No wheel at any point, and pressure without a wheel: 10 pt wide all along.
+    let none = blob(&mut s, with(&tip, json!({"points": wheeled(300.0, &|_| json!(null))})));
+    let pressed = (0..=20).map(|i| json!([100.0 + f64::from(i) * 10.0, 400.0, f64::from(i) / 20.0])).collect::<Vec<_>>();
+    let pressure = blob(&mut s, with(&tip, json!({"points": pressed})));
+    for (id, y) in [(none, 300.0), (pressure, 400.0)] {
+        assert!(inside(&s, id, 110.0, y + 3.0) && inside(&s, id, 290.0, y + 3.0) && !inside(&s, id, 290.0, y + 7.0), "10 pt at y {y}");
+    }
+    // A click paints one dab as wide as the wheel gives.
+    let wide = blob(&mut s, with(&tip, json!({"points": [[100, 500, null, null, null, null, 1]]})));
+    let thin = blob(&mut s, with(&tip, json!({"points": [[300, 500, null, null, null, null, 0]]})));
+    assert!(inside(&s, wide, 100.0, 508.0) && !inside(&s, thin, 300.0, 503.0), "a dab follows the wheel");
+    // A stroke whose samples all lie at one point paints a dab sized from its first reading, with
+    // the wheel and with pressure.
+    let still = blob(&mut s, with(&tip, json!({"points": [[500, 500, null, null, null, null, 1], [500, 500, null, null, null, null, 0]]})));
+    let pressed_still = blob(&mut s, with(&tip, json!({"sizeMode": "pressure", "points": [[700, 500, 1], [700, 500, 0]]})));
+    for (id, x) in [(still, 500.0), (pressed_still, 700.0)] {
+        assert!(inside(&s, id, x, 508.0) && !inside(&s, id, x, 510.0), "a dab from the first reading at x {x}");
+    }
+    // A 25% round tip lying level: about 0.5 pt tall at the left end to 4.5 pt at the right.
+    let flat = blob(&mut s, with(&tip, json!({"roundness": 25, "points": wheeled(600.0, &|w| json!(w))})));
+    assert!(inside(&s, flat, 290.0, 601.9) && !inside(&s, flat, 110.0, 601.0), "a flat tip follows the wheel");
+    // Refused, with the document and its undo steps as they were.
+    let (before, undo) = (paths(&s).len(), s.doc().unwrap().history.undo.len());
+    for (bad, key) in [
+        (json!({"points": wheeled(700.0, &|w| json!(w)), "sizeMode": "tilt", "sizeVariation": 8}), "sizeMode"),
+        (json!({"points": [[0, 700, null, null, null, null, 1.5], [10, 700]], "sizeMode": "stylusWheel", "sizeVariation": 8}), "wheel"),
+    ] {
+        let err = s.execute("path.blob", &bad).unwrap_err();
+        assert!(err.to_string().contains(key), "{err}");
+    }
+    assert_eq!((paths(&s).len(), s.doc().unwrap().history.undo.len()), (before, undo), "nothing changed");
+    // The tool records the wheel while its Size varies with it.
+    let v = view();
+    s.select_tool("blobBrush", v).unwrap();
+    s.set_tool_option("sizeMode", &json!("stylusWheel"));
+    s.set_tool_option("sizeVariation", &json!(8));
+    assert_eq!(s.tool_options()["sizeMode"], json!("stylusWheel"));
+    let ev = |kind, i: i32| PointerEvent {
+        pen: Some(PenPose { wheel: Some(i as f32 / 20.0), ..PenPose::default() }),
+        ..PointerEvent::new(kind, 100.0 + f64::from(i) * 10.0, 800.0)
+    };
+    s.pointer(&ev(PointerKind::Down, 0), v).unwrap();
+    for i in 1..20 {
+        s.pointer(&ev(PointerKind::Drag, i), v).unwrap();
+    }
+    s.pointer(&ev(PointerKind::Up, 20), v).unwrap();
+    let (drawn, _) = paths(&s).into_iter().find(|(_, p)| p.control_bounds().is_some_and(|b| b.y0 > 750.0)).unwrap();
+    assert!(inside(&s, drawn, 290.0, 807.0) && !inside(&s, drawn, 110.0, 803.0), "the tool's stroke follows the wheel");
 }
 
 /// Eraser Tool Options' Size set to Pressure (#3961): the tip is Size − Variation across where the
@@ -1799,6 +1897,64 @@ fn smooth_region_refits_at_the_tolerance_sent_at_any_zoom() {
     for (amplitude, fidelity, scale) in [(1.5, 0.05, 1.0 / 640.0), (1.5, 0.05, 1.0 / 8.0), (5.0, 20.0, 1.0 / 0.0313), (5.0, 20.0, 4.0)] {
         let want = smoothed_zigzag_anchors(amplitude, fidelity, 1.0);
         assert_eq!(smoothed_zigzag_anchors(amplitude, fidelity, scale), want, "{amplitude} pt zigzag at {fidelity} px, zoom {}", 1.0 / scale);
+    }
+}
+
+/// A line from (100, 200) to (400, 200) jagged by up to 6 pt either way, the same every time.
+fn jagged_line_anchors() -> Vec<serde_json::Value> {
+    let mut seed = 7u64;
+    (0..=60)
+        .map(|i| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0;
+            json!({"x": 100.0 + f64::from(i) * 5.0, "y": 200.0 + 6.0 * noise})
+        })
+        .collect()
+}
+
+/// The path a `path.smoothRegion` drag along [`jagged_line_anchors`] leaves with `smoothness` (left
+/// out for null), and the mean distance of its points from the line y = 200.
+fn smoothed_jagged_line(smoothness: serde_json::Value) -> (PathData, f64) {
+    let mut s = session();
+    let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+    let drag: Vec<_> = (0..=64).map(|i| json!([90.0 + f64::from(i) * 5.0, 200.0])).collect();
+    s.execute("path.smoothRegion", &json!({"points": drag, "radius": 12, "fidelity": 2.5, "smoothness": smoothness})).unwrap();
+    let p = path(&s, id);
+    let samples = smooth_test_samples(&p);
+    let off = samples.iter().map(|q| (q.y - 200.0).abs()).sum::<f64>() / samples.len() as f64;
+    (p, off)
+}
+
+/// Smooth Tool Options' Smoothness: the higher it is, the smoother the path a drag leaves, from
+/// 0% to 100%. Left out, a drag smooths at 50%.
+#[test]
+fn a_higher_smoothness_leaves_a_smoother_path() {
+    let original = {
+        let mut s = session();
+        let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+        let samples = smooth_test_samples(&path(&s, id));
+        samples.iter().map(|q| (q.y - 200.0).abs()).sum::<f64>() / samples.len() as f64
+    };
+    let offs: Vec<f64> = [0.0, 25.0, 50.0, 75.0, 100.0].iter().map(|&x| smoothed_jagged_line(json!(x)).1).collect();
+    assert!(offs[0] < original, "even 0% refits within Fidelity: {offs:?}, {original} before");
+    assert!(offs.windows(2).all(|w| w[1] < w[0]), "each step up smooths more: {offs:?}");
+    assert_eq!(smoothed_jagged_line(json!(null)).0, smoothed_jagged_line(json!(50)).0, "left out is 50%");
+}
+
+/// `path.smoothRegion` refuses a Smoothness outside 0% to 100% and changes nothing.
+#[test]
+fn smooth_region_refuses_a_smoothness_outside_0_to_100() {
+    let mut s = session();
+    let id = smooth_test_path(&mut s, &jagged_line_anchors(), false);
+    let drag = json!({"points": [[90, 200], [250, 200], [410, 200]], "radius": 12, "fidelity": 2.5});
+    for x in [json!(-1), json!(-0.001), json!(100.5), json!(101), json!(1e300)] {
+        refuses_with(&mut s, "path.smoothRegion", &with(&drag, json!({"smoothness": x})), "`smoothness` must be from 0 to 100");
+    }
+    for x in [json!(0), json!(100)] {
+        let before = path(&s, id);
+        s.execute("path.smoothRegion", &with(&drag, json!({"smoothness": x}))).unwrap_or_else(|e| panic!("smoothness {x}: {e}"));
+        assert_ne!(path(&s, id), before, "smoothness {x} smoothed nothing");
+        s.execute("edit.undo", &json!({})).unwrap();
     }
 }
 
@@ -3484,7 +3640,7 @@ fn smooth_and_join_refuse_a_reach_or_fidelity_outside_its_range() {
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
-/// width, radius, fidelity or tolerance given as text or as another value that is not a number, and change
+/// width, radius, fidelity, smoothness or tolerance given as text or as another value that is not a number, and change
 /// nothing; null is read as the key left out.
 #[test]
 fn drawing_commands_refuse_a_size_given_as_text() {
@@ -3499,6 +3655,7 @@ fn drawing_commands_refuse_a_size_given_as_text() {
         ("path.eraseSegments", "width"),
         ("path.smoothRegion", "radius"),
         ("path.smoothRegion", "fidelity"),
+        ("path.smoothRegion", "smoothness"),
         ("path.joinScrub", "tolerance"),
         ("path.blob", "size"),
         ("path.blob", "fidelity"),

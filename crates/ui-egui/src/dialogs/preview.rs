@@ -48,8 +48,8 @@ impl LivePreview {
         Some(answer)
     }
 
-    /// OK: keeps the previewed `cmd` as one undo step (or runs it when no preview runs); the command's warning shows
-    /// in the status bar either way. On an error the dialog stays open.
+    /// OK: keeps the previewed `cmd` as one undo step (or runs it when no preview runs); the command's warning, or a
+    /// plug-in run's notice, shows in the status bar either way. On an error the dialog stays open.
     pub(crate) fn commit(self, app: &mut VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
         if !app.session.in_interaction() {
             return app.run(cmd, params);
@@ -60,6 +60,9 @@ impl LivePreview {
             && let Some(w) = v.get("warning").and_then(Value::as_str)
         {
             app.status(w.to_string());
+        }
+        if r.is_ok() {
+            crate::plugin_runs::show_notice(app, cmd, &v);
         }
         r
     }

@@ -171,6 +171,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
+        // With Preferences › General › Display Print Size at 100% Zoom on, the measured density of
+        // the main window's display in points per inch (null where none was measured), and the
+        // points an inch takes at 100% in the current window. Both are null with it off, when the
+        // desktop app does not measure the displays.
+        "screenPpi": app.session.prefs.display_print_size.then(|| app.services.screen_ppi.ppi()).flatten(),
+        "printPpi": app.print_ppi(),
         // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
         // last frame drew: each one's document index, view number (Window › New Window) and rect.
         // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars

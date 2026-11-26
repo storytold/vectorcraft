@@ -1690,6 +1690,17 @@ file-filter	Templates	Шаблоны
 	Graphic Styles	Графические стили
 	Graphic Styles Options	Параметры графических стилей
 	Graphics	Графика
+	Show Contrast	Показать контраст
+	Contrast For	Контраст для
+	Normal Text	Обычный текст
+	Large Text	Крупный текст
+	Contrast Background	Фон контраста
+	Behind Selection	За выделением
+	Current Color	Текущий цвет
+	Pass	Соответствует
+	Fail	Не соответствует
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Минимальный контраст по WCAG 2.2: обычный текст AA 4.5:1 (1.4.3) и AAA 7:1 (1.4.6), крупный текст AA 3:1 и AAA 4.5:1, графика и элементы управления AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон определяется в центре выделения.
 	Graphics Processor	Графический процессор
 	Graphics: {adapter}	Графика: {adapter}
 	Gravity	Гравитация
@@ -3361,7 +3372,7 @@ digits	Malayalam	Малаялам
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Выделение › То же › Цвет заливки», «Цвет обводки» и «Заливка и обводка» находят только тот же оттенок глобального или плашечного образца, а не любой его оттенок.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показывает начальный экран, когда нет открытых документов; если выключено, окно остаётся пустым, пока вы не нажмёте «Домой».
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Измеряет объекты с обводками и эффектами, меняющими форму, для размера, положения и выравнивания; тени, свечения и размытия не учитываются.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	При масштабе 100 % один дюйм документа занимает 96 экранных пунктов вместо 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	При масштабе 100 % один дюйм документа занимает один дюйм дисплея или 96 экранных пунктов, если система не сообщает пригодный размер дисплея.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Двойной щелчок по группе, контуру или изображению инструментом «Выделение» открывает их в режиме изоляции.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки и обводки узором трансформируются вместе с графикой, если трансформирование или меню панели «Трансформировать» не задаёт иное.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радиусы динамических углов масштабируются вместе с графикой, если масштабирование не задаёт иное.
@@ -5604,6 +5615,12 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	finish editing the pattern first	сначала завершите редактирование узора
 @msg	nothing encoded	ничего не закодировано
 @msg	nothing selected	ничего не выделено
+@msg	`{key}` must be a color or {_1}	`{key}` должен быть цветом или {_1}
+@msg	the selected objects' colors differ: give `color`	цвета выделенных объектов различаются: укажите `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	цвета выделенных объектов различаются: укажите `opacity` или `color`
+@msg	the active fill or stroke has no color: give `color`	у активной заливки или обводки нет цвета: укажите `color`
+@msg	the active fill or stroke is hidden: give `color`	активная заливка или обводка скрыта: укажите `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активная заливка или обводка рисуется через непрозрачную маску: укажите `color`
 @msg	nothing selected is in a group	ничего из выделенного не находится в группе
 @msg	nothing to align	нечего выравнивать
 @msg	nothing to distort	нечего искажать
@@ -6937,6 +6954,8 @@ axis	Y Axis	Ось Y
 	Cancel Plug-in Run	Отменить запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершился, но документ или модуль за это время изменился: запустите его снова
 @msg	Running “{name}”…	Выполняется «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` должен быть строкой с видимым текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): его должен одобрить человек в настольном приложении, либо передайте `allowHeavy: true` в сеансе, запущенном с --allow-plugin-grants
@@ -7029,7 +7048,7 @@ axis	Y Axis	Ось Y
 @msg	a list of {min_items} to {max_items} numbers	список из {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому объекту нужен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
+@msg	a painted live effect returns only `objects` and `notice`	рисующий динамический эффект возвращает только `objects` и `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
 @msg	a read-only object was left out	пропущен объект только для чтения
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан
@@ -7134,6 +7153,8 @@ axis	Y Axis	Ось Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` может быть только true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` допустим только для динамического эффекта (`kind` "effect") с `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` допустим только для импортёра (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» открывает файлы, но не помещает их: его манифест не задаёт `place`
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
 @msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`
