@@ -10934,8 +10934,8 @@ every option.
 File → Export → Save for Web (Legacy) writes optimised web images: `document.exportForWeb {format: gif|jpg|png8|png24,
 …}` renders the artboard (`clipToArtboard`, the default; `artboard` picks one) or the visible art and the slices, at
 `width`, `height` or `percent`, and encodes it with the format's settings: for GIF and PNG-8 `reduction`, `colors`,
-`dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
-transparent, webShift, sort, deleted, customPalette, shifted}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
+`dither`, `ditherAmount`, `transparency`, `transparencyDither`, `transparencyDitherAmount`, `matte`, `interlaced`,
+`webSnap`, `lossy` (GIF) and `colorTable {locked, transparent, webShift, sort, deleted, customPalette, shifted}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
 `transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
 GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. `<stem>` is the name of `path` without its extension, or
 without `path` the document's title with the characters Windows does not allow in a file name as `-` and a `-` after
@@ -10945,6 +10945,15 @@ after a Windows device name such as `aux` (`slices: selected` writes the selecte
 `<stem>.html` placing them, with each slice's URL, target, alt text and status message, and No Image / HTML Text cells.
 Without `path` the files come back as `{name, dataBase64}`. As in the raster exports, `warnings` says when an image
 couldn't be decoded and is missing from the image; the files are written all the same.
+
+With `transparency` on, `transparencyDither` sets how GIF and PNG-8 treat partly transparent pixels: `none` (the
+default) makes the pixels under half opacity transparent and keeps the others; `diffusion`, `pattern` and `noise` make
+some of them transparent and keep the rest in a diffusion pattern, an 8×8 ordered pattern or noise. With `pattern`,
+`noise`, or `diffusion` at amount 100, about as many are kept as their opacity says. `transparencyDitherAmount` (0 to
+100, default 100) sets the strength of `diffusion`: a lower amount comes closer to `none`, and 0 gives the same file as
+`none`. Fully transparent and fully opaque pixels do not change, the same art and settings
+always give the same file, and a kept pixel is blended over `matte` as before. Without `transparency` both keys are
+kept and do not change the file. An unknown method or an amount outside 0 to 100 is refused.
 
 `document.exportForWeb.preview` returns what Save writes for the same settings without writing it: `bytes` (the exact
 file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
