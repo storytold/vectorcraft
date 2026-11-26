@@ -166,7 +166,7 @@ pub(super) fn remove_anchors(s: &mut Session, _: &Value) -> Result<Value> {
 /// end. Indexes are those after the removal, without the subpaths left with fewer than two anchors.
 /// `removed` is in ascending order without repeats, as a selection holds it, and each subpath reads
 /// only its own pairs.
-fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTreeSet<(usize, usize)> {
+pub(in crate::cmd) fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTreeSet<(usize, usize)> {
     let mut next = BTreeSet::new();
     let mut kept = 0;
     let mut rest = removed;
@@ -202,7 +202,7 @@ fn following_anchors(shape: &[(usize, bool)], removed: &[(usize, usize)]) -> BTr
 /// ([`vectorcraft_tools::draw2::curvature_remove`]). A subpath left with one anchor is removed,
 /// and a path left with no subpath is removed through `emptied`; the caller then takes it out of
 /// the selection. True when the path went.
-fn remove_anchors_of(
+pub(in crate::cmd) fn remove_anchors_of(
     d: &mut Document,
     sel: &mut Selection,
     emptied: &mut Beside,

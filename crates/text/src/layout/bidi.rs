@@ -81,8 +81,8 @@ pub(super) fn visual_order(bidi: Option<&BidiInfo<'_>>, paragraph_start: usize, 
         return vec![];
     }
     let levels = bidi.reordered_levels(para, line.start.saturating_sub(paragraph_start)..line.end.saturating_sub(paragraph_start));
-    craft_font_catalog::visual_order(
-        glyphs.iter().map(|g| craft_font_catalog::VisualGlyph { byte: g.byte, len: g.len, level: g.level }),
+    craft::font_catalog::visual_order(
+        glyphs.iter().map(|g| craft::font_catalog::VisualGlyph { byte: g.byte, len: g.len, level: g.level }),
         paragraph_start,
         &levels,
     )

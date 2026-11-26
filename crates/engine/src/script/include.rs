@@ -217,6 +217,8 @@ pub(crate) struct Files {
     levels: usize,
     /// The files `$.evalFile` is running, the script first.
     frames: Vec<Frame>,
+    /// The run reads ECMAScript 2015 ([`es2015_script`]): its files are parsed that way.
+    es2015: bool,
 }
 
 /// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
@@ -318,7 +320,13 @@ impl Files {
             chain: real.into_iter().collect(),
             levels: 0,
             frames: vec![Frame { shown: Arc::from(path.unwrap_or_default()), dir }],
+            es2015: es2015_script(path),
         }
+    }
+
+    /// The options a file of this run is parsed with, preprocessor lines aside.
+    pub(crate) fn options(&self) -> Options {
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, e4x: true, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.
@@ -463,7 +471,7 @@ impl Files {
             return Ok(());
         }
         let fail = |kind, message: String, line, column| Failure { kind, message, index, file: shown.clone(), line, column };
-        let options = Options { preprocessor_lines: true, max_source_units: MAX_TOTAL_BYTES, ..Options::default() };
+        let options = Options { preprocessor_lines: true, ..self.options() };
         let program = vectorcraft_js::parse_utf16(&units, &options).map_err(|e| fail(FailKind::Syntax, e.message, e.line, e.column))?;
         let mut cursor = 0usize;
         for d in &program.directives {
