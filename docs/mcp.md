@@ -3518,6 +3518,9 @@ parameters for a script that runs after the startup scripts. A `then` that `scri
 missing file, one larger than 8 MiB, or source that fails to compile, ends the request with `script.run`'s error
 before any startup script runs. Compilation does not execute the chosen script. The chosen script runs the source
 read before startup scripts begin, including when a startup script removes the installed file.
+Included files are read again when the chosen run starts, so edits to them during startup affect that run.
+A failed chosen-script compilation clears the previous script report. In the app, each queue pump processes at
+most one startup entry and keeps later entries in order, including after a startup entry fails.
 `maxFuel` limits each startup script's instructions
 (from 1 to 100,000,000,000, default 1,000,000,000). It returns `{reason, skipped: true, why}` with `why` set to `off`,
 `safeMode` or `noFolder` when nothing runs, and otherwise `{reason, skipped: false, ran, failed: [{name, error}],

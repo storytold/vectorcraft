@@ -2224,7 +2224,7 @@ impl Session {
             // A stop asked for between two runs stops the run that starts now, which clears it.
             let stop = self.script_stop.is_set();
             self.start_queued();
-            if stop && self.script_key.is_some() {
+            if stop && (self.script_key.is_some() || !self.script_queue.is_empty()) {
                 self.script_stop.set();
             } else {
                 self.script_stop.clear();

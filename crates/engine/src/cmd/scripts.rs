@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Startup Scripts",
             [],
             None,
-            "{reason: launch|menu (launch: the app starting; menu: before a script chosen from File › Scripts), then?: script.run's parameters (the script to run once the startup scripts have run; its source is read once and must compile before enabled startup scripts run), maxFuel?: whole number from 1 to 100000000000 (each startup script's instructions; default 1000000000)} run the .jsx files of the Startup Scripts folder next to the settings, one at a time, as script.run runs a file, each with the same limits as any script and its own undo step; nothing runs, and the reply says why, when the runStartupScripts preference is off (the default), in Safe Mode, or in a session without the folder (the web, and a run with VECTORCRAFT_NO_PREFS); only the folder's own .jsx files run, sorted by name without regard to case, then by name; links, hidden files, names starting with a dot, subfolders and other files are left out, and so is a script the Safe Mode choice disabled; a missing folder runs nothing; a script that cannot be read, is larger than 8 MiB, fails or is stopped is named in failed and in the Script Console, and the next one runs, then the script of then; while a startup script runs, the launch marker names it, so a launch that stops there offers to disable it; script.* commands are refused inside a script, so a startup script does not start another startup run. VectorCraft's own rules: the folder, the order, the limits of a listing (2048 folder entries, 512 scripts, 250 ms) and what a failure does → {reason, skipped: true, why: off|safeMode|noFolder, then?: script.run's reply} | {reason, skipped: false, ran: [names], failed: [{name, error}], disabled: [names], truncated, unreadable, then?: script.run's reply}, or, in the app, {reason, skipped: false, running, queued: the runs queued, then's included, failed: [{name, error}] (the runs that could not start before the first one did), disabled, truncated, unreadable, then?: script.run's reply when it ran to its end at once}, each run then reporting as script.run's do, and a later run that cannot start is named in the status bar, where the message of a startup script that fails or is stopped also stays",
+            "{reason: launch|menu (launch: the app starting; menu: before a script chosen from File › Scripts), then?: script.run's parameters (the script to run once the startup scripts have run; its source is read once and must compile before enabled startup scripts run), maxFuel?: whole number from 1 to 100000000000 (each startup script's instructions; default 1000000000)} run the .jsx files of the Startup Scripts folder next to the settings, one at a time, as script.run runs a file, each with the same limits as any script and its own undo step; nothing runs, and the reply says why, when the runStartupScripts preference is off (the default), in Safe Mode, or in a session without the folder (the web, and a run with VECTORCRAFT_NO_PREFS); only the folder's own .jsx files run, sorted by name without regard to case, then by name; links, hidden files, names starting with a dot, subfolders and other files are left out, and so is a script the Safe Mode choice disabled; a missing folder runs nothing; a script that cannot be read, is larger than 8 MiB, fails or is stopped is named in failed and in the Script Console, and the next one runs, then the script of then; while a startup script runs, the launch marker names it, so a launch that stops there offers to disable it; script.* commands are refused inside a script, so a startup script does not start another startup run. VectorCraft's own rules: the folder, the order, the limits of a listing (2048 folder entries, 512 scripts, 250 ms) and what a failure does → {reason, skipped: true, why: off|safeMode|noFolder, then?: script.run's reply} | {reason, skipped: false, ran: [names], failed: [{name, error}], disabled: [names], truncated, unreadable, then?: script.run's reply}, or, in the app, {reason, skipped: false, running, queued: the runs queued, then's included, failed: [{name, error}] (the runs that could not start before the first one did), disabled, truncated, unreadable, then?: script.run's reply when it ran to its end at once}, each run then reporting as script.run's do, and a later run that cannot start is named in the status bar, where the message of a startup script that fails or is stopped also stays; included files are read again when the chosen run starts; a preflight compilation failure clears the previous script report; each app queue pump processes at most one startup entry",
             always,
             startup_run
         ),
@@ -460,7 +460,7 @@ impl Session {
 
     /// With no script running, starts the next run `script.startup.run` queued: the next startup
     /// script that starts, or the script queued after them. A run that cannot start is kept for
-    /// [`Self::take_startup_failures`], and the next one starts. → the reply of the script queued
+    /// [`Self::take_startup_failures`], and the next one starts on a later pump. → the reply of the script queued
     /// after them when it ran to its end at once.
     pub(crate) fn start_queued(&mut self) -> Option<Value> {
         // Held aside while a run starts, so that the queue does not count as a running script then.
@@ -469,8 +469,9 @@ impl Session {
         // keeps, and not in the scope of the frame that starts it.
         let scope = self.script_queue_scope.clone().unwrap_or_else(crate::file_access::ScopeHandle::capture);
         let mut reply = None;
-        while self.script_key.is_none() {
-            let Some(next) = queue.pop_front() else { break };
+        if self.script_key.is_none()
+            && let Some(next) = queue.pop_front()
+        {
             match next {
                 script::startup::Queued::Startup { path, fuel } => {
                     if let Err(e) = scope.clone().run(|| self.start_startup(&path, fuel)) {
@@ -487,7 +488,6 @@ impl Session {
                         Ok(v) => reply = Some(v),
                         Err(e) => self.startup_failures.push((then_name(&params), e.to_string())),
                     }
-                    break;
                 }
             }
         }
@@ -573,7 +573,10 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
     let prepared = then.as_ref().map(|params| prepare(s, params)).transpose()?;
     if let Some(request) = &prepared {
         let mut preflight = Session::new();
-        preflight.script_start(request.clone())?;
+        if let Err(error) = preflight.script_start(request.clone()) {
+            s.script_report = None;
+            return Err(error);
+        }
     }
     let folder = root.to_string_lossy().into_owned();
     // The folder is the app's: a refusal names it as the request may see it.

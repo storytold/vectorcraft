@@ -294,6 +294,99 @@ fn a_chosen_script_that_cannot_start_is_refused_before_any_startup_script_runs()
 }
 
 #[test]
+fn a_stop_between_runs_survives_an_entry_that_cannot_start() {
+    let _f = fresh();
+    let dir = tmp_dir("stop-before-failed-entry");
+    write(&dir, "a.jsx", "vc.log('first');");
+    write(&dir, "b.jsx", "var = ;");
+    write(&dir, "c.jsx", "vc.log('must not run');");
+    for by_interrupt in [false, true] {
+        let mut s = session(&dir);
+        s.script_frames = true;
+        s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
+        assert!((0..10_000).find_map(|_| s.script_pump()).unwrap().is_ok());
+        if by_interrupt {
+            s.script_interrupt().set();
+        } else {
+            assert!(s.script_request_stop());
+        }
+        let stopped = (0..10_000).find_map(|_| s.script_pump()).unwrap();
+        assert!(stopped.is_err(), "by_interrupt={by_interrupt}");
+        assert_eq!(s.script_report().unwrap()["name"], "c.jsx");
+        assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+        assert_eq!(console(&s, "log"), ["first"]);
+        assert_eq!(s.take_startup_failures().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["b.jsx"]);
+    }
+}
+
+#[test]
+fn the_chosen_run_reads_includes_after_the_startup_runs() {
+    let _f = fresh();
+    let dir = tmp_dir("chosen-includes");
+    let startup = dir.join("startup");
+    let chosen = dir.join("chosen");
+    write(&startup, "a.jsx", "vc.log('startup');");
+    let include = write(&chosen, "value.jsxinc", "vc.log('before');");
+    let main = write(&chosen, "main.jsx", "#include \"value.jsxinc\"\nvc.log('main');");
+    let mut s = session(&startup);
+    s.script_frames = true;
+    s.execute("script.startup.run", &json!({"reason": "menu", "then": {"path": main.to_string_lossy()}})).unwrap();
+    std::fs::write(&include, "vc.log('after');").unwrap();
+    for _ in 0..1000 {
+        if !s.script_running() {
+            break;
+        }
+        s.script_pump();
+    }
+    assert!(!s.script_running());
+    assert_eq!(console(&s, "log"), ["startup", "after", "main"]);
+}
+
+#[test]
+fn failed_startup_entries_resume_in_fifo_order_on_later_pumps() {
+    let _f = fresh();
+    let dir = tmp_dir("failed-startup-pumps");
+    for name in ["a.jsx", "b.jsx", "c.jsx"] {
+        write(&dir, name, "var = ;");
+    }
+    let mut s = session(&dir);
+    s.script_frames = true;
+    let first = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "vc.log('chosen');", "name": "chosen"}})).unwrap();
+    let failures = first["failed"].as_array().unwrap();
+    assert!(!failures.is_empty() && failures.len() < 3, "{first}");
+    assert!(!started(&s).iter().any(|name| name == "chosen"), "the chosen run follows the remaining startup entries");
+    let mut failed: Vec<String> = failures.iter().map(|entry| entry["name"].as_str().unwrap().to_string()).collect();
+    for _ in 0..100 {
+        if !s.script_running() {
+            break;
+        }
+        s.script_pump();
+        failed.extend(s.take_startup_failures().into_iter().map(|(name, _)| name));
+    }
+    assert!(!s.script_running());
+    assert_eq!(failed, ["a.jsx", "b.jsx", "c.jsx"]);
+    assert_eq!(console(&s, "log"), ["chosen"]);
+}
+
+#[test]
+fn a_failed_chosen_preflight_clears_the_previous_report() {
+    let _f = fresh();
+    let dir = tmp_dir("preflight-report");
+    write(&dir, "a.jsx", "vc.log('startup');");
+    for frames in [false, true] {
+        let mut s = session(&dir);
+        s.execute("script.run", &json!({"source": "vc.log('previous');"})).unwrap();
+        assert!(s.script_report().is_some());
+        let before = started(&s);
+        s.script_frames = frames;
+        assert!(s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "var = ;"}})).is_err());
+        assert!(s.script_report().is_none(), "frames={frames}");
+        assert_eq!(started(&s), before);
+        assert!(!s.script_running());
+    }
+}
+
+#[test]
 fn a_chosen_script_with_invalid_syntax_is_refused_before_startup_scripts_run() {
     let _f = fresh();
     let dir = tmp_dir("invalid-chosen-syntax");
@@ -461,9 +554,13 @@ fn in_the_app_every_queued_run_keeps_the_automation_roots_of_the_request_that_qu
         let r = if confined { vectorcraft_engine::file_access::confine(Some(&roots), request) } else { request() };
         assert_eq!(r["queued"], json!(3));
         // The frames that start the later runs are outside the request.
-        while s.script_running() {
+        for _ in 0..1000 {
+            if !s.script_running() {
+                break;
+            }
             s.script_pump();
         }
+        assert!(!s.script_running(), "the startup queue did not finish, confined {confined}");
         assert_eq!(started(&s), ["a.jsx", "b.jsx", "chosen"]);
         let want = if confined { "refused" } else { "wrote" };
         assert_eq!(console(&s, "log"), [want, want, want], "confined {confined}");
