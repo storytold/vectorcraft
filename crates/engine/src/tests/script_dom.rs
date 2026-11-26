@@ -257,6 +257,23 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(undo_steps(&s), steps);
 }
 
+/// An item's or a layer's opacity that differs from the reported one, however little, is set as
+/// given.
+#[test]
+fn an_opacity_near_the_reported_one_is_still_set() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 0})).unwrap();
+    let out = log(
+        &mut s,
+        "var i = app.activeDocument.pageItems[0]; i.opacity = 0.00009; vc.log(i.opacity);\
+         var l = app.activeDocument.layers[0]; l.opacity = 0; l.opacity = 0.00009; vc.log(l.opacity);",
+    );
+    assert_eq!(out, vec![json!(0.0001), json!(0.0001)]);
+    let d = &s.active().unwrap().doc;
+    assert!(d.node(a).unwrap().opacity > 0.0);
+    assert!(d.node(d.layer_containing(a).unwrap()).unwrap().opacity > 0.0);
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
@@ -1693,6 +1710,29 @@ fn node_move_refuses_a_guide_and_a_locked_or_hidden_compound_path() {
         s.execute("edit.undo", &json!({})).unwrap();
     }
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+}
+
+/// `node.move` refuses a clip group's clipping path for a compound path and leaves the group
+/// clipped as it was; the art the group clips still goes in.
+#[test]
+fn node_move_refuses_a_clipping_path_for_a_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let cid = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.position(b).map(|(p, i, _)| (p, i)), Some((Some(g), 0)));
+    let (before, steps) = (format!("{:?}", d.layers), undo_steps(&s));
+    let err = s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("clipping path"), "{err}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(cid));
+    assert!(d.node(g).unwrap().clips());
+    assert_eq!(d.position(b).map(|(p, i, _)| (p, i)), Some((Some(g), 0)));
 }
 
 /// `duplicate(compoundPath)` puts the copy into the compound path; an empty one takes its paint.

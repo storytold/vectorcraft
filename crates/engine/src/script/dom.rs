@@ -1521,8 +1521,14 @@ fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
+/// The percentage a page item's or a layer's `opacity` reports for `opacity`, rounded to four
+/// decimals.
+fn reported_opacity(opacity: f32) -> f64 {
+    (f64::from(opacity) * 100.0 * 1e4).round() / 1e4
+}
+
 fn item_opacity(h: &Host, a: &[Data]) -> Answer {
-    read_item(h, a, |_, n| Ok(num((f64::from(n.opacity) * 100.0 * 1e4).round() / 1e4)))
+    read_item(h, a, |_, n| Ok(num(reported_opacity(n.opacity))))
 }
 
 fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
@@ -1530,12 +1536,12 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    // A value the getter reports for the item's opacity sends the opacity it has, and
+    // The value the getter reports for the item's opacity sends the opacity it has, and
     // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
-    // replaces the one the graph keeps for its series or kind.
+    // replaces the one the graph keeps for its series or kind. Any other value is sent as given.
     let item = this_item(h, a)?;
-    let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
-    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| n.opacity));
+    let v = now.filter(|now| reported_opacity(*now) == v).map_or(v, |now| f64::from(now) * 100.0);
     set_props(h, a, |_| false, json!({"opacity": v}))
 }
 

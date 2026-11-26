@@ -2829,7 +2829,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   index 0 puts it directly above the clipping path), as one undo step named Group, and
   gives `{id}`. With `compound: true` it adds an empty compound path instead, as one undo step named Compound Path.
   The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, where the path
-  gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
+  gives up its own paint (a clip group's or clipping layer's clipping path is refused until its mask is released), and an empty compound path takes the paint the first path that goes in was drawn with. A
   path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
   alignment.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and

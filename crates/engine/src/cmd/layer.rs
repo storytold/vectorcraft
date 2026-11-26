@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path other than a clip group's or clipping layer's clipping path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -923,6 +923,11 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(c) = compound {
         if !matches!(n.kind, NodeKind::Path { guide: false, .. }) {
             return Err(bad(C, "a compound path holds only paths"));
+        }
+        // A clip group's or clipping layer's clipping path stays where it is: without it, the
+        // next object up would become the clipping path.
+        if d.position(id).is_some_and(|(from, i, _)| i == 0 && from.and_then(|f| d.node(f)).is_some_and(Node::clips)) {
+            return Err(bad(C, "a clipping path does not go into a compound path; release the clipping mask first"));
         }
         if !d.is_editable(c.id) {
             return Err(bad(C, "the compound path is hidden or locked"));

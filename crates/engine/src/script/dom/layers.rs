@@ -42,7 +42,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
     boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
-    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, text, typename, whole, with_doc,
+    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, reported_opacity, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -222,7 +222,7 @@ fn layer_set_dim(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn layer_opacity(h: &Host, a: &[Data]) -> Answer {
-    read_layer(h, a, |_, n| Ok(num((f64::from(n.opacity) * 100.0 * 1e4).round() / 1e4)))
+    read_layer(h, a, |_, n| Ok(num(reported_opacity(n.opacity))))
 }
 
 fn layer_set_opacity(h: &Host, a: &[Data]) -> Answer {
@@ -230,7 +230,7 @@ fn layer_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    set_layer(h, a, "object.setProps", |n| (f64::from(n.opacity) * 100.0 - v).abs() < 1e-4, json!({"opacity": v}))
+    set_layer(h, a, "object.setProps", |n| reported_opacity(n.opacity) == v, json!({"opacity": v}))
 }
 
 fn layer_color(h: &Host, a: &[Data]) -> Answer {
