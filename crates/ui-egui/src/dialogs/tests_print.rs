@@ -206,6 +206,34 @@ fn done_keeps_the_settings_without_printing_and_bad_settings_keep_the_dialog() {
     assert!(!crate::menus::enabled(&app, "print.printerSetup"), "the mock has no settings to open");
 }
 
+#[test]
+fn print_does_not_send_or_update_the_other_drawing() {
+    let (mut app, jobs) = app();
+    app.run("file.new", json!({"width": 180, "height": 100, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 30})).unwrap();
+    let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+
+    activate(&mut app, 0);
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    set(&mut app, "copies", json!(2));
+    activate(&mut app, 1);
+    confirm(&mut app);
+
+    assert!(jobs.borrow().is_empty());
+    let other = app.session.active().unwrap();
+    assert!(other.doc.print_setup.is_none());
+    assert_eq!(other.history.undo.len(), undo);
+    assert!(is_open(&app));
+    assert_eq!(fields(&app)["copies"], 2);
+    activate(&mut app, 0);
+    confirm(&mut app);
+    assert_eq!(jobs.borrow().len(), 1);
+    assert_eq!(pages(&jobs.borrow()[0].2), 6);
+    assert!(!is_open(&app));
+}
+
 /// A print queue that puts each page on the paper as it is, as `lp` does.
 struct UprightQueue(Jobs);
 
