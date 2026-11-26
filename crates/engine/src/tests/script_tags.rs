@@ -53,7 +53,7 @@ fn tags_are_added_named_read_and_removed_in_one_undo_step() {
     let before = undo_steps(&s);
     let out = log(
         &mut s,
-        "var item = app.activeDocument.pageItems[0], tags = item.tags;\
+        "var item = app.activeDocument.pageItems[1], tags = item.tags;\
          vc.log(tags.typename); vc.log(tags.length);\
          var t = tags.add(); vc.log(t.typename); vc.log(t.name === '' && t.value === '');\
          t.name = 'size'; t.value = 'XL';\
@@ -72,7 +72,7 @@ fn tags_are_added_named_read_and_removed_in_one_undo_step() {
     assert!(tags(&s, a).is_empty());
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(tags(&s, a).len(), 2);
-    log(&mut s, "app.activeDocument.pageItems[0].tags.removeAll();");
+    log(&mut s, "app.activeDocument.pageItems[1].tags.removeAll();");
     assert!(tags(&s, a).is_empty());
 }
 
@@ -86,7 +86,8 @@ fn document_tags_list_every_items_tags_and_add_none() {
         "var d = app.activeDocument; vc.log(d.tags.length); vc.log(d.tags[0].name); vc.log(d.tags[1].name);\
          vc.log(d.tags.parent.typename); vc.log(d.tags.getByName('b1').parent.typename);",
     );
-    assert_eq!(out, [json!(2), json!("a1"), json!("b1"), json!("Document"), json!("PathItem")]);
+    // `pageItems` lists the topmost item first, and so does `Document.tags`.
+    assert_eq!(out, [json!(2), json!("b1"), json!("a1"), json!("Document"), json!("PathItem")]);
     // A copy keeps its source's tags.
     let copy = s.execute("edit.duplicate", &json!({"ids": [a.0]})).unwrap()["ids"][0].as_u64().map(NodeId).unwrap();
     assert_eq!(tags(&s, copy), pairs(&[("a1", "1")]));
@@ -104,13 +105,13 @@ fn bad_tag_values_throw_and_change_nothing() {
     let (mut s, a, _) = doc();
     s.execute("object.tag.add", &json!({"id": a.0, "name": "n", "value": "v"})).unwrap();
     let before = undo_steps(&s);
-    let tag = "app.activeDocument.pageItems[0].tags[0]";
+    let tag = "app.activeDocument.pageItems[1].tags[0]";
     assert!(failure(&mut s, &format!("{tag}.name = 5;")).contains("TypeError: name must be a string"));
     assert!(failure(&mut s, &format!("{tag}.value = null;")).contains("TypeError: value must be a string"));
     let long = format!("{tag}.value = new Array({}).join('x');", MAX_TAG_TEXT + 2);
     assert!(failure(&mut s, &long).contains("RangeError: a tag's value is longer than 65,536 bytes"));
-    assert!(failure(&mut s, "app.activeDocument.pageItems[0].tags.getByName('none');").contains("Not found"));
-    assert!(failure(&mut s, "app.activeDocument.pageItems[0].tags.index(true);").contains("TypeError"));
+    assert!(failure(&mut s, "app.activeDocument.pageItems[1].tags.getByName('none');").contains("Not found"));
+    assert!(failure(&mut s, "app.activeDocument.pageItems[1].tags.index(true);").contains("TypeError"));
     // A run that fails after changing a tag puts it back.
     assert!(failure(&mut s, &format!("{tag}.value = 'w'; throw new Error('stop');")).contains("stop"));
     assert_eq!(tags(&s, a), pairs(&[("n", "v")]));
@@ -140,9 +141,9 @@ fn tags_work_on_an_item_and_with_tag_ids_above_2_to_the_53() {
 #[test]
 fn an_object_takes_at_most_64_tags() {
     let (mut s, a, _) = doc();
-    let out = log(&mut s, "var t = app.activeDocument.pageItems[0].tags; for (var i = 0; i < 64; i++) t.add(); vc.log(t.length);");
+    let out = log(&mut s, "var t = app.activeDocument.pageItems[1].tags; for (var i = 0; i < 64; i++) t.add(); vc.log(t.length);");
     assert_eq!(out, [json!(MAX_TAGS)]);
-    let e = failure(&mut s, "app.activeDocument.pageItems[0].tags.add();");
+    let e = failure(&mut s, "app.activeDocument.pageItems[1].tags.add();");
     assert!(e.contains("64 tags"), "{e}");
     assert_eq!(tags(&s, a).len(), MAX_TAGS);
 }
