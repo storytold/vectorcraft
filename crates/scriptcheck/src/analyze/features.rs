@@ -2,6 +2,12 @@
 
 use super::{Analyzer, COMPOUND, FeatureId, NEWER, OutsideId, Pending, Sig, T, catalog, is, member_mark, newer_number, report, unquote, word};
 
+/// Words that start or continue a statement or an expression, never a variable's name.
+const RESERVED: [&str; 24] = [
+    "var", "function", "if", "else", "for", "while", "do", "return", "new", "typeof", "delete", "in", "instanceof", "this", "with", "switch", "case",
+    "try", "catch", "finally", "throw", "break", "continue", "void",
+];
+
 /// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
 pub(super) fn platform_name(n: &str) -> bool {
     matches!(
@@ -372,6 +378,23 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.scopes.last().is_none_or(|s| s.saved.contains_key(name))
     }
 
+    /// A function body uses `name`, which no literal has given methods and the body does not declare,
+    /// in a way that may change or share it ([`Analyzer::shared_early`]). With no room left for the
+    /// name, no literal's methods are the script's own from then on.
+    pub(super) fn share_early(&mut self, name: &str) {
+        let Some(body) = self.scopes.last() else { return };
+        if body.saved.contains_key(name) || self.writers.contains_key(name) {
+            return;
+        }
+        if self.shared_early.contains_key(name) || self.acc.room(self.shared_early.len()) {
+            let open = self.scopes.len();
+            let seen = self.shared_early.entry(name.to_string()).or_insert(open);
+            *seen = (*seen).max(open);
+        } else {
+            self.shared_full = true;
+        }
+    }
+
     fn writer_bits(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> u8 {
         match receiver {
             Some(r) if r.kind == T::Ident && !member_mark(before) => self.writers.get(r.text).copied().unwrap_or(0),
@@ -449,12 +472,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         if let Some(name) = escaped {
             self.writers.remove(name);
         }
-        if let Some(name) = early
-            && (self.shared_early.contains_key(name) || self.acc.room(self.shared_early.len()))
-        {
-            let open = self.scopes.len();
-            let seen = self.shared_early.entry(name.to_string()).or_insert(open);
-            *seen = (*seen).max(open);
+        if let Some(name) = early {
+            self.share_early(name);
+        }
+        // A name read in a function body that the body does not declare, as a receiver or otherwise.
+        if let Some(r) = h0.filter(|r| r.kind == T::Ident && !member_mark(h1) && !RESERVED.contains(&r.text)) {
+            self.share_early(r.text);
         }
         if changes {
             let rebound = if is(h1, ".") {

@@ -643,6 +643,9 @@ struct Analyzer<'s, 'a, 'l> {
     /// most function bodies that were open where it was read; a literal in a body with that many
     /// open or more is unaffected, since it gives a variable of its own.
     shared_early: HashMap<String, usize>,
+    /// [`Analyzer::shared_early`] had no room for a name: no literal gives methods that are the
+    /// script's own from then on.
+    shared_full: bool,
     /// The object literals being assigned to a variable, the innermost last, up to
     /// [`crate::Limits::nesting`] of them.
     objects: Vec<ObjectValue>,
@@ -737,6 +740,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             maybe_files_full: false,
             writers: HashMap::new(),
             shared_early: HashMap::new(),
+            shared_full: false,
             objects: vec![],
             closed: None,
             index_receiver: 0,
@@ -1423,6 +1427,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         {
             let h1 = self.h[1];
             let declared = word(h1, "var") || (is(h1, ",") && self.var_depth.is_some());
+            if !declared && !member_mark(h1) && !is(h1, "@") {
+                self.share_early(name.text);
+            }
             if declared {
                 if self.in_catch(name.text) {
                     self.declare_in_catch(name.text);
@@ -1436,7 +1443,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.assign = Some(Assign { name: name.text.to_string(), after_new: false });
             }
         }
-        match self.updated(t) {
+        let updated = self.updated(t);
+        if let Some((name, _)) = updated {
+            self.share_early(name);
+        }
+        match updated {
             // The value on the right is read at this depth, and the name holds nothing the check
             // follows once that value ends ([`Analyzer::settle_groups`]).
             Some((name, true)) => self.start_value(name.to_string(), Operand::Other),
@@ -1451,6 +1462,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && !self.shared_full
             && self.shared_early.get(&name).is_none_or(|&open| open <= self.scopes.len())
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {

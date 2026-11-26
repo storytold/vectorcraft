@@ -738,7 +738,68 @@ fn a_hoisted_function_that_changes_or_shares_the_variable_ends_the_own_save_as()
         "function g1() { use(mine); }\n",
         "function g2() { var mine = {saveAs: function () {}}; mine.saveAs(f); }\n",
     ));
-    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 11][..]));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 11, 13][..]));
+}
+
+/// A table of shared names with no room left for one more means a function may share any name: no
+/// literal after it gives methods that are the script's own.
+#[test]
+fn a_full_table_of_shared_names_keeps_reporting_the_write() {
+    let src = concat!(
+        "var f = new File(p);\n",
+        "function a(w) { p1.saveAs = w; p2.saveAs = w; p3.saveAs = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+    );
+    let r = check("test.jsx", src.as_bytes(), None, &Limits { entries: 2, ..Limits::default() });
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4][..]));
+}
+
+/// A function body that assigns a variable it does not declare (`=`, a compound operator, `++` or
+/// `--`) may run after the literal and give the variable another value.
+#[test]
+fn an_assignment_in_a_hoisted_function_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a(w) { local = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { other += 1; }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { third++; }\n",
+        "var third = {saveAs: function () {}};\n",
+        "third.saveAs(f);\n",
+        "function e() { --fourth; }\n",
+        "var fourth = {saveAs: function () {}};\n",
+        "fourth.saveAs(f);\n",
+        "function d() { var mine = 1; mine = 2; }\n",
+        "var mine = {saveAs: function () {}};\n",
+        "mine.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 10, 13][..]));
+}
+
+/// A function body that calls a method of, or reads, a variable it does not declare may run before
+/// the literal as well, so a later literal's calls keep reporting the write.
+#[test]
+fn a_member_call_or_read_in_a_hoisted_function_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a() { local.run(); }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { other['m'](); }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { return third.name; }\n",
+        "var third = {saveAs: function () {}};\n",
+        "third.saveAs(f);\n",
+        "function d() { var calm = 1; return calm.name; }\n",
+        "var calm = {saveAs: function () {}};\n",
+        "calm.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 10][..]));
 }
 
 /// A function that reads the variable from outside runs after whatever the script gave it since, so
