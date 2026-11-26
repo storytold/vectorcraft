@@ -4134,7 +4134,8 @@ Copy) and `object.transformAgain`, also when no object is selected, in one undo 
 guide transforms as the line `view.guides.release` makes of it, and the default origin is the center of the selected
 objects' box and those lines together. A guide that ends up vertical or horizontal stays a ruler guide at its new
 place: a turn of 180° keeps it, and a turn of 90° makes a horizontal guide vertical. A guide at any other angle
-becomes a guide path along its line, on the guide's layer, and is selected as one. Locked or hidden guides do not
+becomes a guide path along its line, on the guide's layer, and is selected as one; the reply's `ids` list it after
+the transformed objects. Locked or hidden guides do not
 transform, nor do guides when `ids` is given or `objects` is false. `object.rotate` with `absolute` and only ruler
 guides selected is an error, as guides have no bounding box angle.
 
