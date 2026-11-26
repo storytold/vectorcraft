@@ -266,6 +266,8 @@ pub struct VectorcraftApp {
     pub(crate) shortcut_overrides: Arc<craft::keymap::Overrides>,
     /// Messages waiting for the dialog that shows them.
     pub(crate) told: dialogs::host::Told,
+    /// The Type tool's pending edit, kept even when the dialog closes without a prompt answer.
+    pub(crate) missing_font_edit_token: Option<u64>,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one

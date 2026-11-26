@@ -25,6 +25,10 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The worker's frame shown drew art in a way that depends on its size, or a part of it drawn
+    /// again on this thread would not have matched the frame around it: until the worker's next
+    /// frame is shown, edits of the frame shown render on the worker ([`canvas::show`]).
+    pub worker_parts: bool,
     /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
     /// (seconds, egui's input time): it renders whole once it has been shown for
     /// [`canvas::STILL_SECS`] with the view unmoved.
@@ -107,6 +111,9 @@ pub struct CanvasCache {
     /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
     /// which gives back a selection tool Cmd lent.
     pub escaped_press: bool,
+    /// The host's Caps Lock state at the last canvas pass, which `VectorcraftApp::follow_caps_lock` compares with the
+    /// next reading; `None` before the first pass.
+    pub host_caps_lock: Option<bool>,
     /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
     /// commit came first in production: the field's own commit later in the pass has nothing left to run.
     pub committed_preview: bool,

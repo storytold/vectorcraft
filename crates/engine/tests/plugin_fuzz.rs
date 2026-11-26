@@ -1022,6 +1022,7 @@ proptest! {
         let store = Store(std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id())));
         let _ = std::fs::remove_dir_all(&store.0);
         let folder = store.0.clone();
+        vectorcraft_engine::store::grant_keys::keep_grant_keys_in_memory();
         let mut s = Session::new();
         s.allow_plugin_grants_from_requests();
         s.attach_plugin_store(folder.clone());
