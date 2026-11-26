@@ -112,24 +112,34 @@ fn corner_target(doc: &Document, id: NodeId, indices: &[usize]) -> Option<Corner
     (!corners.is_empty()).then(|| CornerTarget::new(id.0, corners, individual))
 }
 
-/// The Live Corners widgets on show, one group per layer colour so each draws in its object's colour: Selection
-/// and the shape tools on a live rectangle or polygon while Show Shape Widgets is on, Direct Selection on any
-/// path. Only the corners the tool hit-tests are listed, those within the Hide Corner Widget angle. `tool` is the tool
-/// whose widgets the canvas shows ([`super::shown_tool`]).
-// PLAN: the decision's `(.., f64)` is dropped: the corners listed are already those within the angle, so no
-// angle is left to hand on.
-pub(super) fn corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
+/// The tool's Live Corners widgets on show: Selection and the shape tools on a live rectangle or polygon while
+/// Show Shape Widgets is on, Direct Selection on any path. Only the corners the tool hit-tests are listed, those
+/// within the Hide Corner Widget angle. `tool` is the tool whose widgets the canvas shows ([`super::shown_tool`]).
+fn shown_corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<vectorcraft_tools::corners::CornerWidgets> {
     let direct = tool == "directSelection";
     if !(matches!(tool, "selection" | "directSelection") || shape_tool_idle(app, tool)) {
         return None;
     }
     let st = app.session.active()?;
     let on = app.ui.view.corner_widgets && (direct || app.ui.view.shape_widgets);
-    let shown =
-        vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)?;
+    vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)
+}
+
+/// The Live Corners widgets of the picked corners on show, one group per layer color so each draws in its
+/// object's color, with a dot at its center. Every corner on show is picked, except with Direct Selection while
+/// some corners are picked: the widgets of the others are [`hollow_corners`]. `tool` is the tool whose widgets the
+/// canvas shows ([`super::shown_tool`]).
+// PLAN: the decision's `(.., f64)` is dropped: the corners listed are already those within the angle, so no
+// angle is left to hand on.
+pub(super) fn corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
+    let shown = shown_corners(app, tool, zoom)?;
+    let st = app.session.active()?;
     // `visible_on` and `corners` list the same corners in the same order: path after path.
     let mut per_path: Vec<(NodeId, Vec<usize>)> = vec![];
-    for ((id, _), index) in shown.visible_on().zip(shown.corners()) {
+    for ((id, _, picked), index) in shown.visible_on().zip(shown.corners()) {
+        if !picked {
+            continue;
+        }
         match per_path.last_mut() {
             Some((last, indices)) if *last == id => indices.push(index),
             _ => per_path.push((id, vec![index])),
@@ -145,6 +155,78 @@ pub(super) fn corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<Vec
         }
     }
     Some(groups)
+}
+
+/// The Live Corners widgets of the corners on show that are not picked: with Direct Selection while some corners
+/// are picked, every other corner's widget shows too, so a click or a Shift-click on it picks its corner. Each is
+/// listed with its place and its object's layer color.
+pub(super) fn hollow_corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Vec<(Point, DataColor)> {
+    let (Some(shown), Some(st)) = (shown_corners(app, tool, zoom), app.session.active()) else { return vec![] };
+    shown.visible_on().filter(|&(_, _, picked)| !picked).map(|(id, at, _)| (doc_point(at), data_color(st.doc.layer_color(id)))).collect()
+}
+
+/// The widgets of [`hollow_corners`]: each a disc in the handle fill ringed in its layer color, the look of the
+/// picked corners' widgets without their dot. Display only: the tool takes the presses.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(canvas_control)]
+pub struct HollowCorners {
+    #[common]
+    common: Common,
+    widgets: Vec<(Point, DataColor)>,
+}
+
+impl HollowCorners {
+    fn new(widgets: Vec<(Point, DataColor)>) -> Self {
+        HollowCorners { common: Common::new(), widgets }.label("Live Corners not picked")
+    }
+}
+
+/// The style of the hollow corner widgets.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct HollowCornersStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+    /// A widget's diameter: `size.handle.md`, as the picked corners' widgets.
+    widget: f32,
+    /// A widget's inside: `overlay.handle_fill`.
+    fill: StyleColor,
+}
+
+impl Component for HollowCorners {
+    const ROLE: Role = Role::GRAPHICS_OBJECT;
+    const INPUT: Input = Input::Display;
+    const PARTS: bool = false;
+    const STOPS: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = HollowCornersStyle;
+    type Output = Response;
+
+    fn style(cx: &StyleCx<'_>, _: HollowCornersStyleKey) -> HollowCornersStyle {
+        HollowCornersStyle { metrics: Metrics::new(), widget: cx.tokens.size.handle.md, fill: cx.color(cx.tokens.color.overlay.handle_fill) }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> egui::Vec2 {
+        egui::Vec2::ZERO
+    }
+
+    fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
+        let Some(space) = canvas_space(&cx.env) else { return };
+        let draw = ui.draw();
+        for &(at, color) in &self.widgets {
+            let ring = PaintShape::Circle(space.view.to_screen(at), cx.style.widget / 2.0);
+            draw.fill(&ring, cx.style.fill);
+            draw.stroke(&ring, StrokeWidth::Medium, StrokeColor::Data(color));
+        }
+    }
+
+    fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
+        access.description("Live Corners not picked");
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
 }
 
 fn corner_kind(kind: DocCornerKind) -> CornerKind {
@@ -367,6 +449,19 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::u
     let widgets = ShapeWidgets::of(app, tool, edges, shown.as_ref(), space.view.zoom, space.view.rotation);
     if !widgets.marks.is_empty() {
         widgets.show_at(ui, rect);
+    }
+}
+
+/// Shows the widgets of [`hollow_corners`] over the live document, with View › Show Edges on. The canvas shows
+/// them before the selection's anchors and handles, so the anchors and handles draw over them. Nothing here is
+/// shown while a revolve is edited.
+pub(super) fn show_hollow_corners(app: &VectorcraftApp, ui: &mut egui::Ui, space: &craft::ui::canvas::CanvasSpace, kind: BodyKind) {
+    if kind != BodyKind::Live || super::revolve_editing(app) || !app.ui.view.edges {
+        return;
+    }
+    let widgets = hollow_corners(app, super::shown_tool(app, ui.ctx()), space.view.zoom);
+    if !widgets.is_empty() {
+        HollowCorners::new(widgets).show_at(ui, ui.max_rect());
     }
 }
 

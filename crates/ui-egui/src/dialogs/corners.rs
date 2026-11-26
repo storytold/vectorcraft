@@ -1,6 +1,7 @@
 //! Corners: double-clicking a Live Corners widget (or `ui.corners`) sets the corner kind and
-//! radius of a path's corners: those whose widgets show (the Direct-Selected ones, else every
-//! corner). OK runs `object.setLiveShape` for them, one undo step.
+//! radius of a path's corners: the picked ones (the Direct-Selected ones, else every corner), or
+//! the double-clicked widget's corner alone when Direct Selection did not pick it. OK runs
+//! `object.setLiveShape` for them, one undo step.
 //!
 //! Fields: `id`, `corners` (anchor indices of the path with its corners uncut: a rectangle's 0–3
 //! from the top-left clockwise), `kind` ("round", "invertedRound" or "chamfer"), `radii`
@@ -217,12 +218,12 @@ mod tests {
     #[test]
     fn double_clicking_a_direct_selected_corner_edits_it_alone() {
         let (mut app, id) = app();
-        // Direct Selection picks the bottom-right anchor: only its widget shows.
+        // Direct Selection picks the bottom-right anchor: its widget alone is picked.
         app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "set"})).unwrap();
         app.select_tool("directSelection");
         let view = app.view_info();
         let st = app.session.active().unwrap();
-        let at: Vec<_> = CornerWidgets::of(&st.doc, &st.selection, view.zoom, true).unwrap().visible().collect();
+        let at: Vec<_> = CornerWidgets::of(&st.doc, &st.selection, view.zoom, true).unwrap().visible_on().filter(|w| w.2).map(|w| w.1).collect();
         assert_eq!(at.len(), 1);
         crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::DoubleClick, at[0].x, at[0].y), view);
         assert!(is_open(&app), "Corners opened");

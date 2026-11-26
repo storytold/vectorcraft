@@ -5091,6 +5091,36 @@ fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
     assert!(!s.doc().unwrap().selection.contains(b));
 }
 
+/// #1232: through the session, Direct Selection's corner widgets pick corners across paths. With
+/// a corner of `a` picked and `b` selected whole, a Shift-click on a widget of `b` deselects that
+/// corner and keeps `b`'s other corners and `a`'s pick; one on a widget of `a` that is not picked
+/// adds its corner. A Ctrl/Cmd-click (the Selection tool, lent) leaves the picks as they are.
+#[test]
+fn corner_widgets_pick_corners_across_paths_through_the_session() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    let all = json!([[0, 0], [0, 1], [0, 2], [0, 3]]);
+    let start = json!({"items": [{"id": a.0, "anchors": [[0, 0]]}, {"id": b.0, "anchors": all}]});
+    s.select_tool("directSelection", v).unwrap();
+    let click = |s: &mut Session, x: f64, y: f64, mods: vectorcraft_tools::Mods| {
+        s.execute("select.anchorsMany", &start).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, y).with_mods(mods), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, y).with_mods(mods), v).unwrap();
+        let sel = &s.doc().unwrap().selection;
+        assert!(sel.contains(a) && sel.contains(b), "both stay selected");
+        (sel.partial(a).cloned(), sel.partial(b).cloned())
+    };
+    let shift = vectorcraft_tools::Mods { shift: true, ..Default::default() };
+    // The top-right widget of b.
+    assert_eq!(click(&mut s, 390.0, 110.0, shift), (Some([(0, 0)].into()), Some([(0, 0), (0, 2), (0, 3)].into())));
+    // The top-right widget of a, not picked.
+    assert_eq!(click(&mut s, 190.0, 110.0, shift), (Some([(0, 0), (0, 1)].into()), None));
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    assert_eq!(click(&mut s, 190.0, 110.0, cmd), (Some([(0, 0)].into()), None), "a Ctrl/Cmd-click leaves the picks");
+}
+
 #[test]
 fn path_commands_reject_bad_anchors_before_modifying_geometry() {
     let mut s = session();

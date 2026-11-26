@@ -61,7 +61,7 @@ use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection, symbol_overr
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
 use crate::bbox::move_delta;
-use crate::corners::{self, CornerDrag, over_widget};
+use crate::corners::{self, CornerDrag};
 use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::{MeshEdit, grid_of};
 use crate::pathtype::{self, BracketDrag, near_bracket};
@@ -739,6 +739,13 @@ fn type_path_handles(cx: &ToolContext) -> Vec<Overlay> {
 /// The end of a shown direction handle ([`handle_anchors`]) nearest to `p` within `tol`, and
 /// nearer to it than the handle's anchor (a short handle leaves its anchor to be picked): (path,
 /// subpath, anchor, is_out).
+/// A press at `p` on a corner widget centered at `widget` whose corner is not picked goes to a
+/// direction handle end within point tolerance, or to an anchor no farther from `p` than the
+/// widget's center, instead; so do the cursor and a double-click (#1232).
+fn yields_to_point(cx: &ToolContext, p: Point, widget: Point) -> bool {
+    hit_handle(cx, p, cx.point_tol()).is_some() || hit_anchor(cx, p, cx.point_tol().min(widget.distance(p))).is_some()
+}
+
 pub(crate) fn hit_handle(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, bool)> {
     let mut best: Option<((NodeId, usize, usize, bool), f64)> = None;
     for (id, si, ai, a) in handle_anchors(cx) {
@@ -996,7 +1003,9 @@ impl Tool for DirectSelectionTool {
                 self.click_segment = None;
                 self.click_group = None;
                 self.frame_click = None;
-                if let Some(c) = CornerDrag::hit(cx, ev, true) {
+                if let Some(c) = CornerDrag::hit(cx, ev, true)
+                    && !(c.on_unpicked() && c.widget_center().is_some_and(|w| yields_to_point(cx, p, w)))
+                {
                     self.state = State::Corner(c);
                     return vec![];
                 }
@@ -1257,7 +1266,10 @@ impl Tool for DirectSelectionTool {
         }
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p, true)) {
+        if !self.group
+            && (matches!(self.state, State::Corner(_))
+                || corners::widget_at(cx, p, true).is_some_and(|(picked, w)| picked || !yields_to_point(cx, p, w)))
+        {
             return Cursor::CornerRadius;
         }
         if !self.group && (matches!(self.state, State::Bracket(_)) || near_bracket(cx, p) && !over_path_type_anchor(cx, p)) {
@@ -1500,7 +1512,9 @@ impl DirectSelectionTool {
     }
     fn double_click(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point) -> Vec<Action> {
         self.state = State::Idle;
-        if let Some(a) = corners::double_click(cx, p, true) {
+        // As with a press, a handle end or a nearer anchor takes the double-click from a widget that
+        // is not picked.
+        if let Some(a) = corners::double_click_unless(cx, p, true, |w| yields_to_point(cx, p, w)) {
             return vec![a];
         }
         if let Some(a) = release_guide_at(cx, p, ev.mods) {

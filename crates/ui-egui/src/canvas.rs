@@ -276,6 +276,7 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         crate::dialogs::simplify_slider::show(app, ui, &space.view);
     }
     guides::show(app, ui, space, win, kind);
+    widgets::show_hollow_corners(app, ui, space, kind);
     selection::show(app, ui, space, win, kind);
     widgets::show(app, ui, space, win, kind);
     if !presenting && !revolve_editing(app) {

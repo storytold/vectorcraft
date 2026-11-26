@@ -265,6 +265,22 @@ fn a_star_shows_corner_widgets_with_direct_selection() {
     assert_eq!(corner_count(&app), 0);
 }
 
+/// #1232: with two of a star's corners picked, Direct Selection still shows all ten widgets: the two picked ones
+/// with their dot, the other eight hollow in the layer color. With the star selected whole, every widget is picked.
+#[test]
+fn direct_selection_shows_the_widgets_of_corners_not_picked_hollow() {
+    let mut app = new_app(&[]);
+    let id = make(&mut app, "shape.star", json!({"cx": 200, "cy": 150, "radius1": 80, "radius2": 40}));
+    app.session.execute("select.anchors", &json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    app.select_tool("directSelection");
+    let zoom = app.view_info().zoom;
+    let hollow = hollow_corners(&app, app.session.tool_id(), zoom);
+    assert_eq!((corner_count(&app), hollow.len()), (2, 8));
+    assert!(hollow.iter().all(|&(_, color)| color == layer(&app, id)));
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    assert_eq!((corner_count(&app), hollow_corners(&app, app.session.tool_id(), zoom).len()), (10, 0));
+}
+
 #[test]
 fn the_type_widget_shows_which_kind_the_type_is() {
     let mut app = new_app(&[]);

@@ -8218,10 +8218,20 @@ draws no larger than takes the cut halfway along the corner's shorter side (half
 same limit for its four corners), the corners stay circular through uneven scales (the radius scales by the mean scale,
 or keeps its size with Scale Corners off), and a rectangle from a file that kept an uneven scale in its transform
 (elliptical corners) gets circular ones in document units when its corners are next set. Dragging a corner widget
-rounds the corners whose widgets show (every corner, or the Direct-Selected ones) on every selected path at once,
+rounds the picked corners (every corner, or the Direct-Selected ones) whose widgets show, on every selected path at once,
 outlining in red those that reach their limit; the Selection tool shows the widgets of live rectangles and polygons,
-the Direct Selection tool those of any path. `rectanglesOnly: true` sets them on the live rectangles among the targets
-alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
+the Direct Selection tool those of any path. Direct Selection shows the widget of every corner, picked or not: a
+picked corner's widget has a dot at its center and the others are hollow. A click on a widget that is not picked
+picks its corner alone (`select.anchors` with mode `set`), and a click on a picked widget leaves the picks as they
+are. A Shift-click adds or removes that corner, on any selected path, and keeps the other picks (`select.anchors`
+with mode `toggle`, or `select.anchorsMany` with mode `toggle` on a path selected whole). While every corner of every
+selected path is picked, paths whose widgets are hidden included, a click or Shift-click picks that corner alone. A drag or Alt-click on a widget whose
+corner is not picked edits that corner with the picked ones and does not pick it. A double-click on a
+picked widget opens Corners for the picked corners of its path, and on a widget that is not picked, for its corner
+alone; while every corner is picked, the double-click's first click has already picked the widget's corner alone. A
+selected anchor's handle end, or an anchor as near to the pointer as the center of a widget that is not picked or nearer, takes
+the press there. `rectanglesOnly: true` sets them on
+the live rectangles among the targets alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
 selection, so an action that records them acts on the rectangles selected when it plays). Several objects each with their own corners are one call:
 `items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind. Double-clicking one with Direct Selection opens Corners (`ui.corners {id?, corners?}`,
 dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`). Double-clicking a selected live shape's corner
