@@ -2887,8 +2887,12 @@ own rules:
   stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
   `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
   `script.stop` drops the jobs still waiting, and the documents go back as for any failed run.
-- `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
-  item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
+- `all`, `allSettled` and `race` read their input through `Symbol.iterator`, including user-defined iterables and
+  overridden array iterators. In a kept engine with no `Symbol.iterator`, they walk arrays, `arguments` objects and
+  strings. String iterators keep surrogate pairs together. A noniterable object, including one
+  with only a `length`, rejects the promise they return with a `TypeError`. When processing a yielded value throws,
+  the combinator calls the iterator's `return` method if present; the original exception remains the rejection reason
+  even when `return` throws. An iterator whose step threw or finished is not closed. The promises `then` and the
   statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
 - A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
   report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
