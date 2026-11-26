@@ -1485,6 +1485,13 @@ a larger file. A lossy file keeps the alpha exactly when some pixels are not opa
 that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
 or in `settings.webp`.
 
+GIF and PNG-8 exports take Save for Web's `transparencyDither` (`none`, the default, `diffusion`, `pattern` or `noise`)
+and `transparencyDitherAmount` (0 to 100, default 100) next to `dither` and `ditherAmount`, and they change the file as
+in `document.exportForWeb`: with `transparency` on, some partly transparent pixels become transparent and the rest keep
+their color, and without `transparency` the keys do not change the file. For GIF and PNG-8 an unknown method, or an
+amount that is not a whole number from 0 to 100, is refused; other formats do not read the keys, and the warnings name
+them. GIF and PNG-8 Options show both as Transparency Dither and its amount, disabled while Transparency is off.
+
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
 anchors spaced evenly by angle, clockwise from the left one and fitted to `width` × `height`. The Ellipse dialog (a
