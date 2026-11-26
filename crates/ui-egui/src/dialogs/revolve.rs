@@ -727,7 +727,7 @@ pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
             fields.remove("__lightPick");
             set_light_value(fields, "lightColor", json!(hex));
         }
-        ui.vertical(|ui| {
+        super::form::stacked(ui, fields, |ui, fields| {
             let mut list = explicit_lights(fields).unwrap_or_else(|| vec![light_record(fields)]);
             let mut index = light_index(fields, list.len());
             let titles: Vec<String> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
@@ -773,7 +773,6 @@ pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
                 store_selected(fields, &selected);
             }
         })
-        .response
     })
     .companions(LIGHT_KEYS.iter().map(|(_, k)| *k).chain(["__light", "__lightPick"]))
     .on_set(set_light_field)
