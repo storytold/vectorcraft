@@ -229,8 +229,8 @@ pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
-/// (Export Selection, Save for Office Documents, Text Export Options and the presets dialogs'
-/// Export…), reported with the command's warnings ([`report_saved`]); `then` gets where they went.
+/// (Export Selection, Save for Office Documents, Text Export Options and the Tracing Presets
+/// dialog's Export…), reported with the command's warnings ([`report_saved`]); `then` gets where they went.
 // PLAN: callers outside io (print.rs, dialogs/office_export.rs, text_export.rs, the presets dialogs, menus/run.rs,
 // composite_fonts.rs) get the path from this synchronously; their owners move the code after it into `then`.
 pub fn save_command_output(
