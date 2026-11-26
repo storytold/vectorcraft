@@ -5447,7 +5447,7 @@ theme	Appearance	Giao diện
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Tập lệnh này đã thêm rất nhiều đối tượng. Tiếp tục, hay dừng lại và hoàn tác những gì nó đã làm?
-@msg	Choose a .js or .jsx script	Chọn một tập lệnh .js hoặc .jsx
+@msg	Choose a .js, .mjs or .jsx script	Chọn một tập lệnh .js, .mjs hoặc .jsx
 @msg	Ran {name}	Đã chạy {name}
 @msg	The script was stopped and its changes were undone	Tập lệnh đã dừng và các thay đổi của nó đã được hoàn tác
 @msg	a script is running: stop it or wait for it to finish	một tập lệnh đang chạy: hãy dừng nó hoặc chờ nó kết thúc
@@ -5617,7 +5617,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`args` is larger than 1 MiB	`args` lớn hơn 1 MiB
 @msg	`path` is empty	`path` trống
 @msg	`installed` takes a `path`, not a `source`	`installed` nhận `path`, không nhận `source`
-@msg	`path` must name a .js or .jsx file	`path` phải chỉ đến tệp .js hoặc .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` phải chỉ đến tệp .js, .mjs hoặc .jsx
 @msg	give exactly one of `path` and `source`	hãy cung cấp đúng một trong `path` và `source`
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script

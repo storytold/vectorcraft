@@ -5781,7 +5781,7 @@ imageTrace	Outline	Körvonal
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ez a parancsfájl nagyon sok objektumot adott hozzá. Folytatja, vagy leállítja és visszavonja a módosításait?
-@msg	Choose a .js or .jsx script	Válasszon .js vagy .jsx parancsfájlt
+@msg	Choose a .js, .mjs or .jsx script	Válasszon .js, .mjs vagy .jsx parancsfájlt
 @msg	Ran {name}	Lefutott: {name}
 @msg	The script was stopped and its changes were undone	A parancsfájl leállt, a módosításai visszavonva
 @msg	a script is running: stop it or wait for it to finish	egy parancsfájl fut: állítsa le, vagy várja meg, hogy befejeződjön
@@ -5929,7 +5929,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`args` is larger than 1 MiB	`args`: nagyobb 1 MiB-nál
 @msg	`path` is empty	a `path` üres
 @msg	`installed` takes a `path`, not a `source`	az `installed` `path` értéket vár, nem `source` értéket
-@msg	`path` must name a .js or .jsx file	a `path` értékének .js vagy .jsx fájlt kell megadnia
+@msg	`path` must name a .js, .mjs or .jsx file	a `path` értékének .js, .mjs vagy .jsx fájlt kell megadnia
 @msg	give exactly one of `path` and `source`	pontosan egyet adj meg ezek közül: `path`, `source`
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva

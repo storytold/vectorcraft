@@ -5740,7 +5740,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	이 스크립트가 매우 많은 개체를 추가했습니다. 계속할까요, 아니면 중지하고 변경 내용을 취소할까요?
-@msg	Choose a .js or .jsx script	.js 또는 .jsx 스크립트를 선택하세요
+@msg	Choose a .js, .mjs or .jsx script	.js, .mjs 또는 .jsx 스크립트를 선택하세요
 @msg	Ran {name}	{name} 실행됨
 @msg	The script was stopped and its changes were undone	스크립트를 중지하고 변경 내용을 취소했습니다
 @msg	a script is running: stop it or wait for it to finish	스크립트 실행 중: 중지하거나 끝날 때까지 기다리세요
@@ -5887,7 +5887,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`args` is larger than 1 MiB	`args`이(가) 1 MiB보다 큽니다
 @msg	`path` is empty	`path`이(가) 비어 있습니다
 @msg	`installed` takes a `path`, not a `source`	`installed`에는 `source`가 아니라 `path`를 지정하세요
-@msg	`path` must name a .js or .jsx file	`path`은(는) .js 또는 .jsx 파일을 가리켜야 합니다
+@msg	`path` must name a .js, .mjs or .jsx file	`path`은(는) .js, .mjs 또는 .jsx 파일을 가리켜야 합니다
 @msg	give exactly one of `path` and `source`	`path`, `source` 중 정확히 하나를 지정하세요
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다

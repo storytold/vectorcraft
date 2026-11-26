@@ -374,7 +374,7 @@ fn a_site_getter_is_told_where_the_code_that_reads_it_is() {
         Ok(Data::Number(f64::from(s.line)))
     });
     let source: HostFunction = Rc::new(|_| Ok(Data::String("\n\nfunction inEval() { return host.site; }".into())));
-    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site: false };
     r.define_host_object("host", vec![("site".into(), HostItem::SiteGetter(site)), ("load".into(), load)]).unwrap();
     r.run("function early() {\n  return  host.site;\n}\nhost.load();").unwrap();
     let first = r.script_tag();
@@ -394,6 +394,31 @@ fn a_site_getter_is_told_where_the_code_that_reads_it_is() {
     // A getter a built-in calls is at the place of the code that called the built-in.
     assert_eq!(r.run("\nObject.getOwnPropertyDescriptor(host, 'site').get.call(host)").unwrap(), JsValue::Number(2.0));
     assert_eq!(seen.borrow().first().map(|s| s.source), Some(r.script_tag()));
+}
+
+/// An evaluator made with `site` is given the place of the code that calls it before its
+/// arguments; one made without it is given only the arguments.
+#[test]
+fn an_evaluator_with_site_is_told_where_it_is_called() {
+    let mut r = realm(10_000_000);
+    let given: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();
+    let evaluator = |site: bool| {
+        let log = given.clone();
+        let source: HostFunction = Rc::new(move |a| {
+            log.borrow_mut().push(a);
+            Ok(Data::String("1".into()))
+        });
+        HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site }
+    };
+    r.define_host_object("host", vec![("at".into(), evaluator(true)), ("plain".into(), evaluator(false))]).unwrap();
+    r.run("\n\n  host.at('x');\nhost.plain('y');").unwrap();
+    let tag = f64::from(r.script_tag());
+    let given = given.borrow();
+    assert_eq!(given.len(), 2, "{given:?}");
+    assert_eq!(given[0].len(), 4, "{given:?}");
+    assert_eq!((&given[0][..2], &given[0][3]), (&[Data::Number(tag), Data::Number(3.0)][..], &Data::String("x".into())), "{given:?}");
+    assert!(matches!(given[0][2], Data::Number(c) if c >= 1.0), "{given:?}");
+    assert_eq!(given[1], vec![Data::String("y".into())]);
 }
 
 #[test]
@@ -915,7 +940,7 @@ fn a_converted_function_reads_each_argument_as_its_list_says() {
 fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unknown() {
     let mut r = realm(10_000_000);
     let source: HostFunction = Rc::new(|_| Ok(Data::String("\nthrow new Error('in eval')".into())));
-    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site: false };
     r.define_host_object("host", vec![("load".into(), load)]).unwrap();
     r.run("function late() { throw new Error('late'); }").unwrap();
     assert!(r.run("host.load()").is_err());
@@ -937,7 +962,7 @@ fn the_code_observer_sees_every_source_evaluated_at_run_time() {
     let s = seen.clone();
     r.observe_code(move |units| s.borrow_mut().push(String::from_utf16_lossy(units)));
     let source: HostFunction = Rc::new(|_| Ok(Data::String("40 + 2".into())));
-    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site: false };
     r.define_host_object("host", vec![("load".into(), load)]).unwrap();
     let out = r.run("function f() { return eval('1 + 1'); } f() + (0, eval)('2') + Function('a', 'return a')(3) + host.load()").unwrap();
     assert_eq!(out, JsValue::Number(49.0));
@@ -952,7 +977,7 @@ fn the_code_observer_sees_every_source_evaluated_at_run_time() {
 fn error_tags_stay_the_same_from_run_to_run_and_are_never_shared() {
     let mut r = realm(10_000_000);
     let source: HostFunction = Rc::new(|_| Ok(Data::String("function inEval() { throw new Error('in eval'); }".into())));
-    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site: false };
     r.define_host_object("host", vec![("load".into(), load)]).unwrap();
     assert_eq!(r.script_tag(), UNKNOWN_SOURCE, "no script yet");
     r.run("function late() { throw new Error('late'); }\nhost.load(); host.load();").unwrap();
@@ -985,7 +1010,7 @@ fn an_evaluators_source_takes_fuel_before_it_is_parsed() {
     let ends = Rc::new(Cell::new(0));
     let ended = ends.clone();
     let source: HostFunction = Rc::new(|_| Ok(Data::String(format!("{}7", " ".repeat(1 << 17)))));
-    let item = HostItem::Evaluator { source, end: Rc::new(move || ended.set(ended.get() + 1)), strict_writes: Rc::new(|| None) };
+    let item = HostItem::Evaluator { source, end: Rc::new(move || ended.set(ended.get() + 1)), strict_writes: Rc::new(|| None), site: false };
     let mut r = realm(10_000);
     r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
     let e = r.run("host.evaluate()").unwrap_err();
@@ -1006,7 +1031,7 @@ fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
     // The source does not parse, so a parse would throw a syntax error instead.
     let n = (1 << 17) + 1;
     let source: HostFunction = Rc::new(move |_| Ok(Data::String(format!("{}(", " ".repeat(n - 1)))));
-    let item = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    let item = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None), site: false };
     let mut r = realm(1_000_000);
     r.define_host_object("host", vec![("evaluate".into(), item)]).unwrap();
     r.interp().collect_for_room();

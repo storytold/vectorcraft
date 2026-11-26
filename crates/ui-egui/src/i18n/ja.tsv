@@ -5811,7 +5811,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
 	This script has added a great many objects. Continue, or stop it and undo what it did?	このスクリプトは非常に多くのオブジェクトを追加しました。続行しますか、それとも停止して変更を取り消しますか？
-@msg	Choose a .js or .jsx script	.js または .jsx スクリプトを選択してください
+@msg	Choose a .js, .mjs or .jsx script	.js、.mjs または .jsx スクリプトを選択してください
 @msg	Ran {name}	{name} を実行しました
 @msg	The script was stopped and its changes were undone	スクリプトを停止し、変更を取り消しました
 @msg	a script is running: stop it or wait for it to finish	スクリプトの実行中です: 停止するか、終了するまでお待ちください
@@ -5958,7 +5958,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	`args` is larger than 1 MiB	`args` が 1 MiB を超えています
 @msg	`path` is empty	`path` が空です
 @msg	`installed` takes a `path`, not a `source`	`installed` には `source` ではなく `path` を指定してください
-@msg	`path` must name a .js or .jsx file	`path` には .js または .jsx ファイルを指定してください
+@msg	`path` must name a .js, .mjs or .jsx file	`path` には .js、.mjs または .jsx ファイルを指定してください
 @msg	give exactly one of `path` and `source`	`path` と `source` のうち 1 つだけを指定してください
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました

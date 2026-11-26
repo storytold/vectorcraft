@@ -4820,7 +4820,7 @@ axis	Both	Båda
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Det här skriptet har lagt till väldigt många objekt. Fortsätta, eller stoppa det och ångra det det gjort?
-@msg	Choose a .js or .jsx script	Välj ett .js- eller .jsx-skript
+@msg	Choose a .js, .mjs or .jsx script	Välj ett .js-, .mjs- eller .jsx-skript
 @msg	Ran {name}	Körde {name}
 @msg	The script was stopped and its changes were undone	Skriptet stoppades och dess ändringar ångrades
 @msg	a script is running: stop it or wait for it to finish	ett skript körs: stoppa det eller vänta tills det är klart
@@ -4991,7 +4991,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`args` is larger than 1 MiB	`args` är större än 1 MiB
 @msg	`path` is empty	`path` är tomt
 @msg	`installed` takes a `path`, not a `source`	`installed` tar en `path`, inte en `source`
-@msg	`path` must name a .js or .jsx file	`path` måste ange en .js- eller .jsx-fil
+@msg	`path` must name a .js, .mjs or .jsx file	`path` måste ange en .js-, .mjs- eller .jsx-fil
 @msg	give exactly one of `path` and `source`	ange exakt en av `path` och `source`
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten

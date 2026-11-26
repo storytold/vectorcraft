@@ -197,7 +197,7 @@ pub(crate) enum Func {
     Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
-    Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str> },
+    Eval { f: DataFn, end: Rc<dyn Fn()>, strict_writes: Rc<dyn Fn() -> Option<bool>>, name: Rc<str>, site: bool },
     Bound { target: ObjId, this: Value, args: Rc<[Value]> },
 }
 
@@ -264,6 +264,9 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A module namespace object (ECMA-262 2015 section 9.4.6): its own properties are the
+    /// module's exports, read live from the bindings they name.
+    ModuleNamespace(Box<ModuleExports>),
     /// An object of a class a host defined ([`crate::host_classes`]).
     Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
@@ -349,6 +352,8 @@ impl Class {
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
+            // The value of a namespace object's @@toStringTag (ECMA-262 2015 section 26.3.1).
+            Class::ModuleNamespace(_) => "Module",
             Class::UnitValue(_) => "UnitValue",
         }
     }
@@ -383,17 +388,49 @@ pub(crate) struct Binding {
     /// A `let` or `const` binding, or a function declared in a block: a `var` that eval code
     /// declares cannot take its name.
     pub(crate) lexical: bool,
+    /// A module's import of another module's binding (ECMA-262 2015 section 8.1.1.5.5,
+    /// CreateImportBinding): reading it reads the binding of that name in that environment, and
+    /// writing it is a `TypeError`. `value` is unused.
+    pub(crate) import: Option<(EnvId, Key)>,
 }
 
 impl Binding {
     /// An initialized binding.
     pub(crate) fn new(value: Value, mutable: bool, deletable: bool) -> Self {
-        Self { value, mutable, deletable, uninitialized: false, constant: false, lexical: false }
+        Self { value, mutable, deletable, uninitialized: false, constant: false, lexical: false, import: None }
     }
 
     /// A `let` (or with `constant`, a `const`) binding not yet initialized.
     pub(crate) fn lexical(constant: bool) -> Self {
-        Self { value: Value::Undefined, mutable: !constant, deletable: false, uninitialized: true, constant, lexical: true }
+        Self { value: Value::Undefined, mutable: !constant, deletable: false, uninitialized: true, constant, lexical: true, import: None }
+    }
+
+    /// An import of the binding `name` of the environment `env`.
+    pub(crate) fn import(env: EnvId, name: Key) -> Self {
+        Self {
+            value: Value::Undefined,
+            mutable: false,
+            deletable: false,
+            uninitialized: false,
+            constant: true,
+            lexical: true,
+            import: Some((env, name)),
+        }
+    }
+}
+
+/// A module namespace object's exports (ECMA-262 2015 section 9.4.6): each exported name, in
+/// code unit order, with the environment and name of the binding it reads, or `None` for an export
+/// whose value is fixed (another module's namespace object), kept in the object's own property.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ModuleExports {
+    pub(crate) bindings: Vec<(Key, Option<(EnvId, Key)>)>,
+}
+
+impl ModuleExports {
+    /// The binding the export `name` reads, when it reads one.
+    pub(crate) fn binding(&self, name: &[u16]) -> Option<&(EnvId, Key)> {
+        self.bindings.binary_search_by(|(k, _)| (**k).cmp(name)).ok().and_then(|i| self.bindings.get(i)).and_then(|(_, b)| b.as_ref())
     }
 }
 
@@ -735,6 +772,16 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = BOUND_ARG_BYTES * args.len();
         }
         Class::Arguments(map) => work.push(map.env.0),
+        Class::ModuleNamespace(exports) => {
+            for (k, b) in &exports.bindings {
+                strings.add_key(k);
+                if let Some((env, name)) = b {
+                    work.push(env.0);
+                    strings.add_key(name);
+                }
+            }
+            extra = PROP_BYTES * exports.bindings.len();
+        }
         Class::String(s) => strings.add(s),
         Class::RegExp(re) => {
             if strings.seen.insert(Rc::as_ptr(re) as *const () as usize) {
@@ -821,6 +868,10 @@ fn trace_env(e: &Env, work: &mut Vec<u32>, strings: &mut StringSizes) -> usize {
             for (k, b) in bindings.iter() {
                 strings.add_key(k);
                 mark_value(&b.value, work, strings);
+                if let Some((env, name)) = &b.import {
+                    work.push(env.0);
+                    strings.add_key(name);
+                }
             }
             ENV_BYTES + PROP_BYTES * bindings.len()
         }

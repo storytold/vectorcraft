@@ -359,6 +359,7 @@ fn an_installed_run_reads_its_includes_in_the_folder_its_read_found() {
         fuel: script::DEFAULT_FUEL,
         locale: "en_US".into(),
         answers: Vec::new(),
+        module: false,
     };
     s.script_start(request).unwrap();
     assert_eq!(s.script_run_to_end().unwrap()["log"], json!([1]));

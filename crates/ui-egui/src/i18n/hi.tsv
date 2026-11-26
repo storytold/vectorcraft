@@ -7643,7 +7643,7 @@ arrowhead	Feather	पंख
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
 	This script has added a great many objects. Continue, or stop it and undo what it did?	इस स्क्रिप्ट ने बहुत सारे ऑब्जेक्ट जोड़े हैं। जारी रखें, या इसे रोककर इसके बदलाव पूर्ववत करें?
-@msg	Choose a .js or .jsx script	.js या .jsx स्क्रिप्ट चुनें
+@msg	Choose a .js, .mjs or .jsx script	.js, .mjs या .jsx स्क्रिप्ट चुनें
 @msg	Ran {name}	{name} चलाई गई
 @msg	The script was stopped and its changes were undone	स्क्रिप्ट रोकी गई और उसके बदलाव पूर्ववत किए गए
 @msg	a script is running: stop it or wait for it to finish	एक स्क्रिप्ट चल रही है: उसे रोकें या पूरा होने की प्रतीक्षा करें
@@ -7814,7 +7814,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`args` is larger than 1 MiB	`args` 1 MiB से बड़ा है
 @msg	`path` is empty	`path` खाली है
 @msg	`installed` takes a `path`, not a `source`	`installed` एक `path` लेता है, `source` नहीं
-@msg	`path` must name a .js or .jsx file	`path` में किसी .js या .jsx फ़ाइल का नाम होना चाहिए
+@msg	`path` must name a .js, .mjs or .jsx file	`path` में किसी .js, .mjs या .jsx फ़ाइल का नाम होना चाहिए
 @msg	give exactly one of `path` and `source`	`path` और `source` में से ठीक एक दें
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट

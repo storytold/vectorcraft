@@ -6453,7 +6453,7 @@ digits	Malayalam	Malaiàlam
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Aquest script ha afegit moltíssims objectes. Voleu continuar, o aturar-lo i desfer el que ha fet?
-@msg	Choose a .js or .jsx script	Trieu un script .js o .jsx
+@msg	Choose a .js, .mjs or .jsx script	Trieu un script .js, .mjs o .jsx
 @msg	Ran {name}	S'ha executat {name}
 @msg	The script was stopped and its changes were undone	L'script s'ha aturat i s'han desfet els seus canvis
 @msg	a script is running: stop it or wait for it to finish	s'està executant un script: atureu-lo o espereu que acabi
@@ -6623,7 +6623,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`args` is larger than 1 MiB	`args` ocupa més d'1 MiB
 @msg	`path` is empty	`path` és buit
 @msg	`installed` takes a `path`, not a `source`	`installed` admet un `path`, no un `source`
-@msg	`path` must name a .js or .jsx file	`path` ha d’indicar un fitxer .js o .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` ha d’indicar un fitxer .js, .mjs o .jsx
 @msg	give exactly one of `path` and `source`	indiqueu exactament un de `path` i `source`
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script

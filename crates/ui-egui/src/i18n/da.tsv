@@ -54,7 +54,7 @@
 @msg	it decompresses to more than {_1} MB	den udpakkes til mere end {_1} MB
 @msg	its editing data is for a different page	dens redigeringsdata er til en anden side
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` skal være "emBox", "capHeight", "xHeight" eller "icfBox"
-@msg	Choose a .js or .jsx script	Vælg et .js- eller .jsx-script
+@msg	Choose a .js, .mjs or .jsx script	Vælg et .js-, .mjs- eller .jsx-script
 @msg	Ran {name}	Kørte {name}
 @msg	The script was stopped and its changes were undone	Scriptet blev stoppet, og dets ændringer blev fortrudt
 @msg	a script is running: stop it or wait for it to finish	et script kører: stop det, eller vent, til det er færdigt
@@ -242,7 +242,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`args` is larger than 1 MiB	`args` er større end 1 MiB
 @msg	`path` is empty	`path` er tom
 @msg	`installed` takes a `path`, not a `source`	`installed` tager en `path`, ikke en `source`
-@msg	`path` must name a .js or .jsx file	`path` skal angive en .js- eller .jsx-fil
+@msg	`path` must name a .js, .mjs or .jsx file	`path` skal angive en .js-, .mjs- eller .jsx-fil
 @msg	give exactly one of `path` and `source`	angiv præcis én af `path` og `source`
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}

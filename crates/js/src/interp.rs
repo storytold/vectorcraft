@@ -24,8 +24,8 @@ use crate::ast::BinaryOp;
 use crate::bytecode::{Code, CodeKind, NamePrefix, Op, Source};
 use crate::compiler::{CompileFail, compile_program};
 use crate::heap::{
-    ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
-    Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
+    ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, ModuleExports, NativeKind, OBJECT_BYTES,
+    OPEN, ObjId, Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
 use crate::string_builtins::flat_charged;
 use crate::symbol::PropKey;
@@ -210,6 +210,11 @@ pub(crate) struct Frame {
     completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
     boundary: bool,
+    /// The frame runs a module that another module of the same run waits under (ECMA-262 2015
+    /// section 15.2.1.16.5): its completion value is dropped when it returns, and an exception
+    /// that leaves it ends the run at the boundary frame without stopping in the frames between.
+    chained: bool,
+    pending_module: bool,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
@@ -247,6 +252,7 @@ pub(crate) struct Interp {
     pub(crate) heap: Heap,
     pub(crate) stack: Vec<Value>,
     pub(crate) frames: Vec<Frame>,
+    pending_module_frames: usize,
     /// Values native code holds while it may run JavaScript.
     pub(crate) temp_roots: Vec<Value>,
     /// Environments native code is still building.
@@ -593,6 +599,7 @@ impl Interp {
             heap,
             stack: Vec::new(),
             frames: Vec::new(),
+            pending_module_frames: 0,
             temp_roots: Vec::new(),
             temp_envs: Vec::new(),
             temp_codes: Vec::new(),
@@ -983,7 +990,11 @@ impl Interp {
             self.push(v)?;
             return Ok(None);
         }
+        if self.frames.last().is_some_and(|frame| frame.pending_module) {
+            self.pending_module_frames -= 1;
+        }
         let frame = self.frame_mut()?;
+        frame.pending_module = false;
         let Some(&op) = frame.code.ops.get(frame.pc) else { return internal("ran past the end of the code") };
         frame.pc += 1;
         match op {
@@ -1047,9 +1058,13 @@ impl Interp {
                 }
                 return Ok(());
             }
-            let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
+            let Some(frame) = self.pop_frame() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
-            if frame.boundary {
+            if frame.chained {
+                // The modules under it have not started, so no handler of theirs takes it.
+                self.abort_to_boundary();
+            }
+            if frame.boundary || frame.chained {
                 self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
             }
@@ -1059,11 +1074,24 @@ impl Interp {
     /// Each running frame of script code, outermost first: its code, the index of its next
     /// instruction, and whether it runs a function (not global or eval code).
     pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
-        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
+        self.frames.iter().filter(|f| !f.pending_module).map(|f| (&f.code, f.pc, f.callee.is_some()))
+    }
+
+    pub(crate) fn clear_frames(&mut self) {
+        self.frames.clear();
+        self.pending_module_frames = 0;
+    }
+
+    fn pop_frame(&mut self) -> Option<Frame> {
+        let frame = self.frames.pop()?;
+        if frame.pending_module {
+            self.pending_module_frames -= 1;
+        }
+        Some(frame)
     }
 
     fn abort_to_boundary(&mut self) {
-        while let Some(frame) = self.frames.pop() {
+        while let Some(frame) = self.pop_frame() {
             self.stack.truncate(frame.base);
             if frame.boundary {
                 break;
@@ -1072,7 +1100,7 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
-        let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
+        let Some(frame) = self.pop_frame() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
         self.drop_left_finally_sites(frame.base);
@@ -1082,6 +1110,9 @@ impl Interp {
         };
         if frame.boundary {
             return Ok(Some(v));
+        }
+        if frame.chained {
+            return Ok(None);
         }
         self.push(v)?;
         Ok(None)
@@ -1382,6 +1413,15 @@ impl Interp {
         matches!(self.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.get(name).is_some_and(|b| b.uninitialized))
     }
 
+    /// The binding the binding `name` of the declarative environment `env` imports, when it is a
+    /// module's import.
+    fn import_of(&self, env: EnvId, name: &[u16]) -> Option<(EnvId, Key)> {
+        match self.heap.env(env) {
+            Some(Env::Decl { bindings, .. }) => bindings.get(name).and_then(|b| b.import.clone()),
+            _ => None,
+        }
+    }
+
     fn not_initialized(&mut self, name: &[u16]) -> Abrupt {
         let ident = String::from_utf16_lossy(name);
         self.throw(ErrorType::Reference, &format!("{ident} is used before it is initialized"))
@@ -1394,6 +1434,14 @@ impl Interp {
 
     /// GetValue of a reference whose base was resolved earlier (section 8.7.1).
     fn get_resolved(&mut self, r: Resolved, name: &Key) -> JsResult<(Value, Value)> {
+        if let Resolved::Decl(e) = r
+            && let Some((target, target_name)) = self.import_of(e, name)
+        {
+            if self.uninitialized(target, &target_name) {
+                return Err(self.not_initialized(name));
+            }
+            return Ok((self.binding_value(target, &target_name)?, Value::Undefined));
+        }
         match r {
             Resolved::Decl(e) if self.uninitialized(e, name) => Err(self.not_initialized(name)),
             Resolved::Decl(e) => Ok((self.binding_value(e, name)?, Value::Undefined)),
@@ -1413,6 +1461,12 @@ impl Interp {
     /// PutValue of a reference whose base was resolved earlier (section 8.7.2).
     fn set_resolved(&mut self, r: Resolved, name: &Key, v: Value) -> JsResult<()> {
         let strict = self.strict();
+        if let Resolved::Decl(e) = r
+            && self.import_of(e, name).is_some()
+        {
+            let ident = String::from_utf16_lossy(name);
+            return Err(self.type_error(&format!("assignment to the import '{ident}'")));
+        }
         match r {
             Resolved::Decl(e) if self.uninitialized(e, name) => Err(self.not_initialized(name)),
             Resolved::Decl(e) if matches!(self.heap.env(e), Some(Env::Decl { bindings, .. }) if bindings.get(name).is_some_and(|b| b.constant)) => {
@@ -1490,7 +1544,18 @@ impl Interp {
                 }
                 _ => return internal("not a declarative environment"),
             },
-            Resolved::Obj { object, .. } => self.delete(object, &name, false)?,
+            Resolved::Obj { object, with_this } => {
+                let owned = !with_this && object == self.global && self.get_own_property(object, &name)?.is_some();
+                let deleted = self.delete(object, &name, false)?;
+                // A deleted global variable no longer stops a `let` or `const` of its name: the
+                // global environment's DeleteBinding drops it from its var names (ECMA-262 2015
+                // section 8.1.1.4.7). Deleting the global object's property by any other route
+                // leaves the name recorded.
+                if deleted && owned {
+                    self.global_vars.remove(&name);
+                }
+                deleted
+            }
         };
         self.push(Value::Bool(result))
     }
@@ -1601,18 +1666,59 @@ impl Interp {
                     return Ok(Some(Prop::Data { value: self.binding_value(map.env, name)?, flags }));
                 }
             }
+            Class::ModuleNamespace(exports) => {
+                if let Some((env, name)) = exports.binding(k)
+                    && let Some(Prop::Data { flags, .. }) = o.props.get(k)
+                {
+                    return Ok(Some(Prop::Data { value: self.binding_value(*env, name)?, flags: *flags }));
+                }
+            }
             _ => {}
         }
         Ok(o.props.get(k).cloned())
     }
 
+    /// [[GetOwnProperty]] as a script reaches it (`hasOwnProperty`, `Object.keys` and the like):
+    /// [`Self::get_own_property`], except that an export of a module namespace object read before
+    /// its module initialized it is a `ReferenceError` (ECMA-262 2015 section 9.4.6.5).
+    pub(crate) fn own_property(&mut self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        self.check_namespace_export(id, k)?;
+        self.get_own_property(id, k)
+    }
+
+    /// [`Self::own_property`] for a name or a Symbol: [`Self::get_own_pk`], with the same
+    /// `ReferenceError` for a namespace export read before its module initialized it.
+    pub(crate) fn own_pk(&mut self, id: ObjId, k: &PropKey) -> JsResult<Option<Prop>> {
+        if let PropKey::Str(name) = k {
+            self.check_namespace_export(id, name)?;
+        }
+        self.get_own_pk(id, k)
+    }
+
+    /// A `ReferenceError` when `k` is an export of the module namespace object `id` that its module
+    /// has not initialized yet.
+    fn check_namespace_export(&mut self, id: ObjId, k: &[u16]) -> JsResult<()> {
+        if let Some(Class::ModuleNamespace(exports)) = self.heap.object(id).map(|o| &o.class)
+            && let Some((env, name)) = exports.binding(k)
+            && self.uninitialized(*env, name)
+        {
+            return Err(self.not_initialized(k));
+        }
+        Ok(())
+    }
+
     /// [[GetProperty]]: the property found on the object or its prototype chain.
     pub(crate) fn find_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        Ok(self.find_property_on(id, k)?.map(|(_, p)| p))
+    }
+
+    /// [`Self::find_property`], with the object on the prototype chain that has the property.
+    fn find_property_on(&self, id: ObjId, k: &[u16]) -> JsResult<Option<(ObjId, Prop)>> {
         let mut cur = Some(id);
         let mut steps = 0usize;
         while let Some(o) = cur {
             if let Some(p) = self.get_own_property(o, k)? {
-                return Ok(Some(p));
+                return Ok(Some((o, p)));
             }
             cur = self.object(o)?.proto;
             steps += 1;
@@ -1635,7 +1741,14 @@ impl Interp {
         {
             return self.host_index(&f, start, crate::Data::Number(f64::from(i)), false);
         }
-        match self.find_property(start, k)? {
+        let found = self.find_property_on(start, k)?;
+        // A module's export read before the module ran is in its temporal dead zone (ECMA-262
+        // 2015 section 9.4.6.8), whether the read starts at the namespace object or reaches it
+        // through a prototype chain.
+        if let Some((holder, _)) = &found {
+            self.check_namespace_export(*holder, k)?;
+        }
+        match found.map(|(_, p)| p) {
             // A name the object and its prototypes lack is the indexer's answer too.
             None => match self.host_indexer(start)? {
                 Some(f) => self.host_index(&f, start, Self::indexer_key(k), false),
@@ -1651,7 +1764,11 @@ impl Interp {
     /// class: a name the object and its prototypes lack is `undefined`. For names the engine looks
     /// up itself, such as `toJSON`, which a collection's indexer would answer with an error.
     pub(crate) fn get_property_only(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
-        match self.find_property(start, k)? {
+        let found = self.find_property_on(start, k)?;
+        if let Some((holder, _)) = &found {
+            self.check_namespace_export(*holder, k)?;
+        }
+        match found.map(|(_, p)| p) {
             None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
             Some(Prop::Data { value, .. }) => Ok(value),
             Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
@@ -1760,8 +1877,24 @@ impl Interp {
                 }
                 Ok(true)
             }
+            Class::ModuleNamespace(_) => self.define_namespace_export(id, &k, desc, throw),
             _ => self.define_ordinary(id, k, desc, throw),
         }
+    }
+
+    /// A module namespace object's [[DefineOwnProperty]] (ECMA-262 2020 section 9.4.6.5): only a
+    /// descriptor that leaves an export as it is (enumerable, writable, not configurable, its
+    /// current value) succeeds.
+    fn define_namespace_export(&mut self, id: ObjId, k: &[u16], desc: &Desc, throw: bool) -> JsResult<bool> {
+        let Some(Prop::Data { value, .. }) = self.own_property(id, k)? else {
+            return self.reject_bool(throw, k, "a module namespace object is not extensible");
+        };
+        let unchanged = desc.configurable != Some(true)
+            && desc.enumerable != Some(false)
+            && !desc.is_accessor()
+            && desc.writable != Some(false)
+            && desc.value.as_ref().is_none_or(|v| same_value(v, &value));
+        if unchanged { Ok(true) } else { self.reject_bool(throw, k, "a module namespace object is read-only") }
     }
 
     pub(crate) fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
@@ -1928,6 +2061,10 @@ impl Interp {
 
     /// [[Put]] (section 8.12.5).
     pub(crate) fn put(&mut self, id: ObjId, k: Key, v: Value, throw: bool) -> JsResult<()> {
+        // A module namespace object takes no writes (ECMA-262 2015 section 9.4.6.9).
+        if matches!(self.object(id)?.class, Class::ModuleNamespace(_)) {
+            return self.reject(throw, &k, "a module namespace object is read-only");
+        }
         match self.get_own_property(id, &k)? {
             Some(Prop::Data { flags, .. }) => {
                 if flags & WRITABLE == 0 {
@@ -1939,8 +2076,25 @@ impl Interp {
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
             None => {}
         }
-        let proto = self.object(id)?.proto;
-        let inherited = proto.map(|p| self.find_property(p, &k)).transpose()?.flatten();
+        let mut inherited = None;
+        let mut cur = self.object(id)?.proto;
+        let mut steps = 0usize;
+        while let Some(o) = cur {
+            // A write that reaches a module namespace object on the prototype chain is refused
+            // there too: its [[Set]] returns false for every key.
+            if matches!(self.object(o)?.class, Class::ModuleNamespace(_)) {
+                return self.reject(throw, &k, "a module namespace object is read-only");
+            }
+            if let Some(p) = self.get_own_property(o, &k)? {
+                inherited = Some(p);
+                break;
+            }
+            cur = self.object(o)?.proto;
+            steps += 1;
+            if steps > 1_000_000 {
+                return internal("prototype chain too long");
+            }
+        }
         match inherited {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
@@ -2015,12 +2169,6 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
-                // A deleted global variable no longer stops a `let` or `const` of its name
-                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
-                // global object's properties.
-                if id == self.global {
-                    self.global_vars.remove(k);
-                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2768,6 +2916,8 @@ impl Interp {
             // listed or their bytes reserved must not free it.
             let saved = self.temp_roots.len();
             self.temp_roots.push(Value::Object(o));
+            // Listing a namespace object's exports does not read them (ECMA-262 2015 section
+            // 9.4.6.11, [[Enumerate]]), so an export still in its temporal dead zone is listed.
             let keys = self.enumerable_keys(o).and_then(|keys| {
                 let bytes = keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
                 self.reserve_heap(bytes)?;
@@ -2874,8 +3024,8 @@ impl Interp {
                     // keeps itself reachable.
                     return Ok(Prepared::Done(self.call_data(&f, &name, &this, &args, &read)?));
                 }
-                Func::Eval { f, end, strict_writes, name } => {
-                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
+                Func::Eval { f, end, strict_writes, name, site } => {
+                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args, site)?));
                 }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
@@ -3010,9 +3160,7 @@ impl Interp {
     /// the stack.
     fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
         let Entry { callee, code, env, this, args } = entry;
-        if self.frames.len() >= self.limits.frames {
-            return Err(Abrupt::Limit(LimitKind::Frames));
-        }
+        self.check_frame_room()?;
         let params = code.params.iter().chain(&code.pattern_names).fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments = if code.uses_arguments { arguments_bytes(args.len()) } else { 0 };
         // The array a rest parameter gets: its binding and one property for each extra argument.
@@ -3066,6 +3214,8 @@ impl Interp {
             construct,
             completion: Value::Undefined,
             boundary,
+            chained: false,
+            pending_module: false,
         });
         Ok(())
     }
@@ -3361,6 +3511,22 @@ impl Interp {
         })
     }
 
+    /// Parses and compiles a module's source ([`crate::parse_module`]), counting it against the
+    /// source limit, with [`Self::source_tag`] as its source's tag.
+    pub(crate) fn compile_module_source(&mut self, units: &[u16]) -> Result<(Rc<Code>, crate::ModuleInfo), CompileError> {
+        self.source_units = self.source_units.saturating_add(units.len());
+        let remaining = self.options.max_source_units.saturating_sub(self.source_units.saturating_sub(units.len()));
+        let options = Options { max_source_units: remaining, ..self.options.clone() };
+        let (program, info) = crate::parse_module_utf16(units, &options).map_err(CompileError::Syntax)?;
+        let writes = self.writes_mode();
+        let source = Rc::new(Source { lines: program.lines.clone(), text: units.into(), tag: self.source_tag, strict_writes: writes });
+        let code = crate::compiler::compile_module(&program, &source).map_err(|e| match e {
+            CompileFail::Syntax(s) => CompileError::Syntax(s),
+            CompileFail::Internal(m) => CompileError::Internal(m),
+        })?;
+        Ok((code, info))
+    }
+
     /// Turns a compile failure inside a running script into what it throws.
     pub(crate) fn compile_error_to_abrupt(&mut self, e: CompileError) -> Abrupt {
         match e {
@@ -3539,7 +3705,7 @@ impl Interp {
 
     /// A [`LimitKind::Frames`] error when no other frame fits under the frame limit.
     fn check_frame_room(&self) -> JsResult<()> {
-        if self.frames.len() >= self.limits.frames {
+        if self.frames.len() - self.pending_module_frames >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
         Ok(())
@@ -3560,8 +3726,125 @@ impl Interp {
             construct: None,
             completion: Value::Undefined,
             boundary,
+            chained: false,
+            pending_module: false,
         });
         Ok(())
+    }
+
+    /// Declaration binding instantiation for a module's code (ECMA-262 2015 section 15.2.1.16.4,
+    /// ModuleDeclarationInstantiation, its imports aside): a new environment inside the global
+    /// scope holds its variables and functions, and one inside that its `let` and `const` names,
+    /// uninitialized. → the environment it runs in and the outer one. Both stay in the temporary
+    /// roots for the caller to remove.
+    pub(crate) fn instantiate_module(&mut self, code: &Rc<Code>) -> JsResult<(EnvId, EnvId)> {
+        // The code itself was counted when the module was loaded ([`Self::hold_module_code`]).
+        self.reserve_heap(declaration_bytes(code).saturating_add(ENV_BYTES))?;
+        let scope = self.global_lex;
+        let env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(scope) });
+        self.temp_envs.push(env);
+        let lex = self.instantiate_global(code, env, env, true)?;
+        self.temp_envs.push(lex);
+        Ok((lex, env))
+    }
+
+    /// Adds `binding` (an import) to the module environment `env`, which must not have `name`.
+    pub(crate) fn add_import(&mut self, env: EnvId, name: Key, binding: Binding) -> JsResult<()> {
+        self.use_fuel()?;
+        // The binding's value (a namespace object) stays reachable while room is made.
+        self.temp_roots.push(binding.value.clone());
+        let reserved = self.reserve_heap(binding_bytes(name.len()));
+        self.temp_roots.pop();
+        reserved?;
+        self.env_insert(env, name, binding)
+    }
+
+    /// The environment that holds `name` of a module whose code runs in `lex` inside `env`.
+    pub(crate) fn module_binding(&self, lex: EnvId, env: EnvId, name: &[u16]) -> Option<EnvId> {
+        [lex, env].into_iter().find(|e| matches!(self.heap.env(*e), Some(Env::Decl { bindings, .. }) if bindings.contains(name)))
+    }
+
+    /// A module namespace object for the exports `exports`, each `(name, binding)` with the
+    /// binding it reads or, for `None`, the value `fixed` gives. The names must be in code unit
+    /// order and distinct.
+    pub(crate) fn module_namespace(&mut self, exports: Vec<(Key, Option<(EnvId, Key)>)>, fixed: &[(Key, Value)]) -> JsResult<ObjId> {
+        let names = exports.iter().map(|(name, _)| string_bytes(name.len())).sum::<usize>();
+        let bindings = PROP_BYTES.saturating_mul(exports.len());
+        let tag = self.well_known(|symbols| &symbols.to_string_tag);
+        let tagged = if tag.is_some() { PROP_BYTES.saturating_add(string_bytes(6)) } else { 0 };
+        let extra = bindings.saturating_add(names).saturating_add(tagged);
+        self.reserve_heap(OBJECT_BYTES.saturating_add(bindings).saturating_add(extra))?;
+        let mut object = Object::new(Class::ModuleNamespace(Box::default()), None);
+        if let Some(tag) = tag {
+            object.syms.get_or_insert_with(Default::default).insert(tag, Prop::Data { value: Value::str("Module"), flags: 0 });
+        }
+        object.extensible = false;
+        for (name, _) in &exports {
+            self.use_fuel()?;
+            let value = fixed.iter().find(|(k, _)| k == name).map_or(Value::Undefined, |(_, v)| v.clone());
+            object.props.insert(name.clone(), Prop::Data { value, flags: WRITABLE | ENUMERABLE });
+        }
+        object.class = Class::ModuleNamespace(Box::new(ModuleExports { bindings: exports }));
+        let namespace = self.heap.alloc_object(object);
+        self.heap.bytes = self.heap.bytes.saturating_add(extra);
+        Ok(namespace)
+    }
+
+    /// Pushes the frames of a run of modules: `modules` in the order they run, each with its code,
+    /// the environment it runs in and the outer one. The last is the boundary frame, pushed first;
+    /// each of the others is pushed above the one that runs after it, so the first to run is on
+    /// top.
+    pub(crate) fn push_module_frames(&mut self, modules: &[(Rc<Code>, EnvId, EnvId)]) -> JsResult<()> {
+        for (i, (code, env, var_env)) in modules.iter().enumerate().rev() {
+            let last = i + 1 == modules.len();
+            self.push_code_frame(code.clone(), *env, *var_env, Value::Undefined, last)?;
+            if let Some(frame) = self.frames.last_mut() {
+                frame.chained = !last;
+                frame.pending_module = true;
+            }
+            self.pending_module_frames += 1;
+        }
+        Ok(())
+    }
+
+    /// Ends module linking: drops the temporary roots from `mark` on.
+    pub(crate) fn drop_temp_envs(&mut self, mark: usize) {
+        self.temp_envs.truncate(mark);
+    }
+
+    pub(crate) fn temp_envs_mark(&self) -> usize {
+        self.temp_envs.len()
+    }
+
+    /// Counts a loaded module's code against the heap once, when the module is loaded, and keeps
+    /// it reachable until [`Self::drop_temp_codes`] drops it, so a collection while later modules
+    /// load counts it too.
+    pub(crate) fn hold_module_code(&mut self, code: &Rc<Code>) -> JsResult<()> {
+        self.charge_code(code, 0)?;
+        self.temp_codes.push(code.clone());
+        Ok(())
+    }
+
+    pub(crate) fn temp_codes_mark(&self) -> usize {
+        self.temp_codes.len()
+    }
+
+    /// Ends module linking: drops the modules' code held from `mark` on.
+    pub(crate) fn drop_temp_codes(&mut self, mark: usize) {
+        self.temp_codes.truncate(mark);
+    }
+
+    /// Keeps `v` reachable until [`Self::drop_temp_roots`] drops it.
+    pub(crate) fn hold(&mut self, v: Value) {
+        self.temp_roots.push(v);
+    }
+
+    pub(crate) fn temp_roots_mark(&self) -> usize {
+        self.temp_roots.len()
+    }
+
+    pub(crate) fn drop_temp_roots(&mut self, mark: usize) {
+        self.temp_roots.truncate(mark);
     }
 
     /// Declaration binding instantiation for global and eval code (section 10.5). The caller has

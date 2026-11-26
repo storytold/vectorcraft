@@ -4905,7 +4905,7 @@ axis	Both	Les deux
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ce script a ajouté un très grand nombre d’objets. Continuer, ou l’arrêter et annuler ce qu’il a fait ?
-@msg	Choose a .js or .jsx script	Choisissez un script .js ou .jsx
+@msg	Choose a .js, .mjs or .jsx script	Choisissez un script .js, .mjs ou .jsx
 @msg	Ran {name}	{name} exécuté
 @msg	The script was stopped and its changes were undone	Le script a été arrêté et ses modifications ont été annulées
 @msg	a script is running: stop it or wait for it to finish	un script est en cours d’exécution : arrêtez-le ou attendez qu’il se termine
@@ -5051,7 +5051,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`args` is larger than 1 MiB	`args` dépasse 1 Mio
 @msg	`path` is empty	`path` est vide
 @msg	`installed` takes a `path`, not a `source`	`installed` prend un `path`, pas un `source`
-@msg	`path` must name a .js or .jsx file	`path` doit désigner un fichier .js ou .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` doit désigner un fichier .js, .mjs ou .jsx
 @msg	give exactly one of `path` and `source`	indiquez exactement un paramètre parmi `path` et `source`
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l’application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script

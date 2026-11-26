@@ -2694,11 +2694,11 @@ the included files too.
 vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
-`script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
-File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
+`script.run {path? | source?, module?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+File › Scripts › Other Script… (Cmd+F12) picks a `.js`, `.mjs` or `.jsx` file and runs it the same way; the help page
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
-describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
-case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
+describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js`, `.mjs` or `.jsx`, in
+any case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
 `ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. A `path` that ends in
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
@@ -2723,21 +2723,64 @@ an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-in
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
 ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+`.jsx` file and a `source` string read ES5.1 when run as scripts. With `module: true`, they run as modules and
+accept the ECMAScript 2015 forms listed here. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
 or `||` without parentheses, and assigning to an optional chain, are syntax errors. In a `.jsx` file and a `source`
-string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. Every script, `.js`,
-`.jsx` or `source`, also reads ECMAScript for XML (E4X, ECMA-357, 2nd edition,
+string that runs as a script, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule.
+Every script, `.js`, `.jsx` or `source`, also reads ECMAScript for XML (E4X, ECMA-357, 2nd edition,
 https://ecma-international.org/publications-and-standards/standards/ecma-357/): XML and XMLList literals, the `..`,
 `.@`, `.*`, `.()` and `::` selectors, `for each`, `default xml namespace`, and the global `XML`, `XMLList`,
 `Namespace`, `QName`, `isXMLName` and `setDefaultXMLNamespace`, as the XML object pages describe them
-(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file also has
-`Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a named engine
-(`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later run, as it keeps
-its globals. The script reaches the app through the global object `vc`, and writes to the Script Console and runs
-other files through `$`:
+(https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file or a module also has
+`Promise` (described below); a `.jsx` file and a `source` string that runs as a script do not, except that a named engine
+(`#targetengine`) has `Promise` from its first `.js` or module run and keeps it for every later run, as it keeps its globals.
+
+A `path` that ends in `.mjs` (in any case) runs as an ECMAScript 2015 module
+(https://262.ecma-international.org/6.0/#sec-modules): strict mode code with the forms above (optional chains and `??`
+included), and `import` and
+`export` declarations at its top level. Module source reserves `await` as an identifier. A module namespace has an
+own `Symbol.toStringTag` property with value `"Module"` that is nonwritable, nonenumerable and nonconfigurable.
+`import` and `export` are syntax errors in a `.js` or `.jsx` script.
+`module` (true or false) chooses this for any `path` or `source`; it defaults to true for a `path` that ends in
+`.mjs` and false otherwise. The app passes `module: true` for a `.mjs` file picked on the web, where the script
+arrives as `source`. A `source` that runs as a module imports no files: each import ends the run with an error that
+names the specifier.
+
+- A specifier is a path relative to the file that imports it. It starts with `./` or `../`, separates names with
+  `/` and names a `.mjs` or `.js` file, which is read as a module. A bare name such as `'lib'`, a URL, an absolute
+  path, and a specifier with `\`, `:` or a control character end the run with a `SyntaxError` that names the
+  specifier.
+- Modules are read through the script's own file scope: only from the script's folder and the folders below it.
+  A specifier whose `..` names lead above the script's folder, and a link that leads out of it, end the run with an
+  error that names the specifier. A missing file ends the run with an error that names the specifier.
+- Every module is read, parsed and linked before any of them runs. A syntax error, a missing or refused file, an
+  import of a name the module does not export, and an import of a name that two `export *` declarations give from
+  different modules end the run with no code run, at the file, line and column of the module they are in.
+- Each module runs once in a run, after the modules it imports, in the order it imports them. In a cycle of imports
+  a module does not wait for a module that is still waiting for its own imports, so it can run before that module
+  has initialized its bindings. Two paths to one file
+  (a link, `sub/../x.mjs`, or names that differ only in letter case in a Windows folder that ignores case) are one
+  module, and a module's relative imports are read from the folder the file is in, whichever path reached it first. An import reads
+  the exporting module's binding each time, so it sees later assignments, and reading it before that module has
+  initialized it (in a cycle of imports) throws a `ReferenceError`. Assigning to an import throws a `TypeError`.
+- `import * as ns` gives a namespace object: not extensible, with no prototype, its export names in code unit order
+  as properties that cannot be written or deleted, and `[object Module]` from `Object.prototype.toString`.
+  Export redefinitions use the ECMAScript 2020 rule, which accepts a descriptor only when it leaves the current
+  export unchanged (https://262.ecma-international.org/11.0/#sec-module-namespace-exotic-objects-defineownproperty-p-desc).
+  `export *` passes on every name but `default`, and `export * as ns from` passes on a namespace.
+- A module's top-level names stay in the module, `this` is `undefined` at its top, it has no preprocessor lines,
+  and `import()` is a syntax error. `vc`, `$` and the other globals are there as in a script.
+- In the host API, `Realm::run_module` drains queued Promise jobs before returning, as sliced module execution does.
+  `Realm::start_module` and `Realm::run_module` end a paused or waiting run before loading replacement source,
+  including when that source fails to compile. Existing globals remain available.
+- Module files count against the limits of `#include` files: 8 MiB a file, 32 MiB of source in all, 64 files
+  besides the script, imports 16 deep and 1,024 paths looked up. These limits are VectorCraft's own.
+
+The script reaches the app through the global object `vc`, and writes to the Script Console and runs other files
+through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it

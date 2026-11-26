@@ -97,6 +97,8 @@ struct FnCompiler<'a> {
     recursion: u32,
     /// The code was read with [`crate::Options::es2015`]: blocks have scopes of their own.
     es2015: bool,
+    /// The code is a module's ([`compile_module`]), which has no completion value.
+    module: bool,
     scopes: Vec<BlockScope>,
     templates: Vec<Template>,
     uses_this: bool,
@@ -150,6 +152,7 @@ impl<'a> FnCompiler<'a> {
             uses_arguments: false,
             recursion,
             es2015: false,
+            module: false,
             scopes: Vec::new(),
             templates: Vec::new(),
             uses_this: false,
@@ -158,6 +161,12 @@ impl<'a> FnCompiler<'a> {
             annex: HashSet::new(),
             optional: Vec::new(),
         }
+    }
+
+    /// Script and eval code keep the value of the last expression statement as their
+    /// completion value; function and module code do not.
+    fn keeps_completion(&self) -> bool {
+        self.kind != CodeKind::Function && !self.module
     }
 
     // ---- emitting ----
@@ -261,8 +270,10 @@ impl<'a> FnCompiler<'a> {
         let mut seen = HashSet::new();
         // The `let` and `const` names and the block functions of each statement list and loop the
         // walk enters, with the index of the one around it; the body's are first, and its
-        // functions are var-scoped.
-        let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, self.lexical_names(body), HashSet::new())];
+        // functions are var-scoped. Only Annex B's block functions read them, so without
+        // [`crate::Options::es2015`] none is collected.
+        let top = if self.es2015 { self.lexical_names(body) } else { HashSet::new() };
+        let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, top, HashSet::new())];
         let mut work: Vec<(StmtId, bool, usize)> = body.iter().rev().map(|&s| (s, false, 0)).collect();
         let mut add_var = |out: &mut Hoisted, k: Key| {
             if seen.insert(k.clone()) {
@@ -296,7 +307,7 @@ impl<'a> FnCompiler<'a> {
                     }
                 }
                 Stmt::Block(list) => {
-                    let s = enter(self.lexical_names(list), self.block_function_names(list));
+                    let s = if inner { enter(self.lexical_names(list), self.block_function_names(list)) } else { scope };
                     work.extend(list.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::If { consequent, alternate, .. } => {
@@ -304,7 +315,7 @@ impl<'a> FnCompiler<'a> {
                     // (Annex B.3.4).
                     for &branch in alternate.iter().chain(std::iter::once(consequent)) {
                         let alone = matches!(self.ast.stmt(branch), Some(Stmt::FunctionDecl(_)));
-                        let s = if alone { enter(HashSet::new(), HashSet::new()) } else { scope };
+                        let s = if alone && inner { enter(HashSet::new(), HashSet::new()) } else { scope };
                         work.push((branch, nested || inner, s));
                     }
                 }
@@ -337,30 +348,38 @@ impl<'a> FnCompiler<'a> {
                     work.push((*body, nested || inner, s));
                 }
                 Stmt::Switch { cases, .. } => {
-                    let names = cases.iter().flat_map(|c| self.lexical_names(&c.body)).collect();
-                    let funcs = cases.iter().flat_map(|c| self.block_function_names(&c.body)).collect();
-                    let s = enter(names, funcs);
+                    let s = if inner {
+                        let names = cases.iter().flat_map(|c| self.lexical_names(&c.body)).collect();
+                        let funcs = cases.iter().flat_map(|c| self.block_function_names(&c.body)).collect();
+                        enter(names, funcs)
+                    } else {
+                        scope
+                    };
                     for case in cases.iter().rev() {
                         work.extend(case.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                 }
                 Stmt::Try { block, handler, finalizer } => {
                     if let Some(f) = finalizer {
-                        let s = enter(self.lexical_names(f), self.block_function_names(f));
+                        let s = if inner { enter(self.lexical_names(f), self.block_function_names(f)) } else { scope };
                         work.extend(f.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                     if let Some(h) = handler {
-                        // A `var` cannot redeclare a destructured catch parameter's names
-                        // (ECMA-262 11th edition section B.3.5), so a block function of that name
-                        // in the body is not also made a `var` (section B.3.3).
-                        let mut names = self.lexical_names(&h.body);
-                        if matches!(h.param, Binding::Pattern(_)) {
-                            names.extend(self.bound_keys(&h.param));
-                        }
-                        let s = enter(names, self.block_function_names(&h.body));
+                        let s = if inner {
+                            // A `var` cannot redeclare a destructured catch parameter's names
+                            // (ECMA-262 11th edition section B.3.5), so a block function of that
+                            // name in the body is not also made a `var` (section B.3.3).
+                            let mut names = self.lexical_names(&h.body);
+                            if matches!(h.param, Binding::Pattern(_)) {
+                                names.extend(self.bound_keys(&h.param));
+                            }
+                            enter(names, self.block_function_names(&h.body))
+                        } else {
+                            scope
+                        };
                         work.extend(h.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
-                    let s = enter(self.lexical_names(block), self.block_function_names(block));
+                    let s = if inner { enter(self.lexical_names(block), self.block_function_names(block)) } else { scope };
                     work.extend(block.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::Expr(_)
@@ -473,7 +492,10 @@ impl<'a> FnCompiler<'a> {
     fn lexical_decls(&mut self, decls: &[VarDecl]) -> CResult<()> {
         for d in decls {
             match (d.init, &d.target) {
-                (Some(init), Binding::Name(name)) => self.named_expr(init, &name.name)?,
+                (Some(init), Binding::Name(name)) => {
+                    let public_name = if name.name == crate::ast::DEFAULT_BINDING { "default" } else { &name.name };
+                    self.named_expr(init, public_name)?;
+                }
                 (Some(init), Binding::Pattern(_)) => self.expr(init)?,
                 (None, Binding::Name(_)) => self.emit(Op::Undefined),
                 (None, Binding::Pattern(_)) => return internal("a destructuring declaration without an initializer"),
@@ -523,7 +545,7 @@ impl<'a> FnCompiler<'a> {
             Stmt::Empty | Stmt::Debugger => Ok(()),
             Stmt::Expr(e) => {
                 self.expr(*e)?;
-                self.emit(if self.kind == CodeKind::Function { Op::Pop } else { Op::SetCompletion });
+                self.emit(if self.keeps_completion() { Op::SetCompletion } else { Op::Pop });
                 Ok(())
             }
             Stmt::Block(list) => self.block(list),
@@ -976,8 +998,12 @@ impl<'a> FnCompiler<'a> {
         let Some(Stmt::Switch { discriminant, cases }) = self.ast.stmt(id) else { return internal("not a switch") };
         self.statement_completion_start();
         self.expr(*discriminant)?;
-        let all: Vec<StmtId> = cases.iter().flat_map(|c| c.body.iter().copied()).collect();
-        let scope = self.list_scope(&all, true)?;
+        let scope = if self.es2015 {
+            let all: Vec<StmtId> = cases.iter().flat_map(|c| c.body.iter().copied()).collect();
+            self.list_scope(&all, true)?
+        } else {
+            None
+        };
         if let Some(scope) = scope {
             self.emit(Op::PushBlock(scope));
             self.env_depth += 1;
@@ -1207,7 +1233,7 @@ impl<'a> FnCompiler<'a> {
         self.bind(fin_entry);
         // In script and eval code the finally block keeps the completion value of the try or
         // catch block when it ends normally (ECMA-262 5.1 section 12.14).
-        let keeps_completion = self.kind != CodeKind::Function;
+        let keeps_completion = self.keeps_completion();
         if keeps_completion {
             self.emit(Op::GetCompletion);
         }
@@ -2224,7 +2250,10 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
         pattern_names,
-        own_name: es2015.then(|| key_of(f.name.as_ref().map_or("", |n| n.name.as_str()))),
+        own_name: es2015.then(|| {
+            let name = f.name.as_ref().map_or("", |n| n.name.as_str());
+            key_of(if f.kind == FunctionKind::Declaration && name == crate::ast::DEFAULT_BINDING { "default" } else { name })
+        }),
         method: es2015 && matches!(f.kind, FunctionKind::Method | FunctionKind::Getter | FunctionKind::Setter),
     };
     c.finish(hoisted, meta)
@@ -2238,6 +2267,21 @@ pub(crate) fn compile_program(program: &crate::Program, source: &Rc<Source>, kin
     let top_scope = c.list_scope(&program.body, false)?;
     c.stmts(&program.body)?;
     c.emit(Op::ReturnCompletion);
+    let end = u32::try_from(source.text.len()).unwrap_or(u32::MAX);
+    c.finish(hoisted, Meta { span: (0, end), top_scope, ..Meta::default() })
+}
+
+/// Compiles a module's statements ([`crate::parse_module`]): strict code that runs in an
+/// environment of its own, as strict eval code does, and returns `undefined`.
+pub(crate) fn compile_module(program: &crate::Program, source: &Rc<Source>) -> CResult<Rc<Code>> {
+    let mut c = FnCompiler::new(&program.ast, source, CodeKind::Eval, true, 0);
+    c.es2015 = true;
+    c.module = true;
+    let hoisted = c.hoist(&program.body, &[])?;
+    let top_scope = c.list_scope(&program.body, false)?;
+    c.stmts(&program.body)?;
+    c.emit(Op::Undefined);
+    c.emit(Op::Return);
     let end = u32::try_from(source.text.len()).unwrap_or(u32::MAX);
     c.finish(hoisted, Meta { span: (0, end), top_scope, ..Meta::default() })
 }

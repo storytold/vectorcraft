@@ -37,11 +37,21 @@
 //!
 //! The expanded source keeps a [`SourceMap`], so an error is reported at the line and column of
 //! the file it is in.
+//!
+//! A `.mjs` script is a module ([`module_script`]): it has no preprocessor lines, and the modules
+//! it imports are read by [`Files::module`]. A specifier is a path relative to the importing
+//! module's file, starting with `./` or `../` and naming a `.mjs` or `.js` file; a bare name, a URL
+//! and any other form are a `SyntaxError`. Its `..` names are taken off by name, and one that would
+//! lead above the script's folder is refused. Modules are read through the same [`ScriptScope`],
+//! so a link that leads out of the script's folder is refused as well. Module files count against
+//! the same limits as included files, and the paths of one file (two spellings, a link, or names
+//! that differ only in letter case on Windows) give one module.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use vectorcraft_js::{DirectiveName, Options};
+use vectorcraft_js::{DirectiveName, LoadError, Options};
 
 use crate::file_access::{ScriptRead, ScriptScope};
 
@@ -219,13 +229,65 @@ pub(crate) struct Files {
     frames: Vec<Frame>,
     /// The run reads ECMAScript 2015 ([`es2015_script`]): its files are parsed that way.
     es2015: bool,
+    /// The modules a module run has read, by key ([`module_key`]): the names of the folders each
+    /// is in, below the script's folder.
+    module_dirs: HashMap<String, Vec<String>>,
+    /// The key of each module path read, below the script's folder.
+    module_paths: HashMap<String, String>,
+    /// The key [`Files::module_entry`] gave the script, in a module run.
+    entry_key: Option<String>,
 }
 
 /// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
-/// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
-/// ECMAScript 5.1 with the ExtendScript extensions.
+/// `.js` or `.mjs` (in any letter case); a `.jsx` script, any other file and a script given as text
+/// run as ECMAScript 5.1 with the ExtendScript extensions.
 pub(crate) fn es2015_script(path: Option<&str>) -> bool {
-    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js"))
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js") || e.eq_ignore_ascii_case("mjs"))
+}
+
+/// A script at `path` runs as a module when its file name ends in `.mjs` (in any letter case).
+pub(crate) fn module_script(path: Option<&str>) -> bool {
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("mjs"))
+}
+
+/// What names the file at the real path `real` among a run's modules: on Unix its device and file
+/// number, so two paths to one file give one module; elsewhere its real path, which on Windows
+/// spells each name in the letter case the folder stores it in, so two spellings of one file in a
+/// folder that ignores case give one module and two files in a folder that does not stay two.
+fn module_key(real: &Path) -> String {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let Ok(m) = std::fs::metadata(real) {
+            return format!("{}:{}", m.dev(), m.ino());
+        }
+    }
+    display(real).to_string()
+}
+
+/// The names of the folders from `root` down to `dir`, both real paths, or `None` when `dir` is
+/// not `root` or below it, or has a name that is not Unicode.
+fn names_below(root: &Path, dir: &Path) -> Option<Vec<String>> {
+    dir.strip_prefix(root).ok()?.components().map(|c| c.as_os_str().to_str().map(str::to_string)).collect()
+}
+
+/// The names of a module specifier's path: one that starts with `./` or `../`, uses `/` between
+/// names and names a `.mjs` or `.js` file. A specifier in any other form is a syntax error.
+fn specifier_names(specifier: &str) -> Result<Vec<&str>, LoadError> {
+    let wrong = |why: &str| Err(LoadError::Syntax(format!("module specifier '{specifier}' {why}")));
+    if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        return wrong("must start with './' or '../'");
+    }
+    if specifier.chars().any(|c| matches!(c, '\\' | ':' | '\0') || c.is_control()) {
+        return wrong("must not contain \\, : or control characters");
+    }
+    let names: Vec<&str> = specifier.split('/').collect();
+    let file = names.last().copied().unwrap_or_default();
+    let ext = Path::new(file).extension().and_then(|e| e.to_str()).unwrap_or_default();
+    if !(ext.eq_ignore_ascii_case("mjs") || ext.eq_ignore_ascii_case("js")) {
+        return wrong("must name a .mjs or .js file");
+    }
+    Ok(names)
 }
 
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
@@ -321,7 +383,89 @@ impl Files {
             levels: 0,
             frames: vec![Frame { shown: Arc::from(path.unwrap_or_default()), dir }],
             es2015: es2015_script(path),
+            module_dirs: HashMap::new(),
+            module_paths: HashMap::new(),
+            entry_key: None,
         }
+    }
+
+    /// Makes the run's files read ECMAScript 2015, as a module run given as text does.
+    pub(crate) fn read_es2015(&mut self) {
+        self.es2015 = true;
+    }
+
+    /// The module `text`, the script's own, as a source of one file. → its key and the source.
+    pub(crate) fn module_entry(&mut self, text: &str) -> Result<(String, Expanded), Failure> {
+        self.bytes = self.bytes.saturating_add(text.len());
+        let shown = self.frames.first().map(|f| f.shown.clone()).unwrap_or_else(|| Arc::from(""));
+        let key = self.chain.first().map(|real| module_key(real)).unwrap_or_default();
+        self.module_dirs.insert(key.clone(), Vec::new());
+        self.entry_key = Some(key.clone());
+        let map = SourceMap { files: vec![shown], segments: vec![Segment { out_line: 1, file: 0, line: 1, shift: 0 }] };
+        Ok((key, Expanded { source: text.to_string(), map, name: None, strict: None, engine: None }))
+    }
+
+    /// The module `specifier` names for the module `referrer` (a key [`Files::module_entry`] or
+    /// this function gave). → the module's key, with its text and source map the first time the
+    /// run reads it.
+    pub(crate) fn module(&mut self, referrer: &str, specifier: &str) -> Result<(String, Option<(String, SourceMap)>), LoadError> {
+        let names = specifier_names(specifier)?;
+        let mut path = self.module_dirs.get(referrer).cloned().ok_or_else(|| LoadError::Other(format!("module not found: '{referrer}'")))?;
+        for name in names {
+            match name {
+                "" | "." => {}
+                ".." => {
+                    if path.pop().is_none() {
+                        return Err(LoadError::Other(format!("module path leads out of the script's folder: '{specifier}'")));
+                    }
+                }
+                name => path.push(name.to_string()),
+            }
+        }
+        let relative = path.join("/");
+        if let Some(key) = self.module_paths.get(&relative) {
+            return Ok((key.clone(), None));
+        }
+        let root =
+            self.frames.first().and_then(|f| f.dir.clone()).ok_or_else(|| LoadError::Other(format!("script file read refused: {specifier}")))?;
+        self.probes += 1;
+        if self.probes > MAX_PROBES {
+            return Err(LoadError::Range(format!("module search limit ({MAX_PROBES} paths) reached")));
+        }
+        let candidate = path.iter().fold(root.clone(), |p, name| p.join(name));
+        // Another path to a module already read gives that module: the file is not read again, and
+        // its text is not counted again.
+        let loaded = &self.module_dirs;
+        let read = self.scope.read_unless(&candidate, crate::script::MAX_SOURCE_BYTES, |real| loaded.contains_key(&module_key(real)));
+        let (real, bytes) = match read {
+            Ok(found) => found,
+            Err(ScriptRead::Missing) => return Err(LoadError::Other(format!("module file not found: {specifier}"))),
+            Err(ScriptRead::Refused) => return Err(LoadError::Other(format!("script file read refused: {specifier}"))),
+            Err(ScriptRead::TooLarge) => return Err(LoadError::Range(format!("script file is too large: {specifier}"))),
+            Err(ScriptRead::Failed(e)) => return Err(LoadError::Other(format!("cannot read script file {specifier}: {e}"))),
+        };
+        let key = module_key(&real);
+        let Some(bytes) = bytes else {
+            self.module_paths.insert(relative, key.clone());
+            return Ok((key, None));
+        };
+        if self.bytes.saturating_add(bytes.len()) > MAX_TOTAL_BYTES {
+            return Err(LoadError::Range("script source limit reached (32 MiB)".to_string()));
+        }
+        if self.files >= MAX_FILES {
+            return Err(LoadError::Range(format!("module file limit ({MAX_FILES}) reached")));
+        }
+        let text = decode(&bytes, specifier).map_err(LoadError::Other)?;
+        self.bytes += bytes.len();
+        self.files += 1;
+        self.module_paths.insert(relative, key.clone());
+        // The module's relative imports start from the folder the file is in, whichever path to it
+        // was read first; the path as written stands in when that folder is not below the script's.
+        path.pop();
+        let dir = folder_of(&real).and_then(|d| names_below(&root, &d)).unwrap_or(path);
+        self.module_dirs.insert(key.clone(), dir);
+        let map = SourceMap { files: vec![display(&real)], segments: vec![Segment { out_line: 1, file: 0, line: 1, shift: 0 }] };
+        Ok((key, Some((text, map))))
     }
 
     /// The options a file of this run is parsed with, preprocessor lines aside.
@@ -362,12 +506,26 @@ impl Files {
         self.expand(shown, dir, text, true)
     }
 
-    /// The file `path` names for `$.evalFile`, relative to the file being run now, read and with its
-    /// preprocessor lines read. It becomes the file being run until [`Files::end_eval`].
-    pub(crate) fn eval_file(&mut self, path: &str) -> Result<Expanded, Failure> {
+    /// The folder of the module `key` ([`Files::module`] gave it), from the script's folder.
+    pub(crate) fn module_dir(&self, key: &str) -> Option<PathBuf> {
+        let names = self.module_dirs.get(key)?;
+        let root = self.frames.first().and_then(|f| f.dir.clone())?;
+        Some(names.iter().fold(root, |p, name| p.join(name)))
+    }
+
+    /// The script's folder when the run is a module run ([`Files::module_entry`] read the script),
+    /// or `None` for a script run.
+    pub(crate) fn entry_module_dir(&self) -> Option<PathBuf> {
+        self.module_dir(self.entry_key.as_deref()?)
+    }
+
+    /// The file `path` names for `$.evalFile`, relative to the file being run now, or to the folder
+    /// `module_dir` when a module's code calls it, read and with its preprocessor lines read. It
+    /// becomes the file being run until [`Files::end_eval`].
+    pub(crate) fn eval_file(&mut self, path: &str, module_dir: Option<PathBuf>) -> Result<Expanded, Failure> {
         let current = self.frames.last().map(|f| f.shown.clone()).unwrap_or_else(|| Arc::from(""));
         let fail = |kind, message: String| Failure { kind, message, index: 0, file: current.clone(), line: 0, column: 0 };
-        let dir = self.frames.last().and_then(|f| f.dir.clone());
+        let dir = module_dir.or_else(|| self.frames.last().and_then(|f| f.dir.clone()));
         let (real, bytes) = self.open(path, dir.as_deref(), false).map_err(|(kind, message)| fail(kind, message))?;
         let text = self.admit(&real, bytes, path).map_err(|(kind, message)| fail(kind, message))?;
         let shown = display(&real);

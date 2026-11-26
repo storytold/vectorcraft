@@ -4969,7 +4969,7 @@ axis	Both	Обидві
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Цей скрипт додав дуже багато об’єктів. Продовжити чи зупинити його та скасувати його зміни?
-@msg	Choose a .js or .jsx script	Виберіть скрипт .js або .jsx
+@msg	Choose a .js, .mjs or .jsx script	Виберіть скрипт .js, .mjs або .jsx
 @msg	Ran {name}	Виконано: {name}
 @msg	The script was stopped and its changes were undone	Скрипт зупинено, його зміни скасовано
 @msg	a script is running: stop it or wait for it to finish	виконується скрипт: зупиніть його або дочекайтеся завершення
@@ -8724,7 +8724,7 @@ breakText	Glyphs	Гліфи
 @msg	`args` is larger than 1 MiB	`args` більший за 1 МіБ
 @msg	`path` is empty	параметр `path` порожній
 @msg	`installed` takes a `path`, not a `source`	`installed` приймає `path`, а не `source`
-@msg	`path` must name a .js or .jsx file	`path` має вказувати на файл .js або .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` має вказувати на файл .js, .mjs або .jsx
 @msg	give exactly one of `path` and `source`	укажіть рівно одне з: `path`, `source`
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа

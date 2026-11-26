@@ -2138,7 +2138,7 @@
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` უნდა იყოს მთელი რიცხვი 1-დან {_1}-მდე
 @msg	`max` must be 1 to {MAX_WORDS}	`max` უნდა იყოს 1-დან {MAX_WORDS}-მდე
 @msg	`path` is empty	`path` ცარიელია
-@msg	`path` must name a .js or .jsx file	`path` უნდა მიუთითებდეს .js ან .jsx ფაილს
+@msg	`path` must name a .js, .mjs or .jsx file	`path` უნდა მიუთითებდეს .js, .mjs ან .jsx ფაილს
 @msg	`reference` must be a whole number from 0 to 8	`reference` უნდა იყოს მთელი რიცხვი 0-დან 8-მდე
 @msg	`ringSeed` must be below 2^53, not {r}	`ringSeed` უნდა იყოს 2^53-ზე ნაკლები და არა {r}
 @msg	`source` is the only path, line or label that graph group `target` stands for	`source` ერთადერთი ტრაექტორია, ხაზი ან წარწერაა, რომელსაც დიაგრამის ჯგუფი `target` წარმოადგენს
@@ -8491,7 +8491,7 @@ imageTrace	Outline	კონტური
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	ამ სკრიპტმა ძალიან ბევრი ობიექტი დაამატა. გაგრძელდეს, თუ შეჩერდეს და გაუქმდეს მისი ცვლილებები?
-@msg	Choose a .js or .jsx script	აირჩიეთ .js ან .jsx სკრიპტი
+@msg	Choose a .js, .mjs or .jsx script	აირჩიეთ .js, .mjs ან .jsx სკრიპტი
 @msg	Ran {name}	გაშვებულია: {name}
 @msg	The script was stopped and its changes were undone	სკრიპტი შეჩერდა და მისი ცვლილებები გაუქმდა
 @msg	a script is running: stop it or wait for it to finish	სკრიპტი მუშაობს: შეაჩერეთ ან დაელოდეთ დასრულებას

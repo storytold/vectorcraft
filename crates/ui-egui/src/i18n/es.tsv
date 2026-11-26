@@ -4923,7 +4923,7 @@ axis	Both	Ambos
 	Do not show this warning again	No volver a mostrar esta advertencia
 	Stop the script and undo what it did? Then quit again.	¿Detener el script y deshacer lo que hizo? Después, vuelva a salir.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Este script ha añadido muchísimos objetos. ¿Continuar, o detenerlo y deshacer lo que hizo?
-@msg	Choose a .js or .jsx script	Elija un script .js o .jsx
+@msg	Choose a .js, .mjs or .jsx script	Elija un script .js, .mjs o .jsx
 @msg	Ran {name}	Se ejecutó {name}
 @msg	The script was stopped and its changes were undone	El script se detuvo y sus cambios se deshicieron
 @msg	a script is running: stop it or wait for it to finish	se está ejecutando un script: deténgalo o espere a que termine
@@ -5093,7 +5093,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`args` is larger than 1 MiB	`args` ocupa más de 1 MiB
 @msg	`path` is empty	`path` está vacío
 @msg	`installed` takes a `path`, not a `source`	`installed` admite un `path`, no un `source`
-@msg	`path` must name a .js or .jsx file	`path` debe indicar un archivo .js o .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` debe indicar un archivo .js, .mjs o .jsx
 @msg	give exactly one of `path` and `source`	indique exactamente uno de `path` y `source`
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script

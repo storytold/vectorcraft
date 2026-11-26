@@ -3,7 +3,7 @@
 //! asks while a script runs, and the dialogs a script opens with `alert`, `confirm` and `prompt`.
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
-//! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
+//! asks for a `.js`, `.mjs` or `.jsx` file through the app's file asks. With Preferences › General › Show
 //! External Script Warning off, the chosen script runs at once. The warning (kind `scriptRun`) is a
 //! prompt: its `choice` field (`proceed` runs, `cancel` does not) and `skip` (true: turn the
 //! warning off). The growth question (`scriptGrowth`) and the question quitting asks
@@ -462,7 +462,8 @@ pub(crate) fn picked_script(app: &mut VectorcraftApp, picked: Picked) -> Result<
             return Err(TOO_LARGE.to_string());
         }
         let source = String::from_utf8(bytes).map_err(|_| "the script is not UTF-8 text".to_string())?;
-        return chosen(app, json!({"source": source, "name": name}));
+        let module = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("mjs"));
+        return chosen(app, json!({"source": source, "name": name, "module": module}));
     }
     match picked.paths().into_iter().next() {
         Some(path) => chosen(app, json!({ "path": path.to_string_lossy() })),
@@ -474,7 +475,7 @@ pub(crate) fn picked_script(app: &mut VectorcraftApp, picked: Picked) -> Result<
 pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     let path = params.get("path").and_then(Value::as_str);
     if path.is_some_and(|path| !runs(path)) {
-        return Err("Choose a .js or .jsx script".into());
+        return Err("Choose a .js, .mjs or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
         return app.run("script.run", params);

@@ -6132,7 +6132,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	Do not show this warning again	Não mostrar este aviso novamente
 	Stop the script and undo what it did? Then quit again.	Parar o script e desfazer o que ele fez? Depois, saia novamente.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Este script adicionou muitíssimos objetos. Continuar, ou pará-lo e desfazer o que ele fez?
-@msg	Choose a .js or .jsx script	Escolha um script .js ou .jsx
+@msg	Choose a .js, .mjs or .jsx script	Escolha um script .js, .mjs ou .jsx
 @msg	Ran {name}	{name} executado
 @msg	The script was stopped and its changes were undone	O script foi parado e suas alterações foram desfeitas
 @msg	a script is running: stop it or wait for it to finish	um script está em execução: pare-o ou aguarde até que termine
@@ -9139,7 +9139,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`args` is larger than 1 MiB	`args` tem mais de 1 MiB
 @msg	`path` is empty	`path` está vazio
 @msg	`installed` takes a `path`, not a `source`	`installed` aceita um `path`, não um `source`
-@msg	`path` must name a .js or .jsx file	`path` deve indicar um arquivo .js ou .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` deve indicar um arquivo .js, .mjs ou .jsx
 @msg	give exactly one of `path` and `source`	informe exatamente um de `path` e `source`
 @msg	`answers` must be a list of answers	`answers` deve ser uma lista de respostas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve ser o índice de uma prancheta do documento

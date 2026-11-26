@@ -54,7 +54,7 @@
 @msg	it decompresses to more than {_1} MB	gedecomprimeerd is het groter dan {_1} MB
 @msg	its editing data is for a different page	zijn bewerkingsgegevens horen bij een andere pagina
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` moet "emBox", "capHeight", "xHeight" of "icfBox" zijn
-@msg	Choose a .js or .jsx script	Kies een .js- of .jsx-script
+@msg	Choose a .js, .mjs or .jsx script	Kies een .js-, .mjs- of .jsx-script
 @msg	Ran {name}	{name} uitgevoerd
 @msg	The script was stopped and its changes were undone	Het script is gestopt en de wijzigingen ervan zijn ongedaan gemaakt
 @msg	a script is running: stop it or wait for it to finish	er wordt een script uitgevoerd: stop het of wacht tot het klaar is
@@ -220,7 +220,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`args` is larger than 1 MiB	`args` is groter dan 1 MiB
 @msg	`path` is empty	`path` is leeg
 @msg	`installed` takes a `path`, not a `source`	`installed` neemt een `path`, geen `source`
-@msg	`path` must name a .js or .jsx file	`path` moet een .js- of .jsx-bestand aanwijzen
+@msg	`path` must name a .js, .mjs or .jsx file	`path` moet een .js-, .mjs- of .jsx-bestand aanwijzen
 @msg	give exactly one of `path` and `source`	geef precies een van `path` en `source`
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}

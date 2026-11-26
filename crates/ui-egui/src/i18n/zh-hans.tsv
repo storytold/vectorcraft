@@ -5476,7 +5476,7 @@ imageTrace	Outline	轮廓
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
 	This script has added a great many objects. Continue, or stop it and undo what it did?	此脚本已添加大量对象。要继续，还是停止并撤销其更改？
-@msg	Choose a .js or .jsx script	请选择 .js 或 .jsx 脚本
+@msg	Choose a .js, .mjs or .jsx script	请选择 .js、.mjs 或 .jsx 脚本
 @msg	Ran {name}	已运行 {name}
 @msg	The script was stopped and its changes were undone	脚本已停止，其更改已撤销
 @msg	a script is running: stop it or wait for it to finish	脚本正在运行：请停止它或等待其完成
@@ -8776,7 +8776,7 @@ breakText	Glyphs	字形
 @msg	`args` is larger than 1 MiB	`args` 大于 1 MiB
 @msg	`path` is empty	`path` 为空
 @msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
-@msg	`path` must name a .js or .jsx file	`path` 必须指向 .js 或 .jsx 文件
+@msg	`path` must name a .js, .mjs or .jsx file	`path` 必须指向 .js、.mjs 或 .jsx 文件
 @msg	give exactly one of `path` and `source`	`path` 和 `source` 中必须且只能给出一个
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引

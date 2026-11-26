@@ -5087,7 +5087,7 @@ imageTrace	Outline	Kontur
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ten skrypt dodał bardzo wiele obiektów. Kontynuować, czy zatrzymać go i cofnąć jego zmiany?
-@msg	Choose a .js or .jsx script	Wybierz skrypt .js lub .jsx
+@msg	Choose a .js, .mjs or .jsx script	Wybierz skrypt .js, .mjs lub .jsx
 @msg	Ran {name}	Wykonano: {name}
 @msg	The script was stopped and its changes were undone	Skrypt został zatrzymany, a jego zmiany cofnięte
 @msg	a script is running: stop it or wait for it to finish	skrypt jest uruchomiony: zatrzymaj go lub poczekaj na jego zakończenie
@@ -8768,7 +8768,7 @@ breakText	Glyphs	Glify
 @msg	`args` is larger than 1 MiB	`args` ma rozmiar większy niż 1 MiB
 @msg	`path` is empty	`path` jest puste
 @msg	`installed` takes a `path`, not a `source`	`installed` przyjmuje `path`, a nie `source`
-@msg	`path` must name a .js or .jsx file	`path` musi wskazywać plik .js lub .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` musi wskazywać plik .js, .mjs lub .jsx
 @msg	give exactly one of `path` and `source`	podaj dokładnie jedno z: `path` i `source`
 @msg	`answers` must be a list of answers	`answers` musi być listą odpowiedzi
 @msg	`artboard` must be the index of an artboard of the document	`artboard` musi być indeksem obszaru kompozycji dokumentu

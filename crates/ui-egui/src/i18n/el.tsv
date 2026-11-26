@@ -2644,7 +2644,7 @@ axis	Both	Και τα δύο
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
 	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Αυτό το σενάριο πρόσθεσε πάρα πολλά αντικείμενα. Συνέχεια, ή διακοπή και αναίρεση όσων έκανε;
-@msg	Choose a .js or .jsx script	Επιλέξτε ένα σενάριο .js ή .jsx
+@msg	Choose a .js, .mjs or .jsx script	Επιλέξτε ένα σενάριο .js, .mjs ή .jsx
 @msg	Ran {name}	Εκτελέστηκε: {name}
 @msg	The script was stopped and its changes were undone	Το σενάριο διακόπηκε και οι αλλαγές του αναιρέθηκαν
 @msg	a script is running: stop it or wait for it to finish	εκτελείται ένα σενάριο: διακόψτε το ή περιμένετε να τελειώσει
@@ -2815,7 +2815,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`args` is larger than 1 MiB	το `args` είναι μεγαλύτερο από 1 MiB
 @msg	`path` is empty	το `path` είναι κενό
 @msg	`installed` takes a `path`, not a `source`	το `installed` δέχεται `path`, όχι `source`
-@msg	`path` must name a .js or .jsx file	το `path` πρέπει να ορίζει αρχείο .js ή .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	το `path` πρέπει να ορίζει αρχείο .js, .mjs ή .jsx
 @msg	give exactly one of `path` and `source`	δώστε ακριβώς ένα από τα `path` και `source`
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε

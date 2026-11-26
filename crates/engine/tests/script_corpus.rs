@@ -118,7 +118,7 @@ fn a_script_refused_before_it_runs_has_not_started() {
     let r = result(&mut session(), &json!({"path": "notes.txt", "maxFuel": FUEL, "answers": []}));
     assert_eq!(r["started"], false);
     assert_eq!(r["ok"], false);
-    assert!(r["message"].as_str().unwrap().contains(".js or .jsx"), "{r}");
+    assert!(r["message"].as_str().unwrap().contains(".js, .mjs or .jsx"), "{r}");
 }
 
 #[test]

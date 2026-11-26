@@ -5261,7 +5261,7 @@ imageTrace	Outline	Obrys
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Tento skript přidal velmi mnoho objektů. Pokračovat, nebo jej zastavit a vrátit jeho změny?
-@msg	Choose a .js or .jsx script	Vyberte skript .js nebo .jsx
+@msg	Choose a .js, .mjs or .jsx script	Vyberte skript .js, .mjs nebo .jsx
 @msg	Ran {name}	Spuštěno: {name}
 @msg	The script was stopped and its changes were undone	Skript byl zastaven a jeho změny byly vráceny
 @msg	a script is running: stop it or wait for it to finish	běží skript: zastavte jej nebo počkejte na jeho dokončení
@@ -5408,7 +5408,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`args` is larger than 1 MiB	`args` je větší než 1 MiB
 @msg	`path` is empty	`path` je prázdný
 @msg	`installed` takes a `path`, not a `source`	`installed` přijímá `path`, ne `source`
-@msg	`path` must name a .js or .jsx file	`path` musí označovat soubor .js nebo .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` musí označovat soubor .js, .mjs nebo .jsx
 @msg	give exactly one of `path` and `source`	zadejte právě jedno z `path` a `source`
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována

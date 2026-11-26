@@ -54,7 +54,7 @@
 @msg	it decompresses to more than {_1} MB	hasil dekompresinya lebih dari {_1} MB
 @msg	its editing data is for a different page	data penyuntingannya untuk halaman lain
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` harus "emBox", "capHeight", "xHeight" atau "icfBox"
-@msg	Choose a .js or .jsx script	Pilih skrip .js atau .jsx
+@msg	Choose a .js, .mjs or .jsx script	Pilih skrip .js, .mjs, atau .jsx
 @msg	Ran {name}	{name} dijalankan
 @msg	The script was stopped and its changes were undone	Skrip dihentikan dan perubahannya dibatalkan
 @msg	a script is running: stop it or wait for it to finish	skrip sedang berjalan: hentikan atau tunggu hingga selesai
@@ -149,7 +149,7 @@
 @msg	`args` is larger than 1 MiB	`args` lebih besar dari 1 MiB
 @msg	`path` is empty	`path` kosong
 @msg	`installed` takes a `path`, not a `source`	`installed` menerima `path`, bukan `source`
-@msg	`path` must name a .js or .jsx file	`path` harus menyebut file .js atau .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` harus menyebut file .js, .mjs, atau .jsx
 @msg	give exactly one of `path` and `source`	berikan tepat satu dari `path` dan `source`
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}

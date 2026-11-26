@@ -2035,13 +2035,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.runScript",
         "Other Script…",
         "Cmd+F12",
-        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+        "{path? | source?, name?} run a .js, .mjs or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
     ),
     (
         crate::scripts_menu::COMMAND,
         "Run Script",
         "",
-        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with installed reads the file once, checks it again and runs that text, so its #include lines and $.evalFile read in the folder that read found), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with installed reads the file once, checks it again and runs that text, so its #include lines and $.evalFile read in the folder that read found), without the warning Other Script… shows; a file that is no longer a .js, .mjs or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",

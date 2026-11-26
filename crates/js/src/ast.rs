@@ -546,6 +546,62 @@ pub struct Program {
     pub(crate) es2015: bool,
 }
 
+/// The name an import takes from the module it names, or an export from a module it re-exports.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImportName {
+    /// The export of this name (`default` for a default import).
+    Name(String),
+    /// The module's namespace object (`* as ns`).
+    Namespace,
+}
+
+/// A module a module imports or re-exports from: the specifier as written and where it stands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModuleRequest {
+    /// The specifier as text, with each unpaired surrogate written as U+FFFD.
+    pub specifier: String,
+    /// The specifier's string value, code unit for code unit (ECMA-262 2015 section 15.2.1.16,
+    /// ModuleRequests). It may hold an unpaired surrogate, which no host path can name.
+    pub units: Vec<u16>,
+    pub span: Span,
+}
+
+/// One name an import declaration binds (ECMA-262 2015 section 15.2.1.16, ImportEntry).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportEntry {
+    /// The index of the module in [`ModuleInfo::requests`].
+    pub request: usize,
+    pub import: ImportName,
+    /// The name bound in the importing module.
+    pub local: Name,
+}
+
+/// One name a module exports (ExportEntry).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExportEntry {
+    /// `export_name` is the module's own binding `local` (`*default*` for a default export of an
+    /// expression or an anonymous function).
+    Local { export_name: String, local: String, span: Span },
+    /// `export_name` is the export `import` of the module `request` (`export { a as b } from`,
+    /// `export * as ns from`, or an exported import).
+    Indirect { export_name: String, request: usize, import: ImportName, span: Span },
+    /// Every export of the module `request` but `default` (`export * from`).
+    Star { request: usize, span: Span },
+}
+
+/// What a module imports and exports, read by [`crate::parse_module`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModuleInfo {
+    /// The modules it names, each specifier once, in the order they first appear.
+    pub requests: Vec<ModuleRequest>,
+    pub imports: Vec<ImportEntry>,
+    pub exports: Vec<ExportEntry>,
+}
+
+/// The binding name of a default export that has no name of its own (ECMA-262 2015 section
+/// 15.2.3.5); no identifier can name it.
+pub const DEFAULT_BINDING: &str = "*default*";
+
 impl Program {
     /// The line and column (both from 1, the column in UTF-16 code units) of a source offset.
     pub fn line_column(&self, offset: u32) -> (u32, u32) {

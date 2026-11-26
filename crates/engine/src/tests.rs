@@ -182,6 +182,7 @@ mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
+mod script_modules;
 mod script_run;
 mod scripts;
 mod segment_nudge;

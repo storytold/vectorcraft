@@ -31,7 +31,10 @@
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
 //! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
 //! chains and `??`) without and with that option, and
-//! prints both counts; its failures with the option go to `es2015-failures.txt`.
+//! prints both counts; its failures with the option go to `es2015-failures.txt`. A sixth test runs
+//! the module tests under `test/language/module-code`, `import` and `export` as modules, reading
+//! the fixture files they import from the suite, and as scripts for comparison; its failures as
+//! modules go to `module-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
@@ -63,7 +66,11 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use vectorcraft_js::{JsValue, Limits, Options, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize};
+use vectorcraft_js::{
+    JsValue, Limits, LoadError, LoadedModule, ModuleLimits, Options, Progress, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize,
+    tokenize_module,
+};
+
 /// A test file's metadata, from its `/*--- … ---*/` block.
 #[derive(Default)]
 struct Meta {
@@ -443,6 +450,12 @@ fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: 
             Err(_) => return true,
         }
     }
+    uses_missing_builtin(&lists, missing)
+}
+
+/// The tokens `lists` (of a test and the harness files it includes) use a missing built-in, as
+/// [`needs_missing_builtin`] counts them.
+fn uses_missing_builtin(lists: &[Vec<Token>], missing: &HashSet<&str>) -> bool {
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
         TokenKind::Ident(name) => missing.contains(name.as_str()),
@@ -846,6 +859,190 @@ fn run_es2015(dir: &Path) {
         report.display()
     );
     assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+/// The folders under `test/language/` whose module tests [`modules_run`] reads.
+const MODULE_FOLDERS: &[&str] = &["module-code", "import", "export"];
+
+/// The feature tags a module test may carry: those of [`ES2015_FEATURES`] and `export * as ns from`.
+const MODULE_FEATURES: &[&str] =
+    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "export-star-as-namespace-from-module"];
+
+#[test]
+fn modules_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 modules: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_modules(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// The `/`-separated path, from the suite's folder, of the module `specifier` names for the module
+/// at `referrer` (a path from the suite's folder too): only a `./` or `../` path that stays inside
+/// `test/`.
+fn module_path(referrer: &str, specifier: &str) -> Result<String, LoadError> {
+    if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        return Err(LoadError::Syntax(format!("the runner reads only relative specifiers: '{specifier}'")));
+    }
+    let mut names: Vec<&str> = referrer.split('/').collect();
+    names.pop();
+    for name in specifier.split('/') {
+        match name {
+            "" | "." => {}
+            ".." if names.len() > 1 => {
+                names.pop();
+            }
+            ".." => return Err(LoadError::Other(format!("'{specifier}' leads out of the suite's tests"))),
+            name => names.push(name),
+        }
+    }
+    Ok(names.join("/"))
+}
+
+/// Runs a module test's `source` (at `rel`, a path from the suite's folder) in a new realm with
+/// `options`, after `prelude` (the harness) as a script; the modules it imports are read from the
+/// suite. `Err` describes a failure. `negative` is the phase (`resolution` or `runtime`) and the
+/// error the test expects. A `resolution` test's module must parse, and the run must end with the
+/// error while the modules load and link, before any runs; an imported module that does not parse
+/// counts for a `SyntaxError`. A `runtime` test's modules must load and link, and the error must be thrown
+/// while they run.
+fn run_module_one(dir: &Path, prelude: &str, rel: &str, source: &str, negative: Option<(&str, &str)>, options: &Options) -> Result<(), String> {
+    let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    realm.run(prelude).map_err(|e| format!("the harness failed: {}", e.message))?;
+    let mut given = HashSet::new();
+    let mut load = |referrer: &str, specifier: &str| {
+        let key = module_path(referrer, specifier)?;
+        let path = inside(dir, &key).map_err(LoadError::Other)?;
+        let source = if given.insert(key.clone()) { Some(read_source(&path).map_err(LoadError::Other)?) } else { None };
+        Ok(LoadedModule { key, source })
+    };
+    let resolution = negative.is_some_and(|(phase, _)| phase == "resolution");
+    if resolution && let Err(e) = vectorcraft_js::parse_module(source, options) {
+        return Err(format!("did not parse; a resolution error was expected: {} (line {})", e.message, e.line));
+    }
+    let started = realm.start_module(rel, source, ModuleLimits::default(), &mut load);
+    let result = match started {
+        Ok(()) if resolution => return Err("linked; an error while linking was expected".to_string()),
+        Err(e) if !resolution && negative.is_some() => {
+            return Err(format!("did not start; an error while running was expected: {:?}: {} (line {})", e.kind, e.message, e.line));
+        }
+        Err(e) => Err(e),
+        Ok(()) => loop {
+            match realm.advance(u64::MAX) {
+                Ok(Progress::Paused) => {}
+                Ok(Progress::Done(v)) => break Ok(v),
+                Err(e) => break Err(e),
+            }
+        },
+    };
+    match (result, negative.map(|(_, t)| t)) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
+        (Err(e), Some("SyntaxError")) if resolution && e.kind == RunErrorKind::Syntax => Ok(()),
+        (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
+            realm.bind_last_thrown("__thrown");
+            match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
+                Ok(JsValue::Bool(true)) => Ok(()),
+                _ => Err(format!("threw {} (line {}); a {t} was expected", e.message, e.line)),
+            }
+        }
+        (Err(e), _) => Err(format!("{:?}: {} (line {}, column {})", e.kind, e.message, e.line, e.column)),
+    }
+}
+
+/// Runs the module tests (`flags: [module]`) under [`MODULE_FOLDERS`] whose feature tags are all in
+/// [`MODULE_FEATURES`], leaving out asynchronous tests and those that use a missing built-in: each
+/// once as a strict script with [`Options::es2015`], as they could run before modules, and once as
+/// a module, and prints both counts. A `negative: phase: parse` test must not parse as a module,
+/// and a `phase: resolution` one must end before it runs with the error its `type:` names.
+/// Failures as a module go to `module-failures.txt`.
+fn run_modules(dir: &Path) {
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let missing = missing_builtins(&[TEXT_BUILTINS]);
+    let options = Options { es2015: true, ..Options::default() };
+    let (mut selected, mut skipped) = (0usize, 0usize);
+    let (mut before, mut after) = ((0usize, 0usize), (0usize, 0usize));
+    let mut failures = String::new();
+    let mut panics = 0usize;
+    for folder in MODULE_FOLDERS {
+        let root = or_fail(inside(dir, &format!("test/language/{folder}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        for path in or_fail(test_files(&root)) {
+            let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+            let source = or_fail(read_source(&path));
+            let meta = meta(&source);
+            let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+            if !has("module") || !meta.features.iter().all(|f| MODULE_FEATURES.contains(&f.as_str())) {
+                continue;
+            }
+            let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+            let phase = meta.negative_phase.as_deref();
+            // A module that must not parse has no tokens to look at, and one that does not parse
+            // runs, to fail.
+            let missing_builtin = phase != Some("parse")
+                && match (tokenize_module(&source, &options), tokenize(&includes, &options)) {
+                    (Ok(test), Ok(harness)) => uses_missing_builtin(&[test, harness], &missing),
+                    (Err(_), Ok(_)) => false,
+                    (_, Err(_)) => true,
+                };
+            if has("async") || missing_builtin {
+                skipped += 1;
+                continue;
+            }
+            selected += 1;
+            let negative_type = meta.negative_type.clone().filter(|_| matches!(phase, Some("runtime" | "resolution")));
+            let negative = phase.zip(negative_type.as_deref());
+            let as_script = if matches!(phase, Some("parse" | "resolution")) {
+                parse(&source, &Options { strict: true, ..options.clone() }).is_err()
+            } else {
+                run_one(&format!("\"use strict\";\n{prelude}{includes}{source}"), negative_type.as_deref(), &options).is_ok()
+            };
+            if as_script {
+                before.0 += 1;
+            } else {
+                before.1 += 1;
+            }
+            let outcome = if phase == Some("parse") {
+                match vectorcraft_js::parse_module(&source, &options) {
+                    Err(_) => Ok(()),
+                    Ok(_) => Err("parsed; a SyntaxError was expected".to_string()),
+                }
+            } else {
+                let prelude = format!("{prelude}{includes}");
+                match std::panic::catch_unwind(|| run_module_one(dir, &prelude, &rel, &source, negative, &options)) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        panics += 1;
+                        Err("PANIC".to_string())
+                    }
+                }
+            };
+            match outcome {
+                Ok(()) => after.0 += 1,
+                Err(why) => {
+                    after.1 += 1;
+                    failures.push_str(&format!("{rel}: {why}\n"));
+                }
+            }
+        }
+    }
+    assert!(selected > 0, "no module tests under {}", dir.display());
+    let report = dir.join("module-failures.txt");
+    if let Err(e) = std::fs::write(&report, &failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 modules: {selected} tests. As scripts: {} passed, {} failed. As modules: {} passed, {} failed. Skipped {skipped} \
+         asynchronous or missing-built-in tests. Failures: {}",
+        before.0,
+        before.1,
+        after.0,
+        after.1,
+        report.display()
+    );
+    assert_eq!(panics, 0, "the interpreter panicked; see {}", report.display());
 }
 
 #[test]

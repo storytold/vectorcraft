@@ -7,6 +7,7 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+mod module;
 mod pattern;
 mod xml;
 
@@ -102,6 +103,9 @@ pub(crate) struct Parser<'s> {
     es2015: bool,
     /// The scopes open around the current token, outermost first (only with `es2015`).
     scopes: Vec<Scope>,
+    /// Read a module ([`Parser::parse_module`]): its top-level function declarations are lexical
+    /// declarations (ECMA-262 2015 section 15.2.1.11).
+    module: bool,
     /// Where each shorthand property with an initializer (`{a = 1}`) not yet read as part of a
     /// destructuring pattern starts; one left when its expression ends is a `SyntaxError`.
     cover_inits: Vec<u32>,
@@ -139,6 +143,7 @@ impl<'s> Parser<'s> {
             e4x: options.e4x,
             es2015: options.es2015,
             scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            module: false,
             cover_inits: Vec::new(),
             cover_ok: false,
             rest_commas: HashSet::new(),
@@ -278,6 +283,9 @@ impl<'s> Parser<'s> {
     /// Checks a name used as an identifier: not a reserved word written with escapes, and not a
     /// strict-mode reserved word in strict code.
     fn check_identifier(&self, token: &Token, name: &str) -> Result<()> {
+        if self.module && name == "await" {
+            return Err(self.error_at_token(token, "'await' is a reserved word in modules"));
+        }
         if token.escaped && Keyword::from_word(name).is_some() {
             return Err(self.error_at_token(token, format!("keyword '{name}' must not contain escaped characters")));
         }
@@ -360,6 +368,9 @@ impl<'s> Parser<'s> {
     /// body or the script, lexical in a block.
     fn declare_function(&mut self, id: crate::ast::FunctionId) -> Result<()> {
         let Some(name) = self.ast.function(id).and_then(|f| f.name.clone()) else { return Ok(()) };
+        if self.module && self.scopes.len() == 1 {
+            return self.declare_lexical(&name, true);
+        }
         match self.scopes.last_mut() {
             Some(scope) if scope.function => {
                 if scope.lexical.contains_key(&name.name) {

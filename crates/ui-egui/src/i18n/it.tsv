@@ -4985,7 +4985,7 @@ axis	Both	Entrambi
 	Do not show this warning again	Non mostrare più questo avviso
 	Stop the script and undo what it did? Then quit again.	Interrompere lo script e annullare ciò che ha fatto? Poi esci di nuovo.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Questo script ha aggiunto moltissimi oggetti. Continuare, oppure interromperlo e annullare ciò che ha fatto?
-@msg	Choose a .js or .jsx script	Scegli uno script .js o .jsx
+@msg	Choose a .js, .mjs or .jsx script	Scegli uno script .js, .mjs o .jsx
 @msg	Ran {name}	{name} eseguito
 @msg	The script was stopped and its changes were undone	Lo script è stato interrotto e le sue modifiche sono state annullate
 @msg	a script is running: stop it or wait for it to finish	è in esecuzione uno script: interrompilo o attendi che finisca
@@ -8565,7 +8565,7 @@ breakText	Glyphs	Glifi
 @msg	`args` is larger than 1 MiB	`args` supera 1 MiB
 @msg	`path` is empty	`path` è vuoto
 @msg	`installed` takes a `path`, not a `source`	`installed` accetta un `path`, non un `source`
-@msg	`path` must name a .js or .jsx file	`path` deve indicare un file .js o .jsx
+@msg	`path` must name a .js, .mjs or .jsx file	`path` deve indicare un file .js, .mjs o .jsx
 @msg	give exactly one of `path` and `source`	indica esattamente uno tra `path` e `source`
 @msg	`answers` must be a list of answers	`answers` deve essere un elenco di risposte
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve essere l'indice di una tavola da disegno del documento

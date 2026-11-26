@@ -4847,7 +4847,7 @@ theme	Appearance	Erscheinungsbild
 	Do not show this warning again	Diese Warnung nicht mehr anzeigen
 	Stop the script and undo what it did? Then quit again.	Skript stoppen und seine Änderungen rückgängig machen? Beenden Sie danach erneut.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dieses Skript hat sehr viele Objekte hinzugefügt. Fortfahren oder das Skript stoppen und seine Änderungen rückgängig machen?
-@msg	Choose a .js or .jsx script	Wählen Sie ein .js- oder .jsx-Skript
+@msg	Choose a .js, .mjs or .jsx script	Wählen Sie ein .js-, .mjs- oder .jsx-Skript
 @msg	Ran {name}	{name} ausgeführt
 @msg	The script was stopped and its changes were undone	Das Skript wurde gestoppt und seine Änderungen wurden rückgängig gemacht
 @msg	a script is running: stop it or wait for it to finish	ein Skript wird ausgeführt: stoppen Sie es oder warten Sie, bis es fertig ist
@@ -8524,7 +8524,7 @@ breakText	Glyphs	Glyphen
 @msg	`args` is larger than 1 MiB	`args` ist größer als 1 MiB
 @msg	`path` is empty	`path` ist leer
 @msg	`installed` takes a `path`, not a `source`	`installed` nimmt einen `path`, keine `source`
-@msg	`path` must name a .js or .jsx file	`path` muss eine .js- oder .jsx-Datei angeben
+@msg	`path` must name a .js, .mjs or .jsx file	`path` muss eine .js-, .mjs- oder .jsx-Datei angeben
 @msg	give exactly one of `path` and `source`	geben Sie genau eines von `path` und `source` an
 @msg	`answers` must be a list of answers	`answers` muss eine Liste von Antworten sein
 @msg	`artboard` must be the index of an artboard of the document	`artboard` muss der Index einer Zeichenfläche des Dokuments sein

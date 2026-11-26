@@ -714,6 +714,15 @@ impl ScriptScope {
 
     /// The real path of the file at `path` and its first `max` bytes, at most.
     pub(crate) fn read(&self, path: &Path, max: usize) -> Result<(PathBuf, Vec<u8>), ScriptRead> {
+        match self.read_unless(path, max, |_| false)? {
+            (real, Some(bytes)) => Ok((real, bytes)),
+            (_, None) => Err(ScriptRead::Failed("the file was not read".to_string())),
+        }
+    }
+
+    /// [`ScriptScope::read`], except that a file whose real path `known` accepts is not opened:
+    /// → its real path and no bytes.
+    pub(crate) fn read_unless(&self, path: &Path, max: usize, known: impl Fn(&Path) -> bool) -> Result<(PathBuf, Option<Vec<u8>>), ScriptRead> {
         use std::io::Read;
         if self.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
             return Err(ScriptRead::Refused);
@@ -728,6 +737,9 @@ impl ScriptScope {
         };
         if !self.allows(&real) {
             return Err(ScriptRead::Refused);
+        }
+        if known(&real) {
+            return Ok((real, None));
         }
         let file = std::fs::File::open(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
         let meta = file.metadata().map_err(|e| ScriptRead::Failed(e.to_string()))?;
@@ -746,7 +758,7 @@ impl ScriptScope {
         if std::fs::canonicalize(path).ok().as_ref() != Some(&real) {
             return Err(ScriptRead::Refused);
         }
-        Ok((real, bytes))
+        Ok((real, Some(bytes)))
     }
 
     /// The first granted folder, as people read it (`None` for a script given as text).
@@ -963,6 +975,21 @@ mod tests {
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    /// A file the caller already has is not opened: its size is not checked and no byte is read.
+    #[test]
+    fn a_known_script_file_is_not_read_again() {
+        let (base, _) = folders("known");
+        std::fs::write(base.join("in/big.js"), "x".repeat(64)).unwrap();
+        let scope = ScriptScope::of_folder(&base.join("in"));
+        let path = base.join("in/big.js");
+        assert_eq!(scope.read(&path, 16).map(|(_, b)| b.len()), Err(ScriptRead::TooLarge));
+        let real = std::fs::canonicalize(&path).unwrap();
+        assert_eq!(scope.read_unless(&path, 16, |r| r == real), Ok((real.clone(), None)));
+        assert_eq!(scope.read_unless(&path, 64, |_| false).map(|(_, b)| b.map(|b| b.len())), Ok(Some(64)));
+        assert_eq!(scope.read_unless(&base.join("outside/secret.svg"), 64, |_| true), Err(ScriptRead::Refused));
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// The roots both grant: the deeper of two nested roots, nothing for roots apart, and a kind

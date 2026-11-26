@@ -163,7 +163,7 @@ fn only_js_and_jsx_files_are_taken() {
     let mut app = app();
     for name in ["a.txt", "a.jsxbin", "a"] {
         let e = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "path": name })).unwrap().unwrap_err();
-        assert!(e.contains(".js or .jsx"), "{name}: {e}");
+        assert!(e.contains(".js, .mjs or .jsx"), "{name}: {e}");
     }
     assert!(!app.any_dialog_open());
     assert!(!is_open::<RunQuestion>(&app));
@@ -216,6 +216,17 @@ fn a_picked_script_goes_to_the_warning() {
     finish(&mut app);
     assert_eq!(objects(&app), 2);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_web_pick_of_a_mjs_file_runs_as_a_module() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    // `export` is a syntax error outside a module, and `this` is undefined at a module's top.
+    let module = format!("export var a = 1;\nif (this !== undefined) throw new Error('not a module');\n{DRAW}");
+    script_run::picked_script(&mut app, Picked::Contents(vec![("Picked.MJS".into(), module.into_bytes())])).unwrap();
+    finish(&mut app);
+    assert_eq!(objects(&app), 2, "{}", app.ui.status);
 }
 
 #[test]

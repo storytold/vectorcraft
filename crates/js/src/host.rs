@@ -152,11 +152,14 @@ pub enum HostItem {
     /// that is not a string is the call's result. `end` is called when the source has run,
     /// normally or not. Each source given has the next tag of [`crate::Realm::error_source`],
     /// from 1. `strict_writes`, called after `source`, gives [`crate::Realm::set_strict_writes`]
-    /// for that source alone; with `None` it takes the calling code's.
+    /// for that source alone; with `None` it takes the calling code's. With `site`, `source` is
+    /// given the [`CallSite`] of the code that calls it first, as the three numbers its source
+    /// tag, line and column, and the arguments after them.
     Evaluator {
         source: HostFunction,
         end: Rc<dyn Fn()>,
         strict_writes: Rc<dyn Fn() -> Option<bool>>,
+        site: bool,
     },
     /// A read-only property that reads the interpreter's own state.
     Script(ScriptItem),
@@ -454,7 +457,8 @@ impl Interp {
     /// source it gives as global code, as an indirect `eval` does, giving that code's completion
     /// value. A result that is not a string is given to the script as it is. `end` is called once
     /// the source has run, normally or not. `strict_writes` gives the source's
-    /// [`crate::bytecode::Source::strict_writes`], or `None` for the calling code's.
+    /// [`crate::bytecode::Source::strict_writes`], or `None` for the calling code's. With `site`,
+    /// `f` is given the calling code's [`CallSite`] before the arguments.
     pub(crate) fn call_evaluator(
         &mut self,
         f: &crate::heap::DataFn,
@@ -462,8 +466,13 @@ impl Interp {
         strict_writes: &Rc<dyn Fn() -> Option<bool>>,
         name: &Rc<str>,
         args: &[Value],
+        site: bool,
     ) -> JsResult<Value> {
-        let data = self.read_args(name, args, &ArgRead::Data)?;
+        let caller = site.then(|| self.call_site());
+        let mut data = self.read_args(name, args, &ArgRead::Data)?;
+        if let Some(caller) = caller {
+            data.splice(0..0, site_data(caller));
+        }
         let source = match f(data) {
             Ok(Data::String(source)) => source,
             Ok(d) => return self.write_data(d, 0, false),
@@ -641,9 +650,9 @@ impl Interp {
             HostItem::Converted(list, f) => {
                 Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Each(list.into()))), flags: ENUMERABLE }
             }
-            HostItem::Evaluator { source, end, strict_writes } => {
+            HostItem::Evaluator { source, end, strict_writes, site } => {
                 let proto = self.intrinsics.function_proto;
-                let func = Func::Eval { f: source, end, strict_writes, name: full.into() };
+                let func = Func::Eval { f: source, end, strict_writes, name: full.into(), site };
                 let f = self.heap.alloc_object(Object::new(Class::Function(func), Some(proto)));
                 Prop::Data { value: Value::Object(f), flags: ENUMERABLE }
             }

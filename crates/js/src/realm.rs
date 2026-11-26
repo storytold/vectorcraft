@@ -7,8 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::bytecode::CodeKind;
 use crate::heap::{Func, HIDDEN, Object, Prop, key};
 use crate::interp::{Abrupt, CompileError, Interp};
+use crate::module::{LinkFail, ModuleLimits, ModuleLoader};
 use crate::value::Value;
 use crate::{Options, SyntaxError};
+
+fn internal_error(message: &str) -> RunError {
+    RunError { kind: RunErrorKind::Internal, message: message.to_string(), line: 0, column: 0, authored: false }
+}
 
 /// The limits a run is held to. Reaching one ends the run with [`RunErrorKind::Limit`]; scripts
 /// cannot catch it, and their `finally` blocks do not run.
@@ -287,6 +292,78 @@ impl Realm {
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
         self.end();
+        self.reset_run()?;
+        let interp = &mut self.interp;
+        let strict = interp.options.strict;
+        interp.evaluated = next_tag(interp.evaluated);
+        self.script_tag = interp.evaluated;
+        interp.source_tag = self.script_tag;
+        let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
+        interp.source_tag = UNKNOWN_SOURCE;
+        match code {
+            Ok(code) => Ok(code),
+            Err(CompileError::Syntax(e)) => {
+                interp.error_tag = self.script_tag;
+                Err(e.into())
+            }
+            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0, authored: false }),
+        }
+    }
+
+    /// Begins a run of the module `key` with `source` (ECMA-262 2015 section 15.2), which
+    /// [`Realm::advance`] carries on as it does a script [`Realm::start`] began. `load` gives each
+    /// module a module imports ([`ModuleLoader`]). Every module is loaded, parsed and linked before
+    /// any runs, so a syntax error, an import of a missing or ambiguous export, a module `load`
+    /// cannot give or a module past `limits` ends the run here, with no code run. The first module
+    /// has [`Realm::script_tag`] as its source's tag, and each module loaded after it the next tag,
+    /// in the order `load` first gave their sources, as the sources an evaluator gives during a run
+    /// take theirs. A realm without [`Options::es2015`] runs no module: that is a syntax error.
+    /// A paused or waiting run ends before loading; its globals remain available.
+    pub fn start_module(&mut self, key: &str, source: &str, limits: ModuleLimits, load: &mut ModuleLoader<'_>) -> Result<(), RunError> {
+        self.end();
+        self.reset_run()?;
+        if !self.interp.options.es2015 {
+            let message = "modules need ECMAScript 2015; this script runs ECMAScript 5".to_string();
+            return Err(RunError { kind: RunErrorKind::Syntax, message, line: 0, column: 0, authored: false });
+        }
+        let interp = &mut self.interp;
+        interp.evaluated = next_tag(interp.evaluated);
+        self.script_tag = interp.evaluated;
+        let marks = (interp.temp_envs_mark(), interp.temp_roots_mark(), interp.temp_codes_mark());
+        let linked = crate::module::link(interp, key, source, self.script_tag, limits, load);
+        let pushed = match linked {
+            Ok(modules) => interp.push_module_frames(&modules).map_err(LinkFail::Run),
+            Err(fail) => Err(fail),
+        };
+        let interp = &mut self.interp;
+        interp.drop_temp_envs(marks.0);
+        interp.drop_temp_roots(marks.1);
+        interp.drop_temp_codes(marks.2);
+        match pushed {
+            Ok(()) => Ok(()),
+            Err(LinkFail::Syntax { tag, error }) => {
+                self.interp.error_tag = tag;
+                Err(error.into())
+            }
+            Err(LinkFail::At { tag, line, column, abrupt }) => {
+                let e = self.outcome(Err(abrupt)).err();
+                self.interp.error_tag = tag;
+                Err(e.map_or_else(|| internal_error("a module failed without an error"), |e| RunError { line, column, ..e }))
+            }
+            Err(LinkFail::Run(abrupt)) => self.outcome(Err(abrupt)).map(drop),
+        }
+    }
+
+    /// Runs the module `key` with `source` to its end ([`Realm::start_module`]), drains its queued
+    /// Promise jobs, and returns `undefined`.
+    pub fn run_module(&mut self, key: &str, source: &str, limits: ModuleLimits, load: &mut ModuleLoader<'_>) -> Result<JsValue, RunError> {
+        self.start_module(key, source, limits, load)?;
+        let result = self.interp.execute().and_then(|value| self.interp.drain_jobs(value));
+        self.outcome(result)
+    }
+
+    /// Readies the realm for a run: its state from the last run cleared and its fuel filled.
+    fn reset_run(&mut self) -> Result<(), RunError> {
         self.script_tag = UNKNOWN_SOURCE;
         self.rejections = (Vec::new(), 0);
         let interp = &mut self.interp;
@@ -326,21 +403,7 @@ impl Realm {
                 }),
             };
         }
-        let interp = &mut self.interp;
-        let strict = interp.options.strict;
-        interp.evaluated = next_tag(interp.evaluated);
-        self.script_tag = interp.evaluated;
-        interp.source_tag = self.script_tag;
-        let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
-        interp.source_tag = UNKNOWN_SOURCE;
-        match code {
-            Ok(code) => Ok(code),
-            Err(CompileError::Syntax(e)) => {
-                interp.error_tag = self.script_tag;
-                Err(e.into())
-            }
-            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0, authored: false }),
-        }
+        Ok(())
     }
 
     /// The end of a run: its completion value or error, with the interpreter's stacks emptied.
@@ -353,7 +416,7 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.stack.clear();
-        interp.frames.clear();
+        interp.clear_frames();
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
@@ -542,16 +605,17 @@ impl Realm {
         self.interp.script_name = name;
     }
 
-    /// Which source the last error's `line` and `column` are in: 0 for the script last given to
-    /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
-    /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
-    /// includes code from an earlier script and from the sources given during its run.
+    /// Which source the last error's `line` and `column` are in: 0 for the most recent script or
+    /// module entry source. Later sources are numbered from 1 as tags are assigned: modules in
+    /// load order, then sources a [`crate::HostItem::Evaluator`] gives. Module execution order
+    /// can differ from load order. A script run without modules numbers only evaluator sources.
+    /// [`UNKNOWN_SOURCE`] includes code from earlier runs and their module or evaluator sources.
     pub fn error_source(&self) -> u32 {
         self.source_of(self.interp.error_tag)
     }
 
     /// The source tag of the code the last error's `line` and `column` are in, which stays the same
-    /// from run to run: each script given to [`Realm::run`] or [`Realm::start`] and each source a
+    /// from run to run: each script or module entry, each dependency loaded, and each source a
     /// [`crate::HostItem::Evaluator`] gives gets the next tag, so a function an earlier script
     /// defined has its script's tag. [`UNKNOWN_SOURCE`] for code that `eval` or `Function`
     /// compiled, an error with no place, and sources given once the tags are used up.
@@ -559,9 +623,10 @@ impl Realm {
         self.interp.error_tag
     }
 
-    /// The source tag ([`Realm::error_tag`]) of the script the last [`Realm::run`] or
-    /// [`Realm::start`] compiled; the `n`th source an evaluator gave during that run has this tag
-    /// plus `n`. [`UNKNOWN_SOURCE`] when that call compiled nothing.
+    /// The source tag ([`Realm::error_tag`]) of the most recent script or module entry source.
+    /// Dependency modules receive subsequent tags in load order, followed by evaluator sources
+    /// as they are given. A script run without modules assigns subsequent tags only to evaluator
+    /// sources. [`UNKNOWN_SOURCE`] when no entry tag has been assigned or the tags are used up.
     pub fn script_tag(&self) -> u32 {
         self.script_tag
     }

@@ -2811,7 +2811,7 @@ file-filter	Templates	範本
 	Do not show this warning again	不再顯示此警告
 	Stop the script and undo what it did? Then quit again.	要停止指令碼並還原其變更嗎？然後請再次結束。
 	This script has added a great many objects. Continue, or stop it and undo what it did?	此指令碼已新增大量物件。要繼續，還是停止並還原其變更？
-@msg	Choose a .js or .jsx script	請選擇 .js 或 .jsx 指令碼
+@msg	Choose a .js, .mjs or .jsx script	請選擇 .js、.mjs 或 .jsx 指令碼
 @msg	Ran {name}	已執行 {name}
 @msg	The script was stopped and its changes were undone	指令碼已停止，其變更已還原
 @msg	a script is running: stop it or wait for it to finish	指令碼正在執行：請停止它或等待其完成
@@ -2958,7 +2958,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`args` is larger than 1 MiB	`args` 大於 1 MiB
 @msg	`path` is empty	`path` 為空
 @msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
-@msg	`path` must name a .js or .jsx file	`path` 必須指向 .js 或 .jsx 檔案
+@msg	`path` must name a .js, .mjs or .jsx file	`path` 必須指向 .js、.mjs 或 .jsx 檔案
 @msg	give exactly one of `path` and `source`	`path` 和 `source` 請只提供其中一個
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告

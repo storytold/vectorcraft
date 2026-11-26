@@ -100,8 +100,16 @@ fn redeclarations_and_bad_declarations_are_syntax_errors() {
     syntax("'use strict'; { function f() {} function f() {} }");
     syntax("for (let x = 1 in {}) {}");
     syntax("if (1) let x = 1;");
+    // No statement starts with `let [`, in a statement list or in the body of an `if` or a loop.
+    for body in ["if (true) let[0];", "if (false) ; else let[0];", "while (false) let[0];", "for (;false;) let[0];", "lbl: let[0];"] {
+        syntax(&format!("var let = [1]; {body}"));
+    }
     // Outside strict mode code `let` is still a name where no declaration can start.
     truth("var let = 3; let === 3");
+    truth("var let = [1]; var r; if (true) (let[0]); if (true) r = let[0]; r === 1");
+    truth("var let = [2]; if (true) let\n; let.length === 1");
+    // ECMAScript 5.1 reads it as a property read.
+    assert_eq!(Realm::new().run("var let = [1]; if (true) let[0];"), Ok(JsValue::Number(1.0)));
     truth("{ function f() { return 1; } function f() { return 2; } } f() === 2");
 }
 
@@ -170,7 +178,7 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
     assert!(matches!(&var, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("SyntaxError")), "{var:?}");
     assert_eq!(realm.run("kept"), Ok(JsValue::Number(5.0)));
     let restricted = realm.run("let undefined = 1;");
-    assert!(restricted.is_err(), "{restricted:?}");
+    assert!(is_thrown(&restricted, "SyntaxError"), "{restricted:?}");
 }
 
 #[test]
@@ -317,8 +325,14 @@ fn a_global_var_stops_a_later_let_even_on_a_configurable_property() {
     assert!(is_thrown(&realm.run("let z;"), "SyntaxError"));
     assert_eq!(realm.run("delete z"), Ok(JsValue::Bool(true)));
     assert_eq!(realm.run("let z = 3; z"), Ok(JsValue::Number(3.0)));
+    // Deleting the global object's property, not the variable, leaves the name declared
+    // (ECMA-262 2015 section 8.1.1.4.7 runs only for `delete w`).
     assert_eq!(realm.run("(0, eval)('var w = 1'); delete this.w"), Ok(JsValue::Bool(true)));
-    assert_eq!(realm.run("let w = 4; w"), Ok(JsValue::Number(4.0)));
+    let after_property = realm.run("let w = 4; w");
+    assert!(is_thrown(&after_property, "SyntaxError"), "{after_property:?}");
+    assert_eq!(realm.run("(0, eval)('var v = 1'); with (this) delete v"), Ok(JsValue::Bool(true)));
+    let after_with = realm.run("let v = 4; v");
+    assert!(is_thrown(&after_with, "SyntaxError"), "{after_with:?}");
 }
 
 #[test]
@@ -433,6 +447,17 @@ fn arrow_functions_cannot_be_constructed() {
     throws("var f = () => 1; new f();", "TypeError");
     throws("var f = () => 1; var b = f.bind(null); new b();", "TypeError");
     truth("((a, b) => 0).length === 2");
+}
+
+#[test]
+fn an_arrow_functions_length_is_configurable_and_read_only() {
+    truth(
+        "var d = Object.getOwnPropertyDescriptor((a) => a, 'length'); \
+         d.configurable && !d.writable && !d.enumerable && d.value === 1",
+    );
+    truth("var f = (a, b) => 0; delete f.length && !f.hasOwnProperty('length')");
+    // In ECMAScript 2015 code the other functions' `length` is configurable too (section 19.2.4.1).
+    truth("var d = Object.getOwnPropertyDescriptor(function (a) {}, 'length'); d.configurable && !d.writable && !d.enumerable");
 }
 
 #[test]

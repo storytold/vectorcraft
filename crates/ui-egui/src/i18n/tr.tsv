@@ -4666,7 +4666,7 @@ axis	Both	Her İkisi
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
 	Stop the script and undo what it did? Then quit again.	Betik durdurulsun ve yaptıkları geri alınsın mı? Ardından yeniden çıkın.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Bu betik çok sayıda nesne ekledi. Devam edilsin mi, yoksa durdurulup yaptıkları geri mi alınsın?
-@msg	Choose a .js or .jsx script	Bir .js veya .jsx betiği seçin
+@msg	Choose a .js, .mjs or .jsx script	Bir .js, .mjs veya .jsx betiği seçin
 @msg	Ran {name}	{name} çalıştırıldı
 @msg	The script was stopped and its changes were undone	Betik durduruldu ve değişiklikleri geri alındı
 @msg	a script is running: stop it or wait for it to finish	bir betik çalışıyor: durdurun veya bitmesini bekleyin
@@ -4821,7 +4821,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`args` is larger than 1 MiB	`args` 1 MiB'tan büyük
 @msg	`path` is empty	`path` boş
 @msg	`installed` takes a `path`, not a `source`	`installed` bir `path` alır, `source` almaz
-@msg	`path` must name a .js or .jsx file	`path` bir .js veya .jsx dosyasını adlandırmalıdır
+@msg	`path` must name a .js, .mjs or .jsx file	`path` bir .js, .mjs veya .jsx dosyasını adlandırmalıdır
 @msg	give exactly one of `path` and `source`	`path` ve `source` değerlerinden tam olarak birini verin
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı

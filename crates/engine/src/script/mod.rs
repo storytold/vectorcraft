@@ -63,7 +63,8 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_js::{
-    Data, DataLimits, HostError, HostFunction, HostItem, Interrupt, LimitKind, Limits, Options, Progress, Realm, RunError, RunErrorKind,
+    Data, DataLimits, HostError, HostFunction, HostItem, Interrupt, LimitKind, Limits, LoadError, LoadedModule, ModuleLimits, Options, Progress,
+    Realm, RunError, RunErrorKind,
 };
 
 use crate::{
@@ -202,6 +203,8 @@ pub(crate) struct Request {
     pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
+    /// The script runs as an ECMAScript 2015 module, as a `.mjs` file does ([`include::module_script`]).
+    pub module: bool,
 }
 
 thread_local! {
@@ -777,6 +780,9 @@ struct Host {
     script_map: RefCell<include::SourceMap>,
     /// The same for each source `$.evalFile` gave, in order.
     eval_maps: RefCell<Vec<include::SourceMap>>,
+    /// The module key ([`include::Files::module`]) of each of [`Host::eval_maps`] that is a
+    /// module's, by its index there.
+    module_maps: RefCell<HashMap<usize, String>>,
     /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
@@ -961,6 +967,22 @@ impl Host {
                 kept.as_ref().and_then(|k| k.get(tag)).map(|k| name(&k.map)).unwrap_or_default()
             }
         }
+    }
+
+    /// The folder of the module whose source has `tag`, when it is a module of a module run: the
+    /// script itself or a module it imported (not a file `$.evalFile` gave, or code from another
+    /// run).
+    fn module_dir_at(&self, tag: u32) -> Option<std::path::PathBuf> {
+        let script = self.script_tag.get();
+        if tag == vectorcraft_js::UNKNOWN_SOURCE || script == vectorcraft_js::UNKNOWN_SOURCE {
+            return None;
+        }
+        let n = tag.checked_sub(script)?;
+        if n == 0 {
+            return self.files.borrow().entry_module_dir();
+        }
+        let key = self.module_maps.borrow().get(&(n as usize - 1)).cloned()?;
+        self.files.borrow().module_dir(&key)
     }
 
     /// Adds a line to the run's console and, during a slice, to the session's.
@@ -1492,6 +1514,7 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
                 }
             }),
             strict_writes: Rc::new(move || current(&strict).ok().and_then(|h| h.eval_strict.get())),
+            site: true,
         }
     };
     let mut items = vec![
@@ -1506,9 +1529,17 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
 }
 
 /// `$.evalFile(path[, timeout])`: the source of the file `path` names, relative to the file being
-/// run, with its preprocessor lines read, which the interpreter then runs. `timeout`, in
-/// milliseconds, is taken and not waited on: the file is read at once.
-fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostError> {
+/// run (for a call in a module the script imported, that module's file), with its preprocessor
+/// lines read, which the interpreter then runs. `timeout`, in milliseconds, is taken and not
+/// waited on: the file is read at once. `args` starts with the call's place, as
+/// [`HostItem::Evaluator`] gives it with `site`.
+fn eval_file(host: &Host, mut args: Vec<Data>) -> std::result::Result<Data, HostError> {
+    let tag = match args.first() {
+        Some(Data::Number(n)) if args.len() >= 3 => *n as u32,
+        _ => vectorcraft_js::UNKNOWN_SOURCE,
+    };
+    args.drain(..3.min(args.len()));
+    let module_dir = host.module_dir_at(tag);
     let Some(Data::String(path)) = args.first().filter(|p| !matches!(p, Data::String(s) if s.is_empty())) else {
         return Err(HostError::Type(EVAL_NO_PATH.to_string()));
     };
@@ -1522,7 +1553,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         return Err(HostError::Type(EVAL_ARGUMENTS.to_string()));
     }
     host.charge_call(path.len() as u64 + 2)?;
-    let expanded = host.files.borrow_mut().eval_file(path).map_err(|f| {
+    let expanded = host.files.borrow_mut().eval_file(path, module_dir).map_err(|f| {
         let message = if f.line > 0 { format!("{}:{}:{}: {}", f.file, f.line, f.column, f.message) } else { f.message };
         let error = match f.kind {
             include::FailKind::Limit => HostError::Abort(message),
@@ -1630,6 +1661,22 @@ fn explained(e: &RunError) -> String {
     } else {
         message.to_string()
     }
+}
+
+/// The module `specifier` names for the module `referrer` of the run of `host`, read through the
+/// run's files. Its source map is kept with the maps of the sources the run evaluates, in the order
+/// the modules are read, which is the order of their sources' tags.
+fn load_module(host: &Host, referrer: &str, specifier: &str) -> std::result::Result<LoadedModule, LoadError> {
+    let (key, read) = host.files.borrow_mut().module(referrer, specifier)?;
+    let source = read.map(|(text, map)| {
+        let mut maps = host.eval_maps.borrow_mut();
+        host.module_maps.borrow_mut().insert(maps.len(), key.clone());
+        maps.push(map);
+        drop(maps);
+        host.disk.borrow_mut().saw_code(&text.encode_utf16().collect::<Vec<u16>>());
+        text
+    });
+    Ok(LoadedModule { key, source })
 }
 
 /// The error of a run that stopped in its preprocessor lines (`f`), as the realm gives its own.
@@ -2001,7 +2048,19 @@ impl Session {
         self.script_stop.clear();
         self.script_report = None;
         let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
-        let expanded = files.expand_script(&request.source);
+        if request.module {
+            files.read_es2015();
+        }
+        // A module (a `.mjs` file, or a script run with `module`) has no preprocessor lines;
+        // `module_key` names it among the modules it imports.
+        let (expanded, module_key) = if request.module {
+            match files.module_entry(&request.source) {
+                Ok((key, expanded)) => (Ok(expanded), Some(key)),
+                Err(f) => (Err(f), None),
+            }
+        } else {
+            (files.expand_script(&request.source), None)
+        };
         let name = match &expanded {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),
             _ => request.name,
@@ -2032,9 +2091,8 @@ impl Session {
         // from its first run, and they act for the run that calls them.
         let fresh = realm.is_none();
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
-        // code the way the script does. Its realm has `Promise`: a kept realm gets it at the first
-        // `.js` run that names it, and keeps it as it keeps its globals.
-        let es2015 = include::es2015_script(request.file.as_deref());
+        // code the way the script does. Its realm has `Promise`; a kept realm retains it.
+        let es2015 = request.module || include::es2015_script(request.file.as_deref());
         let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
@@ -2103,6 +2161,7 @@ impl Session {
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
+            module_maps: RefCell::default(),
             eval_failures: RefCell::default(),
             script_tag: Cell::new(vectorcraft_js::UNKNOWN_SOURCE),
             report_name: Arc::from(name.as_str()),
@@ -2163,7 +2222,13 @@ impl Session {
                     .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
-                        let r = realm.start(&expanded.source);
+                        let r = match &module_key {
+                            None => realm.start(&expanded.source),
+                            Some(key) => {
+                                let limits = ModuleLimits { modules: include::MAX_FILES + 1, depth: include::MAX_DEPTH };
+                                realm.start_module(key, &expanded.source, limits, &mut |referrer, specifier| load_module(&host, referrer, specifier))
+                            }
+                        };
                         // Source that does not compile defines no code, so its map is not kept.
                         if !matches!(&r, Err(e) if e.kind == RunErrorKind::Syntax) {
                             host.script_tag.set(realm.script_tag());
