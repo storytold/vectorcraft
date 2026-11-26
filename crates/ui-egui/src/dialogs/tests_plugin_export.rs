@@ -67,7 +67,8 @@ fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     try_confirm(&mut app).unwrap();
     assert!(kind(&app).is_none());
     assert_eq!(names(&written), ["/out/Untitled-1.tup"]);
-    let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
+    let mut sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
+    assert!(sent["_context"].as_object_mut().unwrap().remove("fuel").is_some_and(|f| f.as_u64().is_some()), "{sent}");
     assert_eq!(sent, json!({"density": 7.0, "_context": {"mode": "export", "extension": "tup", "name": "Untitled-1"}}));
     app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
 }
@@ -94,7 +95,8 @@ fn an_exporter_is_told_its_file_whatever_the_options_are() {
     crate::io::export(&mut app, Some("plugin.test.ui.nulloptions"), None, &Value::Null).unwrap();
     answer_saves(&mut app);
     assert_eq!(names(&written), ["/out/plotter-job.tnb"]);
-    let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
+    let mut sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
+    assert!(sent["_context"].as_object_mut().unwrap().remove("fuel").is_some_and(|f| f.as_u64().is_some()), "{sent}");
     assert_eq!(sent, json!({"_context": {"mode": "export", "extension": "tnb", "name": "plotter-job"}}));
     app.run("plugin.remove", json!({"id": "test.ui.nulloptions"})).unwrap();
 }

@@ -1052,9 +1052,12 @@ selection's centre, else the first; `documentData` (filters) what the plug-in la
 it keeps something; see Output); `document` (filters and commands whose manifest lists `context`) the [document
 information](#document-information) asked for. A live effect's `item` says where it sits: `"object"` (one of the object's effects), or
 `{"fill": i}` / `{"stroke": i}` (in the own effects of the object's `i`th fill or stroke, counted from the bottom as in
-`fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt", "name": "Poster"}` instead:
+`fills` and `strokes`). An export's `_context` is `{"mode": "export", "extension": "plt", "name": "Poster", "fuel": 10000480000}` instead:
 the extension of the file being written (one the exporter lists) and its name without the extension (the document's name
-when the export is not given a path), which some formats keep in their header. An import's `_context` is `{"mode":
+when the export is not given a path), which some formats keep in their header. `fuel` is the instructions this run may
+use, the export's budget plus 4,000 for each byte of this document ([the sandbox](#the-sandbox)), so an exporter that
+can estimate its own work declines with a message of its own (`{"error": …}`) before it starts, instead of being
+stopped part way with no file written. Hosts from before `fuel` leave it out. An import's `_context` is `{"mode":
 "import", "extension": "plt", "name": "Poster"}`: the extension of the file being opened and its name without the
 extension. A place's `_context` is the same with `"mode": "place"`; the importer is given nothing of the document the
 file is placed in.

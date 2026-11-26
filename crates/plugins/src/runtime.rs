@@ -169,6 +169,14 @@ impl Default for Limits {
     }
 }
 
+impl Limits {
+    /// The instructions `vc_run` gets for `input_bytes` of input: [`Limits::fuel_base`] plus
+    /// [`Limits::fuel_per_byte`] for each byte.
+    pub fn run_fuel(&self, input_bytes: usize) -> u64 {
+        self.fuel_base.saturating_add((input_bytes as u64).saturating_mul(self.fuel_per_byte))
+    }
+}
+
 /// A loaded, validated plug-in. Cheap to share (`Arc`) and safe to run from several threads:
 /// every run gets its own store and instance.
 pub struct Plugin {
@@ -636,7 +644,7 @@ impl Plugin {
         };
         let iptr = place(live, input)?;
         let pptr = place(live, params)?;
-        let fuel = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
+        let fuel = limits.run_fuel(input.len());
         let packed = self.call_with(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline, bridge)?;
         // A cancelled run, or one past its time budget, changes nothing, also when the plug-in saw
         // `vc_cancelled` and returned.
