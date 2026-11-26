@@ -74,7 +74,8 @@ struct Reach<'a> {
     face: &'a PathData,
     bez: &'a vectorcraft_geom::kurbo::BezPath,
     zone: Rect,
-    /// How close (pt) to the outline a path may come and still change the area: the gap and 1 pt.
+    /// How close (pt) to the outline a path may come and still change the area: the gap and
+    /// [`CONTACT`].
     reach: f64,
 }
 
@@ -359,13 +360,15 @@ impl AreaFinder {
             let before = window;
             match bounds {
                 // A path left out that crosses the area or comes within its reach could cut it, and
-                // only the map of every path holds both.
+                // only the map of every path holds both. A bridge reaches at most `gap`, so a path
+                // farther than that from the outline, give or take [`CONTACT`], does not change it.
                 Some(rb) if within(&rb, &window) => {
-                    let reached = rb.inflate(reach, reach);
+                    let contact = self.gap + CONTACT;
+                    let reached = rb.inflate(contact, contact);
                     let mut budget = CUT_BUDGET;
                     let cut = any_left_out
                         && face.is_none_or(|(region, bez, _)| {
-                            let area = Reach { face: &region.path, bez, zone: reached, reach };
+                            let area = Reach { face: &region.path, bez, zone: reached, reach: contact };
                             self.inputs.iter().zip(&left_out).any(|((s, b, _), out)| *out && meet(b, &reached) && cuts(&s.path, &area, &mut budget))
                         });
                     if !cut {
