@@ -195,6 +195,20 @@ const TRANSPARENCY: FormatOption = FormatOption {
     description: "pixels under half opacity become one transparent entry (false: everything is blended over the matte)",
 };
 
+const TRANSPARENCY_DITHER: FormatOption = FormatOption {
+    name: "transparencyDither",
+    ty: "string",
+    default: "\"none\"",
+    description: "with transparency, how partly transparent pixels are split between the transparent entry and their color: none (cut at half opacity), diffusion, pattern (8×8 ordered) or noise",
+};
+
+const TRANSPARENCY_DITHER_AMOUNT: FormatOption = FormatOption {
+    name: "transparencyDitherAmount",
+    ty: "integer",
+    default: "100",
+    description: "the diffusion transparency dither's strength 0–100 (0 cuts at half opacity; more than 100 is refused)",
+};
+
 const MATTE: FormatOption = FormatOption {
     name: "matte",
     ty: "string",
@@ -235,6 +249,8 @@ const PALETTE_OPTIONS: &[FormatOption] = &[
     DITHER,
     DITHER_AMOUNT,
     TRANSPARENCY,
+    TRANSPARENCY_DITHER,
+    TRANSPARENCY_DITHER_AMOUNT,
     MATTE,
 ];
 

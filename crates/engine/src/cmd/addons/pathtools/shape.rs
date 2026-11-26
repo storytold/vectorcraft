@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Parametric Shape",
             [],
             None,
-            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
+            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), with `center` the shape's center moves to it, otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
             has_doc,
             set
         ),

@@ -255,13 +255,29 @@ fn native_tab_group(h: &mut Harness) -> ViewportId {
 fn a_group_float_of_a_tab_group_resizes_its_native_window() {
     let mut h = Harness::new();
     let viewport = native_tab_group(&mut h);
-    let id = floating_window(&layout_of(&h.app.ui), "swatches").unwrap().id;
+    let id = floating_window(layout_of(&h.app.ui), "swatches").unwrap().id;
     let before = h.host.borrow().windows[&viewport].rect;
     h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
     h.frames(3);
-    assert_eq!(floating_window(&layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(floating_window(layout_of(&h.app.ui), "swatches").unwrap().id, id);
     assert_eq!(h.viewport("color"), viewport);
     assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
+/// `window.toolbar.float` with x, y moves the OS window a toolbar made with New Toolbar already has.
+#[test]
+fn floating_a_toolbar_at_a_point_moves_its_native_window() {
+    let mut h = Harness::new();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 240, "y": 160})).unwrap();
+    h.frames(3);
+    let panel = crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&h.app.ui, "Mine").unwrap().id);
+    let viewport = h.viewport(&panel);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(240.0, 160.0));
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 300, "y": 220})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport(&panel), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(300.0, 220.0));
 }
 
 #[test]

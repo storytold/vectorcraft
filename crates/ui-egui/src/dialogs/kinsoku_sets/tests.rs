@@ -47,6 +47,21 @@ fn cancel(app: &VectorcraftApp) {
     app.dialogs().unwrap().with(|h| h.cancel::<KinsokuDialog>(&ctx));
 }
 
+#[test]
+fn empty_kinsoku_list_shows_none_in_the_preset_picker() {
+    let mut fixture = craft::ui::testing::Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
+    fixture.room(egui::vec2(800.0, 600.0));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(fixture.ctx().clone());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut app).unwrap();
+    fixture.settle();
+
+    let picker = fixture.by_label("Kinsoku Set").expect("Kinsoku Set picker");
+    assert_eq!(fixture.tree().value_of(picker.node), Some("None"));
+    assert!(picked(&app).is_empty(), "the caption does not select a set");
+}
+
 /// Type › Kinsoku Shori Settings… opens on the document's sets; New adds one based on Hard, its
 /// categories edited in their fields and Add putting in a character by its code point; nothing
 /// changes until OK, which sets them as one undo step; Cancel leaves them.
