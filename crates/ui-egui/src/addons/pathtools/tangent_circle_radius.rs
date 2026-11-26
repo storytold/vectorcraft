@@ -416,6 +416,33 @@ mod tests {
     }
 
     #[test]
+    fn cancel_right_after_a_failed_ok_rolls_the_preview_back() {
+        let mut app = app_with_lines(&[100, 140]);
+        let (paths, steps) = (count(&app), undo_steps(&app));
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(count(&app), paths + 1);
+        {
+            let st = app.session.doc_mut().unwrap();
+            let layer = st.doc.layers[0].id;
+            let it = st.interaction.as_mut().unwrap();
+            std::sync::Arc::make_mut(&mut it.doc).node_mut(layer).unwrap().locked = true;
+        }
+        let id = dialog_id(&app);
+        assert!(confirm(&app, id), "OK is on");
+        frame(&mut app);
+        assert!(is_open(&app));
+        assert!(app.session.in_interaction());
+        // Cancel is the next press after the refused OK, with no radius change or other frame in between.
+        cancel(&app, id);
+        frame(&mut app);
+        assert!(!is_open(&app));
+        assert!(!app.session.in_interaction());
+        assert_eq!((count(&app), undo_steps(&app)), (paths, steps));
+    }
+
+    #[test]
     fn a_click_found_radius_outside_the_tool_range_can_be_drawn() {
         // Lines 2,400,000 pt apart: a click on each finds the circle of radius 1,200,000, past the
         // largest radius the tool takes.
