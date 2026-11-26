@@ -44,6 +44,7 @@ pub const COMMAND: &str = "object.createObjectMosaic";
 
 /// What the dialog says while no image is selected.
 const NO_IMAGE: &str = "select an image";
+const WRONG_DOCUMENT: &str = "Object Mosaic belongs to the document that opened the dialog.";
 
 /// The new sizes the command takes, in points or percentages (`object.createObjectMosaic`).
 const SIZE_RANGE: RangeInclusive<f64> = 0.1..=1.0e6;
@@ -97,6 +98,7 @@ pub struct Mosaic {
 /// Create Object Mosaic on the dialog host.
 pub struct ObjectMosaicDialog {
     id: DialogId,
+    document: u64,
     values: Mosaic,
     /// The size (pt) of the image as of the last [`sync`]; the last size read while none is selected.
     image: (f64, f64),
@@ -129,6 +131,7 @@ fn image_size(app: &VectorcraftApp) -> Option<(f64, f64)> {
 /// nothing opens and the error says why.
 pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
     let Some((w, h)) = image_size(app) else { return Err(NO_IMAGE.into()) };
+    let document = app.session.active().ok_or(NO_IMAGE)?.uid;
     let none = json!({});
     let given = if given.is_null() { &none } else { given };
     app.session.check_params(COMMAND, given).map_err(|e| e.to_string())?;
@@ -161,7 +164,7 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
     };
     let dialogs = app.dialogs().ok_or("no window")?;
     let lengths = crate::canvas::general_lengths(app);
-    dialogs.with(|host| host.open(ObjectMosaicDialog::new(values, (w, h), lengths)));
+    dialogs.with(|host| host.open(ObjectMosaicDialog::new(document, values, (w, h), lengths)));
     Ok(json!({ "dialog": KIND }))
 }
 
@@ -169,11 +172,16 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
 /// it before the dialogs, and `ui.dialog.*` before each method.
 pub(crate) fn sync(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
+    let document = app.session.active().map(|active| active.uid);
     let size = image_size(app);
     let lengths = crate::canvas::general_lengths(app);
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
-            dialog.sync(size, lengths);
+            if document == Some(dialog.document) {
+                dialog.sync(size, lengths);
+            } else {
+                dialog.sync(None, dialog.lengths);
+            }
         }
     });
 }
@@ -190,10 +198,21 @@ enum Work {
 /// held OK, whose command may refuse (the dialog then stays open with the reason).
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(dialogs) = app.dialogs() else { return };
+    let document = app.session.active().map(|active| active.uid);
     let work = dialogs.with(|host| {
         // Nothing reads the unit answer of a closed dialog.
         let _ = host.take::<ObjectMosaicDialog>();
         let dialog = host.get_mut::<ObjectMosaicDialog>()?;
+        if document != Some(dialog.document) {
+            let reason = || Label::from(tl!(WRONG_DOCUMENT));
+            if std::mem::take(&mut dialog.use_ratio) {
+                dialog.note = Some(reason());
+            }
+            if dialog.held.take().is_some() {
+                dialog.held.answer(Err(reason()));
+            }
+            return None;
+        }
         if std::mem::take(&mut dialog.use_ratio) {
             return Some(Work::Ratio(dialog.values.clone(), dialog.image));
         }
@@ -235,8 +254,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
 }
 
 impl ObjectMosaicDialog {
-    fn new(values: Mosaic, image: (f64, f64), lengths: LengthUnits) -> Self {
-        ObjectMosaicDialog { id: dialog_id(KIND), values, image, selected: true, lengths, note: None, use_ratio: false, held: HeldAnswer::new() }
+    fn new(document: u64, values: Mosaic, image: (f64, f64), lengths: LengthUnits) -> Self {
+        ObjectMosaicDialog {
+            id: dialog_id(KIND),
+            document,
+            values,
+            image,
+            selected: true,
+            lengths,
+            note: None,
+            use_ratio: false,
+            held: HeldAnswer::new(),
+        }
     }
 
     /// `size` is the selected image's size, `None` while none is selected: the last size stays and a
@@ -244,11 +273,11 @@ impl ObjectMosaicDialog {
     fn sync(&mut self, size: Option<(f64, f64)>, lengths: LengthUnits) {
         self.lengths = lengths;
         self.selected = size.is_some();
+        if self.note.as_ref().is_some_and(|n| n.as_str() == tl!(WRONG_DOCUMENT) || (self.selected && n.as_str() == NO_IMAGE)) {
+            self.note = None;
+        }
         if let Some(size) = size {
             self.image = size;
-            if self.note.as_ref().is_some_and(|n| n.as_str() == NO_IMAGE) {
-                self.note = None;
-            }
         }
     }
 }
@@ -375,7 +404,7 @@ impl StackDialog for ObjectMosaicDialog {
     }
 
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
-        let ObjectMosaicDialog { id: _, values, image, selected, lengths, note, use_ratio, held } = self;
+        let ObjectMosaicDialog { values, image, selected, lengths, note, use_ratio, held, .. } = self;
         // A refusal shows until a value it refused changes.
         if held.refusal().is_some_and(|(_, refused)| refused != values) {
             held.clear_refusal();
@@ -624,6 +653,34 @@ mod tests {
         app.run("select.set", json!({"ids": [id]})).unwrap();
     }
 
+    #[test]
+    fn mosaic_confirmation_does_not_replace_the_other_drawings_raster() {
+        let mut app = app_with_image();
+        open_from_menu(&mut app);
+        set(&mut app, "columns", json!(2)).unwrap();
+        set(&mut app, "rows", json!(2)).unwrap();
+        set(&mut app, "deleteRaster", json!(true)).unwrap();
+
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 90, "height": 55})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("object.rasterize", json!({"ppi": 72})).unwrap();
+        let id = image_id(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        sync(&mut app);
+        ok(&mut app);
+
+        assert!(mosaic(&app).is_none());
+        assert_eq!(image_id(&app), id);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&mut app));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        select_image(&mut app);
+        sync(&mut app);
+        ok(&mut app);
+        assert!(mosaic(&app).is_some());
+    }
+
     /// An image narrower than 0.1 pt opens with a new width of 0.1 pt, which OK makes.
     #[test]
     fn a_tiny_image_opens_with_a_size_the_command_takes() {
@@ -663,6 +720,23 @@ mod tests {
         set(&mut app, "gray", json!(true)).unwrap();
         ok(&mut app);
         assert_eq!(mosaic(&app), Some((300.0, 150.0, 32)));
+    }
+
+    #[test]
+    fn returning_to_the_mosaic_drawing_clears_the_use_ratio_warning() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"columns": 10})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        with_dialog(&mut app, |d| d.use_ratio = true);
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(with_dialog(&mut app, |d| d.note.is_some()).unwrap());
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        sync(&mut app);
+        assert!(with_dialog(&mut app, |d| d.note.is_none() && !d.selected).unwrap());
+        assert_eq!(number_of(&mut app, "columns"), 10.0);
     }
 
     /// With Constrain Ratio on, a kept width of 0.1 pt over a 100 × 50 pt image sets a height of
