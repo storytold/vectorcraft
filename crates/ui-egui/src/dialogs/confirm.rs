@@ -7,6 +7,7 @@
 use craft::ui::dialog::{Alert, DialogHost, DialogId, DialogResult, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage};
 use egui::Context;
 use serde_json::{Value, json};
+use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
 
@@ -81,8 +82,18 @@ macro_rules! wrapped_dialog {
 }
 pub(crate) use wrapped_dialog;
 
-/// A confirmation: its tag is the command OK runs and that command's params.
+/// A confirmation: its tag is an [`Asked`].
 pub(crate) struct Question(StandardPrompt);
+
+/// The tag of a confirmation ([`ask`]): the command OK runs, and the access it runs under.
+struct Asked {
+    command: String,
+    params: Value,
+    /// The automation roots in force when asked: the command runs under them.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs as automation.
+    automated: bool,
+}
 wrapped_dialog!(Question, StandardPrompt, KIND);
 
 /// A message with a Close button.
@@ -110,6 +121,10 @@ pub(crate) struct ReplaceFiles {
     pub(crate) command: String,
     /// Its params.
     pub(crate) params: Value,
+    /// The automation roots in force when asked: the command runs again under them.
+    pub(crate) scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs again as automation.
+    pub(crate) automated: bool,
 }
 
 /// Ask `message` (with an optional `detail` line), both in the UI language; OK runs `command`
@@ -123,7 +138,8 @@ pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str,
     if !detail.is_empty() {
         prompt = prompt.paragraph(detail.to_string());
     }
-    let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag((command.to_string(), params));
+    let asked = Asked { command: command.to_string(), params, scope: ScopeHandle::capture(), automated: app.automation_asked() };
+    let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag(asked);
     dialogs.with(|host| host.open(Question(prompt)));
 }
 
@@ -184,6 +200,8 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
         allowed: allowed.to_vec(),
         command: command.to_string(),
         params,
+        scope: ScopeHandle::capture(),
+        automated: app.automation_asked(),
     });
     // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
     // (however many messages wait: the save or export needs the answer).
@@ -240,8 +258,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     };
     if let Some(DialogResult::Ok(mut answer)) = dialogs.with(|host| host.take::<Question>())
         && answer.choice == PromptChoice::Proceed
-        && let Some((command, params)) = answer.take_tag::<(String, Value)>()
-        && let Err(e) = app.run(&command, params)
+        && let Some(Asked { command, params, scope, automated }) = answer.take_tag::<Asked>()
+        && let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params)))
     {
         app.status(e);
     }
@@ -273,8 +291,8 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
 pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, String, String)> {
     app.dialogs()?.with(|host| {
         let prompt = &host.get::<Question>()?.0;
-        let (command, _) = prompt.tag_as::<(String, Value)>()?;
-        Some((prompt.shown_message(&app.host), prompt.shown_paragraphs(&app.host).join("\n"), command.clone()))
+        let asked = prompt.tag_as::<Asked>()?;
+        Some((prompt.shown_message(&app.host), prompt.shown_paragraphs(&app.host).join("\n"), asked.command.clone()))
     })
 }
 
@@ -289,4 +307,14 @@ pub(crate) fn open_message(app: &VectorcraftApp) -> Option<(String, String)> {
 #[cfg(test)]
 pub(crate) fn open_replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
     app.dialogs()?.with(|host| host.get::<ReplaceFilesPrompt>().and_then(|q| q.0.tag_as::<ReplaceFiles>().map(|tag| tag.files.clone())))
+}
+
+/// Whether the open question about replacing files runs its command confined to automation roots,
+/// and whether as automation, while it is open.
+#[cfg(test)]
+pub(crate) fn open_replace_files_access(app: &VectorcraftApp) -> Option<(bool, bool)> {
+    app.dialogs()?.with(|host| {
+        let tag = host.get::<ReplaceFilesPrompt>()?.0.tag_as::<ReplaceFiles>()?;
+        Some((tag.scope.clone().run(vectorcraft_engine::file_access::current).is_some(), tag.automated))
+    })
 }
