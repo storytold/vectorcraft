@@ -7509,8 +7509,10 @@ marked smooth), when the circle would reach past the canvas (4,000,000 pt from t
 origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
 
 The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
-pointer snaps to the nearest path that is not a guide within 5 screen points, or within Smart Guides › Snapping
-Tolerance when that is larger, and the tool shows the circle that matches the path there as a dashed outline (solid
+pointer snaps to the nearest path that is not a guide within the tool's Snap Tolerance (`snapTolerance` below, 5
+screen points by default), or within Smart Guides › Snapping Tolerance when that is larger; with Snap with Smart
+Guides Off turned off, the reach while Smart Guides are off is no more than Selection & Anchor Display › Tolerance.
+The tool shows the circle that matches the path there as a dashed outline (solid
 once it is more than 50,000 screen points around), a small cross at its center, a line from the center to the point
 it touches and, with Measurement Labels on, its radius by the pointer, followed by an asterisk for an arc's own
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
