@@ -202,6 +202,7 @@
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
 	Anti-aliasing Method	Метод згладжування
+@id	language.name	Українська
 antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
@@ -923,6 +924,7 @@ font-technology	Variable	Варіативні
 	Direct Selection Tool	Інструмент «Пряме виділення»
 	Direction Handles	Маркери напряму
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete вилучає опорні точки й залишає контури з’єднаними
 	Interpolate Control Points When Moving Anchors	Інтерполювати маркери напряму під час переміщення опорних точок
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
@@ -1492,6 +1494,9 @@ file-filter	Swatch libraries	Бібліотеки зразків
 file-filter	Flattener presets	Набори зведення
 file-filter	PDF presets	Набори PDF
 file-filter	Print presets	Набори друку
+file-filter	Tracing presets	Набори трасування
+file-filter	Action sets	Набори дій
+file-filter	Composite fonts	Складені шрифти
 file-filter	Preferences	Налаштування
 file-filter	Export presets	Набори параметрів експорту
 file-filter	SVG Compressed	Стиснутий SVG
@@ -1694,6 +1699,17 @@ file-filter	Templates	Шаблони
 	Graphic Styles	Графічні стилі
 	Graphic Styles Options	Параметри графічних стилів
 	Graphics	Графіка
+	Show Contrast	Показати контраст
+	Contrast For	Контраст для
+	Normal Text	Звичайний текст
+	Large Text	Великий текст
+	Contrast Background	Фон контрасту
+	Behind Selection	За виділенням
+	Current Color	Поточний колір
+	Pass	Відповідає
+	Fail	Не відповідає
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Мінімальний контраст за WCAG 2.2: звичайний текст AA 4.5:1 (1.4.3) і AAA 7:1 (1.4.6), великий текст AA 3:1 і AAA 4.5:1, графіка й елементи керування AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон визначається в центрі виділення.
 	Graphics Processor	Графічний процесор
 	Graphics: {adapter}	Графіка: {adapter}
 	Gravity	Гравітація
@@ -2512,6 +2528,12 @@ file-filter	Templates	Шаблони
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	роздільна здатність недоступна
+	estimated memory {memory}	орієнтовна пам’ять {memory}
+	memory unavailable	пам’ять недоступна
+	Unknown format	Невідомий формат
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2660,6 +2682,7 @@ file-filter	Templates	Шаблони
 	One Point Perspective Preset 5	Набір одноточкової перспективи 5
 	Only Web Colors	Тільки web-кольору
 	Opacity	Непрозорість
+	Show Opacity	Показати непрозорість
 	Opacity & Mask Define Knockout Shape	Непрозорість та маска визначають форму вирізування
 	Opacity Mask	Маска непрозорості
 	Opacity Mask Info	Відомості про маску непрозорості
@@ -3114,6 +3137,9 @@ digits	Malayalam	Малаялам
 	Scale Artwork with Artboard	Масштабувати ілюстрацію разом із монтажною областю
 	Artboards: {n}	Монтажні області: {n}
 	Rearrange All Artboards…	Переставити всі монтажні області…
+	Rearrange…	Переставити…
+	Selected Artboards: {n}	Вибрані монтажні області: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Клацніть полотно, щоб розмістити монтажні області (Esc скасовує)
 	Recall Selection	Відновити виділення
 	RECENT	ОСТАННІ
 	Recent	Останні
@@ -3356,7 +3382,7 @@ digits	Malayalam	Малаялам
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Вимірює об’єкти з обведеннями та ефектами, що змінюють форму, для розміру, положення й вирівнювання; тіні, світіння та розмиття не враховуються.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	За масштабу 100 % один дюйм документа займає 96 екранних пунктів замість 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	За масштабу 100 % один дюйм документа займає один дюйм дисплея або 96 екранних пунктів, якщо система не повідомляє придатний розмір дисплея.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Подвійне клацання на групі, контурі або зображенні інструментом «Виділення» відкриває їх у режимі ізоляції.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки й обведення візерунком трансформуються разом із графікою, якщо трансформування або меню панелі «Трансформувати» не задає іншого.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
@@ -3367,6 +3393,7 @@ digits	Malayalam	Малаялам
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Утримання клавіші запускає інструмент або команду з її стовпця «Утримувати» в «Поєднаннях клавіш»; коротке натискання запускає її звичайне поєднання.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Скільки секунд потрібно утримувати клавішу, перш ніж замість її звичайного поєднання спрацює поєднання утримання.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete вилучає вибрані опорні точки й заново припасовує криву навколо кожної з них, замість розмикати контур у цьому місці.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
@@ -5160,7 +5187,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
@@ -5576,6 +5603,12 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	`{key}` must be a color or {_1}	`{key}` має бути кольором або {_1}
+@msg	the selected objects' colors differ: give `color`	кольори виділених об’єктів відрізняються: укажіть `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	кольори виділених об’єктів відрізняються: укажіть `opacity` або `color`
+@msg	the active fill or stroke has no color: give `color`	активна заливка чи обведення не має кольору: укажіть `color`
+@msg	the active fill or stroke is hidden: give `color`	активна заливка чи обведення приховані: укажіть `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активна заливка чи обведення малюються крізь маску непрозорості: укажіть `color`
 @msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати
@@ -6455,6 +6488,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-ефект на заливці або обведенні групи нічого не малює
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Сітка 3D-об’єкта неповна або містить значення, яке не є числом
 @msg	the <filter> element needs an id, the filter's name	елементу <filter> потрібен id, назва фільтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фільтра SVG містить не більше {MAX_NAME} символів
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не є елементом фільтра SVG
@@ -6873,9 +6907,9 @@ lighting	Light	Світло
 	Slope:	Ухил:
 axis	X Axis	Вісь X
 axis	Y Axis	Вісь Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
@@ -6902,6 +6936,8 @@ axis	Y Axis	Вісь Y
 	Cancel Plug-in Run	Скасувати запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершився, але документ або модуль тим часом змінився: запустіть його знову
 @msg	Running “{name}”…	Виконується «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` має бути рядком із видимим текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
@@ -6927,11 +6963,19 @@ axis	Y Axis	Вісь Y
 @msg	module is {_1} bytes (limit {_2})	модуль займає {_1} байтів (межа {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
 @msg	not JSON: {e}	не JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не двійковий файл WebAssembly (немає заголовка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не двійковий файл WebAssembly (немає заголовка \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	тип функції має більше параметрів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	тип функції має більше результатів, ніж дозволяє межа ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON
 @msg	the module must export its linear memory as `memory`	модуль має експортувати свою лінійну пам’ять як `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль має експортувати `{name}` з типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	модуль має більше ніж один користувацький розділ `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет пам’яті (початкова пам’ять модуля становить {initial} байтів, межа {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	маніфест у користувацькому розділі `{MANIFEST_SECTION}` має вказувати `abi` як {ABI_VERSION}, версію ABI, яку реалізує цей хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиць (модуль визначає {count} таблиць, найбільша містить {largest} елементів; межа {MAX_TABLES} таблиць по {MAX_TABLE_ELEMENTS} елементів)
+@msg	the module's table section could not be read	не вдалося прочитати розділ таблиць модуля
 @msg	the objects to change are no longer in the document	об’єктів, які треба змінити, більше немає в документі
 @msg	the runtime panicked	середовище виконання аварійно завершилося
 @msg	unexpected host trap	неочікувана пастка (trap) хоста
@@ -6939,6 +6983,10 @@ axis	Y Axis	Вісь Y
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc повернула 0 (бракує пам’яті)
 @msg	vc_alloc returned a block outside memory	vc_alloc повернула блок поза пам’яттю
 @msg	vc_run returned error code {packed}	vc_run повернула код помилки {packed}
+@msg	did not finish loading within {secs} s	не завершив завантаження за {secs} с
+@msg	no thread was left to load it	не залишилося потоку, щоб його завантажити
+@msg	panicked while loading	аварійно завершився під час завантаження
+@msg	panicked while loading: {what}	аварійно завершився під час завантаження: {what}
 @msg	{_1} is not a file	{_1} не є файлом
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} займає {_2} байтів (межа {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	об’єктів: {_1} (межа {MAX_OBJECTS})
@@ -6958,6 +7006,11 @@ axis	Y Axis	Вісь Y
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` і `maxItems` мають бути 0-{MAX_LIST}, `maxItems` щонайменше 1, а типове значення має містити стільки елементів
 @msg	`name` must be a string	`name` має бути рядком
 @msg	`opacity` must be a number	`opacity` має бути числом
+@msg	`opacity` must be a number from 0 to 100	`opacity` має бути числом від 0 до 100
+@msg	`opacity` must be true or false	`opacity` має бути true або false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	символи тексту не мають власної непрозорості: додайте заливку або обведення командою «Додати нову заливку» або «Додати нове обведення» на панелі «Оформлення»
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	об’єкт, виділений в екземплярі символу, не має власної непрозорості заливки чи обведення
+@msg	no target has that fill or stroke to take the opacity	жодна ціль не має такої заливки чи обведення, щоб задати непрозорість
 @msg	`type` must be "path" or "compound"	`type` має бути "path" або "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` має містити 1-{MAX_UNIT} друкованих символів
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` має перелічувати від 1 до {MAX_CONDITION_VALUES} значень для `{other}`
@@ -6976,7 +7029,7 @@ axis	Y Axis	Вісь Y
 @msg	a list of {min_items} to {max_items} numbers	список із {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому об’єкту потрібен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
+@msg	a painted live effect returns only `objects` and `notice`	малювальний динамічний ефект повертає лише `objects` і `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
@@ -7001,6 +7054,8 @@ axis	Y Axis	Вісь Y
 @msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	складений контур {id} має прихований, заблокований або напрямний елемент, тому його елементи не можна замінити
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	складений контур {id} має елемент, який не є контуром, тому його елементи не можна замінити
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
 @msg	a number >= {_1}	число >= {_1}
@@ -7079,6 +7134,8 @@ axis	Y Axis	Вісь Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` може бути лише true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` дозволено лише для імпортера (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» відкриває файли, але не розміщує їх: його маніфест не задає `place`
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
@@ -7090,6 +7147,10 @@ axis	Y Axis	Вісь Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
 @msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Читати передані йому об’єкти, а також параметри, монтажні області, шари та зразки документа
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` має перелічувати різні розділи: settings, artboards, layers або swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` дозволено лише для фільтра або динамічного ефекту з `commands`, з `api` 3 або вище та з дозволом `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	відомості про документ, які запитує модуль, завеликі для передавання: не більше {MAX_CONTEXT_ITEMS} монтажних областей, шарів і зразків у {MAX_CONTEXT_BYTES} байтах
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
 @msg	instruction budget	бюджет інструкцій
@@ -8676,6 +8737,8 @@ breakText	Glyphs	Гліфи
 @msg	`dataBase64` is larger than the module limit	`dataBase64` перевищує обмеження модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не є припустимим base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` не можна поєднувати з `ids`, `reverse` або `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` не можна поєднувати з `ids`, `id` або `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` не можна поєднувати з `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` і `childLimit` обмежують зведення: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — це назва дизайну або null для звичайних стовпців
 @msg	`design` is a design name, or null for the default marker	`design` — це назва дизайну або null для стандартного маркера
@@ -9297,6 +9360,7 @@ breakText	Glyphs	Гліфи
 @msg	give a pattern name or select an object painted with a pattern	укажіть ім’я візерунка або виділіть об’єкт, зафарбований візерунком
 @msg	give at least one of clip, invert, disabled, linked	укажіть принаймні одне з: clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	укажіть color, none, swatch або gradient
+@msg	give color, none, swatch, gradient or opacity	укажіть color, none, swatch, gradient або opacity
 @msg	give dataBase64	укажіть dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	укажіть at (клацання) або area (контур, намальований навколо перекриттів)
 @msg	give exactly one of `path`, `data` and `dataBase64`	укажіть рівно одне з: `path`, `data`, `dataBase64`

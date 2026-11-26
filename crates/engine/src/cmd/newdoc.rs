@@ -634,6 +634,30 @@ pub(crate) fn grid_origins_rc(
         .collect()
 }
 
+/// Rearrange Artboards' grid for artboards of `sizes`, in their order, its top-left at `origin`:
+/// `lines` is the column count of a grid by row and the row count of a grid by column (kept to 1
+/// to the artboard count), and `rtl` puts the first column at the right. Returns each artboard's
+/// top-left corner and the grid's rows and columns.
+pub fn rearrange_grid(
+    sizes: &[(f64, f64)],
+    origin: Point,
+    layout: ArtboardLayout,
+    lines: u64,
+    spacing: f64,
+    rtl: bool,
+) -> (Vec<Point>, usize, usize) {
+    let n = sizes.len().max(1);
+    let lines = usize::try_from(lines).unwrap_or(usize::MAX).clamp(1, n);
+    let (rows, cols) = match layout {
+        ArtboardLayout::GridByRow => (n.div_ceil(lines), lines),
+        ArtboardLayout::GridByColumn => (lines, n.div_ceil(lines)),
+        ArtboardLayout::Row => (1, n),
+        ArtboardLayout::Column => (n, 1),
+    };
+    let origins = grid_origins_rc(sizes, origin, (rows, cols), spacing, layout == ArtboardLayout::GridByColumn, rtl);
+    (origins, rows, cols)
+}
+
 /// The built-in presets: (category, presets as (name, width, height, units)), with the category's
 /// colour mode and raster effects resolution. Sizes in `units` (converted to points on use).
 type Category = (&'static str, ColorMode, f64, &'static [(&'static str, f64, f64, Unit)]);
@@ -1009,10 +1033,11 @@ impl Session {
         let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
         // them, so the new document's assigned profiles draw and are saved with it.
-        let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
+        let (mut doc, _, mut warnings) = super::fileio::decode_native_file(&bytes).map_err(|e| e.to_string())?;
         // Linked images in its symbols, patterns and brushes are read from their files, as placing
         // a document reads them.
         super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&file)), false, false);
+        warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
         Ok(Some(ReadProfile { doc, file, warnings }))
     }
 }

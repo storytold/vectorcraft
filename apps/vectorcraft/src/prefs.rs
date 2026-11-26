@@ -1,20 +1,26 @@
-use super::{VectorcraftApp, fileio, prefs_dir};
+//! The preferences file: opened before the window, sampled while the app runs and saved on exit.
 
-/// Where UI preferences live: ~/Library/Application Support/VectorCraft (macOS),
-/// %APPDATA%\VectorCraft (Windows), $XDG_CONFIG_HOME or ~/.config/vectorcraft (Linux).
-pub(crate) fn prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("VectorCraft", "vectorcraft")
-}
+use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
-/// The same place under the project's former name (DrawCraft): read once if there are no
-/// VectorCraft preferences yet, so settings survive the rename.
-fn legacy_prefs_path() -> Option<std::path::PathBuf> {
-    prefs_dir::prefs_path_for("DrawCraft", "drawcraft")
+use craft::settings::{LegacyFile, LoadReport, Location, OpenOptions, SettingsStore, SharedSettings};
+use vectorcraft_ui_egui::{AppSettings, from_app, parse_legacy};
+
+use super::{VectorcraftApp, prefs_dir};
+
+/// The file the settings were kept in before `config.toml`.
+const LEGACY_FILE: &str = "ui.json";
+
+/// The DrawCraft folder (the project's former name), read once if there are no VectorCraft
+/// preferences yet, so settings survive the rename.
+fn legacy_dir() -> Option<PathBuf> {
+    prefs_dir::profile::prefs_dir(true)
 }
 
 /// Where the log files live: `logs` in the preferences folder (see `logging`).
-pub(crate) fn log_dir() -> Option<std::path::PathBuf> {
-    Some(prefs_path()?.parent()?.join("logs"))
+pub(crate) fn log_dir() -> Option<PathBuf> {
+    Some(prefs_dir::prefs_dir()?.join("logs"))
 }
 
 /// Runs without preferences (`VECTORCRAFT_NO_PREFS`, agents' test runs) neither read nor write them.
@@ -22,586 +28,164 @@ pub(crate) fn prefs_enabled() -> bool {
     std::env::var_os("VECTORCRAFT_NO_PREFS").is_none()
 }
 
-/// The saved UI preferences, read before the window opens (they hold its size and position).
-/// A file read only in part, or with layouts converted from an older version, is copied beside
-/// itself before anything saves over it.
-pub(crate) fn read_prefs() -> Option<vectorcraft_ui_egui::UiState> {
-    if !prefs_enabled() {
-        return None;
-    }
-    if let Some(p) = prefs_path()
-        && let Ok(bytes) = std::fs::read(&p)
-    {
-        let read = vectorcraft_ui_egui::UiState::read_preferences(&bytes);
-        if read.as_ref().is_none_or(|read| !read.intact) {
-            keep_prefs_copy(&p, &bytes, "ui.unreadable");
+/// The saved preferences, opened before the window (they hold its size and position). The folder is
+/// `profile.rs`'s; the old `ui.json` files are read once when there is no `config.toml` yet. A run
+/// without preferences keeps them in memory.
+pub(crate) fn open_store() -> (SharedSettings<AppSettings>, LoadReport) {
+    let (location, legacy) = match prefs_dir::prefs_dir().filter(|_| prefs_enabled()) {
+        Some(dir) => {
+            let file = |dir: PathBuf| LegacyFile { path: dir.join(LEGACY_FILE), parse: parse_legacy };
+            let legacy = std::iter::once(file(dir.clone())).chain(legacy_dir().map(file)).collect();
+            (Location::Dir(dir), legacy)
         }
-        if read.as_ref().is_some_and(|read| read.converted) {
-            keep_prefs_copy(&p, &bytes, "ui.before-layout-migration");
-        }
-        return read.map(|read| read.ui);
-    }
-    let bytes = legacy_prefs_path().and_then(|p| std::fs::read(p).ok())?;
-    decode_saved_prefs(&bytes)
+        None => (Location::Memory, Vec::new()),
+    };
+    let (store, report) = SettingsStore::open_with(OpenOptions::new(location).legacy(legacy));
+    (SharedSettings::new(store), report)
 }
 
-/// Saved preferences, with what this version cannot read of their docking data dropped and
-/// older layouts converted (`vectorcraft_ui_egui::layout_migration`).
-pub(crate) fn decode_saved_prefs(bytes: &[u8]) -> Option<vectorcraft_ui_egui::UiState> {
-    vectorcraft_ui_egui::UiState::read_preferences(bytes).map(|read| read.ui)
-}
-
-/// Set when `ui.json` needed a copy kept ([`keep_prefs_copy`]) and none could be: the file is
-/// then left as it is rather than overwritten.
-pub(crate) static KEEP_UI_PREFS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Copy `ui.json` beside it as `<stem>.json` or the first free `<stem>-N.json`, before the next
-/// save replaces it: `ui.unreadable` when it could not be read in full (a newer VectorCraft may
-/// have written it), `ui.before-layout-migration` when its layouts were converted.
-pub(crate) fn keep_prefs_copy(path: &std::path::Path, bytes: &[u8], stem: &str) {
-    use std::io::Write as _;
-    for n in 1..100u32 {
-        let name = if n == 1 { format!("{stem}.json") } else { format!("{stem}-{n}.json") };
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        // The preferences hold recent document paths: the copy is owner-only, whatever the umask.
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        match options.open(path.with_file_name(name)) {
-            Ok(mut file) => {
-                if file.write_all(bytes).is_ok() {
-                    return;
-                }
-                break;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(_) => break,
-        }
-    }
-    KEEP_UI_PREFS.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub(crate) fn load_prefs(app: &mut VectorcraftApp, saved: Option<vectorcraft_ui_egui::UiState>) {
+pub(crate) fn load_prefs(app: &mut VectorcraftApp, store: &SharedSettings<AppSettings>) {
     if !prefs_enabled() {
         return;
     }
-    if let Some(ui) = saved {
-        app.ui = ui.sanitized();
-    }
+    let ui = store.lock().get().ui.clone();
+    app.ui = ui.sanitized();
     vectorcraft_ui_egui::prefs_dialog::restore(app);
-    // What this window started from: only what changes after it is this window's to save.
-    set_saved_base(prefs_value(app).ok());
 }
 
-/// Save what this window changed since it last read or saved the preferences, merged into the
-/// file as it is now ([`merge_changes`]): another VectorCraft window open at the same time, which
-/// read the file before this one saved, then keeps this window's changes when it saves or quits
-/// (#4625). Nothing is written when nothing changed.
-pub(crate) fn save_prefs(app: &VectorcraftApp) {
-    if !prefs_enabled() || KEEP_UI_PREFS.load(std::sync::atomic::Ordering::Relaxed) {
+/// How often [`save_tick`] samples the UI state for changes.
+const SAVE_EVERY: Duration = Duration::from_secs(2);
+
+/// Once per frame: hand the store the current settings when a preference was confirmed (#1747) or
+/// every [`SAVE_EVERY`] (the workspace, panels, toolbars and the other UI settings change without
+/// the dialog, #4625), then let the store write what it holds. The store decides when to write and
+/// merges another window's changes; a sample equal to what it holds saves nothing.
+pub(crate) fn save_tick(app: &mut VectorcraftApp, store: &SharedSettings<AppSettings>, now: Instant) {
+    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+    let confirmed = app.take_prefs_changed();
+    let sample = {
+        let mut last = LAST.lock().unwrap_or_else(PoisonError::into_inner);
+        let sample = confirmed || last.is_none_or(|t| now.duration_since(t) >= SAVE_EVERY);
+        if sample {
+            *last = Some(now);
+        }
+        sample
+    };
+    let mut store = store.lock();
+    if sample && store.is_persistent() {
+        store.set(from_app(app));
+    }
+    store.tick(now);
+}
+
+/// On exit: save the app's last state, with what changed since the last sample.
+pub(crate) fn flush(app: &VectorcraftApp, store: &SharedSettings<AppSettings>) {
+    let mut store = store.lock();
+    if !store.is_persistent() {
         return;
     }
-    let Some(p) = prefs_path() else { return };
-    let Ok(mine) = prefs_value(app) else { return };
-    let base = saved_base();
-    if base.as_ref().is_some_and(|b| same_lasting(b, &mine)) {
-        return;
+    store.set(from_app(app));
+    // Preferences are best effort: a failed write is logged, never fatal at exit.
+    if let Err(e) = store.flush() {
+        log::warn!("the preferences were not saved: {e}");
     }
-    // The file as another window may have saved it since (none, or unreadable: this one's own).
-    let on_disk = std::fs::read(&p).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
-    let merged = match (base.as_ref(), on_disk) {
-        (Some(base), Some(on_disk)) => merge_changes(base, &mine, on_disk),
-        _ => mine.clone(),
-    };
-    let _ = std::fs::create_dir_all(p.parent().unwrap_or(std::path::Path::new(".")));
-    let Ok(bytes) = serde_json::to_vec_pretty(&merged) else { return };
-    // Preferences are best effort: a failed write keeps the previous file, and the changes are
-    // tried again on the next save.
-    if fileio::write_atomic(&p, &bytes).is_ok() {
-        set_saved_base(Some(mine));
-    }
-}
-
-/// How often [`save_prefs_soon`] looks for changes to save.
-const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// Save the preferences at most every [`SAVE_EVERY`] while the app runs, when something changed:
-/// the workspace, panels, toolbars and the other UI settings kept only in the UI state were saved
-/// only on quitting, so a session ended any other way (the window closed by the system, the
-/// process ended or crashing) started the next one from the settings before it (#4625).
-pub(crate) fn save_prefs_soon(app: &VectorcraftApp) {
-    static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
-    let Ok(mut last) = LAST.lock() else { return };
-    if last.is_some_and(|t| t.elapsed() < SAVE_EVERY) {
-        return;
-    }
-    *last = Some(std::time::Instant::now());
-    drop(last);
-    save_prefs(app);
-}
-
-/// The preferences as this window last read or saved them (`None`: not read yet).
-static SAVED_BASE: std::sync::Mutex<Option<serde_json::Value>> = std::sync::Mutex::new(None);
-
-fn saved_base() -> Option<serde_json::Value> {
-    SAVED_BASE.lock().ok().and_then(|b| b.clone())
-}
-
-fn set_saved_base(value: Option<serde_json::Value>) {
-    if let Ok(mut b) = SAVED_BASE.lock() {
-        *b = value;
-    }
-}
-
-/// Fields of the UI state that a start resets ([`vectorcraft_ui_egui::UiState::sanitized`]): a
-/// change to them alone isn't saved, and they are never merged over another window's.
-const PASSING: &[&str] = &["status", "dialog", "flyout", "palette_open", "palette_query", "about", "open_panel"];
-
-/// Do `a` and `b` hold the same preferences, leaving out what a start resets ([`PASSING`])?
-fn same_lasting(a: &serde_json::Value, b: &serde_json::Value) -> bool {
-    match (a.as_object(), b.as_object()) {
-        (Some(a), Some(b)) => {
-            let keys: std::collections::BTreeSet<&String> = a.keys().chain(b.keys()).filter(|k| !PASSING.contains(&k.as_str())).collect();
-            keys.into_iter().all(|k| a.get(k) == b.get(k))
-        }
-        _ => a == b,
-    }
-}
-
-/// Fields that a read fills in from other fields when the file lacks them
-/// (`vectorcraft_ui_egui::layout_migration`): `help_bar` follows `status_bar`. A save writes them
-/// whenever the file lacks them, so the next read does not fill them in again from a changed field.
-const DERIVED: &[&str] = &["help_bar"];
-
-/// `on_disk` with what changed from `base` to `mine` put over it: each top-level field of the UI
-/// state, and each engine preference (`engine_prefs`) on its own, so two windows that change
-/// different settings keep both. A field both changed takes this window's value (it saves last).
-fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: serde_json::Value) -> serde_json::Value {
-    use serde_json::Value;
-    let (Some(base), Some(mine), Value::Object(mut out)) = (base.as_object(), mine.as_object(), on_disk) else {
-        return mine.clone();
-    };
-    // The current Actions set (`action_set`, an index) is this window's when this window chose
-    // another one or the other window did not; otherwise it is the other window's.
-    let use_mine = chose_another_action_set(base, mine) || !chose_another_action_set(base, &out);
-    // The list the saved current set was chosen from.
-    let chosen_from = if use_mine { mine.get("action_sets").cloned() } else { out.get("action_sets").cloned() };
-    let keys: std::collections::BTreeSet<&String> = base.keys().chain(mine.keys()).collect();
-    for key in keys {
-        if PASSING.contains(&key.as_str()) {
-            if let Some(v) = mine.get(key) {
-                out.entry(key.clone()).or_insert_with(|| v.clone());
-            }
-            continue;
-        }
-        let (was, now) = (base.get(key), mine.get(key));
-        if was == now || key == "action_set" {
-            continue;
-        }
-        if key == "engine_prefs"
-            && let (Some(Value::Object(was)), Some(Value::Object(now)), Some(Value::Object(theirs))) = (was, now, out.get_mut(key))
-        {
-            put_changes(was, now, theirs, MERGED_BY_KEY);
-            continue;
-        }
-        match now {
-            Some(v) => {
-                out.insert(key.clone(), v.clone());
-            }
-            None => {
-                out.remove(key);
-            }
-        }
-    }
-    for key in DERIVED {
-        if !out.contains_key(*key)
-            && let Some(v) = mine.get(*key)
-        {
-            out.insert((*key).to_string(), v.clone());
-        }
-    }
-    if use_mine {
-        match mine.get("action_set") {
-            Some(v) => {
-                out.insert("action_set".to_string(), v.clone());
-            }
-            None => {
-                out.remove("action_set");
-            }
-        }
-    }
-    keep_current_action_set(&mut out, chosen_from.as_ref());
-    Value::Object(out)
-}
-
-/// Engine preferences that hold values set one key at a time (`app.preferences` in scripts): a
-/// save merges them key by key, so two windows that set different keys keep both.
-const MERGED_BY_KEY: &[&str] = &["scriptPreferences"];
-
-/// Whether `store`, a saved `scriptPreferences`, reads as a store within the limits
-/// `app.preferences` keeps; one that does not read is not within them.
-fn script_store_fits(store: &serde_json::Map<String, serde_json::Value>) -> bool {
-    serde_json::from_value::<std::collections::BTreeMap<String, vectorcraft_engine::ScriptPreference>>(serde_json::Value::Object(store.clone()))
-        .is_ok_and(|s| vectorcraft_engine::script::dom::preferences::within_limits(&s))
-}
-
-/// `theirs` with each entry that changed from `was` to `now` set to `now`'s value, or removed when
-/// `now` lacks it. The entries named in `by_key` that are maps (or missing) are merged key by key.
-fn put_changes(
-    was: &serde_json::Map<String, serde_json::Value>,
-    now: &serde_json::Map<String, serde_json::Value>,
-    theirs: &mut serde_json::Map<String, serde_json::Value>,
-    by_key: &[&str],
-) {
-    use serde_json::{Map, Value};
-    let empty = Map::new();
-    let names: std::collections::BTreeSet<&String> = was.keys().chain(now.keys()).collect();
-    for name in names {
-        let (a, b) = (was.get(name), now.get(name));
-        if a == b {
-            continue;
-        }
-        if by_key.contains(&name.as_str())
-            && let (Some(a), Some(b)) = (a.map_or(Some(&empty), Value::as_object), b.map_or(Some(&empty), Value::as_object))
-        {
-            let mut inner = match theirs.remove(name) {
-                Some(Value::Object(m)) => m,
-                _ => Map::new(),
-            };
-            put_changes(a, b, &mut inner, &[]);
-            // A merge past the store's limits saves this window's store as it is.
-            if !script_store_fits(&inner) {
-                inner = b.clone();
-            }
-            if !inner.is_empty() {
-                theirs.insert(name.clone(), Value::Object(inner));
-            }
-            continue;
-        }
-        match b {
-            Some(v) => {
-                theirs.insert(name.clone(), v.clone());
-            }
-            None => {
-                theirs.remove(name);
-            }
-        }
-    }
-}
-
-/// Point the saved current Actions set (`action_set`) at the same set in the merged
-/// `action_sets` when the merge took the index from one window and the list from another
-/// ([`find_action_set`]). With no such set, no set is current.
-fn keep_current_action_set(out: &mut serde_json::Map<String, serde_json::Value>, chosen_from: Option<&serde_json::Value>) {
-    use serde_json::Value;
-    let Some(i) = out.get("action_set").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()) else { return };
-    let merged = out.get("action_sets");
-    if merged == chosen_from {
-        return;
-    }
-    match find_action_set(chosen_from, i, merged) {
-        Some(j) => {
-            out.insert("action_set".to_string(), Value::from(j));
-        }
-        None => {
-            out.remove("action_set");
-        }
-    }
-}
-
-/// Was another Actions set made current from `base` to `now`? Recording into the current set,
-/// renaming it, deleting it, or deleting a set before it changes the list or the index without
-/// choosing another set.
-fn chose_another_action_set(base: &serde_json::Map<String, serde_json::Value>, now: &serde_json::Map<String, serde_json::Value>) -> bool {
-    use serde_json::Value;
-    let index = |v: &serde_json::Map<String, Value>| v.get("action_set").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
-    let (was, sets) = (base.get("action_sets"), now.get("action_sets"));
-    let (Some(i), Some(k)) = (index(base), index(now)) else {
-        return match (index(base), index(now)) {
-            (None, None) => false,
-            // No set is current: another set was chosen only if the current one is still there.
-            (Some(i), None) => find_action_set(was, i, sets).is_some(),
-            _ => true,
-        };
-    };
-    if was == sets {
-        return i != k;
-    }
-    if let Some(j) = find_action_set(was, i, sets) {
-        return j != k;
-    }
-    // The set at the same place changed while every other set stayed as it was: it was edited.
-    let edited_in_place = was
-        .and_then(Value::as_array)
-        .zip(sets.and_then(Value::as_array))
-        .is_some_and(|(was, sets)| was.len() == sets.len() && was.iter().zip(sets).enumerate().all(|(j, (a, b))| j == i || a == b));
-    !(i == k && edited_in_place)
-}
-
-/// Where the Actions set at index `i` of `old` is in `new` (two `action_sets` lists): found by
-/// its contents when no other set in either list has the same contents, otherwise by its name when
-/// no other set in either list has it.
-fn find_action_set(old: Option<&serde_json::Value>, i: usize, new: Option<&serde_json::Value>) -> Option<usize> {
-    use serde_json::Value;
-    let (old, new) = (old?.as_array()?, new?.as_array()?);
-    let set = old.get(i)?;
-    let only = |list: &[Value], same: &dyn Fn(&Value) -> bool| {
-        let mut found = list.iter().enumerate().filter(|(_, s)| same(s));
-        match (found.next(), found.next()) {
-            (Some((j, _)), None) => Some(j),
-            _ => None,
-        }
-    };
-    let same_contents = |s: &Value| s == set;
-    if only(old, &same_contents).is_some()
-        && let Some(j) = only(new, &same_contents)
-    {
-        return Some(j);
-    }
-    let name = set.get("name")?;
-    let same_name = |s: &Value| s.get("name") == Some(name);
-    only(old, &same_name)?;
-    only(new, &same_name)
-}
-
-/// The preferences file's contents: the UI state with the engine preferences.
-#[cfg(test)]
-pub(crate) fn prefs_bytes(app: &VectorcraftApp) -> serde_json::Result<Vec<u8>> {
-    serde_json::to_vec_pretty(&prefs_value(app)?)
-}
-
-/// [`prefs_bytes`] as JSON.
-fn prefs_value(app: &VectorcraftApp) -> serde_json::Result<serde_json::Value> {
-    let mut ui = app.ui.clone();
-    // An open dialog is never restored, and its fields can hold passwords (PDF import and save).
-    ui.dialog = None;
-    ui.engine_prefs = app.session.prefs.to_json();
-    serde_json::to_value(&ui)
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use std::path::Path;
 
-    use super::{merge_changes, same_lasting};
+    use super::*;
 
-    /// Two windows open at once (#4625): the one that saves last keeps the other's changes and
-    /// adds its own, instead of putting back the preferences it started from.
-    #[cfg(unix)]
-    #[test]
-    fn a_kept_preferences_copy_is_owner_only() {
-        use std::os::unix::fs::PermissionsExt as _;
-        let temp = tempfile::Builder::new().prefix("vc-prefs-copy-").tempdir().unwrap();
-        let dir = temp.path();
-        super::keep_prefs_copy(&dir.join("ui.json"), b"{}", "ui.unreadable");
-        let mode = std::fs::metadata(dir.join("ui.unreadable.json")).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
+    /// One VectorCraft window: its store over the folder and its app, as loaded from it.
+    struct Window {
+        store: SettingsStore<AppSettings>,
+        app: VectorcraftApp,
     }
 
-    #[test]
-    fn a_window_saves_only_what_it_changed_over_another_windows_save() {
-        let base = json!({"workspace": "Essentials", "toolbar": true, "engine_prefs": {"uiAccent": "blue", "uiScaling": 1.0}});
-        // The other window switched the workspace and the accent, and saved.
-        let on_disk = json!({"workspace": "Painting", "toolbar": true, "engine_prefs": {"uiAccent": "violet", "uiScaling": 1.0}});
-        // This one changed only the UI scaling.
-        let mine = json!({"workspace": "Essentials", "toolbar": true, "engine_prefs": {"uiAccent": "blue", "uiScaling": 1.25}});
-        let merged = merge_changes(&base, &mine, on_disk);
-        assert_eq!(merged, json!({"workspace": "Painting", "toolbar": true, "engine_prefs": {"uiAccent": "violet", "uiScaling": 1.25}}));
+    impl Window {
+        fn open(dir: &Path) -> Self {
+            let (store, _) = SettingsStore::<AppSettings>::open_at(dir);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.ui = store.get().ui.clone();
+            Window { store, app }
+        }
+
+        fn save(&mut self) {
+            self.store.set(from_app(&self.app));
+            self.store.flush().unwrap();
+        }
+
+        fn set_sets(&mut self, names: &[&str]) {
+            self.app.ui.actions = craft::automation::actions::ActionList::new();
+            for name in names {
+                self.app.ui.actions.new_set(name).unwrap();
+            }
+        }
     }
 
-    #[test]
-    fn script_preference_keys_from_two_windows_are_both_saved() {
-        let base = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}, "gone": {"integer": 1}}}});
-        // The other window set `b`; this one set `c`, changed `a` and removed `gone`.
-        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}, "b": {"string": "x"}, "gone": {"integer": 1}}}});
-        let mine = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": false}, "c": {"real": 0.5}}}});
-        let want = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": false}, "b": {"string": "x"}, "c": {"real": 0.5}}}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), want);
-        // A window that started with no keys and removed none keeps the other window's.
-        let base = json!({"engine_prefs": {}});
-        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"b": {"string": "x"}}}});
-        let mine = json!({"engine_prefs": {"scriptPreferences": {"c": {"real": 0.5}}}});
-        let want = json!({"engine_prefs": {"scriptPreferences": {"b": {"string": "x"}, "c": {"real": 0.5}}}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), want);
-        // Removing the last key of either window leaves the field out.
-        let base = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}}}});
-        let on_disk = base.clone();
-        let mine = json!({"engine_prefs": {}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"engine_prefs": {}}));
+    fn temp() -> tempfile::TempDir {
+        tempfile::Builder::new().prefix("vc-prefs-").tempdir().unwrap()
     }
 
-    #[test]
-    fn script_preference_keys_merged_past_the_limits_save_this_windows_keys() {
-        use vectorcraft_engine::script::dom::preferences::MAX_KEYS;
-        let keys = |prefix: &str| -> serde_json::Map<String, serde_json::Value> {
-            (0..MAX_KEYS).map(|i| (format!("{prefix}{i}"), json!({"boolean": true}))).collect()
-        };
-        // Each window added a full store of its own keys.
-        let base = json!({"engine_prefs": {}});
-        let on_disk = json!({"engine_prefs": {"scriptPreferences": keys("theirs")}});
-        let mine = json!({"engine_prefs": {"scriptPreferences": keys("mine")}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), mine);
-        // A merge within the limits keeps both windows' keys.
-        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"theirs": {"boolean": true}}}});
-        let mine = json!({"engine_prefs": {"scriptPreferences": {"mine": {"integer": 2}}}});
-        let want = json!({"engine_prefs": {"scriptPreferences": {"mine": {"integer": 2}, "theirs": {"boolean": true}}}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), want);
+    fn saved(dir: &Path) -> AppSettings {
+        SettingsStore::<AppSettings>::open_at(dir).0.get().clone()
     }
 
-    #[test]
-    fn a_setting_both_windows_changed_takes_the_last_saved() {
-        let base = json!({"workspace": "Essentials", "engine_prefs": {"uiAccent": "blue"}});
-        let on_disk = json!({"workspace": "Painting", "engine_prefs": {"uiAccent": "violet"}});
-        let mine = json!({"workspace": "Typography", "engine_prefs": {"uiAccent": "green"}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"workspace": "Typography", "engine_prefs": {"uiAccent": "green"}}));
+    fn set_names(settings: &AppSettings) -> Vec<String> {
+        settings.ui.actions.sets().into_iter().map(str::to_string).collect()
     }
 
-    #[test]
-    fn fields_added_or_removed_by_this_window_are_saved() {
-        let base = json!({"docking": {"root": 1}, "engine_prefs": {"old": 1}});
-        let on_disk = json!({"docking": {"root": 1}, "recent_files": ["a.svg"], "engine_prefs": {"old": 1}});
-        let mine = json!({"dock_width": 300.0, "engine_prefs": {"new": 2}});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"dock_width": 300.0, "recent_files": ["a.svg"], "engine_prefs": {"new": 2}}));
-    }
-
-    /// The status line and open dialogs reset at start: they don't make a save, and they don't
-    /// replace another window's.
+    /// The status line and open palette reset at start: a window that has them up neither saves
+    /// them nor writes over another window's setting it did not change.
     #[test]
     fn what_a_start_resets_is_left_out() {
-        let base = json!({"status": "", "dialog": null, "workspace": "Essentials"});
-        let mine = json!({"status": "Saved", "dialog": {"kind": "preferences"}, "workspace": "Essentials"});
-        assert!(same_lasting(&base, &mine));
-        let on_disk = json!({"status": "Opened", "dialog": null, "workspace": "Painting"});
-        let mine = json!({"status": "Saved", "dialog": {"kind": "preferences"}, "workspace": "Essentials", "toolbar": false});
-        let merged = merge_changes(&base, &mine, on_disk);
-        assert_eq!(merged, json!({"status": "Opened", "dialog": null, "workspace": "Painting", "toolbar": false}));
-        assert!(!same_lasting(&base, &mine));
+        let dir = temp();
+        Window::open(dir.path()).save();
+        let (mut first, mut second) = (Window::open(dir.path()), Window::open(dir.path()));
+        second.store.update(|s| s.ui.status_bar = false);
+        second.store.flush().unwrap();
+        first.app.ui.status = "Saved".to_string();
+        first.app.ui.palette_query = "find".to_string();
+        first.save();
+        let back = saved(dir.path());
+        assert!(!back.ui.status_bar, "the other window's setting survives");
+        assert!(back.ui.status.is_empty() && back.ui.palette_query.is_empty(), "nothing a start resets is written");
     }
 
-    /// A file from before the Help Bar setting: the read shows the Help Bar with the status bar.
-    /// After the status bar is hidden and the Help Bar left showing, the save writes `help_bar`,
-    /// so the next read does not hide it with the status bar. A value on disk is kept.
-    #[test]
-    fn a_help_bar_setting_the_file_lacks_is_saved() {
-        let base = json!({"status_bar": true, "help_bar": true});
-        let mine = json!({"status_bar": false, "help_bar": true});
-        let on_disk = json!({"status_bar": true});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": true}));
-        // Another window saved its own Help Bar setting: it stays.
-        let on_disk = json!({"status_bar": true, "help_bar": false});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"status_bar": false, "help_bar": false}));
-    }
-
-    /// One window deleted the first Actions set and saved; this one made the second set current.
-    /// The saved index follows that set to its place in the merged list.
+    /// The current Actions set is saved by name: another window inserting a set before it does not
+    /// make a different set current.
     #[test]
     fn the_current_action_set_follows_its_set_in_the_merged_list() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
-        let on_disk = json!({"action_sets": [set("B"), set("C")]});
-        let mine = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 0}));
-        // The other window also recorded into B: B is found by its name.
-        let on_disk = json!({"action_sets": [{"name": "B", "actions": [{"name": "Action 1", "steps": []}]}, set("C")]});
-        let merged = merge_changes(&base, &mine, on_disk);
-        assert_eq!(merged["action_set"], json!(0));
-        // The other window deleted B: no set is current.
-        let on_disk = json!({"action_sets": [set("A"), set("C")]});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("A"), set("C")]}));
+        let dir = temp();
+        let mut base = Window::open(dir.path());
+        base.set_sets(&["A", "B", "C"]);
+        base.save();
+        let (mut chooser, mut inserter) = (Window::open(dir.path()), Window::open(dir.path()));
+        chooser.app.ui.action_set = Some("C".to_string());
+        chooser.save();
+        inserter.set_sets(&["Z", "A", "B", "C"]);
+        inserter.save();
+        let back = saved(dir.path());
+        assert_eq!(back.ui.action_set.as_deref(), Some("C"));
+        assert_eq!(set_names(&back), ["Z", "A", "B", "C"]);
     }
 
-    /// This window deleted the first set while the index saved by the other window still stands.
+    /// The window that did not choose keeps the other's choice, still by name after it deleted the
+    /// set before it.
     #[test]
     fn the_other_windows_current_action_set_follows_its_set() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")]});
-        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
-        let mine = json!({"action_sets": [set("B"), set("C")]});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
-    }
-
-    /// The other window replaced or renamed the set this one made current (the saved sets do not
-    /// tell the two apart): no set is current.
-    #[test]
-    fn a_set_in_the_place_of_the_current_set_is_not_made_current() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")]});
-        let on_disk = json!({"action_sets": [set("A"), set("D"), set("C")]});
-        let mine = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
-        assert_eq!(merge_changes(&base, &mine, on_disk).get("action_set"), None);
-        let on_disk = json!({"action_sets": [set("A"), set("C"), set("D")]});
-        assert_eq!(merge_changes(&base, &mine, on_disk).get("action_set"), None);
-    }
-
-    /// This window deleted a set and made the set now at the old index current: its choice is
-    /// saved, though the index is the same number.
-    #[test]
-    fn a_new_current_set_at_the_same_index_is_saved() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
-        let on_disk = json!({"action_sets": [{"name": "A", "actions": [{"name": "Action 1", "steps": []}]}, set("B"), set("C")], "action_set": 1});
-        let mine = json!({"action_sets": [set("B"), set("C")], "action_set": 1});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
-    }
-
-    /// Recording into the current set does not choose it again: the other window's choice stays.
-    #[test]
-    fn recording_into_the_current_set_keeps_the_other_windows_choice() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let recorded = json!({"name": "A", "actions": [{"name": "Action 1", "steps": []}]});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
-        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
-        let mine = json!({"action_sets": [recorded.clone(), set("B"), set("C")], "action_set": 0});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [recorded, set("B"), set("C")], "action_set": 2}));
-    }
-
-    /// Renaming the current set does not choose it again: the other window's choice stays. With no
-    /// other choice, the renamed set stays current.
-    #[test]
-    fn renaming_the_current_set_keeps_the_other_windows_choice() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 0});
-        let on_disk = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 1});
-        let mine = json!({"action_sets": [set("A2"), set("B"), set("C")], "action_set": 0});
-        assert_eq!(merge_changes(&base, &mine, on_disk)["action_set"], json!(1));
-        assert_eq!(merge_changes(&base, &mine, base.clone())["action_set"], json!(0));
-    }
-
-    /// Deleting the current set does not override the other window's choice.
-    #[test]
-    fn deleting_the_current_set_keeps_the_other_windows_choice() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B")], "action_set": 0});
-        let on_disk = json!({"action_sets": [set("A"), set("B")], "action_set": 1});
-        let mine = json!({"action_sets": [set("B")]});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("B")], "action_set": 0}));
-        assert_eq!(merge_changes(&base, &mine, base.clone()), json!({"action_sets": [set("B")]}));
-    }
-
-    /// Deleting a set before the current one moves its index without choosing it again.
-    #[test]
-    fn deleting_a_set_before_the_current_one_keeps_it_current() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("B"), set("C")], "action_set": 2});
-        let mine = json!({"action_sets": [set("B"), set("C")], "action_set": 1});
-        assert_eq!(merge_changes(&base, &mine, base.clone()), json!({"action_sets": [set("B"), set("C")], "action_set": 1}));
-    }
-
-    /// Two sets with the same contents: when the other window deleted the one this window made
-    /// current, the one left is not made current in its place.
-    #[test]
-    fn a_set_with_the_same_contents_does_not_take_the_place_of_the_current_set() {
-        let set = |name: &str| json!({"name": name, "actions": []});
-        let base = json!({"action_sets": [set("A"), set("A"), set("C")]});
-        let on_disk = json!({"action_sets": [set("A"), set("C")]});
-        let mine = json!({"action_sets": [set("A"), set("A"), set("C")], "action_set": 1});
-        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"action_sets": [set("A"), set("C")]}));
-    }
-
-    #[test]
-    fn a_file_that_is_not_an_object_is_replaced() {
-        let base = json!({"workspace": "Essentials"});
-        let mine = json!({"workspace": "Painting"});
-        assert_eq!(merge_changes(&base, &mine, json!([1, 2])), mine);
+        let dir = temp();
+        let mut base = Window::open(dir.path());
+        base.set_sets(&["A", "B", "C"]);
+        base.save();
+        let (mut chooser, mut deleter) = (Window::open(dir.path()), Window::open(dir.path()));
+        deleter.set_sets(&["B", "C"]);
+        deleter.save();
+        chooser.app.ui.action_set = Some("C".to_string());
+        chooser.save();
+        let back = saved(dir.path());
+        assert_eq!(back.ui.action_set.as_deref(), Some("C"));
+        assert_eq!(set_names(&back), ["B", "C"]);
     }
 }

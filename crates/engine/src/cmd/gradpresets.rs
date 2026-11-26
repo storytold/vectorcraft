@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Gradient Preset",
             [],
             None,
-            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops, method, spread and repeats (a freeform preset's: the first three), and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient (while the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes, by the active proxy) → {name, ids: the objects painted (none: only the default changed)}",
+            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, defaultsOnly?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops, method, spread and repeats (a freeform preset's: the first three), and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient (while the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no ids, id or item are given (a null ids or id counts as none), or `defaultsOnly: true` is given, only the default changes, by the active proxy) → {name, ids: the objects painted (none: only the default changed)}",
             has_doc,
             apply
         ),
@@ -207,10 +207,10 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "gradient.presets.apply";
     let name = name_param(p, C)?;
     let preset = s.gradient_preset(name).ok_or_else(|| bad(C, format!("no gradient preset `{name}` (see gradient.presets.list)")))?;
-    // While the Live Paint Bucket is active, the gradient it paints with changes, chosen by the
-    // active proxy rather than the selection's Appearance row (as paint.editGradient chooses).
-    let bucket = super::paint::bucket_color_params(s, p, C)?;
-    let p = bucket.as_ref().unwrap_or(p);
+    // While the active tool paints with the chosen fill or stroke, the gradient it paints with
+    // changes (as paint.editGradient chooses).
+    let for_tool = super::paint::tool_gradient_params(s, p, C)?;
+    let p = for_tool.as_ref().unwrap_or(p);
     let stroke = edits_stroke(s, p, item_target(s, p, C)?, !s.fill_active, C)?;
     let g = &preset.gradient;
     let mut edit = p.clone();

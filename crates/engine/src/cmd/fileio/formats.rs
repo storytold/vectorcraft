@@ -737,11 +737,26 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Whether a file named `name` can only be read by an importer plug-in: an installed importer lists
-/// its extension and File › Place does not read that extension.
+/// Whether a file named `name` can only be opened, by an importer plug-in: an installed importer lists
+/// its extension, File › Place does not read that extension, and no installed importer that places
+/// its files lists it ([`places_with_importer`]).
 pub fn opens_with_importer(name: &str) -> bool {
     let ext = extension(name);
-    !ext.is_empty() && !PLACE_EXTS.contains(&ext.as_str()) && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+    !ext.is_empty()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+        && !places_with_importer(name)
+}
+
+/// Whether File › Place places a file named `name` with an importer plug-in when no built-in format
+/// reads its content: no built-in format reads its extension, and an installed importer whose manifest
+/// sets `place` lists it.
+pub fn places_with_importer(name: &str) -> bool {
+    let ext = extension(name);
+    !ext.is_empty()
+        && readable_format(&ext).is_none()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::placing(&ext).is_empty()
 }
 
 /// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
@@ -869,6 +884,53 @@ pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
         .chain(std::iter::once(("Word", WORD_EXTS)))
+}
+
+/// File › Place's part for the installed importer plug-ins whose manifests set `place`: the
+/// extensions of "All placeable files" ([`PLACE_EXTS`], then theirs in plug-in id order) and one
+/// filter per such importer that has extensions left, under its name. An importer's extensions leave
+/// out those a built-in format reads, which File › Place reads with that format. Made once for each
+/// set of installed plug-ins, so it lives as long as the dialogs that hold it.
+fn importer_place_part() -> ImporterPart {
+    use vectorcraft_plugins::{import, registry};
+    static MADE: std::sync::Mutex<Option<(u64, ImporterPart)>> = std::sync::Mutex::new(None);
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let revision = registry::revision();
+    if let Some((r, part)) = made.as_ref()
+        && *r == revision
+    {
+        return part.clone();
+    }
+    let mut exts: Vec<&'static str> = PLACE_EXTS.to_vec();
+    let mut filters = Vec::new();
+    for p in import::installed().into_iter().filter(|p| p.manifest().place) {
+        let m = p.manifest();
+        let own: Vec<&'static str> =
+            m.extensions.iter().filter(|e| readable_format(e).is_none() && !PLACE_EXTS.contains(&e.as_str())).map(|e| registry::intern(e)).collect();
+        if own.is_empty() {
+            continue;
+        }
+        for &e in &own {
+            if !exts.contains(&e) {
+                exts.push(e);
+            }
+        }
+        let own: &'static [&'static str] = Box::leak(own.into_boxed_slice());
+        filters.push((registry::intern(&m.name), own));
+    }
+    let exts: &'static [&'static str] = if exts.len() == PLACE_EXTS.len() { PLACE_EXTS } else { Box::leak(exts.into_boxed_slice()) };
+    let part = (exts, filters);
+    *made = Some((revision, part.clone()));
+    part
+}
+
+/// File › Place's own dialog filters: [`place_filters`], with the extensions of the installed
+/// importer plug-ins that place their files in "All placeable files" and one filter per such
+/// importer after the others, under its name ([`places_with_importer`]). Pickers that relink an
+/// image use [`place_filters`].
+pub fn place_dialog_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    let (all, importers) = importer_place_part();
+    std::iter::once(("All placeable files", all)).chain(place_filters().skip(1)).chain(importers)
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
@@ -1021,6 +1083,9 @@ pub(super) fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         let mut v = f.to_json();
         if let Some(id) = vectorcraft_plugins::export::plugin_id(f.id) {
             v["plugin"] = json!(id);
+            if vectorcraft_plugins::import::by_format(f.id).is_some_and(|p| p.manifest().place) {
+                v["place"] = json!(true);
+            }
         }
         v
     };
