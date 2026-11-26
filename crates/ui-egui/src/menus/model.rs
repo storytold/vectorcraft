@@ -75,7 +75,7 @@ pub(crate) fn translate_label(english: &'static str) -> String {
 }
 
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
-/// its revision (edits, selection and view changes), history and clipboard, the language,
+/// its revision (edits, selection and view changes), history and clipboard, the filter plug-in that ran last, the language,
 /// shortcuts, plug-ins, the Scripts folder's listing, an open file dialog and the fonts (Type › Font lists the loaded fonts
 /// until the installed ones are scanned, then all of them, #5483). `input` forces a change on frames with a click or
 /// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
@@ -96,6 +96,8 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
         (d.uid, revision, d.history.undo.len(), d.history.redo.len(), d.transparency_grid, d.print_tiling).hash(&mut h);
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
+    // Apply Last Filter and Last Filter… are named after the filter that ran last.
+    app.last_filters.last_id().hash(&mut h);
     app.file_dialog_open().hash(&mut h);
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), crate::dialogs::proof_setup::saved_revision()).hash(&mut h);
     hash_listed_names(&app.ui, &mut h);
@@ -365,13 +367,13 @@ fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> Command
     state
 }
 
-/// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
-/// the command is not available right now.
+/// What the dimmed row `command`, named `label`, says in the interface language: the engine's reason, the panels' in
+/// Presentation Mode, else that the command is not available right now.
 pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
     why_off(app, crate::keymap::state_id(command))
         .flatten()
         .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
-        .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))
+        .map_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")), |why| crate::i18n::msg(&why))
 }
 
 /// The title a row shows in `lang`: the Settings pages read `Page…`, the other rows their label as the menus draw it.
