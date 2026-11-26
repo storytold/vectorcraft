@@ -10379,8 +10379,13 @@ copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SV
 formats and they are published when they are ready. While that thread has a save, an export, a print or a recovery
 copy to finish, Copy and Cut make and publish them at once. When another Copy or Cut, or a copy of text in
 VectorCraft, comes first, they are dropped. Pasting what VectorCraft copied keeps the lossless internal clipboard,
-also before its formats are published. While a text field or the Type tool has the keyboard, the app waits for
-them. Windows carries every format both ways and pastes a bitmap from PNG, else
+also before its formats are published. When the formats could not be written (another app held the clipboard open
+or refused the write), every Paste takes the internal clipboard until another app copies something, and a paste
+into a text field or type takes the copy's text, or nothing when the formats have no text. The app notices that
+copy only when it changes the clipboard's text, so Paste reads the system clipboard when it held only a picture, or
+nothing that could be read, at the failed write. Once a paste has read the changed text, the older text coming back
+does not restore the copy. While a
+text field or the Type tool has the keyboard, the app waits for them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes
