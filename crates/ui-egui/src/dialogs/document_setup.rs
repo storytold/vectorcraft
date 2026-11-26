@@ -389,7 +389,14 @@ fn grid_colors_row(setup: DocSetup) -> Param {
             picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
             Row::new().show(ui, |ui, _| {
                 for (i, color) in resolved.iter().enumerate() {
-                    let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+                    let number = (i + 1).to_string();
+                    let template = tl!("Grid Colors: {number}");
+                    let name = if template == "Grid Colors: {number}" {
+                        // Keep the translated prefix for catalogs that have yet to add the complete label.
+                        format!("{} {number}", tl!("Grid Colors:"))
+                    } else {
+                        crate::i18n::fmt(template, &[("number", &number)])
+                    };
                     let [r, g, b, _] = color.to_rgba8(1.0);
                     let srgb = box_color(color);
                     wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
@@ -1115,5 +1122,77 @@ mod tests {
         assert_eq!(super::preview_grid(&good, &setup), (vectorcraft_doc::GridSize::Small, [hex("#ff0000"), hex("#0000ff")]));
         let preset = fields(json!({"gridColors": "blue"}));
         assert_eq!(super::preview_grid(&preset, &setup), (vectorcraft_doc::GridSize::Large, [hex("#ffffff"), hex("#c4dcff")]));
+    }
+
+    /// The grid preview the open dialog draws in `ctx`, in frames run as the hosts run them
+    /// ([`crate::testing::part_frame_uploads`]): its rect, the span of its texture
+    /// coordinates (two cells per unit) and the four pixels of the texture it draws. `tiles` holds
+    /// the pixels of each 2 × 2 texture uploaded so far in `ctx`, so every frame drawn in `ctx`
+    /// goes through this function. The preview is the largest rect drawn with such a texture.
+    fn drawn_preview(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        tiles: &mut std::collections::HashMap<egui::TextureId, Vec<egui::Color32>>,
+    ) -> (Rect, egui::Vec2, Vec<egui::Color32>) {
+        let mut preview = None;
+        for _ in 0..4 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 900.0))), ..Default::default() };
+            let mut out = crate::testing::part_frame_uploads(app, ctx, raw, |app, ui| {
+                if let Some(dialogs) = app.dialogs() {
+                    dialogs.with(|h| h.run(ui));
+                }
+            });
+            for (id, deltas) in &out.textures_delta.set {
+                if let Some(d) = deltas.last() {
+                    let egui::ImageData::Color(img) = &d.image;
+                    if img.size == [2, 2] {
+                        tiles.insert(*id, img.pixels.clone());
+                    }
+                }
+            }
+            out.textures_delta.clear();
+            preview = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Rect(r) => {
+                        r.brush.as_ref().filter(|b| tiles.contains_key(&b.fill_texture_id)).map(|b| (r.rect, b.uv, b.fill_texture_id))
+                    }
+                    _ => None,
+                })
+                .max_by(|a, b| a.0.area().total_cmp(&b.0.area()));
+        }
+        let (rect, uv, texture) = preview.unwrap_or_else(|| panic!("no grid preview"));
+        let pixels = tiles.get(&texture).cloned().unwrap_or_else(|| panic!("no tile for {texture:?}"));
+        (rect, uv.size(), pixels)
+    }
+
+    /// The tile's pixels for the grid colors `a` and `b`: `a` in the top-left and bottom-right cells.
+    fn tile(a: &str, b: &str) -> Vec<egui::Color32> {
+        let c = |h| crate::panels::c32(&hex(h));
+        vec![c(a), c(b), c(b), c(a)]
+    }
+
+    /// In an open dialog, the preview follows each edit of Grid Colors and Grid Size: after a
+    /// color edit it draws a tile in the new colors, and after a size edit it draws the new cells.
+    #[test]
+    fn the_grid_preview_follows_edits_in_the_open_dialog() {
+        let (mut app, ctx) = setup_open();
+        let mut tiles = std::collections::HashMap::new();
+        set(&app, &ctx, "tab", json!("Transparency"));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 16.0, tile(LIGHT[0], LIGHT[1])), "Medium, Light");
+        set(&app, &ctx, "gridColors", json!(["#ff0000", "#0000ff"]));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 16.0, tile("#ff0000", "#0000ff")), "color edit");
+        set(&app, &ctx, "gridSize", json!("large"));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 32.0, tile("#ff0000", "#0000ff")), "size edit");
+        set(&app, &ctx, "gridColors", json!("Dark"));
+        let (_, _, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!(pixels, tile("#666666", "#4d4d4d"), "preset edit");
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.setup.grid_size, st.doc.setup.grid_colors), (vectorcraft_doc::GridSize::Medium, LIGHT.map(hex)));
+        assert_eq!(undo_steps(&app), 0);
     }
 }
