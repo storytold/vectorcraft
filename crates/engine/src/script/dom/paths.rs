@@ -67,9 +67,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, whole, with_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, command_value, coordinate, doc_of, edit_item,
+    editable, find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair,
+    point, point_get, point_method, point_property, property, this_doc, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -444,20 +444,17 @@ fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// The id in the result of a command that made an object.
-fn made_id(r: &Data) -> std::result::Result<NodeId, HostError> {
-    let id = match r {
-        Data::Object(o) => o.iter().find(|(k, _)| k == "id").and_then(|(_, v)| if let Data::Number(n) = v { whole(*n) } else { None }),
-        _ => None,
-    };
-    id.map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
+/// The id in the result of a command that made an object, read from the command's own result so
+/// that an id above 2^53 stays exact.
+fn made_id(r: &Value) -> std::result::Result<NodeId, HostError> {
+    r["id"].as_u64().map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
 }
 
 /// Runs the command `id` that makes a path in `doc` on top of the active layer, the selection kept,
 /// and reverses the new path's direction when `reversed`. → the new path.
 fn make(h: &super::Host, doc: Doc, id: &str, params: &Value, reversed: bool) -> Answer {
     let made = on_doc(h, doc.uid, true, |h| {
-        let id = made_id(&drawing_normally(h, || command(h, id, params))?)?;
+        let id = made_id(&drawing_normally(h, || command_value(h, id, params))?.1)?;
         if reversed {
             command(h, "path.reverse", &json!({"ids": [id.0]}))?;
         }
@@ -616,7 +613,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
             let ap = h.session.borrow().new_art();
             ap.fill_paint().is_none() && ap.stroke_paint().is_none()
         };
-        let id = made_id(&drawing_normally(h, || command(h, "path.create", &json!({"d": ""})))?)?;
+        let id = made_id(&drawing_normally(h, || command_value(h, "path.create", &json!({"d": ""})))?.1)?;
         if unpainted {
             keeping_paint(h, || command(h, "paint.setStroke", &json!({"none": true, "ids": [id.0]})))?;
         }
@@ -1719,4 +1716,17 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             None,
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_made_id_above_two_to_the_53_stays_exact() {
+        assert_eq!(made_id(&json!({"id": 9_007_199_254_740_993_u64})), Ok(NodeId(9_007_199_254_740_993)));
+        assert_eq!(made_id(&json!({"id": 7})), Ok(NodeId(7)));
+        assert!(made_id(&json!({"id": 1.5})).is_err());
+        assert!(made_id(&json!({})).is_err());
+    }
 }
