@@ -2625,7 +2625,8 @@ fn a_grant_given_elsewhere_since_the_load_removed_one_is_kept() {
     let approved = asking(id, r#"["doc.read"]"#, &empty);
     std::fs::write(&later, &approved).unwrap();
     let grants = folder.0.join("grants.json");
-    let entry = |hash: String| serde_json::to_vec(&json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}])).unwrap();
+    let entry =
+        |hash: String| crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}]).to_string());
     std::fs::write(&grants, entry(sha256_hex(&approved))).unwrap();
     let held = HeldLoad::new(later.clone());
     let mut s = session();
@@ -2642,7 +2643,7 @@ fn a_grant_given_elsewhere_since_the_load_removed_one_is_kept() {
     s.finish_plugin_loads();
     let source = vectorcraft_plugins::registry::get(id).and_then(|p| p.source().map(str::to_string));
     assert!(vectorcraft_plugins::registry::remove(id));
-    let listed: Vec<Value> = serde_json::from_slice(&std::fs::read(&grants).unwrap()).unwrap();
+    let listed = crate::store::grant_entries(&std::fs::read(&grants).unwrap());
     assert_eq!(source.as_deref(), Some(first.display().to_string().as_str()), "the later module installed");
     assert_eq!(listed.iter().map(|e| e["hash"].clone()).collect::<Vec<_>>(), [json!(sha256_hex(&other))], "{listed:?}");
 }
@@ -2661,7 +2662,11 @@ fn a_grant_that_cannot_be_put_back_leaves_the_later_module_uninstalled() {
     let approved = asking(id, r#"["doc.read"]"#, &empty);
     std::fs::write(&later, &approved).unwrap();
     let grants = folder.0.join("grants.json");
-    std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}])).unwrap()).unwrap();
+    std::fs::write(
+        &grants,
+        crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}]).to_string()),
+    )
+    .unwrap();
     // The first write removes the grant; the second, which puts it back, finds a folder where the
     // file goes and fails.
     let blocked = grants.clone();
@@ -2696,7 +2701,11 @@ fn a_grant_put_back_for_a_module_that_did_not_install_is_removed_again() {
     let approved = asking(id, r#"["doc.read"]"#, &empty);
     std::fs::write(&later, &approved).unwrap();
     let grants = folder.0.join("grants.json");
-    std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}])).unwrap()).unwrap();
+    std::fs::write(
+        &grants,
+        crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}]).to_string()),
+    )
+    .unwrap();
     // The first write removes the grant; while the second puts it back, the id is installed
     // elsewhere.
     crate::store::AFTER_GRANTS_READ.set(Some(Box::new(move || {
@@ -2711,7 +2720,14 @@ fn a_grant_put_back_for_a_module_that_did_not_install_is_removed_again() {
     assert!(vectorcraft_plugins::registry::remove(id));
     // A grants file that went away holds no grant; one still there must read as a list.
     let listed: Vec<Value> = match std::fs::read(&grants) {
-        Ok(b) => serde_json::from_slice(&b).unwrap(),
+        Ok(b) => match serde_json::from_slice::<Value>(&b).unwrap() {
+            Value::Array(entries) => entries,
+            Value::Object(mut file) => match file.remove("grants") {
+                Some(Value::Array(entries)) => entries,
+                other => panic!("the grants file holds no list: {other:?}"),
+            },
+            other => panic!("the grants file holds no list: {other:?}"),
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => vec![],
         Err(e) => panic!("the grants file could not be read: {e}"),
     };

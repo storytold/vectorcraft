@@ -823,18 +823,10 @@ impl Session {
         }
         let dir = load.dir.clone();
         // The grants file is read once for this turn. `written` holds whether it names each id
-        // whose grant this turn removed or put back.
+        // whose grant this turn removed or put back. Only a signed file grants anything
+        // ([`signed_grants`]).
         let file = read_grants(&dir);
-        let mut grants = self.counted(
-            &dir,
-            match &file {
-                Ok(file) => file.grants.clone(),
-                Err(e) => {
-                    log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
-                    BTreeMap::new()
-                }
-            },
-        );
+        let mut grants = self.counted(&dir, signed_grants(&dir, &file));
         let mut written: BTreeMap<String, bool> = BTreeMap::new();
         let named = |written: &BTreeMap<String, bool>, id: &str| {
             written.get(id).copied().unwrap_or_else(|| match &file {
@@ -2398,8 +2390,14 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
 /// ([`Trust`]), and none, with a log record, when it is too large, can't be read or doesn't hold a
 /// list.
 fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
-    match read_grants(dir) {
-        Ok(file) if file.trust == Trust::Signed => file.grants,
+    signed_grants(dir, &read_grants(dir))
+}
+
+/// [`stored_grants`] from `file`, the grants file of the plug-in store `dir` as [`read_grants`]
+/// read it.
+fn signed_grants(dir: &Path, file: &Result<GrantsFile, GrantsError>) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+    match file {
+        Ok(file) if file.trust == Trust::Signed => file.grants.clone(),
         Ok(_) => BTreeMap::new(),
         Err(e) => {
             log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
