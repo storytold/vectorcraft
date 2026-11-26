@@ -126,6 +126,70 @@ fn styled(app: &mut VectorcraftApp, attrs: Value, text: &str) -> u64 {
     id
 }
 
+fn options_in_the_first_of_two_documents() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, json!({"size": 12.0}), "Other document");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app, "Body");
+    app
+}
+
+#[test]
+fn the_style_preview_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    let opening = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, other, "Preview leaves the other document's Body style unchanged");
+    assert!(!app.session.in_interaction());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    pump(&mut app);
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, opening);
+}
+
+#[test]
+fn a_style_options_confirmation_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "preview", json!(false));
+    set::<Existing>(&app, "name", json!("Revised"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    let closed = ok::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, other, "OK leaves the other document's Body style unchanged");
+    assert!(!closed, "the same draft remains available");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok::<Existing>(&mut app));
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+}
+
+#[test]
+fn cancelling_style_options_leaves_the_other_documents_gesture() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    cancel::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
 #[test]
 fn unchanged_basic_fields_preserve_original_keys() {
     for attrs in [
