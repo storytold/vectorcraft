@@ -164,13 +164,15 @@ fn same_path(a: Item, b: Item) -> bool {
     a.doc.uid == b.doc.uid && a.id == b.id
 }
 
-/// Reads the subpaths of the path of `item` with `f`, its waiting point changes included.
+/// Reads the subpaths of the path of `item` with `f`, its waiting point changes included. The
+/// waiting point changes of another path are written first.
 fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) -> std::result::Result<T, HostError> {
     if let Some((waiting, subs)) = &*h.dom.pending.borrow()
         && same_path(*waiting, item)
     {
         return Ok(f(subs));
     }
+    flush(h)?;
     read_path(h, item, |_, _, pd| f(&pd.subpaths))
 }
 
@@ -372,20 +374,17 @@ fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// The id in the result of a command that made an object.
-fn made_id(r: &Data) -> std::result::Result<NodeId, HostError> {
-    let id = match r {
-        Data::Object(o) => o.iter().find(|(k, _)| k == "id").and_then(|(_, v)| if let Data::Number(n) = v { whole(*n) } else { None }),
-        _ => None,
-    };
-    id.map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
+/// The id in the JSON result of a command that made an object, read exactly, as the text creators
+/// read it.
+fn made_id(r: &(Data, Value)) -> std::result::Result<NodeId, HostError> {
+    r.1.get("id").and_then(Value::as_u64).map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
 }
 
 /// Runs the command `id` that makes a path in `doc` on top of the active layer, the selection kept,
 /// and reverses the new path's direction when `reversed`. → the new path.
 fn make(h: &super::Host, doc: Doc, id: &str, params: &Value, reversed: bool) -> Answer {
     let made = on_doc(h, doc.uid, true, |h| {
-        let id = made_id(&drawing_normally(h, || command(h, id, params))?)?;
+        let id = made_id(&drawing_normally(h, || super::command_value(h, id, params))?)?;
         if reversed {
             command(h, "path.reverse", &json!({"ids": [id.0]}))?;
         }
@@ -544,7 +543,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
             let ap = h.session.borrow().new_art();
             ap.fill_paint().is_none() && ap.stroke_paint().is_none()
         };
-        let id = made_id(&drawing_normally(h, || command(h, "path.create", &json!({"d": ""})))?)?;
+        let id = made_id(&drawing_normally(h, || super::command_value(h, "path.create", &json!({"d": ""})))?)?;
         if unpainted {
             keeping_paint(h, || command(h, "paint.setStroke", &json!({"none": true, "ids": [id.0]})))?;
         }

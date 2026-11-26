@@ -158,11 +158,13 @@ impl State {
 
 /// Runs `f`, whose commands are kept together or put back together: when `f` fails, every
 /// document, the selection and the undo histories are as they were before it, with no undo step
-/// and no change to the document's saved state.
+/// and no change to the document's saved state. Point changes that wait in [`State`] are written
+/// first, so a failure in `f` does not put them back.
 fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostError>) -> std::result::Result<T, HostError> {
     if h.dom.saving.get() {
         return f(h);
     }
+    flush(h)?;
     let save = Savepoint::take(&mut h.session.borrow_mut(), "edit.duplicate");
     h.dom.saving.set(true);
     let r = f(h);

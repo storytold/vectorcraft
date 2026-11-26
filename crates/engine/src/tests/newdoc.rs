@@ -272,6 +272,25 @@ fn a_saved_preset_with_values_out_of_range_reads_in_range() {
     assert_eq!(boards(&s).iter().map(|r| r.x0).collect::<Vec<_>>(), [0.0, 100.0, 200.0], "side by side, not overlapping");
 }
 
+/// A saved preset whose rows the preferences hold above the most `file.new` takes reads as that
+/// most, so `file.new` takes the preset as `file.newPresets` lists it; no rows stay no rows.
+#[test]
+fn a_saved_preset_with_too_many_rows_reads_in_range() {
+    let mut s = Session::new();
+    let prefs = json!({
+        "newDocPresets": [
+            {"name": "Tall", "width": 10, "height": 10, "artboards": 4, "layout": "gridByColumn", "rows": 1001},
+            {"name": "Plain", "width": 10, "height": 10, "artboards": 4, "layout": "gridByColumn", "rows": 0},
+        ],
+    });
+    s.apply_prefs(serde_json::from_value(prefs).unwrap());
+    let saved = presets(&mut s, "Saved");
+    assert_eq!(saved[0]["artboardLayout"]["rows"], json!(1000), "{}", saved[0]);
+    assert_eq!(saved[1]["artboardLayout"].get("rows"), None, "{}", saved[1]);
+    s.execute("file.new", &saved[0]).unwrap();
+    assert_eq!(boards(&s).len(), 4);
+}
+
 /// `file.new` and `artboard.new` take the same largest artboard side (the canvas less the largest
 /// bleed on both sides) and refuse a side just past it, or of 0 or less, with an error that names
 /// the limit in points and, when the document's units aren't points, in those units too.

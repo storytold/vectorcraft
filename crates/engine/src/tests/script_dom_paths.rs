@@ -1207,3 +1207,25 @@ fn assigning_guides_throws_in_both_directions_while_guides_are_locked() {
     log(&mut s, "var ps = app.activeDocument.pathItems; ps[0].guides = true; ps[1].guides = false;");
     assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps), "a value the path has runs no command");
 }
+
+/// A point change made before a call that fails and is put back, here a new document whose
+/// profile cannot be read, is kept.
+#[test]
+fn a_point_change_before_a_failed_new_document_is_kept() {
+    let dir = std::env::temp_dir().join(format!("vc-script-points-new-doc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Print.vectorcraft"), b"not a document").unwrap();
+    let (mut s, a, _) = doc();
+    s.attach_new_doc_profiles(dir.clone());
+    let before = node(&s, a).path_data().unwrap().subpaths.clone();
+    let out = log(
+        &mut s,
+        "app.activeDocument.pathItems[0].pathPoints[0].anchor = [5, 7];\
+         try { app.documents.addDocument('Print'); } catch (e) { vc.log('refused'); }",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(out, vec![json!("refused")]);
+    assert_eq!(s.documents().len(), 1);
+    assert_ne!(node(&s, a).path_data().unwrap().subpaths, before, "the point change is kept");
+}

@@ -2838,7 +2838,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a placed item's `file`, are not defined yet and read as `undefined`.
 - `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
-  objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  objects topmost first, as `pageItems` lists them, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
   `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
   with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
   a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`

@@ -193,7 +193,7 @@ type Spans = [(usize, usize)];
 #[derive(Default)]
 pub(in crate::script) struct TextState {
     frames: RefCell<HashMap<(u64, u64), Log>>,
-    /// A document's uid, the document, and the ids of its type objects in paint order.
+    /// A document's uid, the document, and the ids of its type objects, topmost first.
     list: RefCell<Option<FrameList>>,
     /// The fonts `app.textFonts` lists, as family and style, read once a run; a font a character
     /// names that is not installed is added at the end.
@@ -299,6 +299,15 @@ fn resolve(h: &Host, r: Span) -> std::result::Result<(Rc<Index>, usize, usize, u
         let e = e.min(len);
         Ok((index, s.min(e), e, stamp))
     })
+}
+
+/// Runs command `id` with `params` on the text frame of `item`. Throws `Cannot edit`, with nothing
+/// changed, when the frame or a layer or group it is in is hidden or locked.
+fn edit_text(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    if !with_doc(h, item.doc, |_, st| editable(&st.doc, item.id)) {
+        return Err(HostError::Error(format!("Cannot edit TextFrame {}: it, or a layer or group it is in, is hidden or locked", item.id.0)));
+    }
+    edit_item(h, item, id, params)
 }
 
 /// Records an edit the model made to the frame: `removed` units at `at` replaced by `inserted`.
@@ -445,7 +454,7 @@ fn write_contents(h: &Host, r: Span, value: &Data) -> Answer {
         return Ok(Data::Undefined);
     }
     let (s, e) = (index.text[..a].encode_utf16().count(), index.text[..b].encode_utf16().count());
-    edit_item(h, r.item, "text.editRange", &json!({"id": r.item.id.0, "start": a, "end": b, "insert": insert}))?;
+    edit_text(h, r.item, "text.editRange", &json!({"id": r.item.id.0, "start": a, "end": b, "insert": insert}))?;
     record(h, r.item, &index, s, e - s, &insert)?;
     Ok(Data::Undefined)
 }
@@ -719,16 +728,17 @@ fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
     let (r, part) = this_part(h, a)?;
     let contents = contents_of(arg(a, 1))?;
     let (index, s, e, _) = resolve(h, r)?;
-    let at = if before || matches!(arg(a, 2), Data::Undefined) {
+    // The place, and whether it is the end of a range, which rounds up to a character boundary.
+    let (at, after) = if before || matches!(arg(a, 2), Data::Undefined) {
         let (items, spans) = part_spans(&index, part, s, e);
         let span = |k: usize| match spans {
             None => index.char_span(k),
             Some(list) => list.get(k).copied(),
         };
         if before {
-            items.clone().next().and_then(span).map_or(s, |(x, _)| x)
+            (items.clone().next().and_then(span).map_or(s, |(x, _)| x), false)
         } else {
-            items.clone().next_back().and_then(span).map_or(e, |(_, y)| y)
+            (items.clone().next_back().and_then(span).map_or(e, |(_, y)| y), true)
         }
     } else {
         let rel = arg(a, 2);
@@ -741,13 +751,15 @@ fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
             return Err(HostError::Error("relativeObject must be text of the same text frame".into()));
         }
         let (_, ts, te, _) = resolve(h, target)?;
-        if text_placement(arg(a, 3))? { te } else { ts }
+        if text_placement(arg(a, 3))? { (te, true) } else { (ts, false) }
     };
+    // A place inside a character (between the two halves of a surrogate pair) moves to its edge.
+    let b = index.byte(at, after);
+    let at = index.text[..b].encode_utf16().count();
     if contents.is_empty() {
         let (_, stamp) = with_doc(h, r.item.doc, |_, st| observe(h, st, r.item.id))?;
         return Ok(range_ref(h, r.item, at, at, stamp, "TextRange"));
     }
-    let b = index.byte(at, false);
     let (prev, next) = (index.text[..b].chars().next_back(), index.text[b..].chars().next());
     let (lead, trail) = match part {
         Part::Characters => ("", ""),
@@ -763,7 +775,7 @@ fn part_add(h: &Host, a: &[Data], before: bool) -> Answer {
         ),
     };
     let insert = format!("{lead}{contents}{trail}");
-    edit_item(h, r.item, "text.editRange", &json!({"id": r.item.id.0, "start": b, "end": b, "insert": insert}))?;
+    edit_text(h, r.item, "text.editRange", &json!({"id": r.item.id.0, "start": b, "end": b, "insert": insert}))?;
     record(h, r.item, &index, at, 0, &insert)?;
     let (_, stamp) = with_doc(h, r.item.doc, |_, st| observe(h, st, r.item.id))?;
     let start = at + lead.encode_utf16().count();
@@ -1042,7 +1054,8 @@ fn write_attr(h: &Host, a: &[Data], attr: Attr, name: &str) -> Answer {
         let (param, wants) = attr_param(h, attr, name, arg(a, 1), (t, &first.0, first.1))?;
         // A leading set on characters with auto leading fixes it even where auto gives that value.
         let has = |st: &CharStyle, p: usize| (!matches!(attr, Attr::Leading) || st.leading.is_some()) && same(&attr_value(h, attr, t, st, p), &wants);
-        let unchanged = ba == bb || styles.iter().all(|(st, p)| has(st, *p));
+        // An empty range changes nothing, also one inside a character that `ba..bb` widens to it.
+        let unchanged = s == e || ba == bb || styles.iter().all(|(st, p)| has(st, *p));
         let fixed = match (attr, &wants) {
             (Attr::AutoLeading, Data::Bool(false)) if !unchanged => Some(auto_leading_spans(t, ba, bb)?),
             _ => None,
@@ -1060,7 +1073,7 @@ fn write_attr(h: &Host, a: &[Data], attr: Attr, name: &str) -> Answer {
         super::atomically(h, |h| {
             for (start, end, leading) in &spans {
                 let p = json!({"id": r.item.id.0, "start": start, "end": end, "leading": leading});
-                edit_item(h, r.item, "text.setRangeStyle", &p)?;
+                edit_text(h, r.item, "text.setRangeStyle", &p)?;
             }
             Ok(())
         })?;
@@ -1072,7 +1085,7 @@ fn write_attr(h: &Host, a: &[Data], attr: Attr, name: &str) -> Answer {
         o.insert("start".into(), json!(ba));
         o.insert("end".into(), json!(bb));
     }
-    let answer = edit_item(h, r.item, "text.setRangeStyle", &p)?;
+    let answer = edit_text(h, r.item, "text.setRangeStyle", &p)?;
     if let Attr::TextFont = attr {
         let wants = |k: &str| p.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
         font_applied(h, r.item, (ba, bb), (&wants("font"), &wants("style")), &answer)?;
@@ -1234,7 +1247,7 @@ fn write_para(h: &Host, a: &[Data], attr: ParaAttr, name: &str) -> Answer {
         o.insert("start".into(), json!(ba));
         o.insert("end".into(), json!(bb));
     }
-    edit_item(h, r.item, id, &p)?;
+    edit_text(h, r.item, id, &p)?;
     Ok(Data::Undefined)
 }
 
@@ -1250,7 +1263,7 @@ pub(super) fn doc_text_frames(link: &Link) -> HostMember {
     get(link, doc_text_frames_impl)
 }
 
-/// The ids of the document's type objects in paint order, kept while the document is unchanged.
+/// The ids of the document's type objects, topmost first, kept while the document is unchanged.
 fn frame_ids(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     if let Some((uid, doc, ids)) = &*h.dom.text.list.borrow()
         && *uid == st.uid
