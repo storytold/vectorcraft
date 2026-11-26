@@ -13940,13 +13940,21 @@ naming the permissions needed. With `VECTORCRAFT_NO_PREFS` set there is no store
 flag lasts for that session only. In other sessions the approval, or a `grant` accepted under the flag, is kept with the module's
 hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
 same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
-with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
+with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. A
+`grants.json` that does not carry VectorCraft's MAC for its folder, or is at another generation than the one the key
+store keeps for the folder, such as an earlier copy put back (see [plug-ins](plugins.md#grants-file-integrity)), grants
+nothing, and its plug-ins have `needsApproval: true` again. When the system key store can't be reached, an
+approval lasts for that session only and the file is left as it is. `plugin.remove`
 forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
 need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
 grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
-`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed.
-When the plug-in's settings and cache can't be moved back from their `.removed` folder then either, the error names
-that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed;
+so does a `plugin.remove` while the system key store can't be reached, also when `grants.json` is missing or doesn't
+name the plug-in. When `plugin.remove` can't delete an installed plug-in's stored module, it returns an error naming
+the file, and the plug-in stays installed with its grant kept in the store. For an id that isn't installed,
+`plugin.remove` also deletes the module stored for it that didn't
+load and returns `{removed}`. When the plug-in's settings and cache can't be moved back from their `.removed` folder
+then either, the error names that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
