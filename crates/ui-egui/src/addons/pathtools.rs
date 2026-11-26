@@ -1,6 +1,6 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle… and Add Bounding Circle…; the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle…, Add Bounding Circle… and Add Inscribed Circle; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
@@ -14,23 +14,31 @@ pub mod shape;
 pub mod shared_edge;
 pub mod tangent_circle;
 
+use craft::behavior::ColumnWidth;
+use craft::menu::Node;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::display::{Divider, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Grid, Row};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::addons::tangent_circle as tangent_circle_tool;
 use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
-use crate::VectorcraftApp;
-use crate::dialogs::DialogSpec;
-use crate::menus::Item;
-use crate::panels::{empty_state, pstate, set_pstate};
-use crate::state::Dialog;
-use crate::widgets::{self, dim_label};
+use crate::canvas::rulers::general_lengths;
+use crate::dialogs::host::open_held;
+use crate::menus::{Sep, c, cp};
+use crate::panels::empty_state;
+use crate::{VectorcraftApp, fields};
 
 /// The Anchor Inspector panel's id (`window.panel {panel: "anchorInspector"}`).
 pub const ID: &str = "anchorInspector";
-/// Where the panel keeps the count Add Points adds (panel state).
-const COUNT: &str = "anchor-inspector-count";
 /// The tools' options dialog.
 pub const KIND: &str = "pathToolOptions";
 /// Common Tangents' command, whose menu item opens the command dialog with a Preview.
@@ -41,9 +49,51 @@ pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "exter
 /// dialog (Offset, One per Object) with a Preview.
 pub const BOUNDING_RECTANGLE: &str = "addon.pathtools.boundingRectangle";
 pub const BOUNDING_CIRCLE: &str = "addon.pathtools.boundingCircle";
+/// Add Inscribed Circle's command, whose menu item runs it with no dialog.
+pub const INSCRIBED_CIRCLE: &str = "addon.pathtools.inscribedCircle";
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
-const LABEL_W: f32 = 64.0;
+/// The Anchor Inspector's anchor edits: X and Y, and each handle's length and angle, label and field side by side.
+const COLUMNS: [ColumnWidth; 4] = [ColumnWidth::Content, ColumnWidth::fill(1.0), ColumnWidth::Content, ColumnWidth::fill(1.0)];
+/// The close buttons, one share each.
+const CLOSE_COLUMNS: [ColumnWidth; 3] = [ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::fill(1.0)];
+/// The buttons that run an add-on command on the selection, as (label, command).
+const ACTIONS: [(&str, &str); 4] = [
+    ("Make Smooth", "addon.pathtools.smooth"),
+    ("Make Corner", "addon.pathtools.corner"),
+    ("Equalize Handles", "addon.pathtools.equalize"),
+    ("Remove Points, Keep Shape", "addon.pathtools.removeKeepShape"),
+];
+/// The Extend Path tool's modes, as (value, label).
+const EXTEND_MODES: [(&str, &str); 3] = [("straight", "Straight"), ("bezier", "Stretch Curve"), ("arc", "Arc")];
+
+/// The Anchor Inspector panel's run-only state.
+pub(crate) struct Inspector {
+    /// How many points Add Points puts on each segment.
+    pub points_per_segment: u32,
+}
+
+impl Default for Inspector {
+    fn default() -> Self {
+        Inspector { points_per_segment: 1 }
+    }
+}
+
+/// The first selected anchor as the panel shows it: positions less the ruler origin, handles as length and angle.
+pub(crate) struct AnchorReadout {
+    pub x: f64,
+    pub y: f64,
+    /// The In and Out handles' lengths; 0 for a handle that is not there.
+    pub lengths: [f64; 2],
+    /// The In and Out handles' directions in degrees; none for a handle that is not there.
+    pub angles: [Option<f64>; 2],
+}
+
+/// What the Anchor Inspector shows: how many anchors are selected and the first one.
+pub(crate) struct Readout {
+    pub count: usize,
+    pub anchor: Option<AnchorReadout>,
+}
 
 /// The parameters of the add-on's Path Effects that pick one of some values, as (label, value).
 pub(crate) fn effect_choices(effect: &str, key: &str) -> Option<&'static [(&'static str, &'static str)]> {
@@ -60,33 +110,34 @@ pub(crate) fn effect_choices(effect: &str, key: &str) -> Option<&'static [(&'sta
 }
 
 /// Object › Plug-ins › Path Precision Tools.
-pub fn menu() -> Vec<Item> {
-    let tool = |label, id: &str| Item::Cmd(label, "tool.select", json!({ "tool": id }));
+pub fn menu() -> Vec<Node> {
+    let tool = |label, id: &str| cp(label, "tool.select", json!({ "tool": id }));
     vec![
         tool("Anchor Eraser Brush", anchor_eraser::ID),
         tool("Extend Path Tool", extend_path::ID),
         tool("Measure & Inspect Tool", measure_inspect::ID),
         tool("Parametric Shape Tool", parametric_shape::ID),
-        Item::Cmd("Corner Tool", corner::COMMAND, json!({})),
-        Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
+        cp("Corner Tool", corner::COMMAND, json!({})),
+        c("Set Corners…", set_corners::COMMAND),
         tool("Slide Anchor Along Path", slide_anchor::ID),
-        Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        cp("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
         tool("Tangent Circle Tool", tangent_circle_tool::ID),
         tool("Trim at Crossings Tool", trim::ID),
-        Item::Sep,
-        Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
-        Item::Cmd("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
-        Item::Sep,
-        Item::Cmd("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
-        Item::Cmd("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
-        Item::Cmd("Divide into Dashes…", dashes::COMMAND, Value::Null),
-        Item::Cmd("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
-        Item::Cmd("Smooth Bridge…", bridge::COMMAND, Value::Null),
-        Item::Cmd("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
-        Item::Cmd("Tangent Circle…", tangent_circle::COMMAND, Value::Null),
-        Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
-        Item::Cmd("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
-        Item::Cmd("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
+        Sep,
+        cp("Anchor Inspector", "window.panel", json!({ "panel": ID })),
+        cp("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),
+        Sep,
+        cp("Add Points at Crossings", "addon.pathtools.crossings", json!({})),
+        cp("Split at Crossings", "addon.pathtools.crossings", json!({ "cut": true })),
+        c("Divide into Dashes…", dashes::COMMAND),
+        cp("Expand Dashes into Paths", "addon.pathtools.expandDashes", json!({})),
+        c("Smooth Bridge…", bridge::COMMAND),
+        cp("Convert to Parametric Shape", "addon.pathtools.shape.convert", json!({})),
+        c("Tangent Circle…", tangent_circle::COMMAND),
+        cp("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
+        cp("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
+        cp("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
+        cp("Add Inscribed Circle", INSCRIBED_CIRCLE, json!({})),
     ]
 }
 
@@ -106,100 +157,113 @@ fn polar(p: Point, h: Point) -> Option<(f64, f64)> {
     (v.hypot() > 1e-9).then(|| (v.hypot(), (-v.y).atan2(v.x).to_degrees() + 0.0))
 }
 
+/// What the Anchor Inspector shows for the selection.
+pub(crate) fn readout(app: &VectorcraftApp) -> Readout {
+    let Some((a, count)) = first_anchor(app) else { return Readout { count: 0, anchor: None } };
+    let origin = app.ruler_origin();
+    let handles = [a.h_in, a.h_out].map(|h| polar(a.p, h));
+    let anchor = AnchorReadout {
+        x: a.p.x - origin.x,
+        y: a.p.y - origin.y,
+        lengths: handles.map(|h| h.map_or(0.0, |h| h.0)),
+        angles: handles.map(|h| h.map(|h| h.1)),
+    };
+    Readout { count, anchor: Some(anchor) }
+}
+
 fn run(app: &mut VectorcraftApp, id: &str, p: Value) {
     if let Err(e) = app.run(id, p) {
         app.status(e);
     }
 }
 
+/// What a number field changed this pass, if it did and left a number.
+pub(super) fn typed(value: Option<&Option<f64>>) -> Option<f64> {
+    value.copied().flatten()
+}
+
+/// A labelled row of a panel section: `field` draws the control and returns what it edited this pass.
+pub(super) fn row<R>(ui: &mut Ui, label: &'static str, salt: &'static str, mut field: impl FnMut(&mut Ui) -> Option<R>) -> Option<R> {
+    Field::new(tl!(label)).id_salt(salt).show(ui, |ui, _| field(ui)).inner.flatten()
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else {
+    if app.session.active().is_none() {
         empty_state(ui, "dc-anchor-smooth", tl!("No document"), tl!("Open a document to edit its anchor points."));
         return;
-    };
-    let selected = !st.selection.is_empty();
-    let unit = app.session.general_unit();
+    }
+    let readout = readout(app);
+    let anchor = readout.anchor.as_ref();
+    let selected = app.session.active().is_some_and(|st| !st.selection.is_empty());
+    let lengths = general_lengths(app);
     let origin = app.ruler_origin();
-    let anchor = first_anchor(app);
+    let mut points = app.addon_panels.inspector.points_per_segment;
     let mut set: Option<Value> = None;
-    match anchor {
-        Some((_, n)) => dim_label(ui, &crate::i18n::fmt(tl!("Anchors selected: {count}"), &[("count", &n.to_string())])),
-        None => dim_label(ui, tl!("Direct-select anchor points to edit them.")),
-    };
-    ui.add_enabled_ui(anchor.is_some(), |ui| {
-        let a = anchor.map(|(a, _)| a);
-        egui::Grid::new("anchor-inspector-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            for (label, key, v) in [("X:", "x", a.map(|a| a.p.x - origin.x)), ("Y:", "y", a.map(|a| a.p.y - origin.y))] {
-                dim_label(ui, label);
-                if let Some(v) = widgets::num_field_named(ui, ("anchor-inspector", key), Some(tl!(label)), v, unit, 72.0) {
-                    let o = if key == "x" { origin.x } else { origin.y };
-                    set = Some(json!({ key: v + o }));
-                }
-            }
-            ui.end_row();
-            for (name, out) in [("In:", false), ("Out:", true)] {
-                let h = a.and_then(|a| polar(a.p, if out { a.h_out } else { a.h_in }));
-                let side = if out { "out" } else { "in" };
-                dim_label(ui, name);
-                let len = h.map(|h| h.0).or(a.map(|_| 0.0));
-                if let Some(v) = widgets::size_field_named(ui, ("anchor-inspector-len", side), Some(tl!("Length")), len, unit, 72.0) {
-                    set = Some(json!({ format!("{side}Length"): v }));
-                }
-                dim_label(ui, "∠");
-                if let Some(v) = widgets::mixed_field_named(ui, ("anchor-inspector-angle", side), Some(tl!("Angle")), h.map(|h| h.1), "°", 1, 56.0) {
-                    set = Some(json!({ format!("{side}Angle"): v }));
-                }
-                ui.end_row();
-            }
-        });
-    });
-    widgets::divider(ui);
-    let width = ui.available_width();
     let mut action: Option<(&str, Value)> = None;
-    ui.add_enabled_ui(selected, |ui| {
-        for (label, id) in [
-            ("Make Smooth", "addon.pathtools.smooth"),
-            ("Make Corner", "addon.pathtools.corner"),
-            ("Equalize Handles", "addon.pathtools.equalize"),
-            ("Remove Points, Keep Shape", "addon.pathtools.removeKeepShape"),
-        ] {
-            if widgets::flat_button(ui, tl!(label), width).clicked() {
-                action = Some((id, json!({})));
+    match anchor {
+        Some(_) => Text::new(crate::i18n::fmt(tl!("Anchors selected: {count}"), &[("count", &readout.count.to_string())])).show(ui),
+        None => Text::new(tl!("Direct-select anchor points to edit them.")).show(ui),
+    };
+    let enabled = anchor.is_some();
+    let length = |ui: &mut Ui, salt: &'static str, field: NumberField<'static>| typed(field.id_salt(salt).enabled(enabled).show(ui).value());
+    let angle = |ui: &mut Ui, salt: &'static str, v: Option<f64>| {
+        let field = NumberField::new(tl!("Angle"), Bind::given(v)).unit_kind(UnitKind::Degrees).fixed_decimals(1);
+        typed(field.id_salt(salt).enabled(enabled).show(ui).value())
+    };
+    let _ = Grid::new(&COLUMNS).show(ui, |ui, _| {
+        for (label, key, v, o) in [("X", "x", anchor.map(|a| a.x), origin.x), ("Y", "y", anchor.map(|a| a.y), origin.y)] {
+            Text::new(tl!(label)).show(ui);
+            if let Some(v) = length(ui, key, NumberField::length(tl!(label), Bind::given(v), lengths)) {
+                set = Some(json!({ key: v + o }));
             }
         }
-        let mut count: f64 = pstate::<Option<f64>>(ui.ctx(), COUNT).unwrap_or(1.0);
-        ui.horizontal(|ui| {
-            if widgets::flat_button(ui, tl!("Add Points"), width - 70.0).clicked() {
-                action = Some(("addon.pathtools.addPoints", json!({ "count": count })));
+        for (label, side, i) in [("In", "in", 0), ("Out", "out", 1)] {
+            Text::new(tl!(label)).show(ui);
+            // A handle's length is a size: `50%` is half of it.
+            let len = fields::size_field(ui, tl!("Length"), anchor.map(|a| a.lengths[i]), lengths);
+            if let Some(v) = length(ui, if i == 0 { "in-length" } else { "out-length" }, len) {
+                set = Some(json!({ format!("{side}Length"): v }));
             }
-            if let Some(v) =
-                widgets::range_field_named(ui, "anchor-inspector-count", Some(tl!("Points per segment")), count, 1.0..=100.0, "", 0, 60.0)
-            {
-                count = v;
+            Text::new("∠").show(ui);
+            if let Some(v) = angle(ui, if i == 0 { "in-angle" } else { "out-angle" }, anchor.and_then(|a| a.angles[i])) {
+                set = Some(json!({ format!("{side}Angle"): v }));
             }
-        });
-        set_pstate(ui.ctx(), COUNT, Some(count));
-        // The label above and the three ways sharing the row: beside the label they overflow a narrow dock.
-        widgets::subheader(ui, "Close Path:");
-        ui.horizontal(|ui| {
-            let n = CLOSE_MODES.len() as f32;
-            let each = ((width - ui.spacing().item_spacing.x * (n - 1.0)) / n).max(40.0);
-            for (mode, label) in CLOSE_MODES {
-                if widgets::flat_button(ui, tl!(label), each).clicked() {
-                    action = Some(("addon.pathtools.close", json!({ "mode": mode })));
-                }
-            }
-        });
+        }
     });
+    Divider::horizontal().show(ui);
+    for (label, id) in ACTIONS {
+        if clicked(&Button::new(tl!(label)).sizing(Sizing::FillWidth).enabled(selected).show(ui)) {
+            action = Some((id, json!({})));
+        }
+    }
+    let _ = Row::new().fill_width().show(ui, |ui, _| {
+        if clicked(&Button::new(tl!("Add Points")).enabled(selected).show(ui)) {
+            action = Some(("addon.pathtools.addPoints", json!({ "count": f64::from(points) })));
+        }
+        let field = NumberField::new(tl!("Points per segment"), Bind::given(Some(f64::from(points)))).range(1.0..=100.0).fixed_decimals(0);
+        if let Some(v) = typed(field.id_salt("points-per-segment").enabled(selected).show(ui).value()) {
+            points = v as u32;
+        }
+    });
+    // The label above and the three ways under it: beside the label they overflow a narrow dock.
+    Text::new(tl!("Close Path:")).show(ui);
+    let _ = Grid::new(&CLOSE_COLUMNS).show(ui, |ui, _| {
+        for (mode, label) in CLOSE_MODES {
+            if clicked(&Button::new(tl!(label)).enabled(selected).show(ui)) {
+                action = Some(("addon.pathtools.close", json!({ "mode": mode })));
+            }
+        }
+    });
+    app.addon_panels.inspector.points_per_segment = points;
     if let Some(p) = set {
         run(app, "addon.pathtools.setAnchor", p);
     }
     if let Some((id, p)) = action {
         run(app, id, p);
     }
-    widgets::divider(ui);
+    Divider::horizontal().show(ui);
     corner::section(app, ui);
-    widgets::divider(ui);
+    Divider::horizontal().show(ui);
     shared_edge::section(app, ui);
 }
 
@@ -210,72 +274,77 @@ pub fn has_options(tool: &str) -> bool {
     [anchor_eraser::ID, extend_path::ID, tangent_circle_tool::ID].contains(&tool)
 }
 
-/// Open the options of add-on tool `tool` with its current values.
-pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
-    let mut fields: Map<String, Value> = app.session.tool_options_of(tool).as_object().cloned().unwrap_or_default();
-    fields.insert("__tool".into(), json!(tool));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    Ok(json!({ "dialog": KIND }))
-}
-
-pub(crate) const OPTIONS_SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 280.0, ..DialogSpec::FORM };
-
-fn heading(d: &Dialog) -> String {
-    let label = vectorcraft_tools::tool_info(&d.str("__tool")).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
-}
-
-fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    if d.str("__tool") == extend_path::ID {
-        let modes = [("straight", "Straight"), ("bezier", "Stretch Curve"), ("arc", "Arc")];
-        let labels: Vec<&str> = modes.iter().map(|(_, l)| *l).collect();
-        let current = modes.iter().find(|(m, _)| *m == d.str("mode")).map_or("Straight", |(_, l)| *l);
-        widgets::label_row(ui, tl!("Mode:"), LABEL_W, |ui| {
-            if let Some((m, _)) = widgets::dropdown(ui, "extend-path-mode", current, &labels, 140.0).and_then(|i| modes.get(i)) {
-                d.fields.insert("mode".into(), json!(m));
+/// The dialog's values from a tool's options object.
+fn fields_of(options: &Value) -> DialogFields {
+    let mut fields = DialogFields::new();
+    for (key, value) in options.as_object().into_iter().flatten() {
+        match value {
+            Value::Bool(on) => fields.set(key.clone(), FieldValue::Bool(*on)),
+            Value::Number(n) => {
+                if let Some(n) = n.as_f64() {
+                    fields.set(key.clone(), FieldValue::Number(n));
+                }
             }
-        });
-        return false;
+            Value::String(text) => fields.set(key.clone(), FieldValue::Text(text.clone())),
+            _ => {}
+        }
     }
-    if d.str("__tool") == tangent_circle_tool::ID {
+    fields
+}
+
+/// The rows of `tool`'s options dialog.
+fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
+    if tool == extend_path::ID {
+        let modes = EXTEND_MODES.iter().map(|(value, label)| ((*value).to_owned(), tl!(*label).into())).collect();
+        return vec![Param::new("mode", tl!("Mode"), ParamKind::choice(modes, Some("straight".into())))];
+    }
+    if tool == tangent_circle_tool::ID {
         let (lo, hi) = tangent_circle_tool::RADIUS_RANGE;
-        let r = d.f64("radius", tangent_circle_tool::RADIUS);
-        widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
-            if let Some(x) = widgets::range_field(ui, "tangent-circle-radius", r, lo..=hi, " pt", 2, 96.0) {
-                d.fields.insert("radius".into(), json!(x));
-            }
-        });
-        return false;
+        let kind = ParamKind::number(Some(lo), Some(hi), tangent_circle_tool::RADIUS, 1.0, 2);
+        let colors =
+            tangent_circle_tool::COLORS.iter().zip(TANGENT_CIRCLE_COLORS).map(|((name, _), label)| ((*name).to_owned(), tl!(label).into())).collect();
+        let (snap_lo, snap_hi) = tangent_circle_tool::SNAP_RANGE;
+        let snap = ParamKind::number(Some(snap_lo), Some(snap_hi), tangent_circle_tool::SNAP_PX, 1.0, 2);
+        return vec![
+            Param::new("radius", tl!("Radius"), kind).length(lengths),
+            Param::new("addPoints", tl!(tangent_circle_tool::ADD_POINTS), ParamKind::bool(false)),
+            Param::new("center", tl!("Circle Center"), ParamKind::bool(true)),
+            Param::new("radii", tl!("Circle Radii Lines"), ParamKind::bool(true)),
+            Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),
+            Param::new("snapTolerance", tl!("Snap Tolerance"), snap).unit(UnitKind::Pixels),
+            Param::new("snapWithoutGuides", tl!("Snap When Smart Guides Are Off"), ParamKind::bool(true)),
+        ];
     }
-    let rows = [
-        ("size", "Size:", anchor_eraser::SIZE_RANGE, "px", anchor_eraser::SIZE),
-        ("tolerance", "Tolerance:", anchor_eraser::TOLERANCE_RANGE, "", anchor_eraser::TOLERANCE),
-    ];
-    for (key, label, (lo, hi), suffix, default) in rows {
-        let v = d.f64(key, default);
-        widgets::label_row(ui, tl!(label), LABEL_W, |ui| {
-            if let Some(x) = widgets::range_field(ui, ("anchor-eraser", key), v, lo..=hi, suffix, 0, 72.0) {
-                d.fields.insert(key.into(), json!(x));
-            }
-        });
-    }
-    if widgets::check(ui, "Pressure", d.bool("pressure"), true) {
-        let on = !d.bool("pressure");
-        d.fields.insert("pressure".into(), json!(on));
-    }
-    false
+    let (size, tolerance) = (anchor_eraser::SIZE_RANGE, anchor_eraser::TOLERANCE_RANGE);
+    vec![
+        Param::new("size", tl!("Size"), ParamKind::range(size.0, size.1, anchor_eraser::SIZE, SliderScale::Linear)).unit(UnitKind::Pixels),
+        Param::new("tolerance", tl!("Tolerance"), ParamKind::range(tolerance.0, tolerance.1, anchor_eraser::TOLERANCE, SliderScale::Linear)),
+        Param::new("pressure", tl!("Pressure"), ParamKind::bool(false)),
+    ]
 }
 
-/// OK: set the tool's options. When the tool refuses one of them, nothing is set and the dialog
-/// stays open.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let tool = d.str("__tool");
-    let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let r = app.run("tool.setOption", json!({ "tool": tool, "values": values }));
-    if r.is_ok() {
-        app.ui.dialog = None;
-    }
-    r
+/// The labels of the Tangent Circle tool's colors ([`tangent_circle_tool::COLORS`]), in its order.
+const TANGENT_CIRCLE_COLORS: [&str; 6] = ["Red", "Blue", "Magenta", "Green", "Black", "Gray"];
+
+/// Open the options of add-on tool `tool` with its current values. OK sets them; when the tool refuses one, the dialog
+/// stays open with the reason.
+pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let label = vectorcraft_tools::tool_info(tool).map_or("", |t| t.label);
+    let title = crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))]);
+    let lengths = general_lengths(app);
+    let fields = fields_of(&app.session.tool_options_of(tool));
+    let tool = tool.to_owned();
+    let shown = tool.clone();
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, Label::from(title.clone()), options_params(&shown, lengths)).values(Bind::bound(fields))
+    });
+    open_held(app, dialog, move |app, answer| {
+        let values: Map<String, Value> = answer.fields.iter().filter_map(|(k, v)| Some((k.to_owned(), serde_json::to_value(v).ok()?))).collect();
+        app.run("tool.setOption", json!({ "tool": tool, "values": values })).map(|_| ())
+    })
+    .ok_or("no window")?;
+    Ok(json!({ "dialog": KIND }))
 }
 
 #[cfg(test)]

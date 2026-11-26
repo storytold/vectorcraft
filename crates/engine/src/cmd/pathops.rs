@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pathfinder Options…",
             ["Window", "Pathfinder"],
             None,
-            "{precision?: pt 0.001..10 (0.01; how closely the Pathfinder operations follow the paths: results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (false; the results lose the anchors that don't change their shape), removeUnpainted?: bool (false; Divide and Outline leave out the pieces of objects with no fill)} Pathfinder Options, kept in the preferences and used by every later Shape Mode and Pathfinder operation (not Trap); {} reads them → the options",
+            "{precision?: pt 0.001..10 (0.01; how closely the Pathfinder operations follow the paths: results are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together than precision / 10000 as one point, or than the tolerance for the art's size when that is larger), removeRedundantPoints?: bool (false; the results lose the anchors that don't change their shape), removeUnpainted?: bool (false; Divide and Outline leave out the pieces of objects with no fill)} Pathfinder Options, kept in the preferences and used by every later Shape Mode and Pathfinder operation (not Trap); {} reads them → the options",
             always,
             pathfinder_options
         ),
@@ -199,14 +199,11 @@ pub fn specs() -> Vec<CommandSpec> {
 
 // ---------- helpers ----------
 
-/// Number param that also accepts strings like `"10 pt"`.
+/// Number param that also accepts a string when all of it is a number (`"10"`, not `"10abc"`).
 pub(crate) fn num_param(p: &Value, key: &str) -> Option<f64> {
     match p.get(key)? {
         Value::Number(n) => n.as_f64(),
-        Value::String(s) => {
-            let t: String = s.trim().chars().take_while(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E')).collect();
-            t.parse().ok()
-        }
+        Value::String(s) => whole_number(s),
         _ => None,
     }
     .filter(|v: &f64| v.is_finite())
@@ -613,8 +610,8 @@ impl Default for PathfinderOptions {
     }
 }
 
-/// The range of Pathfinder Options › Precision (pt).
-pub const PATHFINDER_PRECISION_RANGE: std::ops::RangeInclusive<f64> = 0.001..=10.0;
+/// The range of Pathfinder Options › Precision (pt), which a Pathfinder effect's `precision` shares.
+pub const PATHFINDER_PRECISION_RANGE: std::ops::RangeInclusive<f64> = vectorcraft_render::effects::PATHFINDER_EFFECT_PRECISION;
 
 impl PathfinderOptions {
     /// These options with those `p` names (`precision` in pt or a string with a unit), or why `p`
