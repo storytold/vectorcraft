@@ -829,19 +829,18 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
     p.get("effect").and_then(serde_json::Value::as_str).filter(|_| matches!(id, "effect.apply" | "effect.dialog"))
 }
 
-/// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
-/// effect's `@id` row when the catalog has one, any other command by its id's row or its English
-/// label, and a submenu, an unbuilt item or a placeholder by its English label.
-fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
+/// The label a menu item shows in `lang`, as the menus resolve it: a built-in Effect menu item by
+/// its effect's name ([`crate::menus::effect_item_label`]), any other command by its id's row or
+/// its English label, and a submenu, an unbuilt item or a placeholder by its English label.
+fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<String> {
     use crate::menus::Node;
     match item {
-        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label)),
+        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label).to_string()),
         Node::Item(it) => {
             let (id, p) = (it.command.id.as_str(), &it.command.params);
-            let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
-            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, &it.label)))
+            Some(crate::menus::effect_item_label(id, p, lang).unwrap_or_else(|| tr_id(lang, id, &it.label).to_string()))
         }
-        Node::Submenu { label, .. } => Some(tr(lang, label)),
+        Node::Submenu { label, .. } => Some(tr(lang, label).to_string()),
         _ => None,
     }
 }
@@ -853,7 +852,7 @@ fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
 fn menu_items_side_by_side_have_different_labels() {
     use crate::menus::Node;
     fn walk(lang: Lang, path: &str, items: &[Node], out: &mut Vec<String>) {
-        let mut seen: std::collections::BTreeMap<&str, (&str, &str)> = std::collections::BTreeMap::new();
+        let mut seen: std::collections::BTreeMap<String, (&str, &str)> = std::collections::BTreeMap::new();
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
@@ -862,7 +861,7 @@ fn menu_items_side_by_side_have_different_labels() {
                 Node::Submenu { label, .. } => (label.as_str(), "submenu or unbuilt item"),
                 _ => continue,
             };
-            match seen.get(shown) {
+            match seen.get(&shown) {
                 Some(&(other, other_what)) if other != english => {
                     out.push(format!("{}: {path}: {other:?} ({other_what}) and {english:?} ({what}) both show {shown:?}", lang.code()));
                 }
@@ -916,7 +915,7 @@ fn menu_items_never_show_an_id() {
                     let (l, id) = (&it.label, it.command.id.as_str());
                     let key = menu_item_effect(id, &it.command.params).unwrap_or(id);
                     let shown = shown_menu_label(lang, item).unwrap_or_default();
-                    if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
+                    if label_shows_an_id(&shown, key) && !label_shows_an_id(l, key) {
                         out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.code()));
                     }
                 }
@@ -1009,14 +1008,15 @@ fn untranslated_report() {
     assert!(strings.len() > 500, "menu scan found only {} strings", strings.len());
     let literals = tl_literals();
     assert!(literals.len() > 300, "scan found only {} tl! literals", literals.len());
-    // Undo step names: the recorded names, every effect's name without its ellipsis, and the
-    // Liquify tools' step names (`{} Tool`). A name's row is its plain row or the row of the same
-    // name with an ellipsis (`panels::history::step_name`); a template made with
-    // `Session::edit_named` needs a plain row, which `panels::history::entry_name` fills.
+    // Undo step names: the recorded names and the Liquify tools' step names (`{} Tool`). A name's
+    // row is its plain row or the row of the same name with an ellipsis
+    // (`panels::history::step_name`); a template made with `Session::edit_named` needs a plain
+    // row, which `panels::history::entry_name` fills. A step that applies an effect is named as
+    // the Effect menu names it (`i18n::has_effect_name`), listed under "effect names".
     let scan = undo_scan();
     let mut undo = scan.labels;
     assert!(undo.len() > 300, "scan found only {} undo labels", undo.len());
-    undo.extend(vectorcraft_effects::effect_catalog().iter().map(|e| e.label.trim_end_matches('…').to_string()));
+    let effect_ids: Vec<&'static str> = vectorcraft_effects::effect_catalog().iter().map(|e| e.id).collect();
     let liquify = ["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
     undo.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
     assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
@@ -1040,6 +1040,11 @@ fn untranslated_report() {
         add(code, "menu strings", strings.iter().filter(|s| !kept(s) && !has(lang, s)).cloned().collect::<BTreeSet<_>>());
         add(code, "tl! strings", literals.iter().filter(|s| !has(lang, s)).cloned().collect::<BTreeSet<_>>());
         add(code, "undo labels", undo.iter().filter(|s| crate::panels::history::step_name(lang, s).is_none()).cloned().collect::<BTreeSet<_>>());
+        add(
+            code,
+            "effect names",
+            effect_ids.iter().filter(|id| !crate::i18n::has_effect_name(lang, id)).map(|id| id.to_string()).collect::<BTreeSet<_>>(),
+        );
         add(code, "undo label templates", scan.templates.iter().filter(|t| !has(lang, t)).cloned().collect::<BTreeSet<_>>());
         let render_site =
             RENDER_SITE_ROWS.iter().filter(|(ctx, src)| catalog.get(lang, ctx, src).is_none()).map(|(ctx, src)| format!("{ctx}: {src}"));

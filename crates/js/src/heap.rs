@@ -181,6 +181,8 @@ pub(crate) enum NativeKind {
     Apply,
     /// The global `eval`: a call to it by that name is a direct eval.
     Eval,
+    /// `%GeneratorPrototype%`'s `next`, `return` or `throw`.
+    Resume(crate::generator::ResumeMode),
 }
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
@@ -245,6 +247,8 @@ pub(crate) enum Class {
     /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
     /// operand stack only.
     IterRecord(Box<crate::iteration::IterRecord>),
+    /// A generator object and its state (ECMA-262 11th edition, section 25.4).
+    Generator(Box<crate::generator::GenState>),
     ForIn(Box<ForIn>),
     /// The `Math` object (section 15.8).
     Math,
@@ -339,7 +343,13 @@ impl Class {
             Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
+            Class::Ordinary
+            | Class::ForIn(_)
+            | Class::Host(_)
+            | Class::Symbol(_)
+            | Class::Iterator(_)
+            | Class::IterRecord(_)
+            | Class::Generator(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -759,6 +769,24 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
             crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),
         },
+        Class::Generator(state) => {
+            if let Some(saved) = state.saved() {
+                work.push(saved.env.0);
+                work.push(saved.var_env.0);
+                work.extend(saved.callee.iter().map(|o| o.0));
+                work.extend(saved.marks.iter().map(|&(id, _, _)| id.0));
+                mark_value(&saved.this, work, strings);
+                mark_value(&saved.completion, work, strings);
+                for v in &saved.stack {
+                    mark_value(v, work, strings);
+                }
+                mark_code(&saved.code, strings);
+                for ((code, _), _) in &saved.sites {
+                    mark_code(code, strings);
+                }
+                extra = crate::generator::saved_bytes(saved);
+            }
+        }
         Class::Xml(node) => {
             work.extend(node.parent.iter().chain(&node.attrs).chain(&node.children).map(|o| o.0));
             strings.add(&node.value);

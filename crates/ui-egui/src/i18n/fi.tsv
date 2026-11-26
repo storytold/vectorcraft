@@ -5161,6 +5161,14 @@ imageTrace	Outline	Ääriviiva
 	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
 	Allow Once	Salli kerran
 	Always Allow This Script	Salli tämä komentosarja aina
+	No script has kept file access.	Millään komentosarjalla ei ole tallennettua tiedostojen käyttöoikeutta.
+	Read file	Tiedoston luku
+	Read and write file	Tiedoston luku ja kirjoitus
+	Read and write folder	Kansion luku ja kirjoitus
+	Revoke	Peruuta oikeus
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Peruuta oikeus poistaa käyttöoikeuden, joka on tallennettu komentosarjan jokaiselle versiolle. Kansion käyttöoikeus kattaa kaiken sen sisällön.
+@msg	Script file access revoked	Komentosarjan tiedostojen käyttöoikeus peruttu
+@msg	The script file access was already revoked	Komentosarjan tiedostojen käyttöoikeus oli jo peruttu
 	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
@@ -5358,6 +5366,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
 @msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
 @msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	the script file permissions could not be read: {e}	komentosarjojen tiedostolupia ei voitu lukea: {e}
 @msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
 @msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois
@@ -7650,6 +7659,21 @@ axis	Y Axis	Y-akseli
 @msg	time budget	aikabudjetti
 @msg	memory budget (the selection is too large to hand over)	muistibudjetti (valinta on liian suuri luovutettavaksi)
 @msg	output size ({what} is {len} bytes, limit {max})	tulosteen koko ({what}: {len} tavua, raja {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} rivi {line}, sarake {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	muistibudjetti
+@msg	call depth	kutsusyvyys
+@msg	run(input, params) returned no output object	run(input, params) ei palauttanut tulosobjektia
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" tarvitsee avaimen `script`: laajennuksen .js-tiedoston nimen manifestin vieressä
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` on oltava manifestin kansiossa olevan .js-tiedoston nimi: 1-128 tavua, ei kansiota, ei merkkiä `:`, ei alussa merkkiä `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` on komentosarjan teksti, ja se annetaan vain JSONissa, jonka plugin.install-komennon dataBase64 ottaa: .vcplugin-tiedosto nimeää komentosarjansa avaimessa `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript-laajennuksen manifesti antaa `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" on objektisuodattimelle (`kind` "filter"), ei arvolle `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript-laajennus ei voi luetella lupaa `{name}`: isännän luvista se voi luetella luvan `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly-moduulin manifesti jättää avaimen `runtime` pois: "js" on JavaScript-laajennukselle
+@msg	a JavaScript plug-in makes no command calls	JavaScript-laajennus ei kutsu komentoja
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) ottaa kaksi lukua
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) ottaa tason, 0 (virhe), 1 (varoitus), 2 (tieto) tai 3 (virheenjäljitys), ja merkkijonon
 @msg	the plug-in's grant can't be removed from the plug-in store	laajennuksen käyttöoikeutta ei voi poistaa laajennusvarastosta
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`

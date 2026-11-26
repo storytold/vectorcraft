@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, Pos2, pos2, vec2};
+use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
 use super::*;
@@ -203,6 +204,56 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     rig.click("Color stop 1 of 2");
     assert_eq!(rig.app().session.selected_stop(), Some(0));
     assert_eq!(rig.number("Location"), Some(0.0), "the stop's location again");
+}
+
+/// A diamond picked on the selected object's gradient is not selected on another gradient the
+/// panel shows with that object still selected: the Live Paint Bucket's, or the stroke's after the
+/// proxy toggles. Going back to the object's fill selects it again.
+#[test]
+fn a_picked_diamond_stays_with_the_gradient_it_was_picked_on() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("paint.setStroke", json!({"gradient": {"kind": "radial"}})).unwrap();
+    app.session.fill_active = true;
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    let mid = |rig: &Rig| selected_mid(&rig.app(), 2);
+    assert_eq!(mid(&rig), Some(0), "the diamond is picked");
+    {
+        let mut app = rig.app();
+        app.select_tool("livePaintBucket");
+        app.run("paint.setFill", json!({"gradient": {"kind": "radial"}})).unwrap();
+    }
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the bucket's gradient");
+    rig.app().select_tool("selection");
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), Some(0), "the object's fill again");
+    rig.app().session.fill_active = false;
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the object's stroke");
+}
+
+/// Dragging the document's tab along the strip keeps its selected stop and its picked diamond
+/// selected: both stay with the document, not with the tab it was in.
+#[test]
+fn a_selected_stop_and_a_picked_diamond_stay_selected_when_the_document_tab_moves() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    app.run("document.move", json!({"to": 0})).unwrap();
+    assert_eq!(app.session.selected_stop(), Some(1), "the stop stays selected in the moved tab");
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond is picked");
+    rig.app().run("document.move", json!({"to": 1})).unwrap();
+    rig.fixture.settle();
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond stays picked in the moved tab");
+    assert_eq!(rig.number("Location"), Some(30.0), "Location still shows the midpoint");
 }
 
 /// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the

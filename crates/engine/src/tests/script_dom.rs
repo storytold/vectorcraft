@@ -909,6 +909,18 @@ fn assigning_the_same_objects_clears_the_key_and_guides() {
     assert!(s.active().unwrap().selection.guides.is_empty());
 }
 
+/// Assigning `undefined` or a value that is not a page item to the selection throws and keeps it.
+#[test]
+fn assigning_undefined_to_the_selection_throws_and_keeps_it() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    for source in ["var u; app.activeDocument.selection = u;", "app.activeDocument.selection = undefined;", "app.activeDocument.selection = 1;"] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("TypeError"), "{source}: {e}");
+        assert_eq!(s.active().unwrap().selection.objects, vec![a, b], "{source}");
+    }
+}
+
 #[test]
 fn a_page_item_with_a_large_id_keeps_its_id() {
     let mut s = Session::new();

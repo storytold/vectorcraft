@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use craft::ui::dialog::DialogId;
+use craft::ui::dialog::{DialogHost, DialogId};
 use craft::ui::patterns::form_dialogs::{
     HostedPdfExport, ParamResult, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfExportWords, PdfPresetEvent, PresetDraft,
 };
@@ -376,6 +376,119 @@ pub(crate) fn dialog_set(app: &mut VectorcraftApp, params: &Value) -> Option<Res
         let shown = dialogs.with(|host| craft::automation::dialogs::inspect(host));
         shown.as_array().and_then(|list| list.iter().find(|d| d["id"] == id.value())).cloned().unwrap_or(Value::Null)
     }))
+}
+
+/// `ui.dialog.set` of a settings object (`bleed`, `marks`, `compression.color`…) on Save PDF or the preset editor,
+/// the dialog `id`: the object sets only the options it holds, and the ones it leaves out keep the dialog's values. A
+/// value that isn't an object is refused there. The fields are set in order, all or none, as the framework sets a
+/// `fields` list. `None` for a request that sets no settings object on that dialog.
+pub(crate) fn set_settings_objects(host: &mut DialogHost, ctx: &egui::Context, id: DialogId, params: &Value) -> Option<Result<(), String>> {
+    let named = (params["dialog"] == "top" && host.open_dialogs().last().map(|d| d.id) == Some(id))
+        || params["dialog"] == id.value()
+        || params["dialog"].as_str() == Some(id.value().to_string().as_str());
+    let known = params.as_object()?.keys().all(|k| matches!(k.as_str(), "dialog" | "field" | "value" | "fields"));
+    if !named || !known {
+        return None;
+    }
+    let item = |f: &Value| Some((f.get("field")?.as_str()?.to_owned(), f.get("value").cloned().unwrap_or(Value::Null)));
+    let items: Vec<(String, Value)> = match params.get("fields") {
+        Some(_) if params.get("field").is_some() || params.get("value").is_some() => return None,
+        Some(list) => {
+            list.as_array().filter(|l| l.len() <= craft::automation::dialogs::MAX_DIALOG_FIELDS)?.iter().map(item).collect::<Option<_>>()?
+        }
+        None => vec![item(params)?],
+    };
+    let settings = |host: &DialogHost| host.get_by_id::<HostedPdfExport>(id).and_then(|d| serde_json::to_value(d.settings()).ok());
+    let now = settings(host)?;
+    if !items.iter().any(|(field, _)| option_at(&now, field).is_some_and(Value::is_object)) {
+        return None;
+    }
+    let before = dialog_fields(host, id);
+    let passwords = host.get_by_id::<HostedPdfExport>(id).map(|d| {
+        let security = &d.settings().security;
+        [("security.openPassword", security.open_password.clone()), ("security.permissionsPassword", security.permissions_password.clone())]
+    });
+    let mut changed = false;
+    for (field, value) in &items {
+        let set = match settings(host).as_ref().and_then(|s| option_at(s, field)).filter(|v| v.is_object()) {
+            Some(_) if !value.is_object() => Err(format!("`{field}` must be an object of options, not {value}")),
+            Some(old) => {
+                let mut merged = old.clone();
+                merge_options(&mut merged, value);
+                host.set_json_field(ctx, id, field, merged)
+            }
+            None => host.set_json_field(ctx, id, field, value.clone()),
+        };
+        if let Err(e) = set {
+            // A refused field leaves the dialog as it was, so only the fields set before it go back.
+            if changed {
+                restore_fields(host, ctx, id, before, passwords);
+            }
+            return Some(Err(e));
+        }
+        changed = true;
+    }
+    Some(Ok(()))
+}
+
+/// The JSON fields of the open dialog `id`.
+fn dialog_fields(host: &DialogHost, id: DialogId) -> Option<Value> {
+    host.open_dialogs().into_iter().find(|d| d.id == id).and_then(|d| d.fields)
+}
+
+/// The option at the dotted `path` (`compression.color`) of the settings `settings`.
+fn option_at<'a>(settings: &'a Value, path: &str) -> Option<&'a Value> {
+    path.split('.').try_fold(settings, |at, key| at.get(key))
+}
+
+/// Set the options `over` holds on `base`, object by object; any other value replaces `base`.
+fn merge_options(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(b), Value::Object(o)) => {
+            for (k, v) in o {
+                match b.get_mut(k) {
+                    Some(slot) => merge_options(slot, v),
+                    None => {
+                        b.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (b, o) => *b = o.clone(),
+    }
+}
+
+/// Set the dialog `id`'s fields that differ from `before` back to it. The preset goes first, since choosing it
+/// replaces every setting and clears the passwords. The `passwords` the dialog had, which its fields leave out, are set
+/// back last when they differ.
+fn restore_fields(host: &mut DialogHost, ctx: &egui::Context, id: DialogId, before: Option<Value>, passwords: Option<[(&str, String); 2]>) {
+    let Some(Value::Object(before)) = before else { return };
+    let preset = before.get("preset").filter(|old| dialog_fields(host, id).as_ref().and_then(|now| now.get("preset")) != Some(*old));
+    if let Some(old) = preset {
+        let _ = host.set_json_field(ctx, id, "preset", old.clone());
+    }
+    // The standard goes next, since it enables and sets other fields. A field that another one still disables is set
+    // again in a later pass, once that one is back; one that stays disabled keeps its value, as the framework's own
+    // rollback leaves it.
+    let rest = || before.get_key_value("standard").into_iter().chain(before.iter().filter(|(k, _)| !matches!(k.as_str(), "preset" | "standard")));
+    for _ in 0..3 {
+        let now = dialog_fields(host, id).unwrap_or(Value::Null);
+        let differ: Vec<_> = rest().filter(|(name, old)| now.get(name.as_str()) != Some(*old)).collect();
+        if differ.is_empty() {
+            break;
+        }
+        for (name, old) in differ {
+            let _ = host.set_json_field(ctx, id, name, old.clone());
+        }
+    }
+    let now = host
+        .get_by_id::<HostedPdfExport>(id)
+        .map(|d| [d.settings().security.open_password.clone(), d.settings().security.permissions_password.clone()]);
+    for ((name, password), now) in passwords.into_iter().flatten().zip(now.into_iter().flatten()) {
+        if password != now {
+            let _ = host.set_json_field(ctx, id, name, Value::String(password));
+        }
+    }
 }
 
 /// The dialog's `settings` with the job's Custom… flattener options, as the export gets them.

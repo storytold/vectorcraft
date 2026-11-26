@@ -50,6 +50,10 @@
 //! also given the parts of the active document it names in `_context.document`, whether or not
 //! anything is selected: the settings, artboards, layers and swatches, as plain values
 //! ([`context`]).
+//!
+//! A filter may be written in JavaScript ([`vectorcraft_plugins::js`]): `plugin.install {path}`
+//! takes its `.vcplugin` manifest and reads the `.js` file the manifest names beside it, and the
+//! plug-in store keeps the two as one module.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -123,6 +127,10 @@ pub fn describe(p: &Plugin) -> Value {
     }
     if m.paint_output {
         v["paintOutput"] = json!(true);
+    }
+    if let Some(script) = p.script() {
+        v["runtime"] = json!(m.runtime.name());
+        v["script"] = json!(script);
     }
     if !m.command_allowlist.is_empty() {
         v["commandAllowlist"] = json!(m.command_allowlist);
@@ -1008,8 +1016,9 @@ pub(crate) fn admit_effects_for(cmd: &str, fx: &[Effect], n: &Node) -> std::resu
 /// Largest base64 payload `plugin.install` accepts (the module limit, encoded).
 const MAX_DATA_CHARS: usize = (32 << 20) / 3 * 4 + 4;
 
-/// The `.wasm` extension plug-in files have (File › Open installs them).
-pub const EXTS: &[&str] = &["wasm"];
+/// The extensions plug-in files have (File › Open installs them): a WebAssembly module, and a
+/// JavaScript plug-in's manifest.
+pub const EXTS: &[&str] = &["wasm", vectorcraft_plugins::js::PACKAGE_EXT];
 
 /// The plug-in module command `c`'s params give, loaded and checked, and its bytes: `path` (a
 /// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source).
@@ -1389,12 +1398,23 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
-/// The plug-in in the `.wasm` file `path`, and its module.
+/// The plug-in in the `.wasm` file `path`, or in the `.vcplugin` manifest `path` and the `.js` file
+/// it names, and its module: for a JavaScript plug-in, the manifest with the script's text
+/// ([`registry::read_js_package`]). Under automation read roots the script must be inside them too.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_path(path: &str) -> Result<(Plugin, Vec<u8>)> {
     crate::file_access::check_read(path).map_err(EngineError::Other)?;
     let limits = vectorcraft_plugins::Limits::default();
-    let bytes = crate::store::read_capped(std::path::Path::new(path), limits.max_module_bytes as u64).map_err(EngineError::Other)?;
+    let file = std::path::Path::new(path);
+    let bytes = if registry::is_js_package(file) {
+        let allow = |script: &std::path::Path| match script.to_str() {
+            Some(script) => crate::file_access::check_read(script),
+            None => Err(format!("automation path rejected: {} isn't valid text", script.display())),
+        };
+        registry::read_js_package(file, &allow).map_err(err)?
+    } else {
+        crate::store::read_capped(file, limits.max_module_bytes as u64).map_err(EngineError::Other)?
+    };
     Ok((Plugin::load(&bytes, limits).map_err(err)?.with_source(path), bytes))
 }
 
@@ -1958,7 +1978,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), runtime?: \"js\" and script?: its .js file name (a JavaScript filter, see docs/plugins.md), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1985,7 +2005,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count, and a grants.json without VectorCraft's MAC for that folder grants nothing; when the system key store can't be reached, the grant lasts for this session only; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
+            "{path: a .wasm file or a JavaScript plug-in's .vcplugin manifest (read with the .js file its script names) (desktop) | dataBase64: the module or a JavaScript plug-in as one JSON object (its manifest, with the script's text in source) (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count, and a grants.json without VectorCraft's MAC for that folder grants nothing; when the system key store can't be reached, the grant lasts for this session only; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1994,7 +2014,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
+            "{path: a .wasm file or a .vcplugin manifest (desktop) | dataBase64: the module or a JavaScript plug-in's JSON, name?: the file name shown as its source (with dataBase64)} validate a plug-in without installing it, running none of its code → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions no person has granted this very module, its bytes included: it then needs a person's approval, see plugin.install) and needsReplace: bool (true when it would take the place of another module with its id: plugin.install then needs replace: true), unknownCommands?: [id] (commandAllowlist ids no command has) and refusedCommands?: [id] (commandAllowlist ids no plug-in may call: plugin.install refuses the module)",
             always,
             inspect
         ),
@@ -2021,7 +2041,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it, the first 1,000 by file name (desktop; a bad module, one that isn't a regular file, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}], leftOut: the count of *.wasm files past the first 1,000, not tried}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm and *.vcplugin in it, the first 1,000 by file name (desktop; a bad module, one that isn't a regular file, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}], leftOut: the count of *.wasm and *.vcplugin files past the first 1,000, not tried}",
             always,
             reload
         ),
