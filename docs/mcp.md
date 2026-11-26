@@ -11839,6 +11839,18 @@ PDF/X-4 always embeds one), a TrimBox on every page (the artboard), `/Trapped` T
 document has none) and dates; type is outlined or embedded; editing data, passwords and, in PDF/X-1a and PDF/X-3, PDF
 layers are refused.
 
+The built-in CMYK working spaces `VectorCraft Coated CMYK (FOGRA51)` and `VectorCraft Uncoated CMYK (FOGRA52)` are
+VectorCraft's own press models, computed when first used from the FOGRA51 and FOGRA52 characterization data that Fogra
+publishes (<https://fogra.org/en/downloads/work-tools/characterisation-data>); the data files ship unmodified in
+`crates/color/data/`. An output intent with one of them, and with `output.outputConditionId` blank, has the
+`/OutputConditionIdentifier` `FOGRA51` or `FOGRA52` and, unless `output.registry` names another, the `/RegistryName`
+`http://www.color.org` (<https://registry.color.org/cmyk-registry/>), with the profile embedded. Their total ink limit
+(300%) and black generation are VectorCraft's own values.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-4:2010","output":{"outputIntent":"VectorCraft Coated CMYK (FOGRA51)"}}}}
+```
+
 - **pdfX1a** (PDF/X-1a:2001, written as PDF 1.3): CMYK, grey and spot colours only. Every colour and image is converted
   to `output.destination` (blank: the output intent's CMYK profile, else the working CMYK profile), untagged; an RGB
   destination or output intent is refused. Transparency is flattened before writing.

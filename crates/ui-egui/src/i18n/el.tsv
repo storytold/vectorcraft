@@ -6625,6 +6625,8 @@ arrowhead	Feather	Φτερό
 	VectorCraft Default	Προεπιλογή VectorCraft
 	VectorCraft Defaults	Προεπιλογές VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Γενικό CMYK του VectorCraft (τύπου SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK επιχρισμένου χαρτιού του VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK μη επιχρισμένου χαρτιού του VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Δείγματα χρωμάτων VectorCraft (.vcswatches)
 	Vertical Align	Κατακόρυφη στοίχιση
 	Vertical Area Type	Κατακόρυφο κείμενο περιοχής
