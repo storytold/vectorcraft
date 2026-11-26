@@ -101,6 +101,9 @@ pub fn describe(p: &Plugin) -> Value {
         Kind::Exporter | Kind::Importer => {
             v["format"] = json!(export::format_id(&m.id));
             v["extensions"] = json!(m.extensions);
+            if m.place {
+                v["place"] = json!(true);
+            }
         }
         Kind::Filter => {}
     }
@@ -147,7 +150,7 @@ pub fn describe(p: &Plugin) -> Value {
 
 /// The plug-in's own parameters from command params: `params` if given, else the top-level keys
 /// minus the ones the command itself uses.
-fn plugin_params(p: &Value) -> Value {
+pub fn plugin_params(p: &Value) -> Value {
     if let Some(v) = p.get("params") {
         return v.clone();
     }
@@ -382,6 +385,7 @@ impl FilterRun {
         // A command's undo step is named after the command.
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
+        let notice = out.notice;
         // The output is applied to a copy of the document, as `colorcmds::edit_if_changed` applies
         // its pass: only a copy whose objects or kept data differ becomes the document, as one undo
         // step. Otherwise the document, its undo and redo steps and its saved state stay as they
@@ -423,6 +427,11 @@ impl FilterRun {
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
         }
+        // Only an output that was applied reports its notice, with the name of the plug-in that ran.
+        if let Some(notice) = notice {
+            out["notice"] = json!(notice);
+            out["pluginName"] = json!(m.name);
+        }
         Ok(out)
     }
 }
@@ -442,8 +451,9 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
 /// parameters and `_context` (what it keeps with the document included), and applies its output as
 /// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
 /// what it keeps with the document from now on: the output handed in for this very run when there
-/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
-/// changed, which is then selected.
+/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids, notice?,
+/// pluginName?}`: what it made or changed, which is then selected, and the output's `notice` once it
+/// was applied, with the plug-in's name.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
@@ -817,7 +827,7 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         fields.push_str(own);
     }
     let params = format!(
-        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids}}",
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step, none when the run changes nothing → {{plugin, command, ids, notice?, pluginName?}} (pluginName, the plug-in's name, comes with notice)",
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
@@ -853,9 +863,9 @@ fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
 /// Runs plug-in command `id` (`plugin.<plug-in id>.<command id>`): a filter run of the plug-in on
 /// `ids` (else the selection) with the command's own parameters, checked before it runs, and
 /// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
-/// after the command → `{plugin, command, ids}`. A run that fails (a trap, an exhausted budget, an
-/// output it may not make) leaves the document as it was, and the error names the plug-in and the
-/// command.
+/// after the command → `{plugin, command, ids, notice?, pluginName?}`. A run that fails (a trap, an exhausted
+/// budget, an output it may not make) leaves the document as it was, and the error names the
+/// plug-in and the command.
 pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     // An output handed in is for `plugin.run` alone.
     s.plugin_output = None;
@@ -1534,9 +1544,11 @@ fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending
     let allow = move |f: &std::path::Path| {
         scope.clone().run(|| match f.to_str() {
             Some(f) => crate::file_access::check_read(f),
-            // A lossy name would check another file than the one loaded.
-            None if crate::file_access::current().is_none() => Ok(()),
-            None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+            // A lossy name would check another file than the one loaded, so such a file loads only
+            // where no read is checked: without roots and outside a script's command.
+            None if crate::file_access::current().is_some() => Err(format!("automation path rejected: {} isn't valid text", f.display())),
+            None if crate::file_access::in_script_command() => Err(format!("Script file access denied: {} isn't valid text", f.display())),
+            None => Ok(()),
         })
     };
     // The modules start loading once the loads queued before them are done.
@@ -1849,7 +1861,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), place?: true (an importer whose files file.place also reads, see file.place's importer), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), context?: [\"settings\"|\"artboards\"|\"layers\"|\"swatches\"] (the parts of the active document a filter's runs and its or a live effect's commands are given in _context.document, with or without a selection, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1, 2 or 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema, menu?: {path: [menu label], after?: item label (escaped), placed?: false (it stays in its plug-in's submenu: its label reads like a built-in item or submenu of that menu or another plug-in command placed there)} (the menu its manifest places it in, see docs/plugins.md)}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1867,7 +1879,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step (an output that changes no object and no kept data records none and leaves the document unmodified); the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids, notice?, pluginName?} (notice: the text the output reports in its notice key once applied, escaped and cut at 200 characters; pluginName: the plug-in's name, with it)",
             has_doc,
             run
         ),
