@@ -51,12 +51,18 @@ const SMOOTH_TURN: f64 = 0.5 * std::f64::consts::PI / 180.0;
 /// side it touches `c` at `t`, its center one radius out from there. A `t` outside 0 to
 /// 1 and a segment whose points are not finite give [`NoCircle::Cusp`].
 pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
+    curvature_circle_with(c, t, convex, true)
+}
+
+/// [`curvature_circle`], with `arcs` off giving the cubic's own curvature at `t` on the cubic of a
+/// circular arc too.
+pub fn curvature_circle_with(c: CubicBez, t: f64, convex: bool, arcs: bool) -> Result<CurvatureCircle, NoCircle> {
     let finite = [c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.is_finite());
     if !finite || !(0.0..=1.0).contains(&t) {
         return Err(NoCircle::Cusp);
     }
     let at = c.eval(t);
-    let (center, radius, nominal) = match circular_arc(c) {
+    let (center, radius, nominal) = match circular_arc(c).filter(|_| arcs) {
         Some((center, radius)) => {
             let out = at - center;
             let len = out.hypot();
@@ -89,6 +95,11 @@ pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCi
 /// length passed over to reach it, and the path turns there by less than 90°, or when
 /// the two segments leave it within [`SMOOTH_TURN`] of one direction.
 pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
+    curvature_circle_on_with(sp, seg, t, convex, true)
+}
+
+/// [`curvature_circle_on`] with [`curvature_circle_with`]'s `arcs`.
+pub fn curvature_circle_on_with(sp: &SubPath, seg: usize, t: f64, convex: bool, arcs: bool) -> Result<CurvatureCircle, NoCircle> {
     let n = sp.segment_count();
     if seg >= n {
         return Err(NoCircle::Cusp);
@@ -106,7 +117,7 @@ pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Re
     if corner {
         return Err(NoCircle::Corner);
     }
-    curvature_circle(c, t, convex)
+    curvature_circle_with(c, t, convex, arcs)
 }
 
 /// The nearest segment with length before (or with `forward`, after) segment `seg`, and whether
@@ -258,6 +269,19 @@ mod tests {
             let (center, r) = osculating(seg, t).unwrap();
             assert!((r - 100.0).abs() < 2.5 && center.distance(Point::ORIGIN) < 2.5, "{t}: {center:?} {r}");
         }
+    }
+
+    /// With `arcs` off, a quarter circle's segment gives the cubic's own curvature, which is smaller
+    /// than the circle's at its ends: the circle is not nominal and is larger than the arc's.
+    #[test]
+    fn without_arcs_a_circle_segment_gives_its_own_curvature() {
+        let pd = shapes::ellipse(Rect::new(-100.0, -100.0, 100.0, 100.0));
+        let sp = &pd.subpaths[0];
+        let arc = curvature_circle_on_with(sp, 0, 0.0, false, true).unwrap();
+        let own = curvature_circle_on_with(sp, 0, 0.0, false, false).unwrap();
+        assert!(arc.nominal && !own.nominal, "{arc:?} {own:?}");
+        assert!(own.radius > arc.radius && own.center != arc.center, "{arc:?} {own:?}");
+        assert_eq!(own.at, sp.segment(0).eval(0.0));
     }
 
     /// On the parabola y = x² / 200, the curvature at its vertex is 1/100: drawn as a cubic from
