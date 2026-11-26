@@ -1299,6 +1299,11 @@ fn views_parent(h: &Host, a: &[Data]) -> Answer {
     Ok(doc_ref(h, doc.uid))
 }
 
+fn views_to_string(h: &Host, a: &[Data]) -> Answer {
+    views_doc(h, a)?;
+    Ok(text("[Views]"))
+}
+
 fn views_at(h: &Host, a: &[Data]) -> Answer {
     let doc = views_doc(h, a)?;
     let first = matches!(arg(a, 1), Data::Number(n) if *n == 0.0);
@@ -1350,6 +1355,11 @@ fn view_typename(h: &Host, a: &[Data]) -> Answer {
 fn view_parent(h: &Host, a: &[Data]) -> Answer {
     let (doc, _) = this_view(h, a)?;
     Ok(doc_ref(h, doc.uid))
+}
+
+fn view_to_string(h: &Host, a: &[Data]) -> Answer {
+    this_view(h, a)?;
+    Ok(text("[View]"))
 }
 
 /// `bounds`: `[left, top, right, bottom]` of the part of the document the canvas shows.
@@ -2305,7 +2315,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("length", get(l, views_length)),
             ("parent", get(l, views_parent)),
             ("index", method(l, views_index)),
-            ("toString", class_text("Views")),
+            ("toString", method(l, views_to_string)),
         ]),
         Some(function(l, views_at)),
     ));
@@ -2319,7 +2329,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("centerPoint", property(l, view_center, view_set_center)),
             ("zoom", property(l, view_zoom, view_set_zoom)),
             ("screenMode", property(l, view_screen_mode, view_set_screen_mode)),
-            ("toString", class_text("View")),
+            ("toString", method(l, view_to_string)),
         ]),
         None,
     ));

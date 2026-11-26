@@ -2755,7 +2755,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   has none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
   `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
   rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at 100% and goes
-  from 0.0313 to 640 (VectorCraft's own range); a zoom outside it throws a `RangeError`. `screenMode` reads Normal as
+  from 0.0313 to 640 (VectorCraft's own range); a zoom outside it, or a `centerPoint` outside the canvas, throws a
+  `RangeError`, and a `centerPoint` that is not two numbers throws a `TypeError`. `screenMode` reads Normal as
   `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
   Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it
   on one view sets it on every view. Changing a view runs no command, adds

@@ -213,8 +213,8 @@ fn shown(s: &Session) -> Option<WindowView> {
 #[test]
 fn the_view_shows_the_part_of_the_document_its_window_shows() {
     let (mut s, ..) = doc();
-    let none = "var v = app.activeDocument.views; vc.log(v.length); vc.log(v[0] === undefined);";
-    assert_eq!(log(&mut s, none), vec![json!(0), json!(true)], "a document without a window has no view");
+    let none = "var v = app.activeDocument.views; vc.log(v.length); vc.log(v[0] === undefined); vc.log(0 in v); vc.log('a' in v);";
+    assert_eq!(log(&mut s, none), vec![json!(0), json!(true), json!(false), json!(false)], "a document without a window has no view");
     show(&mut s, window());
     // A rectangle drawn over the visible part of the document has the view's bounds.
     let r = window().visible();
@@ -236,6 +236,13 @@ fn the_view_shows_the_part_of_the_document_its_window_shows() {
     assert!(width(&turned[0]) > width(&out[3]));
     let names = log(&mut s, "var d = app.activeDocument; vc.log(String(d.views) + String(d.views[0]));");
     assert_eq!(names, vec![json!("[Views][View]")]);
+    assert_eq!(log(&mut s, "var v = app.activeDocument.views; vc.log(0 in v); vc.log(1 in v);"), vec![json!(true), json!(false)]);
+    // A named engine keeps the views from an earlier run, but they are stale.
+    run(&mut s, "#targetengine keep\nvar vs = app.activeDocument.views, v = vs[0];").unwrap();
+    for member in ["String(vs)", "String(v)"] {
+        let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
+        assert!(e.contains("Stale document"), "{member}: {e}");
+    }
 }
 
 #[test]
@@ -259,8 +266,17 @@ fn setting_the_zoom_changes_the_view_without_an_undo_step() {
     assert_eq!(s.window_views[1].1.zoom, window().zoom, "the zoom is each window's own");
     assert_eq!(undo_steps(&s), steps, "a view change is not undoable");
     // A bad value throws and leaves the view as it is.
-    for bad in ["v.zoom = 0;", "v.zoom = 1000;", "v.zoom = '2';", "v.centerPoint = [1];", "v.screenMode = 'FULLSCREEN';"] {
-        failure(&mut s, &format!("var v = app.activeDocument.views[0]; {bad}"));
+    let bad = [
+        ("v.zoom = 0;", "RangeError"),
+        ("v.zoom = 1000;", "RangeError"),
+        ("v.zoom = '2';", "TypeError"),
+        ("v.centerPoint = [1];", "TypeError"),
+        ("v.centerPoint = [1e12, 0];", "RangeError"),
+        ("v.screenMode = 'FULLSCREEN';", "TypeError"),
+    ];
+    for (bad, name) in bad {
+        let out = log(&mut s, &format!("var v = app.activeDocument.views[0]; try {{ {bad} vc.log('set'); }} catch (e) {{ vc.log(e.name); }}"));
+        assert_eq!(out, vec![json!(name)], "{bad}");
         assert_eq!(shown(&s), Some(now), "{bad}");
     }
     // A run that fails after changing the view keeps the change.
