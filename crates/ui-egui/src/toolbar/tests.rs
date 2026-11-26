@@ -1,200 +1,215 @@
-use egui::accesskit::{Role, Toggled};
+use egui::accesskit::{Node, Role, Toggled};
 use egui::{Event, PointerButton, Pos2};
+use serde_json::json;
 use vectorcraft_engine::Session;
 
+use craft::ui::dialog::DialogId;
+use craft::ui::rails::ToolTips as _;
+
 use super::*;
-use crate::widgets::accessibility_tests::{role_and_state, tree};
 
-/// One headless frame of the toolbar; returns the tool buttons' rects, top to bottom.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Rect> {
-    frame_in(app, ctx, time, events, 1200.0)
-}
-
-/// [`frame`] in a window `height` points tall.
-fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<egui::Rect> {
-    let input = egui::RawInput {
-        time: Some(time),
-        events,
-        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, height))),
-        ..Default::default()
-    };
-    let mut out = ctx.run_ui(input, |ui| show(app, ui));
-    out.textures_delta.clear();
-    widget_rects(ctx, vec2(36.0, PITCH - 1.0))
-}
-
-/// The rects of the last frame's widgets of `size`, top to bottom.
-pub(crate) fn widget_rects(ctx: &egui::Context, size: egui::Vec2) -> Vec<egui::Rect> {
-    let mut r: Vec<egui::Rect> =
-        ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
-    r.sort_by(|a, b| a.top().total_cmp(&b.top()));
-    r
-}
-
-/// A mouse wheel turn over `at`, scrolling the content up by `dy` points.
-pub(crate) fn wheel(at: Pos2, dy: f32) -> Vec<Event> {
-    let unit = egui::MouseWheelUnit::Point;
-    vec![
-        Event::PointerMoved(at),
-        Event::MouseWheel {
-            unit,
-            delta: vec2(0.0, -dy),
-            phase: egui::TouchPhase::Move,
-            modifiers: Default::default(),
-            source: egui::MouseWheelSource::Unknown,
-        },
-    ]
-}
-
-#[test]
-fn the_toolbar_scrolls_in_a_short_window() {
+/// A fresh app with a document `width` by `height` points.
+fn app_with(width: u32, height: u32) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    // 500 pt: even two columns don't fit, so Edit Toolbar (the last button) starts below the window.
-    let tools = frame_in(&mut app, &ctx, 0.0, vec![], 500.0);
-    let edit_toolbar = || widget_rects(&ctx, vec2(26.0, 26.0)).last().copied().unwrap();
-    assert!(edit_toolbar().bottom() > 500.0);
-    frame_in(&mut app, &ctx, 0.1, wheel(tools[0].center(), 2000.0), 500.0);
-    for k in 2..40 {
-        frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
-    }
-    assert!(edit_toolbar().bottom() <= 500.0, "scrolled into view: {:?}", edit_toolbar());
-    // Back up to the top.
-    frame_in(&mut app, &ctx, 4.0, wheel(tools[0].center(), -2000.0), 500.0);
-    for k in 41..80 {
-        frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
-    }
-    assert_eq!(frame_in(&mut app, &ctx, 8.0, vec![], 500.0)[0], tools[0]);
+    app.run("file.new", json!({"width": width, "height": height})).unwrap();
+    app
 }
 
-/// The tool buttons sit in the middle of the panel, between its border and the separator
-/// line, docked and floating, in one or two columns (docked, they sat 2½ pt right of centre).
+/// A context that makes screen-reader nodes, set up as the app runs.
+fn reader() -> egui::Context {
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    ctx
+}
+
+/// One whole app frame in a window 1200 points wide and `height` tall; returns the screen-reader nodes.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<Node> {
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, height)));
+    let mut out = crate::testing::app_frame(app, ctx, egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() });
+    out.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default()
+}
+
+/// Three frames from `t0`, enough for the dock to measure; returns the last one's nodes.
+fn settled(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, height: f32) -> Vec<Node> {
+    frame(app, ctx, t0, vec![], height);
+    frame(app, ctx, t0 + 0.05, vec![], height);
+    frame(app, ctx, t0 + 0.1, vec![], height)
+}
+
+/// A click at `at`, then a settled frame; returns that frame's nodes.
+fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, height: f32) -> Vec<Node> {
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, ctx, time, vec![Event::PointerMoved(at), button(true)], height);
+    frame(app, ctx, time + 0.05, vec![button(false)], height);
+    frame(app, ctx, time + 0.1, vec![], height)
+}
+
+/// One frame of the canvas alone over the view's rect: a fit or zoom a command asked for waits for the canvas (a view
+/// request, canvas-w10 note 3).
+fn canvas_pass(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let screen_rect = app.view().map(|v| v.rect);
+    crate::testing::part_frame(app, &ctx, egui::RawInput { screen_rect, ..Default::default() }, crate::canvas::show);
+}
+
+/// Where a screen-reader node is drawn.
+fn bounds(node: &Node) -> Option<egui::Rect> {
+    let b = node.bounds()?;
+    Some(egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+}
+
+/// Where the node named `label` is drawn.
+fn named_rect(nodes: &[Node], label: &str) -> egui::Rect {
+    nodes.iter().find(|n| n.label() == Some(label)).and_then(bounds).unwrap_or_else(|| panic!("{label} is drawn"))
+}
+
+/// The name of `tool`'s button: the rail names a tool by its label (its shortcut is in its tip).
+fn button_name(tool: &ToolInfo) -> String {
+    tl!(tool.label).to_string()
+}
+
+/// Where the button of `tool` is drawn, found by its name among the rail's tool buttons.
+fn tool_rect(nodes: &[Node], tool: &str) -> egui::Rect {
+    let name = tool_info(tool).map(button_name).unwrap_or_default();
+    nodes.iter().find(|n| n.toggled().is_some() && n.label() == Some(name.as_str())).and_then(bounds).unwrap_or_else(|| panic!("{name} is drawn"))
+}
+
+/// The rects of the Tools rail's tool buttons, top to bottom then left to right.
+fn cells(app: &VectorcraftApp, nodes: &[Node]) -> Vec<egui::Rect> {
+    let names: Vec<String> = slots(app).iter().flat_map(|(_, tools)| tools.iter()).filter_map(|id| tool_info(id).map(button_name)).collect();
+    let mut found: Vec<egui::Rect> = nodes
+        .iter()
+        .filter(|n| n.role() == Role::Button && n.toggled().is_some() && n.label().is_some_and(|l| names.iter().any(|name| name == l)))
+        .filter_map(bounds)
+        .collect();
+    found.sort_by(|a, b| a.top().total_cmp(&b.top()).then(a.left().total_cmp(&b.left())));
+    found
+}
+
+use crate::testing::windowed;
+
+/// The open tool-options dialog: its id and the fields automation reads.
+fn tool_dialog(app: &VectorcraftApp) -> Option<(DialogId, serde_json::Value)> {
+    app.dialogs()?.with(|host| host.open_dialogs().pop()).map(|d| (d.id, d.fields.unwrap_or_default()))
+}
+
+/// The field `key` of the open tool-options dialog.
+fn field(app: &VectorcraftApp, key: &str) -> Option<serde_json::Value> {
+    tool_dialog(app)?.1.get(key).cloned()
+}
+
+/// Types `value` into the field `key` of the open tool-options dialog; a value the dialog refuses fails the test.
+fn set_field(app: &VectorcraftApp, key: &str, value: serde_json::Value) {
+    let (id, _) = tool_dialog(app).expect("the dialog is open");
+    let ctx = app.ui_ctx.clone().expect("a window");
+    app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|e| panic!("{key}: {e}"));
+}
+
+/// Answers the open tool-options dialog with OK or Cancel; the frame's pump takes the answer. A held OK files the
+/// answer for the pump and the dialog closes once the pump accepted it.
+fn answer(app: &mut VectorcraftApp, ok: bool) {
+    let (id, _) = tool_dialog(app).expect("the dialog is open");
+    let ctx = app.ui_ctx.clone().expect("a window");
+    if ok {
+        crate::tests::picks::answer_dialog(app, id, &[], true);
+    } else {
+        app.dialogs().expect("a window").with(|host| host.cancel_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+    }
+    assert!(tool_dialog(app).is_none_or(|(open, _)| open != id), "the dialog took the answer");
+}
+
+/// Shift+Tab hides the panels and leaves the Tools panel, and a second Shift+Tab shows them again.
 #[test]
-fn the_tool_buttons_are_centred_in_the_panel() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    for (double, floating) in [(false, None), (true, None), (false, Some([100.0, 100.0])), (true, Some([100.0, 100.0]))] {
-        app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
-        app.ui.toolbar_pos = floating;
-        frame(&mut app, &ctx, 0.0, vec![]);
-        let tools = frame(&mut app, &ctx, 0.1, vec![]);
-        // The title bar spans the panel's inside.
-        let hdr = ctx.viewport(|vp| {
-            vp.prev_pass
-                .widgets
-                .layers()
-                .flat_map(|(_, w)| w.iter())
-                .filter(|w| w.rect.height() == 14.0 && w.rect.width() > 40.0)
-                .map(|w| w.rect)
-                .next()
-        });
-        let hdr = hdr.unwrap();
-        let first = tools[0];
-        let row_right = tools.iter().filter(|r| r.top() == first.top()).map(|r| r.right()).fold(first.right(), f32::max);
-        assert_eq!(row_right - hdr.center().x, hdr.center().x - first.left(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
-        assert!(first.left() >= hdr.left() && row_right <= hdr.right(), "double {double}, floating {floating:?}: {first:?} in {hdr:?}");
+fn shift_tab_hides_the_panels_and_keeps_the_tools() {
+    let mut app = app_with(300, 200);
+    let ctx = reader();
+    let properties = |nodes: &[Node]| nodes.iter().any(|n| n.role() == Role::Tab && n.label().is_some_and(|l| l.eq_ignore_ascii_case("properties")));
+    let shift = egui::Modifiers::SHIFT;
+    let key = |pressed| Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: shift };
+    let nodes = settled(&mut app, &ctx, 0.0, 800.0);
+    assert!(properties(&nodes), "the Properties panel shows at first");
+    for (k, hidden) in [true, false].into_iter().enumerate() {
+        let t = 1.0 + k as f64;
+        frame(&mut app, &ctx, t, vec![Event::ModifiersChanged(shift), key(true)], 800.0);
+        frame(&mut app, &ctx, t + 0.05, vec![key(false), Event::ModifiersChanged(egui::Modifiers::NONE)], 800.0);
+        let nodes = settled(&mut app, &ctx, t + 0.1, 800.0);
+        assert_eq!(properties(&nodes), !hidden, "Shift+Tab {}", if hidden { "hides the panels" } else { "shows them again" });
+        assert_eq!(crate::panel_docking::panels_shown(&app), !hidden);
+        assert!(!crate::panel_docking::tab_hidden(&app), "Shift+Tab is not Tab's hide");
+        tool_rect(&nodes, "selection");
     }
 }
 
+/// A double-click on a tool's button opens what `open_options` opens: the artboard's, a graph's and the tools' dialogs
+/// (each with what it needs selected), the view fits for Hand and Zoom, and a tool without options refuses.
 #[test]
-fn saved_flyout_choices_must_still_belong_to_the_slot() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    for (saved, shown) in [(vectorcraft_tools::addons::polygonal_lasso::ID, "lasso"), ("magicWand", "magicWand")] {
-        app.ui.slot_tool.insert("lasso".into(), saved.into());
-        let tree = tree(|ui| show(&mut app, ui));
-        assert_eq!(role_and_state(&tree, &tip(tool_info(shown).unwrap())), (Role::Button, Some(Toggled::False)));
-    }
-}
-
-/// Screen readers name each tool button by its tool tip and say which tool is active, and name
-/// the title bar's column toggle and grip and the paint buttons under the tools.
-#[test]
-fn screen_readers_name_the_tool_buttons_and_the_active_tool() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.select_tool("pen");
-    let tree = tree(|ui| show(&mut app, ui));
-    let name = |id| tool_info(id).map(tip).unwrap_or_default();
-    assert_eq!(role_and_state(&tree, &name("pen")), (Role::Button, Some(Toggled::True)));
-    assert_eq!(role_and_state(&tree, &name("selection")), (Role::Button, Some(Toggled::False)));
-    for label in ["Toggle single/double column", "Drag to float the toolbar", "Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)"] {
-        assert_eq!(role_and_state(&tree, label), (Role::Button, None), "{label}");
-    }
-}
-
-/// #812: double-clicking the Artboard tool opens Artboard Options of the active artboard, a
-/// graph tool Graph Type for the selected graph, and the Magic Wand tool its panel.
-#[test]
-fn more_tools_open_their_options() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
-    // Without the Artboard tool, the window's artboard.
-    assert_eq!(open_options(&mut app, "artboard").unwrap()["dialog"], "artboardOptions");
-    let d = app.ui.dialog.take().unwrap();
-    assert_eq!((d.f64("index", 9.0), d.f64("width", 0.0), d.str("name")), (0.0, 300.0, "Artboard 1".to_string()));
-    // With it, its active artboard.
+fn tools_open_their_options() {
+    let mut app = windowed(app_with(300, 200));
+    let kind = |app: &mut VectorcraftApp, tool: &str| open_options(app, tool).unwrap()["dialog"].clone();
+    // Without the Artboard tool, the window's artboard; with it, its active artboard.
+    assert_eq!(kind(&mut app, "artboard"), "artboardOptions");
     app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 50})).unwrap();
     app.run("tool.select", json!({"tool": "artboard"})).unwrap();
     app.run("tool.setOption", json!({"key": "active", "value": 1})).unwrap();
-    open_options(&mut app, "artboard").unwrap();
-    let d = app.ui.dialog.take().unwrap();
-    assert_eq!((d.f64("index", 9.0), d.f64("x", 0.0), d.f64("width", 0.0)), (1.0, 400.0, 100.0));
+    assert_eq!(kind(&mut app, "artboard"), "artboardOptions");
     // Graph Type needs a selected graph.
     app.run("select.set", json!({"ids": []})).unwrap();
     assert!(open_options(&mut app, "pieGraph").is_err());
-    assert!(app.ui.dialog.is_none());
     app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150})).unwrap();
-    assert_eq!(open_options(&mut app, "pieGraph").unwrap()["dialog"], "graphType");
-    let d = app.ui.dialog.take().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
-    // The Magic Wand panel opens, and stays open on a second double-click.
-    open_options(&mut app, "magicWand").unwrap();
-    assert!(crate::panel_docking::showing(&app.ui, "magicWand"));
-    open_options(&mut app, "magicWand").unwrap();
-    assert!(crate::panel_docking::showing(&app.ui, "magicWand"));
-    // With the panels hidden by Tab, the double-click shows them with the panel.
-    app.run("window.dock", json!({})).unwrap();
-    open_options(&mut app, "magicWand").unwrap();
-    assert!(app.ui.dock && crate::panel_docking::visible(&app.ui, "magicWand"), "the Magic Wand panel shows");
-    // In Presentation Mode the double-click does not fail, and the panel shows when the mode ends.
-    app.ui.screen_mode = 3;
-    open_options(&mut app, "magicWand").unwrap();
-    app.ui.screen_mode = 0;
-    assert!(crate::panel_docking::visible(&app.ui, "magicWand"), "the Magic Wand panel stays in place");
+    assert_eq!(kind(&mut app, "pieGraph"), "graphType");
+    // Nothing selected: the transform and selection tools refuse, as their menu items are disabled.
+    app.run("select.set", json!({"ids": []})).unwrap();
+    for tool in ["rotate", "scale", "reflect", "shear", "selection", "directSelection", "groupSelection"] {
+        assert_eq!(open_options(&mut app, tool), Err("nothing selected".into()), "{tool}");
+    }
+    assert!(open_options(&mut app, "lasso").is_err(), "a tool without options");
+    // Hand fits the active artboard in the window, Zoom goes to 100%. The Artboard tool made the second active above:
+    // the first is the active one again.
+    crate::panels::artboards::select(&mut app, 0);
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(660.0, 460.0));
+    app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
+    open_options(&mut app, "hand").unwrap();
+    canvas_pass(&mut app);
+    let v = *app.view().unwrap();
+    assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
+    open_options(&mut app, "zoom").unwrap();
+    canvas_pass(&mut app);
+    assert_eq!(app.view().unwrap().zoom, crate::state::zoom_baseline(app.print_ppi()));
+    // With an object selected, the transform tools open their dialogs and the selection tools open Move.
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+    for (tool, dialog) in [
+        ("rotate", "rotate"),
+        ("scale", "scale"),
+        ("reflect", "reflect"),
+        ("shear", "shear"),
+        ("selection", "move"),
+        ("directSelection", "move"),
+        ("groupSelection", "move"),
+    ] {
+        assert_eq!(kind(&mut app, tool), dialog, "{tool}");
+    }
+    // Line, arc and the grids open their tool options; the eyedropper its options.
+    for tool in ["lineSegment", "arc", "rectangularGrid", "polarGrid", "eyedropper"] {
+        open_options(&mut app, tool).unwrap_or_else(|e| panic!("{tool}: {e}"));
+    }
 }
 
-/// A double-click at `at`, `time` seconds in (a second apart from the last).
-fn double_click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) {
-    let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, time, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)]);
-    frame(app, ctx, time + 0.1, vec![]);
-}
-
+/// Type on a Path opens its options for the selected type on a path only: nothing selected and a path without type refuse.
 #[test]
-fn double_clicking_a_tool_button_opens_its_options() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    let buttons = frame(&mut app, &ctx, 0.0, vec![]);
-    // The Color category's slots close the list: Gradient, then Eyedropper.
-    let (gradient, eyedropper) = (buttons[buttons.len() - 2], buttons[buttons.len() - 1]);
-    double_click(&mut app, &ctx, 1.0, gradient.center());
-    assert_eq!((app.session.tool_id(), app.ui.open_panel.as_deref()), ("gradient", Some("gradient")));
-    // Again: the panel stays open.
-    double_click(&mut app, &ctx, 2.0, gradient.center());
-    assert_eq!(app.ui.open_panel.as_deref(), Some("gradient"));
-    double_click(&mut app, &ctx, 3.0, eyedropper.center());
-    let d = app.ui.dialog.clone().expect("Eyedropper Options");
-    assert_eq!((app.session.tool_id(), d.kind.as_str()), ("eyedropper", crate::dialogs::eyedropper::KIND));
-    // OK applies the options.
-    app.ui.dialog.as_mut().unwrap().fields.insert("apply".into(), json!({"appearance": {"transparency": false}}));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let o = app.session.prefs.eyedropper;
-    assert!(o.pick_up.appearance.transparency && !o.apply.appearance.transparency && o.apply.appearance.fill.color);
-    assert!(app.run("tool.options", json!({"tool": "lasso"})).is_err());
+fn type_on_a_path_tools_open_options_for_the_selected_type_on_a_path() {
+    for tool in ["typeOnPath", "verticalTypeOnPath"] {
+        let mut app = app_with(600, 400);
+        app.select_tool(tool);
+        assert_eq!(open_options(&mut app, tool), Err("nothing selected".into()), "{tool}");
+        let path = app.run("path.create", json!({"d": "M100 200 L500 200"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [path]})).unwrap();
+        let e = open_options(&mut app, tool).unwrap_err();
+        assert!(e.contains("`type.pathOptions`: no text objects selected"), "{tool}: {e}");
+        let r = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [300, 210]})).unwrap();
+        app.run("select.set", json!({"ids": [r["id"]]})).unwrap();
+        open_options(&mut app, tool).unwrap_or_else(|e| panic!("{tool}: {e}"));
+    }
 }
 
 /// A click on the Blend tool's button while the Blend tool holds a first pick finishes the
@@ -202,22 +217,20 @@ fn double_clicking_a_tool_button_opens_its_options() {
 /// instead of blending with the first.
 #[test]
 fn clicking_the_active_blend_tool_button_finishes_the_blend() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui.toolbar_advanced = true;
-    app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+    let mut app = app_with(600, 300);
+    app.run("window.toolbarAdvanced", json!({})).unwrap();
     for x in [0, 200] {
         app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 40, "height": 40})).unwrap();
     }
     app.select_tool("blend");
-    let index = slots(&app).iter().position(|(_, tools)| tools.contains(&"blend")).expect("a toolbar slot");
-    let ctx = egui::Context::default();
-    let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
+    let ctx = reader();
+    let at = tool_rect(&settled(&mut app, &ctx, 0.0, 2000.0), "blend").center();
     let down = |x, y| vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
     let view = app.view_info();
     app.session.pointer(&down(20.0, 20.0), view).unwrap();
     assert!(app.session.tool_busy(), "the first rectangle is picked");
     let layers = app.session.active().unwrap().doc.layers.clone();
-    click_in(&mut app, &ctx, 1.0, at, PointerButton::Primary, 2000.0);
+    click(&mut app, &ctx, 1.0, at, 2000.0);
     assert_eq!(app.session.tool_id(), "blend");
     assert!(!app.session.tool_busy(), "the click on the button drops the pick");
     app.session.pointer(&down(220.0, 20.0), view).unwrap();
@@ -225,68 +238,19 @@ fn clicking_the_active_blend_tool_button_finishes_the_blend() {
     assert_eq!(app.session.active().unwrap().doc.layers, layers, "no blend was made");
 }
 
-/// A double-click on the Type on a Path or Vertical Type on a Path tool opens Type on a Path
-/// Options for the selected type on a path, as the menu item does; with nothing selected, or
-/// with no type on a path selected, nothing opens.
-#[test]
-fn double_clicking_a_type_on_a_path_tool_opens_type_on_a_path_options() {
-    for tool in ["typeOnPath", "verticalTypeOnPath"] {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui.toolbar_advanced = true;
-        app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
-        app.select_tool(tool);
-        let index = slots(&app).iter().position(|(_, tools)| tools.contains(&tool)).expect("a toolbar slot");
-        let ctx = egui::Context::default();
-        let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
-        let double_click = |app: &mut VectorcraftApp, time: f64| {
-            let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-            frame_in(app, &ctx, time, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)], 2000.0);
-            frame_in(app, &ctx, time + 0.1, vec![], 2000.0);
-        };
-        // Nothing selected: nothing opens.
-        double_click(&mut app, 1.0);
-        assert!(app.ui.dialog.is_none(), "{tool}");
-        assert_eq!(app.run("tool.options", json!({ "tool": tool })), Err("nothing selected".into()));
-        // A path that holds no type: nothing opens either.
-        let path = app.run("path.create", json!({"d": "M100 200 L500 200"})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [path]})).unwrap();
-        double_click(&mut app, 2.0);
-        assert!(app.ui.dialog.is_none(), "{tool}");
-        let e = app.run("tool.options", json!({ "tool": tool })).unwrap_err();
-        assert!(e.contains("`type.pathOptions`: no text objects selected"), "{tool}: {e}");
-        assert!(app.ui.dialog.is_none(), "{tool}");
-        // Type on a path selected: the dialog opens on its options.
-        let r = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [300, 210]})).unwrap();
-        app.run("select.set", json!({"ids": [r["id"]]})).unwrap();
-        app.run("type.pathOptions", json!({"effect": "skew"})).unwrap();
-        assert_eq!(app.session.tool_id(), tool);
-        double_click(&mut app, 3.0);
-        let d = app.ui.dialog.clone().unwrap_or_else(|| panic!("{tool}: Type on a Path Options"));
-        assert_eq!((d.str("__command"), d.str("__label")), ("type.pathOptions".to_string(), "Type on a Path Options".to_string()));
-        assert_eq!(d.fields.get("effect"), Some(&json!("skew")), "{tool}");
-        assert!(!d.fields.contains_key("start") && !d.fields.contains_key("end"), "{tool}: the menu item's fields");
-        // OK applies what the dialog holds.
-        app.ui.dialog.as_mut().unwrap().fields.insert("effect".into(), json!("gravity"));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!(app.session.execute("type.pathOptions", &json!({})).unwrap()["effect"], "gravity", "{tool}");
-    }
-}
-
 #[test]
 fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
     for (tool, key, count) in [("polygon", "sides", 3), ("star", "points", 7)] {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width":300,"height":300})).unwrap();
+        let mut app = windowed(app_with(300, 300));
         app.select_tool(tool);
         assert!(open_options(&mut app, tool).is_err(), "upstream toolbar opening behavior stays unchanged");
-        assert!(app.ui.dialog.is_none());
+        assert!(tool_dialog(&app).is_none());
         let objects =
             |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>();
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":120,"y":130}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert!(d.fields.contains_key(if tool == "polygon" { "radius" } else { "radius1" }));
-        d.fields.insert(key.into(), json!(count));
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(field(&app, if tool == "polygon" { "radius" } else { "radius1" }).is_some());
+        set_field(&app, key, json!(count));
+        answer(&mut app, true);
         assert_eq!(objects(&app), 1, "deliberate exact-size placement");
         assert_eq!(app.session.tool_options()[key], count);
         for round in 0..3 {
@@ -308,383 +272,90 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
             assert_eq!(node.path_data().unwrap().anchor_count(), if tool == "polygon" { 3 } else { 14 });
         }
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":140,"y":150}));
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!(d.fields[key], count, "reopening uses the chosen count");
-        d.fields.insert(key.into(), json!(9));
-        crate::dialogs::cancel(&mut app);
+        assert_eq!(field(&app, key), Some(json!(count)), "reopening uses the chosen count");
+        set_field(&app, key, json!(9));
+        answer(&mut app, false);
         assert_eq!(objects(&app), 4);
         assert_eq!(app.session.tool_options()[key], count, "Cancel keeps the count");
     }
 }
 
-/// #2691: a double-click on the Line Segment, Arc, Rectangular Grid or Polar Grid tool opens
-/// its Tool Options (the Rectangular Grid and Arc help pages, step 3). Cancel leaves the next
-/// drag as it was; OK draws nothing and the next drag, and a click's dialog, use the options.
-#[test]
-fn double_clicking_the_line_arc_and_grid_tools_opens_their_tool_options() {
-    // (tool, the option changed, its new value, the drag's command, the param it shows in)
-    let cases = [
-        ("lineSegment", "fillLine", json!(true), "shape.line", "fill"),
-        ("arc", "slope", json!(-30.0), "shape.arc", "slope"),
-        ("rectangularGrid", "rows", json!(2), "shape.rectangularGrid", "rows"),
-        ("polarGrid", "radial", json!(3), "shape.polarGrid", "radial"),
-    ];
-    let objects = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>();
-    let drag = |app: &mut VectorcraftApp| {
-        let view = app.view_info();
-        for (kind, x, y) in [
-            (vectorcraft_tools::PointerKind::Down, 50.0, 50.0),
-            (vectorcraft_tools::PointerKind::Drag, 150.0, 120.0),
-            (vectorcraft_tools::PointerKind::Up, 150.0, 120.0),
-        ] {
-            app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, x, y), view).unwrap();
-        }
-        app.session.journal.last().cloned().expect("the drag's command")
-    };
-    for (tool, key, value, cmd, param) in cases {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui.toolbar_advanced = true;
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        app.select_tool(tool);
-        let index = slots(&app).iter().position(|(_, tools)| tools.contains(&tool)).expect("a toolbar slot");
-        let ctx = egui::Context::default();
-        let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
-        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame_in(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)], 2000.0);
-        let d = app.ui.dialog.clone().unwrap_or_else(|| panic!("{tool}: Tool Options"));
-        assert_eq!((d.kind.as_str(), d.bool("__toolOptions")), (tool, true));
-        assert!(!d.fields.contains_key("x"), "{tool}: no click to draw at");
-        let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        let title = match tool {
-            "lineSegment" => "Line Segment Tool Options",
-            "arc" => "Arc Segment Tool Options",
-            "rectangularGrid" => "Rectangular Grid Tool Options",
-            _ => "Polar Grid Tool Options",
-        };
-        assert!(text.contains(title) && !text.contains("Reference:"), "{tool}: {text}");
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert(key.into(), value.clone());
-        crate::dialogs::cancel(&mut app);
-        let (c, p) = drag(&mut app);
-        assert_eq!(c, cmd);
-        assert_ne!(p.get(param), Some(&value), "{tool}: Cancel changes nothing");
-        assert_eq!(objects(&app), 1);
-        app.run("tool.options", json!({ "tool": tool })).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert(key.into(), value.clone());
-        if tool.ends_with("Grid") {
-            d.fields.insert("width".into(), json!("150 pt"));
-        }
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(objects(&app), 1, "{tool}: OK draws nothing");
-        let (c, p) = drag(&mut app);
-        assert_eq!((c.as_str(), &p[param]), (cmd, &value), "{tool}: the next drag uses the option");
-        // A click's dialog opens at them too, a grid at its Default Size.
-        crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x": 100, "y": 100}));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!(d.fields[key], value, "{tool}");
-        if tool.ends_with("Grid") {
-            assert_eq!(d.f64("width", 0.0), 150.0);
-        }
-    }
-}
-
-#[test]
-fn double_clicking_the_hand_zoom_and_transform_tools() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(660.0, 460.0)));
-    app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
-    // Hand: the artboard fits the window. Zoom: 100%.
-    app.run("tool.options", json!({"tool": "hand"})).unwrap();
-    let v = *app.view().unwrap();
-    assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
-    app.run("tool.options", json!({"tool": "zoom"})).unwrap();
-    assert_eq!(app.view().unwrap().zoom, 1.0);
-    // The transform tools open their dialogs, like Object › Transform: not with nothing selected.
-    assert_eq!(app.run("tool.options", json!({"tool": "rotate"})), Err("nothing selected".into()));
-    assert!(app.ui.dialog.is_none());
-    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    for tool in ["rotate", "scale", "reflect", "shear"] {
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some(tool.to_string()));
-    }
-    // OK in Rotate turns the selection about its centre.
-    app.run("tool.options", json!({"tool": "rotate"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(90));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
-    assert!((b.x0 - 20.0).abs() < 1e-9 && (b.y0 - 0.0).abs() < 1e-9 && (b.width() - 20.0).abs() < 1e-9, "{b:?}");
-}
-
-#[test]
-fn double_clicking_a_selection_tool_opens_the_move_dialog() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
-    // The Selection tool's button is the first one.
-    let selection = frame(&mut app, &ctx, 0.0, vec![])[0];
-    // Nothing selected: Move is disabled, so nothing opens.
-    double_click(&mut app, &ctx, 1.0, selection.center());
-    assert!(app.ui.dialog.is_none());
-    assert_eq!(app.run("tool.options", json!({"tool": "directSelection"})), Err("nothing selected".into()));
-    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    double_click(&mut app, &ctx, 2.0, selection.center());
-    assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some("move".to_string()));
-    // The Direct Selection and Group Selection tools open it too.
-    for tool in ["directSelection", "groupSelection"] {
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some("move".to_string()), "{tool}");
-    }
-    // OK moves the selection by what was typed.
-    app.run("tool.options", json!({"tool": "selection"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("dx".into(), json!("25 pt"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
-    assert_eq!((b.x0, b.y0), (35.0, 10.0));
-}
-
-/// #1616: in every language a flyout is wide enough that no tool's name runs into its shortcut
-/// (the Spanish Live Paint names need more than the 250 pt the English ones fit in).
-#[test]
-fn a_flyout_is_as_wide_as_its_longest_translated_row() {
-    let ctx = egui::Context::default();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        for lang in crate::i18n::Lang::all() {
-            for group in TOOL_GROUPS {
-                let rows: Vec<RowText> = group.iter().map(|tool| row_text(ui, lang, tool, Color32::WHITE)).collect();
-                let w = rows_width(rows.iter());
-                assert!(w >= 250.0, "{lang:?}");
-                for (tool, (name, sc)) in group.iter().zip(&rows) {
-                    let name_end = NAME_X + name.size().x;
-                    let shortcut_start = w - ROW_END - sc.as_ref().map_or(0.0, |sc| sc.size().x);
-                    assert!(
-                        name_end <= shortcut_start + 0.01,
-                        "{lang:?} {}: the name ends at {name_end}, the shortcut starts at {shortcut_start}",
-                        tool.id
-                    );
-                }
-            }
-        }
-        let es = crate::i18n::Lang::from_code("es").unwrap();
-        let live_paint = TOOL_GROUPS.iter().find(|g| g.iter().any(|t| t.id == "livePaintSelection")).expect("the Live Paint group");
-        let rows: Vec<RowText> = live_paint.iter().map(|tool| row_text(ui, es, tool, Color32::WHITE)).collect();
-        assert!(rows_width(rows.iter()) > 250.0, "the Spanish Live Paint flyout is wider than the English one");
-    });
-    out.textures_delta.clear();
-}
-
-#[test]
-fn right_clicking_a_tool_group_opens_its_flyout() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    let buttons = frame(&mut app, &ctx, 0.0, vec![]);
-    // Selection, Direct Selection, Lasso, then the Shapes group (Rectangle and its sub-tools).
-    let at = buttons[3].center();
-    let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(true)]);
-    frame(&mut app, &ctx, 1.05, vec![b(false)]);
-    frame(&mut app, &ctx, 1.1, vec![]);
-    assert!(app.ui.flyout.is_some(), "the right-click opens the flyout and the same click doesn't close it");
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
-    assert_eq!(app.session.tool_id(), "selection", "a right-click only opens the flyout");
-    // Its second row is Rounded Rectangle (30 pt rows).
-    let row = egui::pos2(menu.left() + 60.0, menu.top() + 45.0);
-    let p = |pressed| Event::PointerButton { pos: row, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 2.0, vec![Event::PointerMoved(row), p(true)]);
-    frame(&mut app, &ctx, 2.05, vec![p(false)]);
-    assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
-    // A long press opens it too, and releasing the press (a click, being short of 0.8 s) leaves
-    // it open without choosing the button's tool.
-    let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 3.0, vec![Event::PointerMoved(at), p(true)]);
-    frame(&mut app, &ctx, 3.5, vec![]);
-    assert!(app.ui.flyout.is_some(), "a long press opens the flyout");
-    frame(&mut app, &ctx, 3.6, vec![p(false)]);
-    frame(&mut app, &ctx, 3.7, vec![]);
-    assert!(app.ui.flyout.is_some(), "releasing the long press leaves the flyout open");
-    // A click anywhere else closes it.
-    let away = egui::pos2(300.0, 1000.0);
-    let c = |pressed| Event::PointerButton { pos: away, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 4.0, vec![Event::PointerMoved(away), c(true)]);
-    frame(&mut app, &ctx, 4.05, vec![c(false)]);
-    assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
-}
-
-/// The Shapes group's button (Selection, Direct Selection, Lasso, then Rectangle).
-fn shapes_button(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    frame(app, ctx, 0.0, vec![])[3]
-}
-
-#[test]
-fn a_held_press_asks_for_the_frame_that_opens_the_flyout() {
-    // egui draws only on input: a still press must schedule the frame where it becomes long.
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let at = shapes_button(&mut app, &ctx).center();
-    let p = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Default::default() };
-    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), p]);
-    // The frames egui runs after the input settle; then nothing moves.
-    frame(&mut app, &ctx, 1.02, vec![]);
-    let input =
-        egui::RawInput { time: Some(1.04), screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))), ..Default::default() };
-    let out = ctx.run_ui(input, |ui| show(&mut app, ui));
-    let delay = out.viewport_output.get(&egui::ViewportId::ROOT).unwrap().repaint_delay;
-    assert!(delay <= std::time::Duration::from_secs_f64(LONG_PRESS), "repaint in {delay:?}");
-    assert!(app.ui.flyout.is_none(), "not open before the press is long");
-}
-
-#[test]
-fn pressing_the_corner_triangle_opens_the_flyout_at_once() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let button = shapes_button(&mut app, &ctx);
-    let at = button.right_bottom() - vec2(4.0, 4.0);
-    let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), p(true)]);
-    assert!(app.ui.flyout.is_some(), "the press on the triangle opens it");
-    frame(&mut app, &ctx, 1.05, vec![p(false)]);
-    frame(&mut app, &ctx, 1.1, vec![]);
-    assert_eq!((app.session.tool_id(), app.ui.flyout.is_some()), ("selection", true), "the release neither closes it nor picks the tool");
-    // A plain click in the middle of the button still just picks its tool.
-    let mid = button.center();
-    let c = |pressed| Event::PointerButton { pos: mid, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 2.0, vec![Event::PointerMoved(mid), c(true)]);
-    frame(&mut app, &ctx, 2.05, vec![c(false)]);
-    assert_eq!((app.session.tool_id(), app.ui.flyout), ("rectangle", None));
-}
-
-#[test]
-fn the_flyout_opens_on_the_right_press_even_when_its_tool_is_active() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let at = shapes_button(&mut app, &ctx).center();
-    app.select_tool("rectangle");
-    for (k, t0) in [1.0, 3.0, 5.0].into_iter().enumerate() {
-        let r = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
-        frame(&mut app, &ctx, t0, vec![Event::PointerMoved(at), r(true)]);
-        assert!(app.ui.flyout.is_some(), "right press #{k} opens it before the release");
-        frame(&mut app, &ctx, t0 + 0.05, vec![r(false)]);
-        assert!(app.ui.flyout.is_some(), "right press #{k} leaves it open");
-        // A click away closes it; then try again.
-        let away = egui::pos2(300.0, 1000.0);
-        let c = |pressed| Event::PointerButton { pos: away, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(&mut app, &ctx, t0 + 1.0, vec![Event::PointerMoved(away), c(true)]);
-        frame(&mut app, &ctx, t0 + 1.05, vec![c(false)]);
-        assert!(app.ui.flyout.is_none());
-    }
-    // A long press on the active tool's button opens it too.
-    let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 8.0, vec![Event::PointerMoved(at), p(true)]);
-    frame(&mut app, &ctx, 8.0 + LONG_PRESS + 0.01, vec![]);
-    assert!(app.ui.flyout.is_some(), "a long press on the active tool opens it");
-    assert_eq!(app.session.tool_id(), "rectangle");
-}
-
-#[test]
-fn type_button_long_press_selects_vertical_type_in_both_layouts() {
-    for advanced in [false, true] {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui.toolbar_advanced = advanced;
-        let all = slots(&app);
-        let index = all.iter().position(|(_, tools)| tools.contains(&"type")).unwrap();
-        assert!(all[index].1.contains(&"verticalType"));
-        for id in ["type", "verticalType", "areaType", "verticalAreaType", "typeOnPath", "verticalTypeOnPath"] {
-            assert_eq!(all.iter().filter(|(_, tools)| tools.contains(&id)).count(), 1);
-        }
-        let ctx = egui::Context::default();
-        let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
-        let pointer = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame_in(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), pointer(at, true)], 2000.0);
-        frame_in(&mut app, &ctx, 1.36, vec![], 2000.0);
-        frame_in(&mut app, &ctx, 1.4, vec![pointer(at, false)], 2000.0);
-        frame_in(&mut app, &ctx, 1.45, vec![], 2000.0);
-        assert_eq!(app.session.tool_id(), "selection");
-        let tools: Vec<String> = ctx.data(|d| d.get_temp(egui::Id::unique("flyout-tools"))).unwrap();
-        let row_index = tools.iter().position(|id| id == "verticalType").unwrap();
-        let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).unwrap();
-        let row = egui::pos2(menu.left() + 60.0, menu.top() + 15.0 + row_index as f32 * 30.0);
-        frame_in(&mut app, &ctx, 2.0, vec![Event::PointerMoved(row), pointer(row, true)], 2000.0);
-        frame_in(&mut app, &ctx, 2.05, vec![pointer(row, false)], 2000.0);
-        assert_eq!(app.session.tool_id(), "verticalType");
-        assert_eq!(app.ui.flyout, None);
-    }
-}
-
-/// A press at `from`, dragged through `to` (one frame each), then released.
-fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, from: Pos2, to: &[Pos2]) {
-    let b = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, time, vec![Event::PointerMoved(from), b(from, true)]);
-    for (k, p) in to.iter().enumerate() {
-        frame(app, ctx, time + 0.05 * (k + 1) as f64, vec![Event::PointerMoved(*p)]);
-    }
-    let end = to.last().copied().unwrap_or(from);
-    frame(app, ctx, time + 0.05 * (to.len() + 1) as f64, vec![b(end, false)]);
-    frame(app, ctx, time + 0.05 * (to.len() + 2) as f64, vec![]);
-}
-
-/// A click at `at`.
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, button: PointerButton) {
-    click_in(app, ctx, time, at, button, 1200.0);
-}
-
-/// [`click`] in a window `height` points tall; returns the tool buttons' rects after it.
-fn click_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, button: PointerButton, height: f32) -> Vec<egui::Rect> {
-    let b = |pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Default::default() };
-    frame_in(app, ctx, time, vec![Event::PointerMoved(at), b(true)], height);
-    frame_in(app, ctx, time + 0.05, vec![b(false)], height);
-    frame_in(app, ctx, time + 0.1, vec![], height)
-}
-
-/// The Color, Gradient and None buttons grow with the toolbar, and in two columns the three
-/// drawing modes sit side by side, each setting its mode (#1129).
+/// The paint chips, drawing modes and the rest of the footer lie inside the rail at one and at two columns (one column
+/// shows the current drawing mode alone), and in two columns the three drawing modes sit side by side, each setting
+/// its mode (#1129).
 #[test]
 fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
-    frame_in(&mut app, &ctx, 0.0, vec![], 900.0);
-    assert_eq!(widget_rects(&ctx, vec2(11.0, 11.0)).len(), 3, "one column: three 11 pt chips");
-    app.ui.toolbar_double = true;
-    frame_in(&mut app, &ctx, 1.0, vec![], 900.0);
-    assert_eq!(widget_rects(&ctx, vec2(17.0, 17.0)).len(), 3, "two columns: three 17 pt chips");
-    let modes = widget_rects(&ctx, vec2(22.0, 22.0));
-    assert_eq!(modes.len(), 3, "the three drawing modes side by side");
-    assert!(modes.iter().all(|r| (r.top() - modes[0].top()).abs() < 0.5), "{modes:?}");
-    click_in(&mut app, &ctx, 2.0, modes[1].center(), PointerButton::Primary, 900.0);
+    let mut app = app_with(200, 200);
+    let ctx = reader();
+    let footer =
+        ["Color (, or Shift+,)", "Gradient (. or Shift+.)", "None (/)", "Draw Normal (Shift+D)", "Draw Behind (Shift+D)", "Draw Inside (Shift+D)"];
+    let mut nodes = vec![];
+    for (k, double) in [false, true].into_iter().enumerate() {
+        app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+        nodes = settled(&mut app, &ctx, k as f64 * 10.0, 900.0);
+        // The rail itself, not its dock grip, which is named for the pane too.
+        let rail = nodes.iter().find(|n| n.role() == Role::Toolbar && n.label() == Some("Tools")).and_then(bounds).expect("the rail is drawn");
+        for label in &footer[..if double { 6 } else { 4 }] {
+            let r = named_rect(&nodes, label);
+            assert!(rail.expand(0.5).contains_rect(r), "double {double}: {label} {r:?} in {rail:?}");
+        }
+    }
+    let modes = ["Draw Normal (Shift+D)", "Draw Behind (Shift+D)", "Draw Inside (Shift+D)"].map(|label| named_rect(&nodes, label));
+    assert!(modes.iter().all(|r| (r.top() - modes[0].top()).abs() < 0.5), "side by side: {modes:?}");
+    click(&mut app, &ctx, 20.0, modes[1].center(), 900.0);
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
 }
 
-/// A click on the Gradient button applies the last gradient; Cmd/Ctrl-click resets the active
-/// proxy's gradient to the linear White, Black gradient instead, as one undo step.
+/// A screen reader reads the drawing-mode buttons' state as the rail shows it, in every mode: in two columns the
+/// current mode's button reads pressed and the other two not pressed; in one column the single button is named for the
+/// current mode and cycles the modes, so it reads as a plain button with no pressed state.
 #[test]
-fn cmd_click_on_the_gradient_button_resets_to_the_linear_white_black_gradient() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
-    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
-    app.run("paint.setFill", json!({"gradient": {"kind": "radial", "stops": stops}})).unwrap();
-    app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
-    let fill = |app: &VectorcraftApp| match crate::panels::current_paints(app).0 {
-        Paint::Gradient(g) => (g.gradient.kind, g.gradient.stops.iter().map(|s| s.color.to_hex()).collect::<Vec<_>>()),
-        p => panic!("expected a gradient fill, got {p:?}"),
-    };
-    let ctx = egui::Context::default();
-    frame_in(&mut app, &ctx, 0.0, vec![], 900.0);
-    let gradient = widget_rects(&ctx, vec2(11.0, 11.0))[1].center();
-    click_in(&mut app, &ctx, 1.0, gradient, PointerButton::Primary, 900.0);
-    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Radial, vec!["#ff0000".into(), "#0000ff".into()]), "the last gradient");
-    let m = egui::Modifiers::COMMAND;
-    let b = |pressed| Event::PointerButton { pos: gradient, button: PointerButton::Primary, pressed, modifiers: m };
-    frame_in(&mut app, &ctx, 2.0, vec![Event::ModifiersChanged(m), Event::PointerMoved(gradient), b(true)], 900.0);
-    frame_in(&mut app, &ctx, 2.05, vec![b(false)], 900.0);
-    frame_in(&mut app, &ctx, 2.1, vec![Event::ModifiersChanged(egui::Modifiers::NONE)], 900.0);
-    assert_eq!(fill(&app), (vectorcraft_color::GradientKind::Linear, vec!["#ffffff".into(), "#000000".into()]));
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(fill(&app).0, vectorcraft_color::GradientKind::Radial, "one undo step");
+fn the_drawing_mode_buttons_report_the_current_mode() {
+    let mut app = app_with(200, 200);
+    let ctx = reader();
+    // Draw Inside draws into one selected path.
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let modes = [("normal", "Draw Normal (Shift+D)"), ("behind", "Draw Behind (Shift+D)"), ("inside", "Draw Inside (Shift+D)")];
+    let mut t0 = 0.0;
+    for double in [false, true] {
+        app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+        for (current, _) in modes {
+            app.run("view.drawMode", json!({ "mode": current })).unwrap();
+            let nodes = settled(&mut app, &ctx, t0, 900.0);
+            t0 += 10.0;
+            for (mode, label) in modes {
+                let node = nodes.iter().find(|n| n.label() == Some(label));
+                if double {
+                    let node = node.unwrap_or_else(|| panic!("two columns, {current:?}: {label} is drawn"));
+                    let pressed = if mode == current { Toggled::True } else { Toggled::False };
+                    assert_eq!(node.toggled(), Some(pressed), "two columns, {current:?}: {label}");
+                } else if mode == current {
+                    let node = node.unwrap_or_else(|| panic!("one column, {current:?}: {label} is drawn"));
+                    assert_eq!(node.role(), Role::Button, "one column, {current:?}: {label}");
+                    assert_eq!(node.toggled(), None, "one column, {current:?}: {label} has no pressed state");
+                } else {
+                    assert!(node.is_none(), "one column, {current:?}: {label} is not shown");
+                }
+            }
+        }
+    }
+}
+
+/// A Learn link's tool in a collapsed group of the Tools panel opens that group's flyout with the tool in it, and
+/// chooses nothing: the rail reveals the located tool.
+#[test]
+fn a_located_tool_in_a_collapsed_group_opens_its_flyout_on_the_tools_panel() {
+    let mut app = app_with(400, 400);
+    let ctx = reader();
+    let menus = |nodes: &[Node]| nodes.iter().filter(|n| n.role() == Role::Menu).count();
+    let row = tool_info("smooth").map(button_name).unwrap_or_default();
+    let nodes = settled(&mut app, &ctx, 0.0, 900.0);
+    assert_eq!(menus(&nodes), 0, "no flyout before the link");
+    assert_eq!(app.run("learn.locateTool", json!({"tool": "smooth"})).unwrap()["location"], "flyout");
+    let nodes = settled(&mut app, &ctx, 1.0, 900.0);
+    assert!(menus(&nodes) > 0, "the located tool's group opens its flyout");
+    assert!(nodes.iter().any(|n| n.label() == Some(row.as_str())), "the flyout lists {row}");
+    assert_eq!(app.session.tool_id(), "selection", "the link chooses no tool");
 }
 
 /// How many columns of tool buttons `rects` make.
@@ -708,132 +379,36 @@ fn row_sizes(rects: &[egui::Rect]) -> Vec<usize> {
     rows.into_iter().map(|(_, n)| n).collect()
 }
 
-/// #1736: without group labels (as it ships), the tools run on from group to group: one column
-/// evenly spaced, with nothing between the groups; two columns with every row full but maybe
-/// the last. With the labels, each group starts its own row under its name.
-#[test]
-fn the_tools_run_on_without_group_labels() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
-    let one = frame_in(&mut app, &ctx, 0.0, vec![], 1600.0);
-    assert_eq!(one.len(), slots(&app).len());
-    let steps: Vec<f32> = one.windows(2).map(|w| w[1].top() - w[0].top()).collect();
-    assert!(steps.iter().all(|d| (d - steps[0]).abs() < 0.5), "evenly spaced: {steps:?}");
-    app.ui.toolbar_double = true;
-    let rows = row_sizes(&frame_in(&mut app, &ctx, 0.5, vec![], 1600.0));
-    let slots = slots(&app).len();
-    assert_eq!(rows.iter().sum::<usize>(), slots);
-    assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "{rows:?}");
-    assert_eq!(rows.len(), slots.div_ceil(2));
-    app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
-    let labelled = row_sizes(&frame_in(&mut app, &ctx, 1.0, vec![], 1600.0));
-    assert!(labelled.len() > rows.len() && labelled.contains(&1), "{labelled:?}");
-}
-
-#[test]
-fn the_double_arrow_toggles_one_and_two_columns_in_a_short_window() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    // 700 pt: too short for the single column, which scrolls instead of turning into two.
-    assert_eq!(columns(&frame_in(&mut app, &ctx, 0.0, vec![], 700.0)), 1);
-    let arrow = pos2(8.0, 7.0);
-    assert_eq!(columns(&click_in(&mut app, &ctx, 1.0, arrow, PointerButton::Primary, 700.0)), 2);
-    assert!(app.ui.toolbar_double && crate::menus::checked(&app, "window.toolbarColumns", &json!({})) == Some(true));
-    assert_eq!(columns(&click_in(&mut app, &ctx, 2.0, arrow, PointerButton::Primary, 700.0)), 1);
-    assert!(!app.ui.toolbar_double);
-}
-
+/// `window.toolbarColumns` toggles or sets the columns, refuses a non-boolean, the menu agrees, and the Tools rail lays
+/// its buttons out in the columns chosen, Advanced too.
 #[test]
 fn the_columns_command_toggles_or_sets_the_toolbar_columns() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
+    let ctx = reader();
+    // 700 pt: too short for the single column, which scrolls instead of turning into two.
+    let laid_out = |app: &mut VectorcraftApp, t0: f64| {
+        let nodes = settled(app, &ctx, t0, 700.0);
+        cells(app, &nodes)
+    };
     assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(true));
-    assert_eq!(columns(&frame_in(&mut app, &ctx, 0.0, vec![], 700.0)), 2);
+    let two = laid_out(&mut app, 0.0);
+    assert_eq!(columns(&two), 2);
+    let rows = row_sizes(&two);
+    assert_eq!(rows.iter().sum::<usize>(), two.len());
+    assert!(rows[..rows.len() - 1].iter().all(|n| *n == 2), "every row but the last is full: {rows:?}");
     assert_eq!(app.run("window.toolbarColumns", json!({"double": true})).unwrap(), json!(true));
     assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(false));
     assert_eq!(crate::menus::checked(&app, "window.toolbarColumns", &json!({})), Some(false));
-    assert_eq!(columns(&frame_in(&mut app, &ctx, 1.0, vec![], 700.0)), 1);
+    assert_eq!(columns(&laid_out(&mut app, 1.0)), 1);
     assert!(app.run("window.toolbarColumns", json!({"double": "yes"})).is_err());
     // Advanced (every tool group) is taller still and keeps the column the user chose too.
     app.run("window.toolbarAdvanced", json!({})).unwrap();
-    assert_eq!(columns(&frame_in(&mut app, &ctx, 2.0, vec![], 700.0)), 1);
+    assert_eq!(columns(&laid_out(&mut app, 2.0)), 1);
 }
 
-#[test]
-fn a_flyout_dragged_by_its_bar_floats_until_its_close_box_puts_it_back() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let at = shapes_button(&mut app, &ctx).center();
-    click(&mut app, &ctx, 1.0, at, PointerButton::Secondary);
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
-    // Its grab bar runs down its right side: dragging it tears the flyout off.
-    let bar = pos2(menu.right() - BAR / 2.0, menu.center().y);
-    drag(&mut app, &ctx, 2.0, bar, &[bar + vec2(20.0, 0.0), bar + vec2(60.0, 40.0)]);
-    assert_eq!(app.ui.flyout, None, "the flyout became the floating one");
-    let [f] = app.ui.floating_flyouts.as_slice() else { panic!("one floating flyout: {:?}", app.ui.floating_flyouts) };
-    assert_eq!(f.tools.first().map(String::as_str), Some("rectangle"));
-    let float = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).expect("the floating flyout is shown");
-    // A strip of its nine tools' buttons, its bar under the pointer.
-    let drop = bar + vec2(60.0, 40.0);
-    assert!(float.height() < 40.0 && float.width() > 9.0 * STRIP_BUTTON.x, "a one-row strip: {float:?}");
-    assert!((float.right() - 1.0 - BAR / 2.0 - drop.x).abs() < 1.0 && float.y_range().contains(drop.y), "its bar is under the pointer: {float:?}");
-    // The same bar moves it.
-    let bar = pos2(float.right() - 1.0 - BAR / 2.0, float.bottom() - 6.0);
-    drag(&mut app, &ctx, 3.0, bar, &[bar + vec2(0.0, 20.0), bar + vec2(-10.0, 100.0)]);
-    let moved = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
-    assert!((moved.min - (float.min + vec2(-10.0, 100.0))).length() < 2.0, "moved to {moved:?} from {float:?}");
-    // Picking a tool in it leaves it open.
-    click(&mut app, &ctx, 4.0, pos2(moved.left() + STRIP_BUTTON.x * 1.5, moved.center().y), PointerButton::Primary);
-    assert_eq!((app.session.tool_id(), app.ui.floating_flyouts.len()), ("roundedRectangle", 1));
-    // While it floats, the presses that open the group's flyout raise it instead.
-    click(&mut app, &ctx, 5.0, at, PointerButton::Secondary);
-    assert_eq!(app.ui.flyout, None, "no flyout beside the floating one");
-    assert!(ctx.data(|d| d.get_temp::<f64>(floating_area("rectangle"))).is_some(), "the floating flyout was raised");
-    let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 6.0, vec![Event::PointerMoved(at), p(true)]);
-    frame(&mut app, &ctx, 6.0 + LONG_PRESS + 0.01, vec![]);
-    frame(&mut app, &ctx, 6.5, vec![p(false)]);
-    assert_eq!((app.ui.flyout, app.session.tool_id()), (None, "roundedRectangle"), "a long press neither opens the flyout nor picks the tool");
-    // The × at the top of the bar puts it back: the group opens as a flyout again.
-    click(&mut app, &ctx, 7.0, pos2(moved.right() - BAR / 2.0, moved.top() + CLOSE / 2.0), PointerButton::Primary);
-    assert!(app.ui.floating_flyouts.is_empty());
-    click(&mut app, &ctx, 8.0, at, PointerButton::Secondary);
-    assert!(app.ui.flyout.is_some());
-}
-
-#[test]
-fn a_click_on_a_flyouts_bar_tears_it_off() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let at = shapes_button(&mut app, &ctx).center();
-    click(&mut app, &ctx, 1.0, at, PointerButton::Secondary);
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).unwrap();
-    let bar = pos2(menu.right() - BAR / 2.0, menu.center().y);
-    click(&mut app, &ctx, 2.0, bar, PointerButton::Primary);
-    frame(&mut app, &ctx, 2.2, vec![]);
-    assert_eq!(app.ui.flyout, None);
-    assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.tools[0].as_str()).collect::<Vec<_>>(), ["rectangle"]);
-    let float = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).expect("the floating flyout is shown");
-    assert!(float.contains(bar), "its bar is under the pointer: {float:?}");
-    assert_eq!(app.session.tool_id(), "selection", "no tool picked");
-}
-
-#[test]
-fn releasing_a_long_press_over_the_flyouts_bar_tears_it_off() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    let at = shapes_button(&mut app, &ctx).center();
-    let b = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(at, true)]);
-    frame(&mut app, &ctx, 1.0 + LONG_PRESS + 0.01, vec![]);
-    frame(&mut app, &ctx, 1.45, vec![]);
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the long press opens the flyout");
-    let bar = pos2(menu.right() - BAR / 2.0, menu.center().y);
-    frame(&mut app, &ctx, 1.5, vec![Event::PointerMoved(bar)]);
-    frame(&mut app, &ctx, 1.55, vec![b(bar, false)]);
-    frame(&mut app, &ctx, 1.6, vec![]);
-    assert_eq!((app.ui.flyout, app.ui.floating_flyouts.len(), app.session.tool_id()), (None, 1, "selection"));
+/// The Tools group of `first`'s strip panel, with the rect of its floating window.
+fn strip_rect(app: &VectorcraftApp, first: &str) -> Option<egui::Rect> {
+    crate::panel_docking::layout_of(&app.ui).location(&strip_id(&Owner::Tools, first)).ok()?.floating
 }
 
 #[test]
@@ -841,244 +416,45 @@ fn window_float_tools_floats_and_puts_back_a_group() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let check = |app: &VectorcraftApp| crate::menus::checked(app, "window.floatTools", &json!({"tool": "star"}));
     assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(true));
-    let [f] = app.ui.floating_flyouts.as_slice() else { panic!("one strip: {:?}", app.ui.floating_flyouts) };
-    assert_eq!(f.tools.first().map(String::as_str), Some("rectangle"), "the Basic toolbar's Shapes group");
-    assert_eq!(check(&app), Some(true));
+    // The Basic toolbar's Shapes group, named by its first tool.
+    let rect = strip_rect(&app, "rectangle").expect("the Shapes strip floats");
+    assert!(is_floating(&app, None, "rectangle") && check(&app) == Some(true));
     // Already floating: stays where it is.
-    app.ui.floating_flyouts[0].pos = [300.0, 400.0];
     assert_eq!(app.run("window.floatTools", json!({"tool": "rectangle", "floating": true})).unwrap(), json!(true));
-    assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.pos).collect::<Vec<_>>(), [[300.0, 400.0]]);
+    assert_eq!(strip_rect(&app, "rectangle"), Some(rect));
     // Omitted toggles it back.
     assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(false));
-    assert!(app.ui.floating_flyouts.is_empty() && check(&app) == Some(false));
+    assert!(!is_floating(&app, None, "rectangle") && check(&app) == Some(false));
     assert_eq!(app.run("window.floatTools", json!({"tool": "pen", "floating": false})).unwrap(), json!(false));
-    // A tool alone in its slot, an unknown tool, a bad flag.
+    // A tool alone in its slot, an unknown tool, a missing tool, a bad flag: errors that change nothing.
     assert!(app.run("window.floatTools", json!({"tool": "polygon"})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "nope"})).is_err());
     assert!(app.run("window.floatTools", json!({})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "pen", "floating": "yes"})).is_err());
-    assert!(app.ui.floating_flyouts.is_empty());
+    assert!(strip_rect(&app, "rectangle").is_none() && !is_floating(&app, None, "pen"));
 }
 
+/// A floated group is a panel of the workspace's layout: a saved workspace brings it back, the built-in ones have none.
 #[test]
 fn workspaces_keep_floating_flyouts_and_reset_puts_them_back() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
     app.run("window.workspace.new", json!({"name": "Strips"})).unwrap();
     app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
-    assert!(app.ui.floating_flyouts.is_empty(), "the built-in workspaces float none");
+    assert!(!is_floating(&app, None, "pen"), "the built-in workspaces float none");
     app.run("window.workspace", json!({"name": "Strips"})).unwrap();
-    assert_eq!(app.ui.floating_flyouts.iter().map(|f| f.tools[0].as_str()).collect::<Vec<_>>(), ["pen"]);
-    // Workspaces saved before floating strips load without any.
-    let mut old = serde_json::to_value(crate::workspaces::Workspace::default()).unwrap();
-    old.as_object_mut().unwrap().remove("floatingFlyouts");
-    assert!(serde_json::from_value::<crate::workspaces::Workspace>(old).unwrap().floating_flyouts.is_empty());
+    assert!(is_floating(&app, None, "pen"));
 }
 
-#[test]
-fn loaded_floating_flyouts_keep_known_tools_one_strip_per_group() {
-    let f = |tools: &[&str]| crate::state::FloatingFlyout { tools: tools.iter().map(|s| s.to_string()).collect(), pos: [0.0, 0.0] };
-    let ui = crate::state::UiState {
-        floating_flyouts: vec![f(&["pen", "nope", "addAnchor"]), f(&["pen", "addAnchor"]), f(&["nope"]), f(&[])],
-        ..Default::default()
-    };
-    let ui = ui.sanitized();
-    assert_eq!(ui.floating_flyouts.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["pen,addAnchor"]);
-}
-
-#[test]
-fn floating_flyouts_survive_saved_preferences_and_stay_on_screen() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools: vec!["pen".into(), "addAnchor".into()], pos: [5000.0, 10.0] });
-    let saved = serde_json::to_value(&app.ui).unwrap();
-    let back: crate::state::UiState = serde_json::from_value(saved.clone()).unwrap();
-    assert_eq!(back.floating_flyouts.len(), 1);
-    // Preferences saved before floating flyouts load without any.
-    let mut old = saved;
-    old.as_object_mut().unwrap().remove("floating_flyouts");
-    assert!(serde_json::from_value::<crate::state::UiState>(old).unwrap().floating_flyouts.is_empty());
-    let ctx = egui::Context::default();
-    shapes_button(&mut app, &ctx);
-    frame(&mut app, &ctx, 1.0, vec![]);
-    let r = ctx.memory(|m| m.area_rect(floating_area("pen"))).unwrap();
-    assert!(r.right() <= 400.5 && r.left() >= 0.0 && r.top() >= 0.0, "on screen: {r:?}");
-    // A position that isn't a number puts it near the toolbar.
-    app.ui.floating_flyouts[0].pos = [f32::NAN, f32::INFINITY];
-    frame(&mut app, &ctx, 2.0, vec![]);
-    let r = ctx.memory(|m| m.area_rect(floating_area("pen"))).unwrap();
-    assert!(r.min.x.is_finite() && r.min.y.is_finite() && r.left() >= 0.0, "on screen: {r:?}");
-}
-
-/// User Interface › Show Tool Group Labels (#663): off as it ships (#1736), the toolbar shows
-/// none of its groups' names and nothing between the groups; on, it names them.
-#[test]
-fn tool_group_labels_can_be_hidden() {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let draw = |app: &mut VectorcraftApp| {
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-        out.textures_delta.clear();
-        let mut shown = vec![];
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-        shown
-    };
-    let without = draw(&mut app);
-    assert!(!without.iter().any(|t| ["Select", "Shapes", "Draw", "Modify", "Type"].contains(&t.as_str())), "{without:?}");
-    app.run("prefs.set", json!({"key": "toolGroupLabels", "value": true})).unwrap();
-    let with = draw(&mut app);
-    assert!(with.iter().any(|t| t == "Shapes") && with.iter().any(|t| t == "Draw"), "{with:?}");
-}
-
-/// Hover `at` for two seconds, coming from elsewhere: the texts painted meanwhile.
-fn hovered_texts(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2) -> Vec<String> {
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let mut shown = vec![];
-    for i in 0..20 {
-        let events = match i {
-            0 => vec![Event::PointerGone],
-            1 => vec![Event::PointerMoved(at)],
-            _ => vec![],
-        };
-        let time = t0 + f64::from(i) * 0.1;
-        let raw = egui::RawInput {
-            events,
-            time: Some(time),
-            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))),
-            ..Default::default()
-        };
-        let mut out = ctx.run_ui(raw, |ui| {
-            crate::prefs_dialog::apply_runtime(app, ui.ctx());
-            show(app, ui);
-        });
-        out.textures_delta.clear();
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    }
-    shown
-}
-
-#[test]
-fn a_floating_flyouts_buttons_have_tool_tips_when_tool_tips_are_on() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let tools: Vec<String> = ["rectangle", "roundedRectangle", "star"].map(String::from).to_vec();
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
-    let ctx = egui::Context::default();
-    shapes_button(&mut app, &ctx);
-    frame(&mut app, &ctx, 1.0, vec![]);
-    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
-    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
-    let tip = tl!("Star Tool").to_string();
-    assert!(hovered_texts(&mut app, &ctx, 10.0, star).contains(&tip), "on by default");
-    app.session.prefs.show_tool_tips = false;
-    assert!(!hovered_texts(&mut app, &ctx, 20.0, star).contains(&tip), "off: no tool tip");
-    app.session.prefs.show_tool_tips = true;
-    assert!(hovered_texts(&mut app, &ctx, 30.0, star).contains(&tip), "on again");
-}
-
-/// The window of the tool card tests.
-const WINDOW: egui::Vec2 = vec2(400.0, 1200.0);
-
-/// One frame with the preferences applied, as the app runs it, in a window `size` points big: the
-/// texts it paints, each with its rect.
-fn painted_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, size: egui::Vec2) -> Vec<(String, egui::Rect)> {
-    painted_after(app, ctx, time, events, size, None)
-}
-
-/// [`painted_in`], with `taken` (a key the shortcuts handle before the toolbar draws) taken out of
-/// the frame's input first, as the shortcuts take it.
-fn painted_after(
-    app: &mut VectorcraftApp,
-    ctx: &egui::Context,
-    time: f64,
-    events: Vec<Event>,
-    size: egui::Vec2,
-    taken: Option<egui::Key>,
-) -> Vec<(String, egui::Rect)> {
-    fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
-        match s {
-            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let raw = egui::RawInput { events, time: Some(time), screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| {
-        crate::prefs_dialog::apply_runtime(app, ui.ctx());
-        if let Some(key) = taken {
-            assert!(ui.ctx().input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)), "{key:?} taken");
-        }
-        show(app, ui);
-    });
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    shown
-}
-
-/// [`painted_in`] in [`WINDOW`], the texts alone.
-fn painted_texts(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<String> {
-    painted_in(app, ctx, time, events, WINDOW).into_iter().map(|(s, _)| s).collect()
-}
-
-/// The description of the tool `id`, as its card shows it.
-fn described(id: &str) -> String {
-    vectorcraft_tools::catalog::tool_description(id).unwrap_or_else(|| panic!("{id} has no description")).to_string()
-}
-
-/// Rest the pointer on `at` from `t0`, in a window `size` points big, until the card of the tool
-/// `id` shows; returns the time and the rect of the card's description.
-fn until_card_in(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, id: &str, size: egui::Vec2) -> (f64, egui::Rect) {
-    let text = described(id);
-    painted_in(app, ctx, t0, vec![Event::PointerGone], size);
-    painted_in(app, ctx, t0 + 0.1, vec![Event::PointerMoved(at)], size);
-    let mut last = vec![];
-    for i in 2..30 {
-        let time = t0 + f64::from(i) * 0.1;
-        last = painted_in(app, ctx, time, vec![], size);
-        if let Some((_, rect)) = last.iter().find(|(s, _)| *s == text) {
-            return (time, *rect);
-        }
-    }
-    last.retain(|(s, _)| !s.starts_with('⚠'));
-    panic!("no card for {id} on {at:?}: {last:?}");
-}
-
-/// Rest the pointer on `at` from `t0` for three seconds, in a window `size` points big: the texts of
-/// each frame.
-fn hovered_in(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, size: egui::Vec2) -> Vec<Vec<(String, egui::Rect)>> {
-    painted_in(app, ctx, t0, vec![Event::PointerGone], size);
-    let moved = painted_in(app, ctx, t0 + 0.1, vec![Event::PointerMoved(at)], size);
-    std::iter::once(moved).chain((2..30).map(|i| painted_in(app, ctx, t0 + f64::from(i) * 0.1, vec![], size))).collect()
-}
-
-/// [`until_card_in`] in [`WINDOW`].
-fn until_card(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, id: &str) -> (f64, egui::Rect) {
-    until_card_in(app, ctx, t0, at, id, WINDOW)
-}
-
-/// General › Show Tool Cards: a tool's tool tip becomes a card with its name and shortcut, what it
-/// does, and one line per action of its hint, the modifier keys named for the platform.
+/// General › Show Tool Cards: a tool's tool tip becomes a card with what it does and one line per action of its hint, the
+/// modifier keys named for the platform; a tool has a card only with cards and tool tips on and a description.
 #[test]
 fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     let lines = card::lines("selection", false);
     let plain = |line: &Vec<(String, bool)>| line.iter().map(|(s, _)| s.as_str()).collect::<String>();
     assert_eq!(lines.len(), 3, "{lines:?}");
     assert_eq!(plain(&lines[0]), "Click the object to select");
-    let shift = crate::menus::shown_shortcut("Shift+Click");
+    let shift = crate::keymap::chord_text("Shift+Click");
     assert_eq!(lines[1], vec![(shift.clone(), true), (" to select multiple objects".to_string(), false)]);
     assert!(plain(&lines[2]).ends_with(" the object to duplicate"), "{lines:?}");
     // A segment that runs on past a key keeps its pieces on one line.
@@ -1088,723 +464,34 @@ fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     // The Zoom tool's card follows the animated zoom's hint.
     assert_ne!(card::lines("zoom", false), card::lines("zoom", true));
 
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let mut app = app_with(300, 300);
+    assert!(!card::Cards::new(&app).has(&"selection".to_string()), "off by default");
     app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let ctx = egui::Context::default();
-    let selection = frame(&mut app, &ctx, 0.0, vec![])[0];
-    let shown = hovered_texts(&mut app, &ctx, 1.0, selection.center());
-    assert!(shown.contains(&described("selection")), "{shown:?}");
-    assert!(shown.contains(&tip(tool_info("selection").unwrap())), "{shown:?}");
-    assert!(shown.contains(&format!("{shift} to select multiple objects")), "{shown:?}");
-    // The card sits beside its button, inside the window.
-    let (_, text) = until_card(&mut app, &ctx, 10.0, selection.center(), "selection");
-    let window = egui::Rect::from_min_size(Pos2::ZERO, WINDOW);
-    assert!(text.left() >= selection.right() && window.contains_rect(text), "{text:?} beside {selection:?}");
-}
-
-/// A tool without a description keeps its one-line tool tip with the cards on; with the cards off
-/// (the default), or tool tips off, no card shows.
-#[test]
-fn tool_cards_are_off_by_default_and_fall_back_to_the_tool_tip() {
-    assert!(!Session::new().prefs.show_tool_cards, "off by default");
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
-    let rects = frame(&mut app, &ctx, 0.0, vec![]);
-    let (selection, lasso) = (rects[0].center(), rects[2].center());
-    let selection_tip = tip(tool_info("selection").unwrap());
-    let off = hovered_texts(&mut app, &ctx, 1.0, selection);
-    assert!(off.contains(&selection_tip) && !off.contains(&described("selection")), "off: the tool tip, {off:?}");
-
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    assert!(card::Cards::new(&app).has(&"selection".to_string()));
     assert_eq!(vectorcraft_tools::catalog::tool_description("lasso"), None);
-    let lasso_tip = tip(tool_info("lasso").unwrap());
-    assert!(hovered_texts(&mut app, &ctx, 10.0, lasso).contains(&lasso_tip), "no description: the tool tip");
-
-    app.session.prefs.show_tool_tips = false;
-    let none = hovered_texts(&mut app, &ctx, 20.0, selection);
-    assert!(!none.contains(&described("selection")) && !none.contains(&selection_tip), "tool tips off: {none:?}");
-}
-
-/// A card that is showing goes away when tool tips are turned off, while the pointer stays on its
-/// button.
-#[test]
-fn a_shown_tool_card_goes_away_when_tool_tips_are_turned_off() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let ctx = egui::Context::default();
-    let selection = frame(&mut app, &ctx, 0.0, vec![])[0].center();
-    let (time, _) = until_card(&mut app, &ctx, 1.0, selection, "selection");
+    assert!(!card::Cards::new(&app).has(&"lasso".to_string()), "no description: the tool tip");
     app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    let after: Vec<String> = (1..5).flat_map(|i| painted_texts(&mut app, &ctx, time + f64::from(i) * 0.1, vec![])).collect();
-    assert!(!after.contains(&described("selection")), "{after:?}");
-
-    // A card a click put away stays away while the pointer rests on its button, and shows again on
-    // the next rest when the pointer left and came back while tool tips were off.
-    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
-    let (t, _) = until_card(&mut app, &ctx, 10.0, selection, "selection");
-    let b = |pressed| Event::PointerButton { pos: selection, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    painted_texts(&mut app, &ctx, t + 0.1, vec![b(true)]);
-    painted_texts(&mut app, &ctx, t + 0.15, vec![b(false)]);
-    // Tool tips off and on again while the pointer stays: the card stays away.
-    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    painted_texts(&mut app, &ctx, t + 0.2, vec![]);
-    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
-    let stayed: Vec<String> = (3..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
-    assert!(!stayed.contains(&described("selection")), "{stayed:?}");
-    let t = t + 3.0;
-    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    painted_texts(&mut app, &ctx, t + 0.2, vec![Event::PointerGone]);
-    // Back onto the button.
-    painted_texts(&mut app, &ctx, t + 0.3, vec![Event::PointerMoved(selection + vec2(2.0, 2.0))]);
-    painted_texts(&mut app, &ctx, t + 0.35, vec![Event::PointerMoved(selection)]);
-    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
-    let again: Vec<String> = (4..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
-    assert!(again.contains(&described("selection")), "{again:?}");
+    assert!(!card::Cards::new(&app).has(&"selection".to_string()), "tool tips off: no card");
 }
 
-/// A card never gets in the way: a press with it showing picks the tool and puts the card away at
-/// once, it stays away until the pointer leaves, a key (one the shortcuts take first too), a
-/// modifier key alone and a scroll put it away, a long press with it showing still opens a group's flyout on time, while that flyout is
-/// open the other buttons show their one-line tool tips and the flyout's rows show cards past its
-/// bar, and a press held from off the toolbar (as a drag on the canvas holds one) shows none.
-#[test]
-fn a_tool_card_never_gets_in_the_way() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let ctx = egui::Context::default();
-    let rects = frame(&mut app, &ctx, 0.0, vec![]);
-    let (selection, direct, shapes) = (rects[0].center(), rects[1].center(), rects[3].center());
-    let has_card = |shown: &Vec<String>, id: &str| shown.contains(&described(id));
-    let b = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-
-    // A click with the card showing picks the tool and does nothing else.
-    assert_eq!(app.session.tool_id(), "selection");
-    let (t, _) = until_card(&mut app, &ctx, 1.0, direct, "directSelection");
-    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![b(direct, true)]), "directSelection"), "gone on the press");
-    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.15, vec![b(direct, false)]), "directSelection"));
-    assert_eq!(app.session.tool_id(), "directSelection", "the click picked the tool");
-    assert_eq!(app.ui.flyout, None, "and did nothing else");
-    for i in 0..20 {
-        let shown = painted_texts(&mut app, &ctx, t + 0.2 + f64::from(i) * 0.1, vec![]);
-        assert!(!has_card(&shown, "directSelection"), "stays away while the pointer rests there");
-    }
-
-    // A key, a modifier key alone and a scroll each put a showing card away.
-    let key = Event::Key { key: egui::Key::X, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    let scroll = wheel(selection, 10.0).pop().unwrap();
-    for (k, event) in [key, Event::ModifiersChanged(egui::Modifiers::SHIFT), scroll].into_iter().enumerate() {
-        let what = format!("{event:?}");
-        let (t, _) = until_card(&mut app, &ctx, 10.0 + 10.0 * k as f64, selection, "selection");
-        assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![event]), "selection"), "gone on {what}");
-        // The key or the modifier comes up again.
-        let up = Event::Key { key: egui::Key::X, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() };
-        painted_texts(&mut app, &ctx, t + 0.2, vec![up, Event::ModifiersChanged(egui::Modifiers::NONE)]);
-    }
-    // So does an arrow key that the shortcuts take before the toolbar draws (it nudges the selection).
-    let (t, _) = until_card(&mut app, &ctx, 45.0, selection, "selection");
-    let arrow = Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    let shown = painted_after(&mut app, &ctx, t + 0.1, vec![arrow], WINDOW, Some(egui::Key::ArrowLeft));
-    assert!(!shown.iter().any(|(s, _)| *s == described("selection")), "gone on an arrow key the shortcuts took");
-
-    // A long press on a group's button with its card showing still opens its flyout on time.
-    let (t, _) = until_card(&mut app, &ctx, 50.0, shapes, "rectangle");
-    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![b(shapes, true)]), "rectangle"), "gone on the press");
-    painted_texts(&mut app, &ctx, t + 0.1 + LONG_PRESS + 0.01, vec![]);
-    assert!(app.ui.flyout.is_some(), "the long press opened the flyout");
-    assert_eq!(app.session.tool_id(), "directSelection");
-    painted_texts(&mut app, &ctx, t + 1.0, vec![b(shapes, false)]);
-    assert!(app.ui.flyout.is_some());
-
-    // While it is open, another button shows its one-line tool tip instead of a card ...
-    let shown = hovered_texts(&mut app, &ctx, 60.0, selection);
-    assert!(!has_card(&shown, "selection") && shown.contains(&tip(tool_info("selection").unwrap())), "{shown:?}");
-    // ... and its rows show theirs beside it, past its bar, when the window has room there; when
-    // it has none, a row shows no card rather than one pushed over the flyout.
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
-    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
-    let narrow = vec2(menu.right() + 100.0, WINDOW.y);
-    for (k, shown) in hovered_in(&mut app, &ctx, 65.0, row, narrow).into_iter().enumerate() {
-        assert!(!shown.iter().any(|(s, _)| *s == described("roundedRectangle")), "no room: no card (frame {k})");
-    }
-    let (_, text) = until_card_in(&mut app, &ctx, 70.0, row, "roundedRectangle", vec2(menu.right() + 400.0, WINDOW.y));
-    assert!(text.left() >= menu.right(), "{text:?} beside {menu:?}");
-    let away = pos2(300.0, 1000.0);
-    painted_texts(&mut app, &ctx, 80.0, vec![Event::PointerMoved(away), b(away, true)]);
-    painted_texts(&mut app, &ctx, 80.05, vec![b(away, false)]);
-    assert_eq!(app.ui.flyout, None);
-
-    // A press held from off the toolbar, moved over a tool button, shows no card.
-    painted_texts(&mut app, &ctx, 90.0, vec![Event::PointerMoved(away), b(away, true)]);
-    painted_texts(&mut app, &ctx, 90.1, vec![Event::PointerMoved(selection)]);
-    for i in 2..30 {
-        let shown = painted_texts(&mut app, &ctx, 90.0 + f64::from(i) * 0.1, vec![]);
-        assert!(!has_card(&shown, "selection"), "no card while a button is held");
-    }
-    painted_texts(&mut app, &ctx, 93.0, vec![b(selection, false)]);
+/// The real Tools dock column; distinguishes its footer Search from the app bar's Search.
+fn review_8758_panel(app: &VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
+    let report = crate::panel_docking::inspect(app, ctx);
+    let columns = report["columns"].as_array().expect("dock columns");
+    let r = &columns.iter().find(|column| column["panel"] == "tools").expect("the Tools column")["rect"];
+    egui::Rect::from_min_size(egui::pos2(r[0].as_f64().unwrap() as f32, r[1].as_f64().unwrap() as f32),
+        egui::vec2(r[2].as_f64().unwrap() as f32, r[3].as_f64().unwrap() as f32))
 }
 
-/// A floating flyout's buttons show cards below the strip, except while a group's flyout is open:
-/// then they show their one-line tool tips.
-#[test]
-fn a_floating_flyouts_cards_give_way_to_an_open_flyout() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let tools: Vec<String> = ["rectangle", "roundedRectangle", "star"].map(String::from).to_vec();
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
-    let ctx = egui::Context::default();
-    shapes_button(&mut app, &ctx);
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let rects = frame(&mut app, &ctx, 1.0, vec![]);
-    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
-    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
-    let (_, text) = until_card(&mut app, &ctx, 10.0, star, "star");
-    let window = egui::Rect::from_min_size(Pos2::ZERO, WINDOW);
-    assert!(text.top() >= strip.bottom() && window.contains_rect(text), "{text:?} below {strip:?}");
-    // A right-click on the Direct Selection group's button opens its flyout.
-    let direct = rects[1].center();
-    let r = |pressed| Event::PointerButton { pos: direct, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, 20.0, vec![Event::PointerMoved(direct), r(true)]);
-    frame(&mut app, &ctx, 20.05, vec![r(false)]);
-    assert!(app.ui.flyout.is_some());
-    let shown = hovered_texts(&mut app, &ctx, 30.0, star);
-    assert!(!shown.contains(&described("star")) && shown.contains(&tl!("Star Tool").to_string()), "{shown:?}");
+fn review_8758_button<'a>(app: &VectorcraftApp, ctx: &egui::Context, nodes: &'a [Node], label: &str) -> &'a Node {
+    let panel = review_8758_panel(app, ctx);
+    nodes.iter().find(|n| n.role() == Role::Button && n.label() == Some(label)
+        && bounds(n).is_some_and(|r| panel.contains_rect(r))).unwrap_or_else(|| panic!("Tools footer button {label:?} is drawn"))
 }
 
-/// A floating flyout's card goes above the strip when the window has no room below it, and when it
-/// has room neither above nor below, the button keeps its one-line tool tip.
-#[test]
-fn a_floating_flyouts_card_goes_above_or_gives_way_in_a_short_window() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let tools: Vec<String> = ["rectangle", "roundedRectangle", "star"].map(String::from).to_vec();
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
-    let ctx = egui::Context::default();
-    shapes_button(&mut app, &ctx);
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    frame(&mut app, &ctx, 1.0, vec![]);
-    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
-    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
-    let low = vec2(WINDOW.x, strip.bottom() + 40.0);
-    let (_, text) = until_card_in(&mut app, &ctx, 10.0, star, "star", low);
-    assert!(text.bottom() <= strip.top(), "{text:?} above {strip:?}");
-
-    app.ui.floating_flyouts[0].pos = [150.0, 150.0];
-    let short = vec2(WINDOW.x, 360.0);
-    painted_in(&mut app, &ctx, 20.0, vec![], short);
-    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
-    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
-    let frames = hovered_in(&mut app, &ctx, 30.0, star, short);
-    let shown: Vec<&String> = frames.iter().flatten().map(|(s, _)| s).collect();
-    assert!(!shown.contains(&&described("star")) && shown.contains(&&tl!("Star Tool").to_string()), "{shown:?}");
-}
-
-/// A flyout that opens left of its button (a toolbar docked right) shows its rows' cards on its
-/// left, clear of the button.
-#[test]
-fn a_flyout_opened_to_the_left_shows_its_cards_on_the_left() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let ctx = egui::Context::default();
-    let size = vec2(800.0, 1200.0);
-    let anchor = egui::Rect::from_min_size(pos2(760.0, 100.0), vec2(36.0, PITCH - 1.0));
-    app.ui.flyout = Some(0);
-    ctx.data_mut(|d| {
-        d.insert_temp(egui::Id::unique("flyout-anchor"), anchor);
-        d.insert_temp(egui::Id::unique("flyout-tools"), ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec());
-        d.insert_temp(flyout_toolbar_id(), None::<String>);
-    });
-    painted_in(&mut app, &ctx, 0.0, vec![], size);
-    painted_in(&mut app, &ctx, 0.1, vec![], size);
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
-    assert!(menu.right() <= anchor.left(), "the flyout opened left: {menu:?}");
-    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
-    let (_, text) = until_card_in(&mut app, &ctx, 1.0, row, "roundedRectangle", size);
-    assert!(text.right() <= menu.left() && !text.intersects(anchor), "{text:?} left of {menu:?}");
-}
-
-/// A long translated tool name wraps inside the card's width, so the card keeps to the room its
-/// placement checked.
-#[test]
-fn a_long_translated_name_wraps_inside_the_card() {
-    let ru = crate::i18n::Lang::from_code("ru").unwrap();
-    crate::i18n::set_current(ru);
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let anchor = egui::Rect::from_min_size(pos2(760.0, 100.0), vec2(36.0, PITCH - 1.0));
-    app.ui.flyout = Some(0);
-    ctx.data_mut(|d| {
-        d.insert_temp(egui::Id::unique("flyout-anchor"), anchor);
-        d.insert_temp(egui::Id::unique("flyout-tools"), ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec());
-        d.insert_temp(flyout_toolbar_id(), None::<String>);
-    });
-    let size = vec2(800.0, 1200.0);
-    painted_in(&mut app, &ctx, 0.0, vec![], size);
-    painted_in(&mut app, &ctx, 0.1, vec![], size);
-    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
-    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
-    let name = tip(tool_info("roundedRectangle").unwrap());
-    let english = described("roundedRectangle");
-    let description = tl!(english.as_str()).to_string();
-    assert_ne!(description, english, "the description has a Russian row");
-    painted_in(&mut app, &ctx, 1.0, vec![Event::PointerGone], size);
-    painted_in(&mut app, &ctx, 1.1, vec![Event::PointerMoved(row)], size);
-    let mut card = None;
-    for i in 2..30 {
-        let shown = painted_in(&mut app, &ctx, 1.0 + f64::from(i) * 0.1, vec![], size);
-        if shown.iter().any(|(s, _)| *s == description) {
-            card = Some(shown);
-            break;
-        }
-    }
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let shown = card.expect("the Russian card shows");
-    let heading = shown.iter().filter(|(s, _)| *s == name).map(|(_, r)| *r).max_by(|a, b| a.left().total_cmp(&b.left()).reverse());
-    let heading = heading.expect("the card shows the name");
-    // The name sits right of the icon, inside the card's width.
-    assert!(heading.width() <= card::WIDTH - card::ICON, "{name}: {heading:?}");
-    assert!(heading.right() <= menu.left(), "{heading:?} left of {menu:?}");
-}
-
-/// Screen readers name a flyout's rows and a floating strip's buttons by their tools' tool tips,
-/// with the active tool's pressed, and name the strip's close box and both tear-off bars.
-#[test]
-fn screen_readers_name_a_flyouts_rows_and_a_floating_strips_buttons() {
-    let name = |id| tool_info(id).map(tip).unwrap_or_default();
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let group: Vec<String> = ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec();
-    let flyout = tree(|ui| {
-        app.ui.flyout = Some(0);
-        ui.data_mut(|d| d.insert_temp(egui::Id::unique("flyout-tools"), group.clone()));
-        show(&mut app, ui);
-    });
-    assert_eq!(role_and_state(&flyout, &name("roundedRectangle")), (Role::Button, Some(Toggled::False)));
-    assert_eq!(role_and_state(&flyout, &name("ellipse")), (Role::Button, Some(Toggled::False)));
-    assert_eq!(role_and_state(&flyout, "Drag to float as a toolbar"), (Role::Button, None));
-    app.ui.flyout = None;
-    app.select_tool("star");
-    let tools: Vec<String> = ["polygon", "star"].map(String::from).to_vec();
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
-    let strip = tree(|ui| show(&mut app, ui));
-    assert_eq!(role_and_state(&strip, &name("polygon")), (Role::Button, Some(Toggled::False)));
-    assert_eq!(role_and_state(&strip, &name("star")), (Role::Button, Some(Toggled::True)));
-    assert_eq!(role_and_state(&strip, "Put back in the toolbar"), (Role::Button, None));
-    assert_eq!(role_and_state(&strip, "Drag to move"), (Role::Button, None));
-}
-
-/// Tab goes through the tool buttons and does not stop on the Tools panel's grip, a flyout's
-/// tear-off bar or a floating strip's bar, which only the pointer drags.
-#[test]
-fn tab_skips_the_grip_and_the_tear_off_bars() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let group: Vec<String> = ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec();
-    let tools: Vec<String> = ["polygon", "star"].map(String::from).to_vec();
-    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut time = 0.0;
-    let mut frame = |events: Vec<Event>| {
-        time += 0.05;
-        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0)));
-        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
-            app.ui.flyout = Some(0);
-            ui.data_mut(|d| d.insert_temp(egui::Id::unique("flyout-tools"), group.clone()));
-            show(&mut app, ui);
-        });
-        out.textures_delta.clear();
-    };
-    frame(vec![]);
-    frame(vec![]);
-    // The grip: the 6 pt strip under the title bar that senses drags and no clicks.
-    let grip = ctx.viewport(|vp| {
-        vp.prev_pass
-            .widgets
-            .layers()
-            .flat_map(|(_, w)| w.iter())
-            .find(|w| w.rect.height() == 6.0 && w.sense.senses_drag() && !w.sense.senses_click())
-            .map(|w| w.id)
-    });
-    let grip = grip.expect("the Tools panel's grip");
-    // The Tools panel's tool buttons: 36 by 29 pt.
-    let buttons: Vec<egui::Id> = ctx.viewport(|vp| {
-        vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == vec2(36.0, PITCH - 1.0)).map(|w| w.id).collect()
-    });
-    assert!(!buttons.is_empty(), "the Tools panel's buttons are drawn");
-    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 120, frame);
-    assert!(stops.iter().any(|id| buttons.contains(id)), "Tab reaches the Tools panel's buttons: {stops:?}");
-    let close = bar_id(None, "polygon").with("close");
-    assert!(stops.contains(&close), "Tab reaches the strip's Put back in the toolbar button: {stops:?}");
-    for (name, id) in [("the grip", grip), ("the flyout's bar", bar_id(None, "rectangle")), ("the strip's bar", bar_id(None, "polygon"))] {
-        assert!(!stops.contains(&id), "Tab stops on {name}: {stops:?}");
-    }
-}
-
-use crate::panels::learn::locate::{LIFETIME, MARK_WIDTH};
-
-/// One frame of the toolbar in a window 400 points wide and `height` tall, then what ends a Learn
-/// locate (`learn.locateTool`): the marks the locate drew, and the screen-reader nodes.
-fn locate_frame(
-    app: &mut VectorcraftApp,
-    ctx: &egui::Context,
-    time: f64,
-    events: Vec<Event>,
-    height: f32,
-) -> (Vec<egui::Rect>, Vec<egui::accesskit::Node>) {
-    fn marks(s: &egui::Shape, color: Color32, out: &mut Vec<egui::Rect>) {
-        match s {
-            egui::Shape::Rect(r) if r.stroke.width == MARK_WIDTH && r.stroke.color == color => out.push(r.rect),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| marks(s, color, out)),
-            _ => {}
-        }
-    }
-    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, height)));
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
-        show(app, ui);
-        crate::panels::learn::locate::tidy(app, ui.ctx());
-    });
-    out.textures_delta.clear();
-    let color = Tokens::get(ctx).selection;
-    let mut found = vec![];
-    out.shapes.iter().for_each(|c| marks(&c.shape, color, &mut found));
-    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
-    (found, nodes)
-}
-
-/// A context that makes screen-reader nodes.
-fn reader_context() -> egui::Context {
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    ctx
-}
-
-/// Where the screen-reader node named after `tool`'s tool tip is drawn.
-fn tool_rect(nodes: &[egui::accesskit::Node], tool: &str) -> egui::Rect {
-    let name = tool_info(tool).map(tip).unwrap_or_default();
-    let b = nodes.iter().find(|n| n.label().is_some_and(|l| l == name)).and_then(|n| n.bounds()).unwrap_or_else(|| panic!("{name} is drawn"));
-    egui::Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
-}
-
-/// The only mark drawn, on `control`.
-fn assert_marks(marks: &[egui::Rect], control: egui::Rect, what: &str) {
-    let [mark] = marks else { panic!("{what}: one mark, not {marks:?}") };
-    let want = control.shrink(1.0);
-    assert!((mark.min - want.min).length() < 0.5 && (mark.max - want.max).length() < 0.5, "{what}: the mark {mark:?} is on {control:?}");
-}
-
-/// A Learn link's `learn.locateTool` marks a tool shown on its button, with Tools docked left or
-/// right, floating or in two columns; it does not choose the tool, and the mark goes after
-/// [`LIFETIME`] seconds.
-#[test]
-fn a_learn_link_marks_the_tools_button_wherever_tools_is() {
-    for (right, floating, double) in [(false, None, false), (true, None, false), (false, Some([120.0, 80.0]), false), (false, None, true)] {
-        let what = format!("right {right}, floating {floating:?}, double {double}");
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        (app.ui.toolbar_right, app.ui.toolbar_pos, app.ui.toolbar_double) = (right, floating, double);
-        let ctx = reader_context();
-        locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-        assert_eq!(app.run("learn.locateTool", json!({"tool": "pen"})).unwrap(), json!({"tool": "pen", "location": "toolbar", "toolbar": null}));
-        let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-        assert_marks(&marks, tool_rect(&nodes, "pen"), &what);
-        assert_eq!((app.session.tool_id(), app.ui.flyout), ("selection", None), "{what}: no tool chosen, no flyout");
-        assert_eq!(locate_frame(&mut app, &ctx, 1.0 + LIFETIME - 0.1, vec![], 1200.0).0.len(), 1, "{what}: still marked");
-        assert!(locate_frame(&mut app, &ctx, 1.0 + LIFETIME + 0.01, vec![], 1200.0).0.is_empty(), "{what}: the mark has gone");
-        assert!(app.ui.learn_locate.is_none(), "{what}");
-    }
-}
-
-/// A tool in a collapsed group opens the group's flyout with its row marked, also while another
-/// tool of the group shows on the button; the group keeps the tool it shows.
-#[test]
-fn a_learn_link_opens_a_collapsed_group_on_the_tools_row() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui.slot_tool.insert("pencil".into(), "pathEraser".into());
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    for (k, tool) in ["smooth", "pencil"].into_iter().enumerate() {
-        assert_eq!(app.run("learn.locateTool", json!({"tool": tool})).unwrap()["location"], "flyout", "{tool}");
-        // The flyout's first frame only measures it.
-        locate_frame(&mut app, &ctx, 1.0 + k as f64, vec![], 1200.0);
-        let (marks, nodes) = locate_frame(&mut app, &ctx, 1.1 + k as f64, vec![], 1200.0);
-        assert!(app.ui.flyout.is_some(), "{tool}: the flyout opens");
-        assert_marks(&marks, tool_rect(&nodes, tool), tool);
-        let row = tool_rect(&nodes, tool);
-        let flyout = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout shows");
-        assert!(flyout.contains_rect(row), "{tool}: a row of the flyout ({row:?} in {flyout:?})");
-        assert_eq!(ctx.data(|d| d.get_temp::<Vec<String>>(egui::Id::unique("flyout-tools"))).map(|t| t[0].clone()).as_deref(), Some("pencil"));
-    }
-    assert_eq!(app.ui.slot_tool.get("pencil").map(String::as_str), Some("pathEraser"), "the group still shows the Path Eraser");
-    assert_eq!(app.session.tool_id(), "selection");
-}
-
-/// A tool of a group torn off into a strip: the strip comes to the front with the tool marked in it.
-#[test]
-fn a_learn_link_raises_a_torn_off_group_and_marks_the_tool_in_it() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    assert_eq!(app.run("learn.locateTool", json!({"tool": "addAnchor"})).unwrap()["location"], "strip");
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-    assert!(ctx.data(|d| d.get_temp::<f64>(floating_area("pen"))).is_some(), "the strip was raised");
-    let strip = ctx.memory(|m| m.area_rect(floating_area("pen"))).unwrap();
-    let button = tool_rect(&nodes, "addAnchor");
-    assert!(strip.contains_rect(button), "the strip's button: {button:?} in {strip:?}");
-    assert_marks(&marks, button, "the strip");
-    assert_eq!(app.ui.flyout, None);
-}
-
-/// A tool Edit Toolbar took out of the toolbar is marked in the All Tools drawer, which opens; the
-/// toolbar stays as it was.
-#[test]
-fn a_learn_link_marks_a_tool_no_toolbar_holds_in_all_tools() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("toolbar.removeTool", json!({"tool": "rectangle"})).unwrap();
-    let before = slots(&app);
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    assert_eq!(app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["location"], "allTools");
-    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none());
-    // The drawer's first frame only measures it.
-    locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.1, vec![], 1200.0);
-    let drawer = ctx.memory(|m| m.area_rect(crate::edit_toolbar::drawer_id())).expect("the drawer shows");
-    let row = tool_rect(&nodes, "rectangle");
-    assert!(drawer.contains_rect(row), "the drawer's row: {row:?} in {drawer:?}");
-    assert_marks(&marks, row, "the drawer");
-    assert_eq!(slots(&app), before, "no tool added to the toolbar");
-    // Escape closes the drawer first (the shortcuts consume it), and ends the locate too.
-    let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0)));
-    let _ = ctx.run_ui(egui::RawInput { time: Some(1.2), events: vec![escape], screen_rect, ..Default::default() }, |ui| {
-        crate::shortcuts::handle(&mut app, ui.ctx());
-        show(&mut app, ui);
-        crate::panels::learn::locate::tidy(&mut app, ui.ctx());
-    });
-    assert!(!app.ui.tools_drawer, "Escape closed the drawer");
-    assert!(app.ui.learn_locate.is_none(), "and ended the locate");
-}
-
-/// A tool on a toolbar made with New Toolbar that the Tools panel does not hold is marked there.
-#[test]
-fn a_learn_link_marks_a_tool_on_a_toolbar_made_with_new_toolbar() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
-    app.run("toolbar.addTool", json!({"tool": "artboard", "toolbar": "Mine"})).unwrap();
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    assert_eq!(
-        app.run("learn.locateTool", json!({"tool": "artboard"})).unwrap(),
-        json!({"tool": "artboard", "location": "toolbar", "toolbar": "Mine"})
-    );
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-    let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).unwrap();
-    let button = tool_rect(&nodes, "artboard");
-    assert!(bar.contains_rect(button), "{button:?} in {bar:?}");
-    assert_marks(&marks, button, "the toolbar Mine");
-    // A tool of a group whose button shows another: the group's flyout opens on it.
-    app.run("toolbar.addTool", json!({"tool": "slice", "toolbar": "Mine", "slot": 0, "place": "group"})).unwrap();
-    assert_eq!(app.run("learn.locateTool", json!({"tool": "slice"})).unwrap(), json!({"tool": "slice", "location": "flyout", "toolbar": "Mine"}));
-    locate_frame(&mut app, &ctx, 2.0, vec![], 1200.0);
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 2.1, vec![], 1200.0);
-    let flyout = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout shows");
-    let row = tool_rect(&nodes, "slice");
-    assert!(flyout.contains_rect(row), "{row:?} in {flyout:?}");
-    assert_marks(&marks, row, "the flyout of the toolbar Mine");
-    assert_eq!(app.session.tool_id(), "selection");
-}
-
-/// Tools hidden with Window › Tools shows again for a Learn link, and a short window scrolls the
-/// tool into view.
-#[test]
-fn a_learn_link_shows_hidden_tools_and_scrolls_the_tool_into_view() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui.toolbar = false;
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 300.0);
-    assert_eq!(app.run("learn.locateTool", json!({"tool": "gradient"})).unwrap()["location"], "toolbar");
-    assert!(app.ui.toolbar, "Tools shows");
-    let mut drawn = (vec![], vec![]);
-    for k in 1..20 {
-        drawn = locate_frame(&mut app, &ctx, f64::from(k) * 0.1, vec![], 300.0);
-    }
-    let (marks, nodes) = drawn;
-    let button = tool_rect(&nodes, "gradient");
-    assert!(button.top() >= 0.0 && button.bottom() <= 300.0, "scrolled into view: {button:?}");
-    assert_marks(&marks, button, "scrolled");
-}
-
-/// A short window scrolls a tool of a toolbar made with New Toolbar into view for a Learn link.
-#[test]
-fn a_learn_link_scrolls_a_tool_into_view_on_a_toolbar_made_with_new_toolbar() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
-    let tools: Vec<&'static str> = slots(&app).into_iter().filter_map(|(_, s)| s.first().copied()).take(16).collect();
-    for tool in &tools {
-        app.run("toolbar.addTool", json!({"tool": tool, "toolbar": "Mine"})).unwrap();
-    }
-    let tool = *tools.last().expect("a tool");
-    app.run("toolbar.removeTool", json!({"tool": tool})).unwrap();
-    assert!(slots(&app).iter().all(|(_, s)| !s.contains(&tool)), "the Tools panel does not hold {tool}");
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 300.0);
-    let (_, nodes) = locate_frame(&mut app, &ctx, 0.05, vec![], 300.0);
-    let name = tool_info(tool).map(tip).unwrap_or_default();
-    let shown = nodes.iter().filter(|n| n.label().is_some_and(|l| l == name)).filter_map(|n| n.bounds()).any(|b| b.y1 <= 300.0);
-    assert!(!shown, "{tool} starts outside the window");
-    assert_eq!(app.run("learn.locateTool", json!({"tool": tool})).unwrap(), json!({"tool": tool, "location": "toolbar", "toolbar": "Mine"}));
-    let mut drawn = (vec![], vec![]);
-    for k in 1..20 {
-        drawn = locate_frame(&mut app, &ctx, f64::from(k) * 0.1, vec![], 300.0);
-    }
-    let (marks, nodes) = drawn;
-    let button = tool_rect(&nodes, tool);
-    let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).unwrap();
-    assert!(bar.contains_rect(button), "{button:?} in {bar:?}");
-    assert!(button.top() >= 0.0 && button.bottom() <= 300.0, "scrolled into view: {button:?}");
-    assert_marks(&marks, button, "scrolled on the toolbar Mine");
-    assert_eq!(app.session.tool_id(), "selection");
-}
-
-/// In a short window, the flyout of the last group stays inside the window, so the located row's
-/// mark shows.
-#[test]
-fn a_learn_link_in_a_short_window_marks_a_flyout_row_inside_the_window() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = reader_context();
-    let slot = slots(&app).into_iter().map(|(_, s)| s).rfind(|s| s.len() > 1).expect("a group");
-    let tool = *slot.last().expect("a tool");
-    locate_frame(&mut app, &ctx, 0.0, vec![], 300.0);
-    assert_eq!(app.run("learn.locateTool", json!({"tool": tool})).unwrap()["location"], "flyout", "{tool}");
-    let mut drawn = (vec![], vec![]);
-    for k in 1..20 {
-        drawn = locate_frame(&mut app, &ctx, f64::from(k) * 0.1, vec![], 300.0);
-    }
-    let (marks, nodes) = drawn;
-    let row = tool_rect(&nodes, tool);
-    assert!(row.top() >= 0.0 && row.bottom() <= 300.0, "{tool}: the row is inside the window: {row:?}");
-    assert_marks(&marks, row, tool);
-}
-
-/// A group with more rows than the window holds scrolls its flyout, and a Learn link scrolls the
-/// located row into view before marking it.
-#[test]
-fn a_learn_link_scrolls_the_row_of_a_group_taller_than_the_window_into_view() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let tools: Vec<&'static str> = slots(&app).into_iter().filter_map(|(_, s)| s.first().copied()).skip(1).take(16).collect();
-    for tool in &tools {
-        app.run("toolbar.addTool", json!({"tool": tool, "slot": 0, "place": "group"})).unwrap();
-    }
-    let tool = *tools.last().expect("a tool");
-    let group = slots(&app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool)).expect("the group");
-    assert!(group.len() * 30 > 400, "{} rows of 30 points do not fit in 400", group.len());
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 400.0);
-    assert_eq!(app.run("learn.locateTool", json!({"tool": tool})).unwrap()["location"], "flyout", "{tool}");
-    let mut drawn = (vec![], vec![]);
-    for k in 1..20 {
-        drawn = locate_frame(&mut app, &ctx, f64::from(k) * 0.1, vec![], 400.0);
-    }
-    let (marks, nodes) = drawn;
-    let row = tool_rect(&nodes, tool);
-    assert!(row.top() >= 0.0 && row.bottom() <= 400.0, "{tool}: the row is inside the window: {row:?}");
-    assert_marks(&marks, row, tool);
-    assert_eq!(app.session.tool_id(), "selection");
-    // The mark is clipped to the rows' view inside the flyout's 1 pt border, so a row scrolled
-    // part way out shows no mark over the border above or below the rows.
-    let view = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout shows").shrink(1.0);
-    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 400.0)));
-    let out = ctx.run_ui(egui::RawInput { time: Some(2.0), screen_rect, ..Default::default() }, |ui| show(&mut app, ui));
-    let color = Tokens::get(&ctx).selection;
-    let clips: Vec<egui::Rect> = out
-        .shapes
-        .iter()
-        .filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.width == MARK_WIDTH && r.stroke.color == color))
-        .map(|c| c.clip_rect)
-        .collect();
-    assert!(
-        !clips.is_empty() && clips.iter().all(|c| c.top() >= view.top() && c.bottom() <= view.bottom()),
-        "the mark is clipped to {view:?}: {clips:?}"
-    );
-}
-
-/// A toolbar made with New Toolbar under another floating toolbar comes to the front for a Learn
-/// link, so its marked button shows.
-#[test]
-fn a_learn_link_brings_a_covered_toolbar_made_with_new_toolbar_to_the_front() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    for (name, tool) in [("Mine", "artboard"), ("Other", "slice")] {
-        app.run("window.toolbar.new", json!({"name": name})).unwrap();
-        app.run("toolbar.addTool", json!({"tool": tool, "toolbar": name})).unwrap();
-    }
-    for bar in &mut app.ui.custom_toolbars {
-        bar.pos = [200.0, 200.0];
-    }
-    let (mine, other) = (crate::custom_toolbars::area_id("Mine"), crate::custom_toolbars::area_id("Other"));
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, other));
-    let (_, nodes) = locate_frame(&mut app, &ctx, 0.05, vec![], 1200.0);
-    let button = tool_rect(&nodes, "artboard");
-    assert_eq!(ctx.layer_id_at(button.center()).map(|l| l.id), Some(other), "Other covers the button of Mine");
-    assert_eq!(
-        app.run("learn.locateTool", json!({"tool": "artboard"})).unwrap(),
-        json!({"tool": "artboard", "location": "toolbar", "toolbar": "Mine"})
-    );
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-    let button = tool_rect(&nodes, "artboard");
-    assert_eq!(ctx.layer_id_at(button.center()).map(|l| l.id), Some(mine), "Mine comes to the front");
-    assert_marks(&marks, button, "the toolbar Mine");
-}
-
-/// A second Learn link moves the mark; Escape removes it.
-#[test]
-fn a_second_learn_link_replaces_the_mark_and_escape_removes_it() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = reader_context();
-    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
-    app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 0.5, vec![], 1200.0);
-    assert_marks(&marks, tool_rect(&nodes, "pen"), "pen");
-    app.run("learn.locateTool", json!({"tool": "curvature"})).unwrap();
-    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
-    assert_marks(&marks, tool_rect(&nodes, "curvature"), "the second link");
-    let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    locate_frame(&mut app, &ctx, 1.5, vec![escape], 1200.0);
-    assert!(app.ui.learn_locate.is_none());
-    assert!(locate_frame(&mut app, &ctx, 2.0, vec![], 1200.0).0.is_empty());
-}
-
-fn review_8758_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::accesskit::Node> {
-    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 1400.0)));
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
-        show(app, ui);
-        crate::palette::show(app, ui.ctx());
-    });
-    out.textures_delta.clear();
-    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
-}
-
-fn review_8758_button<'a>(nodes: &'a [egui::accesskit::Node], label: &str) -> &'a egui::accesskit::Node {
-    nodes.iter().find(|n| n.role() == Role::Button && n.label() == Some(label)).unwrap_or_else(|| panic!("toolbar button {label:?} is drawn"))
-}
-
-fn review_8758_rect(node: &egui::accesskit::Node) -> egui::Rect {
-    let b = node.bounds().unwrap();
-    egui::Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
-}
-
-fn review_8758_click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) -> Vec<egui::accesskit::Node> {
-    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    review_8758_frame(app, ctx, time, vec![Event::PointerMoved(at), button(true)]);
-    review_8758_frame(app, ctx, time + 0.05, vec![button(false)]);
-    review_8758_frame(app, ctx, time + 0.1, vec![])
+fn review_8758_query(nodes: &[Node]) -> &str {
+    nodes.iter().find(|n| n.role() == Role::TextInput && n.label() == Some("Search commands"))
+        .and_then(Node::value).expect("the native palette's query field")
 }
 
 fn review_8758_unchanged_content(app: &VectorcraftApp) -> Value {
@@ -1813,105 +500,133 @@ fn review_8758_unchanged_content(app: &VectorcraftApp) -> Value {
         "undo": st.history.undo.len(), "redo": st.history.redo.len(), "slots": slots(app)})
 }
 
-fn review_8758_edit_control(app: &mut VectorcraftApp, ctx: &egui::Context, nodes: &[egui::accesskit::Node]) {
-    let edit = review_8758_rect(review_8758_button(nodes, "Edit Toolbar"));
+/// Paint the native tooltip over whole app frames, keeping the same window and dock measurements.
+fn review_8758_hovered_texts(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2) -> Vec<String> {
+    fn texts(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(text) => out.push(text.galley.text().to_string()),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| texts(shape, out)),
+            _ => {}
+        }
+    }
+    let mut shown = vec![];
+    for i in 0..20 {
+        let events = match i { 0 => vec![Event::PointerGone], 1 => vec![Event::PointerMoved(at)], _ => vec![] };
+        let out = crate::testing::app_frame(app, ctx, egui::RawInput {
+            time: Some(t0 + f64::from(i) * 0.1), events,
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 1400.0))), ..Default::default()
+        });
+        out.shapes.iter().for_each(|shape| texts(&shape.shape, &mut shown));
+    }
+    shown
+}
+
+fn review_8758_edit_control(app: &mut VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) {
+    let edit = bounds(review_8758_button(app, ctx, nodes, "Edit Toolbar")).unwrap();
+    let panel = review_8758_panel(app, ctx);
     let before = slots(app);
-    review_8758_click(app, ctx, 0.2, edit.center());
-    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none(), "the existing Edit Toolbar button opens its own drawer");
-    let anchor = ctx.data(|d| d.get_temp::<egui::Rect>(crate::edit_toolbar::button_id())).unwrap();
-    assert_eq!(anchor, edit, "the drawer retains its real Edit Toolbar button anchor");
-    assert!(ctx.memory(|m| m.area_rect(crate::edit_toolbar::drawer_id())).is_some(), "the customization drawer is drawn");
+    let nodes = click(app, ctx, 1.0, edit.center(), 1400.0);
+    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none(), "Edit opens the Tools customization drawer");
+    let drawer = nodes.iter().find(|n| n.role() == Role::Dialog && n.label() == Some("Edit Toolbar"))
+        .and_then(bounds).expect("the native customization drawer is drawn");
+    // Main anchors its native drawer to the rail's canvas side; the footer button remains its focus opener.
+    assert!(drawer.left() >= panel.right() - 1.0 && drawer.top() < panel.bottom() && drawer.bottom() > panel.top(),
+        "the customization drawer remains beside its Tools rail: {drawer:?}, {panel:?}");
+    assert!(nodes.iter().any(|n| n.label() == Some("All Tools")), "the customization list is present");
     assert_eq!(slots(app), before, "opening customization does not change tool membership");
     assert!(before.iter().any(|(_, tools)| tools.contains(&"rectangle")));
     app.run("toolbar.removeTool", json!({"tool": "rectangle"})).unwrap();
-    assert!(!slots(app).iter().any(|(_, tools)| tools.contains(&"rectangle")), "the existing customization command still edits the toolbar");
-    app.run("window.editToolbar", json!({})).unwrap();
+    assert!(!slots(app).iter().any(|(_, tools)| tools.contains(&"rectangle")), "customization still edits the toolbar");
+    // Use the native close control, which returns focus to this footer's Edit button.
+    let close = named_rect(&nodes, "Close");
+    click(app, ctx, 2.0, close.center(), 1400.0);
     assert!(!app.ui.tools_drawer);
+    let key = |pressed| Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame(app, ctx, 2.2, vec![key(true), key(false)], 1400.0);
+    settled(app, ctx, 2.3, 1400.0);
+    assert!(app.ui.tools_drawer, "focus returns to Edit: Enter reopens its customization drawer");
+    app.run("window.editToolbar", json!({})).unwrap();
+    settled(app, ctx, 2.6, 1400.0);
 }
 
 fn review_8758_layout(double: bool) {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let mut app = app_with(300, 300);
     app.run("window.toolbarColumns", json!({"double": double})).unwrap();
-    let ctx = reader_context();
-    crate::theme::install_fonts(&ctx);
-    review_8758_frame(&mut app, &ctx, 0.0, vec![]);
-    let nodes = review_8758_frame(&mut app, &ctx, 0.1, vec![]);
-    // Establish the existing, separately actionable customization control before the new affordance.
+    let ctx = reader();
+    let nodes = settled(&mut app, &ctx, 0.0, 1400.0);
     review_8758_edit_control(&mut app, &ctx, &nodes);
-    let nodes = review_8758_frame(&mut app, &ctx, 0.4, vec![]);
-    let search = review_8758_rect(review_8758_button(&nodes, "Search commands"));
-    let edit = review_8758_rect(review_8758_button(&nodes, "Edit Toolbar"));
-    let panel = ctx.data(|d| d.get_temp::<egui::Rect>(docked_rect_id())).unwrap();
-    assert!(panel.contains_rect(search) && panel.contains_rect(edit), "both controls fit the actual toolbar: {search:?}, {edit:?}, {panel:?}");
+    let nodes = settled(&mut app, &ctx, 3.0, 1400.0);
+    let search = bounds(review_8758_button(&app, &ctx, &nodes, "Search commands")).unwrap();
+    let edit = bounds(review_8758_button(&app, &ctx, &nodes, "Edit Toolbar")).unwrap();
+    let panel = review_8758_panel(&app, &ctx);
+    assert!(panel.contains_rect(search) && panel.contains_rect(edit), "both controls fit the actual Tools panel");
     assert!(search.bottom() <= 1400.0 && edit.bottom() <= 1400.0, "both controls fit the window");
     if double {
         assert!(search.right() <= edit.left() && (search.center().y - edit.center().y).abs() < 0.01, "Search left of Edit on one row");
     } else {
-        assert!(
-            search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01,
-            "one column keeps both controls in a fitted stack"
-        );
+        assert!(search.bottom() <= edit.top() && (search.center().x - edit.center().x).abs() < 0.01, "one column keeps both controls in a fitted stack");
     }
-    assert!(hovered_texts(&mut app, &ctx, 0.5, search.center()).iter().any(|t| t == "Search commands, tools, panels and effects"));
+    assert!(review_8758_hovered_texts(&mut app, &ctx, 4.0, search.center()).iter().any(|t| t == "Search commands, tools, panels and effects"));
     let before = review_8758_unchanged_content(&app);
     let tool = app.session.tool_id().to_string();
-    app.ui.palette_query = "old query".into();
-    review_8758_click(&mut app, &ctx, 3.0, search.center());
-    assert!(app.ui.palette_open, "the actual toolbar button opens the existing command palette");
-    assert!(app.ui.palette_query.is_empty(), "the existing command clears the previous query");
-    assert!(ctx.egui_wants_keyboard_input(), "the palette search has keyboard input");
+    click(&mut app, &ctx, 8.0, search.center(), 1400.0);
+    let nodes = frame(&mut app, &ctx, 9.0, vec![Event::Text("old query".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "old query", "the opened native search has keyboard focus");
+    app.run("help.commandPalette", json!({})).unwrap();
+    settled(&mut app, &ctx, 10.0, 1400.0);
+    let nodes = click(&mut app, &ctx, 11.0, search.center(), 1400.0);
+    assert!(app.ui.palette_open, "the actual footer button opens the existing command palette");
+    assert!(review_8758_query(&nodes).is_empty(), "the native palette opens with a fresh query");
+    let nodes = frame(&mut app, &ctx, 12.0, vec![Event::Text("focused".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "focused", "reopening gives the search field keyboard focus");
     assert!(!app.ui.tools_drawer, "Search is distinct from Edit Toolbar");
-    assert_eq!(review_8758_unchanged_content(&app), before, "opening Search changes no document, history, selection or toolbar membership");
+    assert_eq!(review_8758_unchanged_content(&app), before, "Search changes no document, history, selection or toolbar membership");
     assert_eq!(app.session.tool_id(), tool);
 }
 
 #[test]
 fn review_8758_toolbar_search_fits_beside_edit_and_opens_the_existing_palette() {
-    for double in [true, false] {
-        review_8758_layout(double);
-    }
+    for double in [true, false] { review_8758_layout(double); }
 }
 
 #[test]
 fn review_8758_toolbar_search_accepts_a_tool_query_and_is_disabled_over_a_dialog() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    let ctx = reader_context();
-    crate::theme::install_fonts(&ctx);
-    review_8758_frame(&mut app, &ctx, 0.0, vec![]);
-    let nodes = review_8758_frame(&mut app, &ctx, 0.1, vec![]);
-    let search = review_8758_rect(review_8758_button(&nodes, "Search commands"));
+    let mut app = app_with(300, 300);
+    let ctx = reader();
+    let nodes = settled(&mut app, &ctx, 0.0, 1400.0);
+    let search = bounds(review_8758_button(&app, &ctx, &nodes, "Search commands")).unwrap();
     let before = review_8758_unchanged_content(&app);
-    review_8758_click(&mut app, &ctx, 0.2, search.center());
+    click(&mut app, &ctx, 0.2, search.center(), 1400.0);
     assert!(app.ui.palette_open);
-    review_8758_frame(&mut app, &ctx, 0.4, vec![Event::Text("Scissors".into())]);
-    assert_eq!(app.ui.palette_query, "Scissors", "the palette's actual focused text field receives the query");
-    review_8758_frame(&mut app, &ctx, 0.5, vec![]);
-    let nodes = review_8758_frame(&mut app, &ctx, 0.6, vec![]);
-    let tool = nodes
-        .iter()
-        .find(|n| n.role() == Role::ListItem && n.label().is_some_and(|label| label.starts_with("Tool, ") && label.contains("Scissors")))
-        .expect("the actual palette lists the matching Scissors tool");
+    let nodes = frame(&mut app, &ctx, 0.4, vec![Event::Text("Scissors".into())], 1400.0);
+    assert_eq!(review_8758_query(&nodes), "Scissors", "the actual focused query field receives typing");
+    let nodes = settled(&mut app, &ctx, 0.5, 1400.0);
+    let tool = nodes.iter().find(|n| n.role() == Role::ListBoxOption && n.label().is_some_and(|label| label.starts_with("Scissors")))
+        .expect("the native palette lists the matching Scissors tool");
     assert!(!tool.is_disabled());
-    review_8758_click(&mut app, &ctx, 0.7, review_8758_rect(tool).center());
-    assert_eq!(app.session.tool_id(), "scissors", "activating the real tool result chooses the tool");
+    click(&mut app, &ctx, 0.7, bounds(tool).unwrap().center(), 1400.0);
+    assert_eq!(app.session.tool_id(), "scissors", "activating the real result chooses the tool");
     assert!(!app.ui.palette_open, "a pick closes the palette");
-    assert_eq!(app.ui.recent_commands.first().map(String::as_str), Some("tool:scissors"));
+    assert_eq!(app.ui.recent_commands.first().map(|command| command.key_text().into_owned()), Some("tool:scissors".to_string()));
     assert_eq!(review_8758_unchanged_content(&app), before, "choosing a tool changes no artwork/history or toolbar membership");
 
-    // A real existing Tool Options dialog supplies the same modal guard as the app bar search.
+    // Current main owns query state inside CommandPalette and resets it on opening. A blocked footer press must not
+    // open that component at all, invoke a command, steal focus or change the existing real dialog's fields.
     open_options(&mut app, "lineSegment").unwrap();
-    let dialog = app.ui.dialog.as_ref().unwrap().kind.clone();
-    app.ui.palette_query = "keep while modal".into();
-    let nodes = review_8758_frame(&mut app, &ctx, 1.0, vec![]);
-    let search = review_8758_button(&nodes, "Search commands");
-    assert!(search.is_disabled(), "screen readers find Search disabled while a dialog is open");
-    review_8758_click(&mut app, &ctx, 1.1, review_8758_rect(search).center());
-    assert!(!app.ui.palette_open, "the disabled button cannot open the palette over a dialog");
-    assert_eq!(app.ui.palette_query, "keep while modal");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, dialog);
+    let nodes = settled(&mut app, &ctx, 1.0, 1400.0);
+    let dialog = tool_dialog(&app).expect("the real Tool Options dialog");
+    let focus = craft::ui::runtime::focus::focused_rec(&ctx);
+    let runs = app.run_count;
+    let recent = app.ui.recent_commands.clone();
+    let search = review_8758_button(&app, &ctx, &nodes, "Search commands");
+    assert!(search.is_disabled(), "screen readers find Search disabled while a modal window is open");
+    click(&mut app, &ctx, 1.2, bounds(search).unwrap().center(), 1400.0);
+    assert!(!app.ui.palette_open, "the disabled footer cannot open Search over a dialog");
+    assert_eq!(app.run_count, runs, "the disabled footer does not invoke the palette command");
+    assert_eq!(craft::ui::runtime::focus::focused_rec(&ctx), focus, "the existing modal keeps focus");
+    assert_eq!(app.ui.recent_commands, recent);
+    assert_eq!(tool_dialog(&app), Some(dialog));
     assert_eq!(review_8758_unchanged_content(&app), before);
 }

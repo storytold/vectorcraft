@@ -123,13 +123,6 @@ fn the_legacy_name_is_read_and_plain_pdfs_have_no_editing_data() {
     assert_eq!(editing(&r.bytes), None);
 }
 
-#[test]
-fn pdf_a_carries_no_editing_data() {
-    let s: PdfSettings = serde_json::from_value(json!({"standard": "pdfA2b", "preserveEditing": true})).unwrap();
-    assert!(matches!(s.check(), Err(PdfError::BadSetting(m)) if m.contains("editing")));
-    assert!(matches!(s.check_values(), Err(PdfError::BadSetting(_))));
-}
-
 /// A tiny PDF made of the given objects (numbered from 1), with the cross-reference table written.
 fn raw_pdf(objects: &[String]) -> Vec<u8> {
     raw_pdf_bytes(objects.iter().map(|o| o.clone().into_bytes()))

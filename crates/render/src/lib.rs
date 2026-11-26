@@ -245,6 +245,14 @@ pub struct Renderer {
     /// Layer Options → Dim Images to, of the layer being drawn (screen views only): images show
     /// faded to this opacity over white.
     dim_images: Option<f32>,
+    /// Document Setup → Show Images in Outline Mode of the document whose placed documents are
+    /// being drawn ([`Self::shows_outline_images`]): the art inside them follows it, not the
+    /// placed files' own setup.
+    host_outline_images: Option<bool>,
+    /// Drawing the image a piece of a mesh-warped image clips in Outline mode
+    /// ([`vectorcraft_doc::Node::warp_piece_image`]): a copy of the whole image, which is not crossed
+    /// ([`Self::cross_linked_image`]).
+    in_warp_piece: bool,
     /// Inline graphics being drawn inside inline graphics (a symbol whose art holds text showing
     /// it): drawing stops at [`MAX_INLINE_DEPTH`].
     inline_depth: u32,
