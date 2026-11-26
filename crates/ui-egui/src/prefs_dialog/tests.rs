@@ -507,6 +507,52 @@ fn ok_sets_the_task_bar_in_the_workspace_outside_touch() {
     assert!(left_task_bar(&b, TOUCH), "Touch keeps its own task bar");
 }
 
+/// After an Apply that enters Touch, the task bar row shows Touch's task bar: a later Apply that leaves the row
+/// unedited keeps it, and an edit or a reset of the row reaches it. Leaving Touch with the row unedited gives the
+/// workspace returned to the value it left with.
+#[test]
+fn apply_after_entering_touch_keeps_touchs_task_bar() {
+    use crate::workspaces::{TOUCH, is_current, switch};
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let apply = |a: &mut VectorcraftApp| {
+        let mut w = a.prefs.take().expect("Preferences is open");
+        let r = model::Live { app: &mut *a, w: &mut w }.apply();
+        a.prefs = Some(w);
+        r.unwrap();
+    };
+    let mut a = app();
+    a.touch_screen = true;
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    switch(&mut a, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "__taskBar"), json!(false), "the reset row differs from Touch's task bar");
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "an Apply without a task bar edit keeps Touch's task bar");
+    assert_eq!(field(&a, "__taskBar"), json!(true), "the row shows Touch's task bar");
+    set_field(&mut a, "__taskBar", json!(false)).unwrap();
+    apply(&mut a);
+    assert!(!a.ui.task_bar, "an edit to the row reaches Touch");
+
+    // Reset Preferences in Touch gives Touch its saved value, the value the row showed before the edit.
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    apply(&mut a);
+    assert!(is_current(&a.ui, TOUCH));
+    assert!(a.ui.task_bar, "the reset reaches Touch");
+
+    // Leaving Touch with the row unedited: the workspace returned to keeps the value it left with.
+    set_field(&mut a, "touchWorkspace", json!(false)).unwrap();
+    apply(&mut a);
+    assert!(is_current(&a.ui, "Essentials Classic"));
+    assert!(!a.ui.task_bar, "the workspace returned to keeps its reset value");
+}
+
 /// A Touch return marker left over from an earlier automatic switch (Window › Workspace does not clear it) does not
 /// change where OK puts the task bar: OK enters Touch from the workspace it leaves, so that workspace takes the row
 /// and Touch keeps its own.

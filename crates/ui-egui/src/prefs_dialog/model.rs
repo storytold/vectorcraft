@@ -459,6 +459,9 @@ impl PreferencesDraft for Live<'_> {
             super::snapshot(self.app);
             self.app.prefs_changed = true;
         }
+        // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
+        // took, so a later Apply does not give the workspace left's value to Touch.
+        self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
         self.w.source = self.w.draft.clone();
         self.w.touched.clear();
