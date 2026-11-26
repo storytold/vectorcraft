@@ -101,6 +101,9 @@ const COUNT: &str = "__vcCount";
 const ITEM_COUNT: &str = "__vcItemCount";
 const CLOSING: &str = "__vcClosing";
 const ITEMS: &str = "__vcItems";
+/// How many times a list's items have been replaced, which tells a list from one whose items were
+/// removed and added again with the same texts.
+const ITEMS_REV: &str = "__vcItemsRev";
 const SELECTION: &str = "__vcSelection";
 const LIST: &str = "__vcList";
 const VALUE: &str = "__vcValue";
@@ -218,6 +221,14 @@ fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
     i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES))?;
     i.define(o, key(name), Prop::Data { value, flags: 0 })
+}
+
+/// Gives the list `o` the array `kept` as its items and counts the replacement ([`ITEMS_REV`]).
+fn set_items(i: &mut Interp, o: ObjId, kept: ObjId) -> JsResult<()> {
+    let rev = number_slot(i, o, ITEMS_REV)? + 1.0;
+    // The array stays kept from collection while the revision's slot reserves room.
+    i.rooted(&[Value::Object(kept)], |i| set_slot(i, o, ITEMS_REV, Value::Number(rev)))?;
+    set_slot(i, o, ITEMS, Value::Object(kept))
 }
 
 /// Sets the property `name` of `o` that a script can change.
@@ -672,7 +683,7 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
             }
             "dropdownlist" | "listbox" => {
                 let kept = list(i, &[], false)?;
-                set_slot(i, c, ITEMS, Value::Object(kept))?;
+                set_items(i, c, kept)?;
                 set_slot(i, c, SELECTION, Value::Number(-1.0))?;
                 let items = list(i, &[], true)?;
                 set_open(i, c, "items", Value::Object(items))?;
@@ -778,7 +789,7 @@ fn new_items(i: &mut Interp, o: ObjId, texts: &[Value]) -> JsResult<usize> {
         }
         let kept = list(i, &items, false)?;
         i.temp_roots.push(Value::Object(kept));
-        set_slot(i, o, ITEMS, Value::Object(kept))?;
+        set_items(i, o, kept)?;
         let copy = list(i, &items, true)?;
         set_open(i, o, "items", Value::Object(copy))?;
         Ok(items.len())
@@ -875,7 +886,7 @@ fn remove_all(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Val
     let count = number_slot(i, win, ITEM_COUNT)?;
     set_slot(i, win, ITEM_COUNT, Value::Number((count - n).max(0.0)))?;
     let kept = list(i, &[], false)?;
-    set_slot(i, o, ITEMS, Value::Object(kept))?;
+    set_items(i, o, kept)?;
     let items = list(i, &[], true)?;
     set_open(i, o, "items", Value::Object(items))?;
     set_slot(i, o, SELECTION, Value::Number(-1.0))?;
@@ -1314,7 +1325,7 @@ fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
         items.remove(at);
         i.rooted(&items.clone(), |i| {
             let kept = list(i, &items, false)?;
-            set_slot(i, o, ITEMS, Value::Object(kept))?;
+            set_items(i, o, kept)?;
             let copy = list(i, &items, true)?;
             set_open(i, o, "items", Value::Object(copy))
         })?;
@@ -1905,6 +1916,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
                     texts.push(Data::String(text_of(i, &t, "a list item's text")?));
                 }
                 d.push(("items".into(), Data::Array(texts)));
+                d.push(("itemsRevision".into(), Data::Number(number_slot(i, o, ITEMS_REV)?)));
                 // The item texts' getters ran above, so the selection is read after them.
                 selected = number_slot(i, o, SELECTION)?;
                 let sel = selection_index(i, o)?.filter(|n| *n < items.len());

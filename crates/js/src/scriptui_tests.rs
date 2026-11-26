@@ -892,6 +892,19 @@ fn a_close_a_getter_asks_for_while_the_dialog_is_read_again_ends_show() {
 }
 
 #[test]
+fn a_list_replaced_with_the_same_texts_is_described_with_a_new_revision() {
+    let (mut r, seen, _) = realm(vec![click(2), close()]);
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['a', 'b']); var go = w.add('button', undefined, 'Go'); \
+        go.onClick = function () { l.remove(1); l.add('item', 'b'); }; w.show()";
+    r.run(source).unwrap();
+    let seen = seen.borrow();
+    let revision = |at: usize| field(&nodes(&seen.descriptions[at])[1], "itemsRevision").clone();
+    // `open` and the first `wait` see the dialog as the person does; the second `wait` sees it after the handler.
+    assert_eq!(field(&nodes(&seen.descriptions[2])[1], "items"), field(&nodes(&seen.descriptions[1])[1], "items"), "the same texts");
+    assert_ne!(revision(1), revision(2), "a replacement item is not the one the person saw");
+}
+
+#[test]
 fn a_selection_a_later_getter_changes_is_described_as_it_is() {
     let (mut r, seen, _) = realm(vec![click(2)]);
     let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A', 'B']); var b = w.add('button', undefined, 'OK'); \

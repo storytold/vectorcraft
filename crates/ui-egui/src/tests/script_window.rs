@@ -633,6 +633,26 @@ fn a_queued_list_change_is_dropped_after_a_handler_removes_an_item() {
 }
 
 #[test]
+fn a_queued_list_change_is_dropped_after_a_handler_replaces_the_item_with_one_of_the_same_text() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var rm = w.add('button', undefined, 'Replace'); var l = w.add('listbox', undefined, ['a', 'b', 'c']); \
+         rm.onClick = function () { l.remove(2); l.add('item', 'c'); }; vc.log([w.show(), l.selection === null]);",
+    );
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "Replace"})).unwrap();
+    with_window(&app, |d| d.queue(&UiEvent::Change(2, UiValue::Index(Some(2))))).unwrap();
+    assert!(until_window(&mut app), "the script runs the handler and waits again");
+    step(&mut app, Vec::new());
+    assert!(queued(&app).is_empty(), "the change chose the item that was replaced, so it is dropped");
+    assert_eq!(app.session.script_window().unwrap().nodes[2].selection, None);
+    give(&mut app, json!({"event": "close"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[0, true]]));
+}
+
+#[test]
 fn cancel_on_the_quit_question_does_not_show_a_dialog_whose_show_ended() {
     let mut app = app();
     start(

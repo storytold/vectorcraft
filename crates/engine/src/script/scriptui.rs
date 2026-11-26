@@ -139,6 +139,9 @@ pub struct UiNode {
     pub min: f64,
     pub max: f64,
     pub items: Vec<String>,
+    /// How many times the script replaced a list's items (removed or added some), which tells a
+    /// list from one that holds the same texts again.
+    pub items_revision: u64,
     pub selection: Option<usize>,
     pub multiline: bool,
     pub readonly: bool,
@@ -511,6 +514,7 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             min,
             max,
             items,
+            items_revision: number(field(f, "itemsRevision")).map_or(0, |n| n as u64),
             selection,
             multiline: flag("multiline"),
             readonly: flag("readonly"),

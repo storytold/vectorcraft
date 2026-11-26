@@ -65,8 +65,9 @@ fn list_rows(height: f32) -> u16 {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Queued {
     Click(u64),
-    /// A change, and for a list's, the list's items as the person saw them.
-    Change(u64, UiValue, Option<Vec<String>>),
+    /// A change, and for a list's, the list's items as the person saw them and how many times the
+    /// script had replaced them.
+    Change(u64, UiValue, Option<(Vec<String>, u64)>),
     Close,
     /// Escape or `ui.dialog.cancel` while a handler ran: the click on the cancel button of the
     /// dialog the run waits at next, or its close box.
@@ -251,7 +252,7 @@ fn queued(w: &ScriptUiDialog, event: &UiEvent) -> Option<Queued> {
     Some(match event {
         UiEvent::Click(i) => Queued::Click(id(*i)?),
         UiEvent::Change(i, v) => {
-            let items = matches!(v, UiValue::Index(_)).then(|| w.nodes.get(*i).map(|n| n.items.clone())).flatten();
+            let items = matches!(v, UiValue::Index(_)).then(|| w.nodes.get(*i).map(|n| (n.items.clone(), n.items_revision))).flatten();
             Queued::Change(id(*i)?, v.clone(), items)
         }
         UiEvent::Close => Queued::Close,
@@ -266,7 +267,7 @@ fn resolved(w: &ScriptUiDialog, q: Queued) -> Option<UiEvent> {
         Queued::Click(id) => Some(UiEvent::Click(index_of(w, id)?)),
         Queued::Change(id, v, items) => {
             let i = index_of(w, id)?;
-            if items.is_some_and(|items| items != w.nodes[i].items) {
+            if items.is_some_and(|(items, revision)| items != w.nodes[i].items || revision != w.nodes[i].items_revision) {
                 return None;
             }
             Some(UiEvent::Change(i, v))
