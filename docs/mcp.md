@@ -7918,6 +7918,22 @@ toolbar its controls wrap onto more rows. `ui.inspect` gives `quickPenToolbar` (
 the pin and whether it shows are not saved. These commands run in the desktop app; the headless host does not run them,
 so they need `--connect`.
 
+With no path being drawn (after Escape or Enter, or before the first click), the tool edits the selected paths, as
+[Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html)
+describes. A drag on one of their anchors moves that anchor, and a drag that starts on one of several selected anchors
+moves them all; a drag on a segment moves that segment's two ends. The tool selects what it moves
+(`select.anchors` or `select.segments` with `mode: "set"`) and moves it with `path.moveAnchors {dx, dy, interpolate:
+true}`, one undo step per drag: a segment with one moved end is turned and scaled to its new ends, so beside a corner
+anchor a line stays a line and an arc stays an arc through the same angle; at a smooth anchor the handles stay in line
+and the segments bend to meet, so an arc there need not stay circular. A dragged anchor
+snaps to Smart Guides; a dragged segment does not. Escape during the drag takes it back. A click on an anchor selects
+it alone and Shift-click adds it to the selected anchors or takes it out (`select.anchors` with `"set"` or
+`"toggle"`). A click on an end of an open path still goes on drawing from it, a drag there moves the end, and a click
+on a segment starts a new path. With the Quick Pen chosen, the canvas context menu (right-click) has Delete, which
+removes the selected anchors, or the selected objects (`edit.clear {}`). While a path is being drawn, a press on it
+adds a piece as before. Which presses select, which move, and the drag snapping only an anchor are VectorCraft's own
+rules.
+
 `path.quickPen {start?: [x, y], id?, subpath?, keep?, pieces?, closed?}` draws such a path and selects it, as one
 undo step, and answers `{id}`. With `start`, it makes a new path with the current paint (a black stroke when the paint
 has neither fill nor stroke). With `id`, it draws on the open subpath `subpath` (0 when left out) of that path: its
