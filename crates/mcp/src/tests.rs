@@ -776,6 +776,15 @@ fn set_paint_reports_how_many_objects_it_painted() {
     assert_eq!(v["objects"], 2, "{v}");
     let v = paint(&mut s, 16, json!({"strokeWidth": 2}));
     assert_eq!(v["objects"], 2, "{v}");
+
+    // While the Shape Builder is the active tool, the fill goes to new art only and the stroke to
+    // the selection: the reply names the command that painted nothing.
+    let r = call(&mut s, 17, "select_tool", json!({"tool": "shapeBuilder"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let v = paint(&mut s, 18, json!({"fill": "#ff00ff", "stroke": "#00ffff"}));
+    assert_eq!(v["objects"], 2, "{v}");
+    assert_eq!(v["unpainted"], json!(["paint.setFill"]), "{v}");
+    assert!(v["note"].as_str().is_some_and(|n| n.contains("Shape Builder")), "{v}");
 }
 
 /// #1003: type made on or in a path takes add_text's `color` too, over the current fill.
@@ -1662,6 +1671,18 @@ fn headless_backend_methods() {
     assert_eq!(with_enclosing[0][1]["label"], "Enclosing Lasso Tool");
     assert!(with_enclosing[0][1]["shortcut"].is_null());
     assert_eq!(h.call("ui.tool.select", json!({"tool": enclosing})).unwrap()["tool"], enclosing);
+    // The Smart Pen Tool is listed once, at the end of the Pen tool's group.
+    let smart_pen = vectorcraft_tools::addons::smart_pen::ID;
+    let with_smart_pen: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == smart_pen)).collect();
+    assert_eq!(with_smart_pen.len(), 1, "{smart_pen} is in one group");
+    let ids: Vec<_> = with_smart_pen[0].iter().map(|entry| entry["id"].clone()).collect();
+    assert_eq!(ids.first(), Some(&json!("pen")));
+    assert_eq!(ids[ids.len().saturating_sub(2)..], [json!("quickPen"), json!(smart_pen)]);
+    let entry = with_smart_pen[0].iter().find(|entry| entry["id"] == smart_pen).unwrap();
+    assert_eq!(entry["label"], "Smart Pen Tool");
+    assert!(entry["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": smart_pen})).unwrap()["tool"], smart_pen);
     let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
     assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());

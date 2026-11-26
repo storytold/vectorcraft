@@ -474,6 +474,11 @@ pub struct Manifest {
     /// the one an exporter's files get. Only exporters and importers declare them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
+    /// An importer whose files File › Place also reads (`file.place`), into the open document as one
+    /// group ([`crate::import::Mode::Place`]): `true` when the manifest has `"place": true`. Only an
+    /// importer sets it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub place: bool,
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
@@ -523,6 +528,7 @@ impl Manifest {
             context: Vec::new(),
             params: Vec::new(),
             extensions: Vec::new(),
+            place: false,
             budget: Budget::Light,
             paint_output: false,
             commands: Vec::new(),
@@ -597,6 +603,9 @@ impl Manifest {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
         }
         self.validate_extensions()?;
+        if self.place && self.kind != Kind::Importer {
+            return Err(Error::Manifest("`place` is only for an importer (`kind` \"importer\")".into()));
+        }
         match (self.budget, self.kind) {
             (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
             (Budget::Heavy, Kind::Effect) => {
@@ -1305,6 +1314,33 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"budget":"heavy"}"#, "an import's budget"),
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"permissions":["doc.read"]}"#, "doesn't apply"),
             (r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#, "only an exporter or an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
+    /// Only an importer sets `place`, to a boolean, and it asks for no permission beyond
+    /// `import.read`; false, the default, isn't written back.
+    #[test]
+    fn only_an_importer_places_its_files() {
+        let m = Manifest::parse(br#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"place":true}"#).unwrap();
+        assert!(m.place);
+        assert_eq!(m.permissions(), [Permission::ImportRead]);
+        assert_eq!(serde_json::to_value(&m).unwrap()["place"], json!(true));
+        for open_only in [
+            r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"]}"#,
+            r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"place":false}"#,
+        ] {
+            let m = Manifest::parse(open_only.as_bytes()).unwrap();
+            assert!(!m.place && serde_json::to_value(&m).unwrap().get("place").is_none(), "{open_only}");
+        }
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","place":true}"#, "`place` is only for an importer"),
+            (r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"place":true}"#, "`place` is only for an importer"),
+            (r#"{"id":"a","name":"x","kind":"effect","place":true}"#, "`place` is only for an importer"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"place":"yes"}"#, "invalid type"),
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"place":1}"#, "invalid type"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");

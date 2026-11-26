@@ -312,6 +312,31 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+/// The remembered Transparency Dither, which the dialog does not show, reaches the file Save writes
+/// and stays remembered after Done.
+#[test]
+fn save_keeps_the_remembered_transparency_dither() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-tdither");
+    let (mut app, _) = app(&dir, false);
+    let mut written = vec![];
+    for method in ["none", "noise"] {
+        app.run("webExport.settings", json!({"format": "gif", "transparency": true, "transparencyDither": method})).unwrap();
+        app.run("file.saveForWeb", json!({})).unwrap();
+        save(&mut app);
+        let path = dir.join("Untitled-1.gif");
+        written.push(std::fs::read(&path).unwrap());
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(app.session.last_web_settings().transparency_dither.id(), method, "remembered");
+        let expected = app.session.execute("document.exportForWeb", &json!({"format": "gif", "transparencyDither": method})).unwrap();
+        assert_eq!(expected["files"][0]["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).as_ref(), written.last());
+    }
+    assert_ne!(written[0], written[1], "the partly transparent edge is dithered");
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "choice", json!("done"));
+    confirm(&mut app);
+    assert_eq!(app.session.last_web_settings().transparency_dither.id(), "noise");
+}
+
 #[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");
