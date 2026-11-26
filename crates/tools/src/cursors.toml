@@ -664,6 +664,7 @@ id = "PencilStraight"
 group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone.",
+    "With Use Precise Cursors on (or Caps Lock) it shows as well: it is a crosshair already, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a short level-line badge, where PencilClose has its ring."
@@ -686,7 +687,7 @@ shown_when = [
     "The Pencil tool with Use Precise Cursors on (or Caps Lock), where the Pencil and PencilNew cursors show without it: before a press that draws a new path, while a stroke is drawn, and over a selected path the press would redraw.",
 ]
 hotspot = "The centre, where the arms would meet."
-look = "Four arms around an open centre, like the Crosshair's but turned 45°, with no badge, so it differs at a glance from the crosshair that PencilClose and PencilContinue keep."
+look = "Four arms around an open centre, like the Crosshair's but turned 45°, with no badge, so it differs at a glance from the crosshair that PencilClose, PencilContinue and PencilStraight keep."
 
 [[cursor]]
 id = "Paintbrush"

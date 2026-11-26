@@ -856,7 +856,7 @@ fn pencil_shows_the_straight_line_cursor_when_a_press_draws_a_line() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 40.0, -10.0).with_mods(shift));
     assert_eq!(t.cursor(&cx, at, shift), Cursor::Pencil, "a freehand stroke");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, at, shift), Cursor::Paintbrush);
-    assert_eq!(Cursor::PencilStraight.precise(), Cursor::Crosshair, "Use Precise Cursors");
+    assert_eq!(Cursor::PencilStraight.precise(), Cursor::PencilStraight, "Use Precise Cursors keeps the badge");
 }
 
 /// While a stroke that redraws a selected path is drawn, its previews show the stroke as drawn,
