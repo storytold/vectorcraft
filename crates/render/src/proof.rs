@@ -669,6 +669,5 @@ pub fn active_proof() -> Option<ProofSetup> {
 
 /// Whether [`RenderOptions::overprint_preview`] should be on (Separations Preview implies it).
 pub fn overprint_preview_on() -> bool {
-    let v = view();
-    v.overprint || v.separations.is_some()
+    VIEW.read().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|v| v.overprint || v.separations.is_some())
 }
