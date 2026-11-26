@@ -1325,6 +1325,54 @@ fn duplicate_refuses_hidden_or_locked_art() {
     assert!(order.contains(&a) && order.contains(&b));
 }
 
+#[test]
+fn setters_refuse_art_on_a_locked_artboard() {
+    let (mut s, _, _) = doc();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems[0], refused = [];\
+         var setters = [function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.opacity=50},\
+         function(){p.hidden=true},function(){p.locked=true},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 9])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(log(&mut s, "var p=app.activeDocument.pageItems[0];p.opacity=p.opacity;vc.log(p.opacity);"), vec![json!(100)]);
+}
+
+#[test]
+fn geometry_setters_refuse_locked_guide_paths() {
+    let (mut s, _, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+    let out = log(
+        &mut s,
+        "var p=app.activeDocument.pageItems[0],refused=[];\
+         var setters=[function(){p.position=[5,5]},function(){p.left=5},function(){p.top=5},\
+         function(){p.width=10},function(){p.height=10},function(){p.zOrder(ZOrderMethod.SENDTOBACK)}];\
+         for(var i=0;i<setters.length;i++){try{setters[i]();refused.push(false)}catch(e){refused.push(e.name==='Error')}}\
+         vc.log(refused);",
+    );
+    assert_eq!(out, vec![json!(vec![true; 6])]);
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    log(&mut s, "var p=app.activeDocument.pageItems[0];p.left=5;p.width=10;");
+    let bounds = s.active().unwrap().doc.bounds_of(&[b], false).unwrap();
+    assert!((bounds.x0 - 5.0).abs() < 1e-9 && (bounds.width() - 10.0).abs() < 1e-9);
+}
+
 /// Reading `editable` on every member of a group on a locked artboard measures the group once.
 #[test]
 fn editable_measures_a_group_on_a_locked_artboard_once() {
@@ -1347,24 +1395,24 @@ fn editable_measures_a_group_on_a_locked_artboard_once() {
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
-    let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
+    let fixture = vectorcraft_testkit::TempDir::new("script-file-open-quoting");
+    let path = fixture.join("quote's open.svg");
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = serde_json::to_string(&path.to_string_lossy()).unwrap();
+    let other = serde_json::to_string(&format!("{}.other", path.to_string_lossy())).unwrap();
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
-    let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
+    let elsewhere = fixture.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
     let roots = crate::file_access::AutomationRoots::new(&[&elsewhere], &[]).unwrap().unwrap();
     let out = crate::file_access::confine(Some(&roots), || log(&mut s, &query));
     assert_eq!(out, vec![json!(false), json!(false)]);
-    let _ = std::fs::remove_dir_all(&elsewhere);
     for bad in ["../x.svg", "a/../b.svg", "\\\\\\\\host\\\\share\\\\x.svg", "//host/share/x.svg", "a\\u0000b", ""] {
         assert!(failure(&mut s, &format!("app.getIsFileOpen('{bad}');")).contains("cannot check"), "{bad}");
     }
     assert!(failure(&mut s, "app.getIsFileOpen(new Array(5000).join('a'));").contains("too long"));
-    let _ = std::fs::remove_file(path);
 }
 
 #[test]

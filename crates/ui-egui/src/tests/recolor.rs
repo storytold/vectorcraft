@@ -447,6 +447,39 @@ fn a_gray_row_keeps_the_hsb_sliders_while_it_is_edited() {
     assert_eq!(field(&r, "sliderMode"), json!("hsb"));
 }
 
+#[test]
+fn other_library_picker_only_limits_the_recolor_opening_that_requested_it() {
+    let path = vectorcraft_testkit::temp_dir("recolor-other-library").join("Recolor Test.gpl");
+    std::fs::write(&path, "GIMP Palette\nName: Recolor Test\n#\n12 34 56 Test Color\n").unwrap();
+    let path = path.to_str().unwrap();
+    for reopen in [true, false] {
+        let mut r = open(app(), json!({"colors": ["#123456"], "library": "document"}));
+        let picker = super::picks::scripted(&mut r.app());
+        r.settled();
+        tap(&mut r, "Other Library…");
+        assert_eq!(picker.requests().len(), 1, "the dialog asked for a file");
+        if reopen {
+            r.cancel();
+            assert!(!r.is_open(), "the first opening closed while its answer was pending");
+            r.app().run("ui.recolorDialog", json!({"colors": ["#abcdef"], "library": "document"})).unwrap();
+            r.settled();
+        }
+        assert_eq!(field(&r, "limitTo"), "document");
+
+        picker.answer(&[path]);
+        crate::file_asks::poll(&mut r.app());
+        r.settled();
+        let libraries = r.app().run("swatch.library.list", json!({})).unwrap();
+        let imported = libraries["libraries"].as_array().unwrap().iter().find(|lib| lib["category"] == "loaded").expect("the library still loads");
+        if reopen {
+            assert_eq!(field(&r, "limitTo"), "document", "the reopened dialog keeps its own Limit to Library choice");
+        } else {
+            assert_eq!(field(&r, "limitTo"), imported["id"], "an answer for the current opening selects its library");
+        }
+        r.cancel();
+    }
+}
+
 /// With Limit to Library, a row whose new color is a spot color of the library shows Tint, whose T
 /// slider sets the row's tint of it; OK links the art to the spot color at that tint.
 #[test]

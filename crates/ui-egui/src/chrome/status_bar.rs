@@ -32,7 +32,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .map(|d| d.doc.artboards.iter().enumerate().map(|(i, a)| Entry::new(i, format!("{}  {}", i + 1, a.name))).collect())
         .unwrap_or_default();
     let angles: Vec<Entry<usize>> = ROTATE_VIEW_ANGLES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
-    let rotation = app.view().map_or(0.0, |v| v.rotation);
+    let view = app.view();
+    let rotation = view.map_or(0.0, |v| v.rotation);
     let turned = ROTATE_VIEW_ANGLES.iter().position(|(_, a)| (rotation - a).abs() < 1e-9).unwrap_or(usize::MAX);
     // An angle between the presets, from the Rotate View tool or `view.rotate`, shows in whole degrees; adding 0.0
     // turns the -0 of a small negative angle into 0.
@@ -99,6 +100,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles)
                 .placeholder(angle.clone())
                 .look(SelectLook::Filled)
+                .enabled(view.is_some())
                 .show(ui)
                 .value()
                 .copied();

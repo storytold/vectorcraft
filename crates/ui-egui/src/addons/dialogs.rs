@@ -99,8 +99,8 @@ fn pump_commit(app: &mut VectorcraftApp) {
     let live = host.with(|h| h.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), (spec.params)(d.fields()))));
     if let Some((previewing, params)) = &live {
         let mut preview = mem::take(&mut app.addon_dialogs.preview);
-        // PLAN: the undo step's label is the command id; `Spec` carries no heading (wg.A20 takes a label)
-        let answer = preview.run(app, *previewing, spec.command, spec.command, params);
+        let label = vectorcraft_engine::find_command(spec.command).map_or(spec.command, |command| command.label);
+        let answer = preview.run(app, *previewing, label, spec.command, params);
         app.addon_dialogs.preview = preview;
         if let (Some(found), Some(answer)) = (spec.found, answer) {
             host.with(|h| {
