@@ -51,6 +51,8 @@ struct Head {
     line_break: bool,
     /// The parentheses hold an `await` expression or the identifier `await`.
     awaits: bool,
+    /// A comma follows the last item in the parentheses.
+    trailing_comma: bool,
 }
 
 /// The names declared in a scope, for the early errors of ECMA-262 2015 about redeclarations
@@ -1313,6 +1315,13 @@ impl<'s> Parser<'s> {
                 if head.is_some_and(|h| h.line_break) {
                     return Err(self.error_at_offset(start.start, "a line break cannot come after 'async' in an async arrow function"));
                 }
+                // No comma may follow a rest parameter (ECMA-262 2017 section 14.1).
+                if let Some(&last) = args.last()
+                    && head.is_some_and(|h| h.trailing_comma)
+                    && matches!(self.ast.expr(last), Some(Expr::Spread(_)))
+                {
+                    return Err(self.error_at_offset(self.ast.expr_span(last).start, "a rest parameter must be the last parameter"));
+                }
                 (self.arrow_items(args.clone())?, true)
             }
             _ => return Err(self.unexpected()),
@@ -1517,14 +1526,14 @@ impl<'s> Parser<'s> {
                     let async_head = news.is_empty() && self.async_ident.is_some_and(|a| a == expr);
                     let line_break = self.tok.newline_before;
                     let awaits = self.awaits;
-                    let args = self.parse_arguments()?;
+                    let (args, trailing_comma) = self.arguments()?;
                     let span = Span::new(self.ast.expr_span(expr).start, self.prev_end);
                     expr = match news.pop() {
                         Some(new) => self.ast.push_expr(Expr::New { callee: expr, args }, Span::new(new.start, self.prev_end)),
                         None => self.ast.push_expr(Expr::Call { callee: expr, args }, span),
                     };
                     if async_head && self.at(Punct::Arrow) {
-                        self.heads.insert(expr, Head { line_break, awaits: self.awaits != awaits });
+                        self.heads.insert(expr, Head { line_break, awaits: self.awaits != awaits, trailing_comma });
                     }
                 }
                 TokenKind::Punct(Punct::QuestionDot) => {
@@ -1612,19 +1621,29 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<ExprId>> {
+        Ok(self.arguments()?.0)
+    }
+
+    /// An argument list, and whether a comma follows its last argument.
+    fn arguments(&mut self) -> Result<(Vec<ExprId>, bool)> {
         self.expect(Punct::LParen)?;
         let mut args = Vec::new();
+        let mut trailing_comma = false;
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_element()?);
                 // A comma may follow the last argument (ECMAScript 2017, section 12.3).
-                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
+                if !self.eat(Punct::Comma)? {
+                    break;
+                }
+                if self.at(Punct::RParen) {
+                    trailing_comma = true;
                     break;
                 }
             }
         }
         self.expect(Punct::RParen)?;
-        Ok(args)
+        Ok((args, trailing_comma))
     }
 
     fn parse_primary(&mut self) -> Result<ExprId> {
@@ -1704,7 +1723,8 @@ impl<'s> Parser<'s> {
     }
 
     /// `( … )` with [`crate::Options::es2015`]: a parenthesized expression, or the head of an arrow
-    /// function, which may also be `()` or end with `...name`; those two must come before `=>`.
+    /// function, which may also be `()`, end with `...name` or end with a comma; those three must
+    /// come before `=>`.
     fn parse_paren_or_arrow_head(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LParen)?.span;
         let awaits = self.awaits;
@@ -1723,8 +1743,11 @@ impl<'s> Parser<'s> {
             if !self.eat(Punct::Comma)? {
                 break;
             }
+            // A comma may follow the last parameter (ECMA-262 2017 section 14.2), but not the
+            // last item of a parenthesized expression.
             if self.at(Punct::RParen) {
-                return Err(self.unexpected());
+                head_only = true;
+                break;
             }
         }
         self.expect(Punct::RParen)?;
@@ -1740,7 +1763,7 @@ impl<'s> Parser<'s> {
         };
         let paren = self.ast.push_expr(Expr::Paren(inner), self.span_from(start));
         if self.at(Punct::Arrow) {
-            self.heads.insert(paren, Head { line_break: false, awaits: self.awaits != awaits });
+            self.heads.insert(paren, Head { line_break: false, awaits: self.awaits != awaits, trailing_comma: false });
         }
         Ok(paren)
     }

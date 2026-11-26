@@ -70,6 +70,18 @@ fn arrows_expressions_and_methods_can_be_async() {
 }
 
 #[test]
+fn a_comma_may_follow_an_arrow_functions_last_parameter_but_not_a_rest_parameter() {
+    let src = "var f = async (x,) => x; var g = async (x, ...xs) => xs.length; var h = (a, b,) => a + b;\n\
+               var async = function () { return arguments.length; }; log.push(async(...[1, 2],));\n\
+               Promise.all([f(1), g(1, 2, 3), h(1, 2), h.length]).then(function (r) { log.push(r.join(',')); });";
+    assert_eq!(log(src), "2 1,2,3,2");
+    let mut r = realm();
+    for src in ["async (...xs,) => xs", "async (a, ...xs,) => xs", "(...xs,) => xs", "(a, ...xs,) => xs", "(a,);", "(a, b,);"] {
+        syntax_error(&mut r, src);
+    }
+}
+
+#[test]
 fn async_functions_are_not_constructors_and_have_no_prototype() {
     let src = "async function f() {}\n\
                log.push(f.hasOwnProperty('prototype'));\n\

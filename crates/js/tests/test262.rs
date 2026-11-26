@@ -436,7 +436,7 @@ fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: 
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
         TokenKind::Ident(name) => missing.contains(name.as_str()),
-        TokenKind::String(units) => {
+        TokenKind::String(units) | TokenKind::Template { cooked: units, .. } => {
             let text = String::from_utf16_lossy(units);
             missing.contains(text.as_str())
                 || (strings_are_code && text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')).any(|word| missing.contains(word)))
@@ -1153,6 +1153,15 @@ fn a_source_that_does_not_tokenize_as_es2015_is_run_and_not_skipped() {
     assert!(!needs_missing_builtin_in(&[unreadable], &missing, &modern));
     // A missing built-in in another source still skips.
     assert!(needs_missing_builtin_in(&[unreadable, "var m = new Map();"], &missing, &modern));
+}
+
+#[test]
+fn a_missing_name_in_a_template_that_can_run_as_code_skips() {
+    let missing: HashSet<&str> = ["Map"].into_iter().collect();
+    let modern = Options { es2015: true, ..Options::default() };
+    assert!(needs_missing_builtin_in(&[r#"eval("new Map()");"#], &missing, &modern));
+    assert!(needs_missing_builtin_in(&["eval(`new Map()`);"], &missing, &modern));
+    assert!(!needs_missing_builtin_in(&["assert(true, `a Map`);"], &missing, &modern));
 }
 
 #[test]

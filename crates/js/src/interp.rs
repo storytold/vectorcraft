@@ -2670,8 +2670,16 @@ impl Interp {
             return self.push(Value::Object(id));
         }
         let Some(t) = code.templates.get(i as usize) else { return internal("template out of range") };
-        let strings = t.cooked.len().saturating_add(t.raw.len());
-        self.reserve_heap(OBJECT_BYTES.saturating_mul(2).saturating_add(strings.saturating_mul(PROP_BYTES)))?;
+        // Two arrays, a property and an index name for each string, and the `raw` property.
+        let names = |n: usize| index_keys_bytes(n).saturating_sub(n.saturating_mul(KEY_ENTRY_BYTES));
+        let props = t.cooked.len().saturating_add(t.raw.len()).saturating_add(1);
+        let bytes = OBJECT_BYTES
+            .saturating_mul(2)
+            .saturating_add(props.saturating_mul(PROP_BYTES))
+            .saturating_add(names(t.cooked.len()))
+            .saturating_add(names(t.raw.len()))
+            .saturating_add(string_bytes(3));
+        self.reserve_heap(bytes)?;
         let raw = self.frozen_array(&t.raw)?;
         // The raw array stays reachable while the template object is made.
         self.push(Value::Object(raw))?;
@@ -3620,7 +3628,10 @@ impl Interp {
         for v in &code.vars {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
-            if on_global {
+            // Without ECMA-262 2015's scoping, a property the global object inherits declares the
+            // variable and no own property is made. Only a name with an own property is kept;
+            // `delete` removes the name with that property.
+            if on_global && self.get_own_property(self.global, v)?.is_some() {
                 self.global_vars.insert(v.clone());
             }
         }

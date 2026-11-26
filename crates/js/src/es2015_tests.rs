@@ -263,6 +263,17 @@ fn a_global_var_makes_its_own_property_over_an_inherited_one() {
 }
 
 #[test]
+fn a_var_an_inherited_property_declared_does_not_stop_a_later_let() {
+    // Without the option, `var x` uses the inherited `x` and makes no own property, so a later
+    // run with the option may declare `x` with `let`.
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.prototype.x = 1; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var x; delete this.x"), Ok(JsValue::Bool(true)));
+    realm.set_es2015(true);
+    assert_eq!(realm.run("let x = 2; x"), Ok(JsValue::Number(2.0)));
+}
+
+#[test]
 fn a_global_function_that_cannot_be_declared_declares_nothing() {
     let mut realm = es();
     let failed = realm.run("let retained = 1; function undefined() {}");
@@ -750,6 +761,37 @@ fn spread_stops_at_the_heap_limit_before_the_next_step_runs() {
         assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)), "{spread}");
         assert_eq!(realm.run(&format!("var b = {spread}; b.length")), Ok(JsValue::Number(4000.0)), "{spread}");
     }
+}
+
+#[test]
+fn a_template_object_stays_within_the_heap_limit() {
+    // The template object's two arrays, the index name of each string and the `raw` property are
+    // reserved before they are made, so the heap stays within each limit tried.
+    let setup = "function t(s) { return s.length; } 0";
+    let run = format!("t`{}`", (0..10).map(|i| format!("p{i}${{{i}}}")).collect::<String>());
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let base = measure.interp().heap.bytes;
+    assert_eq!(measure.run(&run), Ok(JsValue::Number(11.0)));
+    let need = measure.interp().settled_heap_bytes() - base;
+    let mut stopped = 0;
+    for heap_bytes in (base..=base + need).step_by(4) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        if realm.run(setup).is_err() {
+            continue;
+        }
+        realm.interp().collect_garbage();
+        let r = realm.run(&run);
+        stopped += usize::from(r.is_err());
+        assert!(
+            matches!(&r, Ok(JsValue::Number(_))) || matches!(&r, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)),
+            "{heap_bytes}: {r:?}"
+        );
+        let bytes = realm.interp().settled_heap_bytes();
+        assert!(bytes <= heap_bytes, "{bytes} > {heap_bytes}");
+    }
+    assert!(stopped > 0, "no limit stopped the run");
 }
 
 #[test]
