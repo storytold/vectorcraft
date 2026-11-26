@@ -109,6 +109,62 @@ mod tests {
         crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     }
 
+    fn right_plane_with_art(app: &mut VectorcraftApp) {
+        app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 450, "y": 380, "width": 60, "height": 60})).unwrap()["id"].clone();
+        app.run("perspective.attach", json!({"ids": [id], "plane": "right"})).unwrap();
+    }
+
+    #[test]
+    fn plane_options_keep_the_plane_and_copied_objects_in_the_opening_document() {
+        let mut app = app();
+        right_plane_with_art(&mut app);
+        let opening = app.session.doc().unwrap().doc.clone();
+        app.run("ui.perspectivePlane", json!({"plane": "right"})).unwrap();
+        set(&app, "location", json!(40.0));
+        set(&app, "objects", json!("copy"));
+
+        app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+        right_plane_with_art(&mut app);
+        let other = app.session.doc().unwrap().doc.clone();
+        let history = app.session.doc().unwrap().history.undo.len();
+        let (id, _) = the_dialog(&app);
+        ok(&mut app);
+
+        assert_eq!(app.session.doc().unwrap().doc, other, "foreign OK leaves the other drawing and its art unchanged");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), history);
+        assert!(matches!(host(&app, |h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+        assert_eq!(the_dialog(&app).1["location"], 40.0);
+        assert_eq!(the_dialog(&app).1["objects"], "copy");
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+        ok(&mut app);
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(PerspectiveGrid::current(doc).right_offset, 40.0);
+        assert_eq!(doc.layers[0].children().unwrap().len(), 2, "one copy in the opening drawing");
+    }
+
+    #[test]
+    fn replacement_plane_options_use_the_replacement_drawing_and_plane() {
+        let mut app = app();
+        app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
+        let opening = app.session.doc().unwrap().doc.clone();
+        app.run("ui.perspectivePlane", json!({"plane": "right"})).unwrap();
+
+        app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+        app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
+        app.run("ui.perspectivePlane", json!({"plane": "ground"})).unwrap();
+        set(&app, "location", json!(40.0));
+        ok(&mut app);
+
+        let grid = PerspectiveGrid::current(&app.session.doc().unwrap().doc);
+        assert_eq!(grid.offset(Plane::Ground), 40.0, "OK moves the replacement opening's plane");
+        assert_eq!(grid.offset(Plane::Right), 0.0);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+    }
+
     #[test]
     fn double_clicking_a_plane_widget_opens_its_options_and_ok_moves_it() {
         let mut app = app();
