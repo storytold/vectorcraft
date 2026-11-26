@@ -754,8 +754,9 @@ fn caps_lock_gives_drawing_tools_the_crosshair() {
 }
 
 /// Use Precise Cursors changes the pointer of the tools that have one of their own: off, each shows its own
-/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it). Every other drawing tool shows a
-/// crosshair either way, and the Type tool and the Scissors over no path keep theirs.
+/// pointer; on, a crosshair (the canvas applies `Cursor::precise` to it), or for the Pencil its precise cross.
+/// Every other drawing tool shows a crosshair either way, and the Type tool and the Scissors over no path keep
+/// theirs.
 #[test]
 fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     use vectorcraft_tools::{Cursor, Mods};
@@ -813,7 +814,8 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     }
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
     for (tool, _) in own {
-        assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");
+        let precise = if tool == "pencil" { Cursor::PencilPrecise } else { Cursor::Crosshair };
+        assert_eq!(cursor(&mut s, tool).precise(), precise, "{tool} on");
     }
     for tool in always {
         assert_eq!(cursor(&mut s, tool).precise(), Cursor::Crosshair, "{tool} on");

@@ -33,6 +33,7 @@ pub static CURSOR_ICONS: AppIcons = AppIcons::new(
         ("cursor-pen-curvature", include_bytes!("../../../assets/cursors/cursor-pen-curvature.svg")),
         ("cursor-pen-join", include_bytes!("../../../assets/cursors/cursor-pen-join.svg")),
         ("cursor-pen-new", include_bytes!("../../../assets/cursors/cursor-pen-new.svg")),
+        ("cursor-pencil-precise", include_bytes!("../../../assets/cursors/cursor-pencil-precise.svg")),
         ("cursor-reshape-segment", include_bytes!("../../../assets/cursors/cursor-reshape-segment.svg")),
     ],
 );
@@ -41,6 +42,8 @@ pub static CURSOR_ICONS: AppIcons = AppIcons::new(
 const TIP: Vec2 = Vec2::new(2.0, 2.0);
 /// The pipette's sampling tip, at the box's lower left.
 const PIPETTE_TIP: Vec2 = Vec2::new(2.0, 22.0);
+/// The middle of the box, where the Pencil's precise cross meets.
+const CENTRE: Vec2 = Vec2::new(12.0, 12.0);
 /// The middle of the Anchor Point caret's square.
 const CARET: Vec2 = Vec2::new(12.0, 6.0);
 /// The blade's point of the knife, at the box's upper right.
@@ -142,6 +145,7 @@ pub fn tool_cursor(c: Cursor) -> cb::Cursor {
         Cursor::PencilClose | Cursor::PaintbrushClose => marked(Crosshair, "cursor-mark-ring"),
         Cursor::PencilStraight => marked(Crosshair, "cursor-mark-line-level"),
         Cursor::PencilContinue => marked(Crosshair, "cursor-mark-line-rising"),
+        Cursor::PencilPrecise => tool("cursor-pencil-precise", CENTRE, None),
         // Only the centre: the tool draws the tip's outline round it, at the zoom.
         Cursor::BlobBrush | Cursor::Eraser => PaintedCursor::circle(1.25).into(),
         Cursor::Knife => tool("dc-knife", BLADE_POINT, None),
@@ -254,6 +258,7 @@ const GLYPHS: [Cursor; 99] = [
     Cursor::PencilClose,
     Cursor::PencilStraight,
     Cursor::PencilContinue,
+    Cursor::PencilPrecise,
     Cursor::Paintbrush,
     Cursor::PaintbrushClose,
     Cursor::BlobBrush,

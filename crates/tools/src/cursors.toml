@@ -680,6 +680,15 @@ hotspot = "The lead tip."
 look = "The Pencil cursor with a short badge line rising to the right, where PencilClose has its ring (the stroke carries on from the path)."
 
 [[cursor]]
+id = "PencilPrecise"
+group = "Drawing and editing tools"
+shown_when = [
+    "The Pencil tool with Use Precise Cursors on (or Caps Lock), where the Pencil and PencilNew cursors show without it: before a press that draws a new path, while a stroke is drawn, and over a selected path the press would redraw.",
+]
+hotspot = "The centre, where the arms would meet."
+look = "Four arms around an open centre, like the Crosshair's but turned 45°, with no badge, so it differs at a glance from the crosshair that PencilClose and PencilContinue keep."
+
+[[cursor]]
 id = "Paintbrush"
 group = "Drawing and editing tools"
 shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it, except that Alt held at the press with a path selected that the Smooth tool can act on smooths that path (see Smooth)."]
