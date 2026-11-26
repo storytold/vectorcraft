@@ -1,9 +1,10 @@
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
-use super::state::{hidden_when_disabled, shortcut_of};
+use super::state::{command_shortcuts, hidden_when_disabled};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
 use super::{Node, Value, VectorcraftApp, unbound};
-use craft::keymap::Chord;
+use craft::keymap::{Chord, CommandRef};
+use vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
 pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
@@ -250,11 +251,18 @@ pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
 
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
-/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
+/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items. Settings' first page shows
+/// Preferences' shortcut.
 pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord> {
+    item_shortcut_in(&command_shortcuts(app), id, p)
+}
+
+/// [`item_shortcut`] with each entry's command looked up in `chord` ([`command_shortcuts`]).
+pub(crate) fn item_shortcut_in(chord: &dyn Fn(&CommandRef) -> Option<Chord>, id: &str, p: &Value) -> Option<Chord> {
     let field = |name: &str| p.get(name).and_then(Value::as_str);
     let key = match (id, field("panel")) {
         ("window.panel", Some(panel)) => format!("panel:{panel}"),
+        ("edit.preferences", _) if field("category") == PREF_CATEGORIES.first().copied() => id.to_string(),
         ("effect.dialog" | "effect.apply", _) => format!("effect:{}", field("effect")?),
         ("plugin.dialog", _) => format!("plugin:{}", field("id")?),
         // The Artboard tool's canvas menu passes the point its Paste goes to.
@@ -265,7 +273,7 @@ pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord>
         _ if p.is_null() => id.to_string(),
         _ => return None,
     };
-    shortcut_of(app, &key)
+    chord(&crate::keymap::command_of(&key))
 }
 
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
