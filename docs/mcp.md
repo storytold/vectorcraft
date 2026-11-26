@@ -8382,6 +8382,13 @@ Commands listed this way include `type.fractionalWidths`, `type.systemLayout`, `
 `links.embed`, `links.update`, `object.slice.delete`, `artboard.switchOrientation`, `artboard.distributeSpacing`,
 `appearance.targetContents` and `paint.invert`.
 
+They also list these UI commands, which have no menu bar item and no default shortcut and whose params are all
+optional: `ui.newSwatch`, `ui.newColorGroup`, `ui.colorGroupOptions`, `ui.newBrush`, `ui.brushOptions`,
+`ui.layerOptions`, `ui.corners`, `ui.placementOptionsDialog`, `ui.relinkDialog`, `ui.perspectivePlane`,
+`ui.bulletsAndNumbering`, `ui.missingFontsDialog` and `ui.findFontsInFolder`. A key assigned to one runs it with no
+params, as `{}` does: it opens the dialog for the selection or the current item, or the status bar shows why it cannot,
+for example "no brush selected".
+
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
 
