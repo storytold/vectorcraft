@@ -15,7 +15,8 @@ use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
 /// this. Level 2 adds the host imports ([`PROGRESS_API`]) and a live effect's `paintOutput`
-/// ([`crate::painted`]); level 3 adds a manifest's `context` ([`CONTEXT_API`]).
+/// ([`crate::painted`]); level 3 adds a filter's `writes` ([`WRITES_API`]) and a manifest's
+/// `context` ([`CONTEXT_API`]).
 pub const API_LEVEL: u32 = 3;
 
 /// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,
@@ -24,6 +25,9 @@ pub const PROGRESS_API: u32 = 2;
 
 /// The API level that adds a filter's `inputs` ([`crate::InputKind`]).
 pub const INPUTS_API: u32 = 2;
+
+/// The API level that adds a filter's `writes`: the kinds among its `inputs` it may change.
+pub const WRITES_API: u32 = 3;
 
 /// The API level that reads a command's `menu` ([`crate::manifest::MenuPlace`]); below it the key
 /// is ignored.

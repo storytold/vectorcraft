@@ -886,14 +886,16 @@ impl ReadFile {
         if self.rest.is_none() {
             return Ok(());
         }
+        // One snapshot of the working settings serves the reply and the policies.
+        let working = vectorcraft_color::cms::working_settings();
         // The question the answer was given to, for the reply's `profileChoice`.
-        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &working);
         let answered = match (&self.choice, &question) {
             (Some(c), Some(q)) if c.issue() == q.issue => Some(json!({ "issue": q.issue.id(), "model": q.to_json()["model"], "choice": c.id() })),
             _ => None,
         };
         // A failure leaves the file waiting, unchanged.
-        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref())?;
+        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref(), &working)?;
         let Some(rest) = self.rest.take() else { return Ok(()) };
         self.answered = answered;
         self.loaded.warnings.extend(notes);

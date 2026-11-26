@@ -77,8 +77,8 @@ pub(super) fn open_blocker(app: &VectorcraftApp) {
 }
 
 /// One pass of the dialog host with `events`; a key pressed in it is let go in a second pass, as a
-/// person lets go of it.
-pub(super) fn frame(app: &VectorcraftApp, events: Vec<egui::Event>) {
+/// person lets go of it. Returns the last pass's output.
+pub(super) fn frame(app: &VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     let ctx = app.ui_ctx.clone().unwrap();
     let dialogs = app.dialogs().unwrap();
     let released: Vec<egui::Event> = events
@@ -92,10 +92,12 @@ pub(super) fn frame(app: &VectorcraftApp, events: Vec<egui::Event>) {
         .collect();
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
     let pressed = !released.is_empty();
+    let mut last = egui::FullOutput::default();
     for events in std::iter::once(events).chain(pressed.then_some(released)) {
-        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
-        out.textures_delta.clear();
+        last = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
+        last.textures_delta.clear();
     }
+    last
 }
 
 pub(super) fn key(k: egui::Key) -> egui::Event {
