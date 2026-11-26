@@ -3375,18 +3375,18 @@ VectorCraft writes files by these rules of its own:
   `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
   built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
 
-`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
+`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file, error?}`, with `code`
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
 takes its place), and `file` the grants
 file's path, or `null` without a settings folder. Under automation read roots, a `script`, `path` or `file` outside them
 is given as its file name alone. `script.grants.revoke {script?, path?, all?}` removes the grants of
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
-matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
+matched as given, or after its links are followed when no grant holds it as given; under automation read roots, a path outside them is matched as given only. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
 cannot be read, a link to a missing file included, is left as it is: `script.grants` and `script.grants.revoke` fail, and a grant picked with Always is
 not kept. A missing grants file lists no grants, and `script.grants` leaves out a grant in the file that is not well
-formed. A script
+formed. Preferences › General › Script File Access shows the error `script.grants` gives. A script
 cannot run either command.
 
 ```json

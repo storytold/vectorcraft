@@ -8486,6 +8486,14 @@ imageTrace	Outline	კონტური
 	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
 	Allow Once	ერთხელ დაშვება
 	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	No script has kept file access.	არცერთ სკრიპტს არ აქვს შენახული წვდომა ფაილებზე.
+	Read file	ფაილის წაკითხვა
+	Read and write file	ფაილის წაკითხვა და ჩაწერა
+	Read and write folder	საქაღალდის წაკითხვა და ჩაწერა
+	Revoke	ნებართვის გაუქმება
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	ნებართვის გაუქმება შლის სკრიპტის ყველა ვერსიისთვის შენახულ წვდომას. საქაღალდეზე წვდომა მოიცავს მასში არსებულ ყველაფერს.
+@msg	Script file access revoked	სკრიპტის წვდომა ფაილებზე გაუქმდა
+@msg	The script file access was already revoked	სკრიპტის წვდომა ფაილებზე უკვე გაუქმებული იყო
 	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
@@ -8652,6 +8660,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	სკრიპტის ფაილის დიალოგისთვის `answer` უნდა იყოს ერთ-ერთი: once, always, deny, stop
 @msg	choose a file or folder first, or deny	ჯერ აირჩიეთ ფაილი ან საქაღალდე, ან უარყავით
 @msg	the script file permissions could not be saved: {e}	სკრიპტების ფაილების ნებართვების შენახვა ვერ მოხერხდა: {e}
+@msg	the script file permissions could not be read: {e}	სკრიპტების ფაილების ნებართვების წაკითხვა ვერ მოხერხდა: {e}
 @msg	this script's file access can be allowed only once	ამ სკრიპტის წვდომა ფაილებზე მხოლოდ ერთხელ შეიძლება დაიშვას
 @msg	Only the person at the keyboard can allow a script's file access	სკრიპტის წვდომას ფაილებზე მხოლოდ კლავიატურასთან მყოფი ადამიანი უშვებს
 @msg	A script is given at most 2,048 files: the files picked after them were left out	სკრიპტი იღებს მაქსიმუმ 2 048 ფაილს: მათ შემდეგ არჩეული ფაილები გამოტოვებულია

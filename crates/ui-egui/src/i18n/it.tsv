@@ -4980,6 +4980,14 @@ axis	Both	Entrambi
 	The script asks to read and write a folder you choose, with everything in it.	Lo script chiede di leggere e scrivere una cartella che scegli, con tutto il suo contenuto.
 	Allow Once	Consenti una volta
 	Always Allow This Script	Consenti sempre questo script
+	No script has kept file access.	Nessuno script ha conservato un accesso ai file.
+	Read file	Lettura file
+	Read and write file	Lettura e scrittura file
+	Read and write folder	Lettura e scrittura cartella
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca rimuove l'accesso conservato per ogni versione dello script. L'accesso a una cartella comprende tutto il suo contenuto.
+@msg	Script file access revoked	Accesso dello script ai file revocato
+@msg	The script file access was already revoked	L'accesso dello script ai file era già stato revocato
 	Deny	Nega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
@@ -5145,6 +5153,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per la finestra di dialogo dei file di uno script deve essere uno tra: once, always, deny, stop
 @msg	choose a file or folder first, or deny	scegli prima un file o una cartella, oppure nega
 @msg	the script file permissions could not be saved: {e}	impossibile salvare i permessi sui file degli script: {e}
+@msg	the script file permissions could not be read: {e}	impossibile leggere i permessi sui file degli script: {e}
 @msg	this script's file access can be allowed only once	l'accesso ai file di questo script può essere consentito solo una volta
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona alla tastiera può consentire l’accesso ai file di uno script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Uno script riceve al massimo 2.048 file: i file scelti dopo questi sono stati esclusi

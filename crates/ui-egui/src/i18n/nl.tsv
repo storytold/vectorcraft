@@ -102,6 +102,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` voor het bestandsdialoogvenster van een script moet een van deze waarden zijn: once, always, deny, stop
 @msg	choose a file or folder first, or deny	kies eerst een bestand of map, of weiger
 @msg	the script file permissions could not be saved: {e}	de toestemmingen voor scriptbestanden konden niet worden opgeslagen: {e}
+@msg	the script file permissions could not be read: {e}	de toestemmingen voor scriptbestanden konden niet worden gelezen: {e}
 @msg	this script's file access can be allowed only once	de bestandstoegang van dit script kan maar één keer worden toegestaan
 @msg	Only the person at the keyboard can allow a script's file access	Alleen de persoon aan het toetsenbord kan de bestandstoegang van een script toestaan
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Een script krijgt maximaal 2.048 bestanden: de bestanden die daarna zijn gekozen, zijn weggelaten
@@ -5608,6 +5609,14 @@ imageTrace	Outline	Contour
 	The script asks to read and write a folder you choose, with everything in it.	Het script vraagt een map die u kiest te lezen en te schrijven, met alles wat erin staat.
 	Allow Once	Eenmaal toestaan
 	Always Allow This Script	Dit script altijd toestaan
+	No script has kept file access.	Geen enkel script heeft bewaarde bestandstoegang.
+	Read file	Bestand lezen
+	Read and write file	Bestand lezen en schrijven
+	Read and write folder	Map lezen en schrijven
+	Revoke	Intrekken
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Intrekken verwijdert de toegang die voor elke versie van het script is bewaard. Toegang tot een map omvat alles erin.
+@msg	Script file access revoked	Bestandstoegang van script ingetrokken
+@msg	The script file access was already revoked	De bestandstoegang van het script was al ingetrokken
 	Deny	Weigeren
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen

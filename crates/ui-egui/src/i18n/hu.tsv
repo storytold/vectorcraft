@@ -5776,6 +5776,14 @@ imageTrace	Outline	Körvonal
 	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
 	Allow Once	Engedélyezés egyszer
 	Always Allow This Script	A parancsfájl engedélyezése mindig
+	No script has kept file access.	Egy parancsfájlnak sincs megőrzött fájlhozzáférése.
+	Read file	Fájl olvasása
+	Read and write file	Fájl olvasása és írása
+	Read and write folder	Mappa olvasása és írása
+	Revoke	Engedély visszavonása
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Az Engedély visszavonása a parancsfájl minden verziójához megőrzött hozzáférést eltávolítja. Egy mappához való hozzáférés a teljes tartalmára kiterjed.
+@msg	Script file access revoked	A parancsfájl fájlhozzáférése visszavonva
+@msg	The script file access was already revoked	A parancsfájl fájlhozzáférése már vissza volt vonva
 	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
@@ -5951,6 +5959,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
 @msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
 @msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	the script file permissions could not be read: {e}	a parancsfájlok fájlengedélyeit nem sikerült beolvasni: {e}
 @msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
 @msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak

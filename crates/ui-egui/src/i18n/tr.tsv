@@ -4661,6 +4661,14 @@ axis	Both	Her İkisi
 	The script asks to read and write a folder you choose, with everything in it.	Betik, seçtiğiniz bir klasörü içindeki her şeyle birlikte okumak ve yazmak için izin istiyor.
 	Allow Once	Bir Kez İzin Ver
 	Always Allow This Script	Bu Betiğe Her Zaman İzin Ver
+	No script has kept file access.	Hiçbir betiğin kayıtlı dosya erişimi yok.
+	Read file	Dosya Okuma
+	Read and write file	Dosya Okuma ve Yazma
+	Read and write folder	Klasör Okuma ve Yazma
+	Revoke	İzni Kaldır
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	İzni Kaldır, betiğin her sürümü için kayıtlı erişimi kaldırır. Bir klasöre erişim, içindeki her şeyi kapsar.
+@msg	Script file access revoked	Betiğin dosya erişimi kaldırıldı
+@msg	The script file access was already revoked	Betiğin dosya erişimi zaten kaldırılmıştı
 	Deny	Reddet
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
@@ -4843,6 +4851,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	bir betiğin dosya iletişim kutusu için `answer` şunlardan biri olmalıdır: once, always, deny, stop
 @msg	choose a file or folder first, or deny	önce bir dosya veya klasör seçin ya da reddedin
 @msg	the script file permissions could not be saved: {e}	betiklerin dosya izinleri kaydedilemedi: {e}
+@msg	the script file permissions could not be read: {e}	betiklerin dosya izinleri okunamadı: {e}
 @msg	this script's file access can be allowed only once	bu betiğin dosya erişimine yalnızca bir kez izin verilebilir
 @msg	Only the person at the keyboard can allow a script's file access	Bir betiğin dosya erişimine yalnızca klavye başındaki kişi izin verebilir
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Bir betiğe en fazla 2.048 dosya verilir: bunlardan sonra seçilen dosyalar dışarıda bırakıldı

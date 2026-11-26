@@ -5609,6 +5609,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
 	Allow Once	Izinkan Sekali
 	Always Allow This Script	Selalu Izinkan Skrip Ini
+	No script has kept file access.	Tidak ada skrip yang memiliki akses berkas tersimpan.
+	Read file	Baca Berkas
+	Read and write file	Baca dan Tulis Berkas
+	Read and write folder	Baca dan Tulis Folder
+	Revoke	Cabut
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Cabut menghapus akses yang disimpan untuk setiap versi skrip. Akses ke folder mencakup semua isinya.
+@msg	Script file access revoked	Akses berkas skrip dicabut
+@msg	The script file access was already revoked	Akses berkas skrip sudah dicabut
 	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
@@ -8863,6 +8871,7 @@ breakText	Glyphs	Glif
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` untuk dialog file skrip harus salah satu dari: once, always, deny, stop
 @msg	choose a file or folder first, or deny	pilih file atau folder terlebih dahulu, atau tolak
 @msg	the script file permissions could not be saved: {e}	izin file skrip tidak dapat disimpan: {e}
+@msg	the script file permissions could not be read: {e}	izin file skrip tidak dapat dibaca: {e}
 @msg	this script's file access can be allowed only once	akses file skrip ini hanya dapat diizinkan sekali
 @msg	Only the person at the keyboard can allow a script's file access	Hanya orang yang berada di depan keyboard yang dapat mengizinkan akses file skrip
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrip diberi paling banyak 2.048 file: file yang dipilih sesudahnya dihilangkan

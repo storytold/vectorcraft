@@ -4900,6 +4900,14 @@ axis	Both	Les deux
 	The script asks to read and write a folder you choose, with everything in it.	Le script demande à lire et écrire un dossier que vous choisissez, avec tout son contenu.
 	Allow Once	Autoriser une fois
 	Always Allow This Script	Toujours autoriser ce script
+	No script has kept file access.	Aucun script n’a conservé d’accès aux fichiers.
+	Read file	Lire le fichier
+	Read and write file	Lire et écrire le fichier
+	Read and write folder	Lire et écrire le dossier
+	Revoke	Révoquer
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Révoquer supprime l’accès conservé pour chaque version du script. L’accès à un dossier couvre tout son contenu.
+@msg	Script file access revoked	Accès du script aux fichiers révoqué
+@msg	The script file access was already revoked	L’accès du script aux fichiers était déjà révoqué
 	Deny	Refuser
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
@@ -5074,6 +5082,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
 @msg	choose a file or folder first, or deny	choisissez d’abord un fichier ou un dossier, ou refusez
 @msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
+@msg	the script file permissions could not be read: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être lues : {e}
 @msg	this script's file access can be allowed only once	l’accès aux fichiers de ce script ne peut être autorisé qu’une fois
 @msg	Only the person at the keyboard can allow a script's file access	Seule la personne au clavier peut autoriser l’accès aux fichiers d’un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté

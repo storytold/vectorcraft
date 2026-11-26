@@ -5735,6 +5735,14 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
 	Allow Once	한 번 허용
 	Always Allow This Script	이 스크립트 항상 허용
+	No script has kept file access.	파일 접근을 유지한 스크립트가 없습니다.
+	Read file	파일 읽기
+	Read and write file	파일 읽기 및 쓰기
+	Read and write folder	폴더 읽기 및 쓰기
+	Revoke	권한 취소
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	권한 취소는 스크립트의 모든 버전에 유지된 접근을 제거합니다. 폴더 접근에는 폴더 안의 모든 항목이 포함됩니다.
+@msg	Script file access revoked	스크립트 파일 접근 권한을 취소했습니다
+@msg	The script file access was already revoked	스크립트 파일 접근 권한이 이미 취소되었습니다
 	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
@@ -5909,6 +5917,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
 @msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
 @msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	the script file permissions could not be read: {e}	스크립트 파일 권한을 읽을 수 없습니다: {e}
 @msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
 @msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
 @msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다

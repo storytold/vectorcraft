@@ -4815,6 +4815,14 @@ axis	Both	Båda
 	The script asks to read and write a folder you choose, with everything in it.	Skriptet ber om att läsa och skriva en mapp som du väljer, med allt innehåll.
 	Allow Once	Tillåt en gång
 	Always Allow This Script	Tillåt alltid det här skriptet
+	No script has kept file access.	Inget skript har sparad filåtkomst.
+	Read file	Läs fil
+	Read and write file	Läs och skriv fil
+	Read and write folder	Läs och skriv mapp
+	Revoke	Återkalla
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Återkalla tar bort åtkomsten som sparats för varje version av skriptet. Åtkomst till en mapp omfattar allt i den.
+@msg	Script file access revoked	Skriptets filåtkomst har återkallats
+@msg	The script file access was already revoked	Skriptets filåtkomst var redan återkallad
 	Deny	Neka
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
@@ -5013,6 +5021,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
 @msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
 @msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	the script file permissions could not be read: {e}	skriptens filbehörigheter kunde inte läsas: {e}
 @msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
 @msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades

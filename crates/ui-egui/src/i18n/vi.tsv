@@ -5442,6 +5442,14 @@ theme	Appearance	Giao diện
 	The script asks to read and write a folder you choose, with everything in it.	Tập lệnh yêu cầu đọc và ghi một thư mục bạn chọn, cùng mọi thứ bên trong.
 	Allow Once	Cho phép một lần
 	Always Allow This Script	Luôn cho phép tập lệnh này
+	No script has kept file access.	Không có tập lệnh nào được giữ quyền truy cập tệp.
+	Read file	Đọc tệp
+	Read and write file	Đọc và ghi tệp
+	Read and write folder	Đọc và ghi thư mục
+	Revoke	Thu hồi
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Thu hồi gỡ quyền truy cập đã giữ cho mọi phiên bản của tập lệnh. Quyền truy cập một thư mục bao gồm mọi thứ bên trong.
+@msg	Script file access revoked	Đã thu hồi quyền truy cập tệp của tập lệnh
+@msg	The script file access was already revoked	Quyền truy cập tệp của tập lệnh đã được thu hồi trước đó
 	Deny	Từ chối
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
@@ -5639,6 +5647,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` cho hộp thoại tệp của tập lệnh phải là một trong: once, always, deny, stop
 @msg	choose a file or folder first, or deny	hãy chọn một tệp hoặc thư mục trước, hoặc từ chối
 @msg	the script file permissions could not be saved: {e}	không thể lưu quyền truy cập tệp của các tập lệnh: {e}
+@msg	the script file permissions could not be read: {e}	không thể đọc quyền truy cập tệp của các tập lệnh: {e}
 @msg	this script's file access can be allowed only once	quyền truy cập tệp của tập lệnh này chỉ có thể được cho phép một lần
 @msg	Only the person at the keyboard can allow a script's file access	Chỉ người ngồi tại bàn phím mới có thể cho phép tập lệnh truy cập tệp
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Một tập lệnh nhận tối đa 2.048 tệp: các tệp được chọn sau đó đã bị bỏ qua

@@ -100,6 +100,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
 @msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
 @msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	the script file permissions could not be read: {e}	scriptets filtilladelser kunne ikke læses: {e}
 @msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
 @msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
@@ -7745,6 +7746,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
 	Allow Once	Tillad én gang
 	Always Allow This Script	Tillad altid dette script
+	No script has kept file access.	Intet script har gemt adgang til filer.
+	Read file	Læs fil
+	Read and write file	Læs og skriv fil
+	Read and write folder	Læs og skriv mappe
+	Revoke	Tilbagekald
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Tilbagekald fjerner den adgang, der er gemt for hver version af scriptet. Adgang til en mappe omfatter alt i den.
+@msg	Script file access revoked	Scriptets adgang til filer er tilbagekaldt
+@msg	The script file access was already revoked	Scriptets adgang til filer var allerede tilbagekaldt
 	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen

@@ -6448,6 +6448,14 @@ digits	Malayalam	Malaiàlam
 	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
 	Allow Once	Permet un cop
 	Always Allow This Script	Permet sempre aquest script
+	No script has kept file access.	Cap script no ha conservat accés als fitxers.
+	Read file	Lectura del fitxer
+	Read and write file	Lectura i escriptura del fitxer
+	Read and write folder	Lectura i escriptura de la carpeta
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca elimina l’accés conservat per a cada versió de l’script. L’accés a una carpeta inclou tot el que conté.
+@msg	Script file access revoked	S’ha revocat l’accés de l’script als fitxers
+@msg	The script file access was already revoked	L’accés de l’script als fitxers ja s’havia revocat
 	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
@@ -6645,6 +6653,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
 @msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
 @msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	the script file permissions could not be read: {e}	no s’han pogut llegir els permisos de fitxers dels scripts: {e}
 @msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
 @msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora

@@ -4956,6 +4956,14 @@ axis	Both	Оба
 	The script asks to read and write a folder you choose, with everything in it.	Скрипт запрашивает чтение и запись выбранной вами папки со всем её содержимым.
 	Allow Once	Разрешить один раз
 	Always Allow This Script	Всегда разрешать этот скрипт
+	No script has kept file access.	Ни у одного скрипта нет сохранённого доступа к файлам.
+	Read file	Чтение файла
+	Read and write file	Чтение и запись файла
+	Read and write folder	Чтение и запись папки
+	Revoke	Отозвать
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	«Отозвать» удаляет доступ, сохранённый для каждой версии скрипта. Доступ к папке распространяется на всё её содержимое.
+@msg	Script file access revoked	Доступ скрипта к файлам отозван
+@msg	The script file access was already revoked	Доступ скрипта к файлам уже был отозван
 	Deny	Запретить
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт может изменять открытые документы и записывать файлы с помощью выполняемых команд. Запускайте только те скрипты, которым доверяете.
 	Do not show this warning again	Больше не показывать это предупреждение
@@ -5140,6 +5148,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового диалога скрипта должен быть одним из: once, always, deny, stop
 @msg	choose a file or folder first, or deny	сначала выберите файл или папку либо откажите
 @msg	the script file permissions could not be saved: {e}	не удалось сохранить разрешения скриптов на файлы: {e}
+@msg	the script file permissions could not be read: {e}	не удалось прочитать разрешения скриптов на файлы: {e}
 @msg	this script's file access can be allowed only once	доступ этого скрипта к файлам можно разрешить только один раз
 @msg	Only the person at the keyboard can allow a script's file access	Разрешить скрипту доступ к файлам может только человек за клавиатурой
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт получает не больше 2 048 файлов: файлы, выбранные после них, пропущены
