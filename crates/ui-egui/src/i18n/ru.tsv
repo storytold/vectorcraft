@@ -1,4 +1,3 @@
-# Russian translation © 2026 SuperSfera LLC, MIT OR Apache-2.0
 # Russian (ru) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" forms).
 #

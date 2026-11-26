@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Russian translation © 2026 SuperSfera LLC, MIT OR Apache-2.0 -->
 <!-- This package declares the types shared-mime-info lacks for the formats in the desktop entry's
      MimeType line. The desktop entry lists these types with the shared ones; a test in
      apps/vectorcraft/src/main.rs checks both files. -->
