@@ -12389,6 +12389,11 @@ the dialog on the last search, with the fields its `params` give in its place. A
 the wrong type is an error that leaves the dialog closed. Once it is open, `ui.dialog.confirm` with a field of the
 wrong type runs no action and returns the error.
 
+For other command dialogs, `params.__doc` can supply a document uid. The dialog previews and confirms only while
+that document is active. Confirming after a document switch closes the dialog without running its command.
+Canceling or replacing that dialog does not cancel an interaction in another document. A supplied `__doc` must be
+an unsigned integer; omitting it preserves the command dialog's existing behavior.
+
 
 ## Justification options
 

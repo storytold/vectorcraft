@@ -44,6 +44,8 @@ struct Open {
     preview: LivePreview,
     /// Set Role Swatch: the role the Swatch row was last filled for.
     filled_for: Option<String>,
+    /// The document whose objects the dialog edits, when its caller supplies `__doc`.
+    doc: Option<u64>,
     /// Names this dialog's own open among reopenings of the same command, for its OK and Cancel.
     token: Arc<()>,
 }
@@ -66,10 +68,16 @@ impl Setting {
 }
 
 /// Opens the parameter dialog of `command`, headed `label`, on `params` (a menu item's own values, `__params` for the
-/// fixed ones and `__rowGutterLinked` for Area Type Options' linked Row Gutter).
+/// fixed ones, `__rowGutterLinked` for Area Type Options' linked Row Gutter, and `__doc` for a document uid).
 pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut params: Map<String, Value>) -> Result<Value, String> {
+    let doc = match params.remove("__doc") {
+        None => None,
+        Some(value) => Some(value.as_u64().ok_or("`__doc` must be a document id")?),
+    };
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    if let Some(old) = app.command_dialog.open.take() {
+    if let Some(old) = app.command_dialog.open.take()
+        && on_document(app, &old)
+    {
         old.preview.cancel(app);
     }
     let fixed = match params.remove("__params") {
@@ -104,6 +112,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         previews,
         preview: LivePreview::default(),
         filled_for: None,
+        doc,
         token,
     });
     Ok(Value::Null)
@@ -121,6 +130,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 }
 
 fn step(app: &mut VectorcraftApp, open: &mut Open) {
+    if !on_document(app, open) {
+        return;
+    }
     let Some(dialogs) = app.dialogs() else { return };
     let id = open.id;
     let seen = dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| (d.fields().clone(), d.is_previewing())));
@@ -165,6 +177,9 @@ fn step(app: &mut VectorcraftApp, open: &mut Open) {
 /// error keeps it open with the reason under its rows.
 fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> Result<Value, String> {
     let open = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)).ok_or("the dialog is gone")?;
+    if !on_document(app, &open) {
+        return Ok(Value::Null);
+    }
     let params = command_params(&open.command, &open.opening, Setting::of(app));
     let value = call(&open.command, &open.fixed, open.linked, form::json_of(&params, fields));
     let result = if open.previews {
@@ -185,9 +200,15 @@ fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> 
 
 /// Cancel: rolls back the preview of the dialog `token` names.
 fn cancel(app: &mut VectorcraftApp, token: &Arc<()>) {
-    if let Some(open) = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)) {
+    if let Some(open) = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token))
+        && on_document(app, &open)
+    {
         open.preview.cancel(app);
     }
+}
+
+fn on_document(app: &VectorcraftApp, open: &Open) -> bool {
+    open.doc.is_none_or(|uid| app.session.active().is_some_and(|st| st.uid == uid))
 }
 
 /// The rows of `command`'s dialog: one per value it opens with that the command takes, in `order(command)` first and
@@ -742,6 +763,41 @@ mod tests {
 
     /// The choices this dialog lists for Rasterize, Create Gradient Mesh and Repeat Options are the
     /// values their commands take (#8020, #7991): each one runs, and every language with complete
+    #[test]
+    fn document_scoped_dialog_confirms_only_in_its_opening_document() {
+        for (scoped, switch) in [(true, false), (true, true), (false, true)] {
+            let mut app = windowed();
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let mut params = json!({"x": 10, "y": 10, "width": 20, "height": 20}).as_object().unwrap().clone();
+            if scoped {
+                params.insert("__doc".into(), json!(app.session.active().unwrap().uid));
+            }
+            open(&mut app, "shape.rectangle", "Rectangle", params).unwrap();
+            pump(&mut app);
+            if switch {
+                app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            }
+            answer_ok(&mut app);
+            assert!(app.command_dialog.open.is_none());
+            assert_eq!(app.session.active().unwrap().selection.is_empty(), scoped && switch);
+            if switch {
+                assert!(app.session.set_active(0));
+                assert!(app.session.active().unwrap().selection.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn document_scoped_dialog_rejects_an_invalid_document_id() {
+        for doc in [json!(null), json!("1"), json!(-1), json!(1.5)] {
+            let mut app = windowed();
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let params = json!({"width": 20, "height": 20, "__doc": doc}).as_object().unwrap().clone();
+            assert!(open(&mut app, "shape.rectangle", "Rectangle", params).is_err(), "{doc}");
+            assert!(app.command_dialog.open.is_none());
+        }
+    }
+
     /// menus has a row for each label.
     #[test]
     fn choice_fields_list_the_values_their_commands_take() {
