@@ -855,6 +855,32 @@ fn a_page_item_with_a_large_id_keeps_its_id() {
     assert!(s.active().unwrap().doc.node(a).is_none());
 }
 
+/// A path the script makes keeps its id when the id is past 2^53, where the script's numbers round.
+#[test]
+fn a_path_made_with_a_large_id_keeps_its_id() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let big = (1u64 << 53) + 1;
+    s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+    let out = log(&mut s, "var p = app.activeDocument.pathItems.rectangle(10, 10, 20, 20); p.name = 'big'; vc.log(p.name);");
+    assert_eq!(out, vec![json!("big")]);
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.node(NodeId(big)).and_then(|n| n.name.clone()).as_deref(), Some("big"));
+}
+
+/// Assigning `undefined` to the selection, as a lookup past the end of a list gives, throws and
+/// leaves the selection as it was; `null` still clears it.
+#[test]
+fn assigning_undefined_to_the_selection_throws() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let e = failure(&mut s, "var d = app.activeDocument; d.selection = d.pageItems[99];");
+    assert!(e.contains("TypeError") || e.contains("not undefined"), "{e}");
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    log(&mut s, "app.activeDocument.selection = null;");
+    assert!(s.active().unwrap().selection.objects.is_empty());
+}
+
 #[test]
 fn only_class_constructors_construct() {
     let (mut s, _, _) = doc();
@@ -1349,6 +1375,18 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let _ = std::fs::remove_file(path);
 }
 
+/// `getIsFileOpen` folds `\` into `/` and letter case only by Windows' rules: on macOS and Linux a
+/// `\` is part of a file name, so `a\b.svg` is not the file `b.svg` in the folder `a`.
+#[test]
+fn get_is_file_open_compares_paths_by_the_platform_s_rules() {
+    use crate::script::dom::path_key_on;
+    assert_ne!(path_key_on("/tmp/work/a\\b.svg", false), path_key_on("/tmp/work/a/b.svg", false));
+    assert_ne!(path_key_on("/tmp/work/A.svg", false), path_key_on("/tmp/work/a.svg", false));
+    assert_eq!(path_key_on("/tmp/work/", false), path_key_on("/tmp/work", false));
+    assert_eq!(path_key_on("C:\\Work\\A.svg", true), path_key_on("c:/work/a.svg", true));
+    assert_eq!(path_key_on("C:\\Work\\", true), path_key_on("c:/work", true));
+}
+
 #[test]
 fn hostile_dom_values_do_not_reenter_or_exceed_limits() {
     let (mut s, _, _) = doc();
@@ -1626,12 +1664,15 @@ fn a_layers_and_a_groups_path_items_list_only_the_paths_directly_in_them_topmost
          vc.log(P.length); vc.log(P[0].width); vc.log(P.typename); vc.log(P.parent.typename);\
          vc.log(G.length); vc.log(G[0].width); vc.log(G[1].width); vc.log(G.parent.typename); vc.log(d.pathItems.length);\
          var sub = L.layers.add(); sub.pathItems.rectangle(10, 10, 5, 5); vc.log(L.pathItems.length); vc.log(sub.pathItems.length);\
-         G[1].name = 'B'; vc.log(G.getByName('B') === G[1]); vc.log(G.index('B') === G[1]); vc.log(P[1] === undefined);",
+         sub.pathItems[0].name = 'B'; P[0].name = 'B'; G[1].name = 'B'; G[0].name = 'B';\
+         vc.log(G.getByName('B') === G[0]); vc.log(G.index('B') === G[0]); vc.log(P.getByName('B') === P[0]); vc.log(P[1] === undefined);",
     );
     let expected =
         [json!(1), json!(30), json!("PathItems"), json!("Layer"), json!(2), json!(70), json!(50), json!("GroupItem"), json!(3), json!(1), json!(1)];
     assert_eq!(out[..11], expected);
-    assert_eq!(out[11..], [json!(true), json!(true), json!(true)]);
+    // With the sublayer's path above the group, the layer's own path and both of the group's paths
+    // named `B`, each collection's named lookups give its own topmost path.
+    assert_eq!(out[11..], [json!(true), json!(true), json!(true), json!(true)]);
 }
 
 #[test]
@@ -1716,6 +1757,22 @@ fn path_items_of_a_hidden_or_locked_layer_or_group_make_no_path() {
         assert!(failure(&mut s, src).contains(REFUSED), "{src}");
         assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), locked);
     }
+    // Caught inside the script, each refusal leaves both collections as they were, and the group,
+    // shown and unlocked itself, is refused for its locked layer.
+    let out = log(
+        &mut s,
+        "var L = app.activeDocument.layers[0], g = app.activeDocument.groupItems[0], m = [];\
+         var n = [L.pathItems.length, g.pathItems.length];\
+         try { L.pathItems.rectangle(10, 10, 5, 5); } catch (e) { m.push(e.message); }\
+         try { g.pathItems.add(); } catch (e) { m.push(e.message); }\
+         try { g.pathItems.ellipse(); } catch (e) { m.push(e.message); }\
+         vc.log(m); vc.log([L.pathItems.length, g.pathItems.length]); vc.log(n);",
+    );
+    let refused: Vec<&str> = out[0].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(refused.len(), 3, "{out:?}");
+    assert!(refused.iter().all(|m| m.contains(REFUSED)), "{out:?}");
+    assert_eq!(out[1], out[2], "the collections are unchanged inside the script");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), locked);
     s.execute("layer.setProps", &json!({"id": lid.0, "locked": false})).unwrap();
     s.execute("layer.setProps", &json!({"id": gid.0, "visible": false})).unwrap();
     let hidden = format!("{:?}", s.active().unwrap().doc.layers);
@@ -1981,7 +2038,7 @@ fn a_compound_paths_path_items_add_makes_the_path_inside_it() {
     let d = &s.active().unwrap().doc;
     let compound = d.layers[0].children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Compound { .. })).unwrap();
     assert_eq!(compound.children().unwrap().len(), 2);
-    assert!(undo_steps(&s) > steps);
+    assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
 }
 
 #[test]

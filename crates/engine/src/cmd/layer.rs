@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path whose layer and groups are shown and unlocked and that is not on a locked artboard, and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),

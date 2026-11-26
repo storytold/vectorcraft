@@ -58,9 +58,9 @@ use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, Ru
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, edit_item, editable, find_doc, float,
-    frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, command_value, coordinate, edit_item, editable,
+    find_doc, float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point,
+    point_get, point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -176,6 +176,18 @@ impl PointIndex {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`point_place`] built a [`PointIndex`] on this thread.
+    static INDEX_BUILDS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times a [`PointIndex`] was built on this thread.
+#[cfg(test)]
+pub(crate) fn index_builds() -> u64 {
+    INDEX_BUILDS.with(std::cell::Cell::get)
+}
+
 /// The number of points of the path of `item`, its waiting point changes included, and the subpath
 /// and the place in it of point `i` when `i` is given and in the path. The index of the path's
 /// subpaths is kept in [`super::State`] until the path's points change.
@@ -198,6 +210,8 @@ fn point_place(h: &super::Host, item: Item, i: Option<usize>) -> std::result::Re
             }
     });
     if !fresh {
+        #[cfg(test)]
+        INDEX_BUILDS.with(|n| n.set(n.get() + 1));
         let index = read_points(h, item, |subs| PointIndex::new(key, source, subs))?;
         *h.dom.point_index.borrow_mut() = Some(index);
     }
@@ -230,12 +244,27 @@ fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) 
 /// locked, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
 /// that is, is written at once, so that its points read as the grid snaps them.
 fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>) -> T) -> std::result::Result<T, HostError> {
-    h.dom.pending_changes.set(h.dom.pending_changes.get().wrapping_add(1));
+    edit_points_keeping(h, item, false, f)
+}
+
+/// [`edit_points`]. With `counts_kept`, `f` leaves the number of subpaths and of points in each as
+/// they are, so a [`PointIndex`] of the waiting changes stays good.
+fn edit_points_keeping<T>(
+    h: &super::Host,
+    item: Item,
+    counts_kept: bool,
+    f: impl FnOnce(&mut Vec<SubPath>) -> T,
+) -> std::result::Result<T, HostError> {
     if let Some((waiting, subs)) = &mut *h.dom.pending.borrow_mut()
         && same_path(*waiting, item)
     {
+        if !counts_kept {
+            h.dom.pending_changes.set(h.dom.pending_changes.get().wrapping_add(1));
+            h.dom.pending_reshaped.set(true);
+        }
         return Ok(f(subs));
     }
+    h.dom.pending_changes.set(h.dom.pending_changes.get().wrapping_add(1));
     flush(h)?;
     let mut subs = read_path(h, item, |_, _, pd| pd.subpaths.clone())?;
     let r = f(&mut subs);
@@ -249,6 +278,7 @@ fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>)
             return Err(cannot_edit(item.id));
         }
         *h.dom.pending.borrow_mut() = Some((item, subs));
+        h.dom.pending_reshaped.set(!counts_kept);
         if aligned {
             flush(h)?;
         }
@@ -262,9 +292,13 @@ fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::R
 }
 
 /// Writes the waiting point changes of a path ([`edit_points`]) with one `path.setAnchors`, unless
-/// the path has those points already.
+/// the path has those points already. Changes that added, removed or replaced points are written
+/// with `reshaped`, so the path's direct-selected anchors are deselected even when the counts come
+/// out the same, and the selection the run puts back leaves them out. When the write fails, the
+/// changes stay waiting.
 pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
     let Some((item, subs)) = h.dom.pending.borrow_mut().take() else { return Ok(()) };
+    let reshaped = h.dom.pending_reshaped.replace(false);
     let same = {
         let s = h.session.borrow();
         let node = s.documents().iter().find(|d| d.uid == item.doc.uid).and_then(|st| st.doc.node(item.id));
@@ -277,7 +311,18 @@ pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
     }
     let subpaths: Vec<Value> =
         subs.iter().map(|sp| json!({"anchors": sp.anchors.iter().map(anchor_json).collect::<Vec<_>>(), "closed": sp.closed})).collect();
-    edit_item(h, item, "path.setAnchors", &json!({"id": item.id.0, "subpaths": subpaths}))?;
+    let mut params = json!({"id": item.id.0, "subpaths": subpaths});
+    if reshaped {
+        params["reshaped"] = json!(true);
+    }
+    let kept = h.dom.reshaping.replace(reshaped.then_some(item));
+    let r = edit_item(h, item, "path.setAnchors", &params);
+    h.dom.reshaping.set(kept);
+    if let Err(e) = r {
+        *h.dom.pending.borrow_mut() = Some((item, subs));
+        h.dom.pending_reshaped.set(reshaped);
+        return Err(e);
+    }
     Ok(())
 }
 
@@ -336,8 +381,8 @@ pub(super) const PATH_LISTS: usize = 4;
 
 /// The ids of a document's paths, in the order of its page items, or of the paths directly in the
 /// layer or group `container`, topmost first. The last [`PATH_LISTS`] lists are kept while their
-/// documents are unchanged, so a loop over a collection builds its list once. A new list of a
-/// container is charged by the objects it looks at.
+/// documents are unchanged, so a loop over a collection builds its list once. A new list is
+/// charged by the objects it looks at.
 fn path_items(h: &super::Host, st: &DocState, container: Option<NodeId>) -> std::result::Result<Rc<Vec<NodeId>>, HostError> {
     {
         let mut lists = h.dom.paths.borrow_mut();
@@ -357,6 +402,7 @@ fn path_items(h: &super::Host, st: &DocState, container: Option<NodeId>) -> std:
         }
         None => {
             let all = super::page_items(h, st);
+            h.charge_call(all.len() as u64)?;
             Rc::new(all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(is_path)).collect())
         }
     };
@@ -464,13 +510,10 @@ fn items_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// The id in the result of a command that made an object.
-fn made_id(r: &Data) -> std::result::Result<NodeId, HostError> {
-    let id = match r {
-        Data::Object(o) => o.iter().find(|(k, _)| k == "id").and_then(|(_, v)| if let Data::Number(n) = v { whole(*n) } else { None }),
-        _ => None,
-    };
-    id.map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
+/// The id in the result of a command that made an object, read from the command's own result (not
+/// the script's copy, whose numbers are exact only up to 2^53).
+fn made_id(r: &(Data, Value)) -> std::result::Result<NodeId, HostError> {
+    r.1.get("id").and_then(Value::as_u64).map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
 }
 
 /// The error of a path made in a layer or group that is hidden or locked, or that is in a hidden or
@@ -516,7 +559,7 @@ fn make_in(
 /// contents ([`make_in`]), and reverses the new path's direction when `reversed`. → the new path.
 fn make(h: &super::Host, doc: Doc, container: Option<NodeId>, id: &str, params: &Value, reversed: bool) -> Answer {
     make_in(h, doc, container, |h| {
-        let id = made_id(&drawing_normally(h, || command(h, id, params))?)?;
+        let id = made_id(&drawing_normally(h, || command_value(h, id, params))?)?;
         if reversed {
             command(h, "path.reverse", &json!({"ids": [id.0]}))?;
         }
@@ -673,7 +716,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
             let ap = h.session.borrow().new_art();
             ap.fill_paint().is_none() && ap.stroke_paint().is_none()
         };
-        let id = made_id(&drawing_normally(h, || command(h, "path.create", &json!({"d": ""})))?)?;
+        let id = made_id(&drawing_normally(h, || command_value(h, "path.create", &json!({"d": ""})))?)?;
         if unpainted {
             keeping_paint(h, || command(h, "paint.setStroke", &json!({"none": true, "ids": [id.0]})))?;
         }
@@ -697,7 +740,7 @@ fn path_closed(h: &super::Host, a: &[Data]) -> Answer {
 fn path_set_closed(h: &super::Host, a: &[Data]) -> Answer {
     let closed = boolean(arg(a, 1), "closed")?;
     let item = this_path(h, a)?;
-    edit_points(h, item, |subs| subs.iter_mut().for_each(|sp| sp.closed = closed))?;
+    edit_points_keeping(h, item, true, |subs| subs.iter_mut().for_each(|sp| sp.closed = closed))?;
     Ok(Data::Undefined)
 }
 
@@ -1426,7 +1469,7 @@ fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords,
 /// coordinates (for a point property) or the value itself.
 fn edit_point(h: &super::Host, a: &[Data], f: impl FnOnce(&mut Anchor)) -> Answer {
     let (item, s, j) = this_point_place(h, a)?;
-    edit_points(h, item, |subs| {
+    edit_points_keeping(h, item, true, |subs| {
         if let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j)) {
             f(an);
         }

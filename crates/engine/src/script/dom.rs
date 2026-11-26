@@ -44,6 +44,8 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod colors;
 pub(super) mod layers;
 mod paths;
+#[cfg(test)]
+pub(crate) use paths::index_builds;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -112,6 +114,12 @@ pub(super) struct State {
     /// How many times [`paths`] changed the waiting point changes, which makes a
     /// [`paths::PointIndex`] of them stale.
     pending_changes: Cell<u64>,
+    /// Whether the waiting point changes added, removed or replaced points, so that writing them
+    /// deselects the path's direct-selected anchors even when the counts come out the same.
+    pending_reshaped: Cell<bool>,
+    /// The path [`flush`] is writing reshaped changes to, whose direct-selected anchors and
+    /// segments [`on_doc`] does not select again.
+    reshaping: Cell<Option<Item>>,
     /// Where the points of the path the run last read points of start, by subpath ([`paths`]).
     point_index: RefCell<Option<paths::PointIndex>>,
     /// How many times the points the run read of each path went stale, by document uid and path id
@@ -626,12 +634,15 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
         command(h, "select.set", &json!({"ids": kept.iter().map(|i| i.0).collect::<Vec<_>>()}))?;
     } else {
         // One `select.anchorsMany` selects every object in its order: a partly selected path with
-        // its anchors, a whole path with all of them and any other object with none.
+        // its anchors, a whole path with all of them and any other object with none. A path with
+        // only segments selected gets no anchors here, so `select.segments` below selects it with
+        // just those segments.
         let items: Vec<Value> = kept
             .iter()
             .map(|i| {
                 let anchors: Vec<[usize; 2]> = match before.anchors.get(i) {
                     Some(a) => a.iter().map(|(p, k)| [*p, *k]).collect(),
+                    None if before.segments.contains_key(i) => Vec::new(),
                     None => doc.node(*i).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, k, _)| [s, k]).collect()).unwrap_or_default(),
                 };
                 json!({"id": i.0, "anchors": anchors})
@@ -747,15 +758,16 @@ fn on_doc_layer<T>(
             let s = h.session.borrow();
             s.active().filter(|st| st.uid == uid).map(|st| st.doc.clone())
         };
-        // Anchors and segments are selected by index: a path that gained or lost anchors is not
-        // selected again, so that other anchors of it are not selected in their place.
+        // Anchors and segments are selected by index: a path that gained, lost or replaced anchors
+        // is not selected again, so that other anchors of it are not selected in their place.
         if let Some(doc) = &doc {
             let counts = |d: &Document, id: NodeId| {
                 d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
             };
+            let reshaped = h.dom.reshaping.get().filter(|it| it.doc.uid == uid).map(|it| it.id);
             let partial: Vec<NodeId> = before.anchors.keys().chain(before.segments.keys()).copied().collect();
             for id in partial {
-                if counts(&old, id) != counts(doc, id) {
+                if reshaped == Some(id) || counts(&old, id) != counts(doc, id) {
                     before.anchors.remove(&id);
                     before.segments.remove(&id);
                     before.objects.retain(|o| *o != id);
@@ -840,13 +852,15 @@ fn app_set_coords(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// A path as `getIsFileOpen` compares it: `\` and `/` alike, and on Windows paths (a drive letter
-/// or a `\`) letters in one case.
+/// A path as `getIsFileOpen` compares it, without a trailing `/`: on Windows, `\` and `/` alike and
+/// letters in one case; elsewhere `\` is part of a name and case counts.
 fn path_key(p: &str) -> String {
-    let windows = p.contains('\\') || p.as_bytes().get(1) == Some(&b':');
-    let p = p.replace('\\', "/");
-    let p = p.trim_end_matches('/').to_string();
-    if windows { p.to_lowercase() } else { p }
+    path_key_on(p, cfg!(windows))
+}
+
+/// [`path_key`] for Windows when `windows`, else for macOS and Linux.
+pub(crate) fn path_key_on(p: &str, windows: bool) -> String {
+    if windows { p.replace('\\', "/").trim_end_matches('/').to_lowercase() } else { p.trim_end_matches('/').to_string() }
 }
 
 /// `app.getIsFileOpen(path)`: whether a document open in the run has the file `path`. The path is
@@ -1391,7 +1405,8 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 /// `[]`. Every one must be an object of that document that can be selected.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
+        Data::Undefined => return Err(HostError::Type("the selection takes a page item, a list of them, null or [], not undefined".into())),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],

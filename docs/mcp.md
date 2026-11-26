@@ -2749,11 +2749,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
-  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
+  a list of at most 10,000, `null` or `[]`; `undefined` (such as a page item looked up past the end of a list)
+  throws a `TypeError`, and an object that cannot be selected throws `Cannot select`, each with nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
   with `selected`. Assigning a page item's `selected` leaves the direct-selected anchors and segments of the other
-  selected objects selected. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
-  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  selected objects selected. `getIsFileOpen` compares the path with the open documents' files as text (on Windows,
+  letter case is ignored and `\` matches `/`; on macOS and Linux, `\` is part of a file name) and does not resolve the
+  path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
   Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
@@ -2825,7 +2826,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   default: the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group,
   index 0 puts it directly above the clipping path), as one undo step named Group, and
   gives `{id}`. With `compound: true` it adds an empty compound path instead, as one undo step named Compound Path.
-  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, where the path
+  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path (its layer and
+  groups shown and unlocked too, and not on a locked artboard), where the path
   gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
   path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
   alignment.
@@ -2859,6 +2861,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
   script uses any other member or command, or the points of another path, and when the script ends; a path aligned
   to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  Writing changes that added, removed or replaced points deselects the path's direct-selected anchors, even when the
+  path ends with as many points as before; changes that only move points or handles, change a point's type or set
+  `closed` keep them selected.
   `pathPoints`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
   `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
@@ -6744,7 +6749,8 @@ and `layerRows`, the rows highlighted in the panel.
   that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group, and it puts
-  a path into a shown, unlocked compound path (see `object.newGroup` for the paint the path keeps or takes). A row that
+  a path into a shown, unlocked compound path whose layer and groups are also shown and unlocked and that is not on
+  a locked artboard (see `object.newGroup` for the paint the path keeps or takes). A row that
   either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
   group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
   listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,

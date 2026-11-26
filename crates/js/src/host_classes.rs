@@ -155,7 +155,7 @@ impl Interp {
             }
             return Ok(Value::Object(id));
         }
-        self.reserve_heap(crate::heap::OBJECT_BYTES)?;
+        self.reserve_heap(crate::heap::OBJECT_BYTES.saturating_add(crate::heap::host_handle_bytes(handle.len())))?;
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);

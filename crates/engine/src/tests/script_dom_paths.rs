@@ -170,6 +170,12 @@ fn removing_a_point_deselects_a_path_with_direct_selected_anchors() {
     s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     log(&mut s, "var p = app.activeDocument.pathItems[1].pathPoints[0]; p.anchor = [p.anchor[0] + 1, p.anchor[1]];");
     assert_eq!(s.active().unwrap().selection.anchors[&b].len(), 1);
+    // Removing a point and adding one in a single write ends with as many points, but the
+    // selected anchor's index now names another point, so the path is deselected.
+    log(&mut s, "var pp = app.activeDocument.pathItems[1].pathPoints; pp[0].remove(); pp.add();");
+    let st = s.active().unwrap();
+    assert_eq!(st.doc.node(b).and_then(|n| n.path_data()).map(|p| p.anchors().count()), Some(3));
+    assert!(!st.selection.anchors.contains_key(&b), "{:?}", st.selection);
 }
 
 #[test]
@@ -188,6 +194,14 @@ fn set_anchors_with_other_anchor_counts_deselects_the_paths_anchors() {
     let moved = json!([{"anchors": [pt(1.0, 0.0), pt(9.0, 0.0), pt(9.0, 9.0)], "closed": true}]);
     s.execute("path.setAnchors", &json!({"id": b.0, "subpaths": moved})).unwrap();
     assert_eq!(s.active().unwrap().selection.anchors[&b].len(), 1);
+    // `reshaped` deselects them at the same count; a value that is not a boolean is refused.
+    for bad in [json!(null), json!(1), json!("yes")] {
+        assert!(s.execute("path.setAnchors", &json!({"id": b.0, "subpaths": moved, "reshaped": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.active().unwrap().selection.anchors[&b].len(), 1);
+    s.execute("path.setAnchors", &json!({"id": b.0, "subpaths": moved, "reshaped": true})).unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert!(!sel.objects.contains(&b) && !sel.anchors.contains_key(&b), "{sel:?}");
 }
 
 /// Points are found by their index across subpaths, through changes that wait to be written and
@@ -218,6 +232,26 @@ fn points_are_found_across_subpaths_as_their_counts_change() {
     let n = node(&s, a);
     let counts: Vec<usize> = n.path_data().unwrap().subpaths.iter().map(|sp| sp.anchors.len()).collect();
     assert_eq!(counts, vec![1, 3]);
+}
+
+/// Moving every point of a path, one at a time, keeps the index of where its subpaths' points
+/// start: the index is built again only when a change adds or removes points.
+#[test]
+fn moving_each_point_keeps_the_index_of_the_subpaths() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    let subs: Vec<Value> =
+        (0..50).map(|i| json!({"anchors": [{"x": i, "y": 0, "in": [i, 0], "out": [i, 0], "smooth": false}], "closed": false})).collect();
+    s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": subs})).unwrap();
+    let before = crate::script::dom::index_builds();
+    let out = log(
+        &mut s,
+        "var q = app.activeDocument.pathItems[0].pathPoints; for (var i = 0; i < q.length; i++) q[i].anchor = [i, 7]; vc.log(q[49].anchor);",
+    );
+    assert_eq!(out, vec![json!([49, 7])]);
+    let built = crate::script::dom::index_builds() - before;
+    assert!(built <= 3, "the index was built {built} times");
 }
 
 #[test]

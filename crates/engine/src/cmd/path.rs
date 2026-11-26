@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Anchors",
             [],
             None,
-            "{id, subpaths: [{anchors: [{x,y,in?,out?,smooth?: bool (left out: smooth when both handles are pulled out and in line)}], closed}]} replace a path's geometry",
+            "{id, subpaths: [{anchors: [{x,y,in?,out?,smooth?: bool (left out: smooth when both handles are pulled out and in line)}], closed}], reshaped?: bool (true: the anchors were added, removed or replaced, so the path's direct-selected anchors are deselected even when each subpath keeps its count)} replace a path's geometry",
             has_doc,
             set_anchors
         ),
@@ -757,14 +757,19 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect::<Result<Vec<_>>>()?,
     );
+    let replaced = match p.get("reshaped") {
+        None => false,
+        Some(Value::Bool(v)) => *v,
+        Some(_) => return Err(bad("path.setAnchors", "reshaped must be a boolean")),
+    };
     s.edit("Reshape", |d, sel| {
         let counts = |pd: &PathData| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
         let path = path_mut(d, id)?;
-        let reshaped = counts(path) != counts(&data);
+        let reshaped = replaced || counts(path) != counts(&data);
         *path = data;
         super::object::resnap(d, id);
-        // Direct-selected anchors and segments are kept by index: when anchors were added or
-        // removed, the path is deselected rather than left with other anchors selected.
+        // Direct-selected anchors and segments are kept by index: when anchors were added,
+        // removed or replaced, the path is deselected rather than left with other anchors selected.
         if reshaped && (sel.anchors.remove(&id).is_some() | sel.segments.remove(&id).is_some()) {
             sel.objects.retain(|o| *o != id);
             sel.prune(d);

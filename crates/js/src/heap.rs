@@ -779,9 +779,16 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Host(h) => extra = host_handle_bytes(h.handle.len()),
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra
+}
+
+/// The bytes an object of a host class keeps for a handle of `numbers` numbers: the handle itself
+/// and its copy in the realm's map of host objects.
+pub(crate) fn host_handle_bytes(numbers: usize) -> usize {
+    numbers.saturating_mul(16)
 }
 
 fn add_name(name: &XmlName, strings: &mut StringSizes) {
