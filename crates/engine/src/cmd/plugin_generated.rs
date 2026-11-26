@@ -101,6 +101,17 @@ pub fn open_notes(doc: &Document) -> Vec<String> {
     for layer in &doc.layers {
         vectorcraft_doc::swatches::walk_with_masks(layer, &mut visit);
     }
+    for symbol in &doc.symbols {
+        vectorcraft_doc::swatches::walk_with_masks(&symbol.art, &mut visit);
+    }
+    for pattern in &doc.patterns {
+        for art in &pattern.art {
+            vectorcraft_doc::swatches::walk_with_masks(art, &mut visit);
+        }
+    }
+    for design in &doc.graph_designs {
+        vectorcraft_doc::swatches::walk_with_masks(&design.art, &mut visit);
+    }
     notes
 }
 

@@ -288,6 +288,19 @@ fn a_missing_generator_in_an_opacity_mask_is_named_on_open() {
     assert!(warnings[0].contains("test.gen.mask.gone") && warnings[0].contains("isn't installed"), "{warnings:?}");
 }
 
+#[test]
+fn a_missing_generator_in_a_symbol_definition_is_named_on_open() {
+    let mut s = Session::new();
+    sizes(&mut s, "test.gen.symbol.gone");
+    generated(&mut s, "test.gen.symbol.gone");
+    s.execute("symbol.new", &json!({"name": "Generated"})).unwrap();
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, true);
+    s.execute("plugin.remove", &json!({"id": "test.gen.symbol.gone"})).unwrap();
+    let warnings = reopen_bytes(&mut s, &bytes);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("test.gen.symbol.gone") && warnings[0].contains("isn't installed"), "{warnings:?}");
+}
+
 /// The saved native text `bytes` with the generated art object's JSON changed by `f`.
 fn tampered(bytes: &[u8], f: impl FnOnce(&mut Value)) -> Vec<u8> {
     fn find(v: &mut Value) -> Option<&mut Value> {
