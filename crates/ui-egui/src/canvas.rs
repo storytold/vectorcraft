@@ -5,7 +5,8 @@
 use craft::behavior::{CanvasView, PressPhase};
 use craft::keymap::Mods;
 use craft::ui::canvas::{
-    Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
+    Canvas, CanvasScrollbars, CanvasSpace, ContextSource, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget,
+    canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::runtime::env::Env;
@@ -133,6 +134,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 struct Body {
     reply: Option<ToolHostResponse>,
     context_at: Option<egui::Pos2>,
+    /// The pasteboard's `context_at` answers the Menu key or Shift+F10, not a secondary click.
+    context_key: bool,
     /// A view a compass or scroll bar edit made this pass.
     edited: Option<CanvasView>,
 }
@@ -235,8 +238,12 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         rulers::apply(app, ui, out);
     }
     let pressed = matches!(output.press.phase, PressPhase::Down { .. });
-    let Body { reply, context_at, edited } = body;
-    let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
+    let Body { reply, context_at, context_key, edited } = body;
+    let request = reply
+        .as_ref()
+        .and_then(|r| r.context.as_ref())
+        .map(|c| context_menu::Request { at: c.at, key: c.source == ContextSource::Key })
+        .or(context_at.map(|at| context_menu::Request { at, key: context_key }));
     let jumped = edited.is_some();
     // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own.
     let view_now =
@@ -270,7 +277,12 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
 fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: Option<&ToolPass>, win: Win, kind: BodyKind) -> Body {
     let live = kind == BodyKind::Live;
     let presenting = app.ui.screen_mode == 3;
-    let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
+    let background = space.background();
+    let mut out = Body {
+        context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)),
+        context_key: background.context.is_none() && background.context_key,
+        ..Body::default()
+    };
     grids(app, ui, space, win);
     if live {
         find_shown_tool(app, ui.ctx(), space);
