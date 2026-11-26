@@ -56,18 +56,22 @@ fn text_frames_add_point_area_and_path_type() {
     let out = log(
         &mut s,
         "var d = app.activeDocument, p = d.pageItems;\
-         var area = d.textFrames.areaText(p[0]); area.contents = 'Area';\
-         var path = d.textFrames.pathText(p[1]); path.contents = 'Path';\
+         var area = d.textFrames.areaText(p[1]); area.contents = 'Area';\
+         var path = d.textFrames.pathText(p[0]); path.contents = 'Path';\
          var pt = d.textFrames.add(); pt.contents = 'Point';\
          var at = d.textFrames.pointText([30, 40]); at.contents = 'At';\
          vc.log(d.textFrames.length); vc.log([area.kind, path.kind, pt.kind]);\
          vc.log(pt.typename); vc.log(pt instanceof TextFrame && pt instanceof PageItem);\
-         vc.log(d.textFrames[3].contents); vc.log(d.textFrames[9] === undefined);\
+         vc.log([d.textFrames[0].contents, d.textFrames[3].contents]); vc.log(d.textFrames[9] === undefined);\
          vc.log(at.orientation); vc.log(d.textFrames.parent.typename);",
     );
     assert_eq!(out[0], json!(4));
     assert_eq!(out[1], json!(["TextType.AREATEXT", "TextType.PATHTEXT", "TextType.POINTTEXT"]));
-    assert_eq!(out[2..], [json!("TextFrame"), json!(true), json!("At"), json!(true), json!("TextOrientation.HORIZONTAL"), json!("Document")]);
+    // Topmost first, as `pageItems` lists them: the newest type, then the area type on the rectangle.
+    assert_eq!(
+        out[2..],
+        [json!("TextFrame"), json!(true), json!(["At", "Area"]), json!(true), json!("TextOrientation.HORIZONTAL"), json!("Document")]
+    );
     assert_eq!(undo_steps(&s), before + 1);
     // A path of another kind, or no path, is refused.
     assert!(failure(&mut s, "app.activeDocument.textFrames.areaText(app.activeDocument.textFrames[0]);").contains("PathItem"));
@@ -492,16 +496,17 @@ fn collections_of_text_add_words_characters_and_paragraphs() {
     let (mut s, id) = doc_with("ab");
     s.execute("text.create", &json!({"x": 20, "y": 200, "text": "other", "size": 12})).unwrap();
     let before = undo_steps(&s);
-    let out = log(&mut s, "var n = app.activeDocument.textFrames[1].words.add(''); vc.log([n.length, n.start]);");
+    // `textFrames` lists the topmost first, so the newer "other" is [0].
+    let out = log(&mut s, "var n = app.activeDocument.textFrames[0].words.add(''); vc.log([n.length, n.start]);");
     assert_eq!(out, vec![json!([0, 5])]);
     for (call, want) in [
         ("t.words.add(null)", "contents must be a string or a number"),
         ("t.words.add('x', t.words[0], 'after')", "insertionLocation must be"),
         ("t.words.add('x', t.words[0], ElementPlacement.INSIDE)", "insertionLocation must be"),
-        ("t.words.add('x', app.activeDocument.textFrames[0])", "same text frame"),
+        ("t.words.add('x', app.activeDocument.textFrames[1])", "same text frame"),
         ("t.words.add('x', 5)", "relativeObject must be a TextRange or a TextFrame"),
     ] {
-        let e = failure(&mut s, &format!("var t = app.activeDocument.textFrames[1]; {call};"));
+        let e = failure(&mut s, &format!("var t = app.activeDocument.textFrames[0]; {call};"));
         assert!(e.contains(want), "{call}: {e}");
     }
     assert_eq!(undo_steps(&s), before);
@@ -586,7 +591,7 @@ fn type_made_with_a_large_id_is_the_new_type() {
 fn text_members_refuse_objects_of_other_classes() {
     let (mut s, _) = doc_with("abc");
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextFrame.prototype, 'contents').get.call(app.activeDocument.pageItems[1]);");
+    let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextFrame.prototype, 'contents').get.call(app.activeDocument.pageItems[0]);");
     assert!(e.contains("this is not a TextFrame"), "{e}");
     let e = failure(&mut s, "Object.getOwnPropertyDescriptor(TextRange.prototype, 'contents').get.call(app.activeDocument.textFrames[0]);");
     assert!(e.contains("this is not a TextRange"), "{e}");

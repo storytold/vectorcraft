@@ -189,7 +189,7 @@ type Spans = [(usize, usize)];
 #[derive(Default)]
 pub(in crate::script) struct TextState {
     frames: RefCell<HashMap<(u64, u64), Log>>,
-    /// A document's uid, the document, and the ids of its type objects in paint order.
+    /// A document's uid, the document, and the ids of its type objects, topmost first.
     list: RefCell<Option<FrameList>>,
     /// The fonts `app.textFonts` lists, as family and style, read once a run; a font a character
     /// names that is not installed is added at the end.
@@ -1217,7 +1217,8 @@ pub(super) fn doc_text_frames(link: &Link) -> HostMember {
     get(link, doc_text_frames_impl)
 }
 
-/// The ids of the document's type objects in paint order, kept while the document is unchanged.
+/// The ids of the document's type objects, topmost first as `pageItems` lists them, kept while the
+/// document is unchanged.
 fn frame_ids(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     if let Some((uid, doc, ids)) = &*h.dom.text.list.borrow()
         && *uid == st.uid
