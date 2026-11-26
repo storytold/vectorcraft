@@ -505,3 +505,39 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
 }
+
+/// With two files picked, the file dialog lists them in a scrolled group named Picked files.
+#[test]
+fn a_scripts_file_dialog_lists_several_picked_files_in_a_named_group() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "File.openDialog('Pick', '', true);" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let given = vec!["/picked/a.txt".to_string(), "/picked/b.txt".to_string()];
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(given, true, false))).unwrap();
+    frame(&app, vec![]);
+    let out = frame(&app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    let groups: Vec<_> =
+        update.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::Group).filter_map(|(_, node)| node.label()).collect();
+    assert!(groups.contains(&"Picked files"), "a group named Picked files: {groups:?}");
+    let nodes: std::collections::HashMap<_, _> = update.nodes.iter().map(|(id, node)| (*id, node)).collect();
+    let (_, group) = update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == egui::accesskit::Role::Group && node.label() == Some("Picked files"))
+        .expect("the Picked files group");
+    let mut texts = Vec::new();
+    let mut pending = group.children().to_vec();
+    while let Some(id) = pending.pop() {
+        if let Some(node) = nodes.get(&id) {
+            texts.extend(node.label().into_iter().chain(node.value()).map(str::to_owned));
+            pending.extend_from_slice(node.children());
+        }
+    }
+    for path in ["/picked/a.txt", "/picked/b.txt"] {
+        assert!(texts.iter().any(|text| text == path), "{path} is inside the Picked files group: {texts:?}");
+    }
+    cancel(&mut app, PICKER_KIND);
+    finish(&mut app);
+}

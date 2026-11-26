@@ -9341,6 +9341,14 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
 ```
 
+Reset Preferences also sets the dialog's `__smartGuides`, `__snapToGrid` and `__taskBar` fields to their defaults
+(`__taskBar` takes the value the current workspace was saved with). A category's own reset sets the field of that
+category (Smart Guides, Guides & Grid or General), and File Handling's also resets the app chosen for Edit Original.
+`prefs.reset` run while Preferences is open shows the values it reset in the dialog. In the app, `prefs.reset` also resets Smart Guides,
+Snap to Grid and Enable Contextual Task Bar when it resets every category or their category (Smart Guides, Guides &
+Grid and General), and the app chosen for Edit Original when it resets every category or File Handling. A `category`
+left out or `null` resets every category, and one that is not a string is an error.
+
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
 holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder`, `glyphSnap` and
