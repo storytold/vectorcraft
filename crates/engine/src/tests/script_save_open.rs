@@ -225,7 +225,7 @@ fn an_autocad_export_writes_a_dxf_with_its_options() {
         let dxf = std::fs::read_to_string(dir.join(name)).unwrap();
         assert_eq!(dxf_header(&dxf, "$ACADVER").as_deref(), Some("AC1024"), "{name}: an option left out or undefined is AutoCADRelease24");
         // The rectangle is 10 pt (3.5 mm) from the artboard's left edge.
-        assert!(dxf_leftmost(&dxf) < 1.0, "{name}: the origin is at the visible art's bounds: {}", dxf_leftmost(&dxf));
+        assert!(dxf_leftmost(&dxf).abs() < 1.0, "{name}: the origin is at the visible art's bounds: {}", dxf_leftmost(&dxf));
     }
     let p = std::fs::read_to_string(dir.join("p.dxf")).unwrap();
     assert!(dxf_widest(&p) > dxf_widest(&b) * 5.0, "a pica is a sixth of an inch: {} and {}", dxf_widest(&p), dxf_widest(&b));

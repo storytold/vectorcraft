@@ -142,6 +142,13 @@ const INSIDE: &[(&str, &str)] = &[
         "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint SaveOptions \
          UserInteractionLevel",
     ),
+    ("", "AutoCADColors AutoCADCompatibility AutoCADExportFileFormat AutoCADExportOption AutoCADRasterFormat AutoCADUnit"),
+    ("AutoCADColors.", "Max16Colors Max256Colors Max8Colors TrueColors"),
+    ("AutoCADCompatibility.", "AutoCADRelease13 AutoCADRelease14 AutoCADRelease15 AutoCADRelease18 AutoCADRelease21 AutoCADRelease24"),
+    ("AutoCADExportFileFormat.", "DWG DXF"),
+    ("AutoCADExportOption.", "MaximizeEditability PreserveAppearance"),
+    ("AutoCADRasterFormat.", "JPEG PNG"),
+    ("AutoCADUnit.", "Centimeters Inches Millimeters Picas Pixels Points"),
     (
         "Compatibility.",
         "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
@@ -149,7 +156,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     ("EPSPostScriptLevelEnum.", "LEVEL2 LEVEL3"),
     ("EPSPreview.", "BWTIFF COLORTIFF None TRANSPARENTCOLORTIFF"),
-    ("ExportType.", "AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
+    ("ExportType.", "AUTOCAD AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
     ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
@@ -160,8 +167,8 @@ const INSIDE: &[(&str, &str)] = &[
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
 /// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
-     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
+     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsAutoCAD ExportOptionsJPEG \
+     ExportOptionsPNG24 ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
