@@ -748,7 +748,7 @@ angles and `none`, so `calc()`, `var()`, `color-mix()`, relative color syntax an
 errors, as are named colors and the functions and color spaces not listed above (`hwb()`, `lab()`, `oklab()` and
 `color()`). A hex color, `rgb()` and `hsl()` give their numbers as the document's RGB numbers, as
 `#rrggbb` does in every command, and `oklch()` gives its sRGB color, with the chroma lowered to fit sRGB as OKLCH
-Sliders lower it; `oklch()` is an error while the working RGB space is not sRGB. Values are clamped where CSS clamps
+Sliders lower it; `oklch()` is an error while the active document's RGB space (its assigned profile, else the working RGB space) is not sRGB. Values are clamped where CSS clamps
 them when it parses them (red, green and blue to 0 to 255, the alpha to 0 to 1, a negative saturation to 0, OKLCH
 lightness to 0 to 1 and a negative chroma to 0), and an `hsl()` color's red, green or blue outside 0 to 255 is
 clipped. An `hsl()` color whose saturation and lightness are so large that a channel overflows to an infinity is an
@@ -772,7 +772,7 @@ rgb(), CSS hsl(), CSS oklch() or CMYK Values, the six `color.format` notations, 
 edits when it has one (whether or not that row shows), and the status bar shows what was copied. Its items are the
 menu commands `ui.colorWheel.copy.hex`, `ui.colorWheel.copy.hexAlpha`, `ui.colorWheel.copy.rgb`,
 `ui.colorWheel.copy.hsl`, `ui.colorWheel.copy.oklch` and `ui.colorWheel.copy.cmyk`, which answer `{text}`, or null without a solid color. They are gray without a solid color, and CSS oklch() is also gray
-while the working RGB space is not sRGB. Without a window to copy through, an item puts nothing on the clipboard and
+while the active document's RGB space is not sRGB. Without a window to copy through, an item puts nothing on the clipboard and
 leaves the status bar as it was, and still answers `{text}`.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
