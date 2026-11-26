@@ -680,9 +680,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
