@@ -176,6 +176,7 @@ mod scalestrokes;
 mod script_console;
 mod script_dialogs;
 mod script_dollar;
+mod script_dom;
 mod script_engines;
 mod script_folder;
 mod script_include;

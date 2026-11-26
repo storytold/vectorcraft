@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
+            "{keepEmpty?: bool (keep a compound path left with no members)} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
             has_anchors,
             delete_anchors
         ),
@@ -1731,6 +1731,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: bool) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1748,12 +1749,16 @@ pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: boo
             .copied()
             .filter(|id| !d.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
             .collect();
-        // The compound paths that hold a deleted object; one left with no members goes too.
-        let compounds: BTreeSet<NodeId> = whole_ids
-            .iter()
-            .chain(sel.keys())
-            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
-            .collect();
+        // The compound paths that hold a deleted object; one left with no members goes too, unless `keepEmpty`.
+        let compounds: BTreeSet<NodeId> = if keep_empty {
+            BTreeSet::new()
+        } else {
+            whole_ids
+                .iter()
+                .chain(sel.keys())
+                .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+                .collect()
+        };
         if !whole_ids.is_empty() {
             d.remove_many(&whole_ids)?;
         }
