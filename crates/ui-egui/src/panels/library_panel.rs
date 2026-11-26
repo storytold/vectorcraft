@@ -588,8 +588,8 @@ pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
 // PLAN: the zoom slider can set a zoom the five views do not name; it saves as the nearest of them.
 fn saved_view(view: PresetView, zoom: f64) -> View {
     match (view == PresetView::List, zoom) {
-        (false, z) if z < 0.625 => View::SmallThumb,
-        (false, z) if z < 0.875 => View::MediumThumb,
+        (false, z) if z < 7.0 / 24.0 => View::SmallThumb,
+        (false, z) if z < 0.5 => View::MediumThumb,
         (false, _) => View::LargeThumb,
         (true, z) if z < 0.75 => View::SmallList,
         (true, _) => View::LargeList,

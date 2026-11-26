@@ -117,8 +117,74 @@ pub struct Services {
     pub print: Option<Box<dyn print::PrintService>>,
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<craft::menu::NativeMenu>,
+    /// The density of the display that shows most of the main window, in the window's points
+    /// (before UI Scaling) per inch, from the physical size the system reports for that display.
+    /// The desktop host keeps it current as the window moves between displays. With Display Print
+    /// Size at 100% Zoom, 100% shows one document inch in this many points ([`crate::state::print_ppi`]).
+    /// [`ScreenPpi::Unread`] on the web and until the host's first reading; a display that
+    /// reports no size reads as `Read(None)`. Either way an inch then takes 96 points. The views
+    /// the main window shows count from it; a document floating in an OS window of its own counts
+    /// from the display that shows that window ([`Self::screens`]).
+    pub screen_ppi: ScreenPpi,
+    /// The connected displays with their densities, kept current by the desktop host while
+    /// Display Print Size at 100% Zoom is on, for the document windows floating in OS windows of
+    /// their own ([`screen_ppi_at`]). Empty on the web.
+    pub screens: Vec<ScreenDensity>,
     /// The text Help › Copy Troubleshooting Info copies (desktop: the platform, the graphics
     /// processor, recent commands and frame times, and the hang reports of this session and the
     /// one before). Without it the command copies the version only ([`crate::troubleshooting`]).
     pub troubleshooting: Option<Box<dyn Fn() -> String>>,
+}
+
+/// The density of a display as far as the host has read it ([`Services::screen_ppi`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ScreenPpi {
+    /// Not read yet.
+    #[default]
+    Unread,
+    /// Read: its points to an inch, `None` for a display that reports no physical size.
+    Read(Option<f64>),
+}
+
+impl ScreenPpi {
+    /// The points to an inch, when the display was read and reports a size.
+    pub fn ppi(self) -> Option<f64> {
+        match self {
+            Self::Read(ppi) => ppi,
+            Self::Unread => None,
+        }
+    }
+}
+
+/// A connected display ([`Services::screens`]): where it is on the desktop, in the physical pixels
+/// winit gives its position and size in, its scale factor, and its density in points (at that
+/// scale factor) per inch: `Read(None)` where the system reports no physical size for it, and
+/// unread while it has not answered.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenDensity {
+    /// Left, top, width and height in physical pixels.
+    pub rect: [i32; 4],
+    pub scale: f64,
+    pub ppi: ScreenPpi,
+}
+
+/// The density of the display that shows most of the viewport `ctx` draws, from `screens`: of the
+/// displays at the viewport's scale factor, the one whose rect covers the largest part of the
+/// viewport, in the physical pixels of that scale factor. On macOS each display's pixels are its
+/// points times its own scale factor, so displays of different scales can overlap in those pixels
+/// and the scale tells them apart. `None` when the viewport reports no position (Wayland, the web)
+/// or covers no display.
+pub fn screen_ppi_at(screens: &[ScreenDensity], ctx: &egui::Context) -> Option<ScreenPpi> {
+    let (rect, ppp, native) = ctx.input(|i| (i.viewport().outer_rect, i.pixels_per_point(), i.viewport().native_pixels_per_point));
+    let (rect, ppp, native) = (rect?, f64::from(ppp), f64::from(native?));
+    let [l, t, r, b] = [rect.left(), rect.top(), rect.right(), rect.bottom()].map(|v| f64::from(v) * ppp);
+    if ![l, t, r, b].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let covered = |s: &ScreenDensity| {
+        let [x, y, w, h] = s.rect.map(f64::from);
+        ((r.min(x + w) - l.max(x)).max(0.0)) * ((b.min(y + h) - t.max(y)).max(0.0))
+    };
+    let best = screens.iter().filter(|s| (s.scale - native).abs() < 1e-3).map(|s| (covered(s), s)).max_by(|a, b| a.0.total_cmp(&b.0))?;
+    (best.0 > 0.0).then_some(best.1.ppi)
 }

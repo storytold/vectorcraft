@@ -222,6 +222,8 @@ impl Session {
         self.deactivate_tool(view)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
+        // A pick is armed for a stop after its tool is chosen (`note_stop_pick`).
+        self.stop_pick = None;
         if let Some(selection) = text_selection {
             self.tool.set_option("textSelection", &selection);
         }
@@ -460,7 +462,7 @@ impl Session {
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
-        let lent_by_bucket = self.lent_by_bucket();
+        let lent_by_painter = self.lent_by_painter();
         let Some(lender) = self.lender.take() else { return Ok(()) };
         // The points the lent tool left picked go back to the tool it was lent to when that tool
         // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
@@ -470,12 +472,12 @@ impl Session {
             .then(|| self.tool.options().get("meshPoints").cloned())
             .flatten()
             .filter(|p| lender.options().get("meshPoints") != Some(p));
-        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
-        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
-        let outer_bucket = self.back_to_bucket;
-        self.back_to_bucket |= lent_by_bucket;
+        // The lent tool's last actions (a drag it cancels or keeps) still count as those of the tool
+        // that lent it when that tool paints with the chosen colors ([`Session::tool_paints`]).
+        let outer_painter = self.back_to_painter;
+        self.back_to_painter = self.back_to_painter.or(lent_by_painter);
         let r = self.deactivate_tool(view);
-        self.back_to_bucket = outer_bucket;
+        self.back_to_painter = outer_painter;
         self.keep_tool_settings();
         self.tool = lender;
         // Back with the Selection or Group Selection tool, a symbol part the lent Direct
@@ -524,12 +526,17 @@ impl Session {
                 }
             }
         }
-        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity
+        // and Smoothness.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
             && wanted("smooth")
-            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+            && let Some(saved) = prefs.tool_settings.get("smooth")
         {
-            t.set_option("smoothFidelity", v);
+            for (key, alt) in [("fidelity", "smoothFidelity"), ("smoothness", "smoothSmoothness")] {
+                if let Some(v) = saved.get(key) {
+                    t.set_option(alt, v);
+                }
+            }
         }
     }
 
@@ -567,6 +574,7 @@ impl Session {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
         let smart_guides = view.smart_guides && !view.pixel_preview;
+        let (pick_stop, armed_for_tool) = self.pick_stop();
         let cx = ToolContext {
             doc: &st.doc,
             ruler_origin: st.doc.ruler_origin_for(view.artboard),
@@ -592,7 +600,8 @@ impl Session {
             corner_widgets: view.corner_widgets,
             shape_widgets: view.shape_widgets,
             fill_active: self.fill_active,
-            gradient_stop: self.selected_stop(),
+            gradient_stop: pick_stop,
+            tool_paints: self.tool_paints(!self.fill_active) || armed_for_tool,
             appearance_item: self.appearance_item(),
             constrain_angle: self.prefs.constrain_angle,
             keyboard_increment: self.prefs.keyboard_increment,
@@ -1492,6 +1501,7 @@ impl Session {
         let before_press = self.options_before_press_set();
         let sets_pressed = self.press_taken_by(self.tool.id());
         self.tool.set_option(key, v);
+        self.note_stop_pick(key, self.tool.id() == "eyedropper");
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
         self.keep_press_set(before_press, |k| sets_pressed && k == key, sets_pressed);
@@ -1579,7 +1589,33 @@ impl Session {
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
         self.keep_press_set(before_press, |k| sets_pressed && values.contains_key(k), sets_pressed);
+        // The Eyedropper waiting for a Cmd-drag it lent a selection tool to is armed as the active one.
+        if (active || lender) && values.contains_key("stop") {
+            let eyedropper = id.unwrap_or(self.tool.id()) == "eyedropper";
+            self.note_stop_pick("stop", eyedropper);
+        }
         out
+    }
+
+    /// After option `key` of the active tool, or of the tool waiting for a Cmd-drag it lent, is set
+    /// (`eyedropper`: that tool is the Eyedropper): an Eyedropper armed to sample into a stop of the
+    /// gradient a tool paints with (`stop`) keeps whose gradient that is ([`Session::stop_pick`]).
+    fn note_stop_pick(&mut self, key: &str, eyedropper: bool) {
+        if key == "stop" && eyedropper {
+            let selected = self.selected_stop().is_some();
+            self.stop_pick = self.gradient_stop.map(|(_, owner)| owner).filter(|owner| selected && owner.painter().is_some());
+        }
+    }
+
+    /// The stop an armed Eyedropper pick samples into ([`ToolContext::gradient_stop`]): the
+    /// selected one, and for a pick armed for a stop of the gradient a tool paints with
+    /// ([`Session::stop_pick`]) only a stop still selected on that gradient.
+    fn pick_stop(&self) -> (Option<usize>, bool) {
+        let armed = self.stop_pick.filter(|owner| self.tool.returns_to().is_some_and(|id| owner.painter() == Some(id)));
+        match armed {
+            Some(owner) => (self.selected_stop().filter(|_| self.gradient_stop.is_some_and(|(_, o)| o == owner)), true),
+            None => (self.selected_stop(), false),
+        }
     }
 
     /// The tool that took the press under way: the active tool, or the tool that lent a selection
@@ -1749,10 +1785,16 @@ impl Session {
             self.put_back_interaction();
         }
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
-        let outer_bucket = self.back_to_bucket;
-        // The Eyedropper's sample into a stop of the Live Paint Bucket's gradient, which switches back to the bucket.
-        self.back_to_bucket |=
-            self.tool.id() == "eyedropper" && acts.iter().any(|a| matches!(a, Action::SwitchTool(t) if t == crate::cmd::LIVE_PAINT_BUCKET));
+        let outer_painter = self.back_to_painter;
+        // The Eyedropper's sample into a stop of the gradient of a tool that paints with the chosen
+        // colors (the Live Paint Bucket, the Shape Builder), which switches back to that tool.
+        if self.tool.id() == "eyedropper" {
+            let back = acts.iter().find_map(|a| match a {
+                Action::SwitchTool(t) => crate::cmd::painting_tool_of(t, false).or_else(|| crate::cmd::painting_tool_of(t, true)),
+                _ => None,
+            });
+            self.back_to_painter = self.back_to_painter.or(back);
+        }
         // A preview that settling applied (typing kept as its own step before a drag begins) shows
         // its warning in the status bar, as the tool's own commit shows its preview's.
         let r = if !outer && self.depth == 0 {
@@ -1762,7 +1804,7 @@ impl Session {
             self.apply_tool_actions(acts)
         };
         self.in_tool_actions = outer;
-        self.back_to_bucket = outer_bucket;
+        self.back_to_painter = outer_painter;
         if !outer && self.depth == 0 {
             self.trim_histories();
         }

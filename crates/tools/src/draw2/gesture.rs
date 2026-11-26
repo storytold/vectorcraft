@@ -85,6 +85,9 @@ const BAND_WORK_PER_CALL: usize = 20_000;
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
 /// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
+/// The Smooth tool's Smoothness (percent) until Smooth Tool Options sets another: the strength
+/// `path.smoothRegion` smooths with when a drag leaves it out. VectorCraft's own value.
+const SMOOTH_SMOOTHNESS: f64 = 50.0;
 /// How far the pointer goes from the press point, in screen pixels, before a Shift-drag of the
 /// Eraser takes the 45° step it lies nearest to.
 const ERASER_SHIFT_PX: f64 = 3.0;
@@ -146,9 +149,10 @@ pub struct GestureTool {
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
-    /// Blob Brush and Eraser Tool Options' Size mode: Fixed or Pressure for the Blob Brush (with
-    /// Pressure the tip is `size` − `size_variation` wide at the lightest pen pressure and `size` +
-    /// `size_variation` at the heaviest), and any [`Variation`] for the Eraser.
+    /// Blob Brush and Eraser Tool Options' Size mode: Fixed, Pressure or Stylus Wheel for the Blob
+    /// Brush (with Pressure the tip is `size` − `size_variation` wide at the lightest pen pressure
+    /// and `size` + `size_variation` at the heaviest, and with Stylus Wheel from one end of an
+    /// airbrush pen's finger wheel travel to the other), and any [`Variation`] for the Eraser.
     pub size_mode: Variation,
     /// Blob Brush and Eraser Tool Options' Size Variation, in points.
     pub size_variation: f64,
@@ -182,6 +186,11 @@ pub struct GestureTool {
     /// The Smooth tool's Fidelity (screen pixels), used when Alt switches the Pencil, Paintbrush or
     /// Blob Brush to Smooth. The engine sets it from Smooth Tool Options (`smoothFidelity`).
     smooth_fidelity: f64,
+    /// Smooth Tool Options' Smoothness (percent, 0 to 100): how strongly a Smooth drag smooths the
+    /// path before it is refitted. The Smooth tool's own (`smoothness`), and for the Pencil,
+    /// Paintbrush and Blob Brush the one an Alt smoothing drag uses, which the engine sets from
+    /// Smooth Tool Options (`smoothSmoothness`).
+    smoothness: f64,
     /// Active drag is smoothing with the Pencil, Paintbrush or Blob Brush (Alt held).
     smoothing: bool,
     /// The pointer has moved from the press point, by any distance (a move too short to add a
@@ -907,6 +916,7 @@ impl GestureTool {
             live_preview: true,
             live_fit: true,
             smooth_fidelity: SMOOTH_FIDELITY,
+            smoothness: SMOOTH_SMOOTHNESS,
             smoothing: false,
             moved: false,
             marquee: false,
@@ -1001,12 +1011,13 @@ impl GestureTool {
         }
     }
 
-    /// Give the Eraser's last stroke sample the pen's tilt and rotation of the event `ev`, a drag
-    /// within a pixel of that sample that adds none: a pen turned or tilted in place turns its tip
-    /// there, in the outline and in what the release erases. The sample keeps its pressure, which
-    /// the area outline of the drag was built with, and its pose when `ev` reads none.
+    /// Give the Eraser's or the Blob Brush's last stroke sample the pen's tilt, rotation and wheel
+    /// of the event `ev`, a drag within a pixel of that sample that adds none: a pen turned or
+    /// tilted in place, or its wheel turned there, changes its tip there, in the outline and in
+    /// what the release erases or paints. The sample keeps its pressure, which the area outline of
+    /// the drag was built with, and its pose when `ev` reads none.
     fn refresh_last_pose(&mut self, ev: &PointerEvent) {
-        if self.id != "eraser" || self.poses.len() != self.points.len() || ev.pen.is_none() {
+        if !matches!(self.id, "eraser" | "blobBrush") || self.poses.len() != self.points.len() || ev.pen.is_none() {
             return;
         }
         let pose = ev.pen.map(PenPose::sanitized);
@@ -1126,8 +1137,8 @@ impl GestureTool {
     }
 
     /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
-    /// `size` across at its angle and roundness (the Eraser's as the pen varies them while it
-    /// erases, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
+    /// `size` across at its angle and roundness (as the pen varies them while it erases or
+    /// paints, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
     /// any art. Precise cursors show only the crosshair, and smoothing shows no tip.
     fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
@@ -1275,7 +1286,7 @@ impl GestureTool {
         outline.filter(|o| !o.elements().is_empty())
     }
 
-    /// Does the tool's Size take Fixed or Pressure (the Blob Brush and the Eraser)?
+    /// Does the tool's Size take a variation mode (the Blob Brush and the Eraser)?
     fn varies_size(&self) -> bool {
         matches!(self.id, "blobBrush" | "eraser")
     }
@@ -1365,14 +1376,23 @@ impl GestureTool {
     /// value on a mode that follows the pen goes from the value less its Variation to the value
     /// plus it as the pen reads now (the pressure once the pen has pressed less than fully, the
     /// tilt, rotation and wheel of the last point, and the bearing of the last point the pen leaned 1° or
-    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
-    /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
+    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed, a
+    /// pen that gives no reading and a reading the release does not send (a mode set during the
+    /// drag), the values themselves. The Blob Brush's size follows the pen the
+    /// same way while it paints, as `path.blob` reads the stroke, and its angle and roundness are
+    /// its own values (a roundness of 0 included).
     fn tip_now(&self) -> [f64; 3] {
-        if self.id != "eraser" || !self.active {
+        if !matches!(self.id, "eraser" | "blobBrush") || !self.active {
             return [self.angle, self.roundness, self.size];
         }
-        let pressure = if self.light { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        self.tip_for(pressure, self.poses.last().copied().flatten(), self.bearing)
+        // What the release does not read ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½.
+        let pressure = if self.reads_pressures() { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        let (pose, bearing) = if self.reads_poses() { (self.poses.last().copied().flatten(), self.bearing) } else { (None, None) };
+        let tip = self.tip_for(pressure, pose, bearing);
+        if self.id == "blobBrush" {
+            return [self.angle, self.roundness, tip[2]];
+        }
+        tip
     }
 
     /// The tip's angle, roundness and size for a pen at `pressure` held as `pose`, leaning toward
@@ -1563,8 +1583,9 @@ impl GestureTool {
 
     /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
     /// redraws a selected path is shown as it is drawn, joined at its start to the point of the
-    /// path nearest to it, with no fill, and leaves the path and the selection as they are: where
-    /// the stroke ends is only known at the release, which redraws the path (`finish`).
+    /// path nearest to it, with no fill, on top in any drawing mode, and leaves the path and the
+    /// selection as they are: where the stroke ends is only known at the release, which redraws
+    /// the path (`finish`).
     fn drawing_params(&self, cx: &ToolContext) -> Value {
         let mut v = self.freehand_params(cx, false);
         let Some((id, _)) = self.redraw else { return v };
@@ -1573,7 +1594,7 @@ impl GestureTool {
         }
         v["fill"] = json!(false);
         v["keepSelected"] = json!(false);
-        v["leaveSelection"] = json!(true);
+        v["preview"] = json!(true);
         let on = self.points.first().and_then(|&p| cx.doc.node(id)?.path_data()?.nearest(p)).map(|n| n.3);
         if let (Some(on), Some(pts)) = (on, v["points"].as_array_mut()) {
             pts.insert(0, json!([on.x, on.y]));
@@ -1590,7 +1611,7 @@ impl GestureTool {
             if pts.len() >= 2 && has_selected_smooth_path(cx) {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.smooth_fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.smooth_fidelity), "smoothness": self.smoothness}),
                 )];
             }
             return vec![];
@@ -1655,7 +1676,7 @@ impl GestureTool {
             "smooth" if pts.len() >= 2 && has_selected_smooth_path(cx) => {
                 vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.fidelity), "smoothness": self.smoothness}),
                 )]
             }
             "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": reach(cx, 8.0)}))],
@@ -2094,7 +2115,7 @@ impl Tool for GestureTool {
                     "closeWithin": self.close_within
                 })
             }
-            "smooth" => json!({"fidelity": self.fidelity}),
+            "smooth" => json!({"fidelity": self.fidelity, "smoothness": self.smoothness}),
             "blobBrush" => {
                 json!({
                     "fidelity": self.fidelity,
@@ -2125,10 +2146,10 @@ impl Tool for GestureTool {
         match key {
             "fidelity" => self.fidelity = v.as_f64().unwrap_or(self.fidelity).clamp(super::min_fidelity(self.id), 100.0),
             "size" => self.size = v.as_f64().unwrap_or(self.size).clamp(0.1, 1000.0),
-            // The Blob Brush's Size is Fixed or Pressure; the Eraser's Angle, Roundness and Size
-            // take any mode.
+            // The Blob Brush's Size is Fixed, Pressure or Stylus Wheel; the Eraser's Angle,
+            // Roundness and Size take any mode.
             "sizeMode" if self.varies_size() => match v.as_str().and_then(Variation::parse) {
-                Some(m) if self.id == "eraser" || matches!(m, Variation::Fixed | Variation::Pressure) => self.size_mode = m,
+                Some(m) if self.id == "eraser" || super::BLOB_SIZE_MODES.contains(&m) => self.size_mode = m,
                 _ => {}
             },
             "angleMode" if self.id == "eraser" => self.angle_mode = v.as_str().and_then(Variation::parse).unwrap_or(self.angle_mode),
@@ -2147,6 +2168,11 @@ impl Tool for GestureTool {
             "smoothFidelity" if matches!(self.id, "pencil" | "paintbrush" | "blobBrush") => {
                 self.smooth_fidelity = v.as_f64().unwrap_or(self.smooth_fidelity).clamp(super::min_fidelity("smooth"), 100.0)
             }
+            // A value that is not a number from 0 to 100 leaves the Smoothness as it is.
+            "smoothness" if self.id == "smooth" => self.smoothness = v.as_f64().filter(|n| (0.0..=100.0).contains(n)).unwrap_or(self.smoothness),
+            "smoothSmoothness" if matches!(self.id, "pencil" | "paintbrush" | "blobBrush") => {
+                self.smoothness = v.as_f64().filter(|n| (0.0..=100.0).contains(n)).unwrap_or(self.smoothness)
+            }
             "keepSelected" => self.keep_selected = v.as_bool().unwrap_or(self.keep_selected),
             "mergeOnlySelection" => self.merge_only_selection = v.as_bool().unwrap_or(self.merge_only_selection),
             "editWithin" => self.edit_within = v.as_f64().unwrap_or(self.edit_within).clamp(0.0, 100.0),
@@ -2154,17 +2180,19 @@ impl Tool for GestureTool {
             _ => {}
         }
     }
-    /// The options the tool shows ([`Self::options`]), and the Smooth tool's Fidelity that the
-    /// Pencil, Paintbrush and Blob Brush smooth with while Alt is held (`smoothFidelity`).
+    /// The options the tool shows ([`Self::options`]), and the Smooth tool's Fidelity and Smoothness
+    /// that the Pencil, Paintbrush and Blob Brush smooth with while Alt is held (`smoothFidelity`,
+    /// `smoothSmoothness`).
     fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
         use crate::option_check as c;
-        let smooth_store = key == "smoothFidelity" && matches!(self.id, "pencil" | "paintbrush" | "blobBrush");
+        let smooth_store = matches!(key, "smoothFidelity" | "smoothSmoothness") && matches!(self.id, "pencil" | "paintbrush" | "blobBrush");
         if !smooth_store && self.options().get(key).is_none() {
             return Err(c::unknown(key));
         }
         match key {
             "fidelity" => c::number(key, v, super::min_fidelity(self.id), 100.0),
             "smoothFidelity" => c::number(key, v, super::min_fidelity("smooth"), 100.0),
+            "smoothness" | "smoothSmoothness" => c::number(key, v, 0.0, 100.0),
             "size" => c::number(key, v, 0.1, 1000.0),
             "sizeVariation" => c::number(key, v, 0.0, 1000.0),
             "angle" => c::number(key, v, -180.0, 180.0),
@@ -2172,9 +2200,9 @@ impl Tool for GestureTool {
             "editWithin" | "closeWithin" => c::number(key, v, 0.0, 100.0),
             "angleVariation" => c::number(key, v, 0.0, 180.0),
             "roundnessVariation" => c::number(key, v, 0.0, 100.0),
-            // The Blob Brush's Size is Fixed or Pressure; the Eraser's Angle, Roundness and Size
-            // take any mode (`set_option`).
-            "sizeMode" if self.id != "eraser" => c::one_of(key, v, &[Variation::Fixed.id(), Variation::Pressure.id()]),
+            // The Blob Brush's Size is Fixed, Pressure or Stylus Wheel; the Eraser's Angle,
+            // Roundness and Size take any mode (`set_option`).
+            "sizeMode" if self.id != "eraser" => c::one_of(key, v, &super::BLOB_SIZE_MODES.map(Variation::id)),
             "sizeMode" | "angleMode" | "roundnessMode" => c::one_of(key, v, &Variation::ALL.map(Variation::id)),
             "fill" | "altSmooth" | "livePreview" | "liveFit" | "keepSelected" | "mergeOnlySelection" => c::boolean(key, v),
             _ => Err(c::unknown(key)),
