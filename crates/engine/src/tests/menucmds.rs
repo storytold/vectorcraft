@@ -2377,7 +2377,8 @@ fn find_and_replace_leaves_type_on_a_locked_artboard() {
 
 /// Find and Replace that replaces each match with the text it is (`CAT` found in `cat`, ignoring
 /// case, and replaced by `cat`) records no undo step: the step to redo stays and the document stays
-/// unmodified. It still replies with the count. A replacement that changes the text is one undo step.
+/// unmodified. It still replies with the count, and with no match replaced. A replacement that
+/// changes the text is one undo step.
 #[test]
 fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     let mut s = session();
@@ -2385,9 +2386,9 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     select_with_a_step_to_redo(&mut s, &[a]);
     let before = history(&s);
     assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "CAT", "replace": "cat"})).unwrap(), json!({"count": 2, "replaced": 0}));
     assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
-    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
+    assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2, "replaced": 2}));
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
 }
 
@@ -2424,10 +2425,188 @@ fn find_next_cycles_through_text_objects() {
     let _ = text(&mut s, "banana");
     let c = text(&mut s, "pineapple");
     s.execute("select.none", &json!({})).unwrap();
-    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), a);
+    // From the top of the stacking order down, then round again.
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "APPLE"})).unwrap()), c);
+    assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), c);
+    // A selection that starts with a shape goes on after its first type object.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    sel(&mut s, &[shape, c]);
     assert_eq!(id_of(&s.execute("edit.findNext", &json!({"find": "apple"})).unwrap()), a);
     assert!(s.execute("edit.findNext", &json!({"find": "zzz"})).unwrap()["id"].is_null());
+}
+
+/// The match `r` (an `edit.findNext` result) as (object, start, end, index, count).
+fn found(r: &Value) -> (u64, u64, u64, u64, u64) {
+    let n = |k: &str| r[k].as_u64().unwrap_or_else(|| panic!("no `{k}` in {r}"));
+    (n("id"), n("start"), n("end"), n("index"), n("count"))
+}
+
+/// Find Next steps through the matches one by one when each call is given the match before it:
+/// the objects from the top of the stacking order down, each object's matches in reading order,
+/// and round again after the last. Search Backwards visits them the other way. Each match is
+/// returned with its bytes and its object is selected; nothing is recorded for undo.
+#[test]
+fn find_next_steps_through_the_matches_in_both_directions() {
+    let mut s = session();
+    let bottom = text(&mut s, "cat éa cat");
+    let _ = text(&mut s, "dog");
+    let top = text(&mut s, "a cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let before = history(&s);
+    let step = |s: &mut Session, from: &Value, backwards: bool| {
+        let from = if from.is_null() { Value::Null } else { json!({"id": from["id"], "start": from["start"], "end": from["end"]}) };
+        s.execute("edit.findNext", &json!({"find": "cat", "from": from, "backwards": backwards})).unwrap()
+    };
+    // "é" is two bytes, so the second match of the bottom object is at bytes 8..11.
+    let forward = [(top.0, 2, 5, 1, 3), (bottom.0, 0, 3, 2, 3), (bottom.0, 8, 11, 3, 3), (top.0, 2, 5, 1, 3)];
+    let mut at = Value::Null;
+    for want in forward {
+        at = step(&mut s, &at, false);
+        assert_eq!((found(&at), selected(&s), at["selected"].clone()), (want, vec![NodeId(want.0)], json!(true)));
+    }
+    let backward = [(bottom.0, 8, 11, 3, 3), (bottom.0, 0, 3, 2, 3), (top.0, 2, 5, 1, 3), (bottom.0, 8, 11, 3, 3)];
+    s.execute("select.none", &json!({})).unwrap();
+    let mut at = Value::Null;
+    for want in backward {
+        at = step(&mut s, &at, true);
+        assert_eq!((found(&at), selected(&s)), (want, vec![NodeId(want.0)]));
+    }
+    assert_eq!(history(&s), before, "finding is no undo step");
+    // A `from` in an object the search does not visit starts at the first match.
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": 999_999, "start": 0, "end": 0}})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // So does a null `from`, with a type object selected.
+    sel(&mut s, &[top]);
+    let r = s.execute("edit.findNext", &json!({"find": "cat", "from": null})).unwrap();
+    assert_eq!(found(&r), (top.0, 2, 5, 1, 3));
+    // Nothing found: no match, and the selection stays.
+    let r = s.execute("edit.findNext", &json!({"find": "zebra"})).unwrap();
+    assert_eq!((r, selected(&s)), (json!({"id": null, "count": 0}), vec![top]));
+}
+
+/// Check Hidden Layers and Check Locked Layers: Find Next and Find and Replace leave the type of
+/// a hidden layer and of a locked layer alone unless the switch for it is on. A match on such a
+/// layer is returned without being selected. A hidden or locked object keeps its type out with
+/// the switches on.
+#[test]
+fn find_and_replace_reach_hidden_and_locked_layers_only_when_asked() {
+    for (prop, switch, other) in [("visible", "hiddenLayers", "lockedLayers"), ("locked", "lockedLayers", "hiddenLayers")] {
+        let mut s = session();
+        let open = text(&mut s, "cat one");
+        let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+        let closed = text(&mut s, "cat two");
+        let object = text(&mut s, "cat three");
+        let off = |id: NodeId| if prop == "visible" { json!({"id": id.0, "visible": false}) } else { json!({"id": id.0, "locked": true}) };
+        s.execute("object.setProps", &off(object)).unwrap();
+        s.execute("layer.setProps", &off(layer)).unwrap();
+        sel(&mut s, &[open]);
+        // Without the switch, and with only the other one, the one reachable match is found.
+        for p in [json!({"find": "cat"}), json!({"find": "cat", other: true})] {
+            let r = s.execute("edit.findNext", &p).unwrap();
+            assert_eq!(found(&r), (open.0, 0, 3, 1, 1), "{prop} {p}");
+        }
+        // With it, the layer's type is searched (it is above, so it comes first) and not selected.
+        s.execute("select.none", &json!({})).unwrap();
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((closed.0, 0, 3, 1, 2), json!(false), vec![]), "{prop}");
+        let r = s.execute("edit.findNext", &json!({"find": "cat", switch: true, "from": {"id": closed.0, "start": 0, "end": 3}})).unwrap();
+        assert_eq!((found(&r), r["selected"].clone(), selected(&s)), ((open.0, 0, 3, 2, 2), json!(true), vec![open]), "{prop}");
+        // Replace All: the same reach.
+        let n = undo_len(&s);
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", other: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, open), plain(&s, closed), plain(&s, object)), ("dog one".into(), "cat two".into(), "cat three".into()), "{prop}");
+        assert_eq!(
+            s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", switch: true})).unwrap(),
+            json!({"count": 1, "replaced": 1}),
+            "{prop}"
+        );
+        assert_eq!((plain(&s, closed), plain(&s, object), undo_len(&s)), ("dog two".into(), "cat three".into(), n + 2), "{prop}");
+    }
+}
+
+/// Replace changes one match, the bytes Find Next returned, as one undo step, and returns the
+/// replacement's bytes to go on from. Bytes that are no match are refused, and a match that
+/// already reads as the replacement is left with no undo step.
+#[test]
+fn replace_match_replaces_the_one_match_found() {
+    let mut s = session();
+    let t = text(&mut s, "cat cat Cat");
+    s.execute("select.none", &json!({})).unwrap();
+    let first = s.execute("edit.findNext", &json!({"find": "cat"})).unwrap();
+    assert_eq!(found(&first), (t.0, 0, 3, 1, 3));
+    let n = undo_len(&s);
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "horse", "id": t.0, "start": 0, "end": 3})).unwrap();
+    assert_eq!(r, json!({"id": t.0, "start": 0, "end": 5, "replaced": true}));
+    assert_eq!((plain(&s, t), undo_len(&s)), ("horse cat Cat".to_string(), n + 1));
+    // Replace & Find: on from the replacement, so text put in is not searched again.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "a cat", "id": t.0, "start": 6, "end": 9})).unwrap();
+    let next = s.execute("edit.findNext", &json!({"find": "cat", "from": {"id": r["id"], "start": r["start"], "end": r["end"]}})).unwrap();
+    assert_eq!((plain(&s, t), found(&next)), ("horse a cat Cat".to_string(), (t.0, 12, 15, 2, 2)));
+    // Match Case decides what a match is.
+    let shape = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let before = (history(&s), plain(&s, t));
+    for (p, want) in [
+        (json!({"find": "cat", "replace": "x", "matchCase": true, "id": t.0, "start": 12, "end": 15}), "at bytes 12..15 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 1, "end": 4}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 4, "end": 1}), "at bytes 1..4 of object"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": 0}), "missing `end`"),
+        (json!({"find": "cat", "replace": "x", "start": 0, "end": 3}), "missing `id`"),
+        (json!({"find": "cat", "replace": "x", "id": t.0, "start": "0", "end": 3}), "`start` must be a whole number"),
+        (json!({"find": "", "replace": "x", "id": t.0, "start": 0, "end": 3}), "missing `find`"),
+        (json!({"find": "cat", "replace": 5, "id": t.0, "start": 8, "end": 11}), "`replace` must be a string"),
+        (json!({"find": "cat", "replace": "x", "id": shape.0, "start": 0, "end": 3}), "is not text"),
+    ] {
+        let r = s.execute("edit.replaceMatch", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{p}: {r:?}");
+        assert_eq!((history(&s), plain(&s, t)), before, "{p}");
+    }
+    let r = s.execute("edit.replaceMatch", &json!({"find": "cat", "replace": "x", "id": 999_999, "start": 0, "end": 3}));
+    assert!(matches!(r, Err(EngineError::NoNode(NodeId(999_999)))), "{r:?}");
+    // A match that already reads as the replacement: nothing to undo.
+    let r = s.execute("edit.replaceMatch", &json!({"find": "CAT", "replace": "Cat", "id": t.0, "start": 12, "end": 15})).unwrap();
+    assert_eq!((r, history(&s)), (json!({"id": t.0, "start": 12, "end": 15, "replaced": false}), before.0));
+    // Find Next refuses a `from` that is not a match.
+    for (from, want) in [
+        (json!(5), "missing `id`"),
+        (json!({"id": t.0, "start": 2}), "missing `end`"),
+        (json!({"id": "x", "start": 0, "end": 1}), "`id` must be a whole number"),
+    ] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", "from": from}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(want)), "{from}: {r:?}");
+    }
+    for key in ["backwards", "hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findNext", &json!({"find": "cat", key: "yes"}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+    for key in ["hiddenLayers", "lockedLayers"] {
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", key: 1}));
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == format!("`{key}` must be true or false")), "{key}: {r:?}");
+    }
+}
+
+/// Ruby over text after a replaced match moves with the text, for Replace and for Replace All, as
+/// it does when the text is typed.
+#[test]
+fn find_and_replace_moves_the_ruby_after_a_match() {
+    for all in [false, true] {
+        let mut s = session();
+        let t = text(&mut s, "ab 漢字");
+        sel(&mut s, &[t]);
+        s.execute("type.ruby", &json!({"text": "かんじ", "start": 3, "end": 9})).unwrap();
+        if all {
+            s.execute("edit.findReplace", &json!({"find": "ab", "replace": "abcd"})).unwrap();
+        } else {
+            s.execute("edit.replaceMatch", &json!({"find": "ab", "replace": "abcd", "id": t.0, "start": 0, "end": 2})).unwrap();
+        }
+        let NodeKind::Text(tt) = &node(&s, t).kind else { panic!() };
+        assert_eq!((tt.plain_text().as_str(), tt.ruby.first().map(|r| (r.start, r.end))), ("abcd 漢字", Some((5, 11))), "all: {all}");
+    }
 }
 
 /// The Type menu's commands and Find and Replace and Find Next refuse a param of the wrong type, or
@@ -4356,6 +4535,115 @@ fn release_guides_turns_ruler_guides_into_paths() {
     assert_eq!(guides(&s).len(), 1);
 }
 
+/// The direction of a two-anchor line, in degrees from the page's x axis (y down), from 0 to 180.
+fn line_angle(ends: &[(f64, f64)]) -> f64 {
+    let [(x0, y0), (x1, y1)] = ends[..] else { panic!("not a line of two anchors") };
+    (y1 - y0).atan2(x1 - x0).to_degrees().rem_euclid(180.0)
+}
+
+/// A selected ruler guide rotates with `object.rotate` on its own, in one undo step, about the
+/// middle of the line Release Guides makes of it. At 30° it becomes a selected guide path along
+/// the turned line; Transform Again turns that path on, and undo gives the ruler guide back.
+#[test]
+fn rotating_a_ruler_guide_makes_an_angled_guide() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let line = s.doc().unwrap().doc.guide_line(&s.doc().unwrap().doc.ruler_guides()[0]).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(guides(&s).is_empty(), "the ruler guide is replaced");
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert!(selected_guides(&s).is_empty());
+    let (ends, guide) = line_ends(&s, path);
+    assert!(guide, "the path is a guide");
+    let (mid, len) = (line.0.midpoint(line.1), line.0.distance(line.1));
+    let (a, b) = (vectorcraft_geom::Point::new(ends[0].0, ends[0].1), vectorcraft_geom::Point::new(ends[1].0, ends[1].1));
+    assert!(a.midpoint(b).distance(mid) < 1e-6 && close(a.distance(b), len), "it turns about its middle");
+    // Counter-clockwise on the page: the downward vertical line now points 30° toward the right.
+    assert!(close(line_angle(&ends), 60.0), "{ends:?}");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert!(close(line_angle(&line_ends(&s, path).0), 30.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 100.0)]);
+    assert!(s.doc().unwrap().doc.node(path).is_none());
+}
+
+/// A ruler guide turned by a quarter turn stays a ruler guide, horizontal now, through the same
+/// middle; a turn of 0 changes nothing and records no undo step; a copy leaves the guide where it
+/// was; and locked guides cannot be rotated.
+#[test]
+fn ruler_guides_turned_square_stay_ruler_guides() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let mid = {
+        let d = &s.doc().unwrap().doc;
+        let (a, b) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        a.midpoint(b)
+    };
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.rotate", &json!({"angle": 0})).unwrap();
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    // Guides alone have no bounding box angle for `absolute` to set.
+    assert!(s.execute("object.rotate", &json!({"angle": 90, "absolute": true})).is_err());
+    assert_eq!((guides(&s), undo_len(&s)), (vec![(true, 100.0)], n));
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(!vertical && close(pos, mid.y), "{pos}");
+    assert_eq!((selected_guides(&s), undo_len(&s)), (vec![0], n + 1));
+    // A copy at 45° adds a guide path and keeps the ruler guide.
+    s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 1);
+    let [path] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert!(line_ends(&s, path).1);
+    // Locked guides are deselected, and nothing is left to rotate.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert!(s.execute("object.rotate", &json!({"angle": 30})).is_err());
+    assert_eq!(guides(&s).len(), 1);
+}
+
+/// Art and a ruler guide selected together rotate about the center of the art's box and the
+/// guide's line together, and the angled guide survives a save and reopen as a guide path.
+#[test]
+fn a_ruler_guide_rotates_with_the_selected_art() {
+    let mut s = session();
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert_eq!((selected(&s), selected_guides(&s)), (vec![a], vec![0]));
+    let center = {
+        let d = &s.doc().unwrap().doc;
+        let (p, q) = d.guide_line(&d.ruler_guides()[0]).unwrap();
+        Rect::from_points(p, q).union(bounds(&s, a)).center()
+    };
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let [(vertical, pos)] = guides(&s)[..] else { panic!("one ruler guide") };
+    assert!(vertical && close(pos, center.x + (50.0 - center.y)), "{pos}");
+    let turned = bounds(&s, a);
+    assert!(close(turned.center().x, center.x + (150.0 - center.y)), "{turned:?}");
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [path] = paths[..] else { panic!("the guide path is selected with the art") };
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let saved = back.node(path).unwrap();
+    assert!(matches!(&saved.kind, NodeKind::Path { guide: true, path: p, .. } if *p == match &node(&s, path).kind {
+        NodeKind::Path { path, .. } => path.clone(),
+        _ => panic!("not a path"),
+    }));
+    // With anchors selected with Direct Selection, the selected guide turns with them.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert!(!guides(&s)[0].0, "the vertical guide is horizontal now: {:?}", guides(&s));
+}
+
 #[test]
 fn ruler_guides_and_lock() {
     let mut s = session();
@@ -4442,6 +4730,38 @@ fn locked_guides_lock_guide_paths() {
     assert_eq!(selected(&s), vec![b]);
 }
 
+/// A guide path added to the selection after another object stays unselected while Lock Guides is
+/// on, and is selected once it is off.
+#[test]
+fn a_guide_path_added_after_another_object_stays_unselected_while_guides_are_locked() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let g = guide_path(&mut s, 0.0);
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    for id in [b, g] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(selected(&s), vec![b]);
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    s.execute("select.add", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!(selected(&s), vec![b, g]);
+}
+
+/// An id that names no object and a ruler guide's id, added to a selection after another object,
+/// leave the selection as a whole new selection of the same ids would.
+#[test]
+fn a_missing_object_and_a_ruler_guide_added_after_another_object_stay_unselected() {
+    let mut s = session();
+    let (b, c) = (rect(&mut s, 20.0, 20.0, 10.0, 10.0), rect(&mut s, 40.0, 20.0, 10.0, 10.0));
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let missing = NodeId(u64::MAX);
+    s.select(|_, sel| sel.objects.extend([missing, guide, c])).unwrap();
+    assert_eq!(selected(&s), vec![b, c]);
+}
+
 /// A rectangle at (`x`, 0), 10 pt wide, made into a guide; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let g = rect(s, x, 0.0, 10.0, 10.0);
@@ -4471,6 +4791,17 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     s.execute("object.isolate", &json!({"id": g.0})).unwrap();
     s.execute("object.exitIsolation", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![g]);
+}
+
+/// A ruler guide is not isolated, and isolation mode stays as it was.
+#[test]
+fn ruler_guides_are_not_isolated() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    let guide = s.doc().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let err = s.execute("object.isolate", &json!({"id": guide.0})).unwrap_err();
+    assert!(err.to_string().contains("ruler guides can't be isolated"), "{err}");
+    assert_eq!(s.doc().unwrap().isolation, None);
 }
 
 /// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one

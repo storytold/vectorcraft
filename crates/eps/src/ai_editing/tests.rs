@@ -2432,6 +2432,26 @@ fn an_unpainted_paths_transparency_after_a_compound_path_is_its_own() {
     assert_eq!((art[0].opacity, art[0].blend, art[1].opacity, art[1].blend), (1.0, BlendMode::Normal, 0.5, BlendMode::Multiply));
 }
 
+/// A distorted image as deep as the writer goes, in the art of 8 nested opacity masks, is written
+/// as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut n = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::translate((10.0, 10.0)) * Affine::scale(10.0), None);
+    n.set_image_corners([(14.0, 10.0), (36.0, 10.0), (40.0, 30.0), (10.0, 30.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for _ in 0..8 {
+        let mut owner = square(&mut doc, Rect::new(10.0, 10.0, 40.0, 30.0), Color::gray(0.5));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(n, true)));
+        n = owner;
+    }
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::DEEP_DISTORTED), "{:?}", out.warnings);
+    // The samples are binary: count the `XI` lines in the bytes.
+    assert_eq!(out.program.windows(4).filter(|w| w == b"XI\r\n").count(), 1, "the one image");
+}
+
 /// Opacity masks in mask art nested past the limit are left out, not written empty.
 #[test]
 fn opacity_masks_nested_too_deep_are_left_out() {
@@ -3429,6 +3449,133 @@ fn many_gradient_definitions_take_distinct_names_in_order() {
         std::iter::once("(Gradient)".to_string()).chain((2..=302).filter(|&i| i != 3 && i != 7).map(|i| format!("(Gradient {i})"))).collect();
     assert_eq!(names, expected);
     assert_eq!(text, program(&doc));
+}
+
+/// The program written from `doc`, with the gradient and pattern definitions found by comparing
+/// each in turn (`scanned`) or through their indexes.
+fn program_scanned(doc: &Document, scanned: bool) -> Vec<u8> {
+    writer::SCANNED_DEFINITIONS.with(|s| s.set(scanned));
+    let out = export_ai_editing(doc, &opts());
+    writer::SCANNED_DEFINITIONS.with(|s| s.set(false));
+    out.unwrap().program
+}
+
+/// [`gradients_and_patterns`] with more rectangles, each filled with a gradient: `distinct` with
+/// gradients of their own; `reused` with one of `ramps` gradients in turn; one for each of
+/// `swatches` new gradient swatches, linked to it, with the swatch's gradient for every other one
+/// and another gradient for the rest; one with the gradient of an object whose style isn't written
+/// (an even-odd fill with a drop shadow), after that object; and two whose gradients
+/// differ only in the sign of a zero offset.
+fn many_gradients(distinct: u16, reused: u16, ramps: u16, swatches: u16) -> Document {
+    let mut doc = gradients_and_patterns();
+    let two = |a: Color, b: Color| ramp(GradientKind::Linear, &[(0.0, a, 1.0, 0.5), (1.0, b, 1.0, 0.5)]);
+    let shade = |i: u16, n: u16| f32::from(i) / f32::from(n.max(1));
+    let swatch_gradient = |i: u16| two(Color::gray(shade(i, swatches)), Color::rgb(1.0, 0.0, 0.0));
+    let more = (0..swatches)
+        .map(|i| Swatch { name: format!("Ramp {i}"), paint: gradient_paint(swatch_gradient(i), None, None), global: false, spot: false })
+        .collect();
+    swatches_plus(&mut doc, more);
+    let mut paints = vec![];
+    for i in 0..distinct {
+        paints.push(gradient_paint(two(Color::rgb(shade(i, distinct), 0.5, 0.0), Color::rgb(0.0, 0.0, 1.0)), None, None));
+    }
+    for i in 0..reused {
+        paints.push(gradient_paint(two(Color::rgb(0.0, shade(i % ramps.max(1), ramps), 0.5), Color::WHITE), None, None));
+    }
+    for i in 0..swatches {
+        let g = if i % 2 == 0 { swatch_gradient(i) } else { two(Color::gray(shade(i, swatches)), Color::rgb(0.0, 1.0, 0.0)) };
+        paints.push(gradient_paint(g, None, Some(&format!("Ramp {i}"))));
+    }
+    // The reader wouldn't read an even-odd fill with the style, so the style isn't written.
+    let unstyled = two(Color::WHITE, Color::BLACK);
+    let ap = Appearance {
+        items: vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(unstyled.clone(), None, None)))],
+        effects: vec![fx("stylize.dropShadow", serde_json::json!({}))],
+        contents_index: None,
+    };
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    if let NodeKind::Path { rule, .. } = &mut n.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    put(&mut doc, n);
+    paints.push(gradient_paint(unstyled, None, None));
+    let zero = |o: f32| ramp(GradientKind::Linear, &[(o, Color::rgb(0.2, 0.3, 0.4), 1.0, 0.5), (1.0, Color::BLACK, 1.0, 0.5)]);
+    paints.extend([gradient_paint(zero(0.0), None, None), gradient_paint(zero(-0.0), None, None)]);
+    for (i, p) in (0u16..).zip(paints) {
+        let (x, y) = (f64::from(i % 60) * 5.0, f64::from(i / 60 % 40) * 5.0);
+        let n = painted(&mut doc, shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), vec![AppearanceItem::Fill(FillLayer::new(p))]);
+        put(&mut doc, n);
+    }
+    doc
+}
+
+/// Gradient and pattern definitions found through their indexes are those found by comparing each
+/// in turn: the program is the same, byte for byte. A swatch's definition serves a paint linked to
+/// it only with the swatch's gradient; a gradient defined for a style that isn't written leaves its
+/// name free; gradients that differ only in the sign of a zero share a definition.
+#[test]
+fn indexed_definitions_write_the_same_program() {
+    let doc = many_gradients(300, 300, 7, 6);
+    let (indexed, scanned) = (program_scanned(&doc, false), program_scanned(&doc, true));
+    let differ = indexed.iter().zip(&scanned).position(|(a, b)| a != b);
+    assert!(indexed == scanned, "the programs differ from byte {differ:?} ({} and {} bytes)", indexed.len(), scanned.len());
+    let text = String::from_utf8(indexed).unwrap();
+    let names: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("%AI5_BeginGradient: ")).collect();
+    // `gradients_and_patterns`'s 5, then 300 + 7 + 6 swatches' + 3 others linked to swatches + 1
+    // after the style + 1 for both signs of zero.
+    assert_eq!(names.len(), 5 + 300 + 7 + 6 + 3 + 1 + 1, "{names:?}");
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len(), "{names:?}");
+    assert_eq!(text.matches("%AI3_BeginPattern: (Dots)").count(), 1);
+}
+
+/// A gradient paint is matched with the definitions of the same gradient, not with each
+/// definition: 1,000 gradients of their own and 1,000 paints of 10 others take a few comparisons
+/// each, where comparing each definition in turn takes hundreds of thousands.
+#[test]
+fn gradient_definitions_are_found_without_comparing_each() {
+    let doc = many_gradients(1000, 1000, 10, 0);
+    let comparisons = |scanned: bool| {
+        writer::GRADIENT_COMPARISONS.with(|c| c.set(0));
+        program_scanned(&doc, scanned);
+        writer::GRADIENT_COMPARISONS.with(std::cell::Cell::get)
+    };
+    let (indexed, scanned) = (comparisons(false), comparisons(true));
+    assert!(indexed <= 2 * 2010, "{indexed} comparisons through the index");
+    assert!(scanned > 100 * indexed, "{scanned} comparisons scanning, {indexed} through the index");
+}
+
+/// The time to write 5,000 rectangles with gradients of their own, 5,000 with 50 others and 20
+/// gradient swatches, with the definitions found by comparing each in turn and through their
+/// indexes: the median of 7 runs of each, alternating, with the programs compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture gradient_definitions_timing`.
+#[test]
+#[ignore = "timing"]
+fn gradient_definitions_timing() {
+    let doc = many_gradients(5000, 5000, 50, 20);
+    let mut times = [vec![], vec![]];
+    let mut programs: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [true, false].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let program = program_scanned(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            programs[k].get_or_insert(program);
+        }
+    }
+    assert_eq!(programs[0], programs[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("median of 7 runs ({how}):");
+    println!("| definitions found | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["by comparing each", "through the indexes"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
 }
 
 /// A hard edge: a linear gradient whose stops all lie at one place is written from its last stop,
@@ -6267,7 +6414,8 @@ fn instances_the_data_cant_hold_are_written_as_their_art() {
     let layer = doc.layers[0].id;
     doc.insert(Some(layer), usize::MAX, changed).unwrap();
     doc.insert(Some(layer), usize::MAX, plain).unwrap();
-    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART, writer::SYMBOL_OPTIONS]);
+    doc.symbols[0].dynamic = false;
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::SYMBOL_ART]);
     let back = read_back(&doc);
     assert_eq!(kinds(&back), ["art", "instance"]);
     let green = back.layers[0].children().unwrap()[0].clone();
@@ -6763,7 +6911,7 @@ fn symbol_options_and_linked_images_in_symbols_are_reported() {
     let layer = doc.layers[0].id;
     doc.insert(Some(layer), usize::MAX, one).unwrap();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert_eq!(out.warnings, [writer::SYMBOL_OPTIONS, writer::LINKS_EMBEDDED]);
+    assert_eq!(out.warnings, [writer::LINKS_EMBEDDED]);
     let p = program_shown(&doc);
     assert!(p.contains("%AI5_BeginRaster") && !p.contains("%AI5_BeginPlace"), "{p}");
     let back = read_back(&doc);
@@ -9161,6 +9309,57 @@ fn a_masked_copy_nested_too_deep_for_its_mask_keeps_all_of_its_pixels() {
     assert!(whole >= 2, "the first copy and a copy whose mask is left out: {sizes:?}");
 }
 
+/// A distorted image in the art of an opacity mask written at the deepest level a mask takes is
+/// written as its pieces, as an undistorted image there is written whole: the mask keeps its art.
+#[test]
+fn a_distorted_image_in_a_mask_at_the_nesting_limit_keeps_its_pixels() {
+    // GUARDS: the distorted image was written there as an empty group, so the mask hid the object.
+    let masks = |distorted: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut masked = speckled_photo(&mut doc);
+        let mut art = speckled_photo(&mut doc);
+        if distorted {
+            let q = [(40.0, 10.0), (100.0, 10.0), (148.0, 138.0), (20.0, 138.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+            art.set_image_corners(q).unwrap();
+        }
+        masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }));
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(masked) });
+        // Each isolated instance is written as its art, a level deeper: the masked object's mask
+        // art is at the limit.
+        for i in 1..writer::MAX_NEST - 1 {
+            let mut inner = instance(&mut doc, &format!("S{}", i - 1), Affine::IDENTITY);
+            inner.isolate = true;
+            doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(inner) });
+        }
+        let mut outer = instance(&mut doc, &format!("S{}", writer::MAX_NEST - 2), Affine::IDENTITY);
+        outer.isolate = true;
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS), "{:?}", out.warnings);
+        // Each mask read back, by whether its art holds an image.
+        let back = read_back(&doc);
+        let mut found = vec![];
+        let mut look = |n: &Node| {
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut image = false;
+                m.art.walk(&mut |c| image |= matches!(c.kind, NodeKind::Image(_)));
+                found.push(image);
+            }
+        };
+        for l in &back.layers {
+            l.walk(&mut look);
+        }
+        for s in &back.symbols {
+            s.art.walk(&mut look);
+        }
+        found
+    };
+    let (plain, distorted) = (masks(false), masks(true));
+    assert!(!plain.is_empty() && plain.iter().all(|i| *i), "{plain:?}");
+    assert_eq!(distorted, plain);
+}
+
 /// [`warped_photo`] linked to `/Users/someone/Job/art/photo.png`, in folder `art` next to the
 /// document's.
 fn linked_warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {
@@ -10509,8 +10708,9 @@ fn a_brushs_mask_art_isnt_written_as_a_styled_object_with_its_id() {
 }
 
 /// Settings the other tests don't use come back: a Calligraphic brush varying with tilt and bearing,
-/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, and brushes whose
-/// modes aren't given (the reader gives them, the same ones).
+/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, a Calligraphic
+/// and a Scatter brush whose size follows an airbrush pen's finger wheel, and brushes whose modes
+/// aren't given (the reader gives them, the same ones).
 #[test]
 fn more_brush_settings_are_read_back() {
     use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
@@ -10535,8 +10735,20 @@ fn more_brush_settings_are_read_back() {
     let lib = vec![
         Brush { name: "Tilted".into(), kind: BrushKind::Calligraphic(tilted.clone()) },
         Brush { name: "Still".into(), kind: BrushKind::Scatter(scatter.clone()) },
-        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted }) },
-        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter }) },
+        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted.clone() }) },
+        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter.clone() }) },
+        Brush {
+            name: "Wheel nib".into(),
+            kind: BrushKind::Calligraphic(Calligraphic { modes: Some([Variation::Fixed, Variation::Fixed, Variation::StylusWheel]), ..tilted }),
+        },
+        Brush {
+            name: "Wheel spray".into(),
+            kind: BrushKind::Scatter(Scatter {
+                size: (40.0, 160.0),
+                modes: Some([Variation::StylusWheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]),
+                ..scatter
+            }),
+        },
     ];
     let mut doc = Document::new(300.0, 200.0);
     vectorcraft_brush::store(&mut doc, &lib);
@@ -15841,4 +16053,57 @@ fn a_mesh_eight_levels_down_is_written_as_a_mesh() {
     want.transform(Affine::translate((20.0, 20.0)));
     assert_eq!(back.len(), 1, "{back:#?}");
     assert_mesh_exact(mesh_of(&back[0]), &want, "eight levels down");
+}
+
+fn dynamic_doc() -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+    doc.symbols.push(Symbol { dynamic: true, name: "Leaf".into(), art: Arc::new(art) });
+    let layer = doc.layers[0].id;
+    for (x, c) in [(10.0, Color::rgb(1.0, 0.0, 0.0)), (50.0, Color::rgb(0.0, 0.0, 1.0))] {
+        let mut i = instance(&mut doc, "Leaf", Affine::translate((x, 10.0)));
+        i.extras_mut().symbol_overrides = vec![vectorcraft_doc::SymbolOverride { fill: Some(solid(c)), opacity: Some(0.5), ..Default::default() }];
+        doc.insert(Some(layer), usize::MAX, i).unwrap();
+    }
+    let plain = instance(&mut doc, "Leaf", Affine::translate((90.0, 10.0)));
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    doc
+}
+
+#[test]
+fn dynamic_symbols_and_their_instance_changes_survive_a_round_trip() {
+    let doc = dynamic_doc();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::SYMBOL_CHANGES]);
+    let back = read_back(&doc);
+    assert!(back.symbols[0].dynamic);
+    let kids = back.layers[0].children().unwrap();
+    assert!(kids.iter().all(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })));
+    let want: Vec<_> = doc.layers[0].children().unwrap().iter().map(|n| n.extras().symbol_overrides.clone()).collect();
+    let got: Vec<_> = kids.iter().map(|n| n.extras().symbol_overrides.clone()).collect();
+    assert_eq!(got, want);
+    assert_ne!(got[0], got[1]);
+    assert!(got[2].is_empty());
+}
+
+#[test]
+fn static_symbols_write_no_dynamic_entries() {
+    let mut doc = dynamic_doc();
+    doc.symbols[0].dynamic = false;
+    let layer = doc.layers[0].id;
+    for n in doc.layers[0].children().unwrap().to_vec() {
+        doc.remove(n.id).unwrap();
+    }
+    for x in [10.0, 50.0] {
+        let i = instance(&mut doc, "Leaf", Affine::translate((x, 10.0)));
+        doc.insert(Some(layer), usize::MAX, i).unwrap();
+    }
+    let p = program(&doc);
+    assert!(!p.contains("VectorCraftDynamicSymbol") && !p.contains("VectorCraftSymbolOverrides"));
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    let back = read_back(&doc);
+    assert!(!back.symbols[0].dynamic);
+    let kids = back.layers[0].children().unwrap();
+    assert_eq!(kids.len(), 2);
+    assert!(kids.iter().all(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }) && n.extras().symbol_overrides.is_empty()));
 }

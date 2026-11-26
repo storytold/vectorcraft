@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Object Mosaic…",
             ["Object"],
             None,
-            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt; default the image's), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles coloured by the selected image's average tile colours → {id, tiles}",
+            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors → {id, tiles, columns, rows}",
             has_image,
             object_mosaic
         ),
@@ -187,7 +187,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn), indices?: [n] (lay out only these artboards, in document order; the others and their art and guides stay where they are), at?: [x, y] (the grid's top-left)} lay the artboards out in their order, the grid's top-left at `at`, else at the first artboard's laid out; a locked artboard stays where it is and keeps its place in the grid → {artboards, rows, columns; with indices also indices and moved, the count of artboards that moved}",
             has_doc,
             rearrange_artboards
         ),
@@ -970,7 +970,23 @@ pub(crate) fn has_image(s: &Session) -> std::result::Result<(), String> {
     }
 }
 
-fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+/// What `object.createObjectMosaic` makes from its params: the image, the tile counts, the tiles'
+/// placement, their size and spacing in image pixels, and the options.
+struct MosaicPlan {
+    id: NodeId,
+    im: ImageObject,
+    cols: u32,
+    rows: u32,
+    xf: Affine,
+    tile: (f64, f64),
+    gap: (f64, f64),
+    gray: bool,
+    delete: bool,
+}
+
+/// The mosaic `object.createObjectMosaic` would make from `p`, worked out without decoding the
+/// image or changing the document.
+fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
     const C: &str = "object.createObjectMosaic";
     let st = s.doc()?;
     let id = st
@@ -980,28 +996,100 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         .copied()
         .find(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_))))
         .ok_or_else(|| bad(C, "select an image"))?;
-    let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
-    let blob = st.doc.images.get(&im.key).filter(|b| !b.bytes.is_empty()).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
-    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
-    let cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
-    let rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
+    if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
+        return Err(bad(C, "the image has no embedded pixels"));
+    }
+    let mut cols = whole_or(p, "columns", 10, C)?.clamp(1, 1000) as u32;
+    let mut rows = whole_or(p, "rows", 10, C)?.clamp(1, 1000) as u32;
     let gray = switch_or(p, "gray", false, C)?;
-    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
+    let percentages = switch_or(p, "percentages", false, C)?;
+    // A side named "width" (true) or "height" (false), as `constrain` and `useRatio` take it.
+    let side = |key: &str, v: &Value, also: &str| match v.as_str() {
+        Some("width") => Ok(true),
+        Some("height") => Ok(false),
+        _ => Err(bad(C, format!("`{key}` must be one of {}", format_args!("\"width\", \"height\"{also} or null")))),
+    };
+    let constrain = match p.get("constrain") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(side("constrain", v, "")?),
+    };
+    // Use Ratio's kept side: true keeps Constrain Ratio's side (the width when it is left out).
+    let use_ratio = match p.get("useRatio") {
+        None | Some(Value::Null | Value::Bool(false)) => None,
+        Some(Value::Bool(true)) => Some(constrain.unwrap_or(true)),
+        Some(v) => Some(side("useRatio", v, ", true, false")?),
+    };
     // Tiles in image space, placed by the image transform (scaled to a new size if asked).
     let b = node.geometric_bounds().ok_or_else(|| bad(C, "image has no bounds"))?;
     check_numbers(p, &["width", "height", "spacingX", "spacingY"], C)?;
-    let (nw, nh) = (f64_or(p, "width", b.width()).max(0.1), f64_or(p, "height", b.height()).max(0.1));
-    let resize = Affine::translate(b.origin().to_vec2())
-        * Affine::scale_non_uniform(nw / b.width().max(1e-9), nh / b.height().max(1e-9))
-        * Affine::translate(-b.origin().to_vec2());
+    let (bw, bh) = (b.width().max(1e-9), b.height().max(1e-9));
+    // A size given (pt, or % of the image's) is from 0.1 to 1,000,000; one left out is the image's.
+    let size = |key: &str, base: f64| -> Result<f64> {
+        let Some(x) = p.get(key).and_then(Value::as_f64) else { return Ok(base) };
+        let (min, max) = (0.1, 1_000_000.0);
+        if !(min..=max).contains(&x) {
+            return Err(bad(C, format!("`{key}` must be between {min} and {max} (got {x})")));
+        }
+        Ok(if percentages { base * x / 100.0 } else { x })
+    };
+    let (mut nw, mut nh) = (size("width", bw)?, size("height", bh)?);
+    // Constrain Ratio keeps the image's proportions: the named side leads and the other follows.
+    match constrain {
+        Some(true) => nh = nw * bh / bw,
+        Some(false) => nw = nh * bw / bh,
+        None => {}
+    }
+    // A size under 0.1 pt grows to 0.1 pt, in proportion while Constrain Ratio keeps it. A side
+    // Constrain Ratio works out above 1,000,000 pt shrinks to 1,000,000 pt, the other with it.
+    let (nw, nh) = match constrain {
+        Some(_) => {
+            let k = (0.1 / nw.min(nh)).max(1.0).min(1_000_000.0 / nw.max(nh));
+            // Proportions over 10,000,000 to 1 leave no size with both sides within the range.
+            if nw.min(nh) * k < 0.1 * (1.0 - 1e-9) {
+                return Err(bad(C, "the image's proportions leave no size with both sides between 0.1 and 1000000 pt"));
+            }
+            (nw * k, nh * k)
+        }
+        None => (nw.max(0.1), nh.max(0.1)),
+    };
+    let resize = Affine::translate(b.origin().to_vec2()) * Affine::scale_non_uniform(nw / bw, nh / bh) * Affine::translate(-b.origin().to_vec2());
     let xf = resize * im.xf;
-    let (tw, th) = (im.width as f64 / cols as f64, im.height as f64 / rows as f64);
-    // Spacing is in points; convert to image pixels along each axis.
+    // Points per image pixel along each of the image's axes (the image may be turned).
     let ppx = (xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot().max(1e-9);
     let ppy = (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot().max(1e-9);
-    let (gx, gy) = ((f64_or(p, "spacingX", 0.0).max(0.0) / ppx).min(tw * 0.9), (f64_or(p, "spacingY", 0.0).max(0.0) / ppy).min(th * 0.9));
+    let (sx, sy) = (f64_or(p, "spacingX", 0.0).max(0.0), f64_or(p, "spacingY", 0.0).max(0.0));
+    let (iw, ih) = (im.width as f64, im.height as f64);
+    // Use Ratio: square tiles as drawn, spacing taken off, from the count on the kept side,
+    // measured along the image's axes.
+    match use_ratio {
+        Some(true) => rows = mosaic_square_count(cols, iw * ppx, ih * ppy, sx, sy),
+        Some(false) => cols = mosaic_square_count(rows, ih * ppy, iw * ppx, sy, sx),
+        None => {}
+    }
+    let (tw, th) = (iw / cols as f64, ih / rows as f64);
+    // Spacing is in points; convert to image pixels along each axis.
+    let gap = ((sx / ppx).min(tw * 0.9), (sy / ppy).min(th * 0.9));
     let delete = switch_or(p, "deleteRaster", false, C)?;
+    Ok(MosaicPlan { id, im: im.as_ref().clone(), cols, rows, xf, tile: (tw, th), gap, gray, delete })
+}
+
+/// The tile counts (columns, rows) `object.createObjectMosaic` would use with `p`, Use Ratio
+/// included, without making the mosaic (the dialog's Use Ratio button shows them).
+pub fn mosaic_counts(s: &Session, p: &Value) -> Result<(u32, u32)> {
+    mosaic_plan(s, p).map(|m| (m.cols, m.rows))
+}
+
+fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.createObjectMosaic";
+    let MosaicPlan { id, im, cols, rows, xf, tile: (tw, th), gap: (gx, gy), gray, delete } = mosaic_plan(s, p)?;
+    let blob = s.doc()?.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
+    let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
+    let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
     let (gid, n) = s.edit("Create Object Mosaic", |d, sel| {
         let mut tiles = vec![];
         for r in 0..rows {
@@ -1039,7 +1127,32 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
         sel.set([gid]);
         Ok((gid, n))
     })?;
-    Ok(json!({ "id": gid.0, "tiles": n }))
+    Ok(json!({ "id": gid.0, "tiles": n, "columns": cols, "rows": rows }))
+}
+
+/// The tile count along one side of an Object Mosaic whose tiles, as drawn, come closest to square
+/// (Use Ratio): `kept` tiles span `kept_len` on the other side, and this side is `other_len` long.
+/// Each tile is its cell less the gap on its side (`kept_gap`, `other_gap`), and a gap takes at
+/// most 90% of a cell, as the tiles are drawn. Within 1..1000, the smaller count on a tie; all
+/// lengths in points.
+pub(crate) fn mosaic_square_count(kept: u32, kept_len: f64, other_len: f64, kept_gap: f64, other_gap: f64) -> u32 {
+    let drawn = |len: f64, n: u32, gap: f64| {
+        let cell = len / n.max(1) as f64;
+        cell - gap.max(0.0).min(cell * 0.9)
+    };
+    let side = drawn(kept_len, kept, kept_gap);
+    if !(side.is_finite() && side > 0.0 && other_len.is_finite() && other_len > 0.0) {
+        return 1;
+    }
+    // A tile on this side shrinks as the count grows: find the first count whose tile is no wider
+    // than `side`, then take it or the count before it, whichever is closer.
+    let (mut lo, mut hi) = (1u32, 1000u32);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if drawn(other_len, mid, other_gap) > side { lo = mid + 1 } else { hi = mid }
+    }
+    let off = |n: u32| (drawn(other_len, n, other_gap) - side).abs();
+    if lo > 1 && off(lo - 1) <= off(lo) { lo - 1 } else { lo }
 }
 
 fn polygon_path(pts: &[Point]) -> PathData {
@@ -1175,6 +1288,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if switch_or(p, "trim", false, C)? {
         if p.get("ppi").is_some_and(|v| !v.is_null()) {
             return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
@@ -1385,11 +1501,16 @@ fn mask_image(s: &mut Session, _: &Value) -> Result<Value> {
         .selection
         .objects
         .iter()
-        .find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Image(im)) => {
-                Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+        .find_map(|id| {
+            let n = st.doc.node(*id)?;
+            match &n.kind {
+                // A distorted image's outline joins its corners.
+                NodeKind::Image(_) if n.is_distorted_image() => Some((*id, PathData::from_bezpath(&n.image_frame()?))),
+                NodeKind::Image(im) => {
+                    Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+                }
+                _ => None,
             }
-            _ => None,
         })
         .ok_or_else(|| bad("object.maskImage", "select an image"))?;
     let (gid, pid) = s.edit("Mask", |d, sel| {
@@ -1597,32 +1718,48 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(CMD, "order must be leftToRight or rightToLeft")),
     };
     let count = s.doc()?.doc.artboards.len();
-    let n_ab = count.max(1);
-    // Columns of a grid by row, rows of a grid by column.
-    let lines = whole_or(p, "columns", 2, CMD)?.clamp(1, n_ab as u64) as usize;
-    let (rows, cols) = match layout {
-        L::GridByRow => (n_ab.div_ceil(lines), lines),
-        L::GridByColumn => (lines, n_ab.div_ceil(lines)),
-        L::Row => (1, n_ab),
-        L::Column => (n_ab, 1),
+    // `indices` lays out only those artboards, in document order; left out, every artboard.
+    let picked: Option<Vec<usize>> = match p.get("indices") {
+        Some(v) => Some(super::panelcmds::listed_artboards(&s.doc()?.doc, v, "indices", CMD)?),
+        None => None,
     };
+    let at = match p.get("at") {
+        Some(v) => Some(super::finite_numbers::<2>(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(CMD, "`at` must be [x, y]"))?),
+        None => None,
+    };
+    // Columns of a grid by row, rows of a grid by column.
+    let lines = whole_or(p, "columns", 2, CMD)?;
     check_numbers(p, &["spacing"], CMD)?;
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
     let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
-    let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
+    let laid: Vec<usize> = picked.clone().unwrap_or_else(|| (0..count).collect());
+    let rects: Vec<Rect> = laid.iter().filter_map(|i| d.artboards.get(*i)).map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
-    let first = rects.first().map_or(Point::ZERO, |r| r.origin());
-    let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
-    // A locked artboard stays where it is, and keeps its place in the grid.
-    let deltas: Vec<Vec2> =
-        rects.iter().zip(origins).zip(&d.artboards).map(|((r, o), a)| if a.locked { Vec2::ZERO } else { o - r.origin() }).collect();
+    // The grid's top-left: `at`, else the first artboard laid out's.
+    let origin = at.unwrap_or_else(|| rects.first().map_or(Point::ZERO, |r| r.origin()));
+    let (origins, rows, cols) = super::newdoc::rearrange_grid(&sizes, origin, layout, lines, spacing, rtl);
+    // A locked artboard stays where it is, and keeps its place in the grid; an artboard not laid
+    // out stays where it is.
+    let mut deltas = vec![Vec2::ZERO; count];
+    for ((i, r), o) in laid.iter().zip(&rects).zip(origins) {
+        if let Some(dl) = deltas.get_mut(*i)
+            && !d.artboards.get(*i).is_some_and(|a| a.locked)
+        {
+            *dl = o - r.origin();
+        }
+    }
+    let moved = deltas.iter().filter(|dl| dl.x.abs() > 1e-9 || dl.y.abs() > 1e-9).count();
+    let result = match &picked {
+        Some(indices) => json!({ "artboards": count, "indices": indices, "moved": moved, "rows": rows, "columns": cols }),
+        None => json!({ "artboards": count, "rows": rows, "columns": cols }),
+    };
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
-    if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
-        return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
+    if moved == 0 {
+        return Ok(result);
     }
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
@@ -1670,5 +1807,5 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "artboards": count, "rows": rows, "columns": cols }))
+    Ok(result)
 }

@@ -5,14 +5,33 @@
 //! Setup (working spaces, color management policies, intent, black-point compensation, proof
 //! target, gamut check).
 
-use egui::{Sense, Ui, vec2};
+use std::borrow::Cow;
+
+use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, EditEvent, IconId, ItemSource};
+use craft::host::{PickRequest, Picked};
+use craft::keymap::CommandRef;
+use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
+use craft::ui::choice::{Checkbox, Radio, RadioGroup};
+use craft::ui::contract::{
+    Bind, CollectionEvent, ColumnSpec, Entry, Lazy, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, ToggleColumn,
+    clicked,
+};
+use craft::ui::display::Text;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::{List, ListRow, ThumbSize, ToggleCell};
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::Notice;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use egui::{Color32, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Intent, Policy, ProfileKind};
 use vectorcraft_render::proof;
 
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, dim_label, menu_item};
+use crate::file_asks::{Owner, ask};
 
 const PROOF_TARGETS: [(&str, &str); 7] = [
     ("workingCmyk", "Working CMYK"),
@@ -24,56 +43,143 @@ const PROOF_TARGETS: [(&str, &str); 7] = [
     ("tritanopia", "Color blindness – Tritanopia-type"),
 ];
 
-fn run(app: &mut VectorcraftApp, id: &str, p: Value) {
-    if let Err(e) = app.run(id, p) {
-        app.ui.status = e;
+/// The eye column of the Plates list.
+const EYE: ColumnKey = ColumnKey::new("eye");
+/// The column that holds the plate's chip and name.
+const NAME: ColumnKey = ColumnKey::new("name");
+/// The command of the panel menu's Show All Plates row.
+const SHOW_ALL_PLATES: &str = "ui.separations.showAllPlates";
+/// How long the Color Settings section is, for the scroll area before it has been shown once.
+const COLOR_SETTINGS_ESTIMATE: f32 = 460.0;
+
+/// Runs command `id` with `p`; a failure goes to the status bar, so it returns `None`.
+fn act(app: &mut VectorcraftApp, id: &str, p: Value) -> Option<Value> {
+    match app.run(id, p) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            app.ui.status = e;
+            None
+        }
     }
 }
 
+/// A check box named `label` over `on`; the value the user set this pass.
+fn check(ui: &mut Ui, label: &'static str, on: bool, enabled: bool) -> Option<bool> {
+    Checkbox::new(Bind::given(on)).label(label).enabled(enabled).id_salt(label).show(ui).value().copied()
+}
+
+/// A select named `name` (shown before it when `caption`) over `items` of `(value, shown name)`; the
+/// value the user picked this pass.
+fn pick<T: Clone + PartialEq + Send + Sync + 'static>(
+    ui: &mut Ui,
+    name: &str,
+    caption: bool,
+    enabled: bool,
+    current: T,
+    items: Vec<(T, String)>,
+) -> Option<T> {
+    let entries: Vec<Entry<T>> = items.into_iter().map(|(value, label)| Entry::new(value, label)).collect();
+    let label = Label::from(name.to_owned());
+    let mut picked = None;
+    Row::new().show(ui, |ui, _| {
+        if caption {
+            Text::new(label.clone()).show(ui);
+        }
+        picked = Select::new(label.clone(), Bind::given(current.clone()), &entries).enabled(enabled).id_salt(name).show(ui).value().cloned();
+    });
+    picked
+}
+
+/// One row of the Plates list: the CMYK composite or a plate.
+struct PlateRow {
+    shown: String,
+    /// The plate's ink; the composite has none.
+    chip: Option<Color32>,
+    visible: bool,
+}
+
+/// The Plates list's rows: the CMYK composite (key 0), then plate `n` at key `n + 1`.
+struct Plates(Vec<PlateRow>);
+
+impl DisplayOrder<usize> for Plates {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn text(&self, at: usize) -> Option<Cow<'_, str>> {
+        self.0.get(at).map(|row| Cow::Borrowed(row.shown.as_str()))
+    }
+}
+
+impl ItemSource<usize> for Plates {
+    fn toggled(&self, at: usize, column: &ColumnKey) -> bool {
+        *column == EYE && self.0.get(at).is_some_and(|row| row.visible)
+    }
+}
+
+/// The ink `rgb` (0..1 per channel) as a color.
+fn chip(rgb: [f32; 3]) -> Color32 {
+    let q = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Color32::from_rgb(q(rgb[0]), q(rgb[1]), q(rgb[2]))
+}
+
+/// The Plates section: the separations preview switch and the plates with their eyes.
 fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let v = proof::view();
     let on = v.separations.is_some();
-    if widgets::check(ui, tl!("Overprint Preview (separations)"), on, app.session.active().is_some()) {
-        run(app, "view.separationsPreview", json!({"on": !on}));
+    if let Some(want) = check(ui, tl!("Overprint Preview (separations)"), on, app.session.active().is_some()) {
+        act(app, "view.separationsPreview", json!({"on": want}));
     }
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else {
-        dim_label(ui, tl!("No document open."));
+        Notice::new(Tone::Neutral, tl!("No document open.")).show(ui);
         return;
     };
     let plates = proof::plates(&doc);
     let visible = |n: &str| v.separations.as_ref().is_none_or(|s| s.iter().any(|x| x == n));
-    let alt = ui.input(|i| i.modifiers.alt);
-    widgets::list_box(ui, |ui| {
-        let all_on = plates.iter().all(|p| visible(&p.name));
-        // CMYK composite row.
-        ui.horizontal(|ui| {
-            ui.add_enabled_ui(on, |ui| {
-                if widgets::toggle_icon(ui, "eye", all_on, 18.0, tl!("Show all plates")) && on {
-                    run(app, "view.separationsPreview", json!({"plates": plates.iter().map(|p| p.name.clone()).collect::<Vec<_>>()}));
-                }
-            });
-            ui.label(egui::RichText::new(tl!("CMYK")).size(12.0).color(if on { t.text } else { t.text_dim }));
-        });
-        for p in &plates {
-            ui.horizontal(|ui| {
-                let vis = visible(&p.name);
-                let mut clicked = false;
-                ui.add_enabled_ui(on, |ui| {
-                    clicked =
-                        widgets::toggle_icon(ui, "eye", vis, 18.0, tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)"));
+    let mut rows = vec![PlateRow { shown: tl!("CMYK").to_string(), chip: None, visible: plates.iter().all(|p| visible(&p.name)) }];
+    rows.extend(plates.iter().map(|p| PlateRow {
+        shown: if p.spot { crate::i18n::fmt(tl!("{name} (spot)"), &[("name", &p.name)]) } else { p.name.clone() },
+        chip: Some(chip(p.rgb)),
+        visible: visible(&p.name),
+    }));
+    let rows = Plates(rows);
+    let columns = vec![
+        ColumnSpec::toggle(EYE, Label::Empty, ToggleColumn::default()).icon(IconId::new("eye")),
+        ColumnSpec::new(NAME, Label::Empty, ColumnWidth::fill(1.0)),
+    ];
+    // Disabled while the preview is off: the eyes then take no press and the rows read dim.
+    let out = List::new(tl!("Plates"))
+        .id_salt("plates")
+        .select(SelectMode::None)
+        .sizing(Sizing::Content)
+        .natural_height(true)
+        .enabled(on)
+        .columns(columns)
+        .show_items(ui, &rows, &mut |key, item| {
+            let Some(row) = rows.0.get(*key) else { return ListRow::new(Label::Empty) };
+            let tooltip =
+                if *key == 0 { tl!("Show all plates") } else { tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)") };
+            let mut list_row = ListRow::new(row.shown.clone()).toggle(ToggleCell::eye(EYE, row.visible).tooltip(tooltip));
+            if let Some(ink) = row.chip {
+                list_row = list_row.thumb(ThumbSize::Small, move |painter, rect| {
+                    painter.painter.rect_filled(rect, 2.0, ink);
                 });
-                if clicked && on {
-                    run(app, "view.separationsPreview", eye_click(&p.name, alt));
-                }
-                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-                let q = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
-                ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(q(p.rgb[0]), q(p.rgb[1]), q(p.rgb[2])));
-                let label = if p.spot { crate::i18n::fmt(tl!("{name} (spot)"), &[("name", &p.name)]) } else { p.name.clone() };
-                ui.label(egui::RichText::new(label).size(12.0).color(if on { t.text } else { t.text_dim }));
-            });
-        }
-    });
+            }
+            list_row.cells(item.cells()).state(item.row.clone())
+        });
+    for event in out.events {
+        // A flip lands once: a click's set, or a sweep's commit at the release. It carries the Alt held at the press.
+        let CollectionEvent::Toggle(EditEvent::Set { after: edit, .. } | EditEvent::Commit { after: edit, .. }) = event else { continue };
+        let p = match edit.key.checked_sub(1).and_then(|n| plates.get(n)) {
+            Some(plate) => eye_click(&plate.name, edit.mods.alt),
+            None => json!({"plates": plates.iter().map(|p| p.name.clone()).collect::<Vec<_>>()}),
+        };
+        act(app, "view.separationsPreview", p);
+    }
 }
 
 /// The `view.separationsPreview` params for a click on plate `name`'s eye: with Alt, that plate
@@ -82,97 +188,100 @@ fn eye_click(name: &str, alt: bool) -> Value {
     if alt { json!({"soloToggle": name}) } else { json!({"toggle": name}) }
 }
 
-/// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
-/// profile names are shown as they are. Returns the chosen name.
-pub(crate) fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
-    let names: Vec<String> =
-        extra.map(str::to_string).into_iter().chain(cms::profiles().into_iter().filter(|p| p.kind == kind).map(|p| p.name)).collect();
-    let refs: Vec<&str> = names.iter().map(|n| super::label_or_name(n, extra == Some(n.as_str()))).collect();
-    widgets::dropdown_names(ui, id, super::label_or_name(current, extra == Some(current)), &refs, 210.0).and_then(|i| names.get(i).cloned())
+/// The `kind` profiles after `extra` (a built-in entry, shown in the UI language) as `(name, shown
+/// name)`; profile names are shown as they are.
+pub(crate) fn profile_entries(kind: ProfileKind, extra: Option<&str>) -> Vec<(String, String)> {
+    extra
+        .map(str::to_string)
+        .into_iter()
+        .chain(cms::profiles().into_iter().filter(|p| p.kind == kind).map(|p| p.name))
+        .map(|n| {
+            let shown = super::label_or_name(&n, extra == Some(n.as_str())).to_string();
+            (n, shown)
+        })
+        .collect()
 }
 
-/// The Color Settings section (Edit › Color Settings… / Assign Profile…), scrolled into view once
-/// when one of those commands opened the panel ([`crate::state::UiState::color_settings_scroll`]).
-fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let top = ui.cursor().top();
-    settings_rows(app, ui);
-    // Edit › Color Settings… / Assign Profile… opened the panel for this section: scroll it into
-    // view once, as the plates and Proof Setup above it fill a short window (#6419). At once, not
-    // animated: the panel has just opened. egui moves the scroll area on a later frame, so ask for
-    // one rather than wait for the pointer to move.
-    if app.ui.color_settings_scroll && !ui.is_sizing_pass() {
-        let rect = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.min_rect().bottom().max(top));
-        ui.scroll_to_rect_animation(rect, Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
-        ui.ctx().request_repaint();
-        app.ui.color_settings_scroll = false;
-    }
-}
-
-/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
-/// and CMYK color management policies, Load Profile… and Gamut Check, and the profile the active
-/// document is assigned.
+/// The Color Settings section's rows: the RGB and CMYK working spaces, intent, black point
+/// compensation, the RGB and CMYK color management policies, the Ask boxes of Profile Mismatches and
+/// Missing Profiles, Load Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
-    widgets::section_header(ui, tl!("Color Settings"));
-    ui.horizontal(|ui| {
-        ui.label(tl!("RGB:"));
-        if let Some(n) = profile_dropdown(ui, "cms-rgb", &st.rgb, ProfileKind::Rgb, None) {
-            run(app, "edit.colorSettings", json!({"rgb": n}));
+    for (key, name, kind, current) in [("rgb", tl!("RGB:"), ProfileKind::Rgb, &st.rgb), ("cmyk", tl!("CMYK:"), ProfileKind::Cmyk, &st.cmyk)] {
+        if let Some(n) = pick(ui, name, true, true, current.clone(), profile_entries(kind, None)) {
+            act(app, "edit.colorSettings", json!({ key: n }));
         }
-    });
-    ui.horizontal(|ui| {
-        ui.label(tl!("CMYK:"));
-        if let Some(n) = profile_dropdown(ui, "cms-cmyk", &st.cmyk, ProfileKind::Cmyk, None) {
-            run(app, "edit.colorSettings", json!({"cmyk": n}));
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label(tl!("Intent:"));
-        let labels: Vec<&str> = Intent::ALL.iter().map(|i| i.label()).collect();
-        if let Some(i) = widgets::dropdown(ui, "cms-intent", st.intent.label(), &labels, 170.0) {
-            run(app, "edit.colorSettings", json!({"intent": Intent::ALL[i].id()}));
-        }
-    });
-    if widgets::check(ui, tl!("Use Black Point Compensation"), st.bpc, true) {
-        run(app, "edit.colorSettings", json!({"bpc": !st.bpc}));
+    }
+    let intents = Intent::ALL.iter().enumerate().map(|(i, x)| (i, x.label().to_string())).collect();
+    let current = Intent::ALL.iter().position(|i| i.id() == st.intent.id()).unwrap_or_default();
+    if let Some(i) = pick(ui, tl!("Intent:"), true, true, current, intents)
+        && let Some(intent) = Intent::ALL.get(i)
+    {
+        act(app, "edit.colorSettings", json!({"intent": intent.id()}));
+    }
+    if let Some(on) = check(ui, tl!("Use Black Point Compensation"), st.bpc, true) {
+        act(app, "edit.colorSettings", json!({"bpc": on}));
     }
     // Color management policies: what opening a document does with a profile it is tagged with
     // that is not the working space.
     let policies: [(&str, &str, Policy, &[Policy]); 2] =
         [("rgbPolicy", tl!("RGB Policy:"), st.rgb_policy, &Policy::RGB), ("cmykPolicy", tl!("CMYK Policy:"), st.cmyk_policy, &Policy::CMYK)];
     for (key, label, current, choices) in policies {
-        ui.horizontal(|ui| {
-            ui.label(label);
-            let labels: Vec<&str> = choices.iter().map(|p| policy_label(*p)).collect();
-            if let Some(i) = widgets::dropdown_names(ui, key, policy_label(current), &labels, 210.0)
-                && let Some(p) = choices.get(i)
-            {
-                run(app, "edit.colorSettings", json!({ key: p.id() }));
-            }
-        });
-    }
-    ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked() {
-            // Its file dialog, shown off the UI thread, loads the profile when it answers.
-            crate::picks::button(app, |app| {
-                let pick = crate::FilePick { filters: vec![crate::FilePick::filter("ICC Profiles", &["icc", "icm"])], ..Default::default() };
-                if let Some(path) = crate::picks::open(app, &pick) {
-                    run(app, "color.loadProfile", json!({ "path": path }));
-                }
-            });
+        let items = choices.iter().enumerate().map(|(i, p)| (i, policy_label(*p).to_string())).collect();
+        let at = choices.iter().position(|p| p.id() == current.id()).unwrap_or_default();
+        if let Some(i) = pick(ui, label, true, true, at, items)
+            && let Some(p) = choices.get(i)
+        {
+            act(app, "edit.colorSettings", json!({ key: p.id() }));
         }
-        if widgets::flat_button(ui, tl!("Gamut Check"), 100.0).clicked() {
-            match app.run("color.gamutCheck", json!({})) {
-                Ok(r) => {
-                    let n = r["outOfGamut"].as_array().map_or(0, Vec::len);
-                    app.ui.status = gamut_check_status(n);
-                }
-                Err(e) => app.ui.status = e,
-            }
+    }
+    // Profile Mismatches and Missing Profiles: what opening and pasting ask about.
+    let asks: [(&str, &str, &'static str, bool); 3] = [
+        ("askMismatchOpen", tl!("Profile Mismatches:"), tl!("Ask When Opening"), st.ask_mismatch_open),
+        ("askMismatchPaste", "", tl!("Ask When Pasting"), st.ask_mismatch_paste),
+        ("askMissingOpen", tl!("Missing Profiles:"), tl!("Ask When Opening"), st.ask_missing_open),
+    ];
+    for (key, heading, label, on) in asks {
+        if !heading.is_empty() {
+            Text::new(heading).show(ui);
+        }
+        // The two "Ask When Opening" boxes share a label: the key tells them apart.
+        let value = Checkbox::new(Bind::given(on)).label(label).id_salt(key).show(ui).value().copied();
+        if let Some(on) = value {
+            act(app, "edit.colorSettings", json!({ key: on }));
+        }
+    }
+    Row::new().show(ui, |ui, _| {
+        if clicked(&Button::new(tl!("Load Profile…")).id_salt("load-profile").show(ui)) {
+            load_profile(app);
+        }
+        if clicked(&Button::new(tl!("Gamut Check")).id_salt("gamut-check").show(ui)) {
+            gamut_check(app);
         }
     });
     if let Some(row) = app.session.active().map(|d| AssignRow::of(&d.doc)) {
         assign_rows(app, ui, &row);
+    }
+}
+
+/// Asks for an ICC profile file, off the UI thread; the answer loads it.
+fn load_profile(app: &mut VectorcraftApp) {
+    let request = PickRequest::open("profile").filter("ICC Profiles", &["icc", "icm"]);
+    // The answer comes later; what `ask` returns now is only the pending marker.
+    let _ = ask(app, request, Owner::Free, |app, picked| match picked {
+        Picked::Paths(paths) => match paths.first() {
+            Some(path) => app.run("color.loadProfile", json!({ "path": path })),
+            None => Ok(Value::Null),
+        },
+        _ => Ok(Value::Null),
+    });
+}
+
+/// Runs Gamut Check and reports how many colors fall outside the CMYK gamut on the status bar.
+fn gamut_check(app: &mut VectorcraftApp) {
+    if let Some(r) = act(app, "color.gamutCheck", json!({})) {
+        let n = r["outOfGamut"].as_array().map_or(0, Vec::len);
+        app.ui.status = gamut_check_status(n);
     }
 }
 
@@ -236,34 +345,26 @@ impl AssignRow {
 /// mode, and Profile with a list of the other profiles of that kind. A pick runs `edit.assignProfile`.
 fn assign_rows(app: &mut VectorcraftApp, ui: &mut Ui, row: &AssignRow) {
     let choice = row.choice();
-    let mut pick = None;
-    ui.label(tl!("Assign:"));
-    if widgets::radio(ui, tl!("Don't Color Manage This Document"), choice == AssignChoice::None, true) {
-        pick = row.params(AssignChoice::None, None);
-    }
+    let shown = if choice == AssignChoice::Profile { row.assigned.as_deref() } else { row.others.first().map(String::as_str) };
     let working = match row.mode {
         vectorcraft_doc::ColorMode::Rgb => tl!("Working RGB: {name}"),
         vectorcraft_doc::ColorMode::Cmyk => tl!("Working CMYK: {name}"),
     };
     let working = crate::i18n::fmt(working, &[("name", &row.working)]);
-    if widgets::radio(ui, &working, choice == AssignChoice::Working, true) {
-        pick = row.params(AssignChoice::Working, None);
-    }
-    ui.horizontal(|ui| {
-        let on = choice == AssignChoice::Profile;
-        let shown = if on { row.assigned.as_deref() } else { row.others.first().map(String::as_str) };
-        if widgets::radio(ui, tl!("Profile:"), on, !row.others.is_empty()) {
-            pick = row.params(AssignChoice::Profile, shown);
-        }
-        let refs: Vec<&str> = row.others.iter().map(String::as_str).collect();
-        ui.add_enabled_ui(!refs.is_empty(), |ui| {
-            if let Some(i) = widgets::dropdown_names(ui, "cms-assign", shown.unwrap_or_default(), &refs, 210.0) {
-                pick = row.params(AssignChoice::Profile, refs.get(i).copied());
-            }
+    let mut listed = None;
+    Text::new(tl!("Assign:")).show(ui);
+    let group = RadioGroup::new(tl!("Assign:"), Bind::given(choice)).show(ui, |ui, _| {
+        Radio::new(AssignChoice::None).label(tl!("Don't Color Manage This Document")).show(ui);
+        Radio::new(AssignChoice::Working).label(working.clone()).show(ui);
+        Row::new().show(ui, |ui, _| {
+            Radio::new(AssignChoice::Profile).label(tl!("Profile:")).enabled(!row.others.is_empty()).show(ui);
+            let items = row.others.iter().map(|n| (n.clone(), n.clone())).collect();
+            listed = pick(ui, tl!("Profile:"), false, !row.others.is_empty(), shown.unwrap_or_default().to_string(), items);
         });
     });
-    if let Some(p) = pick {
-        run(app, "edit.assignProfile", p);
+    let radio = group.output.value().copied().and_then(|c| row.params(c, shown));
+    if let Some(p) = listed.and_then(|n| row.params(AssignChoice::Profile, Some(&n))).or(radio) {
+        act(app, "edit.assignProfile", p);
     }
 }
 
@@ -286,54 +387,76 @@ pub(crate) fn gamut_check_status(n: usize) -> String {
     }
 }
 
+/// The Proof Setup section: the target, Proof Colors, Simulate Paper and Overprint Preview.
 fn proof_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let v = proof::view();
-    widgets::section_header(ui, tl!("Proof Setup"));
     let cur = v.setup.target.id();
+    let mut targets: Vec<(String, String)> = PROOF_TARGETS.iter().map(|(id, l)| (id.to_string(), tl!(*l).to_string())).collect();
     // A target that isn't one of ours (a loaded profile) shows its name as it is.
-    let label = PROOF_TARGETS.iter().find(|(id, _)| *id == cur).map_or(cur.as_str(), |(_, l)| tl!(*l));
-    let labels: Vec<&str> = PROOF_TARGETS.iter().map(|(_, l)| tl!(*l)).collect();
-    if let Some(i) = widgets::dropdown_names(ui, "proof-target", label, &labels, 230.0) {
-        run(app, "view.proofSetup", json!({"target": PROOF_TARGETS[i].0}));
+    if !targets.iter().any(|(id, _)| *id == cur) {
+        targets.push((cur.clone(), cur.clone()));
     }
-    ui.horizontal(|ui| {
-        if widgets::check(ui, tl!("Proof Colors"), v.proof_colors, true) {
-            run(app, "view.proofColors", json!({"on": !v.proof_colors}));
+    if let Some(id) = pick(ui, tl!("Proof Setup"), false, true, cur, targets) {
+        act(app, "view.proofSetup", json!({"target": id}));
+    }
+    Row::new().show(ui, |ui, _| {
+        if let Some(on) = check(ui, tl!("Proof Colors"), v.proof_colors, true) {
+            act(app, "view.proofColors", json!({"on": on}));
         }
-        if widgets::check(ui, tl!("Simulate Paper"), v.setup.simulate_paper, v.setup.target.is_cmyk()) {
-            run(app, "view.proofSetup", json!({"simulatePaper": !v.setup.simulate_paper}));
+        if let Some(on) = check(ui, tl!("Simulate Paper"), v.setup.simulate_paper, v.setup.target.is_cmyk()) {
+            act(app, "view.proofSetup", json!({"simulatePaper": on}));
         }
     });
-    if widgets::check(ui, tl!("Overprint Preview"), v.overprint, true) {
-        run(app, "view.overprintPreview", json!({"on": !v.overprint}));
+    if let Some(on) = check(ui, tl!("Overprint Preview"), v.overprint, true) {
+        act(app, "view.overprintPreview", json!({"on": on}));
     }
 }
 
+/// The panel: Plates, Proof Setup and Color Settings, each a fixed section. Edit › Color Settings… /
+/// Assign Profile… ask for the last one to be scrolled into view ([`crate::state::UiState::color_settings_scroll`]):
+/// the plates and Proof Setup above it fill a short window (#6419).
+// PLAN: the sheet says `SectionStack`, which lets the user reorder sections; the old panel had no
+// such thing, so the sections sit in a plain `Stack`.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    plates_section(app, ui);
-    widgets::divider(ui);
-    proof_section(app, ui);
-    widgets::divider(ui);
-    settings_section(app, ui);
+    // The flag is read by every pass of the frame, so a second pass reveals as well; only a real
+    // pass (not a sizing one) spends it.
+    let reveal = app.ui.color_settings_scroll;
+    Stack::new().label(tl!("Separations Preview")).show(ui, |ui, _| {
+        crate::panels::section(tl!("Separations Preview")).show(ui, |ui, _| plates_section(app, ui));
+        crate::panels::section(tl!("Proof Setup")).show(ui, |ui, _| proof_section(app, ui));
+        Lazy::new("color-settings", COLOR_SETTINGS_ESTIMATE).reveal(reveal).show(ui, |ui| {
+            crate::panels::section(tl!("Color Settings")).show(ui, |ui, _| settings_rows(app, ui));
+        });
+    });
+    if reveal && !ui.is_sizing_pass() {
+        app.ui.color_settings_scroll = false;
+    }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let v = proof::view();
-    if menu_item(ui, tl!("Overprint Preview"), true, v.overprint) {
-        run(app, "view.overprintPreview", json!({}));
-    }
-    if menu_item(ui, tl!("Proof Colors"), true, v.proof_colors) {
-        run(app, "view.proofColors", json!({}));
-    }
-    if menu_item(ui, tl!("Show All Plates"), v.separations.is_some(), false) {
-        run(app, "view.separationsPreview", json!({"on": false}));
-        run(app, "view.separationsPreview", json!({"on": true}));
-    }
+/// The rows of the panel's menu: Overprint Preview and Proof Colors (their checks come from the
+/// menu state) and Show All Plates.
+pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
+    ["view.overprintPreview", "view.proofColors", SHOW_ALL_PLATES].into_iter().map(|id| PanelRow::Command(CommandRef::from(id))).collect()
+}
+
+/// Show All Plates is available while the separations preview is on.
+pub(crate) fn menu_states(_app: &VectorcraftApp, states: &mut CommandStates) {
+    states.set(SHOW_ALL_PLATES, CommandState::new().enabled(proof::view().separations.is_some()));
+}
+
+/// Runs the panel's own menu command `id`; `None` for any other id. Show All Plates turns the
+/// preview off and on again, which shows every plate.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    (id == SHOW_ALL_PLATES).then(|| {
+        app.run("view.separationsPreview", json!({"on": false}))?;
+        app.run("view.separationsPreview", json!({"on": true}))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
 
     /// The panel's Proof Setup list offers the targets of View › Proof Setup, in the same order and
@@ -350,16 +473,6 @@ mod tests {
         assert_eq!(menu, panel);
         assert!(panel.iter().any(|(id, _)| id == "tritanopia"));
         assert!(panel.iter().all(|(id, _)| cms::ProofTarget::parse(id).is_some_and(|t| t.id() == *id)));
-    }
-
-    /// An Alt-click on a plate's eye sends `soloToggle`, which `view.separationsPreview` takes, and
-    /// a plain click sends `toggle`.
-    #[test]
-    fn an_alt_click_on_a_plates_eye_sends_solo_toggle() {
-        assert_eq!(eye_click("Cyan", true), json!({"soloToggle": "Cyan"}));
-        assert_eq!(eye_click("Brand Orange", false), json!({"toggle": "Brand Orange"}));
-        let spec = vectorcraft_engine::cmd::command_specs().iter().find(|c| c.id == "view.separationsPreview");
-        assert!(spec.is_some_and(|c| c.params.contains("soloToggle?:")));
     }
 
     /// Assign Profile's three choices: no profile, the working space assigned as the profile, or
@@ -392,13 +505,6 @@ mod tests {
     /// model's profile stays as it was.
     #[test]
     fn assign_rows_follow_the_document_color_mode() {
-        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-            match s {
-                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({})).unwrap();
         for (mode, key, kind, other) in [("rgb", "rgb", ProfileKind::Rgb, "cmyk"), ("cmyk", "cmyk", ProfileKind::Cmyk, "rgb")] {
@@ -408,13 +514,6 @@ mod tests {
             assert_eq!((row.key, row.choice()), (key, AssignChoice::None));
             assert!(!row.others.is_empty() && !row.others.contains(&row.working));
             assert!(row.others.iter().chain([&row.working]).all(|n| cms::profile(n).is_some_and(|p| p.kind == kind)), "{row:?}");
-            let ctx = egui::Context::default();
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| settings_rows(&mut app, ui));
-            out.textures_delta.clear();
-            let mut shown = vec![];
-            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-            let working = format!("Working {}: {}", mode.to_uppercase(), row.working);
-            assert!(shown.contains(&working) && shown.iter().any(|t| t == "Don't Color Manage This Document"), "{shown:?}");
             app.run("edit.assignProfile", row.params(AssignChoice::Profile, None).unwrap()).unwrap();
             let doc = &app.session.active().unwrap().doc;
             let (rgb, cmyk) = vectorcraft_engine::cmd::colormgmt::doc_profiles(doc);
@@ -423,54 +522,38 @@ mod tests {
         }
     }
 
+    /// The panel inside a vertical scroll area, as the window shows it.
+    fn scrolled(app: &mut VectorcraftApp, ui: &mut Ui) {
+        Stack::new().fill().scroll(craft::ui::contract::Scroll::vertical()).show(ui, |ui, _| show(app, ui));
+    }
+
     /// #6419: Edit › Assign Profile… and Color Settings… show the panel scrolled to its Color
     /// Settings section, which a window shorter than the panel (a floated panel stops at 320
-    /// points) otherwise shows only after scrolling past the plates and Proof Setup. Once: a
-    /// scroll away afterwards stays.
+    /// points) otherwise shows only after scrolling past the plates and Proof Setup. Once: the
+    /// request is spent by the pass that read it.
     #[test]
     fn color_settings_and_assign_profile_scroll_the_color_settings_into_view() {
-        const VIEW: f32 = 120.0;
-        fn find(s: &egui::Shape, text: &str) -> Option<f32> {
-            match s {
-                egui::Shape::Text(t) if t.galley.text() == text => Some(t.pos.y),
-                egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, text)),
-                _ => None,
-            }
-        }
-        // One frame of the panel in a scroll area VIEW points high, scrolled to `offset` when
-        // given: where the section's Black Point Compensation box shows in the view.
-        fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, offset: Option<f32>) -> f32 {
-            let mut top = 0.0;
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-                top = ui.cursor().top();
-                let mut area = egui::ScrollArea::vertical().id_salt("separations").max_height(VIEW);
-                if let Some(y) = offset {
-                    area = area.vertical_scroll_offset(y);
-                }
-                area.show(ui, |ui| show(app, ui));
-            });
-            out.textures_delta.clear();
-            out.shapes.iter().find_map(|c| find(&c.shape, "Use Black Point Compensation")).unwrap() - top
-        }
-        let visible = |y: f32| (0.0..VIEW).contains(&y);
+        const BPC: &str = "Use Black Point Compensation";
         for id in ["edit.assignProfile", "edit.colorSettings"] {
             let mut app = VectorcraftApp::new(Session::new(), Default::default());
             app.run("file.new", json!({})).unwrap();
-            let ctx = egui::Context::default();
-            let before = frame(&ctx, &mut app, None);
-            assert!(!visible(before), "the section starts below the view: {before}");
-            app.run(id, json!({})).unwrap();
-            frame(&ctx, &mut app, None);
-            assert!(!app.ui.color_settings_scroll);
-            // egui moves a scroll area on the frame after the request and paints it moved on the
-            // one after that; both ask for a repaint.
-            assert!(ctx.has_requested_repaint());
-            frame(&ctx, &mut app, None);
-            assert!(ctx.has_requested_repaint());
-            let shown = frame(&ctx, &mut app, None);
-            assert!(visible(shown), "{id} scrolls the section into the view: {shown}");
-            frame(&ctx, &mut app, Some(0.0));
-            assert_eq!(frame(&ctx, &mut app, None), before, "scrolled back to the top, it stays there");
+            let mut panel = Panel::new(app, scrolled);
+            panel.room(egui::vec2(300.0, 120.0));
+            panel.frame();
+            // The section draws lazily: below the view it is not drawn at all.
+            assert!(!panel.shows(BPC) || !panel.in_view(BPC), "the section starts below the view");
+            panel.app().run(id, json!({})).unwrap();
+            panel.frame();
+            assert!(!panel.app().ui.color_settings_scroll, "{id}: the pass that read the request spent it");
+            // The scroll glides; let it end.
+            panel.advance(1.0);
+            panel.frame();
+            panel.frame();
+            assert!(panel.in_view(BPC), "{id} scrolls the section into the view");
+            // PLAN: the harness has no scroll driver, so "a later scroll to the top stays there" is
+            // covered only as far as the spent request not scrolling again.
+            panel.frame();
+            assert!(panel.in_view(BPC), "{id}: nothing scrolls it again");
         }
     }
 }

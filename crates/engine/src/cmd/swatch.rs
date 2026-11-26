@@ -6,10 +6,12 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientStop, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::swatches::{LinkFn, PaintFn, color_name, map_node_paints, map_node_solid_paints, node_colors};
-use vectorcraft_doc::{Document, NodeId};
+use vectorcraft_doc::{Document, NodeId, Selection};
 
 use super::paint::paint_from;
-use super::{CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or};
+use super::{
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or, text_param,
+};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -75,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Used Colors",
             ["Window", "Swatches"],
             None,
-            "{selection?: false (only the selected art's colours; default: all the art's), global?: false (the new swatches are global and the matching unlinked colours in that art link to them)} add a swatch for each colour used (fills, strokes, text, gradient stops, mesh points) that no solid swatch has yet, as one undo step → {added: [names], linked}",
+            "{selection?: false (only the selected art's colours; default: all the art's), global?: false (the new swatches are global and the matching unlinked colours in that art link to them)} add a swatch for each colour used (fills, strokes, text, gradient stops, mesh points) that no solid swatch has yet, as one undo step (none when there is no new color; the Swatches panel menu's Add Selected Colors sends selection and global; with Global Edit on, the other members keep their colors) → {added: [names], linked}",
             has_doc,
             swatch_add_used
         ),
@@ -105,6 +107,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name: colour group} move its swatches to the end of the ungrouped swatches and remove the group, as one undo step → {swatches: [names]}",
             has_doc,
             swatch_ungroup
+        ),
+        cmd!(
+            "swatch.renameGroup",
+            "Color Group Options",
+            ["Window", "Swatches"],
+            None,
+            "{group: color group, name: its new name (trimmed)} rename a color group, as one undo step; its swatches, their colors and the art linked to them stay as they are. Swatches and color groups share one set of names, so a name another color group or a swatch has is an error, as is an empty name; the group's own name records no undo step. A drag still in progress becomes an undo step of its own first → {name}",
+            has_doc,
+            swatch_rename_group
         ),
         cmd!(
             "swatch.sortByKind",
@@ -1001,16 +1012,26 @@ fn swatch_list(s: &mut Session, p: &Value) -> Result<Value> {
         Some(g) => vec![d.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| bad("swatch.list", format!("no colour group `{g}`")))?],
         None => d.swatch_groups.iter().collect(),
     };
-    // The built-in Registration swatch lists after None, as the panel shows it.
-    let none = d.swatches.iter().take_while(|w| w.paint.is_none()).count();
-    let (specials, rest) = d.swatches.split_at(none);
-    let all = specials.iter().chain([vectorcraft_color::swatch::registration()]).chain(rest);
-    let ungrouped = all.filter(|_| only.is_none()).map(|w| swatch_json(w, None));
-    let grouped = groups.iter().flat_map(|g| g.swatches.iter().map(|w| swatch_json(w, Some(&g.name))));
-    let swatches: Vec<Value> = ungrouped.chain(grouped).collect();
+    let swatches: Vec<Value> = listed_swatches(d, only.is_none(), groups.clone()).map(|(w, g)| swatch_json(w, g)).collect();
     let groups: Vec<Value> =
         groups.iter().map(|g| json!({"name": g.name, "swatches": g.swatches.iter().map(|w| &w.name).collect::<Vec<_>>()})).collect();
     Ok(json!({"swatches": swatches, "groups": groups}))
+}
+
+/// The swatches `swatch.list` lists, in its order, each with the name of the colour group it is
+/// in: with `ungrouped`, the swatches outside groups (the built-in Registration swatch after None,
+/// as the panel shows it), then those of `groups`.
+pub(super) fn listed_swatches<'a>(
+    d: &'a Document,
+    ungrouped: bool,
+    groups: Vec<&'a SwatchGroup>,
+) -> impl Iterator<Item = (&'a Swatch, Option<&'a str>)> + 'a {
+    let none = d.swatches.iter().take_while(|w| w.paint.is_none()).count();
+    let (specials, rest) = d.swatches.split_at(none);
+    let all = specials.iter().chain([vectorcraft_color::swatch::registration()]).chain(rest);
+    let ungrouped = all.filter(move |_| ungrouped).map(|w| (w, None));
+    let grouped = groups.into_iter().flat_map(|g| g.swatches.iter().map(move |w| (w, Some(g.name.as_str()))));
+    ungrouped.chain(grouped)
 }
 
 fn swatch_sort(s: &mut Session, _: &Value) -> Result<Value> {
@@ -1026,20 +1047,41 @@ fn swatch_sort(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// The colors of the art `ids` that no swatch links them to and no solid swatch has, each once, in
+/// paint order: the swatches Add Used Colors makes.
+fn new_used_colors(d: &Document, ids: &[NodeId]) -> Vec<Color> {
+    let (mut linked_to, mut colors) = (vec![], vec![]);
+    artwork_colors(d, ids, false, &mut linked_to, &mut colors);
+    // Colors a solid swatch already has are skipped.
+    let have: HashSet<ColorKey> = d.swatches_iter().filter_map(|w| w.paint.color()).filter_map(|c| color_key(&c)).collect();
+    colors.retain(|c| color_key(c).is_none_or(|k| !have.contains(&k)));
+    colors
+}
+
 fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.addUsedColors";
     let global = switch_or(p, "global", false, C)?;
     let only_selection = switch_or(p, "selection", false, C)?;
-    let (added, linked) = s.edit("Add Used Colors", |d, sel| {
+    let used_ids = |d: &Document, sel: &Selection| -> Result<Vec<NodeId>> {
         let ids: Vec<NodeId> = if only_selection { sel.objects.clone() } else { d.layers.iter().map(|l| l.id).collect() };
         if only_selection && ids.is_empty() {
             return Err(bad(C, "select artwork to add its colours"));
         }
-        let (mut linked_to, mut colors) = (vec![], vec![]);
-        artwork_colors(d, &ids, false, &mut linked_to, &mut colors);
-        // Colours a solid swatch already has are skipped.
-        let have: HashSet<ColorKey> = d.swatches_iter().filter_map(|w| w.paint.color()).filter_map(|c| color_key(&c)).collect();
-        colors.retain(|c| color_key(c).is_none_or(|k| !have.contains(&k)));
+        Ok(ids)
+    };
+    // Typing in progress is its own undo step and is in the document the colors are read from.
+    super::variablecmds::settle_typing(s)?;
+    // With no new color there is nothing to add or link, so no edit and no undo step.
+    let st = s.doc()?;
+    if new_used_colors(&st.doc, &used_ids(&st.doc, &st.selection)?).is_empty() {
+        return Ok(json!({"added": [], "linked": 0}));
+    }
+    // Linking a paint to its new swatch keeps its color, so Global Edit gives the link to no other
+    // member: a member whose color differs keeps it.
+    let global_edit = s.doc_mut()?.global_edit.take();
+    let edited = s.edit("Add Used Colors", |d, sel| {
+        let ids = used_ids(&*d, &*sel)?;
+        let colors = new_used_colors(d, &ids);
         let mut free = d.free_swatch_names();
         let mut links = vec![];
         for c in colors {
@@ -1049,7 +1091,9 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let linked = if global { link_colors(d, &ids, &links) } else { 0 };
         Ok((links.into_iter().map(|(_, n)| n).collect::<Vec<_>>(), linked))
-    })?;
+    });
+    s.doc_mut()?.global_edit = global_edit;
+    let (added, linked) = edited?;
     Ok(json!({"added": added, "linked": linked}))
 }
 
@@ -1200,6 +1244,35 @@ fn swatch_ungroup(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "swatches": moved }))
 }
 
+fn swatch_rename_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.renameGroup";
+    let group = text_param(p, "group", C)?.ok_or_else(|| bad(C, "missing `group`"))?.to_string();
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?.trim().to_string();
+    if name.is_empty() {
+        return Err(bad(C, "`name` is empty"));
+    }
+    let d = &s.doc()?.doc;
+    if !d.swatch_groups.iter().any(|g| g.name == group) {
+        return Err(bad(C, format!("no colour group `{group}`")));
+    }
+    if name == group {
+        return Ok(json!({ "name": name }));
+    }
+    if d.swatch_name_taken(&name) {
+        return Err(bad(C, format!("a swatch or color group named `{name}` already exists")));
+    }
+    // A drag still in progress is a step of its own, so canceling or undoing it leaves the rename.
+    if !s.previewing && s.batch_stash.is_none() && (s.in_interaction() || s.holds_interaction()) {
+        super::settle_interaction(s)?;
+    }
+    s.edit("Color Group Options", |d, _| {
+        let g = d.swatch_groups.iter_mut().find(|g| g.name == group).ok_or_else(|| bad(C, format!("no colour group `{group}`")))?;
+        g.name.clone_from(&name);
+        Ok(())
+    })?;
+    Ok(json!({ "name": name }))
+}
+
 fn swatch_sort_by_kind(s: &mut Session, _: &Value) -> Result<Value> {
     let rank = |w: &Swatch| match &w.paint {
         Paint::None => 0,
@@ -1279,40 +1352,63 @@ impl GroupEdit {
 
 /// Rewrite colour group `group` with `colors`: its swatches take them in order (keeping their
 /// names, kinds and global or spot flags), a `None` removes the swatch at its place, extra colors
-/// are added as new swatches and swatches past the end are removed. Paints linked to its global
+/// are added as new swatches and swatches past the end are removed. With `colors_only`, a swatch
+/// that is not a color (a gradient, pattern or None swatch) keeps its place and paint and takes no
+/// entry of `colors`, which go to the group's color swatches in order. Paints linked to its global
 /// swatches follow (a removed swatch's are unlinked); `rename` renames the group. A built-in swatch
 /// (None, Registration) it would change or remove is refused.
-pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Option<Color>], rename: Option<&str>, cmd: &str) -> Result<GroupEdit> {
+pub(super) fn rewrite_group(
+    d: &mut Document,
+    group: &str,
+    colors: &[Option<Color>],
+    colors_only: bool,
+    rename: Option<&str>,
+    cmd: &str,
+) -> Result<GroupEdit> {
     let gi = d.swatch_groups.iter().position(|g| g.name == group).ok_or_else(|| bad(cmd, format!("no colour group `{group}`")))?;
     let name = match rename.map(str::trim).filter(|n| !n.is_empty() && *n != group) {
         Some(n) => d.free_swatch_name(n),
         None => group.to_string(),
     };
     let old = &d.swatch_groups[gi].swatches;
+    // The place in `colors` of each swatch's new color; none for a swatch kept as it is.
+    let mut taken = 0;
+    let places: Vec<Option<usize>> = old
+        .iter()
+        .map(|w| {
+            (!colors_only || w.paint.color().is_some()).then(|| {
+                taken += 1;
+                taken - 1
+            })
+        })
+        .collect();
+    let new_color = |place: Option<usize>| place.and_then(|i| colors.get(i).copied().flatten());
     if let Some(w) = old
         .iter()
-        .enumerate()
-        .find(|(i, w)| w.is_reserved() && colors.get(*i).copied().flatten().is_none_or(|c| w.paint.color() != Some(c)))
-        .map(|x| x.1)
+        .zip(&places)
+        .find(|(w, place)| place.is_some() && w.is_reserved() && new_color(**place).is_none_or(|c| w.paint.color() != Some(c)))
+        .map(|x| x.0)
     {
         return Err(bad(cmd, format!("`{}` can't be edited or removed", w.name)));
     }
     let colorized_ok = super::paint::check_colorized(d).is_ok();
     let mut relinks = vec![];
     let old = std::mem::take(&mut d.swatch_groups[gi].swatches);
-    let old_len = old.len();
-    // The swatches that stay, each with its new color.
-    let mut kept: Vec<(Swatch, Color)> = vec![];
-    for (i, w) in old.into_iter().enumerate() {
-        match colors.get(i).copied().flatten() {
-            Some(c) => kept.push((w, c)),
-            None if w.global => relinks.push(Relink { from: w.name.clone(), to: w.name, color: None, keep: false }),
-            None => {}
+    // The swatches that stay, each with its new color (none for one kept as it is).
+    let mut kept: Vec<(Swatch, Option<Color>)> = vec![];
+    for (w, place) in old.into_iter().zip(places) {
+        match (place, new_color(place)) {
+            (None, _) => kept.push((w, None)),
+            (_, Some(c)) => kept.push((w, Some(c))),
+            (_, None) if w.global => relinks.push(Relink { from: w.name.clone(), to: w.name, color: None, keep: false }),
+            (_, None) => {}
         }
     }
     let mut swatches = Vec::with_capacity(kept.len());
     for (mut w, c) in kept {
-        if w.paint.color() != Some(c) {
+        if let Some(c) = c
+            && w.paint.color() != Some(c)
+        {
             // A tint swatch becomes a colour of its own.
             w.paint = Paint::solid(c);
             if w.global {
@@ -1325,7 +1421,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Option<Colo
     let mut free = d.free_swatch_names();
     free.insert(&name);
     swatches.iter().for_each(|w| free.insert(&w.name));
-    for c in colors.iter().skip(old_len).flatten() {
+    for c in colors.iter().skip(taken).flatten() {
         let nm = free.take(&color_name(*c));
         swatches.push(Swatch { name: nm, paint: Paint::solid(*c), global: false, spot: false });
     }
@@ -1379,7 +1475,7 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Ok(json!({"name": group, "swatches": g.swatches.iter().map(|w| w.name.clone()).collect::<Vec<_>>(), "relinked": 0}));
     }
-    let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
+    let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, false, rename, C))?;
     e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
 }

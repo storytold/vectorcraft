@@ -99,18 +99,24 @@ pub fn builtin_library(id: &str) -> Option<Arc<SwatchLibrary>> {
 
 // ---------- colour construction ----------
 
-/// sRGB (0..=1, gamma encoded) of OKLab `(l, a, b)`, unclamped.
+/// sRGB (0..=1, gamma encoded) of OKLab `(l, a, b)`, unclamped. A linear channel below
+/// −0.0031308 is encoded with the curve's sign turned, as CSS Color 4's extended sRGB does
+/// (<https://www.w3.org/TR/css-color-4/#color-conversion-code>).
 pub(crate) fn oklab_to_srgb(l: f64, a: f64, b: f64) -> [f64; 3] {
+    oklab_to_linear_srgb(l, a, b).map(|v| if v.abs() <= 0.003_130_8 { 12.92 * v } else { v.signum() * (1.055 * v.abs().powf(1.0 / 2.4) - 0.055) })
+}
+
+/// Linear sRGB of OKLab `(l, a, b)`, unclamped.
+pub(crate) fn oklab_to_linear_srgb(l: f64, a: f64, b: f64) -> [f64; 3] {
     let l_ = l + 0.396_337_777_4 * a + 0.215_803_757_3 * b;
     let m_ = l - 0.105_561_345_8 * a - 0.063_854_172_8 * b;
     let s_ = l - 0.089_484_177_5 * a - 1.291_485_548_0 * b;
     let (l3, m3, s3) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_);
-    let lin = [
+    [
         4.076_741_662_1 * l3 - 3.307_711_591_3 * m3 + 0.230_969_929_2 * s3,
         -1.268_438_004_6 * l3 + 2.609_757_401_1 * m3 - 0.341_319_396_5 * s3,
         -0.004_196_086_3 * l3 - 0.703_418_614_7 * m3 + 1.707_614_701_0 * s3,
-    ];
-    lin.map(|v| if v <= 0.003_130_8 { 12.92 * v } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 })
+    ]
 }
 
 /// OKLab `[l, a, b]` of a colour's display RGB.
@@ -118,11 +124,13 @@ pub fn to_oklab(c: &Color) -> [f64; 3] {
     srgb_to_oklab(c.to_rgb_uncalibrated())
 }
 
-/// OKLab `[l, a, b]` of sRGB `rgb` (0..=1, gamma encoded).
+/// OKLab `[l, a, b]` of sRGB `rgb` (0..=1, gamma encoded). A channel below −0.04045 is decoded
+/// with the curve's sign turned, as CSS Color 4's extended sRGB does
+/// (<https://www.w3.org/TR/css-color-4/#color-conversion-code>).
 pub(crate) fn srgb_to_oklab(rgb: [f32; 3]) -> [f64; 3] {
     let [r, g, b] = rgb.map(|v| {
         let v = f64::from(v);
-        if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        if v.abs() <= 0.040_45 { v / 12.92 } else { v.signum() * ((v.abs() + 0.055) / 1.055).powf(2.4) }
     });
     let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
     let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
@@ -621,16 +629,15 @@ fn perceptual() -> (Vec<Swatch>, Vec<SwatchGroup>) {
 
 /// Colour-wheel harmonies of a few base colours (the Color Guide's rules).
 fn harmony_sets() -> (Vec<Swatch>, Vec<SwatchGroup>) {
-    use crate::harmony::Harmony;
+    use crate::harmony::{self, Harmony};
     let bases = [("Coral", Color::from_hsb(8.0, 0.68, 0.94)), ("Teal", Color::from_hsb(176.0, 0.72, 0.62))];
     let rules = [Harmony::Complementary, Harmony::SplitComplementary, Harmony::Analogous, Harmony::Triad, Harmony::Tetrad, Harmony::Pentagram];
     let mut groups = vec![];
     for (bn, base) in bases {
         for rule in rules {
-            let name = format!("{} {bn}", rule.label());
+            let name = format!("{} {bn}", harmony::label(rule));
             // Rounded to 8 bits like the other libraries.
-            let swatches = rule
-                .apply(base)
+            let swatches = harmony::apply(rule, base)
                 .into_iter()
                 .enumerate()
                 .map(|(i, c)| {

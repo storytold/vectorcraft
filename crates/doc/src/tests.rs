@@ -686,6 +686,43 @@ fn reid_gives_fresh_ids() {
     assert!(!ids.contains(&a) && !ids.contains(&b));
 }
 
+/// A copy of a node in the document takes the Symbol Set Density recorded for it; a node from
+/// another document with the same id does not.
+#[test]
+fn reid_copies_the_set_density_of_the_documents_own_node() {
+    let (mut d, a, _) = doc_with_rects();
+    d.unknown.insert(Document::SYMBOL_SET_DENSITY_KEY.into(), serde_json::json!({ a.0.to_string(): 2.0 }));
+    let density = |d: &Document, id: NodeId| d.unknown[Document::SYMBOL_SET_DENSITY_KEY].get(id.0.to_string()).cloned();
+    let own = d.node(a).cloned().unwrap();
+    let copy = d.reid(&own);
+    assert_eq!(density(&d, copy.id), Some(serde_json::json!(2.0)));
+    let foreign = Node::group(a, vec![]);
+    let copy = d.reid(&foreign);
+    assert_eq!(density(&d, copy.id), None);
+}
+
+/// A pasted copy and its descendants take the densities recorded at Copy, and none where Copy
+/// recorded none, whatever [`Document::reid`] found for an identical node in the document.
+#[test]
+fn carry_set_densities_gives_the_densities_recorded_at_copy() {
+    let (mut d, a, b) = doc_with_rects();
+    d.unknown.insert(Document::SYMBOL_SET_DENSITY_KEY.into(), serde_json::json!({ a.0.to_string(): 2.0 }));
+    let density = |d: &Document, id: NodeId| d.unknown[Document::SYMBOL_SET_DENSITY_KEY].get(id.0.to_string()).cloned();
+    let (na, nb) = (d.node(a).cloned().unwrap(), d.node(b).cloned().unwrap());
+    // Copy recorded nothing for `a`: the copy reid gave a density loses it.
+    let copy = d.reid(&na);
+    assert_eq!(density(&d, copy.id), Some(serde_json::json!(2.0)));
+    d.carry_set_densities(&na, &copy, &Default::default());
+    assert_eq!(density(&d, copy.id), None);
+    // Copy recorded 7 for `b` inside a group: the group's copy has none, and `b`'s copy has 7.
+    let g = d.alloc_id();
+    let group = Node::group(g, vec![Arc::new(nb)]);
+    let copy = d.reid(&group);
+    d.carry_set_densities(&group, &copy, &[(b, serde_json::json!(7.0))].into_iter().collect());
+    let inner = copy.children().unwrap()[0].id;
+    assert_eq!((density(&d, copy.id), density(&d, inner)), (None, Some(serde_json::json!(7.0))));
+}
+
 #[test]
 fn setup_round_trips_and_old_files_load() {
     let (mut d, _, _) = doc_with_rects();

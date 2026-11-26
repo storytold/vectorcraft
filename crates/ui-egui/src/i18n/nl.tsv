@@ -22,6 +22,7 @@
 	Quit VectorCraft	VectorCraft afsluiten
 # Artwork drag between document tabs.
 	Drop Artwork	Illustratie neerzetten
+@id	language.name	Nederlands
 @msg	{key} must be [x, y] with finite coordinates	{key} moet [x, y] met eindige coördinaten zijn
 @msg	ids must contain 1–10000 object ids	ids moet 1–10000 object-id’s bevatten
 
@@ -319,6 +320,26 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	the HEIC or HEIF file can't be read	het HEIC- of HEIF-bestand kan niet worden gelezen
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	het HEIC- of HEIF-bestand bevat een soort afbeelding die niet kan worden gelezen
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- en HEIF-afbeeldingen kunnen in deze build niet worden geopend
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	tekeningen uit CDR {version} kunnen niet worden geopend: VectorCraft leest versies 1 tot en met 27
+@msg	this CDR drawing can't be read ({why})	deze CDR-tekening kan niet worden gelezen ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-tekst, bitmaps, vermengingen, omtrekken, penseelstreken en andere objecten die VectorCraft nog niet leest, zijn weggelaten
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-verloop-, patroon-, textuur- en PostScript-vullingen zijn weggelaten
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	kleuren in CDR-kleurmodellen die VectorCraft niet leest, zijn als zwart geopend
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-bibliotheekkleuren die de tekening alleen als nummer opslaat, zijn als zwarte steunkleuren geopend
+@msg	CDR outline arrowheads were left out	pijlpunten van CDR-contouren zijn weggelaten
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-enveloppen zijn niet toegepast, en de vormen eronder behouden hun omtrek
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-lenzen en objecttransparantie zijn niet toegepast, en de objecten waarop ze liggen, worden dekkend weergegeven
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	delen van de tekening die te diep genest zijn of buiten de importlimieten vallen, zijn weggelaten
+@msg	damaged parts of the drawing were left out	beschadigde delen van de tekening zijn weggelaten
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-pagina’s langer dan 163.830 pt zijn op die lengte geopend, en illustraties bij de randen ervan liggen buiten het tekengebied
+@msg	this CMX file can't be read ({why})	dit CMX-bestand kan niet worden gelezen ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX-tekst, afbeeldingen, rechthoeken, ellipsen, uitknippaden en andere objecten die VectorCraft nog niet leest, zijn weggelaten
+@msg	CMX fills other than uniform colors were left out	CMX-vullingen die geen egale kleuren zijn, zijn weggelaten
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	kleuren in CMX-kleurmodellen die VectorCraft niet leest, zijn als zwart geopend
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-bibliotheekkleuren die het bestand alleen als nummer opslaat, zijn als zwarte steunkleuren geopend
+@msg	CMX outline arrowheads were left out	pijlpunten van CMX-contouren zijn weggelaten
+@msg	CMX lenses were not applied	CMX-lenzen zijn niet toegepast
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-pagina’s langer dan 163.830 pt zijn op die lengte geopend, en illustraties bij de randen ervan liggen buiten het tekengebied
 @msg	the JPEG XL file is cut short	het JPEG XL-bestand is afgebroken
 @msg	the JPEG XL container is too large to read	de JPEG XL-container is te groot om te lezen
 @msg	CMYK JPEG XL images can't be read	CMYK-afbeeldingen in JPEG XL kunnen niet worden gelezen
@@ -355,6 +376,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` geldt voor lineaire, radiale, conische en ruitvormige verlopen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} is voltooid, maar het document of de plug-in is intussen gewijzigd: voer het opnieuw uit
 @msg	Running “{name}”…	„{name}” wordt uitgevoerd…
+@msg	Plug-in “{name}”: {notice}	Plug-in „{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` moet een tekenreeks met zichtbare tekst zijn
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	een live-effect wordt uitgevoerd terwijl het document wordt getekend, dus kan het niet `heavy` zijn
 @msg	an exporter always gets an export's budget: leave `budget` out	een exportplug-in krijgt altijd het budget van een export: laat `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” vraagt om een groot rekenbudget (elke uitvoering tot {minutes} minuten en {times} keer het gebruikelijke aantal instructies): een persoon moet dit goedkeuren in de desktop-app, of geef `allowHeavy: true` door in een sessie die is gestart met --allow-plugin-grants
@@ -379,11 +402,19 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	module is {_1} bytes (limit {_2})	de module telt {_1} bytes (limiet {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	geen WebAssembly-binair bestand (de header \0asm ontbreekt)
+@msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} parameters
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	een functietype overschrijdt de limiet van {MAX_FUNC_TYPE_VALUES} resultaten
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
 @msg	the module must export its linear memory as `memory`	de module moet haar lineaire geheugen exporteren als `memory`
+@msg	the module must export `{name}` with the type {signature}	de module moet `{name}` exporteren met het type {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	de module heeft meer dan één aangepaste sectie `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	geheugenbudget (het begingeheugen van de module is {initial} bytes, limiet {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	het manifest in de aangepaste sectie `{MANIFEST_SECTION}` moet `abi` opgeven als {ABI_VERSION}, de ABI-versie die deze host implementeert
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (de module definieert {count} tabellen, de grootste met {largest} elementen; limiet {MAX_TABLES} tabellen van {MAX_TABLE_ELEMENTS} elementen)
+@msg	the module's table section could not be read	de tabelsectie van de module kon niet worden gelezen
 @msg	the objects to change are no longer in the document	de te wijzigen objecten staan niet meer in het document
 @msg	the runtime panicked	de runtime is vastgelopen
 @msg	unexpected host trap	onverwachte trap in de host
@@ -391,6 +422,10 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc gaf 0 terug (onvoldoende geheugen)
 @msg	vc_alloc returned a block outside memory	vc_alloc gaf een blok buiten het geheugen terug
 @msg	vc_run returned error code {packed}	vc_run gaf foutcode {packed} terug
+@msg	did not finish loading within {secs} s	was niet binnen {secs} s klaar met laden
+@msg	no thread was left to load it	er was geen thread meer over om het te laden
+@msg	panicked while loading	is tijdens het laden gecrasht
+@msg	panicked while loading: {what}	is tijdens het laden gecrasht: {what}
 @msg	{_1} is not a file	{_1} is geen bestand
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} is {_2} bytes (limiet {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objecten (limiet {MAX_OBJECTS})
@@ -410,6 +445,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` en `maxItems` moeten 0-{MAX_LIST} zijn, `maxItems` minstens 1, en de standaardwaarde zoveel items
 @msg	`name` must be a string	`name` moet een string zijn
 @msg	`opacity` must be a number	`opacity` moet een getal zijn
+@msg	`opacity` must be a number from 0 to 100	`opacity` moet een getal van 0 tot 100 zijn
+@msg	`opacity` must be true or false	`opacity` moet true of false zijn
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tekens van tekst hebben geen eigen dekking: voeg een vulling of streek toe met Nieuwe vulling toevoegen of Nieuwe streek toevoegen in het deelvenster Uiterlijk
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	een object dat in een symboolinstantie is geselecteerd, heeft geen eigen dekking voor vulling of streek
+@msg	no target has that fill or stroke to take the opacity	geen enkel doel heeft die vulling of streek om de dekking te krijgen
 @msg	`type` must be "path" or "compound"	`type` moet "path" of "compound" zijn
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` moet uit 1-{MAX_UNIT} afdrukbare tekens bestaan
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` noemt 1 tot {MAX_CONDITION_VALUES} waarden voor `{other}`
@@ -428,7 +468,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	a list of {min_items} to {max_items} numbers	een lijst met {min_items} tot {max_items} getallen
 @msg	a new object needs a `path`	een nieuw object heeft een `path` nodig
 @msg	a number	een getal
-@msg	a painted live effect returns only `objects`	een geschilderd live-effect geeft alleen `objects` terug
+@msg	a painted live effect returns only `objects` and `notice`	een geschilderd live-effect geeft alleen `objects` en `notice` terug
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills` en `strokes`
 @msg	a read-only object was left out	een alleen-lezen object is weggelaten
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {{"id": …}} of zoals het is gegeven
@@ -453,6 +493,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	het samengestelde pad {id} heeft een verborgen, vergrendeld of hulplijnlid, dus de leden kunnen niet worden vervangen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	het samengestelde pad {id} heeft een lid dat geen pad is, dus de leden kunnen niet worden vervangen
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
 @msg	true or false	true of false
 @msg	a number >= {_1}	een getal >= {_1}
@@ -512,6 +554,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` is {_1}; deze host implementeert plug-in-API-niveaus 1 tot {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` mag alleen true zijn
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` is alleen voor een live-effect (`kind` "effect") bij `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` is alleen voor een importer (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” opent bestanden maar plaatst ze niet: het manifest stelt `place` niet in
 @msg	`grant` must be a list of permission names	`grant` moet een lijst met namen van machtigingen zijn
 @msg	`grant` names an unknown permission `{shown}`	`grant` noemt een onbekende machtiging `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	een plug-in van het soort `{_1}` heeft de machtiging `{_2}` nodig
@@ -523,6 +567,10 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` noemt `{shown}` twee keer
 @msg	`inputs` needs `api` 2 or later	`inputs` vereist `api` 2 of hoger
 @msg	`inputs` needs the permission `doc.read`	`inputs` vereist de machtiging `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	De objecten lezen die het krijgt, en de instellingen, tekengebieden, lagen en stalen van het document
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` moet verschillende secties noemen: settings, artboards, layers of swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` is voor een filter, of een live-effect met `commands`, bij `api` 3 of later en met de machtiging `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	de documentgegevens die de plug-in vraagt zijn te groot om door te geven: hoogstens {MAX_CONTEXT_ITEMS} tekengebieden, lagen en stalen in {MAX_CONTEXT_BYTES} bytes
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	geheugenbudget (object {_1} heeft {size} bytes invoer nodig, {left} over)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objectbudget (meer dan {MAX_OBJECTS} alleen-lezen objecten)
 @msg	instruction budget	instructiebudget
@@ -668,6 +716,19 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Paste without Formatting	Plakken zonder opmaak
 	Clear	Wissen
 	Find and Replace…	Zoeken en vervangen…
+	Find and Replace	Zoeken en vervangen
+	Find:	Zoeken:
+	Replace With:	Vervangen door:
+	Replace & Find	Vervangen en zoeken
+	Replace All	Alles vervangen
+	Match Case	Hoofdlettergevoelig
+	Find Whole Word	Heel woord zoeken
+	Search Backwards	Achterwaarts zoeken
+	Check Hidden Layers	Verborgen lagen controleren
+	Check Locked Layers	Vergrendelde lagen controleren
+@msg	No matches found	Geen overeenkomsten gevonden
+@msg	Matches replaced: {n}	Vervangen overeenkomsten: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	geen overeenkomst van `find` bij bytes {_1}..{_2} van object {_3}
 	Find Next	Volgende zoeken
 	Spelling	Spelling
 	Auto Spell Check	Automatische spellingcontrole
@@ -821,6 +882,16 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	To Center	Naar het midden
 	To Edge	Naar de rand
 	Create Object Mosaic…	Objectmozaïek maken…
+	Create Object Mosaic	Objectmozaïek maken
+	Current Size:	Huidige grootte:
+	New Size:	Nieuwe grootte:
+	Tile Spacing:	Tussenruimte tegels:
+	Number of Tiles:	Aantal tegels:
+	Constrain Ratio:	Verhouding beperken:
+	Result:	Resultaat:
+	Resize Using Percentages	Grootte wijzigen met percentages
+	Delete Raster	Rasterafbeelding verwijderen
+	Use Ratio	Verhouding gebruiken
 	Vector Halftone…	Vectorhalftoon…
 	Create Trim Marks	Afsnijtekens maken
 	Flatten Transparency…	Transparantie afvlakken…
@@ -902,6 +973,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Artboards	Tekengebieden
 	Convert to Artboards	Converteren naar tekengebieden
 	Rearrange All Artboards…	Alle tekengebieden herschikken…
+	Rearrange…	Herschikken…
+	Selected Artboards: {n}	Geselecteerde tekengebieden: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik op het canvas om de tekengebieden te plaatsen (Esc annuleert)
 	Fit to Artwork Bounds	Op artworkgrenzen passend maken
 	Fit to Selected Art	Op geselecteerd artwork passend maken
 	Graph	Grafiek
@@ -992,6 +1066,20 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Break Thread	Koppeling verbreken
 	Fit Headline	Kop passend maken
 	Find Font…	Lettertype zoeken…
+	Retype	Opnieuw typen
+	Find Matching Fonts	Overeenkomende lettertypen zoeken
+	Find more font matches	Meer overeenkomende lettertypen zoeken
+	Type your text to preview	Typ de tekst voor het voorbeeld
+	Select outlined text, then Find Matching Fonts.	Selecteer omgezette tekst en kies dan Overeenkomende lettertypen zoeken.
+	No font matches the selected shapes.	Geen lettertype komt overeen met de geselecteerde vormen.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Vormen na de eerste 2.048, of meer dan 16 groepen diep, zijn niet vergeleken.
+	Reset Retype Panel	Paneel Opnieuw typen herstellen
+	List Matching Fonts	Overeenkomende lettertypen weergeven
+	Retype Preview	Voorbeeld in paneel Opnieuw typen
+@msg	`count` must be a whole number from 1 to 96	`count` moet een geheel getal van 1 tot 96 zijn
+@msg	`size` must be small, medium or large	`size` moet small, medium of large zijn
+@msg	`text` must be a string of at most 100 characters	`text` moet een tekenreeks van hoogstens 100 tekens zijn
+@msg	Retype: select outlined text (paths or compound paths)	Opnieuw typen: selecteer omgezette tekst (paden of samengestelde paden)
 	Change Case	Hoofdlettergebruik wijzigen
 	UPPERCASE	HOOFDLETTERS
 	lowercase	kleine letters
@@ -1039,6 +1127,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Fill & Stroke	Vulling en contour
 	Fill Color	Vulkleur
 	Opacity	Dekking
+	Show Opacity	Dekking tonen
 	Stroke Color	Contourkleur
 	Fill Gradient	Vulverloop
 	Stroke Gradient	Contourverloop
@@ -1098,6 +1187,17 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Shading Color	Arceringskleur
 	Black Overprint	Zwart overprinten
 	Draw Hidden Faces	Verborgen vlakken tekenen
+	Map Art…	Artwork toewijzen…
+	Map Art	Artwork toewijzen
+	First Surface	Eerste oppervlak
+	Previous Surface	Vorig oppervlak
+	Next Surface	Volgend oppervlak
+	Last Surface	Laatste oppervlak
+	Horizontal Scale	Horizontale schaal
+	Vertical Scale	Verticale schaal
+	Scale to Fit	Schalen om te passen
+	Shade Artwork	Artwork arceren
+	Invisible Geometry	Onzichtbare geometrie
 	Revolve…	Draaien…
 	Inflate…	Opblazen…
 	Materials…	Materialen…
@@ -1209,6 +1309,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Hide Gradient Annotator	Verloopaanduiding verbergen
 	Show Gradient Annotator	Verloopaanduiding tonen
 	Hide Corner Widget	Hoekwidget verbergen
+	Hide Shape Widgets	Vormwidgets verbergen
+	Show Shape Widgets	Vormwidgets tonen
 	Show Corner Widget	Hoekwidget tonen
 	Guides	Hulplijnen
 	Hide Guides	Hulplijnen verbergen
@@ -1306,6 +1408,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Contextual Task Bar	Contextuele taakbalk
 	Pin Bar Position	Balkpositie vastzetten
 	Reset Bar Position	Balkpositie herstellen
+	Bar Actions	Balkacties
+	Reset Bar Actions	Balkacties herstellen
 	Tools	Gereedschappen
 	Toolbars	Werkbalken
 	Advanced	Geavanceerd
@@ -1325,9 +1429,17 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Wielweergave
 	Box View	Vakweergave
+	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Document Colors	Documentkleuren tonen
+	Document Colors	Documentkleuren
+	Selection Colors	Kleuren van de selectie
+@plural	Used {n} time|Used {n} times	{n} keer gebruikt|{n} keer gebruikt
+	Show Harmony	Harmonie tonen
+	Harmony Rule	Harmonieregel
+	Harmony color	Harmoniekleur
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -1345,6 +1457,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Magic Wand	Magische toverstaf
 	Navigator	Navigator
 	Navigator Panel Options	Opties voor het paneel Navigator
+	Attributes Panel Options	Opties voor het paneel Kenmerken
+	Number of Recent URLs:	Aantal recente URL's:
+@msg	`count` must be a whole number from 1 to 30	`count` moet een geheel getal van 1 tot 30 zijn
 	Draw Dashed Lines as Solid Lines	Streepjeslijnen als doorgetrokken lijnen tekenen
 	Pattern Options	Patroonopties
 	Properties	Eigenschappen
@@ -1556,6 +1671,25 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Preserve Embedded Profiles	Ingesloten profielen behouden
 	Convert to Working Space	Omzetten naar werkruimte
 	Preserve Numbers	Waarden behouden
+	Profile Mismatches:	Profielverschillen:
+	Ask When Opening	Vragen bij openen
+	Ask When Pasting	Vragen bij plakken
+	Missing Profiles:	Ontbrekende profielen:
+	Embedded Profile Mismatch	Ingesloten profiel komt niet overeen
+	Missing Profile	Ontbrekend profiel
+	Paste Profile Mismatch	Profielverschil bij plakken
+	“{name}” is not tagged with a {model} profile.	„{name}” heeft geen {model}-profiel.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}” heeft het {model}-profiel „{profile}”, dat niet de {model}-werkruimte „{working}” is.
+	Use the embedded profile	Ingesloten profiel gebruiken
+	Convert the colors to the working space	Kleuren omzetten naar de werkruimte
+	Discard the embedded profile	Ingesloten profiel negeren
+	Leave as is	Laten zoals het is
+	Assign the working space	Werkruimte toewijzen
+	Assign profile:	Profiel toewijzen:
+	Preserve the color numbers	Kleurwaarden behouden
+	Convert to keep the colors' appearance	Omzetten zodat de kleuren er hetzelfde uitzien
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hoort alleen bij `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De geplakte kleuren komen uit een document met het {model}-profiel „{from}”; dat van dit document is „{to}”.
 	CMYK	CMYK
 	Texture	Textuur
 	Craquelure…	Craquelure…
@@ -1637,6 +1771,15 @@ lighting	Light	Licht
 	Document Raster Effects Settings Dialog	Dialoogvenster rastereffectinstellingen van document
 	Drop Shadow	Slagschaduw
 	DXF Options Dialog	Dialoogvenster DXF-opties
+	HP-GL Options	HP-GL-opties
+	HP-GL Options Dialog	Dialoogvenster HP-GL-opties
+	Curve Tolerance:	Curvetolerantie:
+	Origin:	Oorsprong:
+	Pens:	Pennen:
+	One Pen per Color	Eén pen per kleur
+	Pen Table	Pennentabel
+	Draw the Nearest Path Next	Het dichtstbijzijnde pad als volgende tekenen
+	Draw Inner Paths First	Binnenste paden eerst tekenen
 	Edit Toolbar	Werkbalk bewerken
 	Edit Views	Weergaven bewerken
 	Effect…	Effect…
@@ -1949,6 +2092,10 @@ lighting	Light	Licht
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
 	Arc Tool	Boog-gereedschap
+	Three-Point Arc Tool	Driepuntsboog-gereedschap
+	Three-Point Arc	Driepuntsboog
+	Arc too large	Boog te groot
+	Third Point Sets Direction	Derde punt geeft de richting aan
 	Area Graph Tool	Vlakdiagram-gereedschap
 	Area Type Tool	Vlaktype-gereedschap
 	Artboard Tool	Tekengebied-gereedschap
@@ -2065,6 +2212,7 @@ lighting	Light	Licht
 	Save Actions…	Acties opslaan…
 	Load Actions…	Acties laden…
 	Replace Actions…	Acties vervangen…
+	Clear Actions	Acties wissen
 	Reset Actions	Acties opnieuw instellen
 	Replace the current actions with the default set?	De huidige acties vervangen door de standaardset?
 	Append adds the default set after the current sets instead.	Toevoegen voegt in plaats daarvan de standaardset toe na de huidige sets.
@@ -2198,6 +2346,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
+	Show on Shape Creation	Tonen bij maken van vorm
 	Show Recent Colors	Recente kleuren tonen
 	Toggle RGB Percent	RGB in procenten wisselen
 	Small Caps	Kleine kapitalen
@@ -2411,6 +2560,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Actie of actieset dupliceren
 	Delete the action set “{name}” and its actions?	De actieset „{name}” en de acties erin verwijderen?
 	Delete the selected action sets and their actions?	De geselecteerde actiesets en de acties erin verwijderen?
+	Delete all action sets and their actions?	Alle actiesets en de acties erin verwijderen?
 	Delete these {n} graphic styles?	Deze {n} grafische stijlen verwijderen?
 	Delete this {n} graphic style?	Deze {n} grafische stijl verwijderen?
 	Graphic Style Libraries Menu	Menu grafische stijlbibliotheken
@@ -2450,6 +2600,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Voorinstelling hernoemen
 	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
 	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
+	Tracing Presets…	Traceervoorinstellingen…
+	Import Image Trace Presets	Voorinstellingen voor afbeeldingtracering importeren
+	Export Image Trace Presets	Voorinstellingen voor afbeeldingtracering exporteren
+	Replace the saved presets that have these names?	Opgeslagen voorinstellingen met deze namen vervangen?
 	Method:	Methode:
 	Pad	Doortrekken
 	Repeats	Herhalingen
@@ -2465,6 +2619,8 @@ digits	Malayalam	Malayalam
 	Snap Curves To Lines	Curves vastzetten op lijnen
 	Tracing Result with Outlines	Traceringsresultaat met omlijningen
 	Source Image	Bronafbeelding
+	Split View	Gesplitste weergave
+	Divider	Scheidingslijn
 	Threshold	Drempel
 	Trace	Traceren
 	Trace the image with the Default preset	De afbeelding traceren met de standaardvoorinstelling
@@ -2474,6 +2630,17 @@ digits	Malayalam	Malayalam
 	Create New Sublayer	Nieuwe sublaag maken
 	Search All	Alles doorzoeken
 	Graphics	Illustraties
+	Show Contrast	Contrast tonen
+	Contrast For	Contrast voor
+	Normal Text	Normale tekst
+	Large Text	Grote tekst
+	Contrast Background	Contrastachtergrond
+	Behind Selection	Achter selectie
+	Current Color	Huidige kleur
+	Pass	Geslaagd
+	Fail	Niet geslaagd
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimumcontrast volgens WCAG 2.2: normale tekst AA 4.5:1 (1.4.3) en AAA 7:1 (1.4.6), grote tekst AA 3:1 en AAA 4.5:1, illustraties en bedieningselementen AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	De achtergrond wordt in het midden van de selectie gemeten.
 	Local Libraries	Lokale bibliotheken
 	Add Content	Inhoud toevoegen
 	Click to apply to the selected type	Klik om toe te passen op de geselecteerde tekst
@@ -2589,6 +2756,15 @@ digits	Malayalam	Malayalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-set
 	Kinsoku Shori Type	Kinsoku Shori-type
+	Kinsoku Shori Settings…	Kinsoku Shori-instellingen…
+	Kinsoku Shori Settings	Kinsoku Shori-instellingen
+	Kinsoku Sets	Kinsoku-sets
+	Kinsoku Set Base	Basis van Kinsoku-set
+	Based on:	Gebaseerd op:
+	Cannot Start Line	Kan regel niet beginnen
+	Cannot End Line	Kan regel niet beëindigen
+	Hanging Punctuation	Hangende interpunctie
+	Inseparable Characters	Onscheidbare tekens
 	Push In First	Eerst inschuiven
 	Push Out First	Eerst uitschuiven
 	Push Out Only	Alleen uitschuiven
@@ -2988,6 +3164,12 @@ digits	Malayalam	Malayalam
 	Units:	Eenheden:
 	Use Typographer's Quotes	Typografische aanhalingstekens gebruiken
 	Center Artwork	Artwork centreren
+	PSD Import Options	PSD-importopties
+	Place PSD	PSD plaatsen
+	Convert Layers to Objects	Lagen omzetten in objecten
+	Import Hidden Layers	Verborgen lagen importeren
+	Flatten Layers to a Single Image	Lagen afvlakken tot één afbeelding
+	Import Slices	Slices importeren
 	DXF Import Options	DXF-importopties
 	Layout:	Indeling:
 	Merge Layers	Lagen samenvoegen
@@ -3139,6 +3321,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Opslaan als voorinstelling…
 	Save Changes	Wijzigingen opslaan
 	Save Preset…	Voorinstelling opslaan…
+	Save Summary…	Samenvatting opslaan…
 	Vectors	Vectoren
 	A saved copy of the selected preset	Een opgeslagen kopie van de geselecteerde voorinstelling
 	Built-in presets don't change: New makes a copy you can edit.	Ingebouwde voorinstellingen veranderen niet: Nieuw maakt een kopie die je kunt bewerken.
@@ -3372,10 +3555,17 @@ digits	Malayalam	Malayalam
 	Overprint and Transparency Flattener Options	Opties voor overprint en transparantiepletter
 	Custom…	Aangepast…
 	Custom Transparency Flattener Options	Aangepaste opties voor transparantieafvlakking
+	The PDF preset keeps the flattener preset but not the Custom… settings.	De PDF-voorinstelling bewaart de afvlakvoorinstelling, maar niet de instellingen van Aangepast….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3-bestanden snijden gerasterde gebieden bij tot hun regio's, en Overprint bepaalt of overdrukken behouden blijven.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS heeft geen alfatransparantie, en Overdrukken bepaalt of overdrukken behouden blijven.
 	Place the pages with the placement again	Plaats de pagina's opnieuw met de plaatsing
 	Placement:	Plaatsing:
 	Preserve CMYK Numbers	CMYK-waarden behouden
+	Preserve RGB Numbers	RGB-waarden behouden
+	Device to Simulate:	Te simuleren apparaat:
+	Simulate Paper Color	Papierkleur simuleren
+	Simulate Black Ink	Zwarte inkt simuleren
+	Load…	Laden…
 	Previous page	Vorige pagina
 	Print Layers:	Lagen afdrukken:
 	Print Preset:	Afdrukvoorinstelling:
@@ -3453,6 +3643,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Gereedschap Kleur toevoegen
 	Remove Color Tool	Gereedschap Kleur verwijderen
 	Remove Color	Kleur verwijderen
+	Set As Base Color	Instellen als basiskleur
+	Select Shade	Schakering selecteren
+	Add New Color	Nieuwe kleur toevoegen
+	Set Current Color As Base Color	Huidige kleur instellen als basiskleur
 	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
@@ -3467,6 +3661,9 @@ digits	Malayalam	Malayalam
 	Recolor this row	Deze rij opnieuw kleuren
 	Reset the rows to the artwork's colors	De rijen herstellen naar de kleuren van de artwork
 	Color Theme Picker	Kleurthemakiezer
+	Undo Changes	Wijzigingen ongedaan maken
+	Redo Changes	Wijzigingen opnieuw uitvoeren
+@msg	Recolor Artwork is not open	Artwork herkleuren is niet geopend
 	Click or drag across the art to pick its colors; Shift adds more	Klik of sleep over het artwork om de kleuren ervan op te nemen; Shift voegt er meer toe
 	Prominent Colors	Prominente kleuren
 	Save All Colors	Alle kleuren opslaan
@@ -3736,6 +3933,7 @@ antiAlias	Sharp	Scherp
 	Preserve Editing Capabilities	Bewerkbaarheid behouden
 	Responsive	Responsive
 	Show Code	Code weergeven
+	Show in Browser	Tonen in browser
 	Style Attributes	Stijlattributen
 	Style Attributes (Entity References)	Stijlattributen (entiteitsverwijzingen)
 	Styling:	Stijl:
@@ -3753,6 +3951,17 @@ antiAlias	Sharp	Scherp
 	Swatch Name:	Staalnaam:
 	Diameter:	Diameter:
 	Symbolism Tools Options	Opties symbolisatiegereedschappen
+	Tool:	Gereedschap:
+	Symbol Set Density	Symboolsetdichtheid
+	Symbol Sprayer Options	Opties voor symboolspuit
+	Scrunch:	Verdichten:
+	Spin:	Roteren:
+	Screen:	Transparantie:
+	Stain:	Kleuren:
+	Symbol Sizer Options	Opties voor symboolgrootte
+	Proportional Resizing	Proportioneel schalen
+	Resizing Affects Density	Schalen beïnvloedt dichtheid
+	Show Brush Size and Intensity	Penseelgrootte en intensiteit tonen
 	Symbol Set Density:	Symboolsetdichtheid:
 	Intensity:	Intensiteit:
 	Place PDF	PDF plaatsen
@@ -3813,6 +4022,7 @@ antiAlias	Sharp	Scherp
 	Width Point Edit	Breedtepunt bewerken
 	Art	Illustratie
 	Bearing	Richting
+	Stylus Wheel	Pennenwiel
 	Bristle	Borstel
 	Calligraphic	Kalligrafisch
 	Dots	Stippen
@@ -3917,6 +4127,7 @@ theme	Appearance	Vormgeving
 	Delete Brush	Penseel verwijderen
 	Delete Color	Kleur verwijderen
 	Restore Generated Table	Gegenereerde tabel herstellen
+	Unshift All Colors	Verschuiving van alle kleuren ongedaan maken
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
@@ -3946,12 +4157,21 @@ theme	Appearance	Vormgeving
 	embedding for preview and print	insluiten voor voorvertoning en afdrukken
 	embedding allowed	insluiten toegestaan
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	onbekend type
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} keer gebruikt|{n} keer gebruikt
 	substituted: shown in {family} {style} ({detail})	vervangen: weergegeven in {family} {style} ({detail})
 	missing: shown in {family} {style}	ontbreekt: weergegeven in {family} {style}
 	missing	ontbreekt
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolutie niet beschikbaar
+	estimated memory {memory}	geschat geheugen {memory}
+	memory unavailable	geheugen niet beschikbaar
+	Unknown format	Onbekend formaat
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3977,6 +4197,8 @@ theme	Appearance	Vormgeving
 	Symbolism Tool	Symbolisatiegereedschap
 	Image Trace Presets	Voorinstellingen voor afbeeldingtracering
 	Live Paint Bucket	Live Paint-emmer
+	Fill Area	Gebied vullen
+	Fill Area Tool	Gereedschap Gebied vullen
 	Live Paint Bucket (Stroke)	Live Paint-emmer (streek)
 	Live Paint Info	Live Paint-info
 	Shape Builder	Vormopbouw
@@ -4370,6 +4592,7 @@ theme	Appearance	Vormgeving
 	90° & 45° Angles	Hoeken van 90° & 45°
 	90° Angles	Hoeken van 90°
 	Additional Plug-ins Folder	Extra map met plug-ins
+	Plug-in Instruction Budget	Instructiebudget voor plug-ins
 	Additional Fonts Folder	Extra map met lettertypen
 	Alignment Guides	Uitlijnhulplijnen
 	Anchor Points, Handle, and Bounding Box Display	Weergave van ankerpunten, greep en begrenzingskader
@@ -4396,6 +4619,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete verwijdert ankerpunten en houdt paden verbonden
 	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
@@ -4477,6 +4701,15 @@ theme	Appearance	Vormgeving
 	Paste Offset	Plakoffset
 	Pattern Editing	Patroonbewerking
 	Pen Tool	Pen-gereedschap
+	Quick Pen Tool	Snelpen-gereedschap
+	Quick Pen	Snelpen
+	Quick Pen Toolbar	Snelpen-werkbalk
+	Continuous Arc	Doorlopende boog
+	Sharp Corner Arc	Boog met scherpe hoek
+	Flip Arc	Boog spiegelen
+	Hide Toolbar	Werkbalk verbergen
+	Pin Toolbar Position	Werkbalkpositie vastzetten
+	Reset Toolbar Position	Werkbalkpositie herstellen
 	Picas	Pica's
 	Portuguese	Portugees
 	Preserve Appearance and Overprints	Vormgeving en overprint behouden
@@ -4517,6 +4750,7 @@ theme	Appearance	Vormgeving
 	Show Pixel Grid (Above 600% Zoom)	Pixelraster weergeven (boven 600% zoom)
 	Show Slice Numbers	Slicenummers weergeven
 	Show The Home Screen When No Documents Are Open	Startscherm tonen als er geen documenten geopend zijn
+	Show Tool Cards	Gereedschapskaarten tonen
 	Show Tool Tips	Tooltips tonen
 	Size/Leading	Tekengrootte/Regelafstand
 	Snapping Tolerance	Snapping-tolerantie
@@ -4591,6 +4825,11 @@ theme	Appearance	Vormgeving
 	Edit Arrowheads	Pijlpunten bewerken
 	Edit Arrowheads…	Pijlpunten bewerken…
 	Reload Arrowheads	Pijlpunten opnieuw laden
+	Bevels	Afschuiningen
+	Edit Bevels	Afschuiningen bewerken
+	Edit Bevels…	Afschuiningen bewerken…
+	{name} (document)	{name} (document)
+	Reload Bevels	Afschuiningen opnieuw laden
 	Stroke Options	Lijnopties
 	Width Profiles	Breedteprofielen
 	Apply Graphic Style	Grafische stijl toepassen
@@ -4612,6 +4851,7 @@ theme	Appearance	Vormgeving
 	Add to Graphic Styles	Aan grafische stijlen toevoegen
 	Graphic Style Library	Bibliotheek met grafische stijlen
 	Add Used Colors	Gebruikte kleuren toevoegen
+	Add Selected Colors	Geselecteerde kleuren toevoegen
 	Delete Swatch	Kleurstaal verwijderen
 	Duplicate Swatch	Kleurstaal dupliceren
 	Merge Swatches	Kleurstalen samenvoegen
@@ -4642,12 +4882,15 @@ theme	Appearance	Vormgeving
 	Spot Colors (0)	Spotkleuren (0)
 	Swatch Options	Kleurstaalopties
 	Ungroup Color Group	Kleurgroep opheffen
+	Color Group Options	Opties voor kleurgroep
+	Color Group Options…	Opties voor kleurgroep…
 	Copy to User Defined	Kopiëren naar Gebruikergedefinieerd
 	Swatch Library	Bibliotheek met kleurstalen
 	Clear All Tabs	Alle tabs wissen
 	Set Tab Stops	Tabstops instellen
 	Tab Stops	Tabstops
 	Flare	Flare
+	Edit Flare	Flare bewerken
 	Rays	Stralen
 	Rectangle	Rechthoek
 	Paintbrush	Penseel
@@ -4750,6 +4993,8 @@ axis	Both	Beide
 	Show	Tonen
 	Copy Width Point	Breedtepunt kopiëren
 	Duplicate Artboard	Tekengebied dupliceren
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik om aan deze kant een tekenbord toe te voegen, Alt-klik om dit tekenbord met zijn illustratie te dupliceren
+	Click to add an artboard on this side	Klik om aan deze kant een tekenbord toe te voegen
 	Area / Path Type	Gebieds- / padtekst
 	Decrease Font Size	Tekengrootte verkleinen
 	Increase Font Size	Tekengrootte vergroten
@@ -4804,6 +5049,11 @@ axis	Both	Beide
 	Image	Afbeelding
 	Ink	Inkt
 	Lab	Lab
+	OKLCH Sliders	OKLCH-schuifregelaars
+	HSL Sliders	HSL-schuifregelaars
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	De grootste chroma die sRGB bij deze helderheid en tint bevat
+	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 	Medium	Gemiddeld
 	Name	Naam
 	None	Geen
@@ -4884,10 +5134,18 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
 	No commands match	Geen opdrachten gevonden
 	{pos} of {total}: {name}	{pos} van {total}: {name}
+	No menu item	Geen menu-item
+	Toolbar	Gereedschapsbalk
+	{toolbar}, in the {tool} group	{toolbar}, in de groep {tool}
+	In the menu bar: {path}	In de menubalk: {path}
+	In the {group} group: press and hold to open it	In de groep {group}: ingedrukt houden om te openen
+	{home}, not shown now	{home}, nu niet zichtbaar
 @plural	{n} result|{n} results	{n} resultaat|{n} resultaten
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Recent Commands	Recente opdrachten
 	No recent commands	Geen recente opdrachten
+	Type to search commands, tools, panels and effects	Typ om opdrachten, gereedschappen, panelen en effecten te zoeken
+	Clear Recent Commands	Recente opdrachten wissen
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…
@@ -4911,7 +5169,7 @@ font-technology	Variable	Variabel
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecteren › Zelfde › Vulkleur, Contourkleur en Vulling en contour vinden alleen dezelfde tint van een globaal of steunkleurstaal, niet elke tint ervan.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Toont het startscherm wanneer er geen document open is; uitgeschakeld blijft het venster leeg totdat u op Home klikt.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Meet objecten met hun contouren en vormveranderende effecten voor grootte, positie en uitlijning; schaduwen, gloed en vervagingen worden niet gemeten.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Bij 100% zoom neemt één inch van het document 96 schermpunten in beslag in plaats van 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Bij 100% zoom vult één inch van het document één inch van het scherm, of 96 schermpunten als het systeem geen bruikbare schermgrootte doorgeeft.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dubbelklikken op een groep, pad of afbeelding met het gereedschap Selectie opent die in de isolatiemodus.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Patroonvullingen en -contouren transformeren mee met de illustratie, tenzij een transformatie of het menu van het deelvenster Transformeren anders kiest.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamische hoekradii schalen mee met de illustratie, tenzij het schalen anders kiest.
@@ -4920,6 +5178,9 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete verwijdert de geselecteerde ankerpunten en past de curve rond elk ervan opnieuw aan, in plaats van het pad daar te openen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
@@ -4929,6 +5190,7 @@ font-technology	Variable	Variabel
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	De eigenschappen van een dynamische rechthoek tonen één veld Hoekradius voor alle vier hoeken; uitgeschakeld heeft elke hoek een eigen veld.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Wat bewerkingen in het deelvenster Transformeren transformeren: het object, de patroontegels ervan of beide; Standaard volgt Patroontegels transformeren.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Met één symboolinstantie geselecteerd gebruikt het deelvenster Transformeren het registratiepunt van het symbool als referentiepunt.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Als u een rechthoek, ellips, veelhoek, ster of lijn tekent, wordt het deelvenster Transformeren geopend als het gesloten is.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Maakt het canvas buiten de tekenborden donkerder zolang het gereedschap Tekenbord actief is.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Met Gebied buiten tekenbord dimmen aan blijft het gebied buiten de tekenborden donker terwijl u sleept met het gereedschap Tekenbord.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hoe dicht, in pixels, de aanwijzer bij een object, ankerpunt of greep moet zijn om het met een klik te selecteren.
@@ -5001,6 +5263,73 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hoe dicht de aanwijzer of een gesleept punt op het scherm bij een illustratie moet komen voordat slimme hulplijnen erop uitlijnen; de afstand is bij elke zoom gelijk.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Lijnt het einde van een lijnsegment, of een cirkel getekend vanuit het middelpunt, zo uit dat het een curve in de buurt raakt.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Lijnt het einde van een lijnsegment zo uit dat het een recht segment in de buurt onder een rechte hoek raakt.
+	Edit type set in fonts that aren't available?	Tekst in lettertypen bewerken die niet beschikbaar zijn?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Toont op het canvas het nummer van elke slice in een vakje linksboven in de slice; staat dit uit, dan blijven de omtrekken van de slices zichtbaar.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	De kleur van de omtrekken van gebruikers- en objectslices en van hun nummervakjes; automatische slices gebruiken een vagere tint ervan.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is en [Normale tekenstijl] geen taal instelt; tekst die al in een document staat, behoudt zijn eigen taal.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	In alinea's met Afbreken aan krijgt een opgesomd woord alleen een afbreekstreepje bij de koppeltekens die erin getypt zijn, of nooit als het er geen heeft, ongeacht taal of hoofdletters.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer OK een nieuwe map instelt, behalve in de veilige modus; een plug-in die om machtigingen vraagt, laadt pas nadat u ze hebt verleend. De webversie laadt er geen.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Groot geeft elke uitvoering van een filter- of opdrachtplug-in minstens 250 miljoen instructies, met dezelfde tijdslimiet; Normaal houdt het eigen budget van de plug-in. Live-effecten, exporteurs en importeurs houden het hunne.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Nieuwe tekst krijgt deze taal zolang de taal in Documentinstellingen Engels: VS is; tekst die al in een document staat, behoudt zijn eigen taal.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht taal of hoofdletters.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	In de desktopversie worden de .wasm-plug-ins in deze map geladen bij het starten en wanneer u hier met een nieuwe map op OK klikt, behalve in de veilige modus; de webversie laadt ze niet.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normaal behoudt de eigen limieten van elke plug-in; met Groot mag een filter of opdracht van een plug-in ten minste 250 miljoen instructies uitvoeren naast die voor de invoer. De tijdslimiet blijft gelijk.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Hoeveel instructies elke uitvoering van een objectfilter uit een plug-in mag gebruiken; Groot staat er meer toe dan Normaal, met dezelfde limiet van 60 seconden. Zware filters houden hun eigen budget.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De eerste keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	De tweede keuze voor de scratchschijf: Startup, None of een mappad; VectorCraft slaat deze op, maar gebruikt nog geen scratchschijven.
+	How light or dark the interface is.	Hoe licht of donker de gebruikersinterface is.
+	The set of colors the interface is drawn in.	De set kleuren waarin de gebruikersinterface wordt getekend.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	De kleur van besturingselementen die aan staan, gekozen zijn of de focus hebben; het menu is gedimd zolang het Kleurschema een eigen accentkleur heeft.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	De kleur van het canvas rond de tekengebieden; Aanpassen aan helderheid van gebruikersinterface neemt die over van Helderheid. De weergave Omtrek toont het altijd wit.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Een paneel dat vanaf zijn pictogram is geopend, sluit als u op Esc drukt of erbuiten klikt; uit blijft het open tot u op een pictogram klikt.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Toont de naam van elke gereedschapgroep boven de gereedschappen in de werkbalk; uit volgen de groepen elkaar op zonder iets ertussen.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Voortaan openen documenten die u opent of maakt als tabbladen; uit opent elk in een zwevend venster. Documenten die al open zijn, blijven waar ze zijn.
+	Makes the document tabs taller and their names larger.	Maakt de tabbladen van documenten hoger en hun namen groter.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Vanaf de volgende start tekent het systeem de titelbalk van het venster waar VectorCraft anders zijn eigen zou tekenen; op Linux en de BSD's gaat de variabele VECTORCRAFT_TITLEBAR voor.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Vanaf de volgende start tekent VectorCraft de titelbalk van het venster ook waar het bureaublad die zou tekenen, tenzij Systeemtitelbalk aan staat of de variabele VECTORCRAFT_TITLEBAR die kiest.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Maakt de gebruikersinterface groter of kleiner; illustraties op het canvas houden bij dezelfde zoom hun grootte.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	De gereedschapsaanwijzers die VectorCraft tekent, groeien en krimpen mee met UI-schaling; uit houden ze hun grootte.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	De taal van de gebruikersinterface; Automatisch gebruikt de taal van het systeem. Het dialoogvenster wisselt van taal zodra u er een kiest.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Geanimeerd zoomen werkt alleen zolang dit aan staat; uit is Geanimeerd zoomen gedimd en wordt zoomen niet geanimeerd.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoomen met het wieltje glijdt soepel, en het Zoom-gereedschap zoomt terwijl u opzij sleept of het ingedrukt houdt; uit zoomt het Zoom-gereedschap in op het gebied waarover u sleept.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Vanaf de volgende start toont de desktopversie het canvas via dit soort grafische processor; de illustratie wordt hoe dan ook op de CPU getekend. Automatisch kiest op Windows en macOS bij voorkeur de geïntegreerde. De webversie gebruikt het niet.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Vanaf de volgende start toont het venster elk beeld zonder op de verversing van het beeldscherm te wachten, waar het grafische stuurprogramma dat toestaat, met hoogstens 240 beelden per seconde.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Vanaf de volgende start tekent de desktopversie met dit soort grafische processor; Automatisch kiest bij voorkeur de processor die het beeldscherm aanstuurt. De webversie gebruikt het niet.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Vanaf de volgende start toont het venster beelden zonder op de verversing van het beeldscherm te wachten, hoogstens 240 per seconde; uit bepaalt het beeldscherm het tempo. Een presentatiemodus die bij het starten is ingesteld, gaat voor.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Het grootste aantal ongedaanmaakstappen dat elk document bewaart; een lager getal verwijdert de oudste stappen wanneer u op OK klikt. Stappen kunnen ook eerder verdwijnen als ze te veel geheugen gebruiken.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Toont tijdens het slepen hoe de illustratie verandert; uit volgen contouren het slepen en verandert de illustratie wanneer u loslaat. Een hulplijn van de liniaal beweegt altijd mee tijdens het slepen.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Hoeveel werkthreads de illustratie tekenen; -1 gebruikt er één minder dan de kernen die VectorCraft mag gebruiken, hoogstens 8, en 0 geen. De webversie gebruikt er nooit een.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Vanaf de volgende start op een Wayland-bureaublad opent X11 (XWayland) het venster via XWayland; de andere keuzes doen dat alleen als er een pen is aangesloten.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Vanaf de volgende start toont de desktopversie beelden zonder op de verversing van het beeldscherm te wachten, hoogstens 240 per seconde; uit bepaalt het beeldscherm het tempo.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Het grotere budget vervijfvoudigt de basisinstructies van elke uitvoering van een objectfilter en houdt dezelfde toeslag per invoerbyte; zware filters, live-effecten, exporteurs en importeurs houden hun eigen limieten.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Zet de illustraties en tekengebieden op het canvas om naar het kleurprofiel van het beeldscherm waar het systeem dat nog niet doet; uit wordt het canvas in sRGB getekend.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	In de desktopversie wordt opslaan naar een bestand op de achtergrond geschreven terwijl u verder bewerkt; uit wacht u tot het geschreven is.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	In de desktopversie worden exports naar bestanden en pakketten op de achtergrond geschreven terwijl u verder bewerkt, behalve 3D-exports; uit wacht u erop.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Maakt om de paar minuten een herstelkopie van elk document met niet-opgeslagen wijzigingen sinds de laatste kopie; uit worden geen periodieke kopieën gemaakt.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Hoeveel minuten er tussen herstelkopieën zitten zolang Herstelgegevens automatisch opslaan aan staat.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	In de desktopversie de map waarin herstelkopieën worden bewaard; laat leeg voor de eigen map van VectorCraft. De webversie bewaart ze in de browser.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Van documenten met meer dan 20.000 objecten worden geen periodieke herstelkopieën gemaakt.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Recente bestanden openen en het Home-scherm tonen hoogstens zoveel recente bestanden; 0 toont er geen, en VectorCraft onthoudt er nog steeds tot 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Bij het openen van een document houdt een gekoppelde EPS-afbeelding die haar opgeslagen voorvertoning toont die vast, in plaats van het EPS-bestand opnieuw te lezen; gewijzigde bestanden volgen nog steeds Koppelingen bijwerken.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	In Pixelvoorbeeld worden afbeeldingen vloeiend getekend; uit tonen hun pixels harde randen. Buiten Pixelvoorbeeld worden afbeeldingen altijd vloeiend getekend.
+	PDF Text	PDF-tekst
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	De tekst van een PDF die u opent of insluit, komt binnen als bewerkbare tekst of als omlijningen die er op een computer zonder de lettertypen ervan hetzelfde uitzien.
+	Linked pages show the file's own text.	Gekoppelde pagina's tonen de eigen tekst van het bestand.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Als een gekoppeld bestand verandert, leest Automatisch het opnieuw, vraagt Vragen bij wijziging het u eerst, en laat Handmatig het zoals het is met een melding in de statusbalk.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	In de desktopversie de map waarin Nieuw van sjabloon… en Opslaan als sjabloon… beginnen; laat leeg voor VectorCraft Templates in uw documentenmap.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Origineel bewerken opent een gekoppeld bestand in de standaardapp van het systeem voor dat type; uit opent een gekoppelde rasterafbeelding in PhotoCraft als dat geïnstalleerd is.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Een bestand dat een oudere VectorCraft-versie heeft opgeslagen, opent met [Converted] achter de naam, en Opslaan vraagt waar het moet worden opgeslagen; uit vervangt Opslaan het bestand.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-bestanden en -sjablonen worden gecomprimeerd en dus kleiner opgeslagen, tenzij een opslag iets anders zegt; wat wordt opgeslagen voor versies die geen gecomprimeerde bestanden openen, blijft ongecomprimeerd.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiëren en Knippen geven andere apps ook de SVG-code van de illustratie; op de desktop wordt de code niet als tekst gekopieerd als de illustratie meer dan 1 MiB aan afbeeldingen insluit.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Op Windows geven Kopiëren en Knippen andere apps ook een PDF van de illustratie; de andere platforms kopiëren nog geen PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft slaat deze keuze op, maar Kopiëren en Knippen gebruiken nog geen indeling van het verouderde vectorklembord.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Paden behouden of Vormgeving en overprint behouden voor het verouderde vectorklembord; VectorCraft slaat de keuze op, maar gebruikt die nog niet.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Opmaak behouden behoudt de stijlen van tekst uit een tekstobject in VectorCraft wanneer die in een tekstobject wordt geplakt; Platte tekst behouden geeft die de stijl van de plek waar hij terechtkomt.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Alle zwarttinten weergeven als rijk zwart toont zuiver CMYK-zwart (alleen zwarte inkt op 100%) op het canvas als RGB-zwart; Alle zwarttinten nauwkeurig weergeven zet het om via de werk-CMYK-kleurruimte.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Alle zwarttinten uitvoeren als rijk zwart tekent zuiver CMYK-zwart als RGB-zwart in RGB- en grijswaarden-rasterexports en met Afdrukken als bitmap; het verandert niets aan vectorexports, CMYK-JPEG, -TIFF en -PSD of ander afdrukken.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Op een aanraakscherm wordt naar de Touch-werkruimte gewisseld; uitschakelen of het wegvallen van het aanraakscherm zet de werkruimte van daarvoor terug.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Tikken met twee vingers op het canvas maakt ongedaan of wisselt in de Touch-werkruimte tussen selectie- en tekengereedschap, en tikken met drie vingers voert opnieuw uit; geen van beide werkt in de presentatiemodus.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	In alinea's met Afbreken aan wordt een opgesomd woord alleen afgebroken bij de koppeltekens die erin getypt zijn, of nergens als het er geen heeft, ongeacht hoofdletters; Koreaanse woorden krijgen geen afbreekstreepje, en woorden in Indiase talen worden niet binnen een tekengroep afgebroken.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter
@@ -5018,7 +5347,14 @@ font-technology	Variable	Variabel
 	Channel	Kanaal
 	Circle	Cirkel
 	Circle Tool	Cirkelgereedschap
+	Curvature Circle Tool	Krommingscirkelgereedschap
+	Cusp	Keerpunt
+	Straight segment	Recht segment
 	Circle too large	Cirkel te groot
+	Show Radii	Stralen tonen
+	Show Diameter	Diameter tonen
+	Anchors at Standard Positions	Ankerpunten op standaardposities
+	Third Point by Dragging	Derde punt door slepen
 	Clip to Art	Clippen op artwork
 	Colorize	Inkleuren
 	Gamma	Gamma
@@ -5285,6 +5621,7 @@ imageTrace	Outline	Contour
 @msg	Installed plug-in {_1}	Plug-in {_1} geïnstalleerd
 @msg	Internal error: {msg} (please report this bug)	Interne fout: {msg} (meld deze bug alsjeblieft)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint samenvoegen: selecteer een Live Paint-groep en de paden om toe te voegen
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` en `Edge` zijn de namen van de vlakken en randen van een Live Paint-groep: geef het pad een andere naam
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint neemt paden en samengestelde paden: zet tekst, afbeeldingen en andere objecten eerst om in paden
 @msg	Live Paint: select paths or compound paths	Live Paint: selecteer paden of samengestelde paden
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: deze paden zijn te gedegenereerd om te verven
@@ -5318,6 +5655,7 @@ imageTrace	Outline	Contour
 @msg	Saved {path}	{path} opgeslagen
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecteer tekst of klik met het tekstgereedschap in tekst om glyphs in te voegen
 @msg	Shape Builder: no region under the pointer	Vormbouwer: geen gebied onder de aanwijzer
+@msg	Fill Area: no enclosed area under the pointer	Gebied vullen: geen gesloten gebied onder de aanwijzer
 @msg	Shape Builder: select all paths you want to merge	Vormbouwer: selecteer alle paden die je wilt samenvoegen
 @msg	Shape Builder: select paths or compound paths	Vormbouwer: selecteer paden of samengestelde paden
 @msg	Show All Hidden Attributes: nothing is hidden	Alle verborgen kenmerken tonen: er is niets verborgen
@@ -5400,6 +5738,7 @@ imageTrace	Outline	Contour
 @msg	a freeform gradient keeps at least one point	een verloop met vrije vorm behoudt minstens één punt
 @msg	a gradient needs at least two stops	een verloop heeft minstens twee stops nodig
 @msg	a graphic style named `{to}` already exists	er bestaat al een grafische stijl met de naam `{to}`
+@msg	a swatch or color group named `{name}` already exists	er bestaat al een kleurstaal of kleurgroep met de naam `{name}`
 @msg	a page is missing	er ontbreekt een pagina
 @msg	a page out of range	een pagina buiten het bereik
 @msg	a page tree kid isn't a reference	een kind van de paginaboom is geen verwijzing
@@ -5448,6 +5787,7 @@ imageTrace	Outline	Contour
 @msg	choose a location for the package	kies een locatie voor het pakket
 @msg	clipboard is empty	het klembord is leeg
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: er moet ten minste één kleur in de kleurentabel blijven
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` noemt een kleur die ook een andere sleutel noemt
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
@@ -5511,7 +5851,16 @@ imageTrace	Outline	Contour
 @msg	no anchor points selected	geen ankerpunten geselecteerd
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
 @msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
+@msg	the path is straight there, so no circle matches its curvature	het pad is daar recht, dus geen cirkel komt overeen met de kromming ervan
+@msg	the path has a cusp there, so it has no single curvature	het pad heeft daar een keerpunt en dus geen eenduidige kromming
+@msg	the path has a corner there, so it has no single curvature	het pad heeft daar een hoek en dus geen eenduidige kromming
+@msg	a guide has no curvature circle	een hulplijn heeft geen krommingscirkel
+@msg	the circle that matches the path there would reach past the canvas	de cirkel die daar bij het pad past, zou voorbij het canvas reiken
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	`at` must be "start" or "end"	`at` moet "start" of "end" zijn
+@msg	give exactly one of `through` and `toward`	geef precies één van `through` en `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	er past geen boog bij deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	give `at` only with `toward`	geef `at` alleen samen met `toward`
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
 @msg	no artboard {i} (0-based; the document has {_1})	geen tekengebied {i} (vanaf 0; het document heeft er {_1})
@@ -5550,10 +5899,12 @@ imageTrace	Outline	Contour
 @msg	no graphic style `{n}`	geen grafische stijl `{n}`
 @msg	no interaction in progress	geen interactie gaande
 @msg	no key object	geen sleutelobject
+@msg	Align to Key Object isn't available with the Artboard tool	Uitlijnen op sleutelobject is niet beschikbaar met het tekengebied-gereedschap
 @msg	no library `{key}` (see {list})	geen bibliotheek `{key}` (zie {list})
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's
 @msg	no pattern `{name}`	geen patroon `{name}`
+@msg	art painted with `{name}` can't be its tile	illustratie die met `{name}` is geverfd, kan niet de tegel ervan zijn
 @msg	no perspective grid preset named `{name}`	geen perspectiefrastervoorinstelling met de naam `{name}`
 @msg	no plug-in {0} is installed	er is geen plug-in {0} geïnstalleerd
 @msg	no plug-in {id} is installed	er is geen plug-in {id} geïnstalleerd
@@ -5598,6 +5949,9 @@ imageTrace	Outline	Contour
 @msg	no such saved selection	opgeslagen selectie bestaat niet
 @msg	no such segment	segment bestaat niet
 @msg	no such subpath	subpad bestaat niet
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` moet een lijst van hoogstens 10000 stukken zijn
+@msg	give either `start` for a new path or `id`, not both	geef `start` voor een nieuw pad of `id`, niet beide
+@msg	`subpath` and `keep` need `id`	`subpath` en `keep` vereisen `id`
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet
@@ -5627,6 +5981,12 @@ imageTrace	Outline	Contour
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
 @msg	nothing encoded	niets gecodeerd
 @msg	nothing selected	niets geselecteerd
+@msg	`{key}` must be a color or {_1}	`{key}` moet een kleur of {_1} zijn
+@msg	the selected objects' colors differ: give `color`	de kleuren van de geselecteerde objecten verschillen: geef `color` op
+@msg	the selected objects' colors differ: give `opacity` or `color`	de kleuren van de geselecteerde objecten verschillen: geef `opacity` of `color` op
+@msg	the active fill or stroke has no color: give `color`	de actieve vulling of lijn heeft geen kleur: geef `color` op
+@msg	the active fill or stroke is hidden: give `color`	de actieve vulling of lijn is verborgen: geef `color` op
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	de actieve vulling of lijn wordt door een dekkingmasker getekend: geef `color` op
 @msg	nothing selected is in a group	niets van de selectie zit in een groep
 @msg	nothing to align	niets om uit te lijnen
 @msg	nothing to distort	niets om te vervormen
@@ -5680,6 +6040,7 @@ imageTrace	Outline	Contour
 @msg	select a Live Paint group	selecteer een Live Paint-groep
 @msg	select a blend	selecteer een vermenging
 @msg	select a clip group	selecteer een knipgroep
+@msg	select a flare	selecteer een flare
 @msg	select a gradient mesh	selecteer een verloopnet
 @msg	select a linked image: an embedded one has no file	selecteer een gekoppelde afbeelding: een ingesloten afbeelding heeft geen bestand
 @msg	select a repeat	selecteer een herhaling
@@ -5694,6 +6055,10 @@ imageTrace	Outline	Contour
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	deze tracering zou meer dan {max} ankerpunten opleveren, meer dan het document vloeiend kan tonen: verhoog Ruis, verlaag Paden of Kleuren, of kies een voorinstelling met een lagere getrouwheid
 @msg	select an envelope	selecteer een omvorming
 @msg	select an image	selecteer een afbeelding
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	object {_1} is een afbeelding die met Perspectief vervormen of Vrij vervormen is gewijzigd, en deze opdracht werkt daar niet op
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden geen convexe vorm maken
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden de horizon van de vervorming overschrijden
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden te dicht bij elkaar liggen voor een perspectivische afbeelding
 @msg	select an object in perspective	selecteer een object in perspectief
 @msg	select artwork (or a colour group) to recolor	selecteer een illustratie (of een kleurgroep) om te herkleuren
 @msg	select at least two objects	selecteer minstens twee objecten
@@ -5720,6 +6085,7 @@ imageTrace	Outline	Contour
 @msg	the PDF is password-protected: give its password	de PDF is met een wachtwoord beveiligd: geef het wachtwoord op
 @msg	the PDF password is wrong	het PDF-wachtwoord is onjuist
 @msg	the Save PDF dialog didn't open	het dialoogvenster PDF opslaan is niet geopend
+@msg	the Save PDF dialog is not open	het dialoogvenster PDF opslaan is niet open
 @msg	the WMF header is damaged	de WMF-header is beschadigd
 @msg	the art could not be sampled	de illustratie kon niet worden bemonsterd
 @msg	the art has no bounds	de illustratie heeft geen begrenzing
@@ -5888,6 +6254,7 @@ imageTrace	Outline	Contour
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	het document stelt een afloop in die dit PDF/X-bestand weglaat: schakel 'Afloopinstellingen van document gebruiken' in
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} object reikt tot de snijrand maar stopt voor de afloop|{n} objecten reiken tot de snijrand maar stoppen voor de afloop
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
@@ -5918,6 +6285,7 @@ imageTrace	Outline	Contour
 @msg	onto must name a panel floating in another group	onto moet een zwevend paneel in een andere groep benoemen
 @msg	below and above must name a panel floating in another group	below en above moeten een zwevend paneel in een andere groep benoemen
 @msg	give only one of onto, below and above	geef slechts één van onto, below en above
+@msg	give only one of `index`, `indices` and `t`	geef slechts één van `index`, `indices` en `t`
 @msg	column must be true or a number from 1	column moet true zijn of een getal vanaf 1
 @msg	x and y must both be numbers	x en y moeten allebei getallen zijn
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" is geen kleur: schrijf het als #rrggbb
@@ -6014,6 +6382,49 @@ imageTrace	Outline	Contour
 @msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
 @msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
 @msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the file is no longer loaded	het bestand is niet meer geladen
+@msg	the layers can't be read ({e}): the file was placed as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geplaatst als zijn samengevoegde afbeelding
+@msg	1 type layer came in as pixels: the text isn't editable	1 tekstlaag is als pixels binnengekomen: de tekst is niet bewerkbaar
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} tekstlagen zijn als pixels binnengekomen: de tekst is niet bewerkbaar
+@msg	1 adjustment layer was not applied	1 aanpassingslaag is niet toegepast
+@msg	{n} adjustment layers were not applied	{n} aanpassingslagen zijn niet toegepast
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 vullaag is niet getekend (een verloop- of patroonvulling, een kleur die niet kan worden gelezen, of een vorm die geen pixels opslaat)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} vullagen zijn niet getekend (een verloop- of patroonvulling, een kleur die niet kan worden gelezen, of een vorm die geen pixels opslaat)
+@msg	the layer effects of 1 layer weren't drawn	de laageffecten van 1 laag zijn niet getekend
+@msg	the layer effects of {n} layers weren't drawn	de laageffecten van {n} lagen zijn niet getekend
+@msg	the vector masks of 1 layer weren't applied	de vectormaskers van 1 laag zijn niet toegepast
+@msg	the vector masks of {n} layers weren't applied	de vectormaskers van {n} lagen zijn niet toegepast
+@msg	the knockout of 1 layer wasn't applied	de uitsparing van 1 laag is niet toegepast
+@msg	the knockout of {n} layers wasn't applied	de uitsparing van {n} lagen is niet toegepast
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 laag is weggelaten (verborgen lagen en de lagen die erop zijn uitgeknipt)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lagen zijn weggelaten (verborgen lagen en de lagen die erop zijn uitgeknipt)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 laag die is uitgeknipt op een vullaag die niet is getekend, is weggelaten
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lagen die zijn uitgeknipt op vullagen die niet zijn getekend, zijn weggelaten
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lagen in overvloeimodi die VectorCraft niet heeft ({modes}) zijn samengevoegd met de lagen eronder
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 laag in een overvloeimodus die VectorCraft niet heeft, is als Normaal binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lagen in overvloeimodi die VectorCraft niet heeft, zijn als Normaal binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 laag die is uitgeknipt op de laag eronder, is niet uitgeknipt binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lagen die zijn uitgeknipt op de laag eronder, zijn niet uitgeknipt binnengekomen: het samenvoegen vraagt meer geheugen dan toegestaan
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers geldt voor een PSD-bestand dat met layers: true wordt geplaatst
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: een gekoppeld PSD-bestand wordt als zijn platte afbeelding geplaatst; geef link: false om het met zijn slices in te sluiten
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: een gekoppeld PSD-bestand wordt als zijn platte afbeelding geplaatst; laat link weg of geef link: false
+@msg	the slices can't be read ({e}) and were left out	de slices kunnen niet worden gelezen ({e}) en zijn weggelaten
+@msg	1 slice lies outside the canvas or has no size and was left out	1 slice ligt buiten het canvas of heeft geen grootte en is weggelaten
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} slices liggen buiten het canvas of hebben geen grootte en zijn weggelaten
+@msg	1 slice would lie outside the canvas and was left out	1 slice zou buiten het canvas liggen en is weggelaten
+@msg	{n} slices would lie outside the canvas and were left out	{n} slices zouden buiten het canvas liggen en zijn weggelaten
+@msg	the slices' descriptor holds too many values	de descriptor van de slices bevat te veel waarden
+@msg	the slices' descriptor has a version other than 16	de descriptor van de slices heeft een andere versie dan 16
+@msg	the slices are stored in version {v}, which isn't read	de slices zijn opgeslagen in versie {v}, die niet wordt gelezen
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	het bestand heeft {count} slices, meer dan de {MAX_SLICES} die worden gelezen
+@msg	the slices' descriptor has no list of slices	de descriptor van de slices heeft geen lijst met slices
+@msg	the slices' descriptor lists something other than a slice	de descriptor van de slices vermeldt iets anders dan een slice
+@msg	a slice in the slices' descriptor has no bounds	een slice in de descriptor van de slices heeft geen grenzen
+@msg	a slice's bounds in the slices' descriptor aren't numbers	de grenzen van een slice in de descriptor van de slices zijn geen getallen
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	een tekst in de slices heeft meer dan de {MAX_TEXT} tekens die worden gelezen
+@msg	the slices' descriptor nests too deep	de descriptor van de slices is te diep genest
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	de descriptor van de slices heeft een verwijzing van een onbekende soort ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	de descriptor van de slices heeft een waarde van een onbekend type ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
@@ -6180,6 +6591,8 @@ imageTrace	Outline	Contour
 @msg	`dataBase64` is larger than the module limit	`dataBase64` is groter dan de modulelimiet
 @msg	`dataBase64` is not valid base64	`dataBase64` is geen geldige base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `reverse` of `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `id` of `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan niet worden gecombineerd met `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` en `childLimit` beperken de samenvatting: geef `summary: true` op
 @msg	`design` is a design name, or null for plain columns	`design` is de naam van een ontwerp, of null voor gewone kolommen
 @msg	`design` is a design name, or null for the default marker	`design` is de naam van een ontwerp, of null voor de standaardmarkering
@@ -6488,6 +6901,7 @@ imageTrace	Outline	Contour
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
 @msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
 @msg	a linked file's export folder is outside the read roots	de exportmap van een gekoppeld bestand staat buiten de leesroots
+@msg	a linked file's editing data can't be read to check it against the read roots	de bewerkingsgegevens van een gekoppeld bestand kunnen niet worden gelezen om ze aan de leesroots te toetsen
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
@@ -7492,6 +7906,7 @@ imageTrace	Outline	Contour
 @msg	the character's size can't be measured	de grootte van het teken kan niet worden gemeten
 @msg	the code runs past its last instruction	de code loopt voorbij de laatste instructie
 @msg	the compound shape is too complex to expand	de samengestelde vorm is te complex om uit te breiden
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	een lijn of ander open pad dat geen oppervlak omsluit, voegt geen oppervlak toe aan de samengestelde vorm; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
 @msg	the container of the listed objects is gone	de container van de vermelde objecten is verdwenen
 @msg	the copy `{user_id}` can't be read as a library	de kopie `{user_id}` kan niet als bibliotheek worden gelezen
 @msg	the copy would leave the canvas	de kopie zou buiten het canvas vallen
@@ -7838,7 +8253,6 @@ imageTrace	Outline	Contour
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-bestanden hebben geen transparantie, en het bestand zou {what} bevatten: vlak het eerst af (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-afbeeldingen kunnen niet worden geopend (zie document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` is geen van de keuzes
-@msg	{k} has control characters{_1}	{k} bevat besturingstekens{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} is te lang (maximaal {MAX_TEXT} tekens)
 @msg	{k} must be > 0	{k} moet > 0 zijn
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} moet een getal (pt) of een lengte zoals "210 mm" zijn
@@ -8009,6 +8423,7 @@ imageTrace	Outline	Contour
 	Arrow	Pijl
 	Arrow (open)	Pijl (open)
 	Barbed	Weerhaak
+arrowhead	Feather	Veer
 	Half Arrow (left)	Halve pijl (links)
 	Half Arrow (right)	Halve pijl (rechts)
 	Concave	Concaaf
@@ -8036,6 +8451,7 @@ imageTrace	Outline	Contour
 	Kite	Vlieger
 	Triangle to Bar	Driehoek naar balk
 	Oval	Ovaal
+	Line Arrow	Lijnpijl
 	Complementary	Complementair
 	Complementary 2	Complementair 2
 	Split Complementary	Gesplitst complementair
@@ -8167,6 +8583,9 @@ file-filter	Swatch libraries	Stalenbibliotheken
 file-filter	Flattener presets	Afvlakvoorinstellingen
 file-filter	PDF presets	PDF-voorinstellingen
 file-filter	Print presets	Afdrukvoorinstellingen
+file-filter	Tracing presets	Traceervoorinstellingen
+file-filter	Action sets	Actiesets
+file-filter	Composite fonts	Samengestelde lettertypen
 file-filter	Preferences	Voorkeuren
 file-filter	Export presets	Exportvoorinstellingen
 file-filter	SVG Compressed	Gecomprimeerde SVG
@@ -8251,6 +8670,7 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Het net van het 3D-object is onvolledig of bevat een waarde die geen getal is
 @msg	the <filter> element needs an id, the filter's name	het <filter>-element heeft een id nodig, de naam van het filter
 @msg	an SVG filter's id is at most {MAX_NAME} characters	de id van een SVG-filter is hoogstens {MAX_NAME} tekens lang
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> is geen element van een SVG-filter
@@ -8272,7 +8692,10 @@ mark-style	Japanese	Japans
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` moet een object zijn met alleen `mode`, ingesteld op shaded of wireframe
 @msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
-@msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel moet none, een van {_1} of custom met {BEVEL_PROFILE} zijn
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom heeft {BEVEL_PROFILE} nodig, de punten van de afschuining
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} moet een tekenreeks zijn
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} moet 2 tot {most} punten [x, y] bevatten, elk aandeel tussen 0 en 1, van [0, 0] (de rand van de bovenkant) tot [1, 1] (de zijwand)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan van deze illustratie geen massieve objecten maken: de symboolinstanties, vermengingen en knipgroepen ervan bevatten te veel objecten
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan geen massief object maken van de instantie van symbool "{symbol}": de illustratie van het symbool is niet beschikbaar
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: het knippad is te complex om de illustratie mee uit te knippen
@@ -8299,8 +8722,10 @@ mark-style	Japanese	Japans
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Illustraties worden op de objecttypen Vlak, Extruderen en Draaien geplaatst
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Illustraties worden op de objecttypen Vlak, Extruderen, Draaien en Opblazen geplaatst
 @msg	Revolve maps graphics onto its side: map them onto the front	Draaien plaatst illustraties op de zijkant: plaats ze op de voorkant
+@msg	Inflate maps graphics onto its front and back, not onto a side	Opblazen plaatst illustraties op de voorkant en de achterkant, niet op een zijkant
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	object {_1}: de achterkant van Opblazen neemt alleen afbeeldingen aan met Beide zijden en Dop ingeschakeld
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	De illustraties zijn te complex voor dit oppervlak: vereenvoudig de illustraties van de symbolen of verlaag Segmenten
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` neemt maximaal {MAX_GRAPHICS} illustraties op
 @msg	A plane has one face: map its graphics onto the front	Een vlak heeft één zijde: plaats de illustraties ervan op de voorkant
@@ -8496,6 +8921,11 @@ mark-style	Japanese	Japans
 	The active document changed while the screen color sampler was open	Het actieve document is gewijzigd terwijl de schermkleurkiezer open was
 	This system has no screen color sampler	Dit systeem heeft geen schermkleurkiezer
 	Color blindness – Tritanopia-type	Kleurenblindheid – type tritanopie
+	Show Color Vision Preview	Voorvertoning van kleurwaarneming tonen
+	Protanopia	Protanopie
+	Deuteranopia	Deuteranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Panels Except Tools and Control	Alle panelen behalve Gereedschap en Bediening
 	Reset Tracking and Kerning	Tracking en kerning herstellen
 	Reset Horizontal Scale	Horizontale schaal herstellen
@@ -8577,6 +9007,8 @@ mark-style	Japanese	Japans
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` moet grayscale, rgb, hsb, cmyk of websafe zijn
 @msg	`view` must be wheel or box	`view` moet wheel of box zijn
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` moet hue, saturation, brightness, red, green of blue zijn
+@msg	`sliders` must be none, oklch or hsl	`sliders` moet none, oklch of hsl zijn
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer
@@ -8901,6 +9333,8 @@ swatch	Bright Violet	Felviolet
 @msg	no such spine point	dat aspunt bestaat niet
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` moet een lijst van hoogstens 10000 aspuntindexen zijn
 @msg	`with` moves points, not a handle	`with` verplaatst punten, geen handgreep
+@msg	`link` and `independent` cannot both be true	`link` en `independent` kunnen niet allebei true zijn
+@msg	`link` places a handle: give `handle`	`link` plaatst een handgreep: geef `handle` op
 @msg	no such spine segment	dat assegment bestaat niet
 @msg	not a blend	geen vermenging
 @msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
@@ -8942,6 +9376,9 @@ variable-list-end	{0}, {1}	{0} en {1}
 	Continue in Background	Doorgaan op achtergrond
 	Cancel Export	Export annuleren
 @msg	Export cancelled	Export geannuleerd
+	Cancel Save	Opslaan annuleren
+@plural	{n} more save waiting|{n} more saves waiting	Nog {n} opslagactie in de wachtrij|Nog {n} opslagacties in de wachtrij
+@msg	Save canceled	Opslaan geannuleerd
 # Paragraph panel menu › Justification…
 	Desired	Gewenst
 	Word Spacing:	Woordafstand:
@@ -9137,6 +9574,10 @@ axis	Y Axis	Y-as
 	Create New Action	Nieuwe actie maken
 	Play Action	Actie afspelen
 	Action Set:	Actieset:
+	Choose Align To at playback	Uitlijnen op kiezen bij afspelen
+	Align steps use the key object, key anchor or key guide when one is set.	Uitlijnstappen gebruiken het sleutelobject, het sleutelankerpunt of de sleutelhulplijn als die is ingesteld.
+	With one whole object selected and no key, they use the artboard.	Met één volledig geselecteerd object en geen sleutel gebruiken ze het tekengebied.
+	Otherwise they use the selection.	Anders gebruiken ze de selectie.
 	Function Key:	Functietoets:
 	Record	Opnemen
 	Create New Set	Nieuwe set maken
@@ -9163,6 +9604,8 @@ axis	Y Axis	Y-as
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
 	Skill Icons	Vaardigheidsiconen
+	Weather Icons	Weericonen
+	Media Controls	Mediabediening
 	Attack	Aanval
 	Defend	Verdediging
 	Heal	Genezen
@@ -9262,6 +9705,12 @@ axis	Y Axis	Y-as
 	Bus Lines	Buslijnen
 	Terminal Nodes	Aansluitpunten
 
+# Original arrow art brushes.
+	Arrows	Pijlen
+	Solid Arrow	Massieve pijl
+	Open Arrow	Open pijl
+	Chevron Arrow	Chevronpijl
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf
@@ -9278,6 +9727,256 @@ axis	Y Axis	Y-as
 	Stars	Sterren
 	Triangles	Driehoeken
 	Sparkles	Fonkelingen
+	Warm Gray	Warm grijs
+	Cool Gray	Koel grijs
+	Neutrals	Neutrale tinten
+	Ivory	Ivoor
+	Linen	Linnen
+	Oat	Haver
+	Greige	Greige
+	Stone	Steen
+	Taupe	Taupe
+	Slate	Leisteen
+	Clay	Klei
+	Terracotta	Terracotta
+	Ochre	Oker
+	Umber	Omber
+	Sand	Zand
+	Olive	Olijf
+	Moss	Mos
+	Rosy	Rozig
+	Neutral	Neutraal
+	Golden	Goudkleurig
+	Pastel	Pastel
+	Pastel Red	Pastelrood
+	Pastel Orange	Pasteloranje
+	Pastel Amber	Pastelamber
+	Pastel Yellow	Pastelgeel
+	Pastel Lime	Pastellimoen
+	Pastel Green	Pastelgroen
+	Pastel Teal	Pastelblauwgroen
+	Pastel Cyan	Pastelcyaan
+	Pastel Azure	Pastelazuur
+	Pastel Blue	Pastelblauw
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Zacht rood
+	Soft Orange	Zacht oranje
+	Soft Amber	Zacht amber
+	Soft Yellow	Zacht geel
+	Soft Lime	Zacht limoen
+	Soft Green	Zacht groen
+	Soft Teal	Zacht blauwgroen
+	Soft Cyan	Zacht cyaan
+	Soft Azure	Zacht azuur
+	Soft Blue	Zacht blauw
+	Soft Violet	Zacht violet
+	Soft Magenta	Zacht magenta
+	Vivid Red	Levendig rood
+	Vivid Orange	Levendig oranje
+	Vivid Amber	Levendig amber
+	Vivid Yellow	Levendig geel
+	Vivid Lime	Levendig limoen
+	Vivid Green	Levendig groen
+	Vivid Teal	Levendig blauwgroen
+	Vivid Cyan	Levendig cyaan
+	Vivid Azure	Levendig azuur
+	Vivid Blue	Levendig blauw
+	Vivid Violet	Levendig violet
+	Vivid Magenta	Levendig magenta
+	Deep	Diep
+	Deep Red	Dieprood
+	Deep Orange	Dieporanje
+	Deep Amber	Diepamber
+	Deep Yellow	Diepgeel
+	Deep Lime	Dieplimoen
+	Deep Green	Diepgroen
+	Deep Teal	Diepblauwgroen
+	Deep Cyan	Diepcyaan
+	Deep Azure	Diepazuur
+	Deep Blue	Diepblauw
+	Deep Violet	Diepviolet
+	Deep Magenta	Diepmagenta
+	Gold	Goud
+	Silver	Zilver
+	Bronze	Brons
+	Copper	Koper
+	Brass	Messing
+	Rose Gold	Roségoud
+	Gunmetal	Antraciet metaal
+	Platinum	Platina
+	Pewter	Tin
+	Ember	Gloed
+	Lagoon	Lagune
+	Dusk	Schemering
+	Clay to Teal	Klei naar blauwgroen
+	Plum to Olive	Pruim naar olijf
+	Complementary Coral	Koraal complementair
+	Split Complementary Coral	Koraal gesplitst complementair
+	Analogous Coral	Koraal analoog
+	Triad Coral	Koraal triade
+	Tetrad Coral	Koraal tetrade
+	Pentagram Coral	Koraal pentagram
+	Complementary Teal	Blauwgroen complementair
+	Split Complementary Teal	Blauwgroen gesplitst complementair
+	Analogous Teal	Blauwgroen analoog
+	Triad Teal	Blauwgroen triade
+	Tetrad Teal	Blauwgroen tetrade
+	Pentagram Teal	Blauwgroen pentagram
+	Soft Spectrum	Zacht spectrum
+	Red to Amber	Rood naar amber
+	Orange to Yellow	Oranje naar geel
+	Amber to Lime	Amber naar limoen
+	Yellow to Green	Geel naar groen
+	Lime to Teal	Limoen naar blauwgroen
+	Green to Cyan	Groen naar cyaan
+	Teal to Azure	Blauwgroen naar azuur
+	Cyan to Blue	Cyaan naar blauw
+	Azure to Violet	Azuur naar violet
+	Blue to Magenta	Blauw naar magenta
+	Violet to Red	Violet naar rood
+	Magenta to Orange	Magenta naar oranje
+	Dawn	Dageraad
+	Noon	Middag
+	Sunset	Zonsondergang
+	Night	Nacht
+	Overcast	Bewolkt
+	White to Black	Wit naar zwart
+	Light Grays	Lichte grijstinten
+	Dark Grays	Donkere grijstinten
+	Warm Grays	Warme grijstinten
+	Cool Grays	Koele grijstinten
+	Fade to Transparent	Vervagen naar transparant
+	White Fade	Witte vervaging
+	Vignette	Vignet
+	Mist	Nevel
+	Petal	Bloemblad
+	Fern	Varen
+	Smoke	Rook
+	Honey	Honing
+	Seafoam	Zeeschuim
+	Lavender	Lavendel
+	Driftwood	Drijfhout
+	Ink Wash	Inktwassing
+	Tide	Getij
+	Bloom	Bloei
+	Dew	Dauw
+	Pollen	Stuifmeel
+	Lichen	Korstmos
+	Prism Veil	Prismasluier
+	Opal Ribbon	Opaallint
+	Pearl Flash	Parelflits
+	Aurora Foil	Noorderlichtfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	IJzig spectrum
+	Silver Tide	Zilveren getij
+	Rose Quartz Gleam	Rozenkwartsglans
+	Moonstone Shift	Maansteenglans
+	Violet Edge	Violette rand
+	Mint Halo	Munthalo
+	Amber Corona	Ambercorona
+	Polar Glint	Poolschittering
+	Pastel Orbit	Pastelbaan
+	Coral and Navy	Koraal en marineblauw
+	Plum and Lime	Pruim en limoen
+	Teal and Gold	Blauwgroen en goud
+	Indigo and Peach	Indigo en perzik
+	Forest and Rose	Bos en roze
+	Red Glow	Rode gloed
+	Orange Glow	Oranje gloed
+	Amber Glow	Amberkleurige gloed
+	Yellow Glow	Gele gloed
+	Lime Glow	Limoengloed
+	Green Glow	Groene gloed
+	Teal Glow	Blauwgroene gloed
+	Cyan Glow	Cyaangloed
+	Azure Glow	Azuurgloed
+	Blue Glow	Blauwe gloed
+	Violet Glow	Violette gloed
+	Magenta Glow	Magentagloed
+	Polka Dots	Stippen
+	Vertical Stripes	Verticale strepen
+	Horizontal Stripes	Horizontale strepen
+	Diagonal Stripes	Diagonale strepen
+	Checkerboard	Dambord
+	Diamonds	Ruiten
+	Crosses	Kruisjes
+	Coarse Grit	Grove korrel
+	Stipple	Stippeling
+	Scratches	Krassen
+	Sparse Flecks	Verspreide spikkels
+	Dense Flecks	Dichte spikkels
+	Sine Bands	Sinusbanden
+	Ripple Lines	Rimpellijnen
+	Interference Rings	Interferentieringen
+	Offset Rings	Verschoven ringen
+	Warped Checks	Vervormde ruiten
+	Pinched Stripes	Ingesnoerde strepen
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Stralende lenzen
+	Soft Shadow	Zachte schaduw
+	Hard Shadow	Harde schaduw
+	Lifted Card	Opgetilde kaart
+	Neon Tube	Neonbuis
+	Inner Light	Binnenlicht
+	Feathered	Zachte rand
+	Haze	Waas
+	Double Rule	Dubbele lijn
+	Triple Rule	Driedubbele lijn
+	Dashed Border	Gestreepte rand
+	Dotted Border	Gestippelde rand
+	Offset Keyline	Verschoven contour
+	Inset Keyline	Binnencontour
+	Outside Stroke	Buitenlijn
+	Pointer	Aanwijzer
+	Highlighter	Markeerstift
+	Sketchy Line	Schetslijn
+	Scribble Fill	Krabbelvulling
+	Wobble	Wiebel
+	Zig Zag Edge	Zigzagrand
+	Wavy Edge	Golvende rand
+	Puffy	Opgeblazen
+	Starburst	Sterrenuitbarsting
+	Glossy	Glanzend
+	Brushed Metal	Geborsteld metaal
+	Spotlight	Spotlight
+	Sunset Band	Zonsondergangband
+	Sea Glass	Zeeglas
+	Pearl	Parel
+	Chrome Rim	Chromen rand
+	Glow Orb	Gloeibol
+	Pill Badge	Pilbadge
+	Round Badge	Ronde badge
+	Flag Wave	Wapperende vlag
+	Bulge	Bolling
+	Twisted	Gedraaid
+	Echo	Echo
+	Spiral Copies	Spiraalkopieën
+	Multiply Tint	Vermenigvuldigen-tint
+	Darken Veil	Donkerder-sluier
+	Ghosted	Doorschijnend
+	Two Tone	Tweekleurig
+	Overlay Glaze	Bedekken-glazuur
+	Screen Light	Scherm-licht
+	Soft Light Wash	Zacht-licht-wassing
+	Cyan Neon	Cyaan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Amberkleurige buis
+	Electric Lime	Elektrisch limoen
+	Pulse Violet	Pulserend violet
+	Cobalt Phosphor	Kobaltfosfor
+	Burst	Uitbarsting
+	Rounded Square	Afgerond vierkant
+	Sun	Zon
+	Moon	Maan
+	Cloud	Wolk
+	Rain	Regen
+	Thunder	Donder
+	Snow	Sneeuw
+	Play	Afspelen
+	Pause	Pauze
+	Skip Next	Volgende
+	Shuffle	Shuffle
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
@@ -9637,6 +10336,7 @@ breakText	Glyphs	Glyphs
 	Remove Strokes	Contouren verwijderen
 	Place Brush Art	Penseelillustratie plaatsen
 	Replace Brush Art	Penseelillustratie vervangen
+	Replace Pattern Art	Patroonillustratie vervangen
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Contouren gebruiken dit penseel. De nieuwe illustratie op deze contouren toepassen, of ze laten zoals ze zijn en een kopie van het penseel met de nieuwe illustratie toevoegen?
 	Apply to Strokes	Op contouren toepassen
 	Leave Strokes	Contouren behouden
@@ -9669,10 +10369,18 @@ breakText	Glyphs	Glyphs
 	Smooth Bridge…	Vloeiende brug…
 	Smooth Bridge	Vloeiende brug
 	Keep Originals	Originelen behouden
-@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	select two or more circles to bridge	selecteer twee of meer cirkels om te verbinden
 @msg	one circle is inside the other	de ene cirkel ligt binnen de andere
 @msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
 @msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
+	Constant Gap	Constante tussenruimte
+	Reach:	Bereik:
+@msg	the circles are too far apart for this gap: raise the gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte: vergroot de tussenruimte
+@msg	the circles are too far apart for this gap	de cirkels liggen te ver uit elkaar voor deze tussenruimte
+@msg	no two circles are within reach: raise the reach	geen twee cirkels liggen binnen bereik: vergroot het bereik
+@msg	select at most 2000 circles to bridge	selecteer hoogstens 2000 cirkels om te verbinden
+@msg	that makes too many bridges (at most 8000): lower the reach	dat geeft te veel bruggen (hoogstens 8000): verklein het bereik
+@msg	the bridged circles are too complex to unite	de verbonden cirkels zijn te complex om samen te voegen
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeenschappelijke raaklijnen…
 	Common Tangents	Gemeenschappelijke raaklijnen
@@ -9689,12 +10397,15 @@ breakText	Glyphs	Glyphs
 @msg	One path lies inside the other, so they have no common tangents	Het ene pad ligt binnen het andere, dus ze hebben geen gemeenschappelijke raaklijnen
 @msg	The paths overlap, so they have no internal tangents	De paden overlappen, dus ze hebben geen inwendige raaklijnen
 @msg	One path lies inside the other, so they have no internal tangents	Het ene pad ligt binnen het andere, dus ze hebben geen inwendige raaklijnen
+@msg	The point lies inside the path, so it has no tangents	Het punt ligt binnen het pad, dus het heeft geen raaklijnen
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Raakcirkel…
 	Tangent Circle	Raakcirkel
+	Tangent Circle Tool	Raakcirkel-gereedschap
+	No tangent circle here	Hier geen raakcirkel
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` noemt een object twee keer
 @msg	select two or three paths or compound paths	selecteer twee of drie paden of samengestelde paden
@@ -9710,6 +10421,16 @@ breakText	Glyphs	Glyphs
 @msg	`circle` is past the last circle found ({found})	`circle` ligt voorbij de laatst gevonden cirkel ({found})
 @msg	object {value} is not a path or compound path	object {value} is geen pad of samengesteld pad
 @msg	these shapes are too small to measure	deze vormen zijn te klein om te meten
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Begrenzingsrechthoek toevoegen
+	Add Bounding Circle	Begrenzingscirkel toevoegen
+	Add Bounding Rectangle…	Begrenzingsrechthoek toevoegen…
+	Add Bounding Circle…	Begrenzingscirkel toevoegen…
+	One per Object	Eén per object
+@msg	nothing to enclose	niets om te omsluiten
+@msg	`offset` must be 0 or more	`offset` moet 0 of meer zijn
+@msg	the shape would have no size	de vorm zou geen grootte hebben
+@msg	the shape would reach past the edge of the canvas	de vorm zou voorbij de rand van het canvas reiken
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Documentgereedschappen
 	Save a Timestamped Copy	Een kopie met tijdstempel opslaan
@@ -10120,6 +10841,49 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Toont in plaats van de tooltip een kaart met wat een gereedschap in de werkbalk en zijn toetsen doen; vereist Tooltips tonen.
+	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.
+	Selects anchor points and path segments to reshape a path.	Selecteert ankerpunten en padsegmenten om de vorm van een pad te wijzigen.
+	Draws paths point by point, with straight segments and smooth curves.	Tekent paden punt voor punt, met rechte segmenten en vloeiende curven.
+	Draws smooth curves through the points you click.	Tekent vloeiende curven door de punten waarop u klikt.
+	Adds text at a point, or in a frame you drag.	Voegt tekst toe op een punt of in een kader dat u sleept.
+	Draws rectangles and squares.	Tekent rechthoeken en vierkanten.
+	Draws rectangles with rounded corners.	Tekent rechthoeken met afgeronde hoeken.
+	Draws ellipses and circles.	Tekent ellipsen en cirkels.
+	Draws polygons with sides of equal length.	Tekent veelhoeken met zijden van gelijke lengte.
+	Draws stars.	Tekent sterren.
+	Turns objects around a reference point.	Draait objecten rond een referentiepunt.
+	Flips objects across an axis through a reference point.	Spiegelt objecten over een as door een referentiepunt.
+	Resizes objects from a reference point.	Schaalt objecten vanaf een referentiepunt.
+	Slants objects from a reference point.	Schuint objecten af vanaf een referentiepunt.
+	Moves the view of the document.	Verschuift de weergave van het document.
+	Magnifies or reduces the view.	Vergroot of verkleint de weergave.
+	Copies the color and other attributes of one object to the selection.	Kopieert de kleur en andere kenmerken van een object naar de selectie.
+	Sets the direction and length of a gradient.	Stelt de richting en lengte van een verloop in.
+	Creates, selects and resizes artboards.	Maakt, selecteert en schaalt tekengebieden.
+	Changes the width of a stroke along its length.	Wijzigt de breedte van een contour over de lengte ervan.
+	Bends art by dragging pins placed on it.	Buigt illustraties door er geplaatste spelden te slepen.
+	Pushes the outlines of paths in the direction you drag.	Duwt de omtrekken van paden in de richting waarin u sleept.
+	Twists the outlines of paths into swirls.	Draait de omtrekken van paden tot wervelingen.
+	Pulls the outlines of paths in toward the brush.	Trekt de omtrekken van paden naar het penseel toe.
+	Pushes the outlines of paths out from the brush.	Duwt de omtrekken van paden van het penseel af naar buiten.
+	Adds curved details along the outlines of paths.	Voegt gebogen details toe langs de omtrekken van paden.
+	Adds spiky details along the outlines of paths.	Voegt puntige details toe langs de omtrekken van paden.
+	Adds wrinkles along the outlines of paths.	Voegt rimpels toe langs de omtrekken van paden.
+	Moves, copies and resizes objects on the perspective grid.	Verplaatst, kopieert en schaalt objecten op het perspectiefraster.
+	Makes a series of steps between two or more objects.	Maakt een reeks stappen tussen twee of meer objecten.
+	Places dimension lines that show measured lengths.	Plaatst maatlijnen die gemeten lengten tonen.
+	Tap	Kort drukken
+	Clear Hold	Vasthouden wissen
+	Hold Shortcuts	Vasthoudsneltoetsen
+	Hold Shortcut Delay	Vertraging vasthoudsneltoetsen
+	How hold shortcuts work	Zo werken vasthoudsneltoetsen
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik en druk vervolgens een toets in die hiervoor wordt vastgehouden (Esc annuleert). De toets vasthouden voert dit uit; kort drukken voert de eigen sneltoets van de toets uit.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kort drukken op een toets voert de sneltoets ervan uit. De toets vasthouden gedurende de vertraging voert in plaats daarvan het gereedschap of de opdracht in de kolom Houd uit. Een vasthoudsneltoets is een letter-, cijfer- of leestekentoets, alleen of met Shift.
+@msg	Hold {_1} is already used by {_2}	Vasthouden {_1} wordt al gebruikt door {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	een vasthoudsneltoets is een toets die een teken typt, alleen of met Shift ({shown} bevat Cmd, Ctrl of Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan geen vasthoudsneltoets zijn: gebruik een letter, een cijfer of een leestekentoets
 	Check	Controleren
 	Check Fold Lines	Vouwlijnen controleren
 @msg	No cut lines are in the selection.	De selectie bevat geen snijlijnen.
@@ -10140,6 +10904,61 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Nature Icons	Natuurpictogrammen
+	Flower	Bloem
+	Tree	Boom
+	Mountain	Berg
+	Ornamental	Ornamentaal
+	Scrollwork	Krulwerk
+	Filigree Arrow	Filigraanpijl
+	Petal Sweep	Bloemblaadjeszwaai
+	Twin Curl	Dubbele krul
+	Vector Packs	Vectorpakketten
+	Compass Rose	Kompasroos
+	Botanical Sprig	Botanisch takje
+	Facet Diamond	Gefacetteerde diamant
+	Tide Crest	Golfkam
+	Leaf Vine	Bladrank
+	Blossom Chain	Bloemenketting
+	Pennant Garland	Vlaggetjesslinger
+	Lantern String	Lantaarnslinger
+	Orbit Lines	Baanlijnen
+	Petal Garland	Bloemblaadjesslinger
+	Lattice Braid	Rastervlecht
+	Facet Sweep	Gefacetteerde streek
+	Artistic Brushes	Artistieke penselen
+	Paint	Verf
+	Flat Sweep	Vlakke streek
+	Dry Drag	Droge sleep
+	Loaded Stroke	Dikke verfstreek
+	Fan Sweep	Waaierstreek
+	Engraving	Gravure
+	Fine Hatching	Fijne arcering
+	Dense Hatching	Dichte arcering
+	Tapered Hatching	Taps toelopende arcering
+	Broken Hatching	Onderbroken arcering
+	Image Brush	Afbeeldingspenselen
+	Soft Bloom	Zachte bloei
+	Halftone Field	Halftoonveld
+	Solar Grain	Zonnekorrel
+	Color Flecks	Kleurspikkels
+	Paper Cutouts	Papieruitsneden
+	Coral Layers	Koraallagen
+	Mint Layers	Muntlagen
+	Midnight Layers	Middernachtlagen
+	Sunflower Sheet	Zonnebloemvel
+	Rose Layers	Rozenlagen
+	Monochrome Stack	Monochrome stapel
+	Dashed Arrow	Gestreepte pijl
+	Fine Stipple	Fijn stippelen
+	Dense Stipple	Dicht stippelen
+	Soft Stipple	Zacht stippelen
+	Bold Stipple	Grof stippelen
+	Pressure Sensitive	Drukgevoelig
+	Flex Ribbon	Flexibel lint
+	Pulse Stroke	Pulserende streek
+	Round Flow	Ronde vloei
+	Chisel Flow	Schuine vloei
 	Fold Preview	Vouwvoorbeeld
 	Fold	Vouwen
 	Show Fold Lines	Vouwlijnen tonen
@@ -10150,3 +10969,7 @@ breakText	Glyphs	Glyphs
 @msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
 @msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
 @msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Origineel bewerken met:
+file-filter	Applications	Programma’s

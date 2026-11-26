@@ -2,7 +2,6 @@
 //! `tests_textedit`).
 
 use super::*;
-use crate::ImeSurrounding;
 use crate::testutil::{cx, paint};
 use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, Selection, TextObject};
 use vectorcraft_text::FontDb;
@@ -1109,29 +1108,6 @@ fn ime_ranges_convert_characters_to_bytes() {
     assert_eq!(char_range_to_bytes("ががく", backwards), None, "backwards");
 }
 
-/// Outgoing surrounding text excludes the pre-edit and remaps a selection that crosses it, not
-/// only a caret at its end.
-#[test]
-fn ime_surrounding_remaps_a_selection_across_the_preedit() {
-    let (mut d, _id, mut tool) = editing("abcd");
-    let snap = d.clone();
-    let (sel, p) = (Selection::default(), paint());
-    tool.caret = 2;
-    tool.anchor = 2;
-    let acts = tool.ime_preedit(&cx(&d, &sel, &p), "xy", None);
-    apply(&mut d, &snap, &acts);
-    assert_eq!(tool.preedit.as_ref().map(|p| p.range.clone()), Some(2..4));
-    // A selection from before the marked text to after it: the IME receives the committed text
-    // with both offsets folded across the removed pre-edit.
-    tool.anchor = 1;
-    tool.caret = 6;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the pre-edit has committed text around it");
-    };
-    assert_eq!(text, "abcd");
-    assert_eq!((cursor, anchor), (4, 1));
-}
-
 #[test]
 fn marked_text_is_underlined_with_the_converting_clause_thick() {
     let (mut d, id, mut tool) = editing("曲");
@@ -1327,6 +1303,7 @@ fn area_type_drag_measure_labels_honor_preference() {
 
 #[test]
 fn layout_cache_follows_fonts_added_later() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1398,6 +1375,26 @@ fn click(tool: &mut TypeTool, c: &ToolContext, x: f64, y: f64) -> Vec<Action> {
 
 fn creates(acts: &[Action]) -> bool {
     acts.iter().any(|a| matches!(a, Action::Exec(cmd, _) if cmd == "text.create" || cmd == "text.createInPath"))
+}
+
+/// A click in the empty part of an area type frame, below its one line, edits that type: the
+/// selection tools pass such clicks through to the art behind (#7274), the Type tool does not.
+#[test]
+fn a_click_in_an_area_frame_below_its_text_edits_it() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut t = TextObject::point(Point::new(100.0, 100.0), "Hi", CharStyle { size: 20.0, ..Default::default() });
+    t.kind = TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1)) };
+    t.cached_bounds = Some(Rect::new(0.0, 0.0, 30.0, 24.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    assert!(vectorcraft_doc::hit::hit_test(&d, Point::new(250.0, 250.0), c.selection_hit_options()).is_none(), "selection tools: passes through");
+    let mut tool = TypeTool::new("type");
+    let acts = click(&mut tool, &c, 250.0, 250.0);
+    assert!(!creates(&acts), "{acts:?}");
+    assert_eq!(tool.editing, Some(id));
 }
 
 /// While type is being edited, a click on blank canvas ends the editing and makes no new type;
@@ -1542,6 +1539,7 @@ fn selected_type_shows_its_ports_in_each_state() {
 /// Preferences › Hyphenation › Exceptions change, the selected type is laid out again.
 #[test]
 fn the_out_port_follows_the_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     struct Clear;
     impl Drop for Clear {
         fn drop(&mut self) {
@@ -1690,6 +1688,7 @@ const OVERFLOWS: &str = "This text is far too long to fit in a frame of one hund
 /// overlays as a tool that lays every frame out afresh.
 #[test]
 fn type_overlays_keep_the_selected_frames_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (d, ids) = area_frames(&["One", "Two words", "Three words here", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1721,6 +1720,7 @@ fn type_overlays_keep_the_selected_frames_layouts() {
 /// out again on the next frame.
 #[test]
 fn type_overlays_keep_a_selected_storys_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["Story one ", "story two ", "story three ", "story four"]);
     d.text_threads.push(ids.clone());
     let (mut sel, p) = (Selection::default(), paint());
@@ -1749,6 +1749,7 @@ fn type_overlays_keep_a_selected_storys_layouts() {
 /// longer drawn is dropped, and choosing another tool drops them all.
 #[test]
 fn type_overlays_lay_out_again_only_the_frames_that_changed() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["One", "Two", "Three", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1786,6 +1787,7 @@ fn type_overlays_lay_out_again_only_the_frames_that_changed() {
 /// each call, and draws what laying every frame out afresh draws.
 #[test]
 fn type_overlays_keep_at_most_frame_layouts_max() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let texts = vec!["a "; FRAME_LAYOUTS_MAX + 3];
     let (mut d, ids) = area_frames(&texts);
     d.text_threads.push(ids.clone());
@@ -1806,6 +1808,7 @@ fn type_overlays_keep_at_most_frame_layouts_max() {
 
 #[test]
 fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1848,6 +1851,7 @@ fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
 #[test]
 #[ignore = "timing, run by hand"]
 fn type_overlays_timing() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     use std::time::Instant;
     let words = "The quick brown fox jumps over the lazy dog while seven wizards box. ".repeat(6);
     let texts: Vec<String> = (0..200).map(|i| format!("{i} {words}")).collect();
@@ -1920,47 +1924,6 @@ fn type_on_a_path_has_its_ports_beyond_its_brackets() {
     assert!(near(port_centre(t, Port::In, 0.5), Point::new(160.0 - PORT_RISE_PX / 2.0, 300.0)), "screen pixels at 200%");
 }
 
-/// The outgoing query copies only the 4 KiB window around the selection, not the whole document,
-/// and reports offsets into that window.
-#[test]
-fn ime_surrounding_bounds_a_long_document() {
-    let source: String = (0..10_000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    let (d, _id, mut tool) = editing(&source);
-    tool.caret = 5000;
-    tool.anchor = 5000;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("a caret in a long document is available");
-    };
-    assert_eq!(text.len(), 4000, "only the bounded window is copied");
-    assert_eq!(text.as_str(), &source[3000..7000]);
-    assert_eq!((cursor, anchor), (2000, 2000), "offsets are relative to the returned window");
-
-    tool.anchor = 0;
-    let ImeSurrounding::Unavailable(reason) = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("a selection wider than the limit must be explicit");
-    };
-    assert!(reason.contains("selection"), "{reason}");
-}
-
-/// Unicode offsets are UTF-8 bytes and a reversed selection stays reversed through the query.
-#[test]
-fn ime_surrounding_preserves_reversed_unicode_selection_and_empty_text() {
-    let (d, _id, mut tool) = editing("aé😀z");
-    tool.caret = 1;
-    tool.anchor = 7;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("the short text is available");
-    };
-    assert_eq!(text, "aé😀z");
-    assert_eq!((cursor, anchor), (1, 7), "cursor is the primary end, anchor the other");
-
-    let (d, _id, tool) = editing("");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("an empty document is available, not unavailable");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("", 0, 0));
-}
-
 /// Deleting around a selection removes only the surrounding text, keeps the reversed selection
 /// direction, and leaves it for the following commit to replace.
 #[test]
@@ -1975,10 +1938,6 @@ fn ime_delete_surrounding_preserves_a_reversed_selection() {
     let NodeKind::Text(t) = &d.node(_id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "bc", "the selection itself is preserved");
     assert_eq!((tool.caret, tool.anchor), (0, 2), "direction is kept, shifted left by the preceding deletion");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the selection is still an available context");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("bc", 0, 2));
 }
 
 /// Deleting around a composition removes only the surrounding committed text, keeps the pre-edit
@@ -1998,10 +1957,6 @@ fn ime_delete_surrounding_preserves_the_preedit() {
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "axycd", "only the byte before the composition is deleted");
     assert_eq!(tool.preedit.as_ref().map(|p| p.range.clone()), Some(1..3), "the composition stayed and moved left");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the composition has committed text around it");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("acd", 1, 1), "the pre-edit is excluded and remapped");
 }
 
 /// Edit-session identity changes only when editing starts afresh, not on ordinary edits or caret
@@ -2019,23 +1974,6 @@ fn ime_target_is_stable_within_an_edit_session() {
     let second = tool.ime_target(&cx(&d, &sel, &p)).expect("re-entering has an owner");
     assert_eq!((second.0, second.1), (first.0, first.1));
     assert_ne!(second.2, first.2, "a new edit session is a replacement epoch");
-}
-
-/// The bounded query walks the styled runs without joining them, and its byte offsets still refer
-/// to the concatenated logical text.
-#[test]
-fn ime_surrounding_maps_across_styled_runs() {
-    use vectorcraft_doc::TextRun;
-    let (mut d, id, mut tool) = editing("aé😀z");
-    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!() };
-    t.runs =
-        vec![TextRun::new("aé", CharStyle { size: 20.0, ..Default::default() }), TextRun::new("😀z", CharStyle { size: 24.0, ..Default::default() })];
-    tool.caret = 1;
-    tool.anchor = 7;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("the short text is available");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("aé😀z", 1, 7));
 }
 
 /// Deletion counts start at the caret, including when it is in a later styled run. Character
@@ -2092,31 +2030,6 @@ fn a_recreated_type_tool_gets_a_new_replacement_epoch() {
     assert_ne!(a.2, b.2, "edit sessions are numbered process-wide, not per tool");
 }
 
-/// The surrounding query never publishes a typing session's text after the document changed
-/// outside it: it reports the document's own text (and drops the stale marked-text range), and the
-/// commit-time session check keeps the reset from earning an IME receipt.
-#[test]
-fn ime_surrounding_reports_the_document_when_it_changed_under_the_session() {
-    let (mut d, id, mut tool) = editing("abc");
-    let (sel, p) = (Selection::default(), paint());
-    tool.caret = 3;
-    tool.anchor = 3;
-    let snap = d.clone();
-    let acts = tool.text_input(&cx(&d, &sel, &p), "x");
-    apply(&mut d, &snap, &acts);
-    let ImeSurrounding::Available { text, .. } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the session matches the document");
-    };
-    assert_eq!(text, "abcx");
-    // A panel, menu or control edit replaces the text while the typing session is open.
-    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!() };
-    let len = edit::runs_len(&t.runs);
-    let _ = edit::replace_range(&mut t.runs, 0, len, "XYZ");
-    let stale = tool.ime_surrounding(&cx(&d, &sel, &p), 4000);
-    assert_eq!(stale, ImeSurrounding::Available { text: "XYZ".into(), cursor: 3, anchor: 3 });
-    assert!(!tool.ime_session_matches_document(&cx(&d, &sel, &p)), "the commit starts a fresh session");
-}
-
 #[test]
 fn shift_enter_inserts_soft_return() {
     let (mut d, id, mut tool) = editing("Hello World");
@@ -2162,4 +2075,185 @@ fn soft_return_in_a_list_item_keeps_tab_within_the_paragraph() {
     tool.anchor = 0;
     let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.setFormat" && p["listLevel"] == 2)));
+}
+
+/// A family no computer has.
+const NO_SUCH_FAMILY: &str = "Missing Test Family 7258";
+
+/// Point type at (x, 100) whose runs are `runs` (text, family, style).
+fn add_styled_text(d: &mut Document, x: f64, runs: &[(&str, &str, &str)]) -> NodeId {
+    let id = d.alloc_id();
+    let style =
+        |family: &str, font_style: &str| CharStyle { size: 20.0, font_family: family.into(), font_style: font_style.into(), ..Default::default() };
+    let mut t = TextObject::point(Point::new(x, 100.0), "", style(runs[0].1, runs[0].2));
+    t.runs = runs.iter().map(|(text, family, font_style)| TextRun::new(*text, style(family, font_style))).collect();
+    d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    id
+}
+
+/// Where the caret before byte `b` of type `id` is drawn (document space).
+fn caret_at(c: &ToolContext, id: NodeId, b: usize) -> Point {
+    let t = TypeTool::text(c, id).unwrap();
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let (a, bb) = vectorcraft_text::caret_position(&lay, b);
+    let at = t.xf * a.midpoint(bb);
+    Point::new(at.x + 0.1, at.y)
+}
+
+/// The question a click asked → its token and fields.
+fn asked(acts: &[Action]) -> (u64, Value) {
+    match acts {
+        [Action::Dialog(kind, p)] if kind == MISSING_FONT_EDIT => (p["token"].as_u64().unwrap(), p.clone()),
+        _ => panic!("expected only the missing-font question: {acts:?}"),
+    }
+}
+
+/// A click on type set in a family that isn't available asks first and starts no edit; OK starts
+/// it with the caret where the type was clicked, and the font the type names stays as it is.
+#[test]
+fn a_click_on_type_in_a_missing_font_asks_before_editing() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(&mut d, 100.0, &[("Hello", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 3);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(
+        (q["id"].as_u64(), &q["missing"], &q["style"], &q["more"]),
+        (Some(id.0), &json!([format!("{NO_SUCH_FAMILY} Regular")]), &json!([]), &json!(0))
+    );
+    assert_eq!(tool.editing, None);
+    assert!(!tool.waiting());
+    // OK: the next poll starts the edit at the clicked character.
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    assert!(tool.waiting());
+    let acts = tool.poll(&c, false);
+    assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    assert_eq!((tool.editing, tool.caret, tool.anchor), (Some(id), 3, 3));
+    assert!(!tool.waiting());
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs[0].style.font_family, NO_SUCH_FAMILY);
+    // A click within the type being edited moves the caret without asking again.
+    let at = caret_at(&c, id, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(!acts.iter().any(|a| matches!(a, Action::Dialog(..))), "{acts:?}");
+    assert_eq!((tool.editing, tool.caret), (Some(id), 1));
+}
+
+/// `tool.setOption` checks each option first: the answer to the question is a whole-number token
+/// and a true or false `ok`, so a client can give it through that command.
+#[test]
+fn the_answer_to_the_missing_font_question_passes_the_option_check() {
+    let tool = TypeTool::new("type");
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": true})), Ok(()));
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": false})), Ok(()));
+    for bad in [json!({"token": "7", "ok": true}), json!({"token": 7, "ok": 1}), json!({"ok": true}), json!({"token": -1, "ok": true}), json!(null)] {
+        assert_eq!(
+            tool.check_option("missingFontEdit", &bad),
+            Err("`missingFontEdit` must be {token, ok} with a whole number and true or false".to_string()),
+            "{bad}"
+        );
+    }
+}
+
+/// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
+/// another question, or one given to a document changed since, starts nothing either. An answer
+/// naming another question leaves the open question as it was.
+#[test]
+fn cancel_or_a_stale_answer_starts_no_edit_in_missing_fonts() {
+    let (mut d, first, mut tool) = editing("First");
+    tool.caret = 2;
+    let other = add_styled_text(&mut d, 300.0, &[("Second", NO_SUCH_FAMILY, "Bold")]);
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, other, 2);
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2), "the edit in progress goes on while the question is open");
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": true}));
+    assert!(!tool.waiting(), "another question's answer");
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": false}));
+    assert!(tool.poll(&c, false).is_empty());
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2));
+    // OK after the document changed: nothing starts.
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    let changed = ToolContext { revision: (0, 1), ..cx(&d, &sel, &p) };
+    assert!(tool.poll(&changed, false).is_empty());
+    assert_eq!(tool.editing, Some(first));
+    assert!(!tool.waiting());
+    // An answer naming another question leaves the open one answerable: its OK still starts the edit.
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": false}));
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": true}));
+    assert!(!tool.waiting(), "another question's answer");
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    assert!(tool.waiting());
+    let acts = tool.poll(&c, false);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [other.0]}))), "{acts:?}");
+    assert_eq!((tool.editing, tool.caret), (Some(other), 2));
+}
+
+/// Every new edit of such type asks again, after an earlier OK too, and a style the family lacks
+/// asks as a missing family does; type in available fonts is edited at once.
+#[test]
+fn each_new_edit_of_type_in_unavailable_fonts_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let styled = add_styled_text(&mut d, 100.0, &[("Wide", "Source Sans 3", "Ultra Condensed Oblique 7258")]);
+    let plain = add_styled_text(&mut d, 300.0, &[("Plain", "Source Sans 3", "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, styled, 1);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((&q["missing"], &q["style"]), (&json!([]), &json!(["Source Sans 3 Ultra Condensed Oblique 7258"])));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    tool.poll(&c, false);
+    assert_eq!(tool.editing, Some(styled));
+    // Other type in an available font is edited at once.
+    let to = caret_at(&c, plain, 2);
+    let acts = click(&mut tool, &c, to.x, to.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [plain.0]}))), "{acts:?}");
+    assert_eq!(tool.editing, Some(plain));
+    // Back to the first type: a new edit, so the question comes again.
+    asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(tool.editing, Some(plain));
+}
+
+/// The whole story counts: type with one run in a missing font asks even when the click lands in a
+/// run in an available font, and the question names each font once.
+#[test]
+fn a_story_with_one_run_in_a_missing_font_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(
+        &mut d,
+        100.0,
+        &[("Here ", "Source Sans 3", "Regular"), ("gone ", NO_SUCH_FAMILY, "Regular"), ("again", NO_SUCH_FAMILY, "Regular")],
+    );
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 1);
+    let (_, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(q["missing"], json!([format!("{NO_SUCH_FAMILY} Regular")]));
+    assert_eq!(tool.editing, None);
+}
+
+/// Type set in a CSS generic family is edited without a question, and a press dropped while the
+/// question is open leaves the edit in progress as it was.
+#[test]
+fn generic_families_and_a_dropped_press_ask_nothing_more() {
+    let mut d = Document::new(500.0, 500.0);
+    let generic = add_styled_text(&mut d, 100.0, &[("Generic", "sans-serif", "Regular")]);
+    let missing = add_styled_text(&mut d, 300.0, &[("Missing", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, generic, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [generic.0]}))), "{acts:?}");
+    let to = caret_at(&c, missing, 1);
+    asked(&tool.pointer(&c, &PointerEvent::new(PointerKind::Down, to.x, to.y)));
+    assert!(tool.drop_press(&c).is_empty());
+    assert_eq!(tool.editing, Some(generic));
 }

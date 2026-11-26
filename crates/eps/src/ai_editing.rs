@@ -118,7 +118,12 @@
 //!   `%AI24_EndSymbolList`); each instance as `/SymbolInstance :`, `(name) /SymbolRef ,`, the
 //!   matrix taking the art to art space as `a b c d tx ty /RTransformMatrix`, `;`, then its name
 //!   and opacity mask and a state block as a group's with its opacity and blending mode (an
-//!   instance with isolation, knockout or knockout shape of its own is written as its art). The
+//!   instance with isolation, knockout or knockout shape of its own is written as its art). A
+//!   dynamic symbol's art dictionary also holds `VectorCraftDynamicSymbol` (`/Int`, 1), and the
+//!   dictionary of an instance with changes of its own (`symbol_overrides`) holds
+//!   `VectorCraftSymbolOverrides`, a `/String` of the changes as hex-coded JSON: the format's own
+//!   entries, as other apps' editing data is not documented, read back by this reader and left out by
+//!   others. The
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
 //!   a gradient's take the art to the canvas's space turned y up about art space's origin there,
 //!   and a gradient mesh's corners are in that space; an envelope's contents in its dictionary are
@@ -191,7 +196,7 @@
 //! and instances of
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
-//! guides, export types and dynamic type left out, gradient meshes the reader wouldn't read back as
+//! guides, export types left out, gradient meshes the reader wouldn't read back as
 //! they are, folded meshes, meshes in pattern tiles and in art cut to a clipping object and every mesh
 //! on a large canvas as their drawn look, blends the reader wouldn't read back live as
 //! their steps, other live objects (placed documents included) as their art,
@@ -220,6 +225,7 @@ use vectorcraft_pdf::PrivateData;
 use crate::ps;
 
 mod writer;
+pub(crate) use writer::{DYNAMIC_KEY, OVERRIDES_KEY, hex_decode};
 
 use writer::Writer;
 

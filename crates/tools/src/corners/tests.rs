@@ -355,13 +355,24 @@ fn alt_click_cycles_the_kind_and_double_click_opens_the_dialog() {
             assert_eq!(a, vec![Action::Exec("object.setLiveShape".into(), want.clone())], "{tool}");
         }
     }
-    // A double-click on a widget opens Corners for the shown corners; elsewhere it doesn't.
+    // With Direct Selection, a double-click on a widget opens Corners for the shown corners;
+    // elsewhere it doesn't.
     let cx1 = cx(&d, &part, &p);
     let a = crate::create("directSelection").pointer(&cx1, &PointerEvent::new(PointerKind::DoubleClick, 110.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0]}))]);
     let cx2 = cx(&d, &whole, &p);
-    let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    let a = crate::create("directSelection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0, 1, 2, 3]}))]);
+    // With the Selection tool, it shows the Transform panel instead, on any of the widgets.
+    for at in [(110.0, 110.0), (190.0, 110.0), (190.0, 190.0), (110.0, 190.0)] {
+        let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, at.0, at.1));
+        assert_eq!(a, vec![Action::Panel("transform".into())], "{at:?}");
+    }
+    // With the shape widgets hidden, the same double-click isolates the shape, as off the widgets.
+    let mut hidden = cx(&d, &whole, &p);
+    hidden.shape_widgets = false;
+    let a = crate::create("selection").pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    assert_eq!(a, vec![Action::Exec("object.isolate".into(), json!({"id": id.0}))]);
     // Off the widgets, the Selection tool's double-click isolates the shape (Double Click To
     // Isolate) instead.
     let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0));
@@ -404,6 +415,28 @@ fn widgets_off_or_elsewhere_keep_the_tools_behaviour() {
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, 110.0, 110.0));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 110.0));
     assert_eq!(a[0], Action::Begin("Move".into()));
+}
+
+/// With Show Shape Widgets off, a live rectangle's widgets hide from the Selection tool and the
+/// shape tools, and a drag from one moves the object; Direct Selection still shows and drags them
+/// while Show Corner Widget is on.
+#[test]
+fn hidden_shape_widgets_leave_direct_selections_corners() {
+    let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+    let s = selected(id);
+    let p = paint();
+    let c = ToolContext { shape_widgets: false, ..cx(&d, &s, &p) };
+    let at = Point::new(110.0, 110.0);
+    assert!(CornerWidgets::for_tool(&c, false).is_none());
+    assert!(!over_widget(&c, at, false) && double_click(&c, at, false).is_none());
+    assert!(CornerWidgets::for_tool(&c, true).is_some_and(|w| w.visible().count() == 4));
+    assert!(over_widget(&c, at, true));
+    let mut t = crate::create("selection");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 110.0))[0], Action::Begin("Move".into()));
+    // Show Corner Widget off hides Direct Selection's too.
+    let off = ToolContext { corner_widgets: false, ..c };
+    assert!(CornerWidgets::for_tool(&off, true).is_none());
 }
 
 /// #511: Direct Selection shows a widget in each of a star's ten corners (the Selection tool

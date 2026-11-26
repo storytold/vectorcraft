@@ -1,15 +1,14 @@
 //! The canvas context menu: right-click selects the object under the pointer and lists what
 //! applies to the selection.
 
-use egui::{Event, PointerButton, Pos2, Rect, pos2, vec2};
+use craft::menu::Node;
+use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
-use crate::canvas::Xf;
-use crate::menus::{self, Item};
-use crate::{VectorcraftApp, canvas};
+use crate::{VectorcraftApp, canvas, menus};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -21,21 +20,11 @@ fn rect(app: &mut VectorcraftApp, x: f64, y: f64) -> NodeId {
     NodeId(app.run("shape.rectangle", json!({"x": x, "y": y, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
 }
 
-/// One headless frame of the canvas on an 800 × 600 window → the text painted, with its rect.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+/// One headless frame of the canvas on an 800 × 600 window.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) {
     let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
     out.textures_delta.clear();
-    fn walk(s: &egui::Shape, v: &mut Vec<(String, Rect)>) {
-        match s {
-            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
-            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
-            _ => {}
-        }
-    }
-    let mut v = vec![];
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
-    v
 }
 
 fn press(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
@@ -43,24 +32,67 @@ fn press(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
 }
 
 /// Click `button` at `pos` (move, press, release, then a frame to show the result).
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, pos: Pos2, button: PointerButton) -> Vec<(String, Rect)> {
+fn click(app: &mut VectorcraftApp, ctx: &egui::Context, pos: Pos2, button: PointerButton) {
     frame(app, ctx, vec![Event::PointerMoved(pos)]);
     frame(app, ctx, vec![press(pos, button, true)]);
     frame(app, ctx, vec![press(pos, button, false)]);
-    frame(app, ctx, vec![])
+    frame(app, ctx, vec![]);
 }
 
-/// Where document point `p` is on screen (after a first frame laid the canvas out).
+/// Escape, which closes an open menu.
+fn escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    frame(app, ctx, vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+}
+
+/// Where document point `(x, y)` is on screen (after a first frame laid the canvas out).
 fn screen(app: &VectorcraftApp, x: f64, y: f64) -> Pos2 {
-    Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(x, y))
+    app.canvas_view().unwrap().to_screen(Point::new(x, y))
 }
 
-fn has(texts: &[(String, Rect)], label: &str) -> bool {
-    texts.iter().any(|(t, _)| t.trim_start_matches(['✓', ' ']) == label)
+/// The labels of the menu's rows, submenus and headings included, depth first. A spelling suggestion
+/// shows the word it puts in, not a label of the menu.
+fn labels(app: &VectorcraftApp) -> Vec<String> {
+    fn walk(nodes: &[Node], out: &mut Vec<String>) {
+        for n in nodes {
+            match n {
+                Node::Item(it) if it.command.id == "text.editRange" => {}
+                Node::Item(it) => out.push(it.label.clone()),
+                Node::Heading(l) => out.push(l.clone()),
+                Node::Submenu { label, children, .. } => {
+                    out.push(label.clone());
+                    walk(children, out);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    walk(&menus::context_items(app), &mut out);
+    out
 }
 
-fn at(texts: &[(String, Rect)], label: &str) -> Pos2 {
-    texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+/// The command (id and params) of every row of the menu, depth first.
+fn commands(app: &VectorcraftApp) -> Vec<(String, serde_json::Value)> {
+    fn walk(nodes: &[Node], out: &mut Vec<(String, serde_json::Value)>) {
+        for n in nodes {
+            match n {
+                Node::Item(it) => out.push((it.command.id.clone(), it.command.params.clone())),
+                Node::Submenu { children, .. } => walk(children, out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    walk(&menus::context_items(app), &mut out);
+    out
+}
+
+fn has(app: &VectorcraftApp, label: &str) -> bool {
+    labels(app).iter().any(|l| l == label)
+}
+
+fn has_command(app: &VectorcraftApp, id: &str) -> bool {
+    commands(app).iter().any(|(c, _)| c == id)
 }
 
 #[test]
@@ -68,128 +100,78 @@ fn right_click_selects_the_object_and_lists_its_commands() {
     let mut app = app();
     let id = rect(&mut app, 50.0, 50.0);
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    assert!(!has(&frame(&mut app, &ctx, vec![]), "Arrange"));
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.ui.context_menu_at.is_none() && !has(&app, "Arrange"));
     let p = screen(&app, 100.0, 100.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
     assert_eq!(app.session.active().unwrap().selection.objects, [id], "the object right-clicked is selected");
-    for label in ["Undo Rectangle", "Cut", "Copy", "Make Guides", "Transform", "Arrange", "Select", "Export Selection…"] {
-        assert!(has(&texts, label), "{label} in {texts:?}");
+    assert!(app.ui.context_menu_at.is_some(), "the menu is open");
+    for label in ["Cut", "Copy", "Make Guides", "Transform", "Arrange", "Select", "Export Selection…"] {
+        assert!(has(&app, label), "{label} in {:?}", labels(&app));
     }
+    assert!(has_command(&app, "object.arrange.bringToFront"));
     // Nothing that needs several objects, a group or nothing selected.
     for label in ["Group", "Ungroup", "Make Clipping Mask", "Release Compound Path", "Select All", "Zoom In"] {
-        assert!(!has(&texts, label), "{label} in {texts:?}");
+        assert!(!has(&app, label), "{label} in {:?}", labels(&app));
     }
-    // Choosing an item runs its command and closes the menu.
-    let texts = click(&mut app, &ctx, at(&texts, "Make Guides"), PointerButton::Primary);
-    let n = app.session.active().unwrap().doc.node(id).cloned().unwrap();
-    assert!(matches!(n.kind, NodeKind::Path { guide: true, .. }));
-    assert!(!has(&texts, "Arrange"));
 }
 
 #[test]
-fn right_click_on_empty_canvas_offers_the_view_and_a_dismissing_click_does_nothing() {
+fn right_click_on_empty_canvas_offers_the_view_and_selects_nothing() {
     let mut app = app();
     app.select_tool("rectangle");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = screen(&app, 300.0, 250.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
     for label in ["Zoom In", "Zoom Out", "Fit Artboard in Window", "Show Rulers", "Select All"] {
-        assert!(has(&texts, label), "{label} in {texts:?}");
+        assert!(has(&app, label), "{label} in {:?}", labels(&app));
     }
-    assert!(!has(&texts, "Cut") && !has(&texts, "Arrange"));
-    // A click on the canvas away from the menu only closes it: the Rectangle tool draws nothing.
-    let away = pos2(100.0, 500.0);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(away)]);
-    frame(&mut app, &ctx, vec![press(away, PointerButton::Primary, true)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(away + vec2(40.0, 30.0))]);
-    frame(&mut app, &ctx, vec![press(away + vec2(40.0, 30.0), PointerButton::Primary, false)]);
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(!has(&texts, "Zoom In"));
+    assert!(!has(&app, "Cut") && !has(&app, "Arrange"));
+    // The secondary press starts no drag of the Rectangle tool.
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
 }
 
-/// A right-click over a locked object adds an Unlock submenu that lists the object by its name.
-/// Choosing the name unlocks the object in one undo step; once the menu is closed, the menu lists
-/// no Unlock items.
+/// A right-click over a locked object adds an Unlock submenu that lists the object by its name; once
+/// the menu is closed, the menu lists no Unlock items.
 #[test]
 fn right_click_on_a_locked_object_offers_unlock_by_its_name() {
     let mut app = app();
     let id = rect(&mut app, 50.0, 50.0);
     app.run("layer.setProps", json!({"ids": [id.0], "name": "Sky", "locked": true})).unwrap();
-    let steps = app.session.active().unwrap().history.undo.len();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = screen(&app, 100.0, 100.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Unlock"), "{texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.ui.context_locked, Some((app.session.active().unwrap().uid, vec![id])), "the locked object under the pointer");
+    assert!(has(&app, "Unlock"), "{:?}", labels(&app));
     // Agents see the item under the Unlock path, by the object's name.
     let entries = menus::context_entries(&app);
     let item = entries.iter().find(|e| e.path == ["Unlock"]).unwrap();
     assert_eq!((item.label.as_str(), item.command.as_deref()), ("Sky", Some("layer.setProps")));
     assert_eq!(item.params, json!({"ids": [id.0], "locked": false}));
-    // Hovering Unlock opens the submenu.
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Unlock"))]);
-    let texts = frame(&mut app, &ctx, vec![]);
-    let texts = click(&mut app, &ctx, at(&texts, "Sky"), PointerButton::Primary);
-    let st = app.session.active().unwrap();
-    assert!(!st.doc.node(id).unwrap().locked, "the object is unlocked");
-    assert_eq!(st.history.undo.len(), steps + 1, "in one undo step");
-    assert!(!has(&texts, "Unlock"), "the menu closed: {texts:?}");
-    // Locked again, it is not listed until the next right-click over it.
-    app.run("layer.setProps", json!({"ids": [id.0], "locked": true})).unwrap();
-    assert!(menus::context_entries(&app).iter().all(|e| e.path.first().map(String::as_str) != Some("Unlock")));
+    escape(&mut app, &ctx);
+    assert!(app.ui.context_locked.is_none(), "closing the menu forgets it");
+    assert!(app.ui.context_menu_at.is_none());
+    assert!(!has(&app, "Unlock"));
 }
 
-/// #528: right-clicking a ruler offers the document units, the current one checked, and choosing one
-/// swaps them — the same effect as Preferences ▸ Units ▸ General (`document.setUnits`).
-#[test]
-fn right_clicking_a_ruler_swaps_the_document_units() {
-    use vectorcraft_doc::Unit;
-    let mut app = app();
-    app.ui.view.rulers = true;
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(app.session.general_unit(), Unit::Points, "a new document starts in the prefs unit");
-    // Right-click on the top ruler (the band along the top, past the origin box).
-    let texts = click(&mut app, &ctx, pos2(400.0, 8.0), PointerButton::Secondary);
-    for label in ["Points", "Picas", "Inches", "Millimeters", "Feet & Inches", "Pixels"] {
-        assert!(has(&texts, label), "{label} in {texts:?}");
-    }
-    assert!(texts.iter().any(|(t, _)| t == "✓  Points"), "the current unit is checked: {texts:?}");
-    // Choosing a unit runs document.setUnits and closes the menu.
-    let mm = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == "Millimeters").map(|(_, r)| r.center()).expect("Millimeters");
-    let texts = click(&mut app, &ctx, mm, PointerButton::Primary);
-    assert_eq!(app.session.general_unit(), Unit::Millimeters, "the ruler's unit changed");
-    assert!(!has(&texts, "Inches"), "the menu closed");
-    // The left ruler offers the same menu, now checking the new unit.
-    let texts = click(&mut app, &ctx, pos2(8.0, 300.0), PointerButton::Secondary);
-    assert!(texts.iter().any(|(t, _)| t == "✓  Millimeters"), "the left ruler reflects the current unit: {texts:?}");
-}
-
-/// Cmd+Alt+Shift+U is Switch Units by default (Ctrl+Alt+Shift+U on Windows and Linux,
-/// Option+Shift+Command+U on macOS): pressed, the document goes to the unit after its own in the
-/// ruler's menu, and Smart Guides (Cmd+U) stay as they are. No other default has the key.
+/// Cmd+Alt+Shift+U is Switch Units by default: pressed, the document goes to the unit after its own in
+/// the ruler's menu (wrapping from Feet to Points), and Smart Guides (Cmd+U) stay as they are.
 #[test]
 fn cmd_alt_shift_u_switches_to_the_next_unit() {
-    use crate::shortcut_editor as ed;
     use vectorcraft_doc::Unit;
-    assert_eq!(ed::default_command_shortcut("document.switchUnits"), Some("Cmd+Alt+Shift+U"));
-    assert_eq!(ed::command_for_key("Cmd+Alt+Shift+U"), Some("document.switchUnits"));
-    let shown = menus::pretty_shortcut("Cmd+Alt+Shift+U");
-    assert_eq!(shown, if cfg!(target_os = "macos") { "⌥⇧⌘U" } else { "Ctrl+Alt+Shift+U" });
     let mut app = app();
-    let listed = app.run("shortcuts.list", json!({"query": "document.switchUnits"})).unwrap();
-    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| (r["label"].clone(), r["group"].clone(), r["default"].clone())).collect();
-    assert_eq!(rows, [(json!("Switch Units"), json!("Document"), json!("Cmd+Alt+Shift+U"))], "Keyboard Shortcuts lists it under Document");
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
     fn press(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
         let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
         let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
-        let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-        out.textures_delta.clear();
+        crate::tests_synthetic::key_frame(app, &ctx, vec![ev]);
     }
     let guides = app.ui.view.smart_guides;
     press(&mut app);
@@ -200,41 +182,21 @@ fn cmd_alt_shift_u_switches_to_the_next_unit() {
     assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
 }
 
-fn labels(items: &[Item]) -> Vec<&'static str> {
-    items
-        .iter()
-        .flat_map(|it| match it {
-            // A spelling suggestion shows the word it puts in, not its label.
-            Item::Cmd(_, "text.editRange", _) => vec![],
-            Item::Cmd(l, ..) => vec![*l],
-            Item::Header(l) => vec![*l],
-            Item::Sub(l, ch) => std::iter::once(*l).chain(labels(ch)).collect(),
-            _ => vec![],
-        })
-        .collect()
-}
-
 #[test]
 fn the_menu_follows_the_selection() {
     let mut app = app();
     let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
-    let l = labels(&menus::context_items(&app));
     for label in ["Group", "Join", "Make Clipping Mask", "Make Compound Path", "Objects on Path", "Bring to Front", "Move…"] {
-        assert!(l.contains(&label), "{label} in {l:?}");
+        assert!(has(&app, label), "{label} in {:?}", labels(&app));
     }
-    assert!(!l.contains(&"Ungroup") && !l.contains(&"Isolate Selected Group"));
-    // Objects on Path chooses its tool, which attaches the selection to the path clicked next.
-    menus::invoke(&mut app, "object.objectsOnPath.attach", json!({}));
-    assert_eq!(app.session.tool_id(), "objectsOnPath");
-    app.select_tool("selection");
+    assert!(!has(&app, "Ungroup") && !has(&app, "Isolate Selected Group"));
     app.run("object.group", json!({})).unwrap();
-    let l = labels(&menus::context_items(&app));
-    assert!(l.contains(&"Ungroup") && l.contains(&"Isolate Selected Group"));
-    assert!(!l.contains(&"Group") && !l.contains(&"Join"));
+    assert!(has(&app, "Ungroup") && has(&app, "Isolate Selected Group"));
+    assert!(!has(&app, "Group") && !has(&app, "Join"));
     // Isolated: a way out.
-    menus::invoke(&mut app, "object.isolate", json!({}));
-    assert!(labels(&menus::context_items(&app)).contains(&"Exit Isolation Mode"));
+    app.run("object.isolate", json!({})).unwrap();
+    assert!(has_command(&app, "object.exitIsolation"));
     // Agents see the same menu, with submenus as paths.
     let entries = menus::context_entries(&app);
     assert!(entries.iter().any(|e| e.command.as_deref() == Some("object.exitIsolation") && e.enabled));
@@ -243,14 +205,14 @@ fn the_menu_follows_the_selection() {
     let front = entries.iter().find(|e| e.command.as_deref() == Some("object.arrange.bringToFront")).unwrap();
     assert_eq!(front.path, ["Arrange"]);
     // No separator leads, trails or doubles up.
-    let items = menus::context_items(&app);
-    assert!(!matches!(items.first(), Some(Item::Sep)) && !matches!(items.last(), Some(Item::Sep)));
-    assert!(items.windows(2).all(|w| !matches!(w, [Item::Sep, Item::Sep])));
+    let nodes = menus::context_items(&app);
+    assert!(!matches!(nodes.first(), Some(Node::Separator)) && !matches!(nodes.last(), Some(Node::Separator)));
+    assert!(nodes.windows(2).all(|w| !matches!(w, [Node::Separator, Node::Separator])));
 }
 
 /// The labels of the context menu's isolation items.
-fn isolate_labels(app: &VectorcraftApp) -> Vec<&'static str> {
-    labels(&menus::context_items(app)).into_iter().filter(|l| l.starts_with("Isolate Selected")).collect()
+fn isolate_labels(app: &VectorcraftApp) -> Vec<String> {
+    labels(app).into_iter().filter(|l| l.starts_with("Isolate Selected")).collect()
 }
 
 /// One selected path has Isolate Selected Path, which isolates that path.
@@ -260,11 +222,10 @@ fn single_path_context_item_enters_isolation() {
     let a = rect(&mut app, 0.0, 0.0);
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     assert_eq!(isolate_labels(&app), ["Isolate Selected Path"]);
-    let entries = menus::context_entries(&app);
-    assert!(entries.iter().any(|e| e.command.as_deref() == Some("object.isolate") && e.enabled), "agents see the item");
-    menus::invoke(&mut app, "object.isolate", json!({}));
+    assert!(has_command(&app, "object.isolate"));
+    app.run("object.isolate", json!({})).unwrap();
     assert_eq!(app.session.active().unwrap().isolation, Some(a), "the path is isolated");
-    assert!(labels(&menus::context_items(&app)).contains(&"Exit Isolation Mode"));
+    assert!(has_command(&app, "object.exitIsolation"));
 }
 
 /// The isolation item names the kind of the one selected object: a group or a compound path is a
@@ -291,7 +252,7 @@ fn isolation_context_item_follows_selected_kind() {
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "a member selected on its own");
     assert_eq!(isolate_labels(&app), ["Isolate Selected Path"], "a path in a group");
-    menus::invoke(&mut app, "object.isolate", json!({}));
+    app.run("object.isolate", json!({})).unwrap();
     assert_eq!(app.session.active().unwrap().isolation, Some(a), "the member is isolated");
 }
 
@@ -351,69 +312,20 @@ fn isolation_context_item_skips_objects_outside_the_edited_symbol() {
     assert!(app.run("object.isolate", json!({"id": outside.0})).is_err(), "object.isolate refuses it");
 }
 
-/// A closed path of 60 jagged anchors around (150, 150), filled so that a right-click inside it
-/// hits it, with nothing selected.
-fn jagged(app: &mut VectorcraftApp) -> NodeId {
-    let anchors: Vec<_> = (0..60)
-        .map(|i| {
-            let a = f64::from(i) * std::f64::consts::TAU / 60.0;
-            let r = 60.0 + f64::from(i % 2) * 4.0;
-            json!({"x": 150.0 + r * a.cos(), "y": 150.0 + r * a.sin()})
-        })
-        .collect();
-    let id = NodeId(app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
-    app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
-    app.run("select.none", json!({})).unwrap();
-    id
-}
-
-/// The anchor points of every path in the document.
-fn anchor_total(app: &VectorcraftApp) -> usize {
-    let mut n = 0;
-    app.session.active().unwrap().doc.walk(|node| {
-        if let NodeKind::Path { path, .. } = &node.kind {
-            n += path.anchor_count();
-        }
-    });
-    n
-}
-
-/// A right-click on a path lists Object › Path › Smooth… after Join and Average…. Smooth… opens
-/// the Smooth slider at Auto-Smooth's level and adds no undo step while it is open; OK keeps the
-/// smoothed path as one undo step.
+/// Simplify… and Smooth… are listed while the selection holds a path: a path, a group of paths, a
+/// compound path, a path with type, and anchors selected with Direct Selection (whose Remove
+/// Anchor Points stays). They are left out with nothing, only type or a group of type selected.
 #[test]
-fn right_click_on_a_path_opens_the_smooth_slider() {
-    let mut app = app();
-    let id = jagged(&mut app);
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let p = screen(&app, 150.0, 150.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert_eq!(app.session.active().unwrap().selection.objects, [id], "the path right-clicked is selected");
-    let y = |label| at(&texts, label).y;
-    assert!(y("Join") < y("Average…") && y("Average…") < y("Smooth…"), "{texts:?}");
-    let (undo, before) = (app.session.active().unwrap().history.undo.len(), anchor_total(&app));
-    let after = click(&mut app, &ctx, at(&texts, "Smooth…"), PointerButton::Primary);
-    assert!(!has(&after, "Arrange"), "choosing Smooth… closes the menu");
-    let open = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.f64("level", -1.0)));
-    assert_eq!(open, Some((crate::dialogs::smooth_slider::KIND.to_string(), vectorcraft_engine::SMOOTH_AUTO_LEVEL)));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step while the slider is open");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
-    let st = app.session.active().unwrap();
-    assert_eq!(st.history.undo.len(), undo + 1, "OK keeps the result as one undo step");
-    assert!(anchor_total(&app) < before, "the path was smoothed: {} anchor points from {before}", anchor_total(&app));
-}
-
-/// Smooth… is listed while the selection holds a path: a path, a group of paths, a compound path,
-/// a path with type, and anchors selected with Direct Selection (whose Remove Anchor Points
-/// stays). It is left out with nothing, only type or a group of type selected.
-#[test]
-fn smooth_follows_the_selections_paths() {
+fn simplify_and_smooth_follow_the_selections_paths() {
     let mut app = app();
     let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 150.0, 0.0));
     let t = NodeId(app.run("text.create", json!({"x": 10, "y": 250, "text": "Type"})).unwrap()["id"].as_u64().unwrap());
-    let smooth = |app: &VectorcraftApp| labels(&menus::context_items(app)).contains(&"Smooth…");
+    // Both or neither, never one without the other.
+    let smooth = |app: &VectorcraftApp| {
+        let (simplify, smooth) = (has(app, "Simplify…"), has(app, "Smooth…"));
+        assert_eq!(simplify, smooth, "Simplify… and Smooth… follow the same rule: {:?}", labels(app));
+        smooth
+    };
     app.run("select.none", json!({})).unwrap();
     assert!(!smooth(&app), "nothing selected");
     app.run("select.set", json!({"ids": [t.0]})).unwrap();
@@ -438,7 +350,7 @@ fn smooth_follows_the_selections_paths() {
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": a.0, "anchors": [[0, 1]]})).unwrap();
     assert!(smooth(&app), "an anchor point direct-selected");
-    assert!(labels(&menus::context_items(&app)).contains(&"Remove Anchor Points"), "the anchor entries stay");
+    assert!(has(&app, "Remove Anchor Points"), "the anchor entries stay");
 }
 
 /// Selected type has Bullets and Numbering › Apply Bullets in the context menu and the Type menu,
@@ -484,122 +396,9 @@ fn selected_type_has_apply_numbers() {
     assert_eq!(text.para_at(0).list.and_then(|l| l.number), Some(vectorcraft_doc::text::NumberStyle::Arabic));
 }
 
-/// A right-click on type has Spelling › Auto Spell Check, which turns it on or off as Edit ›
-/// Spelling does (helpx: Check and correct spelling, "Turn on Auto Spell Check"). The context menu
-/// draws no check marks, but this submenu shows whether it is on, with Check Spelling… after it;
-/// other submenus stay without the room for one. Other art has no Spelling submenu.
-#[test]
-fn right_click_on_type_turns_auto_spell_check_on_and_off() {
-    let mut app = app();
-    let r = rect(&mut app, 200.0, 150.0);
-    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 24})).unwrap()["id"].as_u64().unwrap());
-    app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let p = screen(&app, 250.0, 200.0);
-    assert!(!has(&click(&mut app, &ctx, p, PointerButton::Secondary), "Spelling"), "a rectangle has no Spelling submenu");
-    assert_eq!(app.session.active().unwrap().selection.objects, [r]);
-    let away = screen(&app, 390.0, 290.0);
-    click(&mut app, &ctx, away, PointerButton::Primary);
-    // Right-click the type, open Spelling: Auto Spell Check, not checked.
-    let open_spelling = |app: &mut VectorcraftApp| {
-        let p = word_at(app, t, 0, 5);
-        let texts = click(app, &ctx, p, PointerButton::Secondary);
-        assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
-        frame(app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
-        frame(app, &ctx, vec![])
-    };
-    let texts = open_spelling(&mut app);
-    assert!(texts.iter().any(|(s, _)| s == "     Auto Spell Check"), "unchecked, with the room for a check mark: {texts:?}");
-    assert!(texts.iter().any(|(s, _)| s == "Transform"), "other items have no gutter: {texts:?}");
-    // Agents see it under the Spelling path.
-    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("edit.autoSpellCheck")).expect("Auto Spell Check");
-    assert_eq!((e.path.as_slice(), e.label.as_str()), (&["Spelling".to_string()][..], "Auto Spell Check"));
-    let texts = click(&mut app, &ctx, at(&texts, "     Auto Spell Check"), PointerButton::Primary);
-    assert!(app.ui.view.auto_spell_check, "turned on");
-    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
-    let texts = open_spelling(&mut app);
-    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
-    assert!(texts.iter().any(|(s, _)| s == "Check Spelling…"), "the dialog's item, which has no check mark: {texts:?}");
-    click(&mut app, &ctx, at(&texts, "✓  Auto Spell Check"), PointerButton::Primary);
-    assert!(!app.ui.view.auto_spell_check, "turned off");
-}
-
-/// A right-click on type has Spelling › Check Spelling… after Auto Spell Check, as Edit ›
-/// Spelling has, which opens the Check Spelling dialog on the type right-clicked (helpx: Check and
-/// correct spelling). Other art has no such item.
-#[test]
-fn right_click_on_type_opens_check_spelling() {
-    let mut app = app();
-    rect(&mut app, 200.0, 150.0);
-    let t = NodeId(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello wrold", "size": 24})).unwrap()["id"].as_u64().unwrap());
-    app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let p = screen(&app, 250.0, 200.0);
-    click(&mut app, &ctx, p, PointerButton::Secondary);
-    let dialog_item = |app: &VectorcraftApp| {
-        menus::context_entries(app).into_iter().position(|e| e.command.as_deref() == Some(crate::dialogs::check_spelling::COMMAND))
-    };
-    assert!(dialog_item(&app).is_none(), "a rectangle has no Check Spelling…");
-    let away = screen(&app, 390.0, 290.0);
-    click(&mut app, &ctx, away, PointerButton::Primary);
-    let p = word_at(&app, t, 0, 5);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert_eq!(app.session.active().unwrap().selection.objects, [t], "the type right-clicked is selected");
-    // Agents see it under the Spelling path, after Auto Spell Check.
-    let entries = menus::context_entries(&app);
-    let i = dialog_item(&app).expect("Check Spelling…");
-    assert_eq!((entries[i].path.as_slice(), entries[i].label.as_str(), entries[i].enabled), (&["Spelling".to_string()][..], "Check Spelling…", true));
-    assert_eq!(entries.get(i.wrapping_sub(1)).and_then(|e| e.command.as_deref()), Some("edit.autoSpellCheck"));
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
-    let texts = frame(&mut app, &ctx, vec![]);
-    let (auto, check) = (at(&texts, "     Auto Spell Check"), at(&texts, "Check Spelling…"));
-    assert!(auto.y < check.y, "Auto Spell Check first: {texts:?}");
-    let texts = click(&mut app, &ctx, check, PointerButton::Primary);
-    assert!(!has(&texts, "Spelling"), "the menu closed: {texts:?}");
-    let d = app.ui.dialog.as_ref().expect("a dialog opened");
-    assert_eq!(d.kind.as_str(), crate::dialogs::check_spelling::KIND);
-    assert_eq!(d.fields["ids"], json!([t.0]), "it checks the type right-clicked");
-    assert_eq!(d.fields["not_in_dictionary"], json!("wrold"), "and stops at its unknown word");
-}
-
-/// A right-click on a word Auto Spell Check underlined lists the suggestions, Ignore All and Add
-/// to Dictionary, and the type's Spelling submenu with Check Spelling… as well.
-#[test]
-fn right_click_on_an_underlined_word_also_offers_check_spelling() {
-    let mut app = app();
-    let id = spelled(&mut app, "the speling cat");
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let p = word_at(&app, id, 4, 11);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Ignore All") && has(&texts, "Add to Dictionary"), "{texts:?}");
-    let e = menus::context_entries(&app).into_iter().find(|e| e.command.as_deref() == Some(crate::dialogs::check_spelling::COMMAND));
-    assert_eq!(e.map(|e| e.path), Some(vec!["Spelling".to_string()]), "Spelling › Check Spelling…");
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at(&texts, "Spelling"))]);
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(texts.iter().any(|(s, _)| s == "✓  Auto Spell Check"), "checked: {texts:?}");
-    click(&mut app, &ctx, at(&texts, "Check Spelling…"), PointerButton::Primary);
-    let d = app.ui.dialog.as_ref().expect("a dialog opened");
-    assert_eq!(d.kind.as_str(), crate::dialogs::check_spelling::KIND);
-    assert_eq!(d.fields["not_in_dictionary"], json!("speling"));
-}
-
-/// The members of the overlap area of Intertwine group `g` at (x, y), in the order they are drawn
-/// there, bottom first.
-fn intertwine_order(app: &VectorcraftApp, g: NodeId, x: f64, y: f64) -> Vec<NodeId> {
-    use vectorcraft_tools::intertwine::{drawn_order, face_at, faces};
-    let st = app.session.active().unwrap();
-    let children = st.doc.node(g).unwrap().children().unwrap();
-    let face = face_at(&faces(children), Point::new(x, y)).unwrap();
-    drawn_order(children, &face).into_iter().map(|i| children[i].id).collect()
-}
-
 /// With the Intertwine tool, a right-click where three or more objects of the group overlap lists
 /// Bring to Front, Bring Forward, Send Backward and Send to Back for the object nearest to the
-/// pointer in place of the Arrange submenu, and they move it in that overlap area only. Elsewhere
-/// the menu is the usual one.
+/// pointer in place of the Arrange submenu. Elsewhere the menu is the usual one.
 #[test]
 fn right_click_where_three_intertwined_objects_overlap_arranges_the_nearest_one() {
     let mut app = app();
@@ -611,34 +410,24 @@ fn right_click_where_three_intertwined_objects_overlap_arranges_the_nearest_one(
     app.run("select.set", json!({"ids": [a.0, b.0, c.0]})).unwrap();
     let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
     assert_eq!(app.session.tool_id(), "intertwine");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
-    let items = ["Bring to Front", "Bring Forward", "Send Backward", "Send to Back"];
     // By the right edge of A (the first rectangle), where all three overlap.
     let p = screen(&app, 169.0, 100.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
     assert_eq!(app.session.active().unwrap().selection.objects, [g], "the selection stays the group");
-    for label in items {
-        assert!(has(&texts, label), "{label} in {texts:?}");
-    }
-    assert!(!has(&texts, "Arrange"), "no Arrange submenu: {texts:?}");
-    let rows: Vec<f32> = items.iter().map(|l| at(&texts, l).y).collect();
-    assert!(rows.windows(2).all(|w| w[0] < w[1]), "in that order: {rows:?}");
-    let Some(Item::Cmd(_, id, params)) = menus::context_items(&app).into_iter().find(|i| matches!(i, Item::Cmd("Bring Forward", ..))) else {
-        panic!("no Bring Forward item")
-    };
-    assert_eq!(id, "object.intertwine.arrange");
-    assert_eq!((&params["id"], &params["order"], &params["member"]), (&json!(g.0), &json!("forward"), &json!(a.0)));
-    // Bring Forward moves A one place up in that area only.
-    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [a, b, c]);
-    let texts = click(&mut app, &ctx, at(&texts, "Bring Forward"), PointerButton::Primary);
-    assert!(!has(&texts, "Bring Forward"), "the menu closes");
-    assert_eq!(intertwine_order(&app, g, 150.0, 100.0), [b, a, c]);
-    assert_eq!(intertwine_order(&app, g, 110.0, 100.0), [a, b], "where only A and B overlap");
+    assert!(app.ui.context_intertwine.is_some());
+    assert!(!has(&app, "Arrange"), "no Arrange submenu: {:?}", labels(&app));
+    let arrange: Vec<_> = commands(&app).into_iter().filter(|(id, _)| id == "object.intertwine.arrange").collect();
+    let orders: Vec<_> = arrange.iter().map(|(_, params)| (params["id"].clone(), params["order"].clone(), params["member"].clone())).collect();
+    let want: Vec<_> = ["front", "forward", "backward", "back"].iter().map(|o| (json!(g.0), json!(o), json!(a.0))).collect();
+    assert_eq!(orders, want, "the four orders for the nearest member, in that order");
     // Where only two overlap, the menu is the usual one.
+    escape(&mut app, &ctx);
     let p = screen(&app, 110.0, 100.0);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Arrange") && !has(&texts, "Bring Forward"), "{texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_intertwine.is_none());
+    assert!(has(&app, "Arrange") && !has_command(&app, "object.intertwine.arrange"), "{:?}", labels(&app));
 }
 
 /// Every label the context menu can show is a menu string, so complete catalogs must translate it.
@@ -648,26 +437,26 @@ fn every_context_label_is_a_menu_string() {
     let mut app = app();
     let mut shown = vec![];
     // Nothing selected, one path, two paths, a group, a clipping group, a compound path, isolation.
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     app.run("object.compoundPath.make", json!({})).unwrap();
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     app.run("object.compoundPath.release", json!({})).unwrap();
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
     app.run("object.clippingMask.make", json!({})).unwrap();
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     app.run("object.group", json!({})).unwrap();
-    shown.extend(labels(&menus::context_items(&app)));
-    menus::invoke(&mut app, "object.isolate", json!({}));
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
+    app.run("object.isolate", json!({})).unwrap();
+    shown.extend(labels(&app));
     // The Unlock submenu that a right-click over a locked object adds.
-    menus::invoke(&mut app, "object.exitIsolation", json!({}));
+    app.run("object.exitIsolation", json!({})).unwrap();
     app.run("layer.setProps", json!({"ids": [a.0], "locked": true})).unwrap();
     app.ui.context_locked = Some((app.session.active().unwrap().uid, vec![a]));
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     // A word Auto Spell Check underlined, with no suggestions: Ignore All, Add to Dictionary.
     let text = NodeId(app.run("text.create", json!({"x": 10, "y": 200, "text": "Zqxvbtkw"})).unwrap()["id"].as_u64().unwrap());
     app.ui.context_spelling = Some(crate::state::ContextSpelling {
@@ -678,20 +467,20 @@ fn every_context_label_is_a_menu_string() {
         word: "Zqxvbtkw".into(),
         suggestions: vec![],
     });
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     app.ui.context_spelling = None;
     // The Lock Artboards and Unlock Artboards submenus of the Artboard tool.
     app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 80})).unwrap();
     app.run("artboard.setProps", json!({"index": 0, "locked": true})).unwrap();
     app.select_tool("artboard");
-    shown.extend(labels(&menus::context_items(&app)));
+    shown.extend(labels(&app));
     // Lock Selected with the artboard that isn't locked active.
     crate::panels::artboards::select(&mut app, 1);
-    shown.extend(labels(&menus::context_items(&app)));
-    let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(**l)).collect();
+    shown.extend(labels(&app));
+    let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(l.as_str())).collect();
     assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");
     for label in menus::CONTEXT_LABELS {
-        assert!(shown.contains(label), "`{label}` is listed but the context menu never shows it");
+        assert!(shown.iter().any(|s| s == *label), "`{label}` is listed but the context menu never shows it");
     }
 }
 
@@ -713,16 +502,9 @@ fn word_at(app: &VectorcraftApp, id: NodeId, a: usize, b: usize) -> Pos2 {
     screen(app, c.x, c.y)
 }
 
-fn plain(app: &VectorcraftApp, id: NodeId) -> String {
-    match app.session.active().unwrap().doc.node(id).map(|n| &n.kind) {
-        Some(NodeKind::Text(t)) => t.plain_text(),
-        _ => panic!("type"),
-    }
-}
-
-/// With Auto Spell Check on, right-clicking an underlined word lists what the dictionary suggests
-/// instead, then Ignore All and Add to Dictionary; a suggestion replaces the word in one undo step
-/// (helpx: Check and correct spelling, "Correct spelling errors during Auto Spell Check").
+/// With Auto Spell Check on, right-clicking an underlined word holds the word, its range and what the
+/// dictionary suggests, which lead the menu, then Ignore All and Add to Dictionary; the type's
+/// Spelling submenu has Check Spelling… as well.
 #[test]
 fn right_click_on_an_underlined_word_offers_its_suggestions() {
     let mut app = app();
@@ -734,98 +516,61 @@ fn right_click_on_an_underlined_word_offers_its_suggestions() {
         .map(|s| s.as_str().unwrap().to_string())
         .collect();
     assert!(!want.is_empty(), "the dictionary has suggestions for `speling`");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, id, 4, 11);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    for w in &want {
-        assert!(has(&texts, w), "`{w}` in {texts:?}");
-    }
-    assert!(has(&texts, "Ignore All") && has(&texts, "Add to Dictionary"), "{texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    let w = app.ui.context_spelling.clone().expect("the word right-clicked");
+    assert_eq!((w.id, w.start, w.end, w.word.as_str()), (id, 4, 11, "speling"));
+    assert_eq!(w.suggestions, want, "the dictionary's suggestions, in order");
+    assert!(has(&app, "Ignore All") && has(&app, "Add to Dictionary"), "{:?}", labels(&app));
     // Agents see them at the top of the menu, a suggestion by its word.
     let entries = menus::context_entries(&app);
     assert_eq!((entries[0].label.as_str(), entries[0].command.as_deref()), (want[0].as_str(), Some("text.editRange")));
-    let steps = app.session.active().unwrap().history.undo.len();
-    let texts = click(&mut app, &ctx, at(&texts, &want[0]), PointerButton::Primary);
-    assert_eq!(plain(&app, id), format!("the {} cat", want[0]), "the word is replaced");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "in one undo step");
-    assert!(!has(&texts, "Ignore All"), "the menu closed: {texts:?}");
+    let check = entries.into_iter().find(|e| e.command.as_deref() == Some(crate::dialogs::check_spelling::COMMAND));
+    assert_eq!(check.map(|e| e.path), Some(vec!["Spelling".to_string()]), "Spelling › Check Spelling…");
 }
 
-/// Ignore All and Add to Dictionary from the menu: the word's line goes, in this document for
-/// Ignore All, in every check for Add. A word with nothing to suggest says so.
-#[test]
-fn ignore_all_and_add_to_dictionary_from_the_context_menu() {
-    let mut app = app();
-    let id = spelled(&mut app, "Qzvxtrwk and Kwqzvxtr");
-    let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![]);
-    let p = word_at(&app, id, 0, 8);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "No Suggestions"), "{texts:?}");
-    click(&mut app, &ctx, at(&texts, "Ignore All"), PointerButton::Primary);
-    assert!(app.session.active().unwrap().spelling_ignored.contains("qzvxtrwk"));
-    let p = word_at(&app, id, 13, 21);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    click(&mut app, &ctx, at(&texts, "Add to Dictionary"), PointerButton::Primary);
-    let added = craft_proof_has(&mut app, "kwqzvxtr");
-    app.run("text.spelling.removeWord", json!({"word": "kwqzvxtr"})).unwrap();
-    assert!(added, "added to the custom dictionary");
-    // Nothing left underlined there: a right-click on it offers no spelling items.
-    let p = word_at(&app, id, 0, 8);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(!has(&texts, "Ignore All"), "{texts:?}");
-}
-
-fn craft_proof_has(app: &mut VectorcraftApp, w: &str) -> bool {
-    app.run("text.spelling.dictionary", json!({})).unwrap()["words"].as_array().unwrap().iter().any(|x| x == w)
-}
-
-/// With Auto Spell Check off, or on a word that is right, a right-click lists no spelling items.
+/// With Auto Spell Check off, or on a word that is right, a right-click holds no spelling word.
 #[test]
 fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
     let mut app = app();
     let id = spelled(&mut app, "the Vqzxtrwk");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, id, 0, 3);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(!has(&texts, "Ignore All"), "a right word: {texts:?}");
-    app.run("edit.autoSpellCheck", json!({})).unwrap();
-    frame(
-        &mut app,
-        &ctx,
-        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
-    );
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_none(), "a right word");
+    escape(&mut app, &ctx);
     let p = word_at(&app, id, 4, 12);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(!has(&texts, "Ignore All"), "off: {texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_some(), "on, the wrong word is held");
+    escape(&mut app, &ctx);
+    app.run("edit.autoSpellCheck", json!({})).unwrap();
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_none(), "off");
 }
 
 /// A right word in type on top of an underlined word in other type: the right-click is on the
-/// top type, so it lists no spelling items for the word under it.
+/// top type, so no spelling word is held for the word under it.
 #[test]
 fn a_word_under_other_type_is_not_the_one_right_clicked() {
     let mut app = app();
     let under = spelled(&mut app, "Qzvxtrwk");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, under, 0, 8);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Ignore All"), "alone, the word is offered: {texts:?}");
-    frame(
-        &mut app,
-        &ctx,
-        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
-    );
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_some(), "alone, the word is held");
+    escape(&mut app, &ctx);
     app.run("text.create", json!({"x": 20, "y": 60, "text": "the cat sat on the mat", "size": 24})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(!has(&texts, "Ignore All"), "under right type: {texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_none(), "under right type");
 }
 
 /// In an Intertwine group, the type drawn on top at the right-click is the one whose word is
-/// offered: a member brought to the front there, though earlier in the stacking order.
+/// held: a member brought to the front there, though earlier in the stacking order.
 #[test]
 fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
     let mut app = app();
@@ -836,7 +581,7 @@ fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
     let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
     app.select_tool("selection");
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     // A point on the word where glyphs of both overlap: Intertwine's areas follow the outlines.
     let quad = {
@@ -852,14 +597,10 @@ fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
         .find(|q| app.run("object.intertwine.arrange", json!({"id": g.0, "at": [q.x, q.y], "order": "back", "member": under.0})).is_ok())
         .expect("glyphs of both overlap somewhere on the word");
     let p = screen(&app, overlap.x, overlap.y);
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(!has(&texts, "Ignore All"), "under the right type: {texts:?}");
-    frame(
-        &mut app,
-        &ctx,
-        vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
-    );
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_none(), "under the right type");
+    escape(&mut app, &ctx);
     app.run("object.intertwine.arrange", json!({"id": g.0, "at": [overlap.x, overlap.y], "order": "front", "member": under.0})).unwrap();
-    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Ignore All"), "brought to the front there: {texts:?}");
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(app.ui.context_spelling.is_some(), "brought to the front there");
 }

@@ -1,59 +1,82 @@
 //! Smooth Bridge in the interface: its dialog (the arcs' radius as a percentage of the smaller
-//! circle's radius, Keep Originals), which previews on the canvas and runs `addon.pathtools.bridge`
-//! on OK.
+//! circle's radius, or with Constant Gap that radius plus a gap; the reach, unavailable with two
+//! circles selected; Keep Originals), which previews on the canvas and runs
+//! `addon.pathtools.bridge` on OK.
 
-use egui::Ui;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::dialogs::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::widgets;
+use crate::addons::dialogs::{self, Spec};
+use crate::canvas::rulers::general_lengths;
 
-/// The command, and its dialog's kind.
+/// The command.
 pub const COMMAND: &str = "addon.pathtools.bridge";
-pub const KIND: &str = "smoothBridge";
 /// The radius the command takes (%), and its default.
 const RADII: std::ops::RangeInclusive<f64> = 1.0..=1000.0;
 const RADIUS: f64 = 100.0;
-const LABEL_W: f32 = 60.0;
-const FIELD_W: f32 = 90.0;
+/// The gap the command takes (pt), and the dialog's first one.
+const GAPS: std::ops::RangeInclusive<f64> = 0.0..=1000.0;
+const GAP: f64 = 4.0;
+/// The reach the command takes (pt), and its default.
+const REACHES: std::ops::RangeInclusive<f64> = 0.0..=10000.0;
+const REACH: f64 = 10.0;
 
-/// The dialog's fields to start with: the command's defaults.
-pub(crate) fn fields() -> Value {
-    json!({ "radius": RADIUS, "keepOriginals": false })
+/// How the dialog's values reach the command.
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
+
+/// The command's parameters from the dialog's fields: the radius, or with Constant Gap the gap.
+fn params(fields: &DialogFields) -> Value {
+    let (reach, keep) = (fields.number("reach").unwrap_or(REACH), fields.bool("keepOriginals").unwrap_or(false));
+    if fields.bool("constantGap").unwrap_or(false) {
+        json!({ "gap": fields.number("gap").unwrap_or(GAP), "reach": reach, "keepOriginals": keep })
+    } else {
+        json!({ "radius": fields.number("radius").unwrap_or(RADIUS), "reach": reach, "keepOriginals": keep })
+    }
 }
 
-pub(crate) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Smooth Bridge").to_string(), body, confirm, preview: true, min_width: 280.0, ..DialogSpec::FORM };
-
-/// The command's parameters from the dialog's fields.
-fn params(d: &Dialog) -> Value {
-    json!({ "radius": d.f64("radius", RADIUS), "keepOriginals": d.bool("keepOriginals") })
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::range_field(ui, ("dlg-num", "radius"), d.f64("radius", RADIUS), RADII, "%", 0, FIELD_W) {
-            d.fields.insert("radius".into(), json!(v));
-        }
-    });
-    form::check(ui, d, "keepOriginals", tl!("Keep Originals"));
-    form::preview(app, ui, d, "Smooth Bridge", COMMAND, params(d));
-    false
-}
-
-/// OK: run the command (keep its preview) and close.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, COMMAND, params(d))
+/// Opens Smooth Bridge's dialog on the command's defaults.
+pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The reach applies to three or more circles; two are bridged at any distance. Counted once, before a preview
+    // replaces the selection with its result.
+    let many = app.session.doc().map(|doc| doc.selection.objects.len() > 2).unwrap_or(true);
+    let fields = DialogFields::from_pairs([
+        ("radius", FieldValue::Number(RADIUS)),
+        ("constantGap", FieldValue::Bool(false)),
+        ("gap", FieldValue::Number(GAP)),
+        ("reach", FieldValue::Number(REACH)),
+        ("keepOriginals", FieldValue::Bool(false)),
+        ("many", FieldValue::Bool(many)),
+    ]);
+    let lengths = general_lengths(app);
+    dialogs::open(app, &SPEC, fields, move |_| {
+        let rows = vec![
+            Param::new("constantGap", tl!("Constant Gap"), ParamKind::bool(false)),
+            Param::number("gap", tl!("Gap:"), GAP, 1.0, 2)
+                .length(lengths)
+                .bounds(Some(*GAPS.start()), Some(*GAPS.end()))
+                .visible_when("constantGap", FieldValue::Bool(true)),
+            Param::number("radius", tl!("Radius:"), RADIUS, 1.0, 0)
+                .unit(UnitKind::Percent)
+                .bounds(Some(*RADII.start()), Some(*RADII.end()))
+                .visible_when("constantGap", FieldValue::Bool(false)),
+            Param::number("reach", tl!("Reach:"), REACH, 1.0, 2)
+                .length(lengths)
+                .bounds(Some(*REACHES.start()), Some(*REACHES.end()))
+                .enabled_when("many", FieldValue::Bool(true)),
+            Param::new("keepOriginals", tl!("Keep Originals"), ParamKind::bool(false)),
+        ];
+        ParamDialog::new(COMMAND, tl!("Smooth Bridge"), rows).previews(true)
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
-    use crate::tests_labels::painted_text;
+    use crate::addons::dialogs::tests::{confirm, dialog_id, frame, read, set};
     use crate::{VectorcraftApp, menus};
 
     fn circle(app: &mut VectorcraftApp, x: f64, r: f64) -> u64 {
@@ -61,32 +84,25 @@ mod tests {
     }
 
     #[test]
-    fn smooth_bridge_opens_its_dialog_previews_and_runs_on_ok() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    fn constant_gap_shows_the_gap_and_bridges_many_circles_within_reach() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let (a, b) = (circle(&mut app, 100.0, 20.0), circle(&mut app, 160.0, 20.0));
-        app.run("select.set", json!({"ids": [a, b]})).unwrap();
-        let entries = menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Smooth Bridge…").unwrap();
-        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(&mut app, &cmd, p);
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(super::KIND));
-        let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        for s in ["Smooth Bridge", "Radius:", "Keep Originals", "Preview"] {
-            assert!(shown.contains(s), "{s} in {shown}");
-        }
-        let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
-        app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        assert_eq!(count(&app), 1, "previewed: one outline in place of the circles");
-        crate::dialogs::cancel(&mut app);
-        assert_eq!(count(&app), 2, "rolled back");
-        menus::invoke(&mut app, &cmd, serde_json::Value::Null);
-        let n = app.session.doc().unwrap().history.undo.len();
-        app.ui.dialog.as_mut().unwrap().fields.insert("keepOriginals".into(), json!(true));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
-        assert_eq!(count(&app), 3, "the circles and the outline above them");
+        // Three circles 4 apart in a row and one far off.
+        let ids: Vec<u64> = [100.0, 124.0, 148.0, 300.0].iter().map(|&x| circle(&mut app, x, 10.0)).collect();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        menus::invoke(&mut app, super::COMMAND, Value::Null);
+        let dialog = dialog_id(&app);
+        set(&app, dialog, "constantGap", json!(true));
+        // A preview leaves two objects selected (one shape and the far circle); Reach stays available for the
+        // four circles the command still bridges.
+        frame(&mut app);
+        assert_eq!(app.session.doc().unwrap().selection.objects.len(), 2, "previewed");
+        let (many, params) = read(&app, dialog, |fields| (fields.bool("many"), (super::SPEC.params)(fields)));
+        assert_eq!(many, Some(true), "Reach available for four circles");
+        assert_eq!(params, json!({"gap": 4.0, "reach": 10.0, "keepOriginals": false}), "the gap, not the radius");
+        assert!(confirm(&app, dialog), "OK is on");
+        frame(&mut app);
+        let top: Vec<u64> = app.session.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
+        assert_eq!(top, [ids[2], ids[3]], "one shape in the topmost joined circle's place, and the far circle");
     }
 }

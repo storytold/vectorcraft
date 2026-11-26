@@ -220,6 +220,13 @@ pub fn language_quotes(language: &str) -> Option<Quotes> {
     LANGUAGES.iter().find(|(l, _, _)| l.eq_ignore_ascii_case(language)).map(|(_, _, q)| *q)
 }
 
+/// The BCP 47 tag of the [`LANGUAGES`] entry named or tagged `language` (case-insensitive), the
+/// default's included (`en-US`): what a document's language ([`DocSetup::language`]) is written
+/// as in an exported file. `None` for a language not in the list.
+pub fn language_tag(language: &str) -> Option<&'static str> {
+    LANGUAGES.iter().find(|(n, t, _)| n.eq_ignore_ascii_case(language) || t.eq_ignore_ascii_case(language)).map(|(_, t, _)| *t)
+}
+
 /// The [`LANGUAGES`] entry named or tagged `language` (case-insensitive) as a character's
 /// language ([`crate::CharStyle::language`]) stores it: its tag, or `None` for the default (the
 /// first entry); `Err` for a language not in the list.
@@ -403,6 +410,16 @@ impl DocSetup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A document's language is written by its tag, the default's included (#3644).
+    #[test]
+    fn document_languages_have_their_tags() {
+        assert_eq!(language_tag(&DocSetup::default().language), Some("en-US"));
+        assert_eq!(language_tag("French"), Some("fr"));
+        assert_eq!(language_tag("german: swiss"), Some("de-CH"));
+        assert_eq!(language_tag("sr-latn"), Some("sr-Latn"));
+        assert_eq!((language_tag("Klingon"), language_tag("")), (None, None));
+    }
 
     /// Characters store a language of the list by its tag, the default as none.
     #[test]

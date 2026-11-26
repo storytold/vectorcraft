@@ -327,6 +327,16 @@ fn only_the_longest_contour_of_a_compound_profile_carries_the_side_surface() {
     let (w, h) = revolve_surface_size(&PathData::from_bezpath(&bp), b, Revolve::default()).unwrap();
     assert!((w - 10.0 * std::f64::consts::PI).abs() < 1e-9 && (h - 80.0).abs() < 1e-3, "{w} {h}");
 }
+#[test]
+fn a_side_quad_lies_on_the_surface_at_its_corners_distances_from_the_axis() {
+    // An edge from 30 to 50 pt right of an axis at 10, at surface y -5 and 15, over a step from
+    // 0.25 to 0.5 radians: x is each angle times each corner's own distance from the axis.
+    let corners = surface_corners(Point::new(30.0, 0.0), Point::new(50.0, 20.0), 10.0, [-5.0, 15.0], [0.25, 0.5]);
+    assert_eq!(corners, [Point::new(5.0, -5.0), Point::new(10.0, 15.0), Point::new(20.0, 15.0), Point::new(10.0, -5.0)]);
+    // Left of the axis the distances are the same.
+    let left = surface_corners(Point::new(-10.0, 0.0), Point::new(-30.0, 20.0), 10.0, [-5.0, 15.0], [0.25, 0.5]);
+    assert_eq!(left, corners);
+}
 /// The square ring of [`a_ring_profile_is_measured_from_its_outer_side_at_mid_height`] with an
 /// anchor in the middle of its inner side.
 fn split_square() -> [Point; 6] {

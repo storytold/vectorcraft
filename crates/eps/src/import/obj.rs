@@ -49,6 +49,8 @@ thread_local! {
     /// Tests: the arrays of the list last released on this thread that were still alive after it
     /// (the ones the interpreter itself still held).
     pub(crate) static ARRAYS_LEFT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many values [`Shared::to_vec`] has copied on this thread.
+    pub(crate) static VALUES_COPIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 thread_local! {
@@ -340,7 +342,10 @@ impl<T: Clone + Held> Shared<T> {
     }
 
     pub fn to_vec(&self) -> Vec<T> {
-        self.borrow().to_vec()
+        let v = self.borrow().to_vec();
+        #[cfg(test)]
+        VALUES_COPIED.with(|n| n.set(n.get() + v.len()));
+        v
     }
 
     /// `n` values from `at`, sharing the storage (`getinterval`); `None` past the end.

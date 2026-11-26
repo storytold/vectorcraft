@@ -29,6 +29,10 @@ impl Default for Headless {
     }
 }
 
+/// Desktop UI commands that the app refuses for every control and MCP request, because each one
+/// opens another app (`refuse_automation` in `vectorcraft-ui-egui`). `--connect` does not run them.
+const KEYBOARD_ONLY: &[&str] = &["attributes.openUrl", "file.export.svg.browser", "file.saveForWeb.browser", "file.showPackage"];
+
 /// Commands the desktop app adds on top of the engine; the headless backend implements them too so
 /// `run_command` behaves the same in both modes.
 const HOST_COMMANDS: &[(&str, &str, &str)] = &[
@@ -156,6 +160,11 @@ impl Headless {
             Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params).map_err(|e| e.to_string())?,
             None if vectorcraft_engine::find_command(id).is_some() => {
                 self.session.check_params(id, params).map_err(|e| e.to_string())?;
+            }
+            None if KEYBOARD_ONLY.contains(&id) => {
+                return Err(format!(
+                    "`{id}` opens another app: only the person at the keyboard can run it in the desktop app; control and MCP requests are refused, `--connect` included"
+                ));
             }
             None if crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| *cid == id) => {
                 return Err(format!(

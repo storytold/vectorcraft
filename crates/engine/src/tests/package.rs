@@ -326,9 +326,11 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
         let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
         String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap()
     };
+    // Reopened existing links use native separators; missing links keep their stored path.
+    let red = dir.0.join("art").join("red.png").to_string_lossy().into_owned();
     let person = report(&run(&mut s, "file.package", json!({})));
     assert!(person.contains(&format!("From: {}\n", dir.file("poster.vectorcraft"))), "{person}");
-    assert!(person.contains(&format!("{} → Links/red.png", dir.file("art/red.png"))), "{person}");
+    assert!(person.contains(&format!("{red} → Links/red.png")), "{person}");
     assert!(person.contains(&format!("blue.png: not found ({})", dir.file("art/blue.png"))), "{person}");
 
     let in_root = dir.0.join("in");
@@ -339,16 +341,19 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
     assert!(text.contains("\nred.png → Links/red.png\n") && text.contains("\nblue.png: not found (blue.png), not copied\n"), "{text}");
     let base = dir.0.to_string_lossy().into_owned();
     assert!(!text.contains(&base), "{text}");
+    // Compare serialized JSON with the path encoded the same way, without its outer quotes.
+    let json_base = serde_json::to_string(&base).unwrap();
+    let json_base = &json_base[1..json_base.len() - 1];
     for key in ["missingLinks", "warnings", "files"] {
-        assert!(!client[key].to_string().contains(&base), "{key}: {client}");
+        assert!(!client[key].to_string().contains(json_base), "{key}: {client}");
     }
     // Document Info, whose report the package holds, gives no link either.
     for p in [json!({}), json!({"format": "text"})] {
         let info = crate::file_access::confine(roots.as_ref(), || run(&mut s, "document.info", p.clone()));
-        assert!(!info.to_string().contains(&base), "{p}: {info}");
+        assert!(!info.to_string().contains(json_base), "{p}: {info}");
     }
     let info = run(&mut s, "document.info", json!({"format": "text"}));
-    assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
+    assert!(info["text"].as_str().unwrap().contains(&red), "the person's: {info}");
 }
 
 /// A confined request packages no document that links, or places a native document or a PDF with
@@ -463,6 +468,117 @@ fn a_confined_package_refuses_a_linked_file_that_keeps_an_export_folder_outside_
     keep(&mut part, &home.file("screens"));
     let mut s = poster(&pdf);
     assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
+}
+
+/// A confined request packages no linked file whose native document it can't read to check against
+/// its read roots: a PDF that needs a password to open, and a native document that doesn't load,
+/// even inside the roots. The package is refused before anything is written, with an error that
+/// names no file or folder. A PDF without editing data is copied, and the person's package copies
+/// every file.
+#[test]
+fn a_confined_package_refuses_a_linked_file_whose_editing_data_cannot_be_read() {
+    let home = Folder::new("package-unreadable-home");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let out = home.file("out");
+    let package = |s: &mut Session, p: Value| crate::file_access::confine(Some(&roots), || s.execute("file.package", &p));
+    let refused = |s: &mut Session, p: Value| {
+        let e = package(s, p.clone()).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked file's editing data can't be read to check it against the read roots"), "{p}: {e}");
+        assert!(!e.contains(home.0.to_string_lossy().as_ref()) && !e.contains("part."), "{p}: {e}");
+        assert!(!std::path::Path::new(&out).exists(), "{p}");
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    let pdf = home.file("art/part.pdf");
+    save(&mut part, &native);
+    let pdf_of =
+        |part: &mut Session, p: Value| vectorcraft_format::base64_decode(run(part, "document.serialize", p)["dataBase64"].as_str().unwrap()).unwrap();
+    let editable = pdf_of(&mut part, json!({"format": "pdf"}));
+    let locked = pdf_of(&mut part, json!({"format": "pdf", "security": {"openPassword": "open sesame"}}));
+    assert!(vectorcraft_pdf::editing_with(&locked, Some("open sesame")).is_some(), "the locked PDF carries editing data");
+    let plain = pdf_of(&mut part, json!({"format": "pdf", "preserveEditing": false}));
+    let poster = |placed: &str| {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        s
+    };
+    write(&pdf, &editable);
+    let mut s = poster(&pdf);
+    write(&pdf, &locked);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    // A package prepared in the confined request and written on another thread.
+    let prepared = crate::file_access::confine(Some(&roots), || s.prepare_package(&json!({"folder": out}))).unwrap();
+    let e =
+        std::thread::spawn(move || prepared.write(&mut |_, _| Ok(())).map(|_| ()).map_err(|e| e.to_string())).join().unwrap().expect_err("refused");
+    assert!(e.contains("a linked file's editing data can't be read to check it against the read roots"), "{e}");
+    assert!(!std::path::Path::new(&out).exists());
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A PDF listing the editing file without its data (`EF` renamed, the same length).
+    let at = editable.windows(4).position(|w| w.starts_with(b"/EF") && !w[3].is_ascii_alphanumeric()).expect("the editing file's EF");
+    let mut detached = editable.clone();
+    detached[at..at + 3].copy_from_slice(b"/XF");
+    assert!(vectorcraft_pdf::editing(&detached).is_none(), "the editing data can't be resolved");
+    write(&pdf, &detached);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A PDF without editing data.
+    write(&pdf, &plain);
+    assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
+    std::fs::remove_dir_all(&out).unwrap();
+    // A PDF whose attachments are too many to search to their end, with a readable editing file
+    // listed before the ones left unsearched.
+    let cut = attachments_cut_short(&vectorcraft_pdf::editing(&editable).unwrap().data);
+    assert!(vectorcraft_pdf::editing(&cut).is_some(), "the editing data is read");
+    write(&pdf, &cut);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A native document that doesn't load, rewritten or copied as it is.
+    let mut s = poster(&native);
+    write(&native, b"not a document");
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"folder": out, "relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+}
+
+/// A one-page PDF carrying `native` as its editing file, listed first in an attachment name tree
+/// whose second subtree has 70,000 nodes, more than are searched.
+fn attachments_cut_short(native: &[u8]) -> Vec<u8> {
+    let name = vectorcraft_pdf::EDITING_FILE;
+    let mut stream = format!("<< /Length {} >>\nstream\n", native.len()).into_bytes();
+    stream.extend_from_slice(native);
+    stream.extend_from_slice(b"\nendstream");
+    let objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_vec(),
+        b"<< /Type /Pages /Kids [6 0 R] /Count 1 >>".to_vec(),
+        format!("<< /Kids [4 0 R << /Kids [{}] >>] >>", "<< /Names [] >> ".repeat(70_000)).into_bytes(),
+        format!("<< /Names [({name}) << /Type /Filespec /UF ({name}) /EF << /F 5 0 R >> >>] >>").into_bytes(),
+        stream,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>".to_vec(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(body);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for at in &offsets {
+        out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
+    out
 }
 
 /// A missing link stored as a path relative to the document names a file inside a confined
@@ -631,7 +747,9 @@ fn a_font_named_by_another_of_its_names_is_copied() {
     let zip = unzip(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
     let report = String::from_utf8(zip["poster Folder/poster Report.txt"].clone()).unwrap();
     assert!(report.contains("SourceSans3-Semibold Regular → Fonts/"), "{report}");
-    let details = report.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
+    // The Font Details row: the Fonts rows above it start with the same label.
+    let font_details = report.split("\nFONT DETAILS\n").nth(1).unwrap_or_default();
+    let details = font_details.lines().find(|l| l.starts_with("SourceSans3-Semibold Regular: ")).unwrap_or_default();
     assert!(details.contains("embedding allowed") && !details.contains("missing"), "{report}");
 }
 
@@ -674,7 +792,7 @@ fn the_document_info_report_has_every_category() {
         assert!(text.contains(&format!("\n{h}\n")), "{h}: {text}");
     }
     assert!(text.contains("Images: 3") && text.contains("Source Sans 3 Regular: built in; embedding allowed"), "{text}");
-    assert!(text.contains("red.png: 600 × 300 px — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
+    assert!(text.contains("red.png: PNG; 600 × 300 px; 72 ppi — ") && text.contains("Color Mode: RGB") && text.contains("\nSwatches: "), "{text}");
     let fonts = run(&mut s, "document.info", json!({"format": "text", "category": "fonts"}))["text"].as_str().unwrap().to_string();
     assert!(fonts.contains("FONTS") && !fonts.contains("OBJECTS"), "{fonts}");
     let i = run(&mut s, "document.info", json!({"category": "linkedImages"}));
@@ -684,7 +802,7 @@ fn the_document_info_report_has_every_category() {
     // embedded one with no file.
     let linked: Vec<Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == true).cloned().collect();
     for (o, r) in linked.iter().zip(i["sections"][0]["rows"].as_array().unwrap()) {
-        let shown = format!("{} × {} px — {}", o["width"], o["height"], o["file"].as_str().unwrap());
+        let shown = format!("PNG; {} × {} px; 72 ppi — {}", o["width"], o["height"], o["file"].as_str().unwrap());
         assert_eq!((&o["name"], shown.as_str()), (&r[0], r[1].as_str().unwrap()));
     }
     assert_eq!(linked.len(), 2);
@@ -901,8 +1019,15 @@ fn package_copies_held_postscript_only_for_a_placed_document_with_a_postscript_n
         im.link.as_mut().unwrap().path = logo_ai.clone();
         im.link.as_mut().unwrap().relative = None;
         let key = im.key.clone();
-        d.images
-            .insert(key, vectorcraft_doc::ImageBlob { mime: "application/postscript".into(), bytes: std::sync::Arc::new(eps.to_vec()), proxy: None });
+        d.images.insert(
+            key,
+            vectorcraft_doc::ImageBlob {
+                mime: "application/postscript".into(),
+                bytes: std::sync::Arc::new(eps.to_vec()),
+                proxy: None,
+                file_font: Default::default(),
+            },
+        );
         Ok(())
     })
     .unwrap();

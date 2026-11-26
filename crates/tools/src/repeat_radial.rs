@@ -27,7 +27,7 @@ pub const HANDLE_GAP: f64 = 22.0;
 pub const INSTANCE_STEP: f64 = 16.0;
 
 /// How near (screen points) a press must come to a handle to take it.
-const REACH: f64 = 8.0;
+pub const REACH: f64 = 8.0;
 
 /// The most instances a radial repeat has (as `object.repeat.options` accepts them).
 const MAX_INSTANCES: f64 = 1000.0;
@@ -124,13 +124,14 @@ impl RadialHandles {
     /// at `zoom`.
     pub fn of(doc: &Document, selection: &Selection, frame: Option<OrientedBox>, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Radial { instances, radius, center, start_angle, end_angle, .. } = spec.kind else { return None };
-        if ![radius, center.x, center.y, start_angle, end_angle].iter().all(|v| v.is_finite()) {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if ![radius, center.x, center.y, start_angle, end_angle].iter().all(|v| v.is_finite()) || !doc.is_editable(*id) {
             return None;
         }
         let source = spec.source_bounds()?;

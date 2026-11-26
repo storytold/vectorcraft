@@ -22,8 +22,675 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Letakkan karya
+@id	language.name	Bahasa Indonesia
 @msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
 @msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
+
+# Status and error messages: 3D assets, type on a path, scripts and their File and $ objects, presets,
+# PDF page sizes, Objects on Path, plug-ins, file readers and data sets. Names in backticks, command ids,
+# double-quoted values and bare true, false and null stay as the English writes them; names the user
+# gave keep the English's quotation marks, and numbers use a period between thousands (2.048).
+@msg	{what} can't be exported in 3D: {e}	{what} tidak dapat diekspor dalam 3D: {e}
+@msg	asset {id} isn't a 3D asset	aset {id} bukan aset 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	aset {id} adalah aset 3D: assets.export3D yang menulisnya
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	belum ada aset 3D: kumpulkan dulu objek dengan efek 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	pilih objek dengan efek 3D (atau berikan id-nya)
+@msg	select point type or type on a path	pilih teks titik atau teks pada jalur
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	teks pada jalur dalam rangkaian tidak dapat menggunakan Teks dinamis: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	teks pada jalur terbuka atau majemuk tidak dapat diletakkan di tengah pada sisi atas atau bawahnya: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	teks pada jalur tanpa panjang atau tanpa tinggi tidak dapat diletakkan di tengah: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	teks pada jalur dalam rangkaian tidak dapat diletakkan di tengah pada sisi atas atau bawahnya: {frames}
+@msg	select type on a closed path	pilih teks pada jalur tertutup
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` berarti pengaturan yang diubah: simpan preset dengan nama lain
+@msg	the selection has no gradient fill	seleksi tidak memiliki isian gradien
+@msg	the selection has no gradient stroke	seleksi tidak memiliki goresan gradien
+@msg	the selection has no pattern fill	seleksi tidak memiliki isian pola
+@msg	the selection has no pattern stroke	seleksi tidak memiliki goresan pola
+@msg	no gradient swatch `{name}`	tidak ada swatch gradien `{name}`
+@msg	no pattern swatch `{name}`	tidak ada swatch pola `{name}`
+@msg	the library item is damaged	item pustaka rusak
+@msg	its zlib compression is damaged	kompresi zlib-nya rusak
+@msg	its Zstandard compression is damaged	kompresi Zstandard-nya rusak
+@msg	it decompresses to more than {_1} MB	hasil dekompresinya lebih dari {_1} MB
+@msg	its editing data is for a different page	data penyuntingannya untuk halaman lain
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` harus "emBox", "capHeight", "xHeight" atau "icfBox"
+@msg	Choose a .js or .jsx script	Pilih skrip .js atau .jsx
+@msg	Ran {name}	{name} dijalankan
+@msg	The script was stopped and its changes were undone	Skrip dihentikan dan perubahannya dibatalkan
+@msg	a script is running: stop it or wait for it to finish	skrip sedang berjalan: hentikan atau tunggu hingga selesai
+@msg	this is a compiled script, which cannot be run; use its source text	ini skrip terkompilasi, yang tidak dapat dijalankan; gunakan teks sumbernya
+@msg	the script is not UTF-8 text	skrip bukan teks UTF-8
+@msg	the script is too large to run	skrip terlalu besar untuk dijalankan
+@msg	a drag or an undo group is open; finish it before running a script	seretan atau grup urungkan sedang terbuka; selesaikan sebelum menjalankan skrip
+@msg	the script left a document that cannot be kept	skrip meninggalkan dokumen yang tidak dapat dipertahankan
+@msg	the script is no longer in the Scripts folder	skrip tidak lagi berada di folder Skrip
+@msg	the script's run is no longer available	proses skrip tidak lagi tersedia
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	perintah yang gagal mengubah langkah urungkan yang tidak dapat dikembalikan, sehingga skrip dihentikan
+@msg	a recovery copy could not be written, so the script was not run	salinan pemulihan tidak dapat ditulis, sehingga skrip tidak dijalankan
+@msg	Script file access denied	Akses berkas skrip ditolak
+@msg	Script file exceeds 8 MiB	Berkas skrip melebihi 8 MiB
+@msg	Script file is not open	Berkas skrip tidak terbuka
+@msg	Script file cannot be decoded	Berkas skrip tidak dapat didekode
+@msg	Script file is not a regular file	Berkas skrip bukan berkas biasa
+@msg	Script file does not exist	Berkas skrip tidak ada
+@msg	Script file could not be read	Berkas skrip tidak dapat dibaca
+@msg	Script folder has more than 2,048 entries	Folder skrip memiliki lebih dari 2.048 entri
+@msg	Script file open mode must be r, w, e or a	Mode buka berkas skrip harus r, w, e atau a
+@msg	Script file writing is not available	Penulisan berkas skrip tidak tersedia
+@msg	Script file dialogs are not available	Dialog berkas skrip tidak tersedia
+@msg	Script files cannot be opened in another application	Berkas skrip tidak dapat dibuka di aplikasi lain
+@msg	Script file access is unavailable on the web	Akses berkas skrip tidak tersedia di web
+@msg	Script has 256 files open	Skrip membuka 256 berkas
+@msg	Script file path exceeds 32,767 characters	Jalur berkas skrip melebihi 32.767 karakter
+@msg	Script folder mask takes too many steps to match	Masker folder skrip memerlukan terlalu banyak langkah untuk dicocokkan
+@msg	the script opened more file data than one run may open (32 MiB)	skrip membuka lebih banyak data berkas daripada yang boleh dibuka satu proses (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: menerima posisi dan mode
+@msg	vc.run: give a command id, as a string	vc.run: berikan id perintah, sebagai string
+@msg	vc.run: takes a command id and an object of parameters	vc.run: menerima id perintah dan objek parameter
+@msg	vc.run: the parameters must be an object	vc.run: parameter harus berupa objek
+@msg	vc.run: the result{place} is too large for a script	vc.run: hasil{place} terlalu besar untuk skrip
+@msg	$.evalFile requires a file path	$.evalFile memerlukan jalur berkas
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: batas waktu harus berupa jumlah milidetik yang berhingga, 0 atau lebih
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: menerima jalur berkas dan batas waktu
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: baris {line}, kolom {column} dari {file}: {e} (dilempar)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: baris {line}, kolom {column}: {e} (dilempar)
+@msg	{name}: {e} (thrown)	{name}: {e} (dilempar)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: baris {line}, kolom {column} dari {file}: {e} (batas)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: baris {line}, kolom {column}: {e} (batas)
+@msg	{name}: {e} (limit)	{name}: {e} (batas)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: baris {line}, kolom {column} dari {file}: {e} (sintaksis)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: baris {line}, kolom {column}: {e} (sintaksis)
+@msg	{name}: {e} (syntax)	{name}: {e} (sintaksis)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: baris {line}, kolom {column} dari {file}: {e} (dihentikan)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: baris {line}, kolom {column}: {e} (dihentikan)
+@msg	{name}: {e} (stopped)	{name}: {e} (dihentikan)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: baris {line}, kolom {column} dari {file}: {e} (galat internal)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: baris {line}, kolom {column}: {e} (galat internal)
+@msg	{name}: {e} (internal)	{name}: {e} (galat internal)
+@msg	{e} (these files stay written: {paths})	{e} (berkas-berkas ini tetap tertulis: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: berikan nama, sebagai string
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: berikan lokal seperti "en" atau "de_DE", atau null untuk lokal antarmuka
+@msg	$.localize: give true or false	$.localize: berikan true atau false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: hanya 512, yang menyalakan lokalisasi, atau 0 yang dapat ditetapkan
+@msg	$.flags: give a number	$.flags: berikan angka
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: skrip di sini hanya membaca dan menulis UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: berikan nama pengodean, sebagai string
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: ukuran cache memori tidak dapat ditetapkan
+@msg	$.setenv: give a value, as a string	$.setenv: berikan nilai, sebagai string
+@msg	$.setenv: only {_1} can be set	$.setenv: hanya {_1} yang dapat ditetapkan
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: nilai berisi paling banyak {MAX_ENV_BYTES} huruf, angka, dan _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: berikan jumlah milidetik dari 0 sampai {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: berikan jumlah milidetik
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: proses tidak dapat menunggu di dalam callback fungsi bawaan, getter, konversi, atau berkas yang dijalankan $.evalFile; panggil dari kode skrip itu sendiri
+@msg	$.bp: scripts here have no debugger	$.bp: skrip di sini tidak memiliki debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: skrip belum dapat menampilkan dialog
+@msg	{name}: give a message	{name}: berikan pesan
+@msg	{name}: give the text the field starts with	{name}: berikan teks awal kolom isian
+@msg	{name}: the message is longer than 16 KiB	{name}: pesan lebih panjang dari 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: judul lebih panjang dari 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: teks awal kolom isian lebih panjang dari 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog tidak dapat dibuka di dalam callback fungsi bawaan, getter, konversi, atau berkas yang dijalankan $.evalFile; panggil dari kode skrip itu sendiri
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: jawaban berikutnya di `answers` untuk {_1}, bukan {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` tidak memiliki jawaban tersisa untuk dialog ini
+@msg	`answers` must be a list of answers	`answers` harus berupa daftar jawaban
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` berisi lebih dari {MAX_ANSWERS} jawaban
+@msg	`answers` is larger than 1 MiB	`answers` lebih besar dari 1 MiB
+@msg	must be an object with `kind` and `value`	harus berupa objek dengan `kind` dan `value`
+@msg	must have exactly `kind` and `value`	harus memiliki tepat `kind` dan `value`
+@msg	is an alert's answer, whose `value` must be "ok"	adalah jawaban alert, yang `value`-nya harus "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	adalah jawaban confirm, yang `value`-nya harus true atau false
+@msg	is longer than 16 KiB	lebih panjang dari 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	adalah jawaban prompt, yang `value`-nya harus berupa string atau null
+@msg	must have `kind` alert, confirm or prompt	harus memiliki `kind` alert, confirm, atau prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` hanya untuk proses tanpa orang yang dapat ditanya: di aplikasi, pengguna menjawab setiap dialog
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` harus berupa bilangan bulat dari 1 sampai {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` bersarang lebih dari 64 tingkat
+@msg	`args` must be an object	`args` harus berupa objek
+@msg	`args` is larger than 1 MiB	`args` lebih besar dari 1 MiB
+@msg	`path` is empty	`path` kosong
+@msg	`installed` takes a `path`, not a `source`	`installed` menerima `path`, bukan `source`
+@msg	`path` must name a .js or .jsx file	`path` harus menyebut file .js atau .jsx
+@msg	give exactly one of `path` and `source`	berikan tepat satu dari `path` dan `source`
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	vc.document{place} is too large for a script	vc.document{place} terlalu besar untuk skrip
+@msg	vc.log: the log of this run is full	vc.log: log proses ini penuh
+@msg	this function's script run has ended	proses skrip fungsi ini telah berakhir
+@msg	the script made more host calls than one run may make	skrip melakukan lebih banyak panggilan host daripada yang boleh dilakukan satu proses
+@msg	the script passed more data to and from commands than one run may pass	skrip mengirim lebih banyak data ke dan dari perintah daripada yang boleh dikirim satu proses
+@msg	the script added more objects and data to the documents than one run may add	skrip menambahkan lebih banyak objek dan data ke dokumen daripada yang boleh ditambahkan satu proses
+@msg	{what}: the object is not a File or a Folder	{what}: objek bukan File atau Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: jumlah harus berupa angka berhingga, 0 atau lebih
+@msg	File.seek: the position must be a finite number	File.seek: posisi harus berupa angka berhingga
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: mode harus 0, 1 atau 2
+@msg	script file is compiled: {value}	berkas skrip terkompilasi: {value}
+@msg	`name` must be the name of a script engine	`name` harus berupa nama mesin skrip
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	mesin skrip utama dibuat baru untuk setiap proses dan tidak pernah disimpan, sehingga tidak dapat dibuang
+@msg	there is no script engine named {name}	tidak ada mesin skrip bernama {name}
+@msg	Running a script	Menjalankan skrip
+@msg	Data Recovery can't keep copies in {path}: {e}	Pemulihan data tidak dapat menyimpan salinan di {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Plug-in tidak dapat dimuat dari {path}: {e}
+@msg	select a path	pilih jalur
+@msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Simpan menulis {_1}, bukan {_2}: gunakan file.saveAsTemplate untuk menulisnya
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 menulis berkas .ai lama, bukan templat .ait
+@msg	`groupColors` must be an array	`groupColors` harus berupa larik
+@msg	`preserve` must be an object	`preserve` harus berupa objek
+@msg	`{key}` must be an array	`{key}` harus berupa larik
+@msg	`{key}` must be a #rrggbb color	`{key}` harus berupa warna #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` harus berupa warna #rrggbb atau nama warna lapisan
+@msg	unknown Live Paint option `{key}`	opsi Live Paint tidak dikenal `{key}`
+@msg	unknown Shape Builder option `{key}`	opsi Pembangun bentuk tidak dikenal `{key}`
+@msg	`{key}` must be a profile name or null	`{key}` harus berupa nama profil atau null
+@msg	`top` and `below` can't both be true	`top` dan `below` tidak boleh keduanya true
+@msg	`select` must be true or false	`select` harus true atau false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` dan `maxAnchors` harus bilangan bulat
+@msg	`{key}` must be a number not below 0	`{key}` harus berupa angka tidak kurang dari 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` harus berupa empat angka tidak kurang dari 0: [tl, tr, br, bl]
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` harus berupa [x, y, width, height]: empat angka berhingga, width dan height tidak negatif
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lebih besar dari `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	berikan setidaknya satu dari `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	warna proses tidak dapat mewarnai gambar skala abu-abu yang memiliki transparansi: gunakan warna spot, hitam atau putih
+@msg	a key object sits on that point	objek kunci berada di titik itu
+@msg	`name` is empty	`name` kosong
+@msg	`newName` is empty	`newName` kosong
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` adalah preset bawaan dan tidak dapat diubah: simpan dengan nama lain
+@msg	`{name}` is a built-in preset and stays	`{name}` adalah preset bawaan dan tetap ada
+@msg	a spine keeps at least two points	rangka mempertahankan setidaknya dua titik
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` berupa null, nama warna lapisan, atau #rrggbb
+@msg	the Simplify slider is not open	penggeser Sederhanakan tidak terbuka
+@msg	the Smooth slider is not open	penggeser Haluskan tidak terbuka
+@msg	handle must be in or out	handle harus in atau out
+@msg	index must be ≥ 0	index harus ≥ 0
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	halaman artboard {n} berukuran {size}, lebih panjang dari batas halaman PDF 14.400 pt (200 in): halaman ditulis dengan UserUnit {unit}, sehingga aplikasi yang mengabaikan UserUnit menampilkannya sekian kali lebih kecil
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	halaman artboard {n} berukuran {size}, lebih panjang dari batas halaman PDF 14.400 pt (200 in): halaman ditulis dengan UserUnit {unit}, sehingga aplikasi yang mengabaikan UserUnit menampilkannya sekian kali lebih kecil: aktifkan Tulis halaman yang lebih panjang dari 200 in dalam ukuran penuh, dalam poin
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	halaman artboard {n} berukuran {size}, lebih panjang dari batas halaman PDF 14.400 pt (200 in): halaman {label} ditulis tanpa UserUnit, dalam poin, dan aplikasi yang mematuhi batas itu memotong halaman menjadi 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 tidak memiliki UserUnit, yang diperlukan halaman lebih panjang dari 14.400 pt (200 in) untuk mempertahankan ukurannya: berkas ditulis sebagai PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 tidak memiliki UserUnit, yang diperlukan halaman lebih panjang dari 14.400 pt (200 in) agar tetap dalam batas halaman PDF/A-2 sebesar 14.400 unit: berkas ditulis sebagai PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	halaman artboard {n} berukuran {size}, terlalu panjang dan sempit untuk sisi halaman PDF 3 sampai 14.400 unit: halaman ditulis dengan UserUnit {unit}, yang menjaga sisi pendek tetap 3 unit atau lebih, dan aplikasi yang mematuhi batas itu memotong sisi panjang menjadi 14.400 unit
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	berkas {label} menyimpan bilangan real hingga {max}, dan halaman artboard {n}, sepanjang {side} pt, memerlukan bilangan yang lebih besar: pilih PDF 1.6 atau lebih baru tanpa standar PDF/X, atau artboard yang lebih kecil
+@msg	line {line}: value for `{var}` must be true or false	baris {line}: nilai untuk `{var}` harus true atau false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	baris {line}: nilai untuk `{var}` lebih panjang dari {MAX_GRAPH_CSV} byte
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	nama kuas bulu paling banyak {max} karakter: `{name}` memiliki {count}
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` bukan dokumen VectorCraft, PDF, atau berkas .ai yang kompatibel dengan PDF
+@msg	no saved preset named `{name}`	tidak ada preset tersimpan bernama `{name}`
+@msg	no saved preset named `{name}` to rename	tidak ada preset tersimpan bernama `{name}` untuk diganti namanya
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensi akan lebih besar dari {MAX_BYTES} byte
+@msg	the artboard is locked	artboard terkunci
+@msg	no such spine point	tidak ada titik rangka seperti itu
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` harus berupa daftar berisi paling banyak 10000 indeks titik rangka
+@msg	`with` moves points, not a handle	`with` memindahkan titik, bukan handle
+@msg	no such spine segment	tidak ada segmen rangka seperti itu
+@msg	node {_1} is on a locked artboard	simpul {_1} berada di artboard yang terkunci
+@msg	not a blend	bukan blend
+@msg	not a PICT file	bukan berkas PICT
+@msg	thumbnail: no page {n} (the file has 1)	gambar mini: tidak ada halaman {n} (berkas memiliki 1)
+@msg	select a blend or give `id`	pilih blend atau berikan `id`
+@msg	select an Objects on Path group	pilih grup Objek pada jalur
+@msg	choose the object to detach with its Select/Move widget	pilih objek yang akan dilepas dengan widget Pilih/Pindahkan-nya
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	jalur di dalam jalur majemuk, blend, amplop, perulangan, atau grup Jalin tidak dapat menerima objek
+@msg	a clipping path can't take objects	jalur kliping tidak dapat menerima objek
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objek di dalam blend, amplop, perulangan, atau grup Jalin tidak dapat dilekatkan ke jalur
+@msg	a clipping path can't be attached to a path	jalur kliping tidak dapat dilekatkan ke jalur
+@msg	`background` must be edges, corners or colors	`background` harus edges, corners atau colors
+@msg	`match` must be distance or channels	`match` harus distance atau channels
+@msg	`{key}` must be from 0 to 100	`{key}` harus dari 0 sampai 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` harus berisi 1 sampai 16 warna, masing-masing heksadesimal (#rrggbb atau #rgb) atau black, white, red, green atau blue
+@msg	the linked image shows its preview: embed or relink it first	gambar tertaut menampilkan pratinjaunya: sematkan atau tautkan ulang terlebih dahulu
+@msg	a CMYK image has no transparency to set	gambar CMYK tidak memiliki transparansi untuk ditetapkan
+@msg	every pixel matches the background: no image would be left	setiap piksel cocok dengan latar belakang: tidak akan ada gambar yang tersisa
+@msg	an image of {w} × {h} pixels is too large to change	gambar berukuran {w} × {h} piksel terlalu besar untuk diubah
+@msg	select an image with a color mask	pilih gambar dengan masker warna
+@msg	the color mask's settings are out of range	pengaturan masker warna berada di luar rentang
+@msg	a CMYK image can't take a color mask	gambar CMYK tidak dapat diberi masker warna
+@msg	the mask would hide every pixel	masker akan menyembunyikan setiap piksel
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Pewarnaan ulang selesai; {locked} dan {hidden} dibiarkan tanpa perubahan
+@msg	Recolor completed; {objects} were left unchanged	Pewarnaan ulang selesai; {objects} dibiarkan tanpa perubahan
+@msg	Recolor completed; {objects} was left unchanged	Pewarnaan ulang selesai; {objects} dibiarkan tanpa perubahan
+@msg	1 locked object	1 objek terkunci
+@msg	{n} locked objects	{n} objek terkunci
+@msg	1 hidden object	1 objek tersembunyi
+@msg	{n} hidden objects	{n} objek tersembunyi
+@msg	t, dx and dy must be finite	t, dx dan dy harus berhingga
+@msg	the blend has no spine	blend tidak memiliki rangka
+@msg	the spine has no segments	rangka tidak memiliki segmen
+@msg	panels can't be shown in Presentation Mode	panel tidak dapat ditampilkan dalam Mode presentasi
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	preset tidak dikenal `{name}`: bukan preset bawaan atau tersimpan (lihat imageTrace.presets)
+@msg	variables are locked	variabel terkunci
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	lebih dari {MAX_CSV_ROWS} himpunan data: Impor himpunan data membaca paling banyak {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	lebih dari {MAX_CSV_COLS} variabel: Impor himpunan data membaca paling banyak {MAX_CSV_COLS}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` dan `options.{key}: {inner}` tidak sesuai: berikan opsi itu satu kali saja
+@msg	x and y must be finite	x dan y harus berhingga
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} adalah pengekspor (Berkas › Ekspor › Ekspor sebagai…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` berukuran {size} byte (batas {MAX_DOCUMENT_DATA})
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	masker yang mencakup beberapa lapisan dibaca sebagai grup kliping di setiap lapisan yang dicakupnya
+@msg	a graph's records don't end where they should: its art was read as it is	catatan grafik tidak berakhir di tempat yang semestinya: karyanya dibaca apa adanya
+@msg	`{w}` takes no operands	`{w}` tidak menerima operan
+@msg	a wraparound group is inside a compound path	grup pembungkus berada di dalam jalur majemuk
+@msg	it ends inside a multi-layer mask	berakhir di dalam masker multi-lapisan
+@msg	a multi-layer mask's operators are out of order	operator masker multi-lapisan tidak berurutan
+@msg	a multi-layer mask needs one clipping path	masker multi-lapisan memerlukan satu jalur kliping
+@msg	a group crosses a multi-layer mask	grup melintasi masker multi-lapisan
+@msg	graphs come in as plain art, without their data or settings	grafik dibaca sebagai karya biasa, tanpa data atau pengaturannya
+@msg	the active document changed while the question was open; nothing was deleted	dokumen aktif berubah saat pertanyaan terbuka; tidak ada yang dihapus
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Tautan berada di dalam simbol, desain grafik, pola, atau masker opasitas dan tidak memiliki tempat di kanvas
+@msg	source must be the id of a Shaper Group's original shape	source harus berupa id bentuk asli Grup Shaper
+@msg	group must be the id of a Shaper Group	group harus berupa id Grup Shaper
+@msg	the shape is not an editable original shape of that Shaper Group	bentuk itu bukan bentuk asli yang dapat diedit dari Grup Shaper tersebut
+@msg	id {value} is a layer, not an object	id {value} adalah lapisan, bukan objek
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} adalah lapisan, bukan objek; pindahkan lapisan dengan layer.move
+@msg	the PCX file is cut short	berkas PCX terpotong
+@msg	the PCX file's header is damaged	header berkas PCX rusak
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	berkas PCX dengan piksel {bits}-bit dalam {planes} bidang tidak dapat dibaca
+@msg	the Pixar file is cut short	berkas Pixar terpotong
+@msg	the Pixar file's header is damaged	header berkas Pixar rusak
+@msg	the Pixar file's image data is damaged	data gambar berkas Pixar rusak
+@msg	the JPEG 2000 file can't be read	berkas JPEG 2000 tidak dapat dibaca
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	berkas JPEG 2000 memiliki ruang warna atau konten JPX yang tidak didukung
+@msg	the HEIC or HEIF file can't be read	berkas HEIC atau HEIF tidak dapat dibaca
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	berkas HEIC atau HEIF berisi jenis gambar yang tidak dapat dibaca
+@msg	HEIC and HEIF images can't be opened in this build	gambar HEIC dan HEIF tidak dapat dibuka di build ini
+@msg	the JPEG XL file is cut short	berkas JPEG XL terpotong
+@msg	the JPEG XL container is too large to read	kontainer JPEG XL terlalu besar untuk dibaca
+@msg	CMYK JPEG XL images can't be read	gambar JPEG XL CMYK tidak dapat dibaca
+@msg	the JPEG XL file can't be read: {e}	berkas JPEG XL tidak dapat dibaca: {e}
+@msg	Extrude & Bevel	Ekstrusi & bevel
+@msg	Revolve	Revolusi
+@msg	Inflate	Gelembungkan
+@msg	Rotate	Putar
+@msg	Extrude & Bevel (Classic)	Ekstrusi & bevel (klasik)
+@msg	Revolve (Classic)	Revolusi (klasik)
+@msg	Rotate (Classic)	Putar (klasik)
+@msg	This effect	Efek ini
+@msg	clipping paths	jalur kliping
+@msg	other objects	objek lain
+@msg	{label} requires a group holding a shape with at least two anchors	{label} memerlukan grup yang berisi bentuk dengan setidaknya dua titik jangkar
+@msg	Revolve requires a group holding a shape with at least two anchors	Revolusi memerlukan grup yang berisi bentuk dengan setidaknya dua titik jangkar
+@msg	Revolve requires a shape with at least two anchors	Revolusi memerlukan bentuk dengan setidaknya dua titik jangkar
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} pada grup memerlukan jalur, jalur majemuk, teks, grup, grup kliping, blend, dan instans simbol: lepaskan atau perluas {what}-nya terlebih dahulu.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} pada grup menerima paling banyak {MAX_MEMBERS} objek
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Efek 3D pada grup atau lapisan diterapkan pada grup itu sendiri, bukan pada isian atau goresannya
+@msg	a 3D effect on a group's fill or stroke draws nothing	efek 3D pada isian atau goresan grup tidak menggambar apa pun
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	efek 3D pada isian atau goresan grup tidak menggambar apa pun untuk diekspor
+@msg	The 3D object is too complex to export	Objek 3D terlalu rumit untuk diekspor
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Objek 3D memiliki mesh yang tidak lengkap atau berisi nilai yang bukan angka
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
+@msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel harus none, salah satu dari {_1}, atau custom dengan {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom memerlukan {BEVEL_PROFILE}, yaitu titik-titik bevel
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} harus berupa string
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} harus berisi 2 sampai {most} titik [x, y], masing-masing bernilai antara 0 dan 1, dari [0, 0] (tepi tutup) hingga [1, 1] (dinding samping)
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} tidak dapat membangun bentuk padat dari karya ini: instans simbol, blend, dan grup klipingnya berisi terlalu banyak objek
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} tidak dapat membangun bentuk padat dari instans simbol "{symbol}": karya simbol tidak tersedia
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: jalur kliping terlalu rumit untuk memotong karya
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} menerima paling banyak {MAX_MEMBERS} objek
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} tidak dapat membangun bentuk padat dari karya yang bersarang lebih dari {MAX_DEPTH} tingkat
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Cat Revolusi terlalu rumit untuk permukaan ini; kurangi Segmen atau sederhanakan gradien
+@msg	Revolve edge must be left or right	edge Revolusi harus left atau right
+@msg	Revolve cap must be a boolean	cap Revolusi harus berupa boolean
+@msg	the revolved object has no fill or stroke	objek hasil revolusi tidak memiliki isian atau goresan
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor harus berupa warna RGB buram dalam bentuk #rrggbb
+@msg	lights must contain one to ten lights	lights harus berisi satu sampai sepuluh cahaya
+@msg	each light must be an object	setiap cahaya harus berupa objek
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	pengaturan cahaya tidak dikenal: gunakan color, intensity, rotation, height, softness atau behind
+@msg	light {key} must be a number from {min} to {max}	{key} cahaya harus berupa angka dari {min} sampai {max}
+@msg	light color must use opaque #rrggbb	color cahaya harus menggunakan #rrggbb buram
+@msg	light behind must be true or false	behind cahaya harus true atau false
+@msg	shadow must be true or false	shadow harus true atau false
+@msg	shadowPosition must be behind or below	shadowPosition harus behind atau below
+@msg	{key} must be a number from {min} to {max}	{key} harus berupa angka dari {min} sampai {max}
+@msg	each of `{GRAPHICS}` must be an object	setiap `{GRAPHICS}` harus berupa objek
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	entri `{GRAPHICS}` menerima symbol, face, x, y, scale dan rotation, bukan `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	setiap `{GRAPHICS}` memerlukan `symbol`, nama sebuah simbol
+@msg	`{GRAPHICS}` face must be front or back	face `{GRAPHICS}` harus front atau back
+@msg	`{GRAPHICS}` face must be front, back or side	face `{GRAPHICS}` harus front, back, atau side
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} `{GRAPHICS}` harus berupa angka dari {lo} sampai {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` harus berupa larik
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafis dipetakan ke jenis objek Bidang, Ekstrusi, Revolusi, dan Gelembungkan
+@msg	Revolve maps graphics onto its side: map them onto the front	Revolusi memetakan grafis ke sisinya: petakan ke bagian depan
+@msg	Inflate maps graphics onto its front and back, not onto a side	Gelembungkan memetakan grafis ke bagian depan dan belakangnya, bukan ke sisi
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objek {_1}: bagian belakang Gelembungkan hanya menerima grafis saat Kedua sisi dan Ujung diaktifkan
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafis terlalu rumit untuk permukaan ini: sederhanakan karya simbol atau kurangi Segmen
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` menerima paling banyak {MAX_GRAPHICS} grafis
+@msg	A plane has one face: map its graphics onto the front	Bidang memiliki satu sisi: petakan grafisnya ke bagian depan
+@msg	The graphics are too complex: simplify the symbols' art	Grafis terlalu rumit: sederhanakan karya simbol
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Karya grafis boleh bersarang paling dalam {MAX_LEVELS} tingkat: sederhanakan karya simbol
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Karya grafis boleh menyarangkan simbol paling dalam {MAX_NESTING} tingkat: sederhanakan karya simbol
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Karya grafis berisi terlalu banyak objek: sederhanakan karya simbol
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafis menggambar paling banyak {MAX_PIECES} isian dan goresan: sederhanakan karya simbol
+@msg	`surface` must be one of {_1}	`surface` harus salah satu dari {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} menggambar karya sumber untuk objek ini, bukan permukaan 3D-nya
+@msg	{label} draws no faces for this object	{label} tidak menggambar sisi apa pun untuk objek ini
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	kerangka kawat memiliki lebih dari {MAX_WIRE_EDGES} tepi
+@msg	the params must be an object, not {got}	parameter harus berupa objek, bukan {got}
+@msg	unknown parameter `{path}`; the object takes no keys	parameter tidak dikenal `{path}`; objek tidak menerima kunci apa pun
+@msg	unknown parameter `{path}`; it takes: {keys}	parameter tidak dikenal `{path}`; yang diterima: {keys}
+@msg	missing `{path}`	`{path}` tidak ada
+@msg	`{path}` must be {expected}, not {got}	`{path}` harus {expected}, bukan {got}
+@msg	`{path}` is nested too deeply	`{path}` bersarang terlalu dalam
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: bukan gambar PNG, JPEG, WebP, TIFF, atau BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	gambar berukuran {iw} × {ih} piksel dan artboard pada lebar itu berukuran {rw} × {rh} piksel: proporsinya berbeda
+@msg	`threshold` must be a number from 0 to 1	`threshold` harus berupa angka dari 0 sampai 1
+@msg	background {v}: a color such as "#808080"	background {v}: warna seperti "#808080"
+@msg	comparing with an image file isn't available in the browser	membandingkan dengan berkas gambar tidak tersedia di peramban
+@msg	columns {first} and {column} both name the variable `{name}`	kolom {first} dan {column} sama-sama menamai variabel `{name}`
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	tidak ada isi himpunan data {name} yang diterapkan: tidak ada objek yang terikat ke variabel yang memiliki nilai di dalamnya
+@msg	no bound object reports a value (locked objects and embedded images report none)	tidak ada objek terikat yang melaporkan nilai (objek terkunci dan gambar tersemat tidak melaporkan apa pun)
+@msg	Edit Original opens image and document files only; “{name}” is not one	Edit asli hanya membuka berkas gambar dan dokumen; “{name}” bukan salah satunya
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	hanya URL http, https, dan mailto yang dibuka di peramban, bukan “{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} membuka aplikasi lain: hanya orang di depan papan tik yang dapat menjalankannya
+@msg	“{name}” is not a file	“{name}” bukan berkas
+@msg	a mask has more than one art block	masker memiliki lebih dari satu blok karya
+@msg	mask art ends outside a mask dictionary	karya masker berakhir di luar kamus masker
+@msg	cancelled; nothing was changed	dibatalkan; tidak ada yang diubah
+@msg	a linked image can't become a gradient mesh: embed it first	gambar tertaut tidak dapat menjadi mesh gradien: sematkan terlebih dahulu
+@msg	the image has no usable size or position	gambar tidak memiliki ukuran atau posisi yang dapat digunakan
+@msg	the image's pixels can't be read	piksel gambar tidak dapat dibaca
+@msg	Persistent libraries not found: {files}	Pustaka permanen tidak ditemukan: {files}
+@msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` bukan panel pustaka (lihat window.swatchLibrary)
+@msg	library panel `{given}` isn't open	panel pustaka `{given}` tidak terbuka
+@msg	too many changed shortcuts	terlalu banyak pintasan yang diubah
+@msg	library panel `{given}` isn't missing its library	panel pustaka `{given}` tidak kehilangan pustakanya
+@msg	too many library panels were opened in this session	terlalu banyak panel pustaka yang dibuka dalam sesi ini
+@msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Gambar berukuran {_1} × {_2} piksel, lebih dari {LARGE_TRACE_SIDE} per sisi: gambar tetap dilacak, tetapi lebih lambat. Preset dengan fidelitas lebih rendah atau salinan gambar yang lebih kecil dilacak lebih cepat.
+@msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Gambar dilacak pada {_1} × {_2} piksel, diperkecil dari {_3} × {_4} (paling banyak {_5} megapiksel).
+@msg	byColor must be true or false	byColor harus true atau false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor tidak dapat memisahkan grup Pengelompokan otomatis: lacak tanpa Pengelompokan otomatis
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor tidak dapat mengelompokkan ulang hasil lacak dengan efek Pathfinder langsung: perluas tanpa byColor
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Mode Logo flat tidak menggunakan keepColors: mode ini melacak warna yang disebut dalam logoColors, atau warna yang ditemukannya.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Tidak ada yang dilacak: tidak satu pun warna yang ditemukan pelacakan cocok dengan keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Tidak ada yang dilacak: Abaikan warna melewatkan setiap area dari warna yang didaftarkan keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Tidak ada yang dilacak: warna yang cocok dengan keepColors tidak menghasilkan jalur.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: tidak satu pun warna yang ditemukan pelacakan cocok dengan {c}, sehingga tidak ada bagiannya yang dilacak.
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` memerlukan `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` memerlukan `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` memerlukan `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	tidak ada grup warna `{name}` di dokumen (lihat swatch.list)
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Logo flat melacak gambar pada {_1} × {_2} piksel, dirata-ratakan dari {_3} × {_4}.
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} hanya mempertahankan 1 dari {n} artboard dokumen: berkas dibuka kembali dengan satu artboard. Aktifkan Pertahankan kemampuan pengeditan untuk mempertahankan semuanya.
+@msg	`spread` must be pad, repeat or reflect	`spread` harus pad, repeat atau reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` harus berupa bilangan bulat dari 1 sampai {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` berlaku untuk gradien linear, radial, conic, dan diamond
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} selesai, tetapi dokumen atau plug-in berubah sementara itu: jalankan lagi
+@msg	Running “{name}”…	Menjalankan “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” melaporkan: {notice}
+@msg	`notice` must be a string with visible text	`notice` harus berupa string dengan teks yang terlihat
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	efek langsung berjalan saat dokumen digambar, sehingga tidak dapat `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	pengekspor selalu mendapat anggaran ekspor: hilangkan `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” meminta anggaran berat (setiap proses hingga {minutes} menit dan {times} kali instruksi biasa): seseorang harus menyetujuinya di aplikasi desktop, atau berikan `allowHeavy: true` dalam sesi yang dimulai dengan --allow-plugin-grants
+@msg	`name` must be 1-64 printable characters	`name` harus berupa 1-64 karakter yang dapat dicetak
+@msg	`version`, `description` or `author` is too long	`version`, `description` atau `author` terlalu panjang
+@msg	`warnings` must be a list of strings	`warnings` harus berupa daftar string
+@msg	`{k}` must be one of {_1}	`{k}` harus salah satu dari {_1}
+@msg	`{k}` must be {what}	`{k}` harus {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	pengekspor mendeklarasikan 1 sampai {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	paling banyak {MAX_UNGROUPED} parameter di luar grup: berikan `group` pada yang lain
+@msg	can't encode the input	tidak dapat mengodekan masukan
+@msg	expected {{"dataBase64": "…"}}	diharapkan {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	diharapkan {{"objects": [...]}}
+@msg	export `{name}`: {e}	ekspor `{name}`: {e}
+@msg	extension {e} is listed twice	ekstensi {e} tercantum dua kali
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	ekstensi {e}: gunakan 1-16 huruf kecil dan angka, tanpa titik
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	id tidak valid {_1}: gunakan 1-64 karakter dari A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	nama parameter tidak valid {k}
+@msg	manifest is not UTF-8	manifes bukan UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifes terlalu panjang (batas {MAX_MANIFEST_BYTES} byte)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifes berukuran {_1} byte (batas {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	modul berukuran {_1} byte (batas {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	memerlukan persetujuan: plug-in meminta {0}, yang diberikan pengguna saat memasangnya sendiri
+@msg	not JSON: {e}	bukan JSON: {e}
+@msg	not a WebAssembly binary (missing \\0asm header)	bukan biner WebAssembly (header \\0asm tidak ada)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} parameter
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	sebuah tipe fungsi melampaui batas {MAX_FUNC_TYPE_VALUES} hasil
+@msg	parameter `{k}`: {what}	parameter `{k}`: {what}
+@msg	parameter `{name}`: {what}	parameter `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON
+@msg	the module must export its linear memory as `memory`	modul harus mengekspor memori liniernya sebagai `memory`
+@msg	the module must export `{name}` with the type {signature}	modul harus mengekspor `{name}` dengan tipe {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul memiliki lebih dari satu bagian kustom `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	anggaran memori (memori awal modul {initial} byte, batas {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifes di bagian kustom `{MANIFEST_SECTION}` harus memberikan `abi` sebagai {ABI_VERSION}, versi ABI yang diterapkan host ini
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	anggaran tabel (modul mendefinisikan {count} tabel, yang terbesar dengan {largest} elemen; batas {MAX_TABLES} tabel dengan {MAX_TABLE_ELEMENTS} elemen)
+@msg	the module's table section could not be read	bagian tabel modul tidak dapat dibaca
+@msg	the objects to change are no longer in the document	objek yang akan diubah tidak lagi ada di dokumen
+@msg	the runtime panicked	runtime mengalami panik
+@msg	unexpected host trap	trap host yang tidak terduga
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version mengembalikan {v}; host ini menerapkan versi {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc mengembalikan 0 (memori habis)
+@msg	vc_alloc returned a block outside memory	vc_alloc mengembalikan blok di luar memori
+@msg	vc_run returned error code {packed}	vc_run mengembalikan kode galat {packed}
+@msg	did not finish loading within {secs} s	tidak selesai dimuat dalam {secs} detik
+@msg	no thread was left to load it	tidak ada utas tersisa untuk memuatnya
+@msg	panicked while loading	mogok saat dimuat
+@msg	panicked while loading: {what}	mogok saat dimuat: {what}
+@msg	{_1} is not a file	{_1} bukan berkas
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} berukuran {_2} byte (batas {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objek (batas {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} menunjuk ke luar memori
+@msg	`angle` must be a number	`angle` harus berupa angka
+@msg	`aspect` must be from 0.01 to 100	`aspect` harus dari 0.01 sampai 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` harus "butt", "round" atau "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` harus "nonzero" atau "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` harus berupa alamat https:// paling panjang {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` harus berupa 1-{MAX_HELP} karakter yang dapat dicetak
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` harus berupa id efek sepanjang 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	`id` harus berupa id objek masukan
+@msg	`join` must be "miter", "round" or "bevel"	`join` harus "miter", "round" atau "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` dan `group` harus berupa 1-{MAX_LABEL} karakter yang dapat dicetak
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` harus 1-{MAX_TEXT}, dan nilai default tidak lebih panjang
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` dan `maxItems` harus 0-{MAX_LIST}, `maxItems` setidaknya 1, dan nilai default sebanyak itu
+@msg	`name` must be a string	`name` harus berupa string
+@msg	`opacity` must be a number	`opacity` harus berupa angka
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan tersebut untuk menerima opasitas
+@msg	`type` must be "path" or "compound"	`type` harus "path" atau "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` harus berupa 1-{MAX_UNIT} karakter yang dapat dicetak
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` mencantumkan 1 sampai {MAX_CONDITION_VALUES} nilai untuk `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` menyebut `{other}`, yang bukan parameter yang dideklarasikan sebelum parameter ini
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` menyebut paling banyak {MAX_CONDITIONS} parameter
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` menerima nilai `{other}`, dari kotak centang atau pilihan
+@msg	`visible` must be true or false	`visible` harus true atau false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` harus berupa angka dari {_1} sampai {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` harus berupa larik berisi paling banyak {MAX_ITEMS} entri
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	nilai default warna harus berupa objek warna atau string heksadesimal seperti "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	objek warna atau string heksadesimal seperti "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	gradien bentuk bebas berisi paling banyak {MAX_ITEMS} titik dan garis
+@msg	a freeform gradient line names a point it doesn't have	garis gradien bentuk bebas menyebut titik yang tidak dimilikinya
+@msg	a gradient needs 1-{MAX_ITEMS} stops	gradien memerlukan 1-{MAX_ITEMS} perhentian
+@msg	a list of numbers	daftar angka
+@msg	a list of {min_items} to {max_items} numbers	daftar berisi {min_items} sampai {max_items} angka
+@msg	a new object needs a `path`	objek baru memerlukan `path`
+@msg	a number	angka
+@msg	a painted live effect returns only `objects` and `notice`	efek langsung yang dicat hanya mengembalikan `objects` dan `notice`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills` dan `strokes`
+@msg	a read-only object was left out	objek baca-saja dihilangkan
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan
+@msg	a string	string
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	goresan hanya memiliki `paint`, `width`, `join`, `cap` dan `miterLimit`
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	goresan harus berupa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	efek harus berupa {{"id", "params"?, "visible"?}}
+@msg	an effect on a fill returns only `fills`	efek pada isian hanya mengembalikan `fills`
+@msg	an effect on a stroke returns only `strokes`	efek pada goresan hanya mengembalikan `strokes`
+@msg	an object must be a JSON object	objek harus berupa objek JSON
+@msg	bad range	rentang tidak valid
+@msg	choices must be 1-64 non-empty, printable strings	pilihan harus berupa 1-64 string yang tidak kosong dan dapat dicetak
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	koordinat di luar rentang (batas ±{MAX_COORD} pt)
+@msg	default is not one of the options	nilai default bukan salah satu opsi
+@msg	each piece needs a `path`	setiap potongan memerlukan `path`
+@msg	is listed twice	tercantum dua kali
+@msg	pattern transform out of range	transformasi pola di luar rentang
+@msg	read-only field '{field}' changed	bidang baca-saja '{field}' berubah
+@msg	stops must be in order of `offset`	perhentian harus berurutan menurut `offset`
+@msg	the document has no pattern {pattern}	dokumen tidak memiliki pola {pattern}
+@msg	the document has no swatch {n}	dokumen tidak memiliki swatch {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
+@msg	the output	keluaran
+@msg	the path has no anchor points	jalur tidak memiliki titik jangkar
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang tersembunyi, terkunci, atau garis panduan, sehingga anggotanya tidak dapat diganti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang bukan jalur, sehingga anggotanya tidak dapat diganti
+@msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
+@msg	true or false	true atau false
+@msg	a number >= {_1}	angka >= {_1}
+@msg	a number > {_1}	angka > {_1}
+@msg	a number <= {_1}	angka <= {_1}
+@msg	a number < {_1}	angka < {_1}
+@msg	a number {_1} to {_2}	angka {_1} sampai {_2}
+@msg	a number >= {_1} and < {_2}	angka >= {_1} dan < {_2}
+@msg	a number > {_1} and <= {_2}	angka > {_1} dan <= {_2}
+@msg	a number > {_1} and < {_2}	angka > {_1} dan < {_2}
+@msg	a number ({_1})	angka ({_1})
+@msg	a number >= {_1} ({_2})	angka >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	angka > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	angka <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	angka < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	angka {_1} sampai {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	angka >= {_1} dan < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	angka > {_1} dan <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	angka > {_1} dan < {_2} ({_3})
+@msg	an integer	bilangan bulat
+@msg	an integer >= {_1}	bilangan bulat >= {_1}
+@msg	an integer <= {_1}	bilangan bulat <= {_1}
+@msg	an integer {_1} to {_2}	bilangan bulat {_1} sampai {_2}
+@msg	one of {_1}	salah satu dari {_1}
+@msg	an object id (a non-negative integer)	id objek (bilangan bulat tidak negatif)
+@msg	a list of object ids	daftar id objek
+@msg	a color (a string, [r, g, b] or an object)	warna (string, [r, g, b] atau objek)
+@msg	[x, y] (two numbers)	[x, y] (dua angka)
+@msg	an object	objek
+@msg	a list	daftar
+@msg	unknown key `{k}`; the keys here are {_1}	kunci tidak dikenal `{k}`; kunci di sini adalah {_1}
+@msg	{_1} is listed twice	{_1} tercantum dua kali
+@msg	{_1} is not the id of an input object	{_1} bukan id objek masukan
+@msg	{_1} is read-only	{_1} baca-saja
+@msg	{what} must be from {lo} to {hi}	{what} harus dari {lo} sampai {hi}
+@msg	a color component	komponen warna
+@msg	a plate	pelat
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Otomatisasi meminta pemasangan plug-in ini. Untuk memasangnya, pilih Objek › Plug-in › Instal plug-in… sendiri.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” adalah modul yang berbeda dari plug-in dengan id {_1} dan akan mendapat pengaturan serta cache yang disimpan untuk plug-in itu: pasang dengan `replace: true` setelah pengguna setuju
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” mencantumkan `{id}` dalam `commandAllowlist`, yang tidak boleh dipanggil plug-in
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: `commandAllowlist` manifes tidak mencantumkannya
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: id atau argumen berada di luar memori modul
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: id atau argumen bukan UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumen bukan objek JSON
+@msg	only a filter with the usual budget declares `commandAllowlist`	hanya filter dengan anggaran biasa yang mendeklarasikan `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	panggilan perintah ({MAX_CALLS} panggilan dan {MAX_CALL_BYTES} byte per proses)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	ukuran panggilan perintah (vc_call `{shown}`: {len} byte, batas {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	paling banyak {MAX_ALLOWED_COMMANDS} perintah dalam `commandAllowlist`
+@msg	a plug-in may not call this command	plug-in tidak boleh memanggil perintah ini
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` memerlukan izin `commands`, dan `commands` memerlukan `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` menyebut `{shown}`, yang bukan id perintah atau tercantum dua kali
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	izin `{permission}` memerlukan API plug-in tingkat {PROGRESS_API}: berikan `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul mengimpor `env.{name}` dengan tipe yang berbeda dari milik host: tipenya {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modul mengimpor `env.{name}`, yang hanya boleh digunakan plug-in pada API plug-in tingkat {PROGRESS_API} (`api` {PROGRESS_API}) dan dengan izin `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modul mengimpor `{from}.{name}`, yang tidak disediakan host: plug-in hanya boleh mengimpor fungsi `env.vc_*` yang tercantum di docs/plugins.md (API plug-in tingkat 2), tanpa WASI, berkas, atau jaringan
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` bernilai {_1}; host ini menerapkan API plug-in tingkat 1 sampai {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` hanya boleh true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` hanya untuk efek langsung (`kind` "effect") pada `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` hanya untuk pengimpor (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” membuka berkas tetapi tidak menempatkannya: manifesnya tidak menetapkan `place`
+@msg	`grant` must be a list of permission names	`grant` harus berupa daftar nama izin
+@msg	`grant` names an unknown permission `{shown}`	`grant` menyebut izin yang tidak dikenal `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in berjenis `{_1}` memerlukan izin `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	paling banyak {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	izin `{shown}` tidak berlaku untuk plug-in berjenis `{_1}`
+@msg	permission `{shown}` is listed twice	izin `{shown}` tercantum dua kali
+@msg	only a filter declares `inputs`	hanya filter yang mendeklarasikan `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` menyebut jenis objek yang tidak dikenal `{shown}`: gunakan type, image atau symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` mencantumkan `{shown}` dua kali
+@msg	`inputs` needs `api` 2 or later	`inputs` memerlukan `api` 2 atau lebih baru
+@msg	`inputs` needs the permission `doc.read`	`inputs` memerlukan izin `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Membaca objek yang diberikan kepadanya, serta pengaturan, artboard, lapisan, dan sampel warna dokumen
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` harus mencantumkan bagian yang berbeda: settings, artboards, layers, atau swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` untuk filter, atau efek langsung dengan `commands`, pada `api` 3 atau lebih baru dengan izin `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	informasi dokumen yang diminta plug-in terlalu besar untuk diserahkan: paling banyak {MAX_CONTEXT_ITEMS} artboard, lapisan, dan sampel warna dalam {MAX_CONTEXT_BYTES} byte
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	anggaran memori (objek {_1} memerlukan {size} byte masukan, tersisa {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	anggaran objek (lebih dari {MAX_OBJECTS} objek baca-saja)
+@msg	instruction budget	anggaran instruksi
+@msg	time budget	anggaran waktu
+@msg	memory budget (the selection is too large to hand over)	anggaran memori (seleksi terlalu besar untuk diserahkan)
+@msg	output size ({what} is {len} bytes, limit {max})	ukuran keluaran ({what} berukuran {len} byte, batas {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	izin yang diberikan kepada plug-in tidak dapat dihapus dari penyimpanan plug-in
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	izin `{shown}` dicadangkan untuk API plug-in yang lebih baru; host ini tidak memberikannya
+@msg	unknown permission `{shown}`	izin tidak dikenal `{shown}`
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” meminta izin {asked}: seseorang harus menyetujuinya di aplikasi desktop, atau berikan `grant` dalam sesi yang dimulai dengan --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` dan `allowHeavy` hanya berlaku dalam sesi yang dimulai dengan --allow-plugin-grants: setujui plug-in di aplikasi desktop
+@msg	Only the person at the keyboard can approve installing a plug-in	Hanya orang di depan papan tik yang dapat menyetujui pemasangan plug-in
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” tidak diberi `{p}`, yang diperlukan keluarannya: tidak ada yang diubah
+@msg	a heavy filter runs in the background, so it can't declare `commands`	filter berat berjalan di latar belakang, sehingga tidak dapat mendeklarasikan `commands`
+@msg	at most {MAX_COMMANDS} `commands`	paling banyak {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	perintah {name} dideklarasikan dua kali
+@msg	command {name}: `label` must be 1-64 printable characters	perintah {name}: `label` harus berupa 1-64 karakter yang dapat dicetak
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	perintah {name}: gunakan id sepanjang 1-{MAX_COMMAND_ID} karakter dari a-z 0-9 _ yang diawali huruf
+@msg	command {name}: {e}	perintah {name}: {e}
+@msg	manifest: {e}	manifes: {e}
+@msg	manifest: {e} at line {line} column {column}	manifes: {e} pada baris {line} kolom {column}
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` harus berupa daftar perintah, masing-masing dengan `id` dan `label`
+@msg	command {name} must be an object with an `id` and a `label`	perintah {name} harus berupa objek dengan `id` dan `label`
+@msg	missing field `{key}`	bidang `{key}` tidak ada
+@msg	duplicate field `{key}`	bidang `{key}` ganda
+@msg	only a filter or a live effect declares `commands`	hanya filter atau efek langsung yang mendeklarasikan `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul tidak memiliki SHA-256 yang diberikan `hash`: tidak ada yang dipasang
+@msg	select one object	pilih satu objek
+@msg	Global Edit is off	Edit global nonaktif
+@msg	only an object of the Global Edit other than the one it started from can be left out	hanya objek Edit global selain objek awalnya yang dapat dikecualikan
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all atau rentang seperti 1, 3-5, bukan {v}
+@msg	`{_1}` has no symbols to place	`{_1}` tidak memiliki simbol untuk ditempatkan
+@msg	missing `library` (see symbol.libraries)	`library` tidak ada (lihat symbol.libraries)
+@msg	no symbol `{n}`	tidak ada simbol `{n}`
+@msg	no symbol `{n}` in `{_1}`	tidak ada simbol `{n}` di `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	tidak ada pustaka simbol `{key}` (lihat symbol.libraries)
+@msg	the document has no symbols to save	dokumen tidak memiliki simbol untuk disimpan
+@msg	`{_1}` has no brushes to apply	`{_1}` tidak memiliki kuas untuk diterapkan
+@msg	missing `library` (see brush.libraries)	`library` tidak ada (lihat brush.libraries)
+@msg	no brush `{n}`	tidak ada kuas `{n}`
+@msg	no brush `{n}` in `{_1}`	tidak ada kuas `{n}` di `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	tidak ada pustaka kuas `{key}` (lihat brush.libraries)
+@msg	the document has no brushes to save	dokumen tidak memiliki kuas untuk disimpan
+@msg	a {width}×{height} screenshot's byte count overflows	jumlah byte tangkapan layar {width}×{height} meluap
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	{what} jendela ({points} poin × {scale} DPI) tidak dapat menentukan ukuran tangkapan layar
+@msg	{label} must be a number	{label} harus berupa angka
+@msg	{label} must be a number of at least 0.1	{label} harus berupa angka setidaknya 0.1
+@msg	{label} must be a number from {min} to {max}	{label} harus berupa angka dari {min} sampai {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} harus berupa bilangan bulat dari {min} sampai {max}
+@msg	features lists at most {max} tags	features mencantumkan paling banyak {max} tag
+@msg	unknown OpenType feature `{t}`	fitur OpenType tidak dikenal `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} harus berupa angka di atas 0 dan paling besar {max}
+@msg	{label} must be at most {max} characters	{label} paling banyak {max} karakter
+@msg	{label} must be one character	{label} harus satu karakter
+@msg	at most {max} tab stops	paling banyak {max} perhentian tab
+@msg	unknown align `{other}`	align tidak dikenal `{other}`
+@msg	no character style `{name}`	tidak ada gaya karakter `{name}`
+@msg	{_1} is an importer (File › Open With)	{_1} adalah pengimpor (Berkas › Buka Dengan)
+@msg	missing `importer` (see document.formats)	`importer` tidak ada (lihat document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` harus berupa id format plug-in (lihat document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” membuka berkas {_1}, bukan `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` adalah plug-in berjenis `{_2}`, bukan pengimpor
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` adalah plug-in berjenis `{_2}`, bukan pengekspor
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` adalah pengimpor: buka berkas dengan document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` adalah pengekspor: ekspor dengan document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` adalah efek langsung: terapkan dengan effect.apply {{"effect": "{_2}"}}
+@msg	the importer returned no objects	pengimpor tidak mengembalikan objek apa pun
+@msg	an importer returns `objects` and `warnings`, not `{key}`	pengimpor mengembalikan `objects` dan `warnings`, bukan `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	berkas lebih besar dari {MAX_INPUT_BYTES} byte yang dibaca pengimpor
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	pengimpor mendeklarasikan 1 sampai {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	hanya pengekspor atau pengimpor yang mendeklarasikan `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	pengimpor selalu mendapat anggaran impor: hilangkan `budget`
+@msg	only paths and compound paths can be aligned to the pixel grid	hanya jalur dan jalur majemuk yang dapat diselaraskan ke kisi piksel
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` dan `last` harus berupa nomor baris yang ada di konsol, first sebelum last
+@msg	no plug-in effect is deferred	tidak ada efek plug-in yang ditunda
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Dibuka dengan {n} efek plug-in yang ditunda. Efek › Segarkan efek yang ditunda menjalankannya.
+@msg	The selected art has no islands to bridge	Karya terseleksi tidak memiliki pulau untuk dijembatani
+@msg	No bridge of this width fits across the selected art	Tidak ada jembatan selebar ini yang muat melintasi karya terseleksi
+@msg	Some islands could not be joined to the area around the art	Beberapa pulau tidak dapat disambungkan ke area di sekitar karya
+@msg	`width` must be from {lo} to {hi} pt	`width` harus dari {lo} sampai {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` harus berupa bilangan bulat dari 1 sampai {MAX_BRIDGES_PER_ISLAND}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” dimuat: {n} langkah memiliki perintah yang tidak dikenal dan dipertahankan; yang pertama: “{action}”, langkah {step}, `{command}`
 
 	File	Berkas
 	New…	Baru…
@@ -80,6 +747,16 @@
 	Paste without Formatting	Tempel tanpa pemformatan
 	Clear	Hapus
 	Find and Replace…	Cari dan ganti…
+	Find and Replace	Cari dan ganti
+	Find:	Cari:
+	Replace With:	Ganti dengan:
+	Replace & Find	Ganti dan cari
+	Replace All	Ganti semua
+	Match Case	Cocokkan huruf besar/kecil
+	Find Whole Word	Cari seluruh kata
+	Search Backwards	Cari mundur
+	Check Hidden Layers	Periksa lapisan tersembunyi
+	Check Locked Layers	Periksa lapisan terkunci
 	Find Next	Cari berikutnya
 	Spelling	Ejaan
 	Auto Spell Check	Pemeriksaan ejaan otomatis
@@ -219,6 +896,16 @@
 	To Center	Ke tengah
 	To Edge	Ke tepi
 	Create Object Mosaic…	Buat mozaik objek…
+	Create Object Mosaic	Buat mozaik objek
+	Current Size:	Ukuran saat ini:
+	New Size:	Ukuran baru:
+	Tile Spacing:	Spasi ubin:
+	Number of Tiles:	Jumlah ubin:
+	Constrain Ratio:	Batasi rasio:
+	Result:	Hasil:
+	Resize Using Percentages	Ubah ukuran dengan persentase
+	Delete Raster	Hapus gambar raster
+	Use Ratio	Gunakan rasio
 	Vector Halftone…	Halftone vektor…
 	Create Trim Marks	Buat tanda potong
 	Flatten Transparency…	Ratakan transparansi…
@@ -300,6 +987,9 @@
 	Artboards	Artboard
 	Convert to Artboards	Konversi ke artboard
 	Rearrange All Artboards…	Atur ulang semua artboard…
+	Rearrange…	Atur ulang…
+	Selected Artboards: {n}	Artboard terpilih: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik kanvas untuk menempatkan artboard (Esc membatalkan)
 	Fit to Artwork Bounds	Sesuaikan ke batas karya seni
 	Fit to Selected Art	Sesuaikan ke karya seni terseleksi
 	Graph	Grafik
@@ -390,6 +1080,20 @@
 	Break Thread	Putus rangkaian
 	Fit Headline	Sesuaikan judul
 	Find Font…	Cari font…
+	Retype	Ketik Ulang
+	Find Matching Fonts	Temukan font yang cocok
+	Find more font matches	Temukan lebih banyak font yang cocok
+	Type your text to preview	Ketik teks untuk pratinjau
+	Select outlined text, then Find Matching Fonts.	Pilih teks yang sudah dijadikan kerangka, lalu Temukan font yang cocok.
+	No font matches the selected shapes.	Tidak ada font yang cocok dengan bentuk yang dipilih.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	Bentuk setelah 2.048 pertama, atau lebih dalam dari 16 grup, tidak dibandingkan.
+	Reset Retype Panel	Setel ulang panel Ketik Ulang
+	List Matching Fonts	Daftar font yang cocok
+	Retype Preview	Pratinjau panel Ketik Ulang
+@msg	`count` must be a whole number from 1 to 96	`count` harus bilangan bulat dari 1 sampai 96
+@msg	`size` must be small, medium or large	`size` harus small, medium, atau large
+@msg	`text` must be a string of at most 100 characters	`text` harus string dengan paling banyak 100 karakter
+@msg	Retype: select outlined text (paths or compound paths)	Ketik Ulang: pilih teks yang sudah dijadikan kerangka (path atau path gabungan)
 	Change Case	Ubah huruf besar-kecil
 	UPPERCASE	HURUF BESAR
 	lowercase	huruf kecil
@@ -437,6 +1141,7 @@
 	Fill & Stroke	Isian & stroke
 	Fill Color	Warna isian
 	Opacity	Opasitas
+	Show Opacity	Tampilkan opasitas
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -496,6 +1201,17 @@
 	Shading Color	Warna pengarsiran
 	Black Overprint	Hitam overprint
 	Draw Hidden Faces	Gambar sisi tersembunyi
+	Map Art…	Petakan karya seni…
+	Map Art	Petakan karya seni
+	First Surface	Permukaan pertama
+	Previous Surface	Permukaan sebelumnya
+	Next Surface	Permukaan berikutnya
+	Last Surface	Permukaan terakhir
+	Horizontal Scale	Skala horizontal
+	Vertical Scale	Skala vertikal
+	Scale to Fit	Skalakan agar pas
+	Shade Artwork	Beri bayangan karya seni
+	Invisible Geometry	Geometri tak terlihat
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
 	Materials…	Material…
@@ -607,6 +1323,8 @@
 	Hide Gradient Annotator	Sembunyikan anotator gradien
 	Show Gradient Annotator	Tampilkan anotator gradien
 	Hide Corner Widget	Sembunyikan widget sudut
+	Hide Shape Widgets	Sembunyikan widget bentuk
+	Show Shape Widgets	Tampilkan widget bentuk
 	Show Corner Widget	Tampilkan widget sudut
 	Guides	Panduan
 	Hide Guides	Sembunyikan panduan
@@ -704,6 +1422,8 @@
 	Contextual Task Bar	Bilah tugas kontekstual
 	Pin Bar Position	Sematkan posisi bilah
 	Reset Bar Position	Atur ulang posisi bilah
+	Bar Actions	Tindakan bilah
+	Reset Bar Actions	Atur ulang tindakan bilah
 	Tools	Alat
 	Toolbars	Bilah alat
 	Advanced	Lanjutan
@@ -723,9 +1443,17 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tampilan roda
 	Box View	Tampilan kotak
+	Show Out-of-Gamut Colors	Tampilkan warna di luar gamut
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Document Colors	Tampilkan warna dokumen
+	Document Colors	Warna dokumen
+	Selection Colors	Warna pilihan
+@plural	Used {n} time|Used {n} times	Dipakai {n} kali
+	Show Harmony	Tampilkan harmoni
+	Harmony Rule	Aturan harmoni
+	Harmony color	Warna harmoni
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -743,6 +1471,9 @@
 	Magic Wand	Tongkat ajaib
 	Navigator	Navigator
 	Navigator Panel Options	Opsi panel navigator
+	Attributes Panel Options	Opsi panel atribut
+	Number of Recent URLs:	Jumlah URL terbaru:
+@msg	`count` must be a whole number from 1 to 30	`count` harus bilangan bulat dari 1 sampai 30
 	Draw Dashed Lines as Solid Lines	Gambar garis putus-putus sebagai garis utuh
 	Pattern Options	Opsi pola
 	Properties	Properti
@@ -954,6 +1685,25 @@
 	Preserve Embedded Profiles	Pertahankan Profil Tersemat
 	Convert to Working Space	Konversi ke Ruang Kerja
 	Preserve Numbers	Pertahankan Angka
+	Profile Mismatches:	Ketidakcocokan Profil:
+	Ask When Opening	Tanya Saat Membuka
+	Ask When Pasting	Tanya Saat Menempel
+	Missing Profiles:	Profil yang Hilang:
+	Embedded Profile Mismatch	Ketidakcocokan Profil Tersemat
+	Missing Profile	Profil Hilang
+	Paste Profile Mismatch	Ketidakcocokan Profil Saat Menempel
+	“{name}” is not tagged with a {model} profile.	“{name}” tidak memiliki profil {model}.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” memiliki profil {model} “{profile}”, yang bukan ruang kerja {model} “{working}”.
+	Use the embedded profile	Gunakan profil tersemat
+	Convert the colors to the working space	Konversi warna ke ruang kerja
+	Discard the embedded profile	Buang profil tersemat
+	Leave as is	Biarkan apa adanya
+	Assign the working space	Tetapkan ruang kerja
+	Assign profile:	Tetapkan profil:
+	Preserve the color numbers	Pertahankan angka warna
+	Convert to keep the colors' appearance	Konversi agar tampilan warna tetap sama
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hanya dipakai dengan `{key}`: "assign"
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Warna yang ditempel berasal dari dokumen dengan profil {model} “{from}”; profil dokumen ini “{to}”.
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…
@@ -1035,6 +1785,15 @@ lighting	Light	Cahaya
 	Document Raster Effects Settings Dialog	Dialog pengaturan efek raster dokumen
 	Drop Shadow	Bayangan jatuh
 	DXF Options Dialog	Dialog opsi DXF
+	HP-GL Options	Opsi HP-GL
+	HP-GL Options Dialog	Dialog opsi HP-GL
+	Curve Tolerance:	Toleransi kurva:
+	Origin:	Titik asal:
+	Pens:	Pena:
+	One Pen per Color	Satu pena per warna
+	Pen Table	Tabel pena
+	Draw the Nearest Path Next	Gambar jalur terdekat berikutnya
+	Draw Inner Paths First	Gambar jalur bagian dalam lebih dulu
 	Edit Toolbar	Edit bilah alat
 	Edit Views	Edit tampilan
 	Effect…	Efek…
@@ -1347,6 +2106,10 @@ lighting	Light	Cahaya
 	Add Anchor Point Tool	Alat tambah titik jangkar
 	Anchor Point Tool	Alat titik jangkar
 	Arc Tool	Alat busur
+	Three-Point Arc Tool	Alat busur tiga titik
+	Three-Point Arc	Busur tiga titik
+	Arc too large	Busur terlalu besar
+	Third Point Sets Direction	Titik ketiga menentukan arah
 	Area Graph Tool	Alat grafik area
 	Area Type Tool	Alat teks area
 	Artboard Tool	Alat artboard
@@ -1463,6 +2226,7 @@ lighting	Light	Cahaya
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
 	Replace Actions…	Ganti tindakan…
+	Clear Actions	Bersihkan tindakan
 	Reset Actions	Atur ulang tindakan
 	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
 	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
@@ -1596,6 +2360,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show on Shape Creation	Tampilkan saat membuat bentuk
 	Show Recent Colors	Tampilkan warna terbaru
 	Toggle RGB Percent	Alihkan RGB dalam persen
 	Small Caps	Kapital kecil
@@ -1623,6 +2388,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Font komposit
 	Export Composite Fonts	Ekspor font komposit
 	Import Composite Fonts	Impor font komposit
+@msg	each font must be {{name, parts}}	setiap font harus berupa {{name, parts}}
+@msg	unknown key `{k}`; a font takes name and parts	kunci tidak dikenal `{k}`; font menerima name dan parts
+@msg	each font needs a name	setiap font memerlukan nama
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` tidak dapat menjadi nama font komposit (1 sampai {COMPOSITE_NAME_MAX} karakter, tanpa karakter kontrol)
+@msg	`{name}`: parts must be an object	`{name}`: parts harus berupa objek
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: kelas tidak dikenal `{k}`; kelasnya adalah kanji, kana, punctuation, symbols, roman, dan numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} harus berupa objek
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: kunci tidak dikenal `{k}` di {_1}
+@msg	`{name}`: give the kanji part	`{name}`: berikan bagian kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokumen menyimpan paling banyak {COMPOSITE_FONTS_MAX} font komposit
+@msg	two composite fonts are named `{_1}`	dua font komposit bernama `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` adalah nama font yang terpasang
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} diatur dengan `{font}`, sebuah font komposit
+@msg	give fonts: [{{name, parts}}…]	berikan fonts: [{{name, parts}}…]
+@msg	path is empty	path kosong
+@msg	fonts must be a list of composite fonts	fonts harus berupa daftar font komposit
+@msg	names must be strings	names harus berupa string
+@msg	no composite font named `{n}`	tidak ada font komposit bernama `{n}`
+@msg	names must be a list of names	names harus berupa daftar nama
+@msg	no composite fonts to export	tidak ada font komposit untuk diekspor
+@msg	not a composite fonts file: {e}	bukan berkas font komposit: {e}
+@msg	not a composite fonts file: no compositeFonts list	bukan berkas font komposit: tidak ada daftar compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	berkas berisi lebih dari {COMPOSITE_FONTS_MAX} font komposit
+@msg	the file is larger than 4 MB	berkas lebih besar dari 4 MB
+@msg	dataBase64 is not base64	dataBase64 bukan base64
+@msg	give one of path, data or dataBase64	berikan salah satu dari path, data, atau dataBase64
+@msg	the file holds no composite fonts	berkas tidak berisi font komposit
+@msg	the file holds two composite fonts named `{_1}`	berkas berisi dua font komposit bernama `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` tidak dapat menjadi nama font komposit
+@msg	{k}: give a font	{k}: berikan font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: berikan font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size harus {_1} sampai {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size harus {_1} sampai {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline harus {_1} sampai {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline harus {_1} sampai {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skala harus {_1} sampai {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skala harus {_1} sampai {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: hanya kana, roman, dan numerals yang dapat diskalakan
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: hanya kana, roman, dan numerals yang dapat diskalakan
+@msg	{k}: only kana can be scaled at the center	{k}: hanya kana yang dapat diskalakan dari tengah
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: hanya kana yang dapat diskalakan dari tengah
+@msg	no composite font	tidak ada font komposit
 	Delete Font	Hapus font
 	Kanji	Kanji
 	Kana	Kana
@@ -1767,6 +2574,7 @@ digits	Malayalam	Malayalam
 	Duplicate Action or Action Set	Duplikatkan tindakan atau set tindakan
 	Delete the action set “{name}” and its actions?	Hapus set tindakan “{name}” beserta tindakannya?
 	Delete the selected action sets and their actions?	Hapus set tindakan yang dipilih beserta tindakannya?
+	Delete all action sets and their actions?	Hapus semua set tindakan beserta tindakannya?
 	Delete these {n} graphic styles?	Hapus {n} gaya grafis ini?
 	Delete this {n} graphic style?	Hapus {n} gaya grafis ini?
 	Graphic Style Libraries Menu	Menu pustaka gaya grafis
@@ -1806,6 +2614,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Ganti nama preset
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
+	Tracing Presets…	Preset penelusuran…
+	Import Image Trace Presets	Impor preset telusur gambar
+	Export Image Trace Presets	Ekspor preset telusur gambar
+	Replace the saved presets that have these names?	Ganti preset tersimpan yang memiliki nama-nama ini?
 	Method:	Metode:
 	Pad	Perpanjang
 	Repeats	Jumlah ulangan
@@ -1821,6 +2633,8 @@ digits	Malayalam	Malayalam
 	Snap Curves To Lines	Kancingkan kurva ke garis
 	Tracing Result with Outlines	Hasil penelusuran dengan garis luar
 	Source Image	Gambar sumber
+	Split View	Tampilan terbagi
+	Divider	Pembatas
 	Threshold	Ambang batas
 	Trace	Telusuri
 	Trace the image with the Default preset	Telusuri gambar dengan preset Default
@@ -1830,6 +2644,17 @@ digits	Malayalam	Malayalam
 	Create New Sublayer	Buat sublapisan baru
 	Search All	Cari semua
 	Graphics	Grafis
+	Show Contrast	Tampilkan kontras
+	Contrast For	Kontras untuk
+	Normal Text	Teks normal
+	Large Text	Teks besar
+	Contrast Background	Latar kontras
+	Behind Selection	Di belakang seleksi
+	Current Color	Warna saat ini
+	Pass	Lulus
+	Fail	Gagal
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Kontras minimum WCAG 2.2: teks normal AA 4.5:1 (1.4.3) dan AAA 7:1 (1.4.6), teks besar AA 3:1 dan AAA 4.5:1, grafis dan kontrol AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Latar dibaca di tengah seleksi.
 	Local Libraries	Pustaka lokal
 	Add Content	Tambahkan konten
 	Click to apply to the selected type	Klik untuk menerapkan ke teks terpilih
@@ -1945,6 +2770,15 @@ digits	Malayalam	Malayalam
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
+	Kinsoku Shori Settings…	Pengaturan Kinsoku Shori…
+	Kinsoku Shori Settings	Pengaturan Kinsoku Shori
+	Kinsoku Sets	Daftar Set Kinsoku
+	Kinsoku Set Base	Dasar Set Kinsoku
+	Based on:	Berdasarkan:
+	Cannot Start Line	Tidak dapat memulai baris
+	Cannot End Line	Tidak dapat mengakhiri baris
+	Hanging Punctuation	Tanda baca gantung
+	Inseparable Characters	Karakter tak terpisahkan
 	Push In First	Dorong masuk dahulu
 	Push Out First	Dorong keluar dahulu
 	Push Out Only	Hanya dorong keluar
@@ -2344,6 +3178,12 @@ digits	Malayalam	Malayalam
 	Units:	Satuan:
 	Use Typographer's Quotes	Gunakan tanda kutip tipografis
 	Center Artwork	Pusatkan karya seni
+	PSD Import Options	Opsi impor PSD
+	Place PSD	Tempatkan PSD
+	Convert Layers to Objects	Ubah lapisan menjadi objek
+	Import Hidden Layers	Impor lapisan tersembunyi
+	Flatten Layers to a Single Image	Ratakan lapisan menjadi satu gambar
+	Import Slices	Impor slice
 	DXF Import Options	Opsi impor DXF
 	Layout:	Tata letak:
 	Merge Layers	Gabungkan lapisan
@@ -2488,6 +3328,7 @@ digits	Malayalam	Malayalam
 	Save As Preset…	Simpan sebagai Preset…
 	Save Changes	Simpan Perubahan
 	Save Preset…	Simpan preset…
+	Save Summary…	Simpan ringkasan…
 	Vectors	Vektor
 	A saved copy of the selected preset	Salinan tersimpan dari preset terpilih
 	Built-in presets don't change: New makes a copy you can edit.	Preset bawaan tidak berubah: Baru membuat salinan yang dapat Anda edit.
@@ -2721,10 +3562,17 @@ digits	Malayalam	Malayalam
 	Overprint and Transparency Flattener Options	Opsi overprint dan perataan transparansi
 	Custom…	Kustom…
 	Custom Transparency Flattener Options	Opsi perataan transparansi kustom
+	The PDF preset keeps the flattener preset but not the Custom… settings.	Preset PDF menyimpan preset perataan, tetapi tidak menyimpan pengaturan Kustom….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	File PDF 1.3 memangkas area yang dirasterisasi ke wilayahnya, dan Overprint menentukan apakah overprint dipertahankan.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS tidak memiliki transparansi alfa, dan Overprint menentukan apakah overprint dipertahankan.
 	Place the pages with the placement again	Tempatkan halaman lagi dengan penempatan tersebut
 	Placement:	Penempatan:
 	Preserve CMYK Numbers	Pertahankan angka CMYK
+	Preserve RGB Numbers	Pertahankan angka RGB
+	Device to Simulate:	Perangkat yang disimulasikan:
+	Simulate Paper Color	Simulasikan warna kertas
+	Simulate Black Ink	Simulasikan tinta hitam
+	Load…	Muat…
 	Previous page	Halaman sebelumnya
 	Print Layers:	Lapisan cetak:
 	Print Preset:	Preset cetak:
@@ -2802,6 +3650,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Alat Tambah Warna
 	Remove Color Tool	Alat Hapus Warna
 	Remove Color	Hapus Warna
+	Set As Base Color	Atur sebagai Warna Dasar
+	Select Shade	Pilih Corak
+	Add New Color	Tambah Warna Baru
+	Set Current Color As Base Color	Atur Warna Saat Ini sebagai Warna Dasar
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -2816,6 +3668,9 @@ digits	Malayalam	Malayalam
 	Recolor this row	Warnai ulang baris ini
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
 	Color Theme Picker	Pemilih tema warna
+	Undo Changes	Urungkan perubahan
+	Redo Changes	Ulangi perubahan
+@msg	Recolor Artwork is not open	Warnai ulang karya seni tidak terbuka
 	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
 	Prominent Colors	Warna menonjol
 	Save All Colors	Simpan semua warna
@@ -3085,6 +3940,7 @@ antiAlias	Sharp	Tajam
 	Preserve Editing Capabilities	Pertahankan kemampuan pengeditan
 	Responsive	Responsif
 	Show Code	Tampilkan kode
+	Show in Browser	Tampilkan di browser
 	Style Attributes	Atribut gaya
 	Style Attributes (Entity References)	Atribut gaya (referensi entitas)
 	Styling:	Penataan gaya:
@@ -3102,6 +3958,17 @@ antiAlias	Sharp	Tajam
 	Swatch Name:	Nama swatch:
 	Diameter:	Diameter:
 	Symbolism Tools Options	Opsi alat simbolisme
+	Tool:	Alat:
+	Symbol Set Density	Kepadatan set simbol
+	Symbol Sprayer Options	Opsi penyemprot simbol
+	Scrunch:	Perapatan:
+	Spin:	Putaran:
+	Screen:	Penyaringan:
+	Stain:	Pewarnaan:
+	Symbol Sizer Options	Opsi pengubah ukuran simbol
+	Proportional Resizing	Ubah ukuran secara proporsional
+	Resizing Affects Density	Perubahan ukuran memengaruhi kepadatan
+	Show Brush Size and Intensity	Tampilkan ukuran dan intensitas kuas
 	Symbol Set Density:	Kepadatan set simbol:
 	Intensity:	Intensitas:
 	Place PDF	Tempatkan PDF
@@ -3162,6 +4029,7 @@ antiAlias	Sharp	Tajam
 	Width Point Edit	Edit titik lebar
 	Art	Seni
 	Bearing	Arah
+	Stylus Wheel	Roda stylus
 	Bristle	Bristle
 	Calligraphic	Kaligrafis
 	Dots	Titik
@@ -3262,6 +4130,7 @@ theme	Appearance	Tampilan
 	Delete Brush	Hapus kuas
 	Delete Color	Hapus warna
 	Restore Generated Table	Pulihkan tabel yang dibuat
+	Unshift All Colors	Batalkan pergeseran semua warna
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
 	Delete the selected symbols?	Hapus simbol yang dipilih?
@@ -3291,12 +4160,21 @@ theme	Appearance	Tampilan
 	embedding for preview and print	penyematan untuk pratinjau dan cetak
 	embedding allowed	penyematan diizinkan
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	jenis tidak dikenal
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} penggunaan
 	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
 	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
 	missing	tidak ada
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	resolusi tidak tersedia
+	estimated memory {memory}	perkiraan memori {memory}
+	memory unavailable	memori tidak tersedia
+	Unknown format	Format tidak dikenal
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3322,6 +4200,8 @@ theme	Appearance	Tampilan
 	Symbolism Tool	Alat simbolisme
 	Image Trace Presets	Preset telusur gambar
 	Live Paint Bucket	Ember Live Paint
+	Fill Area	Isi Area
+	Fill Area Tool	Alat Isi Area
 	Live Paint Bucket (Stroke)	Ember Live Paint (guratan)
 	Live Paint Info	Info Live Paint
 	Shape Builder	Pembangun bentuk
@@ -3715,6 +4595,7 @@ theme	Appearance	Tampilan
 	90° & 45° Angles	Sudut 90° & 45°
 	90° Angles	Sudut 90°
 	Additional Plug-ins Folder	Folder plug-in tambahan
+	Plug-in Instruction Budget	Anggaran instruksi plug-in
 	Additional Fonts Folder	Folder font tambahan
 	Alignment Guides	Panduan perataan
 	Anchor Points, Handle, and Bounding Box Display	Tampilan titik jangkar, pegangan, dan kotak pembatas
@@ -3741,6 +4622,7 @@ theme	Appearance	Tampilan
 	Data Recovery	Pemulihan data
 	Default Language	Bahasa standar
 	Disable Auto Add/Delete	Nonaktifkan tambah/hapus otomatis
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete menghapus titik jangkar dan menjaga jalur tetap tersambung
 	Interpolate Control Points When Moving Anchors	Interpolasikan gagang arah saat memindahkan titik jangkar
 	Display All Blacks Accurately	Tampilkan semua warna hitam secara akurat
 	Display All Blacks as Rich Black	Tampilkan semua warna hitam sebagai rich black
@@ -3822,6 +4704,15 @@ theme	Appearance	Tampilan
 	Paste Offset	Offset tempel
 	Pattern Editing	Pengeditan pola
 	Pen Tool	Alat pena
+	Quick Pen Tool	Alat pena cepat
+	Quick Pen	Pena cepat
+	Quick Pen Toolbar	Bilah alat Pena cepat
+	Continuous Arc	Busur bersambung
+	Sharp Corner Arc	Busur sudut tajam
+	Flip Arc	Balik busur
+	Hide Toolbar	Sembunyikan bilah alat
+	Pin Toolbar Position	Sematkan posisi bilah alat
+	Reset Toolbar Position	Atur ulang posisi bilah alat
 	Picas	Pica
 	Portuguese	Portugis
 	Preserve Appearance and Overprints	Pertahankan tampilan dan overprint
@@ -3860,6 +4751,7 @@ theme	Appearance	Tampilan
 	Show Pixel Grid (Above 600% Zoom)	Tampilkan grid piksel (di atas zoom 600%)
 	Show Slice Numbers	Tampilkan nomor irisan
 	Show The Home Screen When No Documents Are Open	Tampilkan layar beranda saat tidak ada dokumen terbuka
+	Show Tool Cards	Tampilkan kartu alat
 	Show Tool Tips	Tampilkan tips alat
 	Size/Leading	Ukuran/Leading
 	Snapping Tolerance	Toleransi kancing
@@ -3934,6 +4826,11 @@ theme	Appearance	Tampilan
 	Edit Arrowheads	Edit mata panah
 	Edit Arrowheads…	Edit mata panah…
 	Reload Arrowheads	Muat ulang mata panah
+	Bevels	Bentuk bevel
+	Edit Bevels	Edit bentuk bevel
+	Edit Bevels…	Edit bentuk bevel…
+	{name} (document)	{name} (dokumen)
+	Reload Bevels	Muat ulang bentuk bevel
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -3955,6 +4852,7 @@ theme	Appearance	Tampilan
 	Add to Graphic Styles	Tambahkan ke gaya grafis
 	Graphic Style Library	Pustaka gaya grafis
 	Add Used Colors	Tambahkan warna yang digunakan
+	Add Selected Colors	Tambahkan warna terpilih
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel
@@ -3985,12 +4883,15 @@ theme	Appearance	Tampilan
 	Spot Colors (0)	Warna spot (0)
 	Swatch Options	Opsi sampel
 	Ungroup Color Group	Lepaskan grup warna
+	Color Group Options	Opsi grup warna
+	Color Group Options…	Opsi grup warna…
 	Copy to User Defined	Salin ke Buatan Pengguna
 	Swatch Library	Pustaka sampel
 	Clear All Tabs	Hapus semua tab
 	Set Tab Stops	Atur hentian tab
 	Tab Stops	Hentian tab
 	Flare	Flare
+	Edit Flare	Edit flare
 	Rays	Sinar
 	Rectangle	Persegi panjang
 	Paintbrush	Kuas lukis
@@ -4093,6 +4994,8 @@ axis	Both	Keduanya
 	Show	Tampilkan
 	Copy Width Point	Salin titik lebar
 	Duplicate Artboard	Duplikatkan artboard
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik untuk menambahkan artboard di sisi ini, Alt+klik untuk menduplikatkan artboard ini beserta karya seninya
+	Click to add an artboard on this side	Klik untuk menambahkan artboard di sisi ini
 	Area / Path Type	Teks area / teks jalur
 	Decrease Font Size	Perkecil ukuran font
 	Increase Font Size	Perbesar ukuran font
@@ -4147,6 +5050,11 @@ axis	Both	Keduanya
 	Image	Gambar
 	Ink	Tinta
 	Lab	Lab
+	OKLCH Sliders	Penggeser OKLCH
+	HSL Sliders	Penggeser HSL
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	Kroma terbesar yang dapat dimuat sRGB pada kecerahan dan rona ini
+	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 	Medium	Sedang
 	Name	Nama
 	None	Nihil
@@ -4227,10 +5135,18 @@ font-technology	Variable	Variabel
 	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
 	No commands match	Tidak ada perintah yang cocok
 	{pos} of {total}: {name}	{pos} dari {total}: {name}
+	No menu item	Tidak ada item menu
+	Toolbar	Bilah alat
+	{toolbar}, in the {tool} group	{toolbar}, dalam grup {tool}
+	In the menu bar: {path}	Di bilah menu: {path}
+	In the {group} group: press and hold to open it	Di grup {group}: tekan dan tahan untuk membukanya
+	{home}, not shown now	{home}, tidak ditampilkan sekarang
 @plural	{n} result|{n} results	{n} hasil
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
+	Type to search commands, tools, panels and effects	Ketik untuk mencari perintah, alat, panel, dan efek
+	Clear Recent Commands	Kosongkan perintah terbaru
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…
@@ -4254,7 +5170,7 @@ font-technology	Variable	Variabel
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seleksi › Sama › Warna isian, Warna stroke, dan Isian & stroke hanya mencocokkan tint yang sama dari swatch global atau spot, bukan sembarang tint-nya.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Menampilkan layar Home saat tidak ada dokumen yang terbuka; saat nonaktif, jendela tetap kosong sampai Anda mengklik Home.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mengukur objek beserta stroke dan efek yang mengubah bentuknya untuk ukuran, posisi, dan perataan; bayangan, cahaya, dan kekaburan tidak diukur.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pada zum 100%, satu inci dokumen memakai 96 titik layar, bukan 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Pada zum 100%, satu inci dokumen mengisi satu inci layar, atau 96 titik layar bila sistem tidak melaporkan ukuran layar yang dapat dipakai.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Mengklik ganda grup, jalur, atau gambar dengan alat Seleksi membukanya dalam mode isolasi.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Isian dan stroke pola ikut bertransformasi dengan karya seni, kecuali transformasi atau menu panel Transformasi memilih lain.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Radius sudut dinamis ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
@@ -4263,6 +5179,9 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete menghapus titik jangkar yang dipilih dan menyesuaikan ulang kurva di sekitar masing-masing, alih-alih membuka jalur di sana.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Saat Anda memindahkan titik jangkar, setiap kurva dengan satu ujung yang dipindahkan mempertahankan bentuknya terhadap ujung-ujungnya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
@@ -4272,6 +5191,7 @@ font-technology	Variable	Variabel
 	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Properti persegi panjang dinamis menampilkan satu bidang Radius sudut untuk keempat sudut; saat nonaktif, setiap sudut punya bidangnya sendiri.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Apa yang ditransformasi oleh pengeditan di panel Transformasi: objek, ubin polanya, atau keduanya; Default mengikuti Transformasi ubin pola.
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Saat satu instans simbol dipilih, panel Transformasi memakai titik registrasi simbol sebagai titik referensi.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	Menggambar persegi panjang, elips, poligon, bintang, atau garis membuka panel Transformasi jika panel itu tertutup.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Menggelapkan kanvas di luar artboard selama alat Artboard aktif.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Saat Redupkan wilayah di luar artboard aktif, area di luar artboard tetap gelap selama Anda menyeret dengan alat Artboard.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Seberapa dekat, dalam piksel, penunjuk harus berada dari objek, titik jangkar, atau pegangan agar klik memilihnya.
@@ -4344,6 +5264,73 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Seberapa dekat penunjuk atau titik yang diseret harus mendekati karya di layar agar panduan cerdas menjepret; jaraknya sama pada setiap zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Menjepretkan ujung segmen garis, atau lingkaran yang digambar dari pusatnya, agar menyentuh kurva di dekatnya.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
+	Edit type set in fonts that aren't available?	Edit teks dengan font yang tidak tersedia?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA dan [Gaya karakter normal] tidak menetapkan bahasa; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya diberi tanda penggal pada tanda hubung yang diketik di dalamnya, atau tidak pernah jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat OK menetapkan folder baru, kecuali dalam Mode aman; plug-in yang meminta izin baru dimuat setelah Anda memberikannya. Versi web tidak memuat satu pun.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Besar memberi setiap jalannya plug-in filter atau perintah setidaknya 250 juta instruksi, dengan batas waktu yang sama; Normal mempertahankan anggaran plug-in itu sendiri. Efek langsung, pengekspor, dan pengimpor mempertahankan milik mereka.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	Di versi desktop, plug-in .wasm di folder ini dimuat saat memulai dan saat Anda mengeklik OK dengan folder baru di sini, kecuali dalam Mode aman; versi web tidak memuatnya.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal mempertahankan batas setiap plug-in sendiri; dengan Besar, filter atau perintah plug-in dapat menjalankan setidaknya 250 juta instruksi selain instruksi untuk masukannya. Batas waktu tetap sama.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Berapa banyak instruksi yang boleh dipakai setiap jalannya filter objek dari plug-in; Besar mengizinkan lebih banyak daripada Normal dengan batas 60 detik yang sama. Filter berat mempertahankan anggarannya sendiri.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch pertama: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	Pilihan disk scratch kedua: Startup, None, atau jalur folder; VectorCraft menyimpannya, tetapi belum menggunakan disk scratch.
+	How light or dark the interface is.	Seberapa terang atau gelap antarmuka.
+	The set of colors the interface is drawn in.	Kumpulan warna yang digunakan untuk menggambar antarmuka.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	Warna kontrol yang aktif, dipilih, atau difokuskan; menu diredupkan selama Skema warna memiliki warna aksen sendiri.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	Warna kanvas di sekitar artboard; Sesuaikan dengan kecerahan antarmuka pengguna mengambilnya dari Kecerahan. Tampilan Garis luar selalu menampilkannya putih.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	Panel yang dibuka dari ikonnya tertutup saat Anda menekan Esc atau mengeklik di luarnya; jika nonaktif, panel tetap terbuka sampai Anda mengeklik ikon.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Menampilkan nama setiap grup alat di atas alat-alatnya di bilah alat; jika nonaktif, grup-grup berurutan tanpa apa pun di antaranya.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	Mulai sekarang, dokumen yang Anda buka atau buat terbuka sebagai tab; jika nonaktif, masing-masing terbuka di jendela mengambang. Dokumen yang sudah terbuka tetap di tempatnya.
+	Makes the document tabs taller and their names larger.	Membuat tab dokumen lebih tinggi dan namanya lebih besar.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	Mulai dari peluncuran berikutnya, sistem menggambar bilah judul jendela di tempat VectorCraft biasanya menggambar miliknya sendiri; di Linux dan BSD, variabel VECTORCRAFT_TITLEBAR lebih diutamakan.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	Mulai dari peluncuran berikutnya, VectorCraft menggambar bilah judul jendela bahkan di tempat desktop akan menggambarnya, kecuali Bilah judul sistem aktif atau variabel VECTORCRAFT_TITLEBAR memilihnya.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Memperbesar atau memperkecil antarmuka; gambar di kanvas mempertahankan ukurannya pada zoom yang sama.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Penunjuk alat yang digambar VectorCraft membesar dan mengecil mengikuti Penskalaan UI; jika nonaktif, ukurannya tetap.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	Bahasa antarmuka; Otomatis menggunakan bahasa sistem. Dialog berganti bahasa begitu Anda memilih salah satunya.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	Zoom animasi hanya berfungsi selama ini aktif; jika nonaktif, Zoom animasi diredupkan dan zoom tidak dianimasikan.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	Zoom dengan roda meluncur halus, dan Alat zoom memperbesar saat Anda menyeret ke samping atau menahannya; jika nonaktif, Alat zoom memperbesar ke area yang Anda seret.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menampilkan kanvas melalui jenis prosesor grafis ini; karya seni selalu digambar di CPU. Otomatis mengutamakan prosesor terintegrasi di Windows dan macOS. Versi web tidak menggunakannya.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	Mulai dari peluncuran berikutnya, jendela menampilkan setiap bingkai tanpa menunggu penyegaran layar jika driver grafis mengizinkan, paling banyak 240 bingkai per detik.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	Mulai dari peluncuran berikutnya, versi desktop menggambar dengan jenis prosesor grafis ini; Otomatis mengutamakan yang menjalankan layar. Versi web tidak menggunakannya.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	Mulai dari peluncuran berikutnya, jendela menampilkan bingkai tanpa menunggu layar menyegarkan, paling banyak 240 per detik; jika nonaktif, layar mengatur lajunya. Mode presentasi yang diatur saat peluncuran menggantikannya.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	Jumlah maksimum langkah urungkan yang disimpan setiap dokumen; angka yang lebih kecil menghapus langkah terlama saat Anda mengeklik OK. Langkah juga dapat hilang lebih awal jika memakai terlalu banyak memori.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	Menampilkan gambar yang berubah saat Anda menyeret; jika nonaktif, garis luar mengikuti seretan dan gambar berubah saat Anda melepas. Panduan penggaris selalu bergerak saat Anda menyeret.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	Berapa banyak thread pekerja yang menggambar; -1 memakai satu lebih sedikit dari inti yang boleh dipakai VectorCraft, paling banyak 8, dan 0 tidak memakai sama sekali. Versi web tidak pernah memakainya.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Mulai dari peluncuran berikutnya di desktop Wayland, X11 (XWayland) membuka jendela melalui XWayland; pilihan lain melakukannya hanya saat pena terpasang.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	Mulai peluncuran berikutnya, versi desktop menampilkan bingkai tanpa menunggu penyegaran layar, paling banyak 240 per detik; jika nonaktif, layar mengatur temponya.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	Anggaran yang lebih besar menaikkan instruksi dasar setiap jalannya filter objek menjadi lima kali lipat dan mempertahankan jatah yang sama per byte masukan; filter berat, efek langsung, pengekspor, dan pengimpor tetap memakai batasnya sendiri.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	Mengonversi gambar dan artboard di kanvas ke profil warna layar jika sistem belum melakukannya; jika nonaktif, kanvas digambar dalam sRGB.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	Di versi desktop, penyimpanan ke berkas ditulis di latar belakang selagi Anda terus menyunting; jika nonaktif, Anda menunggu sampai selesai ditulis.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	Di versi desktop, ekspor ke berkas dan paket ditulis di latar belakang selagi Anda terus menyunting, kecuali ekspor 3D; jika nonaktif, Anda menunggunya.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	Setiap beberapa menit, menyimpan salinan pemulihan setiap dokumen yang memiliki perubahan belum disimpan sejak salinan terakhirnya; jika nonaktif, tidak ada salinan berkala.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	Berapa menit jeda antara salinan pemulihan selama Simpan otomatis data pemulihan aktif.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	Di versi desktop, folder tempat salinan pemulihan disimpan; biarkan kosong untuk folder milik VectorCraft. Versi web menyimpannya di browser.
+	No timed recovery copies are made of documents with more than 20,000 objects.	Dokumen dengan lebih dari 20.000 objek tidak mendapat salinan pemulihan berkala.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Buka berkas terbaru dan layar Home menampilkan paling banyak sejumlah ini berkas terbaru; 0 tidak menampilkan satu pun, dan VectorCraft tetap mengingat hingga 30.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	Saat dokumen dibuka, gambar EPS tertaut yang menampilkan pratinjau tersimpannya mempertahankannya alih-alih membaca berkas EPS lagi; berkas yang berubah tetap mengikuti Perbarui tautan.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	Dalam Pratinjau piksel, gambar digambar halus; jika nonaktif, pikselnya tampil dengan tepi tajam. Di luar Pratinjau piksel, gambar selalu dihaluskan.
+	PDF Text	Teks PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	Teks PDF yang Anda buka atau sematkan masuk sebagai teks yang dapat diedit, atau sebagai outline yang tampak sama di komputer tanpa fontnya.
+	Linked pages show the file's own text.	Halaman tertaut menampilkan teks milik berkas itu sendiri.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Saat berkas tertaut berubah, Otomatis membacanya lagi, Tanya saat diubah bertanya dulu kepada Anda, dan Secara manual membiarkannya lalu menampilkan catatan di bilah status.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	Di versi desktop, folder tempat Baru dari templat… dan Simpan sebagai templat… dimulai; biarkan kosong untuk VectorCraft Templates di folder dokumen Anda.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edit asli membuka berkas tertaut di aplikasi bawaan sistem untuk jenisnya; jika nonaktif, gambar raster tertaut terbuka di PhotoCraft jika terpasang.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Berkas yang disimpan oleh versi VectorCraft lama terbuka dengan [Converted] di belakang namanya, dan Simpan menanyakan tempat menyimpannya; jika nonaktif, Simpan menimpa berkas itu.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Berkas dan templat VectorCraft disimpan terkompresi sehingga lebih kecil, kecuali penyimpanan menentukan lain; penyimpanan untuk versi yang tidak bisa membuka berkas terkompresi tetap tidak terkompresi.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Salin dan Potong juga memberi aplikasi lain kode SVG dari karya; di desktop, kode tidak disalin sebagai teks jika karya menyematkan gambar lebih dari 1 MiB.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Di Windows, Salin dan Potong juga memberi aplikasi lain PDF dari karya; platform lain belum menyalin PDF.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft menyimpan pilihan ini, tetapi Salin dan Potong belum memakai format clipboard vektor lama.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	Pertahankan jalur atau Pertahankan tampilan dan overprint untuk clipboard vektor lama; VectorCraft menyimpan pilihan itu tetapi belum memakainya.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	Pertahankan pemformatan menjaga gaya teks yang disalin dari objek teks VectorCraft saat ditempel ke objek teks; Pertahankan teks polos memberinya gaya di tempat teks itu ditempel.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	Tampilkan semua warna hitam sebagai rich black menampilkan hitam CMYK murni (hanya tinta hitam 100%) sebagai hitam RGB di kanvas; Tampilkan semua warna hitam secara akurat mengonversinya melalui ruang CMYK kerja.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Keluarkan semua warna hitam sebagai rich black menggambar hitam CMYK murni sebagai hitam RGB dalam ekspor raster RGB dan skala abu-abu serta Cetak sebagai bitmap; opsi ini tidak mengubah ekspor vektor, JPEG, TIFF, dan PSD CMYK, atau pencetakan lain.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	Pada layar sentuh, beralih ke ruang kerja sentuh; mematikan opsi ini atau hilangnya layar sentuh mengembalikan ruang kerja sebelum peralihan.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Ketukan dua jari di kanvas mengurungkan, atau di ruang kerja sentuh beralih antara alat seleksi dan alat gambar, dan ketukan tiga jari mengulangi; keduanya tidak berfungsi dalam mode presentasi.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun huruf besar-kecilnya; kata Korea tidak diberi tanda hubung, dan kata dalam bahasa India tidak dipenggal di dalam satu gugus karakter.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -4359,9 +5346,16 @@ font-technology	Variable	Variabel
 	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 	Channel	Saluran
+	Curvature Circle Tool	Alat Lingkaran kelengkungan
+	Cusp	Titik tajam
+	Straight segment	Segmen lurus
 	Circle	Lingkaran
 	Circle Tool	Alat lingkaran
 	Circle too large	Lingkaran terlalu besar
+	Show Radii	Tampilkan jari-jari
+	Show Diameter	Tampilkan diameter
+	Anchors at Standard Positions	Titik jangkar di posisi standar
+	Third Point by Dragging	Titik ketiga dengan menyeret
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma
@@ -4659,6 +5653,7 @@ imageTrace	Outline	Kontur
 @msg	Saved {path}	Berhasil menyimpan {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Pilih teks atau klik di dalam teks dengan alat Teks untuk menyisipkan glif
 @msg	Shape Builder: no region under the pointer	Pembangun Bentuk: tidak ada area di bawah penunjuk
+@msg	Fill Area: no enclosed area under the pointer	Isi Area: tidak ada area tertutup di bawah penunjuk
 @msg	Shape Builder: select paths or compound paths	Pembangun Bentuk: pilih jalur atau jalur majemuk
 @msg	Show All Hidden Attributes: nothing is hidden	Tampilkan semua atribut tersembunyi: tidak ada yang tersembunyi
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
@@ -4787,6 +5782,7 @@ imageTrace	Outline	Kontur
 @msg	choose a location for the package	pilih lokasi untuk paket
 @msg	clipboard is empty	papan klip kosong
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: setidaknya satu warna harus tetap ada di tabel warna
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` menyebut warna yang juga disebut kunci lain
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
@@ -4882,6 +5878,7 @@ imageTrace	Outline	Kontur
 @msg	no graphic style `{n}`	tidak ada gaya grafis `{n}`
 @msg	no interaction in progress	tidak ada interaksi yang berlangsung
 @msg	no key object	tidak ada objek kunci
+@msg	Align to Key Object isn't available with the Artboard tool	Ratakan ke objek kunci tidak tersedia dengan alat artboard
 @msg	no library `{key}` (see {list})	tidak ada pustaka `{key}` (lihat {list})
 @msg	no native format	tidak ada format asli
 @msg	no pages	tidak ada halaman
@@ -4986,6 +5983,12 @@ imageTrace	Outline	Kontur
 @msg	percent must be above 0 and at most 6400, not {p}	percent harus di atas 0 dan paling banyak 6400, bukan {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	pilih warna, gradien, atau pola untuk disimpan sebagai swatch
 @msg	plane must be left, right or ground	plane harus left, right, atau ground
+@msg	tolerance must be 0 or more	tolerance harus 0 atau lebih
+@msg	give `at` or `clear`, not both	berikan `at` atau `clear`, bukan keduanya
+@msg	anchorPoint must be true or false	anchorPoint harus true atau false
+@msg	gridlineIntersection must be true or false	gridlineIntersection harus true atau false
+@msg	the perspective grid is hidden	kisi perspektif disembunyikan
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Penempatan bidang otomatis nonaktif: aktifkan anchorPoint atau gridlineIntersection (perspective.widget.options)
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in melampaui {0}-nya
 @msg	plug-in failed: {0}	plug-in gagal: {0}
@@ -5010,6 +6013,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend
 @msg	select a clip group	pilih grup klip
+@msg	select a flare	pilih flare
 @msg	select a gradient mesh	pilih mesh gradien
 @msg	select a linked image: an embedded one has no file	pilih gambar tertaut: gambar yang tersemat tidak memiliki berkas
 @msg	select a repeat	pilih pengulangan
@@ -5050,6 +6054,7 @@ imageTrace	Outline	Kontur
 @msg	the PDF is password-protected: give its password	PDF dilindungi kata sandi: berikan kata sandinya
 @msg	the PDF password is wrong	kata sandi PDF salah
 @msg	the Save PDF dialog didn't open	dialog Simpan PDF tidak terbuka
+@msg	the Save PDF dialog is not open	dialog Simpan PDF tidak sedang terbuka
 @msg	the WMF header is damaged	header WMF rusak
 @msg	the art could not be sampled	karya seni tidak dapat diambil sampelnya
 @msg	the art has no bounds	karya seni tidak memiliki batas
@@ -5213,6 +6218,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Telah memperbarui {n} berkas tertaut yang berubah di disk
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumen menetapkan bleed yang dihilangkan oleh file PDF/X ini: aktifkan "Gunakan pengaturan bleed dokumen"
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objek mencapai tepi potong tetapi berhenti sebelum bleed
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} diekspor dengan {n} catatan: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} berkas font kini berada di {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
@@ -5239,6 +6245,7 @@ imageTrace	Outline	Kontur
 @msg	onto must name a panel floating in another group	onto harus menyebutkan panel yang mengambang di grup lain
 @msg	below and above must name a panel floating in another group	below dan above harus menyebutkan panel yang mengambang di grup lain
 @msg	give only one of onto, below and above	berikan hanya satu dari onto, below, dan above
+@msg	give only one of `index`, `indices` and `t`	berikan hanya satu dari `index`, `indices`, dan `t`
 @msg	column must be true or a number from 1	column harus true atau angka mulai dari 1
 @msg	x and y must both be numbers	x dan y harus keduanya angka
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" bukan warna: tulis sebagai #rrggbb
@@ -5495,6 +6502,7 @@ imageTrace	Outline	Kontur
 	Arrow	Panah
 	Arrow (open)	Panah (terbuka)
 	Barbed	Berduri
+arrowhead	Feather	Bulu
 	Half Arrow (left)	Setengah panah (kiri)
 	Half Arrow (right)	Setengah panah (kanan)
 	Concave	Cekung
@@ -5522,6 +6530,7 @@ imageTrace	Outline	Kontur
 	Kite	Layang-layang
 	Triangle to Bar	Segitiga ke batang
 	Oval	Oval
+	Line Arrow	Panah garis
 	Complementary	Komplementer
 	Complementary 2	Komplementer 2
 	Split Complementary	Komplementer terpisah
@@ -5653,6 +6662,9 @@ file-filter	Swatch libraries	Pustaka swatch
 file-filter	Flattener presets	Preset perata
 file-filter	PDF presets	Preset PDF
 file-filter	Print presets	Preset cetak
+file-filter	Tracing presets	Preset penelusuran
+file-filter	Action sets	Set tindakan
+file-filter	Composite fonts	Font komposit
 file-filter	Preferences	Preferensi
 file-filter	Export presets	Preset ekspor
 file-filter	SVG Compressed	SVG terkompresi
@@ -5901,6 +6913,11 @@ mark-style	Japanese	Jepang
 	The active document changed while the screen color sampler was open	Dokumen aktif berubah saat pengambil warna layar terbuka
 	This system has no screen color sampler	Sistem ini tidak memiliki pengambil warna layar
 	Color blindness – Tritanopia-type	Buta warna – tipe Tritanopia
+	Show Color Vision Preview	Tampilkan pratinjau penglihatan warna
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Akromatopsia
 	Panels Except Tools and Control	Semua panel kecuali Alat dan Kontrol
 	Reset Tracking and Kerning	Atur ulang tracking dan kerning
 	Reset Horizontal Scale	Atur ulang skala horizontal
@@ -5921,6 +6938,8 @@ mark-style	Japanese	Jepang
 	Save Variable Library…	Simpan pustaka variabel…
 @msg	a variable library holds text variables, and the document has none	pustaka variabel berisi variabel teks, dan dokumen tidak memilikinya
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabel `{name}` tidak dapat disimpan dalam pustaka variabel: ganti namanya agar diawali huruf atau `_`, tanpa spasi atau simbol selain `-`, `_`, dan `.`
+@msg	{k} has control characters	{k} berisi karakter kontrol
+@msg	{k} has control characters or line breaks	{k} berisi karakter kontrol atau jeda baris
 @msg	data set `{name}` holds a control character, which a variable library can't hold	himpunan data `{name}` berisi karakter kontrol, yang tidak dapat dimuat dalam pustaka variabel
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	himpunan data `{name}` diawali atau diakhiri spasi, yang tidak dapat dimuat dalam pustaka variabel
 @msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
@@ -5983,6 +7002,8 @@ mark-style	Japanese	Jepang
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` harus grayscale, rgb, hsb, cmyk atau websafe
 @msg	`view` must be wheel or box	`view` harus wheel atau box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` harus none, oklch, atau hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -6295,6 +7316,9 @@ swatch	Bright Violet	Violet cerah
 	Continue in Background	Lanjutkan di latar belakang
 	Cancel Export	Batalkan ekspor
 @msg	Export cancelled	Ekspor dibatalkan
+	Cancel Save	Batalkan penyimpanan
+@plural	{n} more save waiting|{n} more saves waiting	{n} penyimpanan lagi menunggu
+@msg	Save canceled	Penyimpanan dibatalkan
 # Paragraph panel menu › Justification…
 	Desired	Diinginkan
 	Word Spacing:	Spasi Kata:
@@ -6489,6 +7513,10 @@ axis	Y Axis	Sumbu Y
 	Create New Action	Buat tindakan baru
 	Play Action	Putar tindakan
 	Action Set:	Set tindakan:
+	Choose Align To at playback	Pilih Ratakan ke saat pemutaran
+	Align steps use the key object, key anchor or key guide when one is set.	Langkah perataan memakai objek kunci, titik jangkar kunci, atau panduan kunci jika ada.
+	With one whole object selected and no key, they use the artboard.	Dengan satu objek utuh terpilih dan tanpa kunci, langkah memakai artboard.
+	Otherwise they use the selection.	Jika tidak, langkah memakai seleksi.
 	Function Key:	Tombol fungsi:
 	Record	Rekam
 	Create New Set	Buat set baru
@@ -6515,6 +7543,8 @@ axis	Y Axis	Sumbu Y
 	Checkpoint	Pos pemeriksaan
 	Inventory Icons	Ikon Inventaris
 	Skill Icons	Ikon Keahlian
+	Weather Icons	Ikon Cuaca
+	Media Controls	Kontrol Media
 	Attack	Serang
 	Defend	Bertahan
 	Heal	Pulihkan
@@ -6614,6 +7644,12 @@ axis	Y Axis	Sumbu Y
 	Bus Lines	Jalur bus
 	Terminal Nodes	Simpul terminal
 
+# Original arrow art brushes.
+	Arrows	Kuas panah
+	Solid Arrow	Panah solid
+	Open Arrow	Panah terbuka
+	Chevron Arrow	Panah chevron
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -6630,6 +7666,256 @@ axis	Y Axis	Sumbu Y
 	Stars	Bintang
 	Triangles	Segitiga
 	Sparkles	Kilauan
+	Warm Gray	Abu-abu hangat
+	Cool Gray	Abu-abu sejuk
+	Neutrals	Warna netral
+	Ivory	Gading
+	Linen	Linen
+	Oat	Gandum
+	Greige	Greige
+	Stone	Batu
+	Taupe	Taupe
+	Slate	Batu tulis
+	Clay	Tanah liat
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umber
+	Sand	Pasir
+	Olive	Zaitun
+	Moss	Lumut
+	Rosy	Kemerahan
+	Neutral	Netral
+	Golden	Keemasan
+	Pastel	Pastel
+	Pastel Red	Merah pastel
+	Pastel Orange	Oranye pastel
+	Pastel Amber	Amber pastel
+	Pastel Yellow	Kuning pastel
+	Pastel Lime	Limau pastel
+	Pastel Green	Hijau pastel
+	Pastel Teal	Hijau toska pastel
+	Pastel Cyan	Sian pastel
+	Pastel Azure	Biru langit pastel
+	Pastel Blue	Biru pastel
+	Pastel Violet	Violet pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Merah lembut
+	Soft Orange	Oranye lembut
+	Soft Amber	Amber lembut
+	Soft Yellow	Kuning lembut
+	Soft Lime	Limau lembut
+	Soft Green	Hijau lembut
+	Soft Teal	Hijau toska lembut
+	Soft Cyan	Sian lembut
+	Soft Azure	Biru langit lembut
+	Soft Blue	Biru lembut
+	Soft Violet	Violet lembut
+	Soft Magenta	Magenta lembut
+	Vivid Red	Merah cerah
+	Vivid Orange	Oranye cerah
+	Vivid Amber	Amber cerah
+	Vivid Yellow	Kuning cerah
+	Vivid Lime	Limau cerah
+	Vivid Green	Hijau cerah
+	Vivid Teal	Hijau toska cerah
+	Vivid Cyan	Sian cerah
+	Vivid Azure	Biru langit cerah
+	Vivid Blue	Biru cerah
+	Vivid Violet	Violet cerah
+	Vivid Magenta	Magenta cerah
+	Deep	Pekat
+	Deep Red	Merah pekat
+	Deep Orange	Oranye pekat
+	Deep Amber	Amber pekat
+	Deep Yellow	Kuning pekat
+	Deep Lime	Limau pekat
+	Deep Green	Hijau pekat
+	Deep Teal	Hijau toska pekat
+	Deep Cyan	Sian pekat
+	Deep Azure	Biru langit pekat
+	Deep Blue	Biru pekat
+	Deep Violet	Violet pekat
+	Deep Magenta	Magenta pekat
+	Gold	Emas
+	Silver	Perak
+	Bronze	Perunggu
+	Copper	Tembaga
+	Brass	Kuningan
+	Rose Gold	Emas mawar
+	Gunmetal	Abu-abu logam
+	Platinum	Platina
+	Pewter	Timah
+	Ember	Bara
+	Lagoon	Laguna
+	Dusk	Senja
+	Clay to Teal	Tanah liat ke hijau toska
+	Plum to Olive	Prem ke zaitun
+	Complementary Coral	Koral komplementer
+	Split Complementary Coral	Koral komplementer terpisah
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triad
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Hijau toska komplementer
+	Split Complementary Teal	Hijau toska komplementer terpisah
+	Analogous Teal	Hijau toska analog
+	Triad Teal	Hijau toska triad
+	Tetrad Teal	Hijau toska tetrad
+	Pentagram Teal	Hijau toska pentagram
+	Soft Spectrum	Spektrum lembut
+	Red to Amber	Merah ke amber
+	Orange to Yellow	Oranye ke kuning
+	Amber to Lime	Amber ke limau
+	Yellow to Green	Kuning ke hijau
+	Lime to Teal	Limau ke hijau toska
+	Green to Cyan	Hijau ke sian
+	Teal to Azure	Hijau toska ke biru langit
+	Cyan to Blue	Sian ke biru
+	Azure to Violet	Biru langit ke violet
+	Blue to Magenta	Biru ke magenta
+	Violet to Red	Violet ke merah
+	Magenta to Orange	Magenta ke oranye
+	Dawn	Fajar
+	Noon	Tengah hari
+	Sunset	Matahari terbenam
+	Night	Malam
+	Overcast	Mendung
+	White to Black	Putih ke hitam
+	Light Grays	Abu-abu terang
+	Dark Grays	Abu-abu gelap
+	Warm Grays	Gradasi abu-abu hangat
+	Cool Grays	Gradasi abu-abu sejuk
+	Fade to Transparent	Memudar ke transparan
+	White Fade	Pudar putih
+	Vignette	Vinyet
+	Mist	Kabut
+	Petal	Kelopak
+	Fern	Pakis
+	Smoke	Asap
+	Honey	Madu
+	Seafoam	Buih laut
+	Lavender	Lavender
+	Driftwood	Kayu apung
+	Ink Wash	Sapuan tinta
+	Tide	Pasang surut
+	Bloom	Mekar
+	Dew	Embun
+	Pollen	Serbuk sari
+	Lichen	Lumut kerak
+	Prism Veil	Selubung prisma
+	Opal Ribbon	Pita opal
+	Pearl Flash	Kilatan mutiara
+	Aurora Foil	Foil aurora
+	Iris Sheen	Kilau iris
+	Frost Spectrum	Spektrum beku
+	Silver Tide	Pasang perak
+	Rose Quartz Gleam	Kilau kuarsa mawar
+	Moonstone Shift	Kilau batu bulan
+	Violet Edge	Tepi violet
+	Mint Halo	Halo mint
+	Amber Corona	Korona amber
+	Polar Glint	Kerlip kutub
+	Pastel Orbit	Orbit pastel
+	Coral and Navy	Koral dan biru dongker
+	Plum and Lime	Prem dan limau
+	Teal and Gold	Hijau toska dan emas
+	Indigo and Peach	Nila dan persik
+	Forest and Rose	Hutan dan mawar
+	Red Glow	Pendar merah
+	Orange Glow	Pendar oranye
+	Amber Glow	Pendar amber
+	Yellow Glow	Pendar kuning
+	Lime Glow	Pendar limau
+	Green Glow	Pendar hijau
+	Teal Glow	Pendar hijau toska
+	Cyan Glow	Pendar sian
+	Azure Glow	Pendar biru langit
+	Blue Glow	Pendar biru
+	Violet Glow	Pendar violet
+	Magenta Glow	Pendar magenta
+	Polka Dots	Polkadot
+	Vertical Stripes	Garis vertikal
+	Horizontal Stripes	Garis horizontal
+	Diagonal Stripes	Garis diagonal
+	Checkerboard	Papan catur
+	Diamonds	Belah ketupat
+	Crosses	Silang
+	Coarse Grit	Butiran kasar
+	Stipple	Titik-titik
+	Scratches	Goresan
+	Sparse Flecks	Bintik jarang
+	Dense Flecks	Bintik rapat
+	Sine Bands	Pita sinus
+	Ripple Lines	Garis riak
+	Interference Rings	Cincin interferensi
+	Offset Rings	Cincin bergeser
+	Warped Checks	Kotak melengkung
+	Pinched Stripes	Garis terjepit
+	Chevron Pulse	Denyut chevron
+	Radiating Lenses	Lensa memancar
+	Soft Shadow	Bayangan lembut
+	Hard Shadow	Bayangan tajam
+	Lifted Card	Kartu terangkat
+	Neon Tube	Tabung neon
+	Inner Light	Cahaya dalam
+	Feathered	Tepi lembut
+	Haze	Kabut tipis
+	Double Rule	Garis ganda
+	Triple Rule	Garis rangkap tiga
+	Dashed Border	Bingkai putus-putus
+	Dotted Border	Bingkai bertitik
+	Offset Keyline	Garis kontur bergeser
+	Inset Keyline	Garis kontur dalam
+	Outside Stroke	Goresan luar
+	Pointer	Penunjuk
+	Highlighter	Stabilo
+	Sketchy Line	Garis sketsa
+	Scribble Fill	Isian coretan
+	Wobble	Goyang
+	Zig Zag Edge	Tepi zigzag
+	Wavy Edge	Tepi bergelombang
+	Puffy	Menggembung
+	Starburst	Ledakan bintang
+	Glossy	Mengilap
+	Brushed Metal	Logam disikat
+	Spotlight	Lampu sorot
+	Sunset Band	Pita senja
+	Sea Glass	Kaca laut
+	Pearl	Mutiara
+	Chrome Rim	Bingkai krom
+	Glow Orb	Bola berpendar
+	Pill Badge	Lencana pil
+	Round Badge	Lencana bulat
+	Flag Wave	Bendera berkibar
+	Bulge	Menggelembung
+	Twisted	Terpuntir
+	Echo	Gema
+	Spiral Copies	Salinan spiral
+	Multiply Tint	Rona multiply
+	Darken Veil	Selubung menggelapkan
+	Ghosted	Samar
+	Two Tone	Dua warna
+	Overlay Glaze	Glasir menimpa
+	Screen Light	Cahaya layar
+	Soft Light Wash	Sapuan cahaya lembut
+	Cyan Neon	Neon sian
+	Magenta Laser	Laser magenta
+	Amber Tube	Tabung amber
+	Electric Lime	Limau elektrik
+	Pulse Violet	Ungu berdenyut
+	Cobalt Phosphor	Fosfor kobalt
+	Burst	Ledakan
+	Rounded Square	Persegi bulat
+	Sun	Matahari
+	Moon	Bulan
+	Cloud	Awan
+	Rain	Hujan
+	Thunder	Guntur
+	Snow	Salju
+	Play	Putar
+	Pause	Jeda
+	Skip Next	Lewati Berikutnya
+	Shuffle	Acak
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
@@ -6989,6 +8275,7 @@ breakText	Glyphs	Glif
 	Remove Strokes	Hapus Stroke
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
+	Replace Pattern Art	Ganti karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -7021,10 +8308,18 @@ breakText	Glyphs	Glif
 	Smooth Bridge…	Jembatan Halus…
 	Smooth Bridge	Jembatan Halus
 	Keep Originals	Pertahankan Asli
-@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	select two or more circles to bridge	pilih dua lingkaran atau lebih untuk dijembatani
 @msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
 @msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
 @msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
+	Constant Gap	Celah Tetap
+	Reach:	Jangkauan:
+@msg	the circles are too far apart for this gap: raise the gap	lingkaran terlalu berjauhan untuk celah ini: perbesar celah
+@msg	the circles are too far apart for this gap	lingkaran terlalu berjauhan untuk celah ini
+@msg	no two circles are within reach: raise the reach	tidak ada dua lingkaran dalam jangkauan: perbesar jangkauan
+@msg	select at most 2000 circles to bridge	pilih paling banyak 2000 lingkaran untuk dijembatani
+@msg	that makes too many bridges (at most 8000): lower the reach	itu membuat terlalu banyak jembatan (paling banyak 8000): perkecil jangkauan
+@msg	the bridged circles are too complex to unite	lingkaran yang dijembatani terlalu rumit untuk disatukan
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Garis Singgung Persekutuan…
 	Common Tangents	Garis Singgung Persekutuan
@@ -7041,12 +8336,15 @@ breakText	Glyphs	Glif
 @msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
 @msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
 @msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
+@msg	The point lies inside the path, so it has no tangents	Titik berada di dalam jalur, sehingga tidak ada garis singgung
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	Lingkaran singgung…
 	Tangent Circle	Lingkaran singgung
+	Tangent Circle Tool	Alat lingkaran singgung
+	No tangent circle here	Tidak ada lingkaran singgung di sini
 	Circle:	Lingkaran:
 @msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
 @msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan
@@ -7062,6 +8360,16 @@ breakText	Glyphs	Glif
 @msg	`circle` is past the last circle found ({found})	`circle` melewati lingkaran terakhir yang ditemukan ({found})
 @msg	object {value} is not a path or compound path	objek {value} bukan jalur atau jalur gabungan
 @msg	these shapes are too small to measure	bentuk ini terlalu kecil untuk diukur
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Tambahkan persegi panjang pembatas
+	Add Bounding Circle	Tambahkan lingkaran pembatas
+	Add Bounding Rectangle…	Tambahkan persegi panjang pembatas…
+	Add Bounding Circle…	Tambahkan lingkaran pembatas…
+	One per Object	Satu per objek
+@msg	nothing to enclose	tidak ada yang bisa dilingkupi
+@msg	`offset` must be 0 or more	`offset` harus 0 atau lebih
+@msg	the shape would have no size	bentuk tidak akan memiliki ukuran
+@msg	the shape would reach past the edge of the canvas	bentuk akan melewati tepi kanvas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu
@@ -7326,6 +8634,18 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` harus lebih dari 0 dan paling besar {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` harus dari 0 sampai {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` harus dari 0,01 sampai 1000 pt
+@msg	select the banner, or mark every artboard	seleksi spanduk, atau tandai setiap artboard
+@msg	the banner has no width or height	spanduk tidak memiliki lebar atau tinggi
+@msg	the grommet inset is too large for the banner	jarak mata ayam dari tepi terlalu besar untuk spanduk
+@msg	the hem is too deep for the banner	lipatan terlalu dalam untuk spanduk
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	spasi ini menghasilkan lebih dari {MAX_GROMMETS} mata ayam
+@msg	there is no banner to mark	tidak ada spanduk untuk ditandai
+@msg	turn on at least one side	aktifkan setidaknya satu sisi
+@msg	with no hem and no grommets there is nothing to mark	tanpa lipatan dan tanpa mata ayam tidak ada yang perlu ditandai
+@msg	{saving} failed: {e}	{saving} gagal: {e}
 	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
 	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
 	Hem	Lipatan
@@ -7383,3 +8703,458 @@ breakText	Glyphs	Glif
 @msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
 @msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Nature Icons	Ikon Alam
+	Flower	Bunga
+	Tree	Pohon
+	Mountain	Gunung
+	Ornamental	Ornamental
+	Scrollwork	Sulur Hias
+	Filigree Arrow	Panah Filigran
+	Petal Sweep	Sapuan Kelopak
+	Twin Curl	Sulur Ganda
+	Vector Packs	Paket Vektor
+	Compass Rose	Mawar Kompas
+	Botanical Sprig	Ranting Botani
+	Facet Diamond	Berlian Berfaset
+	Tide Crest	Puncak Gelombang
+	Leaf Vine	Sulur Daun
+	Blossom Chain	Rangkaian Bunga
+	Pennant Garland	Untaian Panji
+	Lantern String	Rangkaian Lentera
+	Orbit Lines	Garis Orbit
+	Petal Garland	Rangkaian Kelopak
+	Lattice Braid	Anyaman Kisi
+	Facet Sweep	Sapuan Berfaset
+	Artistic Brushes	Kuas Artistik
+	Paint	Cat
+	Flat Sweep	Sapuan Datar
+	Dry Drag	Tarikan Kering
+	Loaded Stroke	Sapuan Tebal
+	Fan Sweep	Sapuan Kipas
+@msg	`at` must be "start" or "end"	`at` harus "start" atau "end"
+@msg	give exactly one of `through` and `toward`	berikan tepat satu dari `through` dan `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	tidak ada busur yang cocok dengan titik-titik ini: dua titik sama atau ketiganya segaris
+@msg	give `at` only with `toward`	berikan `at` hanya bersama `toward`
+	Engraving	Ukiran
+	Fine Hatching	Arsiran halus
+	Dense Hatching	Arsiran rapat
+	Tapered Hatching	Arsiran meruncing
+	Broken Hatching	Arsiran terputus
+	Image Brush	Kuas gambar
+	Soft Bloom	Mekar lembut
+	Halftone Field	Bidang halftone
+	Solar Grain	Butir surya
+	Color Flecks	Bintik warna
+	Fine Stipple	Arsiran titik halus
+	Dense Stipple	Arsiran titik rapat
+	Soft Stipple	Arsiran titik lembut
+	Bold Stipple	Arsiran titik tebal
+	Paper Cutouts	Potongan Kertas
+	Coral Layers	Lapisan Koral
+	Mint Layers	Lapisan Mint
+	Midnight Layers	Lapisan Tengah Malam
+	Sunflower Sheet	Lembar Bunga Matahari
+	Rose Layers	Lapisan Mawar
+	Monochrome Stack	Tumpukan Monokrom
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Menampilkan kartu berisi fungsi alat di bilah alat dan tombolnya sebagai pengganti tipnya; memerlukan Tampilkan tips alat.
+	Selects whole objects and groups to move, resize or rotate them.	Memilih objek dan grup utuh untuk dipindahkan, diubah ukurannya, atau diputar.
+	Selects anchor points and path segments to reshape a path.	Memilih titik jangkar dan segmen jalur untuk mengubah bentuk jalur.
+	Draws paths point by point, with straight segments and smooth curves.	Menggambar jalur titik demi titik, dengan segmen lurus dan lengkungan halus.
+	Draws smooth curves through the points you click.	Menggambar lengkungan halus melalui titik yang Anda klik.
+	Adds text at a point, or in a frame you drag.	Menambahkan teks di suatu titik atau di dalam bingkai yang Anda seret.
+	Draws rectangles and squares.	Menggambar persegi panjang dan persegi.
+	Draws rectangles with rounded corners.	Menggambar persegi panjang dengan sudut membulat.
+	Draws ellipses and circles.	Menggambar elips dan lingkaran.
+	Draws polygons with sides of equal length.	Menggambar poligon dengan sisi yang sama panjang.
+	Draws stars.	Menggambar bintang.
+	Turns objects around a reference point.	Memutar objek di sekitar titik referensi.
+	Flips objects across an axis through a reference point.	Mencerminkan objek terhadap sumbu yang melalui titik referensi.
+	Resizes objects from a reference point.	Mengubah ukuran objek dari titik referensi.
+	Slants objects from a reference point.	Memiringkan objek dari titik referensi.
+	Moves the view of the document.	Menggeser tampilan dokumen.
+	Magnifies or reduces the view.	Memperbesar atau memperkecil tampilan.
+	Copies the color and other attributes of one object to the selection.	Menyalin warna dan atribut lain dari satu objek ke pilihan.
+	Sets the direction and length of a gradient.	Mengatur arah dan panjang gradien.
+	Creates, selects and resizes artboards.	Membuat, memilih, dan mengubah ukuran artboard.
+	Changes the width of a stroke along its length.	Mengubah lebar stroke di sepanjang panjangnya.
+	Bends art by dragging pins placed on it.	Membengkokkan karya seni dengan menyeret pin yang dipasang padanya.
+	Pushes the outlines of paths in the direction you drag.	Mendorong garis luar jalur ke arah yang Anda seret.
+	Twists the outlines of paths into swirls.	Memelintir garis luar jalur menjadi pusaran.
+	Pulls the outlines of paths in toward the brush.	Menarik garis luar jalur ke arah kuas.
+	Pushes the outlines of paths out from the brush.	Mendorong garis luar jalur keluar dari kuas.
+	Adds curved details along the outlines of paths.	Menambahkan detail melengkung di sepanjang garis luar jalur.
+	Adds spiky details along the outlines of paths.	Menambahkan detail runcing di sepanjang garis luar jalur.
+	Adds wrinkles along the outlines of paths.	Menambahkan kerutan di sepanjang garis luar jalur.
+	Moves, copies and resizes objects on the perspective grid.	Memindahkan, menyalin, dan mengubah ukuran objek pada kisi perspektif.
+	Makes a series of steps between two or more objects.	Membuat serangkaian langkah di antara dua objek atau lebih.
+	Places dimension lines that show measured lengths.	Menempatkan garis dimensi yang menunjukkan panjang hasil pengukuran.
+	Tap	Tekan singkat
+	Clear Hold	Hapus Tahan
+	Hold Shortcuts	Pintasan tahan
+	Hold Shortcut Delay	Jeda pintasan tahan
+	How hold shortcuts work	Cara kerja pintasan tahan
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, lalu tekan tombol yang ditahan untuk ini (Esc membatalkan). Menahan tombol menjalankan ini; tekan singkat menjalankan pintasan milik tombol itu sendiri.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Tekan singkat sebuah tombol menjalankan pintasannya. Menahan tombol selama jeda menjalankan alat atau perintah di kolom Tahan sebagai gantinya. Pintasan tahan adalah tombol huruf, angka, atau tanda baca, sendiri atau dengan Shift.
+@msg	Hold {_1} is already used by {_2}	Tahan {_1} sudah digunakan oleh {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pintasan tahan adalah tombol yang mengetik karakter, sendiri atau dengan Shift ({shown} memakai Cmd, Ctrl, atau Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} tidak bisa menjadi pintasan tahan: gunakan huruf, angka, atau tombol tanda baca
+	Dashed Arrow	Panah Putus-putus
+	Pressure Sensitive	Peka Tekanan
+	Flex Ribbon	Pita Lentur
+	Pulse Stroke	Goresan Berdenyut
+	Round Flow	Aliran Bulat
+	Chisel Flow	Aliran Serong
+
+# Script files and their permissions, the script interpreter's errors, Liquify, SVG filters, image
+# encoders, Revolve, swatch and color book readers, metadata templates, toolbars and other status
+# and error messages.
+@msg	Script file access denied: {path}	Akses file skrip ditolak: {path}
+@msg	Script file access to the app's own folders is not allowed	Akses file skrip ke folder milik aplikasi tidak diizinkan
+@msg	Script file cannot encode the text	File skrip tidak dapat mengodekan teks
+@msg	Script file could not be written	File skrip tidak dapat ditulis
+@msg	Script file dialogs need a person to answer them	Dialog file skrip memerlukan orang untuk menjawabnya
+@msg	Script file is not open for writing	File skrip tidak dibuka untuk ditulis
+@msg	Script file name is already in use	Nama file skrip sudah digunakan
+@msg	Script file name must be a name without a folder	Nama file skrip harus berupa nama tanpa folder
+@msg	Script file permission can be kept only for a script run from a file	Izin file skrip hanya dapat disimpan untuk skrip yang dijalankan dari file
+@msg	Script file permission could not be saved	Izin file skrip tidak dapat disimpan
+@msg	Script folder is not empty	Folder skrip tidak kosong
+@msg	Script files cannot make aliases	File skrip tidak dapat membuat alias
+@msg	Script file hidden setting cannot be changed	Pengaturan tersembunyi file skrip tidak dapat diubah
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog file tidak dapat dibuka di dalam callback fungsi bawaan, getter, konversi, atau file yang dijalankan $.evalFile; panggil dari kode skrip itu sendiri
+@msg	the script wrote more file data than one run may write (32 MiB)	skrip menulis data file lebih banyak daripada yang boleh ditulis dalam satu kali jalan (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` untuk dialog file skrip harus salah satu dari: once, always, deny, stop
+@msg	choose a file or folder first, or deny	pilih file atau folder terlebih dahulu, atau tolak
+@msg	the script file permissions could not be saved: {e}	izin file skrip tidak dapat disimpan: {e}
+@msg	this script's file access can be allowed only once	akses file skrip ini hanya dapat diizinkan sekali
+@msg	Only the person at the keyboard can allow a script's file access	Hanya orang yang berada di depan keyboard yang dapat mengizinkan akses file skrip
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skrip diberi paling banyak 2.048 file: file yang dipilih sesudahnya dihilangkan
+@msg	assignment to a constant binding	penetapan nilai ke binding konstanta
+@msg	invalid array length	panjang array tidak valid
+@msg	array literal too long	literal array terlalu panjang
+@msg	the value is not a function	nilai tersebut bukan fungsi
+@msg	apply was called on a value that is not a function	apply dipanggil pada nilai yang bukan fungsi
+@msg	the argument list is not an object	daftar argumen bukan objek
+@msg	too many arguments	terlalu banyak argumen
+@msg	the value is not a constructor	nilai tersebut bukan konstruktor
+@msg	cannot convert the object to a primitive value	objek tidak dapat dikonversi menjadi nilai primitif
+@msg	cannot convert undefined or null to an object	undefined atau null tidak dapat dikonversi menjadi objek
+@msg	the right side of 'in' is not an object	sisi kanan 'in' bukan objek
+@msg	the right side of 'instanceof' is not a function	sisi kanan 'instanceof' bukan fungsi
+@msg	the function's prototype is not an object	prototype fungsi bukan objek
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} tidak didefinisikan
+@msg	cannot read property '{key}' of {base}	properti '{key}' dari {base} tidak dapat dibaca
+@msg	cannot set property '{key}' of {base}	properti '{key}' dari {base} tidak dapat diatur
+@msg	cannot read a property of {base}	properti dari {base} tidak dapat dibaca
+@msg	cannot set a property of {base}	properti dari {base} tidak dapat diatur
+@msg	cannot define property '{key}': {why}	properti '{key}' tidak dapat didefinisikan: {why}
+@msg	cannot assign to property '{key}': {why}	nilai tidak dapat ditetapkan ke properti '{key}': {why}
+@msg	cannot delete property '{key}'	properti '{key}' tidak dapat dihapus
+@msg	cannot declare function {ident}	fungsi {ident} tidak dapat dideklarasikan
+@msg	invalid assignment target	target penetapan tidak valid
+@msg	the array's length is read-only	panjang array bersifat baca-saja
+@msg	the property cannot be redefined	properti tidak dapat didefinisikan ulang
+@msg	the object is not extensible	objek tidak dapat diperluas
+@msg	the length cannot be redefined	panjang tidak dapat didefinisikan ulang
+@msg	it is read-only	properti itu baca-saja
+@msg	an element cannot be deleted	elemen tidak dapat dihapus
+@msg	it has only a getter	properti itu hanya memiliki getter
+@msg	the value is a primitive	nilai tersebut primitif
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` memiliki {n} jawaban yang tidak digunakan skrip
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} membiarkan {n} objek di bawah kuas seperti semula ({_2}): alat ini hanya membentuk ulang jalur
+liquify-tool	Warp	Warp
+liquify-tool	Twirl	Pilin
+liquify-tool	Pucker	Pucker
+liquify-tool	Bloat	Bloat
+liquify-tool	Scallop	Scallop
+liquify-tool	Crystallize	Kristalisasi
+liquify-tool	Wrinkle	Kerut
+liquify-kind	graphs	grafik
+liquify-kind	type	teks
+liquify-kind	symbols	simbol
+liquify-kind	images	gambar
+liquify-kind	meshes	mesh
+liquify-kind	envelopes	amplop
+liquify-kind	repeats	pengulangan
+liquify-kind	placed documents	dokumen tertempat
+liquify-kind	blends	blend
+liquify-list-two	{0}, {1}	{0} dan {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0}, dan {1}
+@msg	give one <filter> element	berikan satu elemen <filter>
+@msg	the <filter> element needs an id, the filter's name	elemen <filter> memerlukan id, yaitu nama filter
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filter SVG paling banyak {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> bukan elemen filter SVG
+@msg	an SVG filter has no event attributes such as {_1}	filter SVG tidak boleh memiliki atribut peristiwa seperti {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	gambar filter SVG berupa URL data: PNG, JPEG, GIF, atau WebP
+@msg	the SVG filter isn't valid XML: {e}	filter SVG bukan XML yang valid: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves feTurbulence paling banyak {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} paling banyak {max}
+@msg	feConvolveMatrix's order	order feConvolveMatrix
+@msg	feMorphology's radius	radius feMorphology
+@msg	a blur's stdDeviation	stdDeviation efek kabur
+@msg	the SVG filter has no primitives	filter SVG tidak memiliki primitif
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filter SVG memiliki paling banyak {MAX_PRIMITIVES} primitif
+@msg	the SVG filter is too large once its attributes are written out	filter SVG terlalu besar setelah atributnya ditulis lengkap
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	gambar filter SVG memiliki total paling banyak {MAX_IMAGE_PIXELS} piksel
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	filter SVG tidak dapat digambar: periksa primitif dan masukannya
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	elemen filter SVG bersarang paling dalam {MAX_DEPTH} tingkat
+@msg	an SVG filter is at most {_1} KB	ukuran filter SVG paling besar {_1} KB
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` harus berupa [a, b, c, d], masing-masing dari -1000 sampai 1000, dengan a·d - b·c berjarak paling sedikit 0,001 dari 0
+@msg	`angle` must be from -180 to 180 degrees	`angle` harus dari -180 sampai 180 derajat
+@msg	`roundness` must be from 0 to 100%	`roundness` harus dari 0 sampai 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` harus dari 0.01 sampai 100 pt
+@msg	style must be "pencil" or "brush"	style harus "pencil" atau "brush"
+@msg	extend end must be "start" or "end"	extend end harus "start" atau "end"
+@msg	connect end must be "start" or "end"	connect end harus "start" atau "end"
+@msg	`roundness` must be from 1 to 100%	`roundness` harus dari 1 sampai 100%
+@msg	3D effects require finite coordinates within 100 million points	Efek 3D memerlukan koordinat berhingga dalam batas 100 juta poin
+@msg	3D effects require one to ten lights	Efek 3D memerlukan satu sampai sepuluh cahaya
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Kedalaman BMP {_1}: 1, 4, 8, 16, 24, atau 32 bit per piksel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Pengodean BMP gagal: {width} × {height} piksel tidak sesuai dengan format atau buffer piksel
+@msg	GIF encoding failed: the palette image is malformed	Pengodean GIF gagal: gambar palet rusak
+@msg	GIF encoding failed: {e}	Pengodean GIF gagal: {e}
+@msg	JPEG colour profile: {e}	Profil warna JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Pengodean JPEG gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	JPEG encoding failed: {e}	Pengodean JPEG gagal: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Pengodean PNG gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	PNG encoding failed: the palette image is malformed	Pengodean PNG gagal: gambar palet rusak
+@msg	PNG encoding failed: {e}	Pengodean PNG gagal: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Pengodean PNG gagal: {width} × {height} piksel bukan ukuran gambar yang valid
+@msg	PSD colour profile: {e}	Profil warna PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Pengodean PSD gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	Revolve profile contains invalid coordinates	Profil Revolusi berisi koordinat yang tidak valid
+@msg	Revolve profile is too complex	Profil Revolusi terlalu rumit
+@msg	Revolve projection is not finite	Proyeksi Revolusi tidak berhingga
+@msg	Revolve requires finite profile coordinates within 100 million points	Revolusi memerlukan koordinat profil berhingga dalam batas 100 juta poin
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Permukaan Revolusi terlalu rumit; kurangi Segmen atau sederhanakan profil
+@msg	Revolve surface is too complex; simplify the profile	Permukaan Revolusi terlalu rumit; sederhanakan profil
+@msg	Revolve visibility cannot split the projected boundary	Visibilitas Revolusi tidak dapat membagi batas hasil proyeksi
+@msg	Revolve visibility creates too many fragments	Visibilitas Revolusi menghasilkan terlalu banyak fragmen
+@msg	Revolve visibility creates too many vector anchors	Visibilitas Revolusi menghasilkan terlalu banyak titik jangkar vektor
+@msg	Revolve visibility exceeds its geometry work limit	Visibilitas Revolusi melampaui batas kerja geometrinya
+@msg	Revolve visibility exceeds its spatial index limit	Visibilitas Revolusi melampaui batas indeks spasialnya
+@msg	Revolve visibility has too many boundary crossings	Visibilitas Revolusi memiliki terlalu banyak perpotongan batas
+@msg	Revolve visibility has too many input anchors	Visibilitas Revolusi memiliki terlalu banyak titik jangkar masukan
+@msg	Revolve visibility requires convex cap sectors	Visibilitas Revolusi memerlukan sektor tutup yang cembung
+@msg	Revolve visibility requires finite projected faces	Visibilitas Revolusi memerlukan sisi hasil proyeksi yang berhingga
+@msg	SVG options: {e}	Opsi SVG: {e}
+@msg	Save for Web settings: {e}	Pengaturan Simpan untuk web: {e}
+@msg	TIFF colour profile: {e}	Profil warna TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Pengodean TIFF gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	TIFF encoding failed: {e}	Pengodean TIFF gagal: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Kedalaman Targa {_1}: 16, 24, atau 32 bit per piksel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Pengodean Targa gagal: buffer piksel tidak sesuai dengan ukuran gambar
+@msg	The 3D projection is not finite	Proyeksi 3D tidak berhingga
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Bayangan 3D terlalu rumit; nonaktifkan Bayangan atau sederhanakan karya
+@msg	The shape contains invalid coordinates	Bentuk berisi koordinat yang tidak valid
+@msg	Too many Revolve faces for visibility evaluation	Terlalu banyak sisi Revolusi untuk evaluasi visibilitas
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft membaca paling banyak {ASE_MAX_ENTRIES} warna dan grup dari file swatch exchange, dan pustaka ini memiliki {entries}
+@msg	WebP encoding failed: {e}	Pengodean WebP gagal: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Pengodean WebP gagal: gambar terlalu besar untuk WebP lossy: turunkan resolusi atau pilih Tanpa kehilangan
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` harus "document", {{artboards: [index, …]}}, atau {{layers: [id, …]}}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` berupa smallThumb, mediumThumb, largeThumb, smallList, atau largeList
+@msg	`{file}` has no swatches of its own	`{file}` tidak memiliki swatch sendiri
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` memiliki swatch pola, yang tidak dapat disimpan dalam file .vcswatches
+@msg	a line can't run from a point to itself	garis tidak dapat ditarik dari suatu titik ke titik itu sendiri
+@msg	a line needs at least two points	garis memerlukan paling sedikit dua titik
+@msg	a linked image file is outside the read roots	file gambar tertaut berada di luar root baca
+@msg	a linked file's export folder is outside the read roots	folder ekspor file tertaut berada di luar root baca
+@msg	a number cannot be read	sebuah angka tidak dapat dibaca
+@msg	a swatch exchange block is too long	blok swatch exchange terlalu panjang
+@msg	a swatch exchange name is too long	nama swatch exchange terlalu panjang
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	gambar {sw} × {sh} tidak dapat diubah ukurannya menjadi {width} × {height} piksel
+@msg	a {width} × {height} image is too large	gambar {width} × {height} terlalu besar
+@msg	a {width} × {height} image: {e}	gambar {width} × {height}: {e}
+@msg	an image could not be written: {e}	sebuah gambar tidak dapat ditulis: {e}
+@msg	an image that couldn't be read was left out	gambar yang tidak dapat dibaca dihilangkan
+@msg	can't open “{name}”: {e}	tidak dapat membuka “{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	entri zip tidak dapat diratakan ke {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	root {kind} otomatisasi `{_1}` tidak dapat dibuka: {e}
+@msg	cannot read profile: {0}	profil tidak dapat dibaca: {0}
+@msg	color book version {version} isn't supported (only 1)	versi buku warna {version} tidak didukung (hanya 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	buku warna dalam ruang warna {other} tidak didukung (hanya RGB, CMYK, dan Lab)
+@msg	file name too long to zip: {_1}	nama file terlalu panjang untuk zip: {_1}
+@msg	file name too long to zip: {name}	nama file terlalu panjang untuk zip: {name}
+@msg	freeform line {i}: {e}	garis bentuk bebas {i}: {e}
+@msg	freeform point {i}: {e}	titik bentuk bebas {i}: {e}
+@msg	give `{key}` or `{other}`, not both	berikan `{key}` atau `{other}`, bukan keduanya
+@msg	grayscale profiles can't be working spaces yet	profil skala abu-abu belum dapat menjadi ruang kerja
+@msg	input contains NaN or infinite coordinates	masukan berisi koordinat NaN atau tak hingga
+@msg	input path could not be closed	jalur masukan tidak dapat ditutup
+@msg	invalid ICC profile: {0}	profil ICC tidak valid: {0}
+@msg	invalid scale {scale}	skala {scale} tidak valid
+@msg	its localized names take more than {_1} KB	nama yang dilokalkan memakan lebih dari {_1} KB
+@msg	its objects are nested too deep ({e})	objeknya bersarang terlalu dalam ({e})
+@msg	its tag table lists the `{_1}` tag more than once	tabel tag mencantumkan tag `{_1}` lebih dari sekali
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	tidak ditemukan objek serupa (salinan yang dicerminkan tidak dicocokkan); ubah Opsi edit global lalu coba lagi
+@msg	not a graphic style library: {e}	bukan pustaka gaya grafis: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	bukan pustaka swatch (.vcswatches atau .gpl)
+@msg	not a swatch library (format `{_1}`)	bukan pustaka swatch (format `{_1}`)
+@msg	not a swatch library: {e}	bukan pustaka swatch: {e}
+@msg	not an action set file ({e})	bukan file set tindakan ({e})
+@msg	numbers out of order in {{}} quantifier	angka tidak berurutan dalam kuantifier {{}}
+@msg	profile colour space {other} is not RGB, CMYK or Gray	ruang warna profil {other} bukan RGB, CMYK, atau Gray
+@msg	regular expression too large	ekspresi reguler terlalu besar
+@msg	script file is not UTF-8 text: {value}	file skrip bukan teks UTF-8: {value}
+@msg	step {step} of “{action}” runs the unknown command `{command}`	langkah {step} dari “{action}” menjalankan perintah tidak dikenal `{command}`
+@msg	stop {i}: {e}	perhentian {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	versi swatch exchange {major}.{minor} tidak didukung (hanya 1.x)
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: gunakan "{_1}" atau "{_2}"
+@msg	the SVG's style sheets take too long to match	lembar gaya SVG terlalu lama untuk dicocokkan
+@msg	the SVG's styles expand to more than {0} MB	gaya SVG berkembang menjadi lebih dari {0} MB
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	buku warna berisi lebih dari {ASE_MAX_ENTRIES} warna
+@msg	the color book is cut short	buku warna terpotong
+@msg	the color book's names take more than {_1} MB	nama dalam buku warna memakan lebih dari {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	gambar akan berukuran {w} × {h} piksel; ekspor raster dibatasi {MAX_RASTER_SIDE} piksel per sisi dan {_1} megapiksel: turunkan skala atau resolusi
+@msg	the optimised image can't be read back: {e}	gambar yang dioptimalkan tidak dapat dibaca kembali: {e}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	cat bukan gradien bentuk bebas (terapkan dengan paint.editGradient {{kind: "freeform"}})
+@msg	the pixel buffer doesn't match the image size	buffer piksel tidak sesuai dengan ukuran gambar
+@msg	the preview: {e}	pratinjau: {e}
+@msg	the request may not read the New Document profiles folder	permintaan tidak boleh membaca folder profil Dokumen baru
+@msg	the shapes are too degenerate to combine	bentuk terlalu degeneratif untuk digabungkan
+@msg	the shapes cross themselves and each other too often to combine	bentuk terlalu sering memotong dirinya sendiri dan satu sama lain untuk digabungkan
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	file swatch exchange berisi lebih dari {ASE_MAX_ENTRIES} warna dan grup
+@msg	the swatch exchange file is cut short	file swatch exchange terpotong
+@msg	the {_1} plate can't be read: {e}	pelat {_1} tidak dapat dibaca: {e}
+@msg	this binary DXF file is damaged or cut short	file DXF biner ini rusak atau terpotong
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	ini gambar DWG, yang tidak dapat dibaca: simpan dari aplikasi CAD sebagai DXF lalu buka file itu
+@msg	too many classes	terlalu banyak kelas
+@msg	too many groups	terlalu banyak grup
+@msg	too many layers for PSD (at most 32767)	terlalu banyak lapisan untuk PSD (paling banyak 32767)
+@msg	too many swatch exchange blocks	terlalu banyak blok swatch exchange
+@msg	unknown colour profile: {0}	profil warna tidak dikenal: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} bentrok dengan nama profil bawaan
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel terlalu besar untuk GIF (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{_1}: no usable transform to/from sRGB	{_1}: tidak ada transformasi yang dapat digunakan ke/dari sRGB
+@msg	{name} is not a CMYK profile	{name} bukan profil CMYK
+@msg	{name} is not an RGB profile	{name} bukan profil RGB
+@msg	{path}: could not be read	{path}: tidak dapat dibaca
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel terlalu besar untuk JPEG (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel terlalu besar untuk Targa (paling banyak 65535 piksel per sisi): turunkan resolusi
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} piksel terlalu besar untuk PSD (paling banyak {MAX_SIDE} piksel per sisi): turunkan resolusi
+@msg	the template name can't be empty	nama templat tidak boleh kosong
+@msg	the template name isn't usable as a file name	nama templat tidak dapat digunakan sebagai nama file
+@msg	no metadata templates folder here	tidak ada folder templat metadata di sini
+@msg	give `name` or `path`, not both	berikan `name` atau `path`, bukan keduanya
+@msg	give one of `path`, `name` and `data`	berikan salah satu dari `path`, `name`, dan `data`
+@msg	mode must be replace, keep or append	mode harus replace, keep, atau append
+@msg	the file is not an XMP metadata template	file ini bukan templat metadata XMP
+@msg	no path painted with a brush is selected	tidak ada jalur yang dicat dengan kuas yang terseleksi
+@msg	the selected paths are painted with brushes of different types	jalur yang terseleksi dicat dengan kuas dari jenis yang berbeda
+@msg	give `params` or `reset`, not both	berikan `params` atau `reset`, bukan keduanya
+@msg	a bristle brush has no options of its own on a path	kuas bulu tidak memiliki opsi sendiri pada jalur
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	beberapa efek raster tidak dijadikan gambar: efek tersebut akan memerlukan total lebih dari 1.024 gambar atau 256 megapiksel
+@msg	Shape Builder: select all paths you want to merge	Pembangun bentuk: pilih semua jalur yang ingin digabungkan
+@msg	action step {_1} (`{id}`) failed: {reason}	langkah tindakan {_1} (`{id}`) gagal: {reason}
+@msg	`points` must be three [x, y] pairs of numbers	`points` harus berupa tiga pasangan angka [x, y]
+@msg	direct-select three anchor points, or give `points`	pilih langsung tiga titik jangkar, atau berikan `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	tidak ada lingkaran yang melewati titik-titik ini: dua titik sama atau ketiganya terletak pada satu garis
+@msg	`{panel}` has no display sizes to cycle	`{panel}` tidak memiliki ukuran tampilan untuk diganti bergiliran
+@msg	the panels are not shown	panel tidak ditampilkan
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	garis atau jalur terbuka lain yang tidak melingkupi area tidak mengubah bentuk hasil; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} memberikan hasil kosong: garis atau jalur terbuka lain tidak melingkupi area; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	garis atau jalur terbuka lain yang tidak melingkupi area tidak menambahkan area ke bentuk majemuk; untuk menyertakannya, terapkan Objek › Jalur › Garis luar stroke padanya terlebih dahulu
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Sematan {n} gambar dilepaskan ke {folder}
+@msg	every numbered name for {name} is taken in that folder	setiap nama bernomor untuk {name} sudah dipakai di folder itu
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Impor membaca file sumber data yang berakhiran .csv, .tsv, .txt, atau .xml
+variable-kind	Visibility	Visibilitas
+variable-kind	Linked File	File tertaut
+variable-kind	Graph Data	Data grafik
+variable-kind	Unknown	Tidak diketahui
+variable-list-two	{0}, {1}	{0} dan {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0}, dan {1}
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum tidak boleh melebihi Diinginkan, dan Diinginkan tidak boleh melebihi Maksimum
+@msg	side is left or right, not `{v}`	side berupa left atau right, bukan `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order berupa bilangan bulat dari 0 sampai {others}, bukan `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (nama bilah alat) harus berupa string
+@msg	no toolbar named `{name}`	tidak ada bilah alat bernama `{name}`
+@msg	toolbar name can't be empty	nama bilah alat tidak boleh kosong
+@msg	a toolbar name has at most {MAX_NAME} characters	nama bilah alat paling banyak {MAX_NAME} karakter
+@msg	there is already a toolbar named `{name}`	sudah ada bilah alat bernama `{name}`
+@msg	there is already a toolbar named `{to}`	sudah ada bilah alat bernama `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	ruang kerja menyimpan paling banyak {MAX} bilah alat
+@msg	name (a toolbar's name) must be a string	name (nama bilah alat) harus berupa string
+@msg	name (a toolbar's name) is required	name (nama bilah alat) wajib diisi
+@msg	to (the new name) is required	to (nama baru) wajib diisi
+@msg	name must be a toolbar's name	name harus berupa nama bilah alat
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	Edit asli dengan:
+file-filter	Applications	Aplikasi
+
+# .cdr and .cmx import notes.
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	teks, bitmap, blend, kontur, goresan kuas, dan objek CDR lain yang belum dibaca VectorCraft tidak disertakan
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	isian fountain, pola, tekstur, dan PostScript CDR tidak disertakan
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	warna dalam model warna CDR yang tidak dibaca VectorCraft dibuka sebagai hitam
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	warna pustaka CDR yang disimpan gambar hanya berdasarkan nomor dibuka sebagai warna spot hitam
+@msg	CDR outline arrowheads were left out	kepala panah garis luar CDR tidak disertakan
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	amplop CDR tidak diterapkan, dan bentuk di bawahnya mempertahankan garis luarnya
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	lensa dan transparansi objek CDR tidak diterapkan, dan objek tempatnya berada tampil buram
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	bagian gambar yang bersarang terlalu dalam, atau melewati batas impor, tidak disertakan
+@msg	damaged parts of the drawing were left out	bagian gambar yang rusak tidak disertakan
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	halaman CDR yang lebih panjang dari 163.830 pt dibuka dengan panjang tersebut, dan karya di dekat tepinya berada di luar artboard
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	teks, gambar, persegi panjang, elips, jalur kliping, dan objek CMX lain yang belum dibaca VectorCraft tidak disertakan
+@msg	CMX fills other than uniform colors were left out	isian CMX selain warna seragam tidak disertakan
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	warna dalam model warna CMX yang tidak dibaca VectorCraft dibuka sebagai hitam
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	warna pustaka CMX yang disimpan berkas hanya berdasarkan nomor dibuka sebagai warna spot hitam
+@msg	CMX outline arrowheads were left out	kepala panah garis luar CMX tidak disertakan
+@msg	CMX lenses were not applied	lensa CMX tidak diterapkan
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	halaman CMX yang lebih panjang dari 163.830 pt dibuka dengan panjang tersebut, dan karya di dekat tepinya berada di luar artboard
+
+# PSD import notes.
+@msg	the file is no longer loaded	berkas tidak lagi dimuat
+@msg	1 type layer came in as pixels: the text isn't editable	1 lapisan teks masuk sebagai piksel: teksnya tidak dapat disunting
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} lapisan teks masuk sebagai piksel: teksnya tidak dapat disunting
+@msg	1 adjustment layer was not applied	1 lapisan penyesuaian tidak diterapkan
+@msg	{n} adjustment layers were not applied	{n} lapisan penyesuaian tidak diterapkan
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 lapisan isian tidak digambar (isian gradien atau pola, warna yang tidak dapat dibaca, atau bentuk yang tidak menyimpan piksel)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} lapisan isian tidak digambar (isian gradien atau pola, warna yang tidak dapat dibaca, atau bentuk yang tidak menyimpan piksel)
+@msg	the layer effects of 1 layer weren't drawn	efek lapisan dari 1 lapisan tidak digambar
+@msg	the layer effects of {n} layers weren't drawn	efek lapisan dari {n} lapisan tidak digambar
+@msg	the vector masks of 1 layer weren't applied	masker vektor dari 1 lapisan tidak diterapkan
+@msg	the vector masks of {n} layers weren't applied	masker vektor dari {n} lapisan tidak diterapkan
+@msg	the knockout of 1 layer wasn't applied	knockout dari 1 lapisan tidak diterapkan
+@msg	the knockout of {n} layers wasn't applied	knockout dari {n} lapisan tidak diterapkan
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lapisan tidak disertakan (lapisan tersembunyi dan lapisan yang dikliping padanya)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} lapisan tidak disertakan (lapisan tersembunyi dan lapisan yang dikliping padanya)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 lapisan yang dikliping ke lapisan isian yang tidak digambar tidak disertakan
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} lapisan yang dikliping ke lapisan isian yang tidak digambar tidak disertakan
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	lapisan dalam mode campuran yang tidak dimiliki VectorCraft ({modes}) digabungkan dengan lapisan di bawahnya
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 lapisan dalam mode campuran yang tidak dimiliki VectorCraft masuk sebagai Normal: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} lapisan dalam mode campuran yang tidak dimiliki VectorCraft masuk sebagai Normal: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 lapisan yang dikliping ke lapisan di bawahnya masuk tanpa kliping: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} lapisan yang dikliping ke lapisan di bawahnya masuk tanpa kliping: penggabungan memerlukan memori lebih dari yang diizinkan
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers berlaku untuk berkas PSD yang ditempatkan dengan layers: true
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: berkas PSD tertaut ditempatkan sebagai gambar datarnya; berikan link: false untuk menyematkannya beserta irisannya
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: berkas PSD tertaut ditempatkan sebagai gambar datarnya; hilangkan link atau berikan link: false
+@msg	1 slice lies outside the canvas or has no size and was left out	1 irisan berada di luar kanvas atau tidak berukuran dan tidak disertakan
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} irisan berada di luar kanvas atau tidak berukuran dan tidak disertakan
+@msg	1 slice would lie outside the canvas and was left out	1 irisan akan berada di luar kanvas dan tidak disertakan
+@msg	{n} slices would lie outside the canvas and were left out	{n} irisan akan berada di luar kanvas dan tidak disertakan
+@msg	the slices' descriptor holds too many values	deskriptor irisan menyimpan terlalu banyak nilai
+@msg	the slices' descriptor has a version other than 16	deskriptor irisan memiliki versi selain 16
+@msg	the slices' descriptor has no list of slices	deskriptor irisan tidak memiliki daftar irisan
+@msg	the slices' descriptor lists something other than a slice	deskriptor irisan mencantumkan sesuatu selain irisan
+@msg	a slice in the slices' descriptor has no bounds	sebuah irisan dalam deskriptor irisan tidak memiliki batas
+@msg	a slice's bounds in the slices' descriptor aren't numbers	batas sebuah irisan dalam deskriptor irisan bukan angka
+@msg	the slices' descriptor nests too deep	deskriptor irisan bersarang terlalu dalam
+@msg	the slices can't be read ({e}) and were left out	irisan tidak dapat dibaca ({e}) dan tidak disertakan
+@msg	the slices are stored in version {v}, which isn't read	irisan disimpan dalam versi {v}, yang tidak dibaca
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	berkas memiliki {count} irisan, lebih dari {MAX_SLICES} yang dibaca
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	sebuah teks dalam irisan memiliki lebih dari {MAX_TEXT} karakter yang dibaca
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	deskriptor irisan memiliki referensi dengan jenis yang tidak dikenal ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	deskriptor irisan memiliki nilai dengan tipe yang tidak dikenal ({_1})
+@msg	the layers can't be read ({e}): the file was placed as its merged image	lapisan tidak dapat dibaca ({e}): berkas ditempatkan sebagai gambar gabungannya
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objek {_1} adalah gambar yang diubah dengan Distorsi perspektif atau Distorsi bebas, dan perintah ini tidak dapat digunakan padanya
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya tidak akan membentuk bangun cembung
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya akan melewati cakrawala distorsi
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	gambar {_1} tidak dapat didistorsi dengan cara ini: sudut-sudutnya terlalu berdekatan untuk pemetaan perspektif

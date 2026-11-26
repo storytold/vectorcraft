@@ -8,6 +8,11 @@ fn num(desc: &str) -> Value {
     json!({"type": "number", "description": desc})
 }
 
+/// A number or null.
+fn num_or_null(desc: &str) -> Value {
+    json!({"description": desc, "anyOf": [{"type": "number"}, {"type": "null"}]})
+}
+
 fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
@@ -214,6 +219,7 @@ pub fn tool_definitions() -> Vec<Value> {
                             "tiltX": num("Pen tilt in degrees −90..90, positive leaning right (document axes); with tiltY, the tilt the Paintbrush records for Tilt and Bearing brushes. One without the other is 0"),
                             "tiltY": num("Pen tilt in degrees −90..90, positive leaning down the page"),
                             "rotation": num("Pen barrel rotation in degrees clockwise: the rotation the Paintbrush records for Rotation brushes"),
+                            "wheel": num("Airbrush pen finger wheel 0..1 (clamped): the wheel the Paintbrush records for Stylus Wheel brushes"),
                             "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },
@@ -276,7 +282,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "set_paint",
             "Set paint",
-            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed.",
+            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed, and when only some of those commands painted no object, `unpainted` lists them with a `note`.",
             obj(
                 json!({
                     "fill": paint_schema("Fill"),
@@ -308,7 +314,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"choice\",value:\"dontSave\"}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
@@ -466,20 +472,20 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection center; `copy` transforms a copy. A scale, reflect or shear its command refuses, or an argument of the wrong type, returns that error before any step runs, and nothing changes.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "dx": num("Move right"),
-                    "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees counter-clockwise"),
-                    "scale": num("Uniform scale in %"),
-                    "scaleX": num("Horizontal scale in %"),
-                    "scaleY": num("Vertical scale in %"),
-                    "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
-                    "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
-                    "copy": {"type": "boolean"},
+                    "dx": num_or_null("Move right (null: 0)"),
+                    "dy": num_or_null("Move down (null: 0)"),
+                    "rotate": num_or_null("Rotation in degrees counter-clockwise"),
+                    "scale": num_or_null("Uniform scale in %"),
+                    "scaleX": num_or_null("Horizontal scale in %"),
+                    "scaleY": num_or_null("Vertical scale in %"),
+                    "reflect": {"anyOf": [{"type": "string", "enum": ["vertical", "horizontal"]}, {"type": "null"}]},
+                    "shear": num_or_null("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
+                    "origin": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, {"type": "null"}]},
+                    "copy": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
                 }),
                 &[],
             ),

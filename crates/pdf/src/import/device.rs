@@ -22,7 +22,7 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn set_blend_mode(&mut self, blend_mode: craft_pdf::interpret::BlendMode) {
+    fn set_blend_mode(&mut self, blend_mode: craft::pdf::interpret::BlendMode) {
         let b = blend(blend_mode);
         if b != self.blend {
             self.flush_glyphs();
@@ -31,7 +31,7 @@ impl<'a> Device<'a> for Builder<'_> {
         }
     }
 
-    fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
+    fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft::pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
         self.flush_type3();
         let walked = self.walked(false);
@@ -46,11 +46,11 @@ impl<'a> Device<'a> for Builder<'_> {
             return;
         }
         let shading = match paint {
-            craft_pdf::interpret::Paint::Pattern(p) => match p.as_ref() {
+            craft::pdf::interpret::Paint::Pattern(p) => match p.as_ref() {
                 Pattern::Shading(sp) => Some(sp),
                 Pattern::Tiling(_) => None,
             },
-            craft_pdf::interpret::Paint::Color(_) => None,
+            craft::pdf::interpret::Paint::Color(_) => None,
         };
         // Patch and triangle meshes are gradient meshes; a stroke's, clipped to the stroke's outline
         // (as Illustrator writes a freeform gradient on a stroke).
@@ -149,7 +149,7 @@ impl<'a> Device<'a> for Builder<'_> {
         self.stack.push(Frame::new(kind));
     }
 
-    fn push_transparency_group(&mut self, opacity: f32, mask: Option<SoftMask<'a>>, blend_mode: craft_pdf::interpret::BlendMode) {
+    fn push_transparency_group(&mut self, opacity: f32, mask: Option<SoftMask<'a>>, blend_mode: craft::pdf::interpret::BlendMode) {
         self.flush();
         let mask = mask.map(|m| self.soft_mask(&m));
         self.stack.push(Frame::new(FrameKind::Group { opacity, blend: blend(blend_mode), mask, isolate: false, knockout: false }));
@@ -162,7 +162,7 @@ impl<'a> Device<'a> for Builder<'_> {
         glyph: &Glyph<'a>,
         transform: Affine,
         glyph_transform: Affine,
-        paint: &craft_pdf::interpret::Paint<'a>,
+        paint: &craft::pdf::interpret::Paint<'a>,
         draw_mode: &GlyphDrawMode,
     ) {
         // Clipping text paints nothing; its outlines arrive separately as a clip path.
@@ -246,7 +246,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 // replaces DeviceCMYK, so it is cached apart from the same image drawn where one does.
                 let intent = !white && self.intent_cmyk.is_some() && self.scan.cmyk_defaults.get(&r.stream().dict().obj_id()) == Some(&false);
                 // Inside an alpha mask the same image is read again, white (its own cache key).
-                let key = craft_pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 } ^ if intent { INTENT_KEY } else { 0 };
+                let key = craft::pdf::interpret::CacheKey::cache_key(&r) ^ if white { WHITE_KEY } else { 0 } ^ if intent { INTENT_KEY } else { 0 };
                 let st = r.stream();
                 let (w, h) = (r.width(), r.height());
                 // CMYK images keep their samples (read once per image).
@@ -292,7 +292,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 let cs_ok = dict.get::<Name<'_>>(b"ColorSpace").is_some_and(|n| matches!(n.as_ref(), b"DeviceRGB" | b"DeviceGray"));
                 let jpeg = !white
                     && filters.len() == 1
-                    && matches!(filters[0], craft_pdf::syntax::Filter::DctDecode)
+                    && matches!(filters[0], craft::pdf::syntax::Filter::DctDecode)
                     && cs_ok
                     && !dict.contains_key(b"SMask")
                     && !dict.contains_key(b"Mask")
@@ -344,7 +344,7 @@ impl<'a> Device<'a> for Builder<'_> {
             }
             Image::Stencil(s) => {
                 let white = self.white_images;
-                let key = craft_pdf::interpret::CacheKey::cache_key(&s) ^ if white { WHITE_KEY } else { 0 };
+                let key = craft::pdf::interpret::CacheKey::cache_key(&s) ^ if white { WHITE_KEY } else { 0 };
                 // A mask painted in a solid color comes in as a grayscale image of what it paints
                 // (black, the rest white) colorized by that color, as the `.ai` reader opens an
                 // image mask: Fill and Recolor Artwork reach the color, a spot color keeps its ink,
@@ -355,7 +355,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 s.with_stencil(
                     |luma, paint| {
                         let px = match paint {
-                            craft_pdf::interpret::Paint::Color(_) if !white => {
+                            craft::pdf::interpret::Paint::Color(_) if !white => {
                                 // The walk doesn't count images: the ink is found by its color space.
                                 colorize = Some(self.paint(paint, false, None).0);
                                 luma.data.iter().map(|a| u8::MAX - a).collect()
@@ -453,12 +453,20 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
-        self.actual.end();
+        // A span's glyphs are stroked within it: a stroke after it goes over none of them.
+        if self.actual.end() {
+            self.end_fills();
+        }
     }
 
     fn actual_text(&mut self, text: &[u8]) {
+        let active = self.actual.active();
         if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
             self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
+        // Nor does a stroke in a span go over a glyph filled before it.
+        if !active && self.actual.active() {
+            self.end_fills();
         }
     }
 }

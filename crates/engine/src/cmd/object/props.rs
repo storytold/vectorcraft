@@ -65,6 +65,9 @@ pub(super) fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             })
     };
     let d = &s.doc()?.doc;
+    if let Some(v) = str_param(p, "name") {
+        crate::cmd::buildcmds::check_part_name(d, &ids, v)?;
+    }
     // A graph keeps the object opacity and blend mode set on a mark of a series for the whole series, and set on a label
     // for its kind of label, so a value a mark or label already has still replaces the one another left on the graph.
     let transparency = opacity.is_some() || blend.is_some();

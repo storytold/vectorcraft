@@ -7,9 +7,11 @@ use std::sync::Arc;
 
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, GradientStop, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
-use vectorcraft_doc::overprint::{darken_overprints, is_black_ink, is_white};
+use vectorcraft_doc::overprint::{
+    DiscardWhite, colorized_shown_key, darken_overprints, image_overprints_whole, image_row_draws, is_black_ink, is_colorized_image, refuses_colorize,
+};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, InkSettings, PrintInk, PrintSettings};
@@ -175,52 +177,118 @@ impl<'a> Separator<'a> {
     /// carry counts as none. A link to a swatch the document lacks separates as the color's own
     /// values, so such a black counts as unlinked.
     fn no_ink(&self, plate: &str, p: &Paint) -> bool {
-        let process = |swatch: Option<&str>| swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_none_or(|w| !w.spot));
-        let none = |c: &Color, process: bool, ink: f32| ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false));
         match p {
             Paint::Solid { color, swatch, tint } => {
-                none(color, process(swatch.as_deref()), self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))))
+                self.none(color, self.process(swatch.as_deref()), self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))))
             }
             Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
-                Some(f) => f.points.iter().all(|pt| none(&pt.color, true, self.ink(plate, &pt.color, None))),
-                None => {
-                    !g.gradient.stops.is_empty()
-                        && g.gradient.stops.iter().all(|s| {
-                            let ink = self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates);
-                            none(&s.color, s.plates.is_none() && process(s.swatch.as_deref()), ink)
-                        })
-                }
+                Some(f) => f.points.iter().all(|pt| self.point_none(plate, &pt.color)),
+                None => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| self.stop_none(plate, s)),
             },
             _ => false,
         }
     }
 
+    /// Whether a color linked to swatch `swatch` separates as process inks: no link, or a link
+    /// to a process swatch or to one the document lacks, other than Registration.
+    fn process(&self, swatch: Option<&str>) -> bool {
+        swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_none_or(|w| !w.spot))
+    }
+
+    /// Whether `ink` of color `c` (separating as process inks when `process` is true) counts as
+    /// none, as [`Self::no_ink`] says.
+    fn none(&self, c: &Color, process: bool, ink: f32) -> bool {
+        ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false))
+    }
+
+    /// Whether gradient stop `s` puts none of ink `plate` down, as [`Self::no_ink`] says.
+    fn stop_none(&self, plate: &str, s: &GradientStop) -> bool {
+        let ink = self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates);
+        self.none(&s.color, s.plates.is_none() && self.process(s.swatch.as_deref()), ink)
+    }
+
+    /// Whether a freeform gradient's point of color `c` puts none of ink `plate` down, as
+    /// [`Self::no_ink`] says.
+    fn point_none(&self, plate: &str, c: &Color) -> bool {
+        self.none(c, true, self.ink(plate, c, None))
+    }
+
+    /// On a PostScript plate, make paper white the stops and points of overprinting gradient `p`
+    /// that put none of ink `plate` down while others do ([`Self::no_ink`]'s rule for each): the
+    /// writer leaves the plate below as it is where the gradient is paper white.
+    fn clear_inkless_stops(&self, plate: &str, p: &mut Paint) {
+        let Paint::Gradient(g) = p else { return };
+        if !self.postscript {
+            return;
+        }
+        let paper = Color::Gray { k: 0.0 };
+        match g.freeform.as_mut().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
+            Some(f) => {
+                for pt in f.points.iter_mut().filter(|pt| self.point_none(plate, &pt.color)) {
+                    pt.color = paper;
+                }
+            }
+            None => {
+                for s in g.gradient.stops.iter_mut().filter(|s| self.stop_none(plate, s)) {
+                    *s = GradientStop { color: paper, swatch: None, tint: 1.0, plates: None, ..s.clone() };
+                }
+            }
+        }
+    }
+
     /// Overprinting fills and strokes of `a`'s subtree with a Normal blending mode, and
     /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
-    /// as it is: they are drawn as nothing on it (white ones with `discard_white` aside, which
-    /// knock out). A writer without blending modes (PostScript) then keeps the ink below them,
+    /// as it is: they are drawn as nothing on it. Paper white ones that `discard_white` knocks out
+    /// ([`DiscardWhite::discards`]) stop overprinting instead, and knock out the ink below them on
+    /// the plate as in composite output. A writer without blending modes (PostScript) then keeps the ink below them,
     /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
     /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
-    /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2).
-    fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
-        let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
+    /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2). On a
+    /// PostScript plate, the stops and points of such a gradient that put none of the ink down
+    /// become paper white ([`Self::clear_inkless_stops`]), which the writer leaves out there. A
+    /// colorized image that overprints as a whole ([`image_overprints_whole`]) and whose color puts
+    /// none of the ink down is hidden on the plate once none of its rows draws there; while a row
+    /// draws, the PostScript writer leaves out the image's paper-white pixels and draws the row.
+    /// A colorized image that does not overprint as a whole, or whose pixels don't take its color
+    /// ([`refuses_colorize`]) and so print as they are, knocks out on the plate.
+    fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: &DiscardWhite) {
+        let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !discard_white.discards(p) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);
+        let whole = image_overprints_whole(n, discard_white, &self.doc.images);
+        if n.colorize_overprints() && !whole {
+            n.extras_mut().colorize_overprint = false;
+        }
+        let image = whole && n.extras().colorize.as_deref().is_some_and(|p| self.no_ink(plate, p));
         for it in &mut n.appearance.items {
+            if it.overprint() && discard_white.discards(it.paint()) {
+                *it.overprint_mut() = false;
+            }
             let normal = match it {
                 AppearanceItem::Fill(l) => l.blend == BlendMode::Normal,
                 AppearanceItem::Stroke(l) => l.blend == BlendMode::Normal,
             };
             if normal && inkless(it.overprint(), it.paint()) {
                 *it.paint_mut() = Paint::None;
+            } else if normal && it.overprint() {
+                self.clear_inkless_stops(plate, it.paint_mut());
             }
+        }
+        if image && !n.appearance.items.iter().any(image_row_draws) {
+            n.visible = false;
         }
         if let NodeKind::Text(t) = &mut n.kind {
             for r in &mut t.runs {
+                r.style.overprint_fill &= !discard_white.discards(&r.style.fill);
+                r.style.overprint_stroke &= !discard_white.discards(&r.style.stroke);
                 if inkless(r.style.overprint_fill, &r.style.fill) {
                     r.style.fill = Paint::None;
+                } else if r.style.overprint_fill {
+                    self.clear_inkless_stops(plate, &mut r.style.fill);
                 }
                 if inkless(r.style.overprint_stroke, &r.style.stroke) {
                     r.style.stroke = Paint::None;
+                } else if r.style.overprint_stroke {
+                    self.clear_inkless_stops(plate, &mut r.style.stroke);
                 }
             }
         }
@@ -234,12 +302,12 @@ impl<'a> Separator<'a> {
     /// ink the plate below shows through instead of being knocked out.
     pub fn plate(&self, plate: &str) -> Document {
         let mut d = self.doc.clone();
-        let discard_white = d.setup.discard_white_overprint;
+        let discard_white = DiscardWhite::printing(&d, |n| !self.converts(n));
         let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
-            self.clear_inkless_overprints(plate, n, discard_white);
-            darken_overprints(n, discard_white);
+            self.clear_inkless_overprints(plate, n, &discard_white);
+            darken_overprints(n, &discard_white, &d.images);
             self.node(plate, Arc::make_mut(n));
             keep_colorized_pixels(n, &d.images, &mut colorized);
         }
@@ -298,22 +366,15 @@ fn colorized_key(key: &str) -> String {
 /// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
 /// shows.
 fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
-    let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
-    if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
+    if !is_colorized_image(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
-    let shown = match &node.kind {
-        NodeKind::Image(im) if colorized(node) => {
-            let mask = Document::color_mask_of(node).filter(|m| m.made_for(im) && images.contains_key(&m.key));
-            Some(mask.map_or(&im.key, |m| &m.key).clone())
-        }
-        _ => None,
-    };
-    if shown.as_ref().and_then(|key| images.get(key)).is_some_and(|b| !b.takes_colorize()) {
+    let shown = colorized_shown_key(node, images);
+    if refuses_colorize(node, images) {
         node.extras_mut().colorize = None;
     }
-    if let Some(key) = shown.filter(|_| colorized(node)) {
+    if let Some(key) = shown.filter(|_| is_colorized_image(node)) {
         if let Some(e) = node.extras_if_any() {
             e.color_mask = None;
         }

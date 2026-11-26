@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AnchorRef, Document, Node, NodeId, NodeKind, Scaling, Selection};
+use vectorcraft_doc::{AnchorRef, Document, Node, NodeId, NodeKind, Scaling, SegmentRef, Selection};
 use vectorcraft_geom::{Anchor, AnchorKind, Anchors, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool}",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool, link?: bool, at?: [x,y]} move a direction handle; independent moves only that side and makes the anchor a corner; symmetric mirrors the other handle about the anchor without changing its kind (not at an open end, where no segment leaves the anchor on that side); link makes the anchor smooth with the other handle in line at its own length (a retracted one is pulled out to the moved handle's length where a segment leaves the anchor on its side); independent and symmetric cannot both be true, and link cannot go with either; all default false; with link false, at moves the anchor and both handles before placing the chosen handle",
             has_doc,
             set_handle
         ),
@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key)",
+            "{keepEmpty?: bool (keep a compound path left with no members)} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
             has_anchors,
             delete_anchors
         ),
@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Anchor Point",
             [],
             None,
-            "{id, subpath?, segment, t: 0..1} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
+            "{id, subpath?, segment, t: 0..1, selectAnchor?: bool (the path becomes the selection with only the new anchor direct-selected, also when it is selected)} add an anchor at t on the segment → {anchor}; the direct-selected anchors and selected segments keep the same points (a selected segment it splits stays selected as its two halves), and a path that isn't selected becomes the selection with the new anchor direct-selected",
             has_doc,
             insert_anchor
         ),
@@ -244,24 +244,76 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
-    let d = Vec2::new(number_or(p, "dx", 0.0, "path.moveAnchors")?, number_or(p, "dy", 0.0, "path.moveAnchors")?);
-    check_switches(p, &["patterns", "interpolate"], "path.moveAnchors")?;
+    move_selected(s, p, false)
+}
+
+/// The arrow keys with direct-selected anchors or segments: as `path.moveAnchors`, except that a
+/// selected curved segment bends ([`SubPath::nudge_segment`]).
+pub(crate) fn nudge_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    move_selected(s, p, true)
+}
+
+/// Move the selection by `(dx, dy)`: its direct-selected anchors with their handles, and the
+/// objects selected whole. With `bend`, each selected curved segment bends instead and its anchors
+/// stay, except an anchor that also ends a selected straight segment, which moves with it.
+fn move_selected(s: &mut Session, p: &Value, bend: bool) -> Result<Value> {
+    const C: &str = "path.moveAnchors";
+    let d = Vec2::new(number_or(p, "dx", 0.0, C)?, number_or(p, "dy", 0.0, C)?);
+    check_switches(p, &["patterns", "interpolate"], C)?;
     // An object selected in a symbol instance's art stays where the symbol puts it.
     super::edit::refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    let mut sel = st.selection.clone();
+    let (held, bends) = if bend { held_segments(&st.doc, &mut sel, d) } else { (false, vec![]) };
+    // Segments that hold their anchors and don't bend, with nothing else to move, change nothing.
+    if held && bends.is_empty() && sel.whole().is_empty() && sel.guides.is_empty() && sel.anchors.values().all(BTreeSet::is_empty) {
+        return ok();
+    }
     // Objects selected whole move as objects, and their pattern tiles move with them when
     // `patterns` (default: General › Transform Pattern Tiles) is on.
-    let whole = s.doc()?.selection.whole();
-    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &whole)?, ..Scaling::default() };
-    let interpolate = interpolates_handles(s, p, "path.moveAnchors")?;
-    transform_anchors(s, "Move", vectorcraft_geom::Affine::translate(d), sc, interpolate)?;
-    // Transform Again repeats a move that moved something; a drag records it when it commits.
+    let sc = Scaling { patterns: super::object::transform_patterns(s, p, &sel.whole())?, ..Scaling::default() };
+    let interpolate = interpolates_handles(s, p, C)?;
+    s.edit(if bends.is_empty() { "Move" } else { "Reshape" }, |doc, _| {
+        transform_selected(doc, &sel, vectorcraft_geom::Affine::translate(d), sc, interpolate)?;
+        for &(id, si, seg) in &bends {
+            if let Some(sp) = path_mut(doc, id)?.subpaths.get_mut(si) {
+                sp.nudge_segment(seg, d);
+            }
+        }
+        Ok(())
+    })?;
+    // Transform Again repeats a move that moved something; a drag records it when it commits. A
+    // move that held segments' anchors is not one move of the selection.
     let st = s.doc_mut()?;
-    if st.interaction.is_none() && (d.x != 0.0 || d.y != 0.0) {
+    if !held && st.interaction.is_none() && (d.x != 0.0 || d.y != 0.0) {
         let options = json!({ "copy": false, "patterns": sc.patterns, "interpolate": interpolate });
         st.last_transform = Some(crate::LastTransform::Matrix(vectorcraft_geom::Affine::translate(d), options));
         st.last_perspective = None;
     }
     ok()
+}
+
+/// Take the anchors of `sel`'s selected curved segments out of its `anchors`, except those that
+/// also end a selected straight segment, and list the segments that a bend by `d` changes. Also
+/// whether any curved segment is selected.
+fn held_segments(doc: &Document, sel: &mut Selection, d: Vec2) -> (bool, Vec<(NodeId, usize, usize)>) {
+    let (mut held, mut bends) = (false, vec![]);
+    for (&id, refs) in &sel.segments {
+        let (Some(path), Some(set)) = (doc.node(id).and_then(Node::path_data), sel.anchors.get_mut(&id)) else { continue };
+        let ends = |(si, seg): SegmentRef| path.subpaths.get(si).map(|sp| [(si, seg), (si, (seg + 1) % sp.anchors.len())]);
+        let curved = |&(si, seg): &SegmentRef| path.subpaths.get(si).is_some_and(|sp| seg < sp.segment_count() && !sp.segment_is_line(seg));
+        let moved: BTreeSet<AnchorRef> = refs.iter().filter(|r| !curved(r)).filter_map(|&r| ends(r)).flatten().collect();
+        for &(si, seg) in refs.iter().filter(|r| curved(r)) {
+            held = true;
+            for end in ends((si, seg)).into_iter().flatten().filter(|e| !moved.contains(e)) {
+                set.remove(&end);
+            }
+            if path.subpaths.get(si).is_some_and(|sp| sp.nudged_handles(seg, d).is_some()) {
+                bends.push((id, si, seg));
+            }
+        }
+    }
+    (held, bends)
 }
 
 /// Interpolate Control Points: does a move of direct-selected anchors re-map the handles of the
@@ -276,56 +328,70 @@ pub(crate) fn interpolates_handles(s: &mut Session, p: &Value, cmd: &str) -> Res
     Ok(on)
 }
 
-/// Apply `xf` to the direct-selected anchors, their handles with them, and (with `sc`) to the
-/// objects selected whole (those with no entry in the selection's `anchors`). An object inside
-/// another selected object, such as a path in a selected group, moves once, with that object.
-/// When `xf` is a move and `interpolate` is on, the handles of each segment with one moved end
-/// are re-mapped ([`move_interpolating_handles`]).
+/// [`transform_selected`] on the active document's selection, as one undo step `label`. A
+/// transform other than a move also transforms the selected ruler guides
+/// ([`Document::transform_ruler_guides`]).
 pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<()> {
     let sel = s.doc()?.selection.clone();
-    let ids = super::edit::outermost(&s.doc()?.doc, sel.objects.clone());
+    // As [`transform_selected`] tells a move apart, which moves the guides itself.
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
-    let delta = vectorcraft_geom::Vec2::new(c[4], c[5]);
-    s.edit(label, |doc, _| {
-        for id in &ids {
-            match sel.anchors.get(id) {
-                Some(set) => {
-                    let path = path_mut(doc, *id)?;
-                    // Only an exact move takes the interpolating path: a near-identity scale or
-                    // turn still transforms the anchors as asked.
-                    if interpolate && c[..4] == [1.0, 0.0, 0.0, 1.0] {
-                        move_interpolating_handles(path, set, delta);
-                    } else {
-                        for &(si, ai) in set {
-                            if let Some(a) = path.anchor_mut(si, ai) {
-                                *a = a.transform(xf);
-                            }
-                        }
-                    }
-                    // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
-                    // to the pixel grid again after its anchors move.
-                    let top = compound_or_self(doc, *id);
-                    if let Some(n) = doc.node_mut(top) {
-                        super::object::snap_if_aligned(n);
-                    }
-                }
-                None => {
-                    if let Some(n) = doc.node_mut(*id) {
-                        n.transform(xf, sc);
-                        super::object::keep_pixel_aligned(n, sc);
-                    }
-                    super::object::keep_compound_aligned(doc, *id, sc);
-                }
-            }
-        }
-        if is_translation && (delta.x != 0.0 || delta.y != 0.0) {
-            for &i in &sel.guides {
-                doc.edit_ruler_guide(i, |g| *g = g.moved(delta));
-            }
+    s.edit(label, |doc, live| {
+        transform_selected(doc, &sel, xf, sc, interpolate)?;
+        if !is_translation {
+            doc.transform_ruler_guides(live, xf);
         }
         Ok(())
     })
+}
+
+/// Apply `xf` to the direct-selected anchors, their handles with them, and (with `sc`) to the
+/// objects selected whole (those with no entry in `sel`'s `anchors`). An object inside
+/// another selected object, such as a path in a selected group, moves once, with that object.
+/// When `xf` is a move and `interpolate` is on, the handles of each segment with one moved end
+/// are re-mapped ([`move_interpolating_handles`]).
+fn transform_selected(doc: &mut Document, sel: &Selection, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<()> {
+    let ids = super::edit::outermost(doc, sel.objects.clone());
+    let c = xf.as_coeffs();
+    let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
+    let delta = vectorcraft_geom::Vec2::new(c[4], c[5]);
+    for id in &ids {
+        match sel.anchors.get(id) {
+            Some(set) => {
+                let path = path_mut(doc, *id)?;
+                // Only an exact move takes the interpolating path: a near-identity scale or
+                // turn still transforms the anchors as asked.
+                if interpolate && c[..4] == [1.0, 0.0, 0.0, 1.0] {
+                    move_interpolating_handles(path, set, delta);
+                } else {
+                    for &(si, ai) in set {
+                        if let Some(a) = path.anchor_mut(si, ai) {
+                            *a = a.transform(xf);
+                        }
+                    }
+                }
+                // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
+                // to the pixel grid again after its anchors move.
+                let top = compound_or_self(doc, *id);
+                if let Some(n) = doc.node_mut(top) {
+                    super::object::snap_if_aligned(n);
+                }
+            }
+            None => {
+                if let Some(n) = doc.node_mut(*id) {
+                    n.transform(xf, sc);
+                    super::object::keep_pixel_aligned(n, sc);
+                }
+                super::object::keep_compound_aligned(doc, *id, sc);
+            }
+        }
+    }
+    if is_translation && (delta.x != 0.0 || delta.y != 0.0) {
+        for &i in &sel.guides {
+            doc.edit_ruler_guide(i, |g| *g = g.moved(delta));
+        }
+    }
+    Ok(())
 }
 
 /// Move the anchors `set` of `path` by `d`, their handles with them, then re-map the two handles
@@ -457,23 +523,179 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let ai = index_opt(p, "anchor", "path.setHandle")?.ok_or_else(|| bad("path.setHandle", "missing anchor"))?;
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
+    if switch_or(p, "link", false, "path.setHandle")? {
+        return link_handle(s, p, id, si, ai, out, pos);
+    }
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
+    let symmetric = switch_or(p, "symmetric", false, "path.setHandle")?;
+    if symmetric && independent {
+        return Err(bad("path.setHandle", "`independent` and `symmetric` cannot both be true"));
+    }
+    // The other handle is mirrored only where a segment leaves the anchor on its side: at an open
+    // end the handle moves as it would without `symmetric`.
+    let symmetric = symmetric && has_segment(s, id, si, ai, !out)?;
+    let at = match p.get("at").filter(|v| !v.is_null()) {
+        None => None,
+        Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad("path.setHandle", "`at` must be [x, y]"))?),
+    };
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
     // other handle of a smooth anchor, which need not give back the same value.
     if let Some(a) = anchor_of(s, id, si, ai)?
+        && at.is_none_or(|to| to == a.p)
         && (if out { a.h_out } else { a.h_in }) == pos
         && !(independent && a.kind != AnchorKind::Corner)
+        && (!symmetric || (if out { a.h_in } else { a.h_out }) == a.p - (pos - a.p))
     {
         return ok();
     }
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-        a.set_handle(out, pos, independent);
+        let old_point = a.p;
+        let old_handle = if out { a.h_out } else { a.h_in };
+        if let Some(to) = at {
+            a.translate(to - a.p);
+        }
+        let handle = if out { a.h_out } else { a.h_in };
+        let kind_changes = independent && a.kind != AnchorKind::Corner;
+        // Ordinary decimal moves can round `at - old_point` differently from the handle's
+        // translation. Within that calculation's roundoff, place the selected point exactly
+        // without realigning the other stored Smooth handle. Real edits still use set_handle.
+        let translation_roundoff = at.is_some_and(|to| {
+            let matches = |actual: f64, requested: f64, owner: f64, old: f64, new: f64| {
+                let scale = owner.abs().max(old.abs()).max(new.abs()).max(requested.abs()).max(1.0);
+                (actual - requested).abs() <= 4.0 * f64::EPSILON * scale
+            };
+            to != old_point && matches(handle.x, pos.x, old_point.x, old_handle.x, to.x) && matches(handle.y, pos.y, old_point.y, old_handle.y, to.y)
+        });
+        if !kind_changes && (handle == pos || translation_roundoff) {
+            if out {
+                a.h_out = pos;
+            } else {
+                a.h_in = pos;
+            }
+        } else {
+            a.set_handle(out, pos, independent);
+        }
+        if symmetric {
+            let opposite = a.p - (pos - a.p);
+            if out { a.h_in = opposite } else { a.h_out = opposite }
+        }
         Ok(())
     })?;
     ok()
+}
+
+/// `path.setHandle` with `link` (the Anchor Point tool's Alt-drag on a handle): the handle goes to
+/// (x, y) and the anchor becomes smooth, its other handle turned in line at its own length. A
+/// retracted other handle is pulled out to the moved handle's length when a segment leaves the
+/// anchor on its side, and stays retracted at an open end. An anchor the edit would leave as it
+/// is records no undo step.
+fn link_handle(s: &mut Session, p: &Value, id: NodeId, si: usize, ai: usize, out: bool, pos: Point) -> Result<Value> {
+    const C: &str = "path.setHandle";
+    if switch_or(p, "independent", false, C)? {
+        return Err(bad(C, "`link` and `independent` cannot both be true"));
+    }
+    if switch_or(p, "symmetric", false, C)? {
+        return Err(bad(C, "`link` and `symmetric` cannot both be true"));
+    }
+    if !(pos.x.abs() < 1e9 && pos.y.abs() < 1e9) {
+        return Err(bad(C, "x and y must be finite"));
+    }
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let unchanged = s.doc()?.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)).is_some_and(|sp| {
+        sp.anchors.get(ai).is_some_and(|a| {
+            let mut linked = *a;
+            linked.link_handle(out, pos, sp.has_segment(ai, !out));
+            linked == *a || ((if out { a.has_in() } else { a.has_out() }) && linked_already(a, out, pos))
+        })
+    });
+    if unchanged {
+        return ok();
+    }
+    s.edit("Reshape", |d, _| {
+        let sp = path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+        let pull_out = sp.has_segment(ai, !out);
+        let a = sp.anchors.get_mut(ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+        a.link_handle(out, pos, pull_out);
+        Ok(())
+    })?;
+    ok()
+}
+
+/// Whether a smooth anchor `a` already has its `out` (or incoming) handle at `pos` and its other
+/// handle exactly where [`Anchor::link_handle`] puts it for that handle at some positive length.
+/// Turning the other handle again from its stored end measures its length anew, which can round
+/// the end differently in the last bit; a handle that passes this test only gets that rounding,
+/// and any other handle is turned. `p + u * len` here is the same arithmetic as in
+/// `Anchor::link_handle`, `dir / l` included.
+fn linked_already(a: &Anchor, out: bool, pos: Point) -> bool {
+    let (moved, other) = if out { (a.h_out, a.h_in) } else { (a.h_in, a.h_out) };
+    let dir = a.p - pos;
+    let l = dir.x.hypot(dir.y);
+    if a.kind != AnchorKind::Smooth || moved != pos || !(l > 0.0 && l.is_finite()) {
+        return false;
+    }
+    let u = dir / l;
+    // The lengths that give each stored coordinate exactly; the smallest length both ranges hold
+    // is checked against the whole end.
+    let (mut lo, mut hi) = (0.0_f64, f64::INFINITY);
+    for (p, o, u) in [(a.p.x, other.x, u.x), (a.p.y, other.y, u.y)] {
+        if u == 0.0 {
+            if o != p {
+                return false;
+            }
+            continue;
+        }
+        let Some((first, last)) = lengths_onto(p, u, o) else {
+            return false;
+        };
+        (lo, hi) = (lo.max(first), hi.min(last));
+    }
+    lo <= hi && lo > 0.0 && lo.is_finite() && a.p + u * lo == other
+}
+
+/// The lengths `len` for which `p + u * len` rounds to exactly `o`, as their smallest and largest,
+/// for a `u` other than 0. The rounded sum moves the same way as `len`, so a range around the
+/// unrounded answer is widened until it brackets `o` and then halved down to each end.
+fn lengths_onto(p: f64, u: f64, o: f64) -> Option<(f64, f64)> {
+    let s = u.signum();
+    let below = |len: f64| s * (p + u * len) < s * o;
+    let above = |len: f64| s * (p + u * len) > s * o;
+    let c = (o - p) / u;
+    let mut d = (o.abs() + p.abs()).max(f64::MIN_POSITIVE) * f64::EPSILON / u.abs();
+    let mut bracket = None;
+    for _ in 0..64 {
+        if below(c - d) && above(c + d) {
+            bracket = Some((c - d, c + d));
+            break;
+        }
+        d *= 2.0;
+    }
+    let (lo, hi) = bracket?;
+    let first = halve(lo, hi, |len| !below(len)).1;
+    let last = halve(lo, hi, above).0;
+    (first <= last).then_some((first, last))
+}
+
+/// Narrows `lo..hi`, where `pred` is false at `lo` and true at `hi` and changes once between
+/// them, to two neighboring values with the same property.
+fn halve(mut lo: f64, mut hi: f64, pred: impl Fn(f64) -> bool) -> (f64, f64) {
+    for _ in 0..2200 {
+        let m = lo + (hi - lo) / 2.0;
+        if m <= lo || m >= hi {
+            break;
+        }
+        if pred(m) {
+            hi = m;
+        } else {
+            lo = m;
+        }
+    }
+    (lo, hi)
 }
 
 /// `path.moveAnchor`: one anchor to (x, y), its handles keeping their offsets (the Anchor Point
@@ -512,6 +734,16 @@ fn anchor_of(s: &Session, id: NodeId, si: usize, ai: usize) -> Result<Option<Anc
     }
     let d = &s.doc()?.doc;
     Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).and_then(|sp| sp.anchors.get(ai)).copied())
+}
+
+/// Whether anchor `ai` of subpath `si` of path `id` has a segment on its outgoing (`out`) or
+/// incoming side; false when the path, subpath or anchor is not there.
+fn has_segment(s: &Session, id: NodeId, si: usize, ai: usize, out: bool) -> Result<bool> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let d = &s.doc()?.doc;
+    Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).is_some_and(|sp| sp.has_segment(ai, out)))
 }
 
 fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1486,8 +1718,20 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 /// Layers are retained, and an object removed with a selected ancestor is not removed twice.
 /// Returns JSON `null` on success; selection is replaced by the surviving object IDs.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    delete_anchors_joined(s, p, false)
+}
+
+/// [`delete_anchors`], and with `keep_joined` (General › Delete Removes Anchor Points and Keeps
+/// Paths Joined) a path with direct-selected anchors and no selected segment loses those anchors
+/// as Remove Anchor Points takes them, without opening it, and stays selected with the next
+/// anchor along (the one before at an open subpath's end), so the next Delete goes on along the
+/// path. When no subpath it changed keeps two anchors, the path stays selected whole, as Remove
+/// Anchor Points leaves it. Paths with a selected segment are cut there, as without `keep_joined`
+/// (their selected anchors stay in the path), and objects selected whole are deleted, in the same undo step.
+pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: bool) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1505,21 +1749,43 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             .copied()
             .filter(|id| !d.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
             .collect();
-        // The compound paths that hold a deleted object; one left with no members goes too.
-        let compounds: BTreeSet<NodeId> = whole_ids
-            .iter()
-            .chain(sel.keys())
-            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
-            .collect();
+        // The compound paths that hold a deleted object; one left with no members goes too, unless `keepEmpty`.
+        let compounds: BTreeSet<NodeId> = if keep_empty {
+            BTreeSet::new()
+        } else {
+            whole_ids
+                .iter()
+                .chain(sel.keys())
+                .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+                .collect()
+        };
         if !whole_ids.is_empty() {
             d.remove_many(&whole_ids)?;
         }
         let mut survivors = vec![];
+        let mut following = vec![];
         let remaining: Vec<NodeId> = sel.keys().copied().filter(|id| d.node(*id).is_some()).collect();
         let mut emptied = Beside::replacing(d, &remaining);
         for (id, set) in &sel {
             // The path went with a fully selected group around it.
             if d.node(*id).is_none() {
+                continue;
+            }
+            if keep_joined
+                && !set.is_empty()
+                && !segments.contains_key(id)
+                && let Some(path) = d.node(*id).and_then(|n| match &n.kind {
+                    NodeKind::Path { path, .. } => Some(path),
+                    _ => None,
+                })
+            {
+                let shape: Vec<(usize, bool)> = path.subpaths.iter().map(|sp| (sp.anchors.len(), sp.closed)).collect();
+                let anchors: Vec<(usize, usize)> = set.iter().copied().collect();
+                let next = super::draw2::following_anchors(&shape, &anchors);
+                if !super::draw2::remove_anchors_of(d, selection, &mut emptied, *id, anchors, false)? {
+                    survivors.push(*id);
+                    following.push((*id, next));
+                }
                 continue;
             }
             let original = deletion_source(d, *id)?;
@@ -1565,6 +1831,11 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         selection.set(survivors);
+        for (id, next) in following {
+            if !next.is_empty() {
+                selection.anchors.insert(id, next);
+            }
+        }
         Ok(())
     })?;
     ok()
@@ -1955,6 +2226,7 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     let si = usize_opt(p, "subpath", "path.insertAnchor")?.unwrap_or(0);
     let seg = index_opt(p, "segment", "path.insertAnchor")?.ok_or_else(|| bad("path.insertAnchor", "missing segment"))?;
     let t = number_or(p, "t", 0.5, "path.insertAnchor")?.clamp(0.0, 1.0);
+    let select_anchor = switch_or(p, "selectAnchor", false, "path.insertAnchor")?;
     let idx = s.edit("Add Anchor Point", |d, sel| {
         let path = path_mut(d, id)?;
         let sp = path.subpaths.get_mut(si).ok_or_else(|| EngineError::Other("no such subpath".into()))?;
@@ -1964,8 +2236,9 @@ fn insert_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let idx = sp.insert_anchor(seg, t);
         renumber_after_insert(sel, id, si, idx);
         // A path that wasn't selected becomes the selection, its new anchor direct-selected, so
-        // the point added shows and can be edited at once (#4237).
-        if !sel.contains(id) {
+        // the point added shows and can be edited at once (#4237). `selectAnchor` does the same
+        // for a path that is selected.
+        if select_anchor || !sel.contains(id) {
             sel.clear();
             sel.add(id);
             sel.anchors.entry(id).or_default().insert((si, idx));

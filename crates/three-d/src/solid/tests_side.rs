@@ -1,6 +1,6 @@
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
-use super::super::{Bevel, Extrude, View, extrude, extrude_side_size};
+use super::super::{Bevel, Extrude, View, extrude, extrude_side_size, extrude_surfaces};
 use super::{across_steps, along_ring, longest};
 
 fn square(r: Rect, hole: Option<Rect>) -> PathData {
@@ -93,4 +93,31 @@ fn the_side_measures_around_the_outline_and_across_the_bevels() {
     assert_eq!(extrude_side_size(&path, FillRule::NonZero, outer, Extrude { depth: 0.0, ..plain }), None);
     let rings = [&[Point::ZERO, Point::new(1.0, 0.0), Point::new(0.0, 1.0)][..], &[Point::ZERO, Point::new(5.0, 0.0), Point::new(0.0, 5.0)][..]];
     assert_eq!(longest(&rings), Some(1));
+}
+
+#[test]
+fn the_surfaces_of_a_solid_past_the_face_limit_are_refused_as_its_side_is() {
+    // A star of `n` thin spikes: a bevel outside cuts each sharp tip square, adding a corner there.
+    let star = |n: usize| {
+        let mut b = BezPath::new();
+        for i in 0..2 * n {
+            let a = i as f64 * std::f64::consts::PI / n as f64;
+            let r = if i % 2 == 0 { 1000.0 } else { 100.0 };
+            if i == 0 { b.move_to((r * a.cos(), r * a.sin())) } else { b.line_to((r * a.cos(), r * a.sin())) }
+        }
+        b.close_path();
+        PathData::from_bezpath(&b)
+    };
+    let bounds = Rect::new(-1000.0, -1000.0, 1000.0, 1000.0);
+    let o = Extrude { depth: 40.0, bevel: Some(Bevel { width: 1.0, height: 1.0, ..Bevel::default() }), ..Extrude::default() };
+    let fits = |n: usize| extrude_side_size(&star(n), FillRule::NonZero, bounds, o).is_some();
+    // The fewest spikes past the limits, as the side's size counts them.
+    let (mut lo, mut hi) = (3usize, 100_000usize);
+    assert!(fits(lo) && !fits(hi));
+    while hi - lo > 1 {
+        let mid = (lo + hi) / 2;
+        if fits(mid) { lo = mid } else { hi = mid }
+    }
+    assert!(extrude_surfaces(&star(lo), FillRule::NonZero, bounds, o).is_ok());
+    assert!(extrude_surfaces(&star(hi), FillRule::NonZero, bounds, o).is_err(), "{hi} spikes");
 }

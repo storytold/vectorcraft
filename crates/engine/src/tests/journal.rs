@@ -1290,3 +1290,132 @@ fn a_failed_preview_is_not_journaled_at_commit() {
     s.commit_interaction().unwrap();
     assert_eq!(s.journal.len(), journal);
 }
+
+/// `take_shape_drawn` is true once after a shape tool's drag is released, a shape command runs (alone
+/// or as a batch step), and false after a drag in progress, a canceled or failed one, a click (which
+/// opens the tool's dialog), other commands and saved steps that play.
+#[test]
+fn take_shape_drawn_follows_the_shapes_that_were_drawn() {
+    use vectorcraft_tools::{Action, PointerEvent, PointerKind};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(!s.take_shape_drawn(), "a new document draws no shape");
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    for (tool, kind) in [
+        ("rectangle", "Rectangle"),
+        ("roundedRectangle", "Rectangle"),
+        ("ellipse", "Ellipse"),
+        ("polygon", "Polygon"),
+        ("star", "Star"),
+        ("lineSegment", "Line"),
+    ] {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 120.0, 110.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a drag in progress");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 130.0), v).unwrap();
+        assert!(s.take_shape_drawn(), "{tool} ({kind}): the released drag");
+        assert!(!s.take_shape_drawn(), "{tool}: once");
+        // Nothing selected, so the next press is not on the new shape's bounding box.
+        s.execute("select.none", &json!({})).unwrap();
+        // A click asks for the tool's dialog and draws nothing yet.
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a click");
+    }
+    // A canceled drag, and a drag whose preview failed.
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), rect.clone()), Action::Cancel]).unwrap();
+    assert!(!s.take_shape_drawn(), "a canceled drag");
+    let bad = json!({"x": 10, "y": 10, "width": "wide", "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), bad.clone()), Action::Commit]).unwrap();
+    assert!(!s.take_shape_drawn(), "a failed drag");
+    // Commands: each shape command, a failed one, a batch with and without a shape, other edits.
+    for (id, p) in [
+        ("shape.rectangle", rect.clone()),
+        ("shape.ellipse", rect.clone()),
+        ("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 30})),
+        ("shape.star", json!({"cx": 100, "cy": 100, "radius1": 30, "radius2": 15, "points": 5})),
+        ("shape.line", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50})),
+    ] {
+        s.execute(id, &p).unwrap();
+        assert!(s.take_shape_drawn(), "{id}");
+    }
+    assert!(s.execute("shape.rectangle", &bad).is_err());
+    assert!(!s.take_shape_drawn(), "a failed command");
+    s.execute(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.ellipse", "params": rect}, {"command": "object.move", "params": {"dx": 5, "dy": 0}}]}),
+    )
+    .unwrap();
+    assert!(s.take_shape_drawn(), "a batch that draws");
+    s.execute("command.batch", &json!({"commands": [{"command": "object.move", "params": {"dx": 5, "dy": 0}}]})).unwrap();
+    assert!(!s.take_shape_drawn(), "a batch that draws nothing");
+    s.execute("shape.rectangularGrid", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(!s.take_shape_drawn(), "other commands, undo and redo");
+    // Saved steps that play.
+    s.replay("shape.rectangle", &rect).unwrap();
+    s.replay(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.star", "params": {"cx": 50, "cy": 50, "radius1": 20, "radius2": 10, "points": 5}}]}),
+    )
+    .unwrap();
+    assert!(!s.take_shape_drawn(), "saved steps");
+    // A script's commands.
+    let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let shapes = count(&s);
+    s.execute("script.run", &json!({"source": "vc.run('shape.rectangle', {x:100,y:0,width:5,height:5});", "name": "t.js"})).unwrap();
+    assert_eq!(count(&s), shapes + 1, "the script drew");
+    assert!(!s.take_shape_drawn(), "a script");
+}
+
+/// With the perspective grid shown and a plane active, a shape tool's drag journals
+/// `perspective.draw` naming the shape command: `take_shape_drawn` is true for a Rectangle drawn on
+/// the plane and for `perspective.draw` naming a shape command (alone or as a batch step), and false
+/// for one naming a shape outside [`crate::DRAWS_SHAPE`].
+#[test]
+fn take_shape_drawn_counts_shapes_drawn_in_perspective() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = super::persp_select::persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.take_shape_drawn();
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 350.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 380.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 410.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    assert!(s.take_shape_drawn(), "a Rectangle drawn on the plane");
+    let rect = json!({"x": 260, "y": 360, "width": 30, "height": 30});
+    s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": rect})).unwrap();
+    assert!(s.take_shape_drawn(), "perspective.draw naming shape.rectangle");
+    s.execute("command.batch", &json!({"commands": [{"command": "perspective.draw", "params": {"command": "shape.ellipse", "params": rect}}]}))
+        .unwrap();
+    assert!(s.take_shape_drawn(), "a batch step drawing in perspective");
+    s.execute("perspective.draw", &json!({"command": "shape.flare", "params": {"cx": 300, "cy": 380, "diameter": 40}})).unwrap();
+    assert!(!s.take_shape_drawn(), "perspective.draw naming a flare");
+}
+
+/// Show on Shape Creation (`showOnShapeCreation`) is off until set, is set and read through
+/// `prefs.set` and `prefs.get`, refuses a value that is not a boolean, and is kept with the saved
+/// preferences.
+#[test]
+fn show_on_shape_creation_is_a_saved_preference() {
+    let mut s = Session::new();
+    assert!(!s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": true})).unwrap();
+    assert!(s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(true));
+    assert!(s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": "yes"})).is_err());
+    assert!(s.prefs.show_on_shape_creation, "a refused value changes nothing");
+    let saved = serde_json::to_value(&s.prefs).unwrap();
+    assert_eq!(saved["showOnShapeCreation"], json!(true));
+    let read: Prefs = serde_json::from_value(saved).unwrap();
+    assert!(read.show_on_shape_creation);
+}

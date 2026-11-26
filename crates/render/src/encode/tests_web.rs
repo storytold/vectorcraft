@@ -22,6 +22,15 @@ fn locked_colours_survive_a_reduction() {
     let ix = quantize_locked(&px, 64, 16, &o, &[rare]);
     assert!(ix.palette.contains(&rare) && ix.palette.len() <= 4, "{:?}", ix.palette);
     assert_eq!(colours(&ix)[0], rare);
+    // Black & White with black locked and one entry left: white takes it, though most pixels are black.
+    let px = image(8, 8, |x, _| if x == 7 { [255; 3] } else { [0; 3] });
+    let o = PaletteOptions { colors: 2, dither: Dither::None, reduction: Reduction::BlackWhite, ..Default::default() };
+    let ix = quantize_locked(&px, 8, 8, &o, &[[0; 3]]);
+    assert_eq!(ix.palette, [[0; 3], [255; 3]]);
+    // With a light gray locked, black takes the entry left, though most pixels are white.
+    let px = image(10, 1, |x, _| if x < 4 { [0; 3] } else { [255; 3] });
+    let ix = quantize_locked(&px, 10, 1, &o, &[[200; 3]]);
+    assert_eq!(ix.palette, [[200; 3], [0; 3]]);
 }
 
 #[test]
@@ -80,14 +89,26 @@ fn lossy_makes_runs_and_smaller_gifs() {
     let px = image(96, 64, |x, y| [(x * 2 + y) as u8, (y * 3) as u8, ((x * y) % 255) as u8]);
     let ix = quantize(&px, 96, 64, &PaletteOptions { colors: 64, dither: Dither::Diffusion, ..Default::default() });
     let mut lossy_ix = ix.clone();
-    lossy(&mut lossy_ix, &px, 80);
+    lossy(&mut lossy_ix, &px, 80, &[]);
     let runs = |ix: &Indexed| ix.indices.windows(2).filter(|w| w[0] != w[1]).count();
     assert!(runs(&lossy_ix) < runs(&ix));
     let size = |ix: &Indexed| gif::encode(ix, false).unwrap().len();
     assert!(size(&lossy_ix) < size(&ix), "{} vs {}", size(&lossy_ix), size(&ix));
     let mut none = ix.clone();
-    lossy(&mut none, &px, 0);
+    lossy(&mut none, &px, 0, &[]);
     assert_eq!(none, ix);
+    // A fixed entry keeps its pixels and takes no others.
+    let fixed: Vec<u8> = (0..ix.palette.len()).filter_map(|i| u8::try_from(i).ok()).collect();
+    let mut kept = ix.clone();
+    lossy(&mut kept, &px, 100, &fixed);
+    assert_eq!(kept, ix);
+    // With one fixed entry of three, no pixel moves into or out of it, and the others still merge.
+    let palette: Vec<[u8; 3]> = vec![[100, 0, 0], [110, 0, 0], [120, 0, 0]];
+    let indices: Vec<u8> = vec![1, 0, 0, 1, 1, 2];
+    let px: Vec<u8> = indices.iter().flat_map(|&i| palette[usize::from(i)].into_iter().chain([255])).collect();
+    let mut part = Indexed { width: 2, height: 3, palette, transparent: None, indices };
+    lossy(&mut part, &px, 100, &[0]);
+    assert_eq!(part.indices, vec![1, 0, 0, 1, 1, 1]);
 }
 
 #[test]

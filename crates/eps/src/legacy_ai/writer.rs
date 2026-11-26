@@ -9,7 +9,8 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DEEP_DISTORTED, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
+use crate::gradient_key::gradient_key;
 
 #[cfg(test)]
 thread_local! {
@@ -18,6 +19,18 @@ thread_local! {
     /// Whether [`Numbered::take`] numbers names on this thread by searching the names given so
     /// far, one number at a time, for each number it tries.
     pub(super) static SCANNED_NAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether [`Writer::defined`] finds a gradient's definition on this thread by comparing the
+    /// gradient with each definition in turn.
+    pub(super) static SCANNED_DEFINITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`Writer::defined`] has compared two gradients on this thread.
+    pub(super) static GRADIENT_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Are gradients `a` and `b` the same?
+fn same_gradient(a: &Gradient, b: &Gradient) -> bool {
+    #[cfg(test)]
+    GRADIENT_COMPARISONS.with(|c| c.set(c.get() + 1));
+    a == b
 }
 
 /// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
@@ -34,7 +47,7 @@ pub(super) struct Writer<'a> {
     /// Spot colors used: the name written and full CMYK equivalent.
     pub(super) spots: Vec<(String, [f32; 4])>,
     /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
-    spot_names: Vec<(String, String)>,
+    spot_names: std::collections::HashMap<String, String>,
     pub(super) warnings: Vec<String>,
     /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
     pub(super) setting_notes: Vec<String>,
@@ -73,6 +86,13 @@ pub(super) struct Writer<'a> {
     gradient_names: Numbered,
     /// The names spot colors are written with ([`Self::spot`]).
     spot_written: Numbered,
+    /// The names of [`Self::spots`].
+    spot_set: std::collections::HashSet<String>,
+    /// The PostScript names of [`Self::fonts`].
+    font_set: std::collections::HashSet<String>,
+    /// The places in [`Self::gradients`] of the definitions, in order, by their gradient's key
+    /// ([`gradient_key`]).
+    gradient_index: std::collections::HashMap<u64, Vec<usize>>,
 }
 
 impl<'a> Writer<'a> {
@@ -84,7 +104,7 @@ impl<'a> Writer<'a> {
             body: String::new(),
             gradients: vec![],
             spots: vec![],
-            spot_names: vec![],
+            spot_names: std::collections::HashMap::new(),
             warnings: vec![],
             setting_notes: vec![],
             locked: false,
@@ -103,6 +123,9 @@ impl<'a> Writer<'a> {
             in_graph: false,
             gradient_names: Numbered::default(),
             spot_written: Numbered::default(),
+            spot_set: std::collections::HashSet::new(),
+            font_set: std::collections::HashSet::new(),
+            gradient_index: std::collections::HashMap::new(),
         }
     }
 
@@ -160,16 +183,17 @@ impl<'a> Writer<'a> {
     /// Windows-1252 are written as `?` (with a warning), and it is numbered when another spot color
     /// is already written with that name; the name is the same each time.
     fn spot(&mut self, name: &str, cmyk: [f32; 4]) -> String {
-        let written = match self.spot_names.iter().find(|(n, _)| n == name) {
-            Some((_, w)) => w.clone(),
+        let written = match self.spot_names.get(name) {
+            Some(w) => w.clone(),
             None => {
                 let base = self.latin_name(name, TITLE_AND_COLOR_NAMES);
                 let written = self.spot_written.take(base);
-                self.spot_names.push((name.to_string(), written.clone()));
+                self.spot_names.insert(name.to_string(), written.clone());
                 written
             }
         };
-        if !self.spots.iter().any(|(n, _)| *n == written) {
+        if !self.spot_set.contains(&written) {
+            self.spot_set.insert(written.clone());
             self.spots.push((written.clone(), cmyk));
         }
         written
@@ -178,7 +202,7 @@ impl<'a> Writer<'a> {
     /// The name spot color `name` (its swatch's name) is written with, once [`Self::spot`] has
     /// noted it.
     pub(super) fn spot_name<'n>(&'n self, name: &'n str) -> &'n str {
-        self.spot_names.iter().find(|(n, _)| n == name).map_or(name, |(_, w)| w.as_str())
+        self.spot_names.get(name).map_or(name, String::as_str)
     }
 
     /// A top-level layer. False when it isn't a layer.
@@ -322,14 +346,23 @@ impl<'a> Writer<'a> {
                 self.lock(locked);
                 self.text(t);
             }
-            NodeKind::Image(im) => {
+            // A distorted image too deep for its pieces is written at the placement nearest its
+            // corners.
+            NodeKind::Image(im) if !n.is_distorted_image() || self.nest >= MAX_NEST => {
                 self.lock(locked);
                 let shown = self.doc.shown_image(n, im);
                 let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
-                self.image(blob, im.width, im.height, im.xf, colorize);
+                let xf = match vectorcraft_doc::image_quad::nearest_affine(n) {
+                    Some(near) => {
+                        self.warn(DEEP_DISTORTED);
+                        near
+                    }
+                    None => im.xf,
+                };
+                self.image(blob, im.width, im.height, xf, colorize.map(|p| (p, n.colorize_overprints())));
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 self.warn(LIVE);
@@ -348,7 +381,8 @@ impl<'a> Writer<'a> {
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
@@ -821,13 +855,24 @@ impl<'a> Writer<'a> {
     /// The name of the definition of `g` (its swatch's name when it has one, with each character
     /// outside Windows-1252 written as `?` and a warning), defined the first time.
     fn define(&mut self, g: &Gradient, swatch: Option<&str>) -> String {
-        if let Some((name, _)) = self.gradients.iter().find(|(_, d)| d == g) {
+        let key = gradient_key(g);
+        if let Some((name, _)) = self.defined(g, key).and_then(|i| self.gradients.get(i)) {
             return name.clone();
         }
         let base = self.latin_name(swatch.filter(|s| !s.is_empty()).unwrap_or("Gradient"), TITLE_AND_COLOR_NAMES);
         let name = self.gradient_names.take(base);
+        self.gradient_index.entry(key).or_default().push(self.gradients.len());
         self.gradients.push((name.clone(), g.clone()));
         name
+    }
+
+    /// The place in [`Self::gradients`] of the first definition of `g`, whose key is `key`.
+    fn defined(&self, g: &Gradient, key: u64) -> Option<usize> {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return self.gradients.iter().position(|(_, d)| same_gradient(d, g));
+        }
+        self.gradient_index.get(&key)?.iter().copied().find(|i| self.gradients.get(*i).is_some_and(|(_, d)| same_gradient(d, g)))
     }
 
     // ---------- type ----------
@@ -1006,7 +1051,8 @@ impl<'a> Writer<'a> {
             self.line_style(&st.stroke_layer());
         }
         let (name, truetype, ascent, descent) = font_of(st);
-        if !self.fonts.iter().any(|(n, _)| *n == name) {
+        if !self.font_set.contains(&name) {
+            self.font_set.insert(name.clone());
             self.fonts.push((name.clone(), truetype));
         }
         let size = finite(st.size, 12.0);
@@ -1083,13 +1129,14 @@ impl<'a> Writer<'a> {
     /// `%AI5_EndRaster`, then `F`. §8.4's examples have no `F`; without it, an app reading the file
     /// can leave out an image in a clipping group and the art after it. No path is open there, so
     /// the `F` paints nothing. `blob` holds the pixels, placed as a grid of `width` × `height`
-    /// by `xf`, and `colorize` is the solid color the image is colorized with. A colorized image
-    /// whose pixels are all black or white is written as an image mask (ImageMask 1, §8.1): its
-    /// color as the fill, then 1-bit samples, a 0 bit for each black pixel, which takes the color,
-    /// and a 1 bit for each white pixel, which is clear. Another colorized image is written with
+    /// by `xf`, and `colorize` is the solid color the image is colorized with and whether it
+    /// overprints. A colorized image whose pixels are all black or white is written as an image
+    /// mask (ImageMask 1, §8.1): its color as the fill with its fill overprint, then 1-bit
+    /// samples, a 0 bit for each black pixel, which takes the color, and a 1 bit for each white
+    /// pixel, which is clear. Another colorized image is written with
     /// its color in its pixels. In a clipping group, an image whose pixels were written whole
     /// already is written as the part of them the group shows ([`ai_ops::image_window`]).
-    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<&Paint>) {
+    fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<(&Paint, bool)>) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let m = self.to_art * xf * flip;
         if !invertible(m) {
@@ -1111,12 +1158,12 @@ impl<'a> Writer<'a> {
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
         let coverage = match colorize {
-            Some(paint) => {
+            Some((paint, overprint)) => {
                 let Some((_, _, coverage)) = self.coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
                     self.warn(UNDECODED);
                     return;
                 };
-                Some((paint, coverage))
+                Some((paint, overprint, coverage))
             }
             None => None,
         };
@@ -1133,7 +1180,7 @@ impl<'a> Writer<'a> {
         let (w, h) = (x1 - x0, y1 - y0);
         // Over white.
         let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
-        if let Some((paint, coverage)) = coverage {
+        if let Some((paint, overprint, coverage)) = coverage {
             let coverage = ai_ops::window_samples(&coverage, img.width(), 1, window);
             if coverage.iter().all(|&v| v == 0 || v == 255) {
                 let stride = (w as usize).div_ceil(8);
@@ -1145,6 +1192,7 @@ impl<'a> Writer<'a> {
                     }
                 }
                 self.color(paint, false);
+                self.line(if overprint { "1 O" } else { "0 O" });
                 self.raster(m, &format!("0 0 {w} {h} {w} {h} 1 1 0 0 0 1"), &bits);
                 return;
             }

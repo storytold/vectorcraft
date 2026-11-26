@@ -38,12 +38,16 @@ mod shape_builder;
 mod trace;
 
 pub use live_paint::live_paint_gaps;
-pub(crate) use live_paint::{isolated_live_paint, merge_drawn_in_isolation};
+pub(crate) use live_paint::{LivePaintMove, check_part_name, clear_part_name, isolated_live_paints, merge_drawn_in_isolation};
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
-use shape_builder::{sb_merge, sb_regions};
+use shape_builder::{sb_copy_region, sb_merge, sb_regions};
 pub(crate) use trace::TracePresetChanges;
-pub use trace::{TracePreset, TracePresetChange, TraceRun, Traced};
-use trace::{trace_expand, trace_make, trace_presets_delete, trace_presets_save, trace_release, trace_set_view};
+pub use trace::{
+    TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES, TracePreset, TracePresetChange, TraceRun, Traced, image_trace_target,
+};
+use trace::{
+    trace_expand, trace_make, trace_presets_delete, trace_presets_export, trace_presets_import, trace_presets_save, trace_release, trace_set_view,
+};
 
 /// Name of an Image Trace group.
 pub const TRACE_NAME: &str = "Image Trace";
@@ -67,6 +71,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?, gap?: pt (0–72; 0: Gap Detection off), openFilledAsClosed?: true (as shapeBuilder.merge)} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}], lines: [{bounds, source: id}], edges: [{bounds, source: id}]} faces of the planar arrangement (unfilled open paths cut them, and filled ones too with openFilledAsClosed false; sources is empty for an area only they enclose), the pieces of those open paths and the edges (the other paths' outlines cut where paths meet; source: the front-most path along it), which erasing deletes",
             has_selection_or_ids,
             sb_regions
+        ),
+        cmd!(
+            "shapeBuilder.copyRegion",
+            "Fill Area",
+            [],
+            None,
+            "{point: [x,y], ids?|id?: [id…] (the objects or layers whose paths bound areas; default: every layer, nothing needs to be selected), gap?: pt (0–72; 0: Gap Detection off; out of range is an error), openFilledAsClosed?: true (as shapeBuilder.merge), fill?, stroke?: \"#rrggbb\" | {color|swatch|gradient|none} (default: the current fill and stroke, with the current stroke weight)} add a new closed path of the area under point that the visible, unlocked paths enclose (the region of shapeBuilder.regions holding it: areas a shape already fills and areas open paths bound count too; a path a clipping mask clips bounds areas only where every mask around it shows it), directly above the front-most object along the area (its outline touches the area's outline, or it covers the area; when a group, Live Paint group, Shaper group or clipping group holds that path, above the outermost group in its layer, never inside it), and select it; in isolation mode only the paths of the isolated layer or group bound areas (with ids, only the paths of the listed objects that are in it), and the new path goes inside it, directly above the object in it that holds that path; no area is found while the isolated object is not a layer or group (a path or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or inside an envelope; the paths around the area are not changed; a point in no enclosed area is an error and changes nothing (no undo step); when the paths together have more than 65,536 segments, only an area the paths near the point enclose is found → {id, above (the object the new path went above)}",
+            has_doc,
+            sb_copy_region
         ),
         cmd!(
             "livePaint.make",
@@ -145,7 +158,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Image Trace"],
             None,
-            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), savedPreset?: {settings} (a saved preset's settings, which the journal records so a replay traces with them after the preset is changed, renamed or deleted; used in place of the saved preset `preset` names), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, split into at least colorDetail colors where the image has that many before colors that look alike merge (less than 5 apart in Oklab × 100 and thoroughly mixed, or less than 1.5 and mixed in patches), automatic: flat art with its own colours, else as many as the tones need without fullTone's least count, merging close RGB colors, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px (an area smaller than this joins the color it shares the longest border with; when that color is far from its own and the area is 2 px or more, or a single pixel whose longest border is not tied between colors, it joins the neighboring color nearest its pixels among those sharing at least a tenth of that border), method: \"abutting\"|\"overlapping\" (abutting with fills, not mode logo: a \"Seam Fills\" clip group under the paths holds strokes along the edges two filled paths share, 1.5 image pixels wide (VectorCraft's own width), in the color of the lower path (on an image stretched more one way than another, each stroke's outline in image pixels as a filled path), clipped to the image's box within the traced paths' box; paths that became live shapes get none; the paths are not changed), ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), ignoreBackground: false (with ignoreWhite: only the areas of the ignored color that reach the image's edge are left out), keepColors?: [\"#rrggbb\"…] (not mode logo: only the palette colors within about 30 levels of a listed color are traced; empty: every color), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, at most ten; white is its own color, and a named color with every channel 245 or more is taken as that white, except with logoColors named, logoWhite false and no ignoreWhite; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white while white is its own color, and stay holes with ignoreWhite or without a white of its own; fills/strokes are ignored; gradients and photos are refused, judged by the image's own colors also when logoColors are named), logoWhite: true (mode logo with logoColors named; false traces the named colors only: white areas take the nearest of them, a named white is kept and enclosed transparent areas stay holes; with ignoreWhite, white areas are left out either way)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at; or a keepColors color matches none the trace found, or nothing was traced)}",
+            "{id?: image or Image Trace group (default: selection), preset?: name (imageTrace.presets), savedPreset?: {settings} (a saved preset's settings, which the journal records so a replay traces with them after the preset is changed, renamed or deleted; used in place of the saved preset `preset` names), enhanced?: false (the preset's enhanced version: with Auto Grouping, and with Shapes in all but High Fidelity Photo; Flat Logo has none and is traced as it is), params?: {mode: \"blackAndWhite\"|\"grayscale\"|\"color\"|\"logo\", threshold: 0-255, palette: \"limited\"|\"fullTone\"|\"automatic\"|\"documentLibrary\" (color mode; limited: the `colors` best colours, fullTone: as many as the tones need, more with colorDetail, split into at least colorDetail colors where the image has that many before colors that look alike merge (less than 5 apart in Oklab × 100 and thoroughly mixed, or less than 1.5 and mixed in patches), automatic: flat art with its own colours, else as many as the tones need without fullTone's least count, merging close RGB colors, documentLibrary: at most `colors` of the library's colours, as they are), colors: 2-256, colorDetail: 0-100 (fullTone, automatic), library: \"document\" (the document's swatches) or a swatch library id or name (swatch.library.list; documentLibrary), colorGroup?: name (color mode, documentLibrary with library \"document\": the colors of that document color group instead of every swatch; \"\" is every swatch), paths: 0-100, corners: 0-100, noise: px (an area smaller than this joins the color it shares the longest border with; when that color is far from its own and the area is 2 px or more, or a single pixel whose longest border is not tied between colors, it joins the neighboring color nearest its pixels among those sharing at least a tenth of that border), method: \"abutting\"|\"overlapping\" (abutting with fills, not mode logo: a \"Seam Fills\" clip group under the paths holds strokes along the edges two filled paths share, 1.5 image pixels wide (VectorCraft's own width), in the color of the lower path (on an image stretched more one way than another, each stroke's outline in image pixels as a filled path), clipped to the image's box within the traced paths' box; paths that became live shapes get none; the paths are not changed), ignoreWhite (leave out white areas), ignoreColor?: \"#rrggbb\" (with ignoreWhite: the colour left out instead of white), ignoreBackground: false (with ignoreWhite: only the areas of the ignored color that reach the image's edge are left out), keepColors?: [\"#rrggbb\"…] (not mode logo: only the palette colors within about 30 levels of a listed color are traced; empty: every color), snapCurvesToLines, shapes: false (filled outlines that are a circle, an ellipse, a rectangle or a regular polygon come out as that live shape), autoGrouping: false (each path that has others inside it is grouped with them), gradients: false (grayscale and color: an area whose colour changes evenly along one direction is one path with a linear gradient fill), fills: true, strokes: false (Create: lines up to strokeWidth wide become stroked centre lines; without fills, wider areas become stroked outlines), strokeWidth: px (10), logoColors?: [\"#rrggbb\"…] (mode logo: flat-colour logos only; colours found automatically or named here, at most ten; white is its own color, and a named color with every channel 245 or more is taken as that white, except with logoColors named, logoWhite false and no ignoreWhite; noise = areas under noise/10 px ignored; edges to a fraction of a pixel, sharp corners restored, lines and circles snapped; enclosed transparent areas are painted white while white is its own color, and stay holes with ignoreWhite or without a white of its own; fills/strokes are ignored; gradients and photos are refused, judged by the image's own colors also when logoColors are named), logoWhite: true (mode logo with logoColors named; false traces the named colors only: white areas take the nearest of them, a named white is kept and enclosed transparent areas stay holes; with ignoreWhite, white areas are left out either way)}, view?: as imageTrace.setView (default: the traced object's own, else tracingResult; the Split view keeps the traced object's divider, else 0.5, and imageTrace.setView sets it), ids?: [id…] (instead of id)} → {id, paths, anchors, colors, warnings: [text…] (the image is over 1500 px on a side, so it traces more slowly; or it was traced scaled down; Flat Logo names only the size it traced a larger image at; or a keepColors color matches none the trace found, or nothing was traced)}",
             has_selection_or_ids,
             |s, p| trace_make(s, p, false)
         ),
@@ -181,7 +194,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Image Trace View",
             [],
             None,
-            "{id?|ids?: Image Trace objects (default: selection), view: \"tracingResult\"|\"tracingResultWithOutlines\"|\"outlines\"|\"outlinesWithSourceImage\"|\"sourceImage\"} how they draw on screen; exports, printing and Expand keep the tracing result → {ids, view}",
+            "{id?|ids?: Image Trace objects (default: selection), view: \"tracingResult\"|\"tracingResultWithOutlines\"|\"outlines\"|\"outlinesWithSourceImage\"|\"sourceImage\"|\"split\" (the source image on the part of the image left of a divider across it, and the tracing result everywhere else), split?: 0-1 (the divider: the fraction of the source image's width, from its left edge, that shows the image; kept as it was when omitted, 0.5 for a new one)} how they draw on screen; exports, printing and Expand keep the tracing result, and tracing again keeps the view and the divider → {ids, view, split (view split: the first object's divider)}",
             has_selection_or_ids,
             trace_set_view
         ),
@@ -207,6 +220,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} delete a saved tracing preset (built-in ones stay) → {deleted: name}",
             always,
             trace_presets_delete
+        ),
+        cmd!(
+            query "imageTrace.presets.import",
+            "Import Image Trace Presets",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, replace?: false (true: a preset whose name a saved preset has replaces that preset's settings; false: it is skipped)} add the presets of a .vctracepresets file (as imageTrace.presets.export writes, at most 4 MiB and 1,000 presets) to the saved ones → {imported: [names added], replaced: [names], skipped: [names]}; every preset is checked first, and a file with a built-in preset's or Custom's name, two presets of one name, a preset without a name or with settings imageTrace.presets.save refuses, or a newer version changes nothing",
+            always,
+            trace_presets_import
+        ),
+        cmd!(
+            query "imageTrace.presets.export",
+            "Export Image Trace Presets",
+            [],
+            None,
+            "{names?: [saved preset names] (default: every saved preset; built-in ones are refused), path?} write the saved tracing presets as a .vctracepresets file (JSON: format, version 1, presets: [{name, params}]) → {path, count}; without path → {data: the file's text, count}; more than 1,000 presets, or a file over 4 MiB, is refused, as imageTrace.presets.import would refuse it",
+            always,
+            trace_presets_export
         ),
     ]
 }
@@ -263,12 +294,18 @@ fn stroke_only(paint: Paint, width: f64) -> Appearance {
 // ---------- Shape Builder ----------
 
 fn fill_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Paint>> {
-    match p.get("fill") {
+    paint_param(s, p, "fill", cmd)
+}
+
+/// The paint `p` gives for `key` (`"#rrggbb"` or `{color|swatch|gradient|none}`), as `fill` is read.
+fn paint_param(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<Option<Paint>> {
+    match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v @ Value::Object(o)) if o.contains_key("color") || o.contains_key("swatch") || o.contains_key("gradient") || o.contains_key("none") => {
-            paint_from(s, v)
+            // A paint key whose value is not a paint, such as `{"swatch": 123}`, gives no paint.
+            paint_from(s, v)?.map(Some).ok_or_else(|| bad(cmd, format!("bad {key} {v}")))
         }
-        Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad fill {v}"))),
+        Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad {key} {v}"))),
     }
 }
 

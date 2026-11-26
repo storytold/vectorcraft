@@ -608,6 +608,24 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     }
 }
 
+/// A distorted image comes with its corners, and with the transform that matches it at its middle
+/// rather than the one it had before the distort.
+#[test]
+fn a_distorted_image_comes_with_its_corners() {
+    let (mut d, _, _, [_, embedded, linked, ..]) = mixed();
+    let q = [(40.0, 60.0), (42.0, 60.0), (44.0, 62.0), (40.0, 62.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(embedded).unwrap().set_image_corners(q).unwrap();
+    let e = encode_read_only(&d, d.node(embedded).unwrap()).unwrap();
+    assert_eq!(e["corners"], json!([[40.0, 60.0], [42.0, 60.0], [44.0, 62.0], [40.0, 62.0]]));
+    assert_ne!(e["transform"], json!([2.0, 0.0, 0.0, 2.0, 40.0, 60.0]));
+    // The transform is the affine map nearest the corners, the one that matches them at the middle.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(embedded).unwrap()).unwrap().as_coeffs();
+    let got: Vec<f64> = e["transform"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!(got.len() == 6 && got.iter().zip(near).all(|(a, b)| (a - b).abs() < 1e-9), "{got:?} against {near:?}");
+    let plain = encode_read_only(&d, d.node(linked).unwrap()).unwrap();
+    assert!(plain.get("corners").is_none());
+}
+
 /// A CMYK image's pixels are its inks as the working CMYK profile shows them on the canvas: black
 /// ink alone is the profile's black, not RGB black.
 #[test]
@@ -1153,4 +1171,53 @@ fn document_data_is_kept_forgotten_or_refused() {
     assert!(matches!(out(Some(json!("x".repeat(MAX_DOCUMENT_DATA - 1)))), Err(Error::Output(_))));
     // A decline is still a decline.
     assert!(matches!(decode_output(br#"{"error": "No pens.", "documentData": 1}"#), Err(Error::Failed(_))));
+}
+
+/// A filter's `notice`: absent or `null` is none; a string is trimmed, its control, bidirectional
+/// and separator characters escaped, and cut at [`MAX_NOTICE_CHARS`] with an ellipsis; anything
+/// else, and text with nothing visible, refuses the whole output.
+#[test]
+fn notice_is_escaped_capped_and_checked() {
+    let out = |notice: Option<Value>| {
+        let mut v = json!({"objects": []});
+        if let Some(n) = notice {
+            v["notice"] = n;
+        }
+        decode_output(v.to_string().as_bytes()).map(|o| o.notice)
+    };
+    assert_eq!(out(None).unwrap(), None);
+    assert_eq!(out(Some(Value::Null)).unwrap(), None);
+    assert_eq!(out(Some(json!("  Selected 12 objects \n"))).unwrap().as_deref(), Some("Selected 12 objects"));
+    let shown = out(Some(json!("Saved\u{202E}txt.exe\nError: disk full\u{7}"))).unwrap().unwrap_or_default();
+    assert_eq!(shown, "Saved\\u{202E}txt.exe\\u{000A}Error: disk full\\u{0007}");
+    let long = out(Some(json!("y".repeat(10_000)))).unwrap().unwrap_or_default();
+    assert_eq!(long.chars().count(), MAX_NOTICE_CHARS);
+    assert!(long.ends_with('…'));
+    // Escapes count toward the limit, so a notice of right-to-left overrides stays within it too.
+    let escaped = out(Some(json!("\u{202E}".repeat(10_000)))).unwrap().unwrap_or_default();
+    assert!(escaped.chars().count() <= MAX_NOTICE_CHARS && !escaped.contains('\u{202E}'), "{escaped}");
+    for bad in [
+        json!(""),
+        json!(" \t\n "),
+        json!("\u{200B}\u{FEFF}"),
+        json!("\u{034F}"),
+        json!("\u{3164}\u{FE0F}\u{E0041}"),
+        // The visible text comes after the cut, so the status bar would show only the `…`.
+        json!(format!("{}AB", "\u{200B}".repeat(MAX_NOTICE_CHARS - 1))),
+        json!(format!("{}A", "\u{7}".repeat(MAX_NOTICE_CHARS / 8))),
+        json!(12),
+        json!(["a"]),
+        json!({"text": "a"}),
+        json!(true),
+    ] {
+        assert!(matches!(out(Some(bad.clone())), Err(Error::Output(ref e)) if e.contains("`notice`")), "{bad}");
+    }
+    // Text with a visible character keeps the invisible ones, and its bidirectional ones escaped.
+    assert_eq!(out(Some(json!("\u{2067}Done\u{034F}"))).unwrap().as_deref(), Some("\\u{2067}Done\u{034F}"));
+    // A visible character in the last place the limit shows, whole or before the `…`, is enough.
+    let pad = "\u{200B}".repeat(MAX_NOTICE_CHARS - 2);
+    assert_eq!(out(Some(json!(format!("{pad}\u{200B}A")))).unwrap(), Some(format!("{pad}\u{200B}A")));
+    assert_eq!(out(Some(json!(format!("{pad}ABC")))).unwrap(), Some(format!("{pad}A…")));
+    // A decline is still a decline.
+    assert!(matches!(decode_output(br#"{"error": "No pens.", "notice": "Done"}"#), Err(Error::Failed(_))));
 }

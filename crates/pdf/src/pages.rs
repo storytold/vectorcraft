@@ -3,10 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
-use craft_pdf::syntax::page::Page;
-use craft_pdf::syntax::xref::XRef;
-use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
+use craft::pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft::pdf::syntax::page::Page;
+use craft::pdf::syntax::xref::XRef;
+use craft::pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
@@ -261,6 +261,18 @@ impl Opened {
         crate::editing::editing_in(&self.pdf)
     }
 
+    /// Does the PDF list the editing file among its attachments, also when
+    /// [`editing`](Self::editing) can't read it?
+    pub fn has_editing_file(&self) -> bool {
+        crate::editing::has_editing_file_in(&self.pdf)
+    }
+
+    /// Is the PDF's attachment name tree too large to search to its end? It may then list an
+    /// editing file that [`editing`](Self::editing) doesn't find, besides the one it reads.
+    pub fn editing_search_cut(&self) -> bool {
+        crate::editing::editing_search_cut_in(&self.pdf)
+    }
+
     /// The private data of an Illustrator `.ai`, as [`illustrator_data`] reads it.
     pub fn illustrator_data(&self) -> Option<Vec<u8>> {
         private_data(&self.pdf)
@@ -326,13 +338,13 @@ pub struct TrimPages {
 /// The shared reader's options: files of any size are accepted. Ordinary stream decoding uses the shared reader's immutable per-document limits, and its input
 /// copy is fallible. One image may decode to the bytes and pixels of
 /// [`crate::streams::image_limits`] for this build, past the shared reader's defaults.
-pub(crate) fn open_options() -> craft_pdf::OpenOptions {
+pub(crate) fn open_options() -> craft::pdf::OpenOptions {
     let (bytes, pixels) = crate::streams::image_limits(crate::streams::LARGE_IMAGES);
-    let decode_limits = craft_pdf::syntax::DecodeLimits::default().with_max_decoded_image(bytes).with_max_image_pixels(pixels);
-    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, decode_limits }
+    let decode_limits = craft::pdf::syntax::DecodeLimits::default().with_max_decoded_image(bytes).with_max_image_pixels(pixels);
+    craft::pdf::OpenOptions { max_input_bytes: usize::MAX, decode_limits }
 }
 
-pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft::pdf::OpenOptions) -> Result<Pdf, PdfError> {
     // Twice: looking at every object makes the reader repair a damaged table of objects (once
     // only), and the objects are other ones after that.
     open_structural_with_options(bytes, password, options).and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
@@ -354,7 +366,7 @@ pub fn reads_of(bytes: &[u8]) -> usize {
 /// [`open_with_options`] without looking at the file's objects ([`hostile`]): the reader builds its
 /// table of objects and its page tree, and nothing on a page is read. For reading one object that
 /// is checked on its own ([`illustrator_data_without_pdf_part`]), never for importing a page.
-fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &craft::pdf::OpenOptions) -> Result<Pdf, PdfError> {
     #[cfg(any(test, feature = "read-count"))]
     if let Ok(mut reads) = READS.lock() {
         let n = reads.entry(bytes.as_ptr() as usize).or_default();
@@ -367,21 +379,21 @@ fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &
         return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
-    let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
+    let read = |pw: &str| craft::pdf::open_slice_with_options(bytes, Some(pw), options);
     read(password)
         .or_else(|e| match e {
             // The reader takes only the open password of RC4 and 128-bit AES files: the
             // permissions password gives it.
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
                 crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
             }
             e => Err(e),
         })
         .map_err(|e| match e {
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
                 PdfError::NeedsPassword
             }
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
             e => PdfError::Parse(e.to_string()),
         })
 }
@@ -400,10 +412,10 @@ fn info_in(pdf: &Pdf) -> PdfInfo {
         .map(|page| {
             let (w, h) = page.render_dimensions();
             let rotation = match page.rotation() {
-                craft_pdf::syntax::page::Rotation::None => 0,
-                craft_pdf::syntax::page::Rotation::Horizontal => 90,
-                craft_pdf::syntax::page::Rotation::Flipped => 180,
-                craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
+                craft::pdf::syntax::page::Rotation::None => 0,
+                craft::pdf::syntax::page::Rotation::Horizontal => 90,
+                craft::pdf::syntax::page::Rotation::Flipped => 180,
+                craft::pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
             let unit = f64::from(page.user_unit());
             let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c).scale_from_origin(unit))).collect();
@@ -433,7 +445,7 @@ pub(crate) fn picked(opts: &ImportOptions, count: usize) -> Result<Vec<usize>, P
     Ok(v)
 }
 
-fn rect(r: craft_pdf::syntax::object::Rect) -> Rect {
+fn rect(r: craft::pdf::syntax::object::Rect) -> Rect {
     Rect::new(r.x0, r.y0, r.x1, r.y1).abs()
 }
 
@@ -450,7 +462,7 @@ pub(crate) fn page_box(page: &Page<'_>, which: CropTo) -> Rect {
         CropTo::Trim => b"TrimBox",
         CropTo::Art => b"ArtBox",
     };
-    page.raw().get::<craft_pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
+    page.raw().get::<craft::pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
 }
 
 /// Where `page` draws on its artboard: the page transform (PDF user space → y-down page space
@@ -590,7 +602,7 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     match filters.as_slice() {
         [] if raw.len() <= most => out.extend_from_slice(&raw),
         [] => return Err(too_large()),
-        [craft_pdf::syntax::Filter::FlateDecode] => {
+        [craft::pdf::syntax::Filter::FlateDecode] => {
             flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).map_err(|_| "its zlib compression is damaged".to_string())?;
         }
         _ => return Err(unread()),

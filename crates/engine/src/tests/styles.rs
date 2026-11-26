@@ -299,6 +299,68 @@ fn redefine_shares_one_appearance() {
     assert!(!Shared::ptr_eq(&node(&s, d).appearance, &nb.appearance));
 }
 
+/// Redefine with `from` gives a style another style's look: the style keeps its name, place and id,
+/// its objects still linked follow, edited ones are unlinked, and `from` and its objects stay as
+/// they are, in one undo step. A style replaced by itself or by a style with the same look records
+/// nothing, and bad parameters are errors that change nothing.
+#[test]
+fn redefine_from_a_style_gives_the_style_that_look() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    let d = rect(&mut s, 300.0);
+    set_fill(&mut s, d, "#0000ff");
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Blue"}));
+    set_fill(&mut s, c, "#00ff00");
+    let names = |s: &Session| s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let (old, blue, order, before) = (style(&s, "S"), style(&s, "Blue"), names(&s), steps(&s));
+    assert_eq!(run(&mut s, "graphicStyle.redefine", json!({"name": "S", "from": "Blue"}))["name"], "S");
+    assert_eq!(style(&s, "S"), GraphicStyle { name: "S".into(), id: old.id, ..blue.clone() });
+    assert_eq!(names(&s), order);
+    let blue_paint = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    for id in [a, b] {
+        let n = node(&s, id);
+        assert_eq!((n.appearance.fill_paint(), n.opacity, n.blend), (blue_paint.clone(), 0.5, BlendMode::Multiply));
+    }
+    assert_eq!(linked(&mut s, "S"), vec![a.0, b.0]);
+    // The edited object keeps its look and is unlinked; Blue and its object are as they were.
+    assert_eq!(fill(&s, c), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert_eq!(node(&s, c).extras().graphic_style, None);
+    assert_eq!(style(&s, "Blue"), blue);
+    assert_eq!(linked(&mut s, "Blue"), vec![d.0]);
+    let step = s.doc().unwrap().history.undo.last().unwrap().clone();
+    assert_eq!((step.label.as_str(), steps(&s)), ("Redefine Graphic Style “S”", before + 1));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(style(&s, "S"), old);
+    assert_eq!((fill(&s, a), fill(&s, b)), (Paint::solid(Color::WHITE), Paint::solid(Color::WHITE)));
+    assert_eq!(node(&s, c).extras().graphic_style, Some(old.id));
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(style(&s, "S").appearance, blue.appearance);
+    assert_eq!(linked(&mut s, "S"), vec![a.0, b.0]);
+    run(&mut s, "edit.undo", json!({}));
+
+    // A style replaced by itself, or by a copy with the same look, records nothing.
+    run(&mut s, "graphicStyle.duplicate", json!({"name": "Blue"}));
+    let before = steps(&s);
+    run(&mut s, "graphicStyle.redefine", json!({"name": "S", "from": "S"}));
+    run(&mut s, "graphicStyle.redefine", json!({"name": "Blue copy", "from": "Blue"}));
+    assert_eq!(steps(&s), before);
+    assert_eq!(style(&s, "S"), old);
+
+    // A style that does not exist, a `from` that is not a name, `from` with `id` and a missing `name` are errors.
+    for p in [
+        json!({"name": "S", "from": "nope"}),
+        json!({"name": "nope", "from": "Blue"}),
+        json!({"name": "S", "from": 3}),
+        json!({"name": "S", "from": "Blue", "id": a.0}),
+        json!({"from": "Blue"}),
+    ] {
+        assert!(s.execute("graphicStyle.redefine", &p).is_err(), "{p}");
+    }
+    assert_eq!((steps(&s), style(&s, "S")), (before, old));
+}
+
 #[test]
 fn deleting_a_style_unlinks_and_renaming_keeps_links() {
     let mut s = session();

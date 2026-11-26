@@ -484,10 +484,17 @@ pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
 /// in `art` (art read from a file, its resources in `d`), the type in opacity masks included. The
 /// pattern being edited is read from the editing layer only.
 pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
+    fonts_of(d, art, false)
+}
+
+/// [`art_fonts`]; `drawn`: only those the type is drawn in, not the fonts of runs drawn in a font
+/// their file carried ([`in_file_fonts`]).
+fn fonts_of(d: &Document, art: &[Node], drawn: bool) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().flat_map(run_fonts));
+            let file = if drawn { in_file_fonts(t) } else { vec![] };
+            fonts.extend(t.runs.iter().filter(|r| !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str()))).flat_map(run_fonts));
         }
     };
     let patterns = d.patterns.iter().filter(|p| !pattern_being_edited(d, &p.name)).flat_map(|p| p.art.iter().map(|a| &**a));
@@ -532,6 +539,24 @@ pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas:
     super::typecmd::export_overflow_warning(&overflow)
 }
 
+/// The objects behind production findings. Resource art points to its first visible owner on
+/// the canvas, so a finding can be located without selecting an id outside the layer tree.
+#[derive(Default)]
+pub(super) struct PreflightType {
+    pub fonts: BTreeMap<UsedFont, BTreeSet<NodeId>>,
+    pub overflow: BTreeSet<NodeId>,
+    pub images: BTreeMap<NodeId, NodeId>,
+}
+
+pub(super) fn preflight_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> PreflightType {
+    let mut walk = Printed::new(d);
+    walk.preflight = Some(PreflightType::default());
+    for l in layers {
+        walk.node(l, Some(areas));
+    }
+    walk.preflight.unwrap_or_default()
+}
+
 /// The walk of [`printed_type`].
 struct Printed<'a> {
     d: &'a Document,
@@ -546,13 +571,25 @@ struct Printed<'a> {
     /// The symbols and patterns whose art was walked.
     symbols: BTreeSet<String>,
     patterns: BTreeSet<String>,
+    preflight: Option<PreflightType>,
+    owner: Option<NodeId>,
 }
 
 impl<'a> Printed<'a> {
     /// A walk of `d` among its own objects, nothing found yet.
     fn new(d: &'a Document) -> Self {
         let boxes = d.symbol_boxes();
-        Self { d, boxes, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() }
+        Self {
+            d,
+            boxes,
+            own: true,
+            fonts: BTreeSet::new(),
+            overflow: BTreeSet::new(),
+            symbols: BTreeSet::new(),
+            patterns: BTreeSet::new(),
+            preflight: None,
+            owner: None,
+        }
     }
 
     /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
@@ -560,6 +597,15 @@ impl<'a> Printed<'a> {
     /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
     /// object) all of them but those outside the clipping path of a clip group.
     fn node(&mut self, n: &Node, areas: Option<&[Rect]>) {
+        let previous = self.owner;
+        if self.own {
+            self.owner = Some(n.id);
+        }
+        self.node_contents(n, areas);
+        self.owner = previous;
+    }
+
+    fn node_contents(&mut self, n: &Node, areas: Option<&[Rect]>) {
         if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
             return;
         }
@@ -571,6 +617,14 @@ impl<'a> Printed<'a> {
             && !open
             && !self.meets(n, a)
         {
+            // An entirely overset frame paints nothing, but is still a delivery problem. Keep
+            // the export walk unchanged; only preflight checks the frame itself in this case.
+            if let (Some(p), Some(owner), NodeKind::Text(t)) = (&mut self.preflight, self.owner, &n.kind)
+                && n.geometric_bounds().is_some_and(|b| a.iter().any(|r| r.intersect(b).area() > 0.0 || r.contains_rect(b)))
+                && vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).overflow
+            {
+                p.overflow.insert(owner);
+            }
             return;
         }
         // The art that its opacity mask, pattern paints and brushed strokes draw.
@@ -612,20 +666,41 @@ impl<'a> Printed<'a> {
             }
         }
         match &n.kind {
-            NodeKind::Text(_) => {
+            NodeKind::Text(t) => {
                 if overflows && self.own {
                     self.overflow.insert(n.id);
                 }
+                if overflows && let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.overflow.insert(owner);
+                }
+                let file = in_file_fonts(t);
                 for r in runs {
-                    self.fonts.extend(run_fonts(r));
+                    // Drawn in a font its file carried: printed as the file drew it.
+                    if !file.contains(&(r.style.font_family.as_str(), r.style.font_style.as_str())) {
+                        let fonts = run_fonts(r);
+                        if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                            for font in &fonts {
+                                p.fonts.entry(font.clone()).or_default().insert(owner);
+                            }
+                        }
+                        self.fonts.extend(fonts);
+                    }
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = r.inline.as_ref().filter(|_| draws_inline(r)) {
                         self.symbol(&art.symbol);
                     }
                 }
             }
+            NodeKind::Image(_) => {
+                if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.images.entry(n.id).or_insert(owner);
+                }
+            }
             NodeKind::SymbolInstance { symbol, .. } => self.symbol(symbol),
             NodeKind::PlacedDocument(p) => {
+                if let (Some(report), Some(owner)) = (&mut self.preflight, self.owner) {
+                    report.images.entry(n.id).or_insert(owner);
+                }
                 for art in p.art(n) {
                     self.art(&art);
                 }
@@ -693,9 +768,18 @@ fn drawn_runs(t: &vectorcraft_doc::TextObject) -> (Vec<&TextRun>, bool) {
 
 /// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
 /// families that aren't available (their type is drawn in the fallback font, not the font it
-/// names) or styles that its family doesn't have (the closest style is drawn).
+/// names) or styles that its family doesn't have (the closest style is drawn). Type drawn in a
+/// font its file carried isn't substituted.
 pub(super) fn substitution_warning(d: &Document) -> Option<String> {
-    substitution_warning_of(used_fonts(d))
+    substitution_warning_of(fonts_of(d, &[], true))
+}
+
+/// The families and styles of the runs of `t` drawn in a font its file carried
+/// ([`vectorcraft_text::FontDb::file_faces`]): drawn as the file drew them, not in a substitute,
+/// though the font they name isn't available.
+fn in_file_fonts(t: &vectorcraft_doc::TextObject) -> Vec<(&str, &str)> {
+    let faces = vectorcraft_text::FontDb::global().file_faces(t);
+    t.runs.iter().zip(faces).filter(|(_, f)| f.is_some()).map(|(r, _)| (r.style.font_family.as_str(), r.style.font_style.as_str())).collect()
 }
 
 /// [`substitution_warning`] for type set in `fonts`.
