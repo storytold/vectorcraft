@@ -50,8 +50,18 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
         app.status("no window");
         return;
     };
-    // An open the host replaces leaves its preview behind unless it is rolled back here.
+    // A dialog still open from an earlier click closes without an answer, and its preview is rolled back. The new
+    // dialog has its id (the dialog's kind), so the earlier dialog's held answer, with its OK and cancel hook, serves
+    // the new one.
+    let mut held = None;
     if let Some(mut old) = app.addon_dialogs.tangent_radius.take() {
+        if let Some(host) = app.dialogs() {
+            host.with(|h| {
+                h.cancel_by_id(&ctx, old.id);
+                let _ = h.take_by_id::<HostedParamDialog>(old.id);
+            });
+            held = Some(host);
+        }
         take_preview(app, &mut old).cancel(app);
     }
     let lengths = general_lengths(app);
@@ -66,7 +76,11 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
             take_preview(app, &mut open).cancel(app);
         }
     });
-    match open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }) {
+    let opened = match held {
+        Some(host) => Some(host.with(|h| h.open(dialog.held_ok()))),
+        None => open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }),
+    };
+    match opened {
         Some(id) => {
             app.addon_dialogs.tangent_radius =
                 Some(Open { id, click: p.clone(), doc, tried: None, note: None, preview: LivePreview::default(), shown_in: doc });
@@ -385,6 +399,35 @@ mod tests {
         assert!(press_ok(&mut app), "{}", app.ui.status);
         assert_eq!((count(&app), undo_steps(&app)), (paths + 1, steps + 1));
         assert_eq!(app.session.tool_options_of(tool::ID)["radius"], json!(tool::RADIUS));
+    }
+
+    #[test]
+    fn a_second_click_replaces_the_open_dialog() {
+        let mut app = app_with_lines(&[100, 140]);
+        let (paths, steps) = (count(&app), undo_steps(&app));
+        let open_ids = |app: &VectorcraftApp| app.dialogs().unwrap().with(|h| h.open_dialogs().iter().map(|d| d.id).collect::<Vec<_>>());
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(count(&app), paths + 1);
+        // The first line stays picked: another click on the second (as a control request can send while the dialog
+        // is open) asks again in one dialog, previewing one circle.
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert_eq!(open_ids(&app).len(), 1);
+        assert!(is_open(&app));
+        assert_eq!(count(&app), paths + 1);
+        // Cancel closes it and rolls its preview back, with no undo step.
+        cancel(&app, dialog_id(&app));
+        frame(&mut app);
+        assert!(!is_open(&app));
+        assert!(open_ids(&app).is_empty());
+        assert_eq!((count(&app), undo_steps(&app)), (paths, steps));
+        // Asked again, OK draws one circle in one undo step.
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert!(press_ok(&mut app), "{}", app.ui.status);
+        assert_eq!((count(&app), undo_steps(&app)), (paths + 1, steps + 1));
     }
 
     #[test]
