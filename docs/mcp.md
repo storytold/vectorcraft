@@ -2901,6 +2901,8 @@ own rules:
 - The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
   the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
   A promise still pending when no job is left stays pending, and the run ends.
+- In the host API, `Realm::run` and `Realm::start` end a paused or waiting run before compiling the new source.
+  The earlier run's globals remain available; its remaining code and queued jobs do not run.
 - The jobs run on the run's fuel and limits, and each job takes 1 unit of fuel. A chain of callbacks that never ends
   stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
   `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
