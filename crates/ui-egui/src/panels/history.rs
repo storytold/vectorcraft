@@ -284,6 +284,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 mod tests {
     use super::*;
     use crate::i18n::LangExt;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
 
     /// A step named after a style lists the template's translation with the style's name in it as
     /// the document holds it, also when the name looks like a template, like a step with a row of
@@ -401,24 +403,9 @@ mod tests {
         let mut app = app_with_two_rectangles();
         app.session.execute("edit.undo", &json!({})).unwrap();
         let source = app.session.active().unwrap().doc.clone();
-        let ctx = crate::testing::ui_context();
-        ctx.enable_accesskit();
-        egui_extras::install_image_loaders(&ctx);
-        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let out = crate::testing::part_frame(app, &ctx, egui::RawInput { events, screen_rect: screen, ..Default::default() }, show);
-            out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
-        };
-        frame(&mut app, vec![]);
-        let nodes = frame(&mut app, vec![]);
-        // PLAN: the button is named by the framework's words ("Create New Document from Current State"); the name is
-        // matched by the words it holds.
-        let button = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.contains("New Document"))).expect("the button");
-        let at = button.bounds().expect("its bounds");
-        let at = egui::pos2((at.x0 + at.x1) as f32 / 2.0, (at.y0 + at.y1) as f32 / 2.0);
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
-        frame(&mut app, vec![press(false)]);
+        let mut panel = Panel::new(app, show);
+        panel.click("Create New Document from Current State");
+        let app = panel.app();
         assert_eq!(app.session.documents().len(), 2);
         assert_eq!(app.session.active_index(), Some(1), "the new document is the active one");
         let st = app.session.active().unwrap();
@@ -427,56 +414,45 @@ mod tests {
         assert!(std::sync::Arc::ptr_eq(&app.session.documents()[0].doc, &source), "the source stays at that state");
     }
 
-    fn history_harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+    fn history_harness(app: VectorcraftApp) -> Panel {
         crate::i18n::set_current(crate::i18n::Lang::EN);
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(260.0, 400.0))
-            .with_context_setup(crate::testing::install)
-            .build_ui_state(|ui, app| show(app, ui), app);
-        h.run_steps(2);
-        h
+        let mut panel = Panel::new(app, show);
+        panel.room(egui::vec2(260.0, 400.0));
+        panel.frame();
+        panel
     }
 
-    fn row_menu_harness(app: VectorcraftApp, row: usize) -> egui_kittest::Harness<'static, VectorcraftApp> {
-        use egui_kittest::kittest::Queryable;
-        let mut h = history_harness(app);
-        let pos = h.get_all_by_role(egui::accesskit::Role::ListItem).nth(row).expect("history row").rect().center();
-        h.event(egui::Event::PointerMoved(pos));
-        for pressed in [true, false] {
-            h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() });
-        }
-        h.run_steps(2);
-        h
+    fn row_menu_harness(app: VectorcraftApp, row: usize) -> Panel {
+        let mut panel = history_harness(app);
+        panel.secondary_click_nth(Role::LIST_ITEM, row);
+        panel
     }
 
-    fn focus_previous_state(h: &mut egui_kittest::Harness<'static, VectorcraftApp>) {
-        use egui_kittest::kittest::{NodeT, Queryable};
+    fn focus_previous_state(panel: &mut Panel) {
         for _ in 0..4 {
-            h.key_press(egui::Key::Tab);
-            h.run_steps(1);
-            if h.get_all_by_role(egui::accesskit::Role::ListItem).nth(2).unwrap().accesskit_node().is_focused() {
+            panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+            if panel.focused_nth(Role::LIST_ITEM, 2) {
                 break;
             }
         }
-        assert!(h.get_all_by_role(egui::accesskit::Role::ListItem).nth(2).unwrap().accesskit_node().is_focused());
-        h.key_press(egui::Key::ArrowUp);
-        h.run_steps(2);
-        assert!(h.get_all_by_role(egui::accesskit::Role::ListItem).nth(1).unwrap().accesskit_node().is_focused());
-        assert_eq!(depth(h.state()), (2, 0), "moving focus must not step history");
+        assert!(panel.focused_nth(Role::LIST_ITEM, 2));
+        panel.key(egui::Key::ArrowUp, egui::Modifiers::NONE);
+        assert!(panel.focused_nth(Role::LIST_ITEM, 1));
+        assert_eq!(depth(&panel.app()), (2, 0), "moving focus must not step history");
     }
 
     #[test]
     fn keyboard_activation_steps_to_the_focused_state() {
         let mut h = history_harness(app_with_two_rectangles());
         focus_previous_state(&mut h);
-        h.key_press(egui::Key::Enter);
-        h.run_steps(2);
-        assert_eq!(depth(h.state()), (1, 1));
-        assert_eq!(h.state().session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        h.key(egui::Key::Enter, egui::Modifiers::NONE);
+        h.frame();
+        h.frame();
+        assert_eq!(depth(&h.app()), (1, 1));
+        assert_eq!(h.app().session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
     }
     #[test]
     fn switching_documents_dismisses_the_row_menu_without_clearing_either_history() {
-        use egui_kittest::kittest::Queryable;
         let mut app = app_with_two_rectangles();
         app.session.execute("edit.undo", &json!({})).unwrap();
         app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
@@ -486,114 +462,116 @@ mod tests {
         app.session.execute("edit.undo", &json!({})).unwrap();
         app.session.execute("document.activate", &json!({"index": 0})).unwrap();
         let mut h = row_menu_harness(app, 1);
-        h.get_by_label("Clear History");
-        h.state_mut().session.execute("document.activate", &json!({"index": 1})).unwrap();
-        h.run_steps(2);
-        assert!(h.query_by_label("Clear History").is_none(), "the other document must not inherit the popup");
-        h.state_mut().session.execute("document.activate", &json!({"index": 0})).unwrap();
-        h.run_steps(2);
-        assert!(h.query_by_label("Clear History").is_none(), "switching back must not revive the popup");
-        for st in h.state().session.documents() {
+        assert!(h.shows("Clear History"));
+        h.app().session.execute("document.activate", &json!({"index": 1})).unwrap();
+        h.frame();
+        h.frame();
+        assert!(!h.shows("Clear History"), "the other document must not inherit the popup");
+        h.app().session.execute("document.activate", &json!({"index": 0})).unwrap();
+        h.frame();
+        h.frame();
+        assert!(!h.shows("Clear History"), "switching back must not revive the popup");
+        for st in h.app().session.documents() {
             assert_eq!((st.history.undo.len(), st.history.redo.len()), (1, 1));
         }
     }
 
     #[test]
     fn keyboard_opens_dismisses_and_activates_the_focused_rows_menu() {
-        use egui_kittest::kittest::{NodeT, Queryable};
         let app = app_with_two_rectangles();
         let source = app.session.active().unwrap().doc.clone();
         let wanted = app.session.active().unwrap().history.undo[1].doc.clone();
         let mut h = history_harness(app);
         focus_previous_state(&mut h);
-        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
-        h.run_steps(2);
-        assert!(h.get_by_label("New Document from State").accesskit_node().is_focused());
-        assert_eq!(depth(h.state()), (2, 0), "opening does not step");
-        h.key_press(egui::Key::Escape);
-        h.run_steps(2);
-        assert!(h.query_by_label("New Document from State").is_none());
-        assert!(h.get_all_by_role(egui::accesskit::Role::ListItem).nth(1).unwrap().accesskit_node().is_focused());
-        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
-        h.run_steps(2);
-        h.key_press(egui::Key::Enter);
-        h.run_steps(2);
-        assert_eq!(h.state().session.documents().len(), 2);
-        assert_eq!(h.state().session.active().unwrap().doc.layers, wanted.layers);
-        assert!(Arc::ptr_eq(&h.state().session.documents()[0].doc, &source));
-        assert_eq!(h.state().session.documents()[0].history.undo.len(), 2);
+        h.key(egui::Key::F10, egui::Modifiers::SHIFT);
+        h.frame();
+        h.frame();
+        assert!(h.focused("New Document from State"));
+        assert_eq!(depth(&h.app()), (2, 0), "opening does not step");
+        h.key(egui::Key::Escape, egui::Modifiers::NONE);
+        h.frame();
+        h.frame();
+        assert!(!h.shows("New Document from State"));
+        assert!(h.focused_nth(Role::LIST_ITEM, 1));
+        h.key(egui::Key::F10, egui::Modifiers::SHIFT);
+        h.frame();
+        h.frame();
+        h.key(egui::Key::Enter, egui::Modifiers::NONE);
+        h.frame();
+        h.frame();
+        assert_eq!(h.app().session.documents().len(), 2);
+        assert_eq!(h.app().session.active().unwrap().doc.layers, wanted.layers);
+        assert!(Arc::ptr_eq(&h.app().session.documents()[0].doc, &source));
+        assert_eq!(h.app().session.documents()[0].history.undo.len(), 2);
     }
 
     #[test]
     fn right_clicking_an_earlier_state_opens_its_menu_without_stepping() {
-        use egui_kittest::kittest::Queryable;
         let h = row_menu_harness(app_with_two_rectangles(), 1);
-        h.get_by_label("New Document from State");
-        h.get_by_label("Step to This State");
-        h.get_by_label("Clear History");
-        assert_eq!(depth(h.state()), (2, 0));
+        assert!(h.shows("New Document from State"));
+        assert!(h.shows("Step to This State"));
+        assert!(h.shows("Clear History"));
+        assert_eq!(depth(&h.app()), (2, 0));
     }
 
     #[test]
     fn the_row_menu_makes_a_new_document_from_that_snapshot() {
-        use egui_kittest::kittest::Queryable;
         let mut app = app_with_two_rectangles();
         app.session.execute("edit.undo", &json!({})).unwrap();
         let snapshot = app.session.active().unwrap().doc.clone();
         app.session.execute("edit.redo", &json!({})).unwrap();
         let source = app.session.active().unwrap().doc.clone();
         let mut h = row_menu_harness(app, 1);
-        h.get_by_label("New Document from State").click();
-        h.run_steps(2);
-        let app = h.state();
+        h.click_menu_item("New Document from State");
+        h.frame();
+        h.frame();
+        let app = h.app();
         assert_eq!(app.session.documents().len(), 2);
         assert_eq!(app.session.active_index(), Some(1));
         let st = app.session.active().unwrap();
         assert_eq!(st.doc.layers, snapshot.layers, "the historic artwork");
         assert!(st.is_dirty());
-        assert_eq!(depth(app), (0, 0));
+        assert_eq!(depth(&app), (0, 0));
         assert!(std::sync::Arc::ptr_eq(&app.session.documents()[0].doc, &source));
         assert_eq!(app.session.documents()[0].history.undo.len(), 2);
     }
 
     #[test]
     fn the_row_menu_steps_backward_and_forward_to_the_target() {
-        use egui_kittest::kittest::{NodeT, Queryable};
         for (current, target) in [(2, 0), (0, 2), (1, 1)] {
             let mut app = app_with_two_rectangles();
             for _ in current..2 {
                 app.session.execute("edit.undo", &json!({})).unwrap();
             }
             let mut h = row_menu_harness(app, target);
-            let item = h.get_by_label("Step to This State");
-            assert_eq!(item.accesskit_node().is_disabled(), current == target);
-            item.click();
-            h.run_steps(2);
-            assert_eq!(depth(h.state()), (target, 2 - target));
-            assert_eq!(h.state().session.active().unwrap().doc.layers[0].children().unwrap().len(), target);
+            assert_eq!(h.menu_item_enabled("Step to This State"), current != target);
+            h.click_menu_item("Step to This State");
+            h.frame();
+            h.frame();
+            assert_eq!(depth(&h.app()), (target, 2 - target));
+            assert_eq!(h.app().session.active().unwrap().doc.layers[0].children().unwrap().len(), target);
         }
     }
 
     #[test]
     fn the_row_menu_clears_undo_and_redo_without_changing_art() {
-        use egui_kittest::kittest::{NodeT, Queryable};
         let mut app = app_with_two_rectangles();
         app.session.execute("edit.undo", &json!({})).unwrap();
         let source = app.session.active().unwrap().doc.clone();
         let mut h = row_menu_harness(app, 0);
-        h.get_by_label("Clear History").click();
-        h.run_steps(2);
-        assert_eq!(depth(h.state()), (0, 0));
-        assert!(std::sync::Arc::ptr_eq(&h.state().session.active().unwrap().doc, &source));
+        h.click_menu_item("Clear History");
+        h.frame();
+        h.frame();
+        assert_eq!(depth(&h.app()), (0, 0));
+        assert!(std::sync::Arc::ptr_eq(&h.app().session.active().unwrap().doc, &source));
         let mut empty = app_with_two_rectangles();
         empty.session.execute("edit.clearHistory", &json!({})).unwrap();
         let h = row_menu_harness(empty, 0);
-        assert!(h.get_by_label("Clear History").accesskit_node().is_disabled());
+        assert!(!h.menu_item_enabled("Clear History"));
     }
 
     #[test]
     fn stepping_settles_typing_and_follows_the_snapshot_when_rows_shift() {
-        use egui_kittest::kittest::Queryable;
         for (limit, row) in [(10, 0), (2, 1)] {
             let mut app = app_with_two_rectangles();
             app.session.active_mut().unwrap().history.limit = limit;
@@ -602,9 +580,11 @@ mod tests {
             app.session.begin_interaction("Typing").unwrap();
             app.session.preview("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
             let mut h = row_menu_harness(app, row);
-            h.get_by_label("Step to This State").click();
-            h.run_steps(2);
-            let st = h.state().session.active().unwrap();
+            h.click_menu_item("Step to This State");
+            h.frame();
+            h.frame();
+            let app = h.app();
+            let st = app.session.active().unwrap();
             assert_eq!(st.doc.layers, wanted.layers, "limit {limit}, row {row}");
             assert!(st.interaction.is_none());
             assert_eq!(st.history.undo.len(), 0);
@@ -613,7 +593,6 @@ mod tests {
 
     #[test]
     fn copying_a_state_resolves_pending_tool_edits_without_copying_a_neighbor() {
-        use egui_kittest::kittest::Queryable;
         use vectorcraft_tools::{PointerEvent, PointerKind};
 
         for (row, finishes_while_open) in [(0, false), (1, false), (0, true), (1, true)] {
@@ -637,13 +616,15 @@ mod tests {
             assert!(app.session.tool_waiting());
             let mut h = row_menu_harness(app, row);
             if finishes_while_open {
-                let requests = h.state_mut().session.finish_tool_edit();
-                crate::canvas::apply_requests(h.state_mut(), requests);
-                h.run_steps(2);
+                let requests = h.app().session.finish_tool_edit();
+                crate::canvas::apply_requests(&mut h.app(), requests);
+                h.frame();
+                h.frame();
             }
-            h.get_by_label("New Document from State").click();
-            h.run_steps(2);
-            let app = h.state();
+            h.click_menu_item("New Document from State");
+            h.frame();
+            h.frame();
+            let app = h.app();
             assert!(!app.session.tool_waiting());
             if row == 0 {
                 assert_eq!(app.session.documents().len(), 1, "the pruned snapshot must not copy its neighbor");
