@@ -14,6 +14,7 @@ use craft::ui::form::Field;
 use craft::ui::list::{List, ListRow};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
+use craft::ui::primitives::SubmitKey;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::text::TextField;
@@ -101,7 +102,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let shown = script.unwrap_or_default();
     let mut typed = None;
     Field::new(caption("JavaScript:")).show(ui, |ui, _| {
-        let out = TextField::new(caption("JavaScript:"), Bind::given(shown.to_string())).lines(3).id_salt(event).enabled(info.has).show(ui);
+        let out = TextField::new(caption("JavaScript:"), Bind::given(shown.to_string()))
+            .lines(3)
+            .submits()
+            .submit_key(SubmitKey::Enter)
+            .id_salt(event)
+            .enabled(info.has)
+            .show(ui);
         typed = out.events.committed().filter(|js| js.as_str() != shown).cloned();
     });
     let source = keyed(events, |(e, _): &(String, String)| e.clone());
@@ -178,6 +185,24 @@ mod tests {
 
     fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
         app.session.execute(id, &p).unwrap()
+    }
+
+    #[test]
+    fn enter_applies_the_event_script_and_shift_enter_adds_a_line() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        let mut panel = Panel::new(app, show);
+
+        panel.click_role(caption("JavaScript:"), craft::ui::contract::Role::TEXT_INPUT);
+        panel.type_text("1;");
+        panel.key(egui::Key::Enter, egui::Modifiers::SHIFT);
+        panel.type_text("2;");
+        let events = |app: &mut VectorcraftApp| run(app, "svgInteractivity.info", json!({}))["events"].clone();
+        assert_eq!(events(&mut panel.app()), json!([]), "the script is still a draft");
+
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(events(&mut panel.app()), json!([{"event": SVG_EVENTS[0], "script": "1;\n2;"}]));
     }
 
     // (Only names and scripts are checked: they are shown as they are, while tests running
