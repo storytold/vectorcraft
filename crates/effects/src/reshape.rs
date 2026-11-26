@@ -1720,6 +1720,7 @@ fn reshape_leaves_checked(
     // whatever its options, unless one of the effects makes copies or moves at random
     // ([`crate::raster::contents_step`], [`follow_art`]).
     let held = listed.iter().any(|e| crate::raster::holds_back(e));
+    let mut rows = rows;
     for e in fx {
         let Some(bounds) = warped.bounds(art) else { break };
         let params = merged_params(&e.id, &e.params);
@@ -1731,6 +1732,9 @@ fn reshape_leaves_checked(
         // as the art it masks did, so no mask is left apart from its art.
         let before = masked.then(|| (art.clone(), used));
         let ran = step.run(art, max, &mut used, copy_whole, Some(&mut warped), false, 0);
+        if painted_plugin(e).is_some() {
+            art.walk(&mut |node| rows |= node.appearance.items.iter().any(follows_row_raster));
+        }
         if (ran.kept || ran.short)
             && let Some(complete) = complete.as_deref_mut()
         {
@@ -2657,7 +2661,7 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
     if let Some(at) = copied_raster_at(&source) {
         let before = art_cost(one);
         let art = copied_raster_art_checked(doc, &source, at, false, &|_| None, Some(room.plus(before)))?;
-        let extra = art_cost(&art).minus(before);
+        let extra = dressed_extra(&art, before);
         if !room.fits(extra) {
             return None;
         }
@@ -2691,7 +2695,7 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
         );
         #[cfg(test)]
         DRESSED.with(|d| d.set(d.get().plus(art_cost(&art))));
-        extra = art_cost(&art).minus(before);
+        extra = dressed_extra(&art, before);
         if !complete || !room.fits(extra) {
             return None;
         }
@@ -2724,6 +2728,19 @@ fn piece_cost(path: &PathData) -> Budget {
 fn piece_share() -> Budget {
     let max = vectorcraft_plugins::objects::MAX_OBJECTS;
     Budget { anchors: Budget::EFFECTS.anchors / max, lines: Budget::EFFECTS.lines / max }
+}
+
+fn dressed_extra(art: &Node, before: Budget) -> Budget {
+    fn shares(node: &Node) -> Budget {
+        match &node.kind {
+            NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => piece_share(),
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                children.iter().map(|child| shares(child)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus)
+            }
+            _ => Budget { anchors: 0, lines: 0 },
+        }
+    }
+    art_cost(art).minus(before).plus(shares(art).minus(piece_share()))
 }
 
 /// Live-effect plug-in `plugin` (one that paints what it returns) with `params`, a later effect of

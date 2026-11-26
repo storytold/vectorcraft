@@ -729,6 +729,49 @@ fn copied_piece_effects_share_the_remaining_geometry_budget() {
     }
 }
 
+#[test]
+fn copied_pieces_reserve_their_shares_before_later_effects() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let mut source = Node::path(NodeId(9), path.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let look = vectorcraft_plugins::painted::Look {
+        effects: vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+            Effect { id: "distort.transform".into(), params: json!({"copies": 1, "moveH": 40.0}), visible: true },
+        ],
+        ..Default::default()
+    };
+    assert!(crate::reshape::dress_piece(&mut source, &look, Budget::of(&path), None).is_none());
+}
+
+#[test]
+fn returned_fill_shadows_follow_later_copying_transforms() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.fill.shadow";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Returned shadows","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "fills": [{"paint": Paint::solid(Color::BLACK), "effects": [{"id": "stylize.dropShadow", "params": {"x": 3.0, "y": 4.0, "blur": 2.0}}]}]}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    for transform in [json!({"copies": 1, "moveH": 40.0, "rotate": 90.0}), json!({"copies": 1, "moveH": 40.0, "scaleH": 200, "scaleV": 200})] {
+        let mut source = Node::path(NodeId(9), path.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        source.appearance.effects = vec![
+            Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+            Effect { id: "distort.transform".into(), params: transform, visible: true },
+        ];
+        let art = reshape(None, &source, None).unwrap();
+        assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+        let mut shadows = vec![];
+        art.walk(&mut |node| {
+            for row in &node.appearance.items {
+                shadows.extend(row.effects().iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.to_string()));
+            }
+            shadows.extend(node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.to_string()));
+        });
+        assert_eq!(shadows.len(), 2, "{shadows:?}");
+        assert_ne!(shadows[0], shadows[1]);
+    }
+}
+
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's
 /// Offset Path runs on it alone, so the plug-in runs once and the square moves once.
 #[test]
