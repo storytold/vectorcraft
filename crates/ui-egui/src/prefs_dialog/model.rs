@@ -436,14 +436,19 @@ impl PreferencesDraft for Live<'_> {
         if before_switch && let Some(on) = self.w.draft.get::<bool>("__taskBar") {
             self.app.ui.task_bar = on;
         }
+        let was_touch = crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
         if touch_ws.is_some() {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
+        // When OK leaves Touch, the workspace returned to takes the row only when it changed since the window opened or
+        // last applied; otherwise it keeps its own.
+        let left_touch = was_touch && !crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
+        let task_bar_row = self.w.draft.get::<bool>("__taskBar").filter(|on| !left_touch || self.w.opened.get::<bool>("__taskBar") != Some(*on));
         let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
         let (smart_guides, snap_to_grid, task_bar) = (
             flag("__smartGuides", self.app.ui.view.smart_guides),
             flag("__snapToGrid", self.app.ui.view.snap_to_grid),
-            if before_switch { self.app.ui.task_bar } else { flag("__taskBar", self.app.ui.task_bar) },
+            if before_switch { self.app.ui.task_bar } else { task_bar_row.unwrap_or(self.app.ui.task_bar) },
         );
         self.app.ui.view.smart_guides = smart_guides;
         self.app.ui.view.snap_to_grid = snap_to_grid;
@@ -451,6 +456,9 @@ impl PreferencesDraft for Live<'_> {
         crate::original_editor::commit(self.app);
         super::snapshot(self.app);
         self.app.prefs_changed = true;
+        // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
+        // took, so a later Apply does not give the workspace left's value to Touch.
+        self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
         Ok(())
     }
