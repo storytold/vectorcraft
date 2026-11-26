@@ -114,6 +114,9 @@ impl Renderer {
     }
 
     fn group_offscreen(&mut self, ctx: &mut RenderContext, f: &Frame, c: Composite, r: Region, draw: &mut Content) {
+        if f.reject_patch() {
+            return;
+        }
         let Composite { clip, blend, opacity, mask, isolated, .. } = c;
         // A group that blends with its backdrop is drawn twice (over the backdrop, and alone for
         // its coverage), and so is everything in it, so such groups nested in each other cost 2ⁿ.

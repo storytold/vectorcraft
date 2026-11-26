@@ -57,9 +57,10 @@ pub(crate) fn color_image_owned(img: vectorcraft_render::Rendered) -> egui::Colo
 /// is at most 8 ms, and except when that frame drew raster effects from rasters made before their
 /// objects moved ([`crate::CanvasCache::moved`]) or holds pixels copied from the worker's last frame
 /// ([`crate::CanvasCache::reused`]): the worker's renderer keeps the rasters of the art's effects,
-/// and this thread's doesn't. No frame that drew art in a way that depends on its size, or that a
-/// part drawn again here since it was shown would have differed from, is drawn again in part
-/// ([`crate::CanvasCache::whole_frames`]). A frame that drew nothing from moved rasters or at a
+/// and this thread's doesn't. A web frame with known view-sensitive output bounds can still be
+/// patched outside them, accounting for the patch's rounding. Otherwise view-sensitive art or
+/// an earlier rejected patch requires a whole render ([`crate::CanvasCache::whole_frames`]).
+/// A frame that drew nothing from moved rasters or at a
 /// drag's lower resolution can supply the unchanged pixels when a Pen press starts an interaction
 /// over a worker frame, even when [`CacheKey::interacting`] and [`CacheKey::dragging`] change.
 /// Leaving an interaction still replaces the whole frame. What changed is measured by this thread's renderer: it keeps what
@@ -101,15 +102,30 @@ pub(super) fn changed_pixels(
         vectorcraft_render::Changed::Nothing => Some(None),
         vectorcraft_render::Changed::Area(area) => match vectorcraft_render::view_pixels(area, view, w, h) {
             None => Some(None),
-            Some([x0, y0, x1, y1]) if !app.canvas.whole_frames => {
+            Some([x0, y0, x1, y1]) => {
                 let ((x0, x1), (y0, y1)) = (in_steps(x0, x1, w), in_steps(y0, y1, h));
+                let patch = Rect::new(f64::from(x0), f64::from(y0), f64::from(x1), f64::from(y1));
+                if app.canvas.whole_frames && app.canvas.view_sized_bounds.is_none_or(|bounds| !bounds.intersect(patch).is_zero_area()) {
+                    return None;
+                }
+                // A full draw can use 3D art measured here. Do not rebuild it in the scratch renderer.
+                if app.canvas.view_sized_bounds.is_some() && app.canvas.renderer.measured_bytes() > 0 {
+                    return None;
+                }
                 let share = (f64::from(x1 - x0) * f64::from(y1 - y0)) / (f64::from(w) * f64::from(h));
                 (share <= budget.min(0.5)).then_some(Some([x0, y0, x1, y1]))
             }
-            Some(_) => None,
         },
         vectorcraft_render::Changed::Everything => None,
     }
+}
+
+fn web_patch_renderer(slot: &mut Option<Box<vectorcraft_render::Renderer>>) -> &mut vectorcraft_render::Renderer {
+    slot.get_or_insert_with(|| {
+        let mut renderer = vectorcraft_render::Renderer::new();
+        renderer.threads = 0;
+        Box::new(renderer)
+    })
 }
 
 /// `a..b` of `0..n`, grown to whole eighths of `n` and moved back into `0..n`: the parts of a
@@ -608,6 +624,8 @@ fn show_worker_frame(app: &mut VectorcraftApp, ctx: &egui::Context, done: crate:
     app.canvas.moved = done.moved > 0;
     app.canvas.from_worker = true;
     app.canvas.whole_frames = done.view_sized;
+    app.canvas.view_sized_bounds = None;
+    app.canvas.web_patch_renderer = None;
 }
 
 /// The size and view matrix of the frame to render: the pixel region in Pixel Preview, else the whole canvas.
@@ -711,11 +729,23 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
     }
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
-        let renderer = &mut app.canvas.renderer;
         let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * *view;
-        let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, opts));
+        let plain_patch = app.canvas.view_sized_bounds.is_some();
+        let renderer = if plain_patch { web_patch_renderer(&mut app.canvas.web_patch_renderer) } else { &mut app.canvas.renderer };
+        let part = effects.view(|| {
+            if plain_patch {
+                renderer.render_plain_patch(doc, x1 - x0, y1 - y0, part_view, opts)
+            } else {
+                Some(renderer.render(doc, x1 - x0, y1 - y0, part_view, opts))
+            }
+        });
+        let Some(mut part) = part else {
+            app.canvas.view_sized_bounds = None;
+            return false;
+        };
         if renderer.stats.view_sized > 0 || renderer.stats.previewed > 0 || app.canvas.from_worker && renderer.stats.moved > 0 {
             app.canvas.whole_frames = true;
+            app.canvas.view_sized_bounds = None;
             return false;
         }
         let width = part.width;
@@ -723,7 +753,10 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
         let color = color_image(&part);
         let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
         tex.set_partial([x0 as usize, y0 as usize], color, options);
-        app.canvas.moved |= app.canvas.renderer.stats.moved > 0;
+        app.canvas.moved |= renderer.stats.moved > 0;
+        if plain_patch {
+            app.canvas.renderer.let_go_of_measured();
+        }
     }
     app.canvas.key = Some((*key).clone());
     app.canvas.shown = Some(((*doc).clone(), opts.clone()));
@@ -779,6 +812,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     // thread's renderer has none, so a frame fast on the worker would be slow here. An edit in a
     // part of the frame shown is drawn again here, unless that part would differ ([`draw_changed`]).
     let same_doc = app.canvas.key.as_ref().is_some_and(|k| k.doc == key.doc);
+    if !same_doc {
+        app.canvas.web_patch_renderer = None;
+    }
     let settling = app.canvas.moved && !key.interacting;
     let staying = key.interacting && app.canvas.from_worker;
     // A document's first frame (opened, or its tab chosen) renders on the worker too: how long it
@@ -835,7 +871,12 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             app.perf.render_ms = monotonic_ms() - t0;
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
-            app.canvas.whole_frames = app.canvas.renderer.stats.view_sized > 0 || app.canvas.renderer.stats.previewed > 0;
+            let stats = app.canvas.renderer.stats;
+            app.canvas.whole_frames = stats.view_sized > 0 || stats.previewed > 0;
+            app.canvas.view_sized_bounds = if app.canvas.waits_for_still && stats.previewed == 0 { stats.view_sized_bounds() } else { None };
+            if app.canvas.view_sized_bounds.is_none() {
+                app.canvas.web_patch_renderer = None;
+            }
             app.canvas.from_worker = false;
             app.canvas.reused = None;
         }

@@ -1531,6 +1531,30 @@ fn moved_objects_draw_their_effect_rasters_while_interacting() {
 /// frame after the drag, of the same document, is what a fresh renderer draws, as is a frame
 /// rendered while interacting without a drag (a dialog's preview).
 #[test]
+fn a_plain_patch_stops_at_a_raster_effect() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("texture.texturizer", json!({}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(94.0, 3.0, 96.0, 6.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let (width, height) = (2000, 1600);
+    let view = Affine::scale(20.0);
+    let still = RenderOptions::default();
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    renderer.render(&doc, width, height, view, &still);
+    let total_drawn = renderer.stats.drawn;
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch_view = Affine::translate((-1850.0, -50.0)) * view;
+    assert!(scratch.render_plain_patch(&doc, 100, 100, patch_view, &still).is_some(), "the distant patch does not draw the effect");
+    assert!(scratch.render_plain_patch(&doc, width, height, view, &still).is_none(), "a patch that draws the effect needs the full render");
+    assert!(scratch.stats.drawn < total_drawn, "the rejected patch does not draw the artwork after the effect");
+}
+
+#[test]
 fn a_drag_renders_raster_effects_within_the_drag_budget() {
     let effects = vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 7, "opacity": 80})), ("texture.texturizer", json!({}))];
     let base = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::rgb(0.9, 0.4, 0.1), effects);

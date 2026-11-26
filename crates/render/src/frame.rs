@@ -167,6 +167,8 @@ pub struct FrameStats {
     /// group or an effect's raster. A part of the frame rendered on its own can draw that art with
     /// other pixels than the whole frame does.
     pub view_sized: usize,
+    bounded_view_sized: usize,
+    view_sized_bounds: Option<Rect>,
     /// How many threads composed the frame from its two ink planes, in a CMYK document that shows
     /// transparency; 0 for other frames.
     pub ink_threads: usize,
@@ -183,10 +185,35 @@ pub struct FrameStats {
     pub micros: u64,
 }
 
+impl FrameStats {
+    /// A conservative enclosure in the frame's output pixels, when every view-sized operation has
+    /// a known bound. `None` leaves the choice to render the whole frame.
+    pub fn view_sized_bounds(&self) -> Option<Rect> {
+        self.view_sized_bounds.filter(|_| self.bounded_view_sized == self.view_sized)
+    }
+}
+
+impl super::Renderer {
+    /// Records an operation bounded by its own output clip. A nested effect can affect more than
+    /// its own clip once an ancestor filters or composites it, so only bound direct RGB output.
+    pub(crate) fn note_view_sized_clip(&mut self, f: &Frame, clip: Rect) {
+        self.stats.view_sized += 1;
+        if self.nested == 0 && self.offscreen_live == 0 && f.view == f.output && f.doc.color_mode == vectorcraft_doc::ColorMode::Rgb {
+            let bound = f.output.transform_rect_bbox(clip).inflate(1.0, 1.0);
+            if bound.is_finite() {
+                self.stats.bounded_view_sized += 1;
+                self.stats.view_sized_bounds = vectorcraft_geom::union_opt(self.stats.view_sized_bounds, Some(bound));
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct Frame<'a> {
     /// Drawing into a multithreaded context: vello filter layers must be rendered offscreen.
     pub(crate) mt: bool,
+    /// Set the flag if the incomplete paint would need a full render.
+    pub(crate) patch: Option<&'a std::cell::Cell<bool>>,
     pub(crate) doc: &'a Document,
     /// `doc`'s symbol art boxes, which culling measures symbol instances by ([`SymbolBoxes::quick`]).
     pub(crate) symbols: &'a SymbolBoxes<'a>,
@@ -208,6 +235,17 @@ pub(crate) struct Frame<'a> {
 }
 
 impl Frame<'_> {
+    pub(crate) fn reject_patch(&self) -> bool {
+        self.patch.is_some_and(|hit| {
+            hit.set(true);
+            true
+        })
+    }
+
+    pub(crate) fn patch_rejected(&self) -> bool {
+        self.patch.is_some_and(std::cell::Cell::get)
+    }
+
     /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
     pub(crate) fn text_snap(&self, t: &TextObject) -> Option<Affine> {
         (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)

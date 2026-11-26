@@ -636,6 +636,10 @@ impl Renderer {
         if !m.is_valid() {
             return;
         }
+        // A cropped mesh may lose a covered neighbor that supplied a color at its fringe.
+        if f.reject_patch() {
+            return;
+        }
         if f.opts.outline {
             let bp = m.lines().to_bezpath();
             self.hairline(ctx, f, &bp, [0, 0, 0, 255]);

@@ -241,7 +241,7 @@ impl Renderer {
     }
 
     pub(crate) fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
-        if self.skipped(f, a) {
+        if f.patch_rejected() || self.skipped(f, a) {
             return;
         }
         // An image masked by one white shape painted straight into the shape, as an image in a
@@ -296,6 +296,9 @@ impl Renderer {
     /// The coverage of opacity mask `m` per output pixel (row-major): its art rendered offscreen,
     /// as luminance ([`mask_value`]).
     pub(super) fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Option<Vec<u8>> {
+        if f.reject_patch() {
+            return None;
+        }
         let mut mctx = f.offscreen_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
         // and its luminance is that of its screen colours.
@@ -393,7 +396,7 @@ impl Renderer {
             return;
         }
         // A cancelled export stops drawing; whoever asked for the picture drops it (see `cancel`).
-        if vectorcraft_doc::cancel::is_cancelled() {
+        if f.patch_rejected() || vectorcraft_doc::cancel::is_cancelled() {
             return;
         }
         if force {
@@ -781,7 +784,7 @@ impl Renderer {
                 self.dimmed(ctx, f, &mut |r, c, fr| rest.iter().for_each(|n| r.draw_arc(c, fr, n)));
             }
         } else {
-            for c in children {
+            for c in children.iter().take_while(|_| !f.patch_rejected()) {
                 self.draw_arc(ctx, f, c);
             }
         }
@@ -804,6 +807,9 @@ impl Renderer {
     /// over the elements below it (the art below the group when the group is non-isolated and
     /// drawn over a copy of it, see [`Self::group`] and [`Self::knockout_over`]).
     pub(crate) fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
+        if f.reject_patch() {
+            return;
+        }
         let backdrop = self.backdrop.take();
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {

@@ -113,9 +113,32 @@ impl Renderer {
     /// set in one of the document's composite fonts draws in the document's definition, also when
     /// no session has registered it (a document that is not in front, or read from a file).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        self.render_document(doc, width, height, view, opts, None)
+    }
+
+    /// Render a plain RGB canvas patch using a separate renderer. Raster effects and offscreen
+    /// group compositing require the full render.
+    pub fn render_plain_patch(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
+        if doc.color_mode != vectorcraft_doc::ColorMode::Rgb || opts.mask_view.is_some() || opts.supersample {
+            return None;
+        }
+        let hit = std::cell::Cell::new(false);
+        let image = self.render_document(doc, width, height, view, opts, Some(&hit));
+        (!hit.get()).then_some(image)
+    }
+
+    fn render_document(
+        &mut self,
+        doc: &Document,
+        width: u32,
+        height: u32,
+        view: Affine,
+        opts: &RenderOptions,
+        patch: Option<&std::cell::Cell<bool>>,
+    ) -> Rendered {
         let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
-        self.render_as(doc, width, height, view, opts, false, 1)
+        self.render_as(doc, width, height, view, opts, false, 1, patch)
     }
 
     /// [`Self::render`], or with `inks` the ink amounts in the working CMYK space instead of
@@ -123,14 +146,24 @@ impl Renderer {
     /// pixel of the output in pixels of this render: the supersampling factor while an export
     /// draws its art at several times its size, else 1 ([`Frame::output`]).
     #[allow(clippy::too_many_arguments)]
-    fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool, cell: u32) -> Rendered {
+    fn render_as(
+        &mut self,
+        doc: &Document,
+        width: u32,
+        height: u32,
+        view: Affine,
+        opts: &RenderOptions,
+        inks: bool,
+        cell: u32,
+        patch: Option<&std::cell::Cell<bool>>,
+    ) -> Rendered {
         let start = now();
         if opts.supersample && opts.anti_alias == AntiAlias::Art && opts.mask_view.is_none() {
             let (w, h) = (width.clamp(1, MAX_CONTEXT_SIDE), height.clamp(1, MAX_CONTEXT_SIDE));
             if let Some(k) = supersample_factor(w, h) {
                 let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
                 let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
-                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks, k);
+                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks, k, patch);
                 self.hairline = hairline;
                 let pixels = downsample(&big.pixels, big.width as usize, big.height as usize, k as usize);
                 self.stats.micros = now().saturating_sub(start);
@@ -164,7 +197,7 @@ impl Renderer {
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
         let plates = proof::plate_lut(opts, doc);
-        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
+        let frame = Frame { mt: threads > 0, patch, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -199,7 +232,7 @@ impl Renderer {
             self.draw_frame(&frame, w, h)
         };
         self.end_frame();
-        if !inks {
+        if !inks && !pixels.is_empty() {
             proof::post(&mut pixels, opts);
         }
         self.stats.symbol_art = symbols.art_measured();
@@ -309,11 +342,17 @@ impl Renderer {
         } else {
             self.draw_page(&mut ctx, f);
         }
-        let pm = self.finish(&mut ctx, self.raster);
+        let pm = if f.patch_rejected() {
+            self.picture = None;
+            None
+        } else {
+            Some(self.finish(&mut ctx, self.raster))
+        };
         self.contexts.push((threads, ctx));
         if self.contexts.len() > 2 {
             self.contexts.remove(0);
         }
+        let Some(pm) = pm else { return Vec::new() };
         let mut pixels = pm.data_as_u8_slice().to_vec();
         if let Some(bg) = opts.background {
             over_background(&mut pixels, f.ink.fixed8(screen_under_art(f, bg)));
@@ -370,7 +409,7 @@ impl Renderer {
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
         let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
         let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
-        self.render_as(doc, w, h, view, opts, true, 1).pixels
+        self.render_as(doc, w, h, view, opts, true, 1, None).pixels
     }
 
     /// Render a single node (thumbnails, previews) fitted into `size`×`size` pixels.
@@ -427,7 +466,7 @@ impl Renderer {
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
+        let frame = Frame { mt: false, patch: None, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
         let raster = std::mem::replace(&mut self.raster, raster_settings(opts));
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);

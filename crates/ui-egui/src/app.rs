@@ -114,6 +114,7 @@ impl VectorcraftApp {
             host,
             canvas: CanvasCache {
                 renderer: vectorcraft_render::Renderer::new(),
+                web_patch_renderer: None,
                 texture: None,
                 key: None,
                 shown: None,
@@ -121,6 +122,7 @@ impl VectorcraftApp {
                 moved: false,
                 from_worker: false,
                 whole_frames: false,
+                view_sized_bounds: None,
                 reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
