@@ -205,6 +205,10 @@ impl HoldsOk for RelinkDialog {
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
+        // A refused complete pass starts over so each new pick is assigned to a link.
+        if answer.is_err() && self.scope == "each" {
+            self.paths.clear();
+        }
         self.held.answer(answer);
     }
 }
@@ -496,6 +500,39 @@ mod tests {
             (dir.join("one.png").to_string_lossy().into_owned(), dir.join("two.png").to_string_lossy().into_owned()),
             "one undo step"
         );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn each_link_separately_lets_the_user_choose_new_paths_after_a_refusal() {
+        let (mut app, dir) = setup("each-after-refusal", &["one.png", "two.png"]);
+        let picker = scripted(&mut app);
+        let ids = [place(&mut app, &dir.join("one.png")), place(&mut app, &dir.join("two.png"))];
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.relinkDialog", json!({"ids": ids})).unwrap();
+        ok(&mut app, &[("scope", json!("each"))]);
+        picker.answer(&[&new_file(&dir, "old-one.png")]);
+        pass(&mut app);
+        ok(&mut app, &[]);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        picker.answer(&[&new_file(&dir, "old-two.png")]);
+        pass(&mut app);
+        let dialog = relink_dialog(&app).id;
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let paths = [new_file(&dir, "new-one.png"), new_file(&dir, "new-two.png")];
+        for (i, path) in paths.iter().enumerate() {
+            ok(&mut app, &[]);
+            picker.answer(&[path]);
+            pass(&mut app);
+            if i == 0 {
+                assert_eq!(fields(&app)["paths"], json!([path]), "the second link still needs its new file");
+            }
+        }
+        assert!(open_dialogs(&app).is_empty());
+        assert_eq!(ids.map(|id| link_path(&app, id)), paths);
         let _ = std::fs::remove_dir_all(dir);
     }
 
