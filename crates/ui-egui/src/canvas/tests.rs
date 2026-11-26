@@ -905,6 +905,88 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     assert_eq!(count(&mut app, red), Some(srgb));
 }
 
+/// With a display profile, in Overprint Preview translucent art around the artboards is blended
+/// with the white canvas before the conversion, as art over the paper is. With the preview off it
+/// converts alone, over the pasteboard.
+#[test]
+fn translucent_art_around_the_artboards_is_blended_with_overprint_previews_white_canvas() {
+    keeping_color_settings(translucent_art_around_the_artboards);
+}
+
+fn translucent_art_around_the_artboards() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    // Left of the artboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The whole art raster one frame uploads: its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).filter(|d| d.pos.is_none()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    upload(&mut app).expect("the view at 100%");
+    let p3 = crate::display_profile::tests::p3();
+    let t = crate::display_profile::tests::transform();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    upload(&mut app).expect("drawn again, converted");
+    let white = convert8(&t, [255; 3]);
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied_rgba8(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // The pixel at the translucent rectangle's center, in sRGB (the display profile's preference
+    // off) and as the canvas shows it (on).
+    let pixel = |app: &mut VectorcraftApp| {
+        app.session.prefs.monitor_profile_display = false;
+        let (width, srgb) = upload(app).expect("drawn in sRGB");
+        let key = app.canvas.key.clone().unwrap();
+        let (_, _, view) =
+            frame_view(None, (key.w, key.h), &CanvasView::new(egui::Rect::NOTHING, Point::new(key.cx, key.cy), key.zoom).rotation(key.rot), key.ppp);
+        let at = view * Point::new(-40.0, 120.0);
+        let at = at.y as usize * width + at.x as usize;
+        app.session.prefs.monitor_profile_display = true;
+        let (_, shown) = upload(app).expect("drawn again, converted");
+        (srgb[at], shown[at], app.canvas.key.clone().unwrap())
+    };
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert!(key.backdrop.as_ref().is_some_and(|b| b.everywhere.is_none()), "Preview: the pasteboard is no paper");
+    assert_eq!(c, plain(s), "over the pasteboard the art converts alone");
+    app.run("view.overprintPreview", json!({"on": true})).unwrap();
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert_eq!(key.backdrop.as_ref().and_then(|b| b.everywhere), Some([255; 3]), "the white canvas is paper");
+    let k = 255 - u32::from(s.a());
+    let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+    let (want, got) = (convert8(&t, mix), over(c, white));
+    assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "{got:?} shown, {want:?} wanted");
+    // The test tells the two apart: the fill converted alone shows another color over the white canvas.
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(got[j]) > 2), "{alone:?} and {got:?}");
+}
+
 /// With a display profile, translucent art and the anti-aliased edges of art over the paper are
 /// blended with the paper in sRGB before the conversion: drawn over the converted paper, each such
 /// pixel shows the converted blend. Opaque art, and art over the pasteboard, convert as before. The
@@ -2864,12 +2946,14 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
     assert_eq!((plain, dots(&t)), (2, 2));
 }
 
-/// General › Display Print Size at 100% Zoom (#394): Actual Size shows the document larger with it
-/// on (an inch at 96 screen points) than off (a point at a point), and reads 100% either way.
+/// General › Display Print Size at 100% Zoom (#394, #9051): Actual Size shows the document larger
+/// with it on (an inch at 96 screen points where no display was measured) than off (a point at a
+/// point), and reads 100% either way.
 #[test]
 fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
     // Frames as the hosts run them: the zoom stops come from the preferences through the app's frame input.
     let frame = |app: &mut VectorcraftApp, ctx: &egui::Context, _: Vec<egui::Event>| {
@@ -2884,7 +2968,7 @@ fn view_actual_size_follows_display_print_size() {
         app.run("view.actualSize", json!({})).unwrap();
         frame(app, &ctx, vec![]);
         let view = app.canvas_view().unwrap();
-        let scheme = crate::app::view::zoom_scheme(&app.session.prefs, ctx.pixels_per_point() / ctx.zoom_factor());
+        let scheme = crate::app::view::zoom_scheme(app.print_ppi(), ctx.pixels_per_point() / ctx.zoom_factor());
         (view.zoom, scheme.percent(craft::behavior::canvas::zoom::device(&view, ctx.pixels_per_point())))
     };
     let (off, off_percent) = actual(&mut app);
@@ -2892,6 +2976,42 @@ fn view_actual_size_follows_display_print_size() {
     let (on, on_percent) = actual(&mut app);
     assert!(on > off, "an inch at 96 screen points shows the document larger: {off} → {on}");
     assert!((off_percent - 100.0).abs() < 1e-9 && (on_percent - 100.0).abs() < 1e-9, "both read 100%: {off_percent}, {on_percent}");
+}
+
+/// #9051: with Display Print Size on, Actual Size shows a document inch in an inch of the display
+/// the window is on, from the density the host measured for it. When the window moves to a display
+/// of another density, the view keeps its zoom percentage, so the art keeps its physical size there.
+#[test]
+fn view_actual_size_fills_an_inch_of_the_measured_display() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    let ctx = crate::testing::ui_context();
+    let frame = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        crate::testing::part_frame(app, ctx, raw, show);
+    };
+    let run = |app: &mut VectorcraftApp, id: &str| {
+        app.run(id, json!({})).unwrap();
+        frame(app, &ctx);
+    };
+    frame(&mut app, &ctx);
+    run(&mut app, "view.fitArtboard");
+    let fitted = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert_eq!(app.view().unwrap().zoom, fitted, "the first measurement leaves a fitted view alone");
+    run(&mut app, "view.actualSize");
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-6, "72 pt take the display's 127 points to an inch");
+    assert!(app.set_screen_ppi(Some(91.0)), "the window moved to a sparser display");
+    assert!(!app.set_screen_ppi(Some(91.0)), "the same reading changes nothing");
+    assert!((app.view().unwrap().zoom * 72.0 - 91.0).abs() < 1e-6, "100% still fills an inch");
+    assert_eq!(crate::state::zoom_label(app.view().unwrap().zoom, app.print_ppi()), "100%");
+    assert!(app.set_screen_ppi(None), "the window moved to a display that reports no size");
+    assert!((app.view().unwrap().zoom * 72.0 - 96.0).abs() < 1e-6, "100% there is 96 points to an inch");
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let zoom = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(110.0)));
+    assert_eq!(app.view().unwrap().zoom, zoom, "off, a move leaves the zoom alone");
 }
 
 /// Fit Artboard in Window fits the active artboard as a turned view shows it: with the second of
@@ -2948,11 +3068,7 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     assert_ne!(shown(&mut app), editing, "Cmd+Space shows the magnifier");
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
-    assert_eq!(
-        app.view().unwrap().zoom,
-        crate::state::next_zoom(before.zoom, true, app.session.prefs.display_print_size),
-        "Cmd+Space click zooms in"
-    );
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, app.print_ppi()), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
