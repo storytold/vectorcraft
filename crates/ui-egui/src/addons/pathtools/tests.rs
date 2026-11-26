@@ -44,6 +44,32 @@ fn the_inspector_shows_the_selected_anchor_and_its_buttons_edit() {
     assert!(a.lengths.iter().all(|l| *l > 0.0) && a.angles.iter().all(|d| d.is_some()), "{:?} {:?}", a.lengths, a.angles);
 }
 
+#[test]
+fn a_short_anchor_inspector_scrolls_to_the_selected_anchors_actions() {
+    let mut app = app();
+    let path = app.run("path.create", json!({ "anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}] })).unwrap();
+    let id = vectorcraft_doc::NodeId(path["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    let mut panel = Panel::new(app, super::show);
+    let room = egui::vec2(220.0, 215.0);
+    panel.room(room).frame();
+    panel.frame();
+    let action = "Remove Points, Keep Shape";
+    assert!(panel.rect(action).bottom() > room.y, "the action starts clipped");
+    panel.focus(action);
+    let rect = panel.rect(action);
+    assert!(panel.focused(action) && rect.top() >= 0.0 && rect.bottom() <= room.y, "focus reveals the action: {rect:?}");
+    panel.focus("Make Smooth");
+    panel.click("Make Smooth");
+    let anchor = readout(&panel.app()).anchor.unwrap();
+    assert!(anchor.lengths.iter().all(|length| *length > 0.0));
+}
+
 /// Runs `f` on the held options dialog, `None` when none is open.
 fn held<R>(app: &VectorcraftApp, f: impl FnOnce(Option<&mut HostedParamDialog>) -> R) -> R {
     app.dialogs().expect("the window's dialogs").with(|h| f(h.get_mut::<HostedParamDialog>()))

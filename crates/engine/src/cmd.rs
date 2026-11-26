@@ -102,6 +102,7 @@ pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
+pub(crate) mod tags;
 mod textedit;
 
 pub use textedit::effective_kerning;
@@ -376,6 +377,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
         v.extend(svgfilter::specs());
@@ -923,6 +925,9 @@ pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYT
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
 pub use buildcmds::{TraceRun, Traced, image_trace_target};
+
+/// Retype's search of the installed fonts, made off the UI thread.
+pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
