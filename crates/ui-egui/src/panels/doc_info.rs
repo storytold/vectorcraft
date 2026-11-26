@@ -70,10 +70,7 @@ pub(crate) fn copy_value(ui: &mut Ui, label: &str, value: &str, mono: bool) -> b
     });
     let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
     eligible
-        && (activated
-            || release.is_some_and(|(pos, keys)| {
-                keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())
-            }))
+        && (activated || release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())))
 }
 
 /// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
