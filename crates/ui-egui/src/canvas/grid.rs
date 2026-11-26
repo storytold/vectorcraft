@@ -44,13 +44,15 @@ pub(super) fn grid_look(prefs: &vectorcraft_engine::Prefs) -> (GridLine, Color32
 }
 
 /// The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): a line at every document
-/// pixel in Pixel Preview, which the control draws from [`PIXEL_GRID_ZOOM`] on (its `min_zoom` is
-/// the device zoom, as the view's).
-pub(super) fn pixel_grid(app: &VectorcraftApp) -> Option<CanvasGrid> {
+/// pixel in Pixel Preview, which the control draws from [`PIXEL_GRID_ZOOM`] on as the zoom field
+/// counts it, with `print` screen points to an inch at 100% ([`crate::state::print_ppi`]; its
+/// `min_zoom` is the device zoom, as the view's).
+pub(super) fn pixel_grid(app: &VectorcraftApp, print: Option<f64>) -> Option<CanvasGrid> {
     if app.ui.screen_mode >= 3 || !app.ui.view.pixel_preview || !app.session.prefs.show_pixel_grid {
         return None;
     }
-    Some(CanvasGrid::new("Pixel grid").spacing((1.0, 1.0).into()).subdivisions(1).color(DataColor::new(PIXEL_GRID)).min_zoom(PIXEL_GRID_ZOOM))
+    let min_zoom = PIXEL_GRID_ZOOM * crate::state::zoom_baseline(print);
+    Some(CanvasGrid::new("Pixel grid").spacing((1.0, 1.0).into()).subdivisions(1).color(DataColor::new(PIXEL_GRID)).min_zoom(min_zoom))
 }
 
 /// A `#rrggbb` colour preference, `fallback` when it doesn't parse.

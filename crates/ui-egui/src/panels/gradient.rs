@@ -136,7 +136,7 @@ pub(crate) fn dropped_link(app: &VectorcraftApp, params: &Value) -> Option<(Stri
 /// is selected.
 pub(crate) fn recolor_selected(app: &mut VectorcraftApp, c: Color, params: &Value) -> bool {
     let Paint::Gradient(g) = active_paint(app) else { return false };
-    if g.gradient.kind == GradientKind::Freeform {
+    if edits_points(app, &g) {
         let Some(i) = app.session.selected_freeform_point().filter(|i| *i < shown_points(&g).points.len()) else { return false };
         edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": super::color_json(&c), "keepModel": true }));
         return true;
@@ -203,6 +203,13 @@ pub(crate) fn draw_radios(app: &mut VectorcraftApp, ui: &mut Ui) {
             set_draw_mode(app, *m);
         }
     });
+}
+
+/// Do the panel, the stop popover and swatch drops edit the points of `g`, the gradient behind
+/// the active proxy? Only for a freeform gradient on art: the one the active tool paints with
+/// lies on no object, so its stops stand for its colors, as in the Color panel.
+pub(crate) fn edits_points(app: &VectorcraftApp, g: &GradientPaint) -> bool {
+    g.gradient.kind == GradientKind::Freeform && !app.session.tool_paints(!app.session.fill_active)
 }
 
 /// The gradient behind the active proxy.
@@ -314,8 +321,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     let freeform = is_grad && kind == GradientKind::Freeform;
+    let points = is_grad && edits_points(app, &g);
     if hidden {
-        if !freeform {
+        if !points {
             stops_editor(app, ui, &g, is_grad);
         }
         return;
@@ -339,8 +347,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     // Along and across, the gradient follows the path: its angle and aspect ratio don't apply.
     let placed = stroke_mode.is_none_or(|m| m == StrokeGradientMode::Within);
-    if freeform {
+    if points {
         freeform_rows(app, ui, &g);
+        return;
+    }
+    // A freeform gradient the active tool paints with: the proxy and the Draw toggle, its stops and
+    // their fields.
+    if freeform {
+        draw_row(app, ui, shown_points(&g).mode);
+        stops_editor(app, ui, &g, is_grad);
+        host_fields(app, ui, &g.gradient, is_grad);
         return;
     }
     method_select(app, ui, &g, is_grad);
@@ -487,8 +503,10 @@ enum PresetKey {
 
 /// The Presets picker: the preset gradients by library (theme), then the saved ones; a choice
 /// applies to the gradient behind the active proxy, keeping its placement
-/// (`gradient.presets.apply`; a solid or no paint becomes the gradient). The picker shows the
-/// preset the gradient is, if any.
+/// (`gradient.presets.apply`; a solid or no paint becomes the gradient), as the panel's other
+/// controls do: an active Appearance row takes the preset only when that row is a fill row with the
+/// Fill proxy in front, or a stroke row with the Stroke proxy in front.
+/// The picker shows the preset the gradient is, if any.
 fn presets_picker(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>) {
     let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).map(PresetKey::Preset);
     let enabled = crate::menus::enabled(app, "gradient.presets.apply");
@@ -500,7 +518,7 @@ fn presets_picker(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPain
         picked = PresetPicker::new(tl!("Presets"), Bind::given(shown.clone()), &source, Bind::kept()).show(ui).picked;
     });
     if let Some(PresetKey::Preset(name)) = picked {
-        app.run("gradient.presets.apply", json!({ "name": name })).ok();
+        app.run("gradient.presets.apply", json!({ "name": name, "stroke": !app.session.fill_active })).ok();
     }
 }
 
@@ -533,10 +551,8 @@ pub(crate) fn edit_point(app: &mut VectorcraftApp, cmd: &str, mut params: Value)
     live_run(app, "Gradient", cmd, params, Live::Released);
 }
 
-/// The freeform section: the proxy beside the Draw toggle, then the selected point's colour
-/// (click: its popover, as a stop's), opacity and spread, and Delete Point.
-fn freeform_rows(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
-    let f = shown_points(g);
+/// The proxy beside the Draw toggle of a freeform gradient, whose mode is `mode`.
+fn draw_row(app: &mut VectorcraftApp, ui: &mut Ui, mode: FreeformMode) {
     let modes = icon_entries([
         (FreeformMode::Points, "circle", tl!("Points: clicks add free points")),
         (FreeformMode::Lines, "spline", tl!("Lines: clicks add points joined by a line")),
@@ -544,11 +560,18 @@ fn freeform_rows(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
     Row::new().show(ui, |ui, _| {
         super::proxy(app, ui);
         Text::new(tl!("Draw:")).shade(Shade::Muted).show(ui);
-        let pick = Segmented::new(tl!("Draw"), Bind::given(f.mode), &modes).show(ui);
+        let pick = Segmented::new(tl!("Draw"), Bind::given(mode), &modes).show(ui);
         if let Some(m) = pick.events.committed() {
             set_draw_mode(app, *m);
         }
     });
+}
+
+/// The freeform section: the proxy beside the Draw toggle, then the selected point's colour
+/// (click: its popover, as a stop's), opacity and spread, and Delete Point.
+fn freeform_rows(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
+    let f = shown_points(g);
+    draw_row(app, ui, f.mode);
     let sel = app.session.selected_freeform_point().filter(|i| *i < f.points.len());
     let point = sel.and_then(|i| f.points.get(i)).copied();
     Row::new().show(ui, |ui, _| {
