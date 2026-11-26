@@ -9,20 +9,20 @@ pub(super) fn drawn_paths<'a>(page: &'a Page<'a>, mut ctx: Context<'a>) -> Optio
     struct Count(usize);
     impl<'a> Device<'a> for Count {
         fn set_soft_mask(&mut self, _: Option<SoftMask<'a>>) {}
-        fn set_blend_mode(&mut self, _: craft_pdf::interpret::BlendMode) {}
+        fn set_blend_mode(&mut self, _: craft::pdf::interpret::BlendMode) {}
         // As `Builder::draw_path` takes them: each fill and each stroke.
-        fn draw_path(&mut self, _: &BezPath, _: Affine, _: &craft_pdf::interpret::Paint<'a>, _: &PathDrawMode) {
+        fn draw_path(&mut self, _: &BezPath, _: Affine, _: &craft::pdf::interpret::Paint<'a>, _: &PathDrawMode) {
             self.0 += 1;
         }
         fn push_clip_path(&mut self, _: &ClipPath) {}
-        fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'a>>, _: craft_pdf::interpret::BlendMode) {}
-        fn draw_glyph(&mut self, _: &Glyph<'a>, _: Affine, _: Affine, _: &craft_pdf::interpret::Paint<'a>, _: &GlyphDrawMode) {}
+        fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'a>>, _: craft::pdf::interpret::BlendMode) {}
+        fn draw_glyph(&mut self, _: &Glyph<'a>, _: Affine, _: Affine, _: &craft::pdf::interpret::Paint<'a>, _: &GlyphDrawMode) {}
         fn draw_image(&mut self, _: Image<'a, '_>, _: Affine) {}
         fn pop_clip_path(&mut self) {}
         fn pop_transparency_group(&mut self) {}
     }
     let mut count = Count(0);
-    craft_pdf::interpret_page(page, &mut ctx, &mut count).ok()?;
+    craft::pdf::interpret_page(page, &mut ctx, &mut count).ok()?;
     Some(count.0)
 }
 
@@ -32,7 +32,7 @@ pub(super) fn drawn_paths<'a>(page: &'a Page<'a>, mut ctx: Context<'a>) -> Optio
 pub(crate) struct CidText {
     /// CID of each glyph.
     cids: Vec<u16>,
-    table: craft_pdf::interpret::hayro_cmap::CMap,
+    table: craft::pdf::interpret::hayro_cmap::CMap,
 }
 
 impl CidText {
@@ -41,7 +41,7 @@ impl CidText {
         if data.len() > 64 << 20 {
             return None;
         }
-        use craft_pdf::interpret::hayro_cmap::{CMap, CMapName, load_embedded};
+        use craft::pdf::interpret::hayro_cmap::{CMap, CMapName, load_embedded};
         use skrifa::raw::ps::cff::{CffFontRef, dict, v1::Cff};
         use skrifa::raw::{FontData, FontRead};
         let cff = Cff::read(FontData::new(data)).ok()?;
@@ -63,15 +63,15 @@ impl CidText {
         Some(Self { cids, table })
     }
 
-    pub(super) fn unicode(&self, glyph: u32) -> Option<craft_pdf::interpret::hayro_cmap::BfString> {
+    pub(super) fn unicode(&self, glyph: u32) -> Option<craft::pdf::interpret::hayro_cmap::BfString> {
         let cid = *self.cids.get(glyph as usize)?;
         self.table.lookup_bf_string(u32::from(cid))
     }
 }
 
 /// A ToUnicode value that names no character: U+FFFD alone (#708).
-pub(super) fn replacement(u: &craft_pdf::interpret::hayro_cmap::BfString) -> bool {
-    use craft_pdf::interpret::hayro_cmap::BfString;
+pub(super) fn replacement(u: &craft::pdf::interpret::hayro_cmap::BfString) -> bool {
+    use craft::pdf::interpret::hayro_cmap::BfString;
     match u {
         BfString::Char(c) => *c == char::REPLACEMENT_CHARACTER,
         BfString::String(s) => !s.is_empty() && s.chars().all(|c| c == char::REPLACEMENT_CHARACTER),
@@ -104,7 +104,7 @@ const KANGXI: &str = "一丨丶丿乙亅二亠人儿入八冂冖冫几凵刀力�
 /// largest difference between their boxes, in thousandths of an em. `None` when they are clearly
 /// different glyphs (or the face lacks the character); `Some(0)` when there is nothing to compare
 /// (several characters, a vertical form, no ink in either).
-fn glyph_deviation(face: &vectorcraft_text::FontFace, text: &str, o: &craft_pdf::interpret::font::OutlineGlyph, vertical: bool) -> Option<f64> {
+fn glyph_deviation(face: &vectorcraft_text::FontFace, text: &str, o: &craft::pdf::interpret::font::OutlineGlyph, vertical: bool) -> Option<f64> {
     let Some(c) = comparable(text, vertical) else { return Some(0.0) };
     let gid = face.glyph_for(c);
     if gid == 0 {
@@ -134,7 +134,7 @@ fn glyph_deviation(face: &vectorcraft_text::FontFace, text: &str, o: &craft_pdf:
 pub(super) fn matching_face(
     face: &Arc<vectorcraft_text::FontFace>,
     text: &str,
-    o: &craft_pdf::interpret::font::OutlineGlyph,
+    o: &craft::pdf::interpret::font::OutlineGlyph,
     vertical: bool,
 ) -> Option<Arc<vectorcraft_text::FontFace>> {
     let own = glyph_deviation(face, text, o, vertical);

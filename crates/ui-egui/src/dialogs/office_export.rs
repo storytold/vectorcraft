@@ -1,71 +1,86 @@
 //! File → Save for Office Documents…: an artboard as a PNG for office documents and slides, at
 //! 72, 150 or 300 ppi, on white or transparent. Fields are `document.exportForOffice` params.
 
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
+use super::export_host::{self, After, Export, Open};
 use super::png_options::{RESOLUTION_LABELS, RESOLUTIONS};
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
+use crate::{VectorcraftApp, io};
 
+/// The dialog's key.
 pub(crate) const KIND: &str = "saveForOffice";
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Save for Office Documents").into(),
-    body,
-    confirm,
-    ok: Some("Save…"),
-    min_width: 340.0,
-    inputs: |_| &["path"],
-    ..DialogSpec::FORM
-};
+/// The document's artboards as the dialog needs them: their names and the size each has at every resolution
+/// (`sizes[board][resolution]`), worked out when the dialog opens.
+struct Boards {
+    names: Vec<String>,
+    sizes: Vec<Vec<String>>,
+}
+
+impl Boards {
+    fn of(doc: &vectorcraft_doc::Document) -> Self {
+        let sizes = doc
+            .artboards
+            .iter()
+            .map(|a| {
+                RESOLUTIONS
+                    .iter()
+                    .map(|ppi| {
+                        let (w, h) = vectorcraft_render::region_pixels(a.rect, ppi / 72.0);
+                        format!("{w} × {h} px")
+                    })
+                    .collect()
+            })
+            .collect();
+        Boards { names: doc.artboards.iter().map(|a| a.name.clone()).collect(), sizes }
+    }
+}
+
+/// A number field's value, also when a client set it as the text of a choice's id.
+fn number(fields: &DialogFields, key: &str) -> Option<f64> {
+    fields.number(key).or_else(|| fields.text(key)?.parse().ok())
+}
+
+fn params(boards: &Boards, fields: &DialogFields) -> Vec<Param> {
+    let ppi = number(fields, "ppi").unwrap_or(RESOLUTIONS[1]);
+    let at = RESOLUTIONS.iter().position(|r| *r == ppi).unwrap_or(1);
+    let board = (number(fields, "artboard").unwrap_or(0.0).max(0.0) as usize).min(boards.names.len().saturating_sub(1));
+    let resolutions = RESOLUTIONS.iter().zip(RESOLUTION_LABELS.iter()).map(|(r, label)| (r.to_string(), Label::from(*label))).collect();
+    let mut rows = vec![Param::new("ppi", tl!("Resolution:"), ParamKind::choice(resolutions, Some(RESOLUTIONS[1].to_string())))];
+    if boards.names.len() > 1 {
+        let names = boards.names.iter().enumerate().map(|(i, name)| (i.to_string(), Label::from(name.clone()))).collect();
+        rows.push(Param::new("artboard", tl!("Artboard:"), ParamKind::choice(names, Some("0".into()))));
+    }
+    let size = boards.sizes.get(board).and_then(|s| s.get(at)).cloned().unwrap_or_default();
+    rows.push(Param::read_only_text("size", tl!("Size:"), size));
+    rows.push(Param::new("transparent", tl!("Transparent Background"), ParamKind::bool(false)));
+    rows
+}
 
 /// Open the dialog (150 ppi on white, the first artboard).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.session.active().ok_or("no document")?;
-    app.ui.dialog = Some(Dialog::new(KIND, json!({"ppi": RESOLUTIONS[1], "transparent": false, "artboard": 0})));
+    let boards = Boards::of(&app.session.active().ok_or("no document")?.doc);
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let mut fields = DialogFields::from_pairs([("ppi", RESOLUTIONS[1].to_string()), ("artboard", "0".to_string())]);
+    fields.set("transparent", false);
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        let rows = params(&boards, fields);
+        ParamDialog::new(KIND, tl!("Save for Office Documents"), rows).values(Bind::bound(fields)).ok_label(Label::from("Save…"))
+    });
+    export_host::open(app, Export::Office, false, dialog).ok_or("no window")?;
     Ok(Value::Null)
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim));
-    let Some(doc) = app.session.active().map(|st| &st.doc) else { return true };
-    let ppi = d.f64("ppi", RESOLUTIONS[1]);
-    let board = (d.f64("artboard", 0.0).max(0.0) as usize).min(doc.artboards.len().saturating_sub(1));
-    egui::Grid::new("office-export").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, tl!("Resolution:"));
-        let at = RESOLUTIONS.iter().position(|r| *r == ppi).unwrap_or(1);
-        if let Some(i) = widgets::dropdown(ui, "office-ppi", RESOLUTION_LABELS[at], &RESOLUTION_LABELS[..RESOLUTIONS.len()], 160.0)
-            && let Some(r) = RESOLUTIONS.get(i)
-        {
-            d.fields.insert("ppi".into(), json!(r));
-        }
-        ui.end_row();
-        if doc.artboards.len() > 1 {
-            label(ui, tl!("Artboard:"));
-            let names: Vec<&str> = doc.artboards.iter().map(|a| a.name.as_str()).collect();
-            if let Some(i) = widgets::dropdown_names(ui, "office-artboard", names.get(board).copied().unwrap_or_default(), &names, 160.0) {
-                d.fields.insert("artboard".into(), json!(i));
-            }
-            ui.end_row();
-        }
-        if let Some(a) = doc.artboards.get(board) {
-            label(ui, tl!("Size:"));
-            let (w, h) = vectorcraft_render::region_pixels(a.rect, ppi / 72.0);
-            ui.label(egui::RichText::new(format!("{w} × {h} px")).color(t.text));
-            ui.end_row();
-        }
-    });
-    ui.add_space(8.0);
-    form::check(ui, d, "transparent", tl!("Transparent Background"));
-    false
-}
-
 /// Pick the file and write it (the command runs first: bad options keep the dialog open).
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let path = io::save_command_output(app, "document.exportForOffice", "png", form::params(d))?;
-    app.ui.dialog = None;
-    Ok(json!({ "path": path }))
+pub(super) fn confirm(app: &mut VectorcraftApp, _open: &Open, fields: &DialogFields) -> Result<After, String> {
+    let params = json!({
+        "ppi": number(fields, "ppi").unwrap_or(RESOLUTIONS[1]),
+        "artboard": number(fields, "artboard").unwrap_or(0.0).max(0.0) as u64,
+        "transparent": fields.bool("transparent").unwrap_or(false),
+    });
+    io::save_command_output(app, "document.exportForOffice", "png", params, |_, _| Ok(Value::Null))?;
+    Ok(None)
 }

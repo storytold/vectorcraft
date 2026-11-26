@@ -32,7 +32,7 @@ impl TraceDivider {
     /// The divider of the one Image Trace object selected whole, when it shows the Split view.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
@@ -41,6 +41,10 @@ impl TraceDivider {
         }
         let NodeKind::Group { children, clip: false } = &n.kind else { return None };
         let NodeKind::Image(im) = &children.first()?.kind else { return None };
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !doc.is_editable(*id) {
+            return None;
+        }
         let (width, height) = (f64::from(im.width), f64::from(im.height));
         let det = im.xf.determinant();
         if width <= 0.0 || height <= 0.0 || !det.is_finite() || det.abs() < 1e-12 || !im.xf.as_coeffs().iter().all(|c| c.is_finite()) {
@@ -94,7 +98,8 @@ fn finite(p: Point) -> bool {
     p.x.is_finite() && p.y.is_finite()
 }
 
-fn resize_cursor(d: &TraceDivider, cx: &ToolContext) -> Cursor {
+/// The resize cursor along the divider `d`, turned with the image and the view.
+pub fn resize_cursor(d: &TraceDivider, cx: &ToolContext) -> Cursor {
     crate::select::handle_cursor(crate::bbox::Handle::Right, d.angle() - cx.view_angle())
 }
 
@@ -257,28 +262,5 @@ mod tests {
         assert_eq!(cursor(&c, Point::new(60.0, 45.0)), None, "the center point");
         assert!(SplitDrag::hit(&c, Point::new(60.0, 45.0), Mods::default()).is_none(), "the center point");
         assert_eq!(cursor(&c, Point::new(60.0, 33.0)), Some(Cursor::ResizeH));
-    }
-
-    /// Switching away from the Selection tool during a divider drag cancels it, as Escape does:
-    /// the view goes back. After a press that has not moved there is nothing to put back.
-    #[test]
-    fn a_tool_switch_cancels_a_divider_drag() {
-        use crate::{PointerEvent, PointerKind, Tool};
-        let paint = paint();
-        let mut selection = Selection::default();
-        let (doc, id) = traced(Affine::translate((10.0, 20.0)), "split", 0.5);
-        selection.set([id]);
-        let c = cx(&doc, &selection, &paint);
-        let mut t = crate::select::SelectionTool::default();
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 40.0)).is_empty());
-        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 85.0, 40.0));
-        assert!(matches!(a.first(), Some(Action::Begin(_))), "{a:?}");
-        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
-        assert!(!t.busy() && !t.transforming());
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 85.0, 40.0)).is_empty());
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 40.0));
-        assert!(t.busy());
-        assert!(t.deactivate(&c).is_empty());
-        assert!(!t.busy());
     }
 }

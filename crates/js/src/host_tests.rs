@@ -326,6 +326,45 @@ fn a_text_function_takes_each_argument_as_string_gives_it() {
 }
 
 #[test]
+fn a_symbol_crosses_as_the_text_string_gives_it_and_never_as_data() {
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { fuel: 10_000_000, ..Limits::default() });
+    let seen = with_take(&mut r);
+    let texts: Rc<RefCell<Vec<Data>>> = Rc::default();
+    let log = texts.clone();
+    let f: HostFunction = Rc::new(move |args| {
+        log.borrow_mut().extend(args);
+        Ok(Data::Undefined)
+    });
+    r.define_host_object("text", vec![("of".into(), HostItem::TextFunction(f))]).unwrap();
+    r.run("text.of(Symbol('tag'), Symbol())").unwrap();
+    assert_eq!(texts.borrow().as_slice(), [Data::String("Symbol(tag)".into()), Data::String("Symbol()".into())]);
+    // An enumerable Symbol-keyed property is refused; one that is not enumerable is left out.
+    let probe = "var e = 'none'; var v = {a: 1}; v[Symbol('k')] = 2; try { host.take(v); } catch (x) { e = x.name + '|' + x.message; } e";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("TypeError|") && out.contains("has a Symbol-keyed property"), "{out}");
+    let probe = "var e = 'none'; var v = [1]; v[Symbol('k')] = 2; try { host.take({list: v}); } catch (x) { e = x.name + '|' + x.message; } e";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("TypeError|") && out.contains(".list has a Symbol-keyed property"), "{out}");
+    assert!(seen.borrow().is_empty(), "the function ran");
+    r.run("var v = {a: 1}; Object.defineProperty(v, Symbol('k'), {value: 2}); host.take(v);").unwrap();
+    assert_eq!(seen.borrow().as_slice(), [Data::Object(vec![("a".into(), Data::Number(1.0))])]);
+}
+
+#[test]
+fn checking_the_symbol_keys_of_a_value_takes_fuel() {
+    // Making the 20,000 hidden keys takes well under 3,000,000 units, in a run of its own; the 500
+    // crossings check 10,000,000 keys.
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { fuel: 3_000_000, ..Limits::default() });
+    with_take(&mut r);
+    let setup = "var v = {}; for (var i = 0; i < 20000; i++) Object.defineProperty(v, Symbol(), {value: i}); true";
+    assert_eq!(r.run(setup), Ok(JsValue::Bool(true)));
+    match r.run("for (var j = 0; j < 500; j++) host.take(v);") {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn errors_from_the_host_can_be_caught_and_an_abort_cannot() {
     let mut r = realm(1_000_000);
     let f: HostFunction = Rc::new(|a| match a.first() {
@@ -634,6 +673,134 @@ fn a_host_function_that_waits_where_it_cannot_ends_the_run() {
     r.define_host_function("ask", vec![], f).unwrap();
     let e = r.run("try { ask(); } catch (e) { 'caught' }").unwrap_err();
     assert_eq!(e.kind, RunErrorKind::Internal);
+}
+
+/// The host class `Thing` with the method `fetch`, which waits for its answer where it can, the
+/// getter `id`, the first number of the object's handle, and the constructor `make`; and the
+/// global `thing`, the `Thing` with the handle `[1]`.
+fn with_thing(r: &mut Realm, make: Option<HostFunction>) {
+    let can_wait = r.wait_flag();
+    let fetch: HostFunction = Rc::new(move |_| if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) });
+    let id: HostFunction = Rc::new(|a| Ok(a.first().and_then(host_ref_parts).and_then(|(_, h)| h.first().copied()).map_or(Data::Null, Data::Number)));
+    let members = vec![("fetch".to_string(), HostMember::Method(fetch)), ("id".to_string(), HostMember::Get(id))];
+    let class = HostClass { name: "Thing".into(), parent: None, members, index: None, construct: make };
+    r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[1.0]))]).unwrap();
+}
+
+#[test]
+fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
+    let mut r = realm(1_000_000);
+    with_thing(&mut r, None);
+    r.start("var t = thing.fetch(), u = thing.fetch(); [t instanceof Thing, t.id, t === u, t === thing].join()").unwrap();
+    for _ in 0..2 {
+        assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+        assert!(r.waits());
+        r.answer(host_ref("Thing", &[2.0])).unwrap();
+    }
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("true,2,true,false".into()));
+}
+
+#[test]
+fn a_host_class_constructor_called_with_new_cannot_wait() {
+    let mut r = realm(1_000_000);
+    let could: Rc<Cell<Option<bool>>> = Rc::default();
+    let (seen, can_wait) = (could.clone(), r.wait_flag());
+    let make: HostFunction = Rc::new(move |_| {
+        seen.set(Some(can_wait.get()));
+        if can_wait.get() { Err(HostError::Wait) } else { Ok(Data::Object(Vec::new())) }
+    });
+    with_thing(&mut r, Some(make));
+    r.start("var c = new Thing(); c instanceof Thing").unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::Bool(true));
+    assert_eq!(could.get(), Some(false));
+}
+
+#[test]
+fn objects_of_a_host_class_report_its_available_members_as_their_own() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![
+            ("size".to_string(), HostMember::Get(value.clone())),
+            ("shape".to_string(), HostMember::Property { get: value.clone(), set: value.clone() }),
+            ("grow".to_string(), HostMember::Method(value.clone())),
+            ("later".to_string(), HostMember::Unavailable(missing)),
+        ],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("leaf".to_string(), HostMember::Get(value))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start(
+        "var own = Object.prototype.hasOwnProperty, keys = [];\
+         for (var k in it) keys.push(k);\
+         [it.hasOwnProperty('size'), it.hasOwnProperty('shape'), it.hasOwnProperty('grow'), it.hasOwnProperty('leaf'),\
+          own.call(it, 'size'), it.propertyIsEnumerable('grow'),\
+          it.hasOwnProperty('later'), it.propertyIsEnumerable('later'), it.hasOwnProperty('nope'),\
+          it.hasOwnProperty('hasOwnProperty'), it.hasOwnProperty('constructor'), 'later' in it,\
+          keys.sort().join(' '), Leaf.prototype.hasOwnProperty('size'), ({}).hasOwnProperty('size')].join()",
+    )
+    .unwrap();
+    assert_eq!(
+        finish(&mut r, 1_000_000).0.unwrap(),
+        JsValue::String("true,true,true,true,true,true,false,false,false,false,false,true,leaf shape size,false,false".into())
+    );
+}
+
+#[test]
+fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![("size".to_string(), HostMember::Get(value.clone())), ("grow".to_string(), HostMember::Method(value))],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("size".to_string(), HostMember::Unavailable(missing))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start("[it.hasOwnProperty('size'), it.propertyIsEnumerable('size'), it.hasOwnProperty('grow')].join()").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::String("false,false,true".into()));
+}
+
+#[test]
+fn assigning_a_name_a_prototype_has_does_not_call_the_indexer() {
+    let mut r = realm(1_000_000);
+    let calls: Rc<Cell<u32>> = Rc::default();
+    let seen = calls.clone();
+    let index: HostFunction = Rc::new(move |a| {
+        seen.set(seen.get() + 1);
+        match a.get(1) {
+            Some(Data::Number(_)) => Ok(Data::Undefined),
+            _ => Err(HostError::Error("no such member".into())),
+        }
+    });
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("List", &[1.0]))]).unwrap();
+    r.start("Object.prototype.extra = 1; it.extra = 2; it.extra").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::Number(1.0));
+    assert_eq!(calls.get(), 0);
+    // A name nothing has still goes to the indexer, which throws.
+    r.start("it.nope = 2").unwrap();
+    assert!(finish(&mut r, 1_000_000).0.is_err());
+    assert_eq!(calls.get(), 1);
 }
 
 #[test]
