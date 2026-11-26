@@ -187,6 +187,23 @@ fn the_presets_manager_creates_edits_and_deletes_presets() {
     assert!(app.run("ui.perspectiveUserPreset3.1", json!({})).is_err());
 }
 
+/// Export… suggests the selected preset's name as the file name, a built-in one's without its brackets.
+#[test]
+fn the_presets_manager_exports_to_a_file_named_after_the_preset() {
+    use super::perspective_presets::{self, Action};
+    let mut app = app();
+    let picker = crate::tests_picks::scripted(&mut app);
+    app.run("perspective.presets.save", json!({"name": "Street"})).unwrap();
+    app.run("ui.perspectivePresetsDialog", json!({"selected": "Street"})).unwrap();
+    frame(&mut app);
+    for (preset, file) in [("Street", "Street.vcperspective"), ("[2P-High View]", "2P-High View.vcperspective")] {
+        perspective_presets::run(&mut app, Action::Export, preset).unwrap();
+        assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some(file), "{preset}");
+        picker.cancel();
+        frame(&mut app);
+    }
+}
+
 #[test]
 fn perspective_preset_menus_list_the_views_of_each_type() {
     let app = app();

@@ -17,7 +17,7 @@
 
 use craft::behavior::Mixed;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::{DialogHost, DialogId, FieldRefusal};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
@@ -290,30 +290,32 @@ enum Measure {
 }
 
 /// One captioned side: a slider over `rail` and a number field in ±`limit`, `value` being none
-/// while the objects differ (the field reads Mixed). Returns the value the user set this pass.
+/// while the objects differ (the field reads Mixed). `caption` is the row (Scale or Move) and the
+/// visible label; the label repeats in each row, so it only describes the controls, and their
+/// names start with the row. Returns the value the user set this pass.
 fn side(
     ui: &mut Ui,
     key: &'static str,
-    label: impl Into<Label>,
+    (row, label): (&'static str, &'static str),
     value: Option<f64>,
     measure: Measure,
     rail: &RangeInclusive<f64>,
     limit: f64,
 ) -> Option<f64> {
-    let label: Label = label.into();
+    let name: Label = format!("{row} {label}").into();
     let mut edit = None;
-    Field::new(label.clone()).id_salt(key).show(ui, |ui, _| {
+    Field::new(label).side(SideLabel::new().role(FieldLabelRole::Describes)).id_salt(key).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let shown = value.map_or(Mixed::Mixed, |v| Mixed::Same(Some(v)));
             let dragged = Slider::new(Bind::given(value.map_or(Mixed::Mixed, |v| Mixed::Same(v.clamp(*rail.start(), *rail.end())))), rail.clone())
-                .label(label.clone())
+                .label(name.clone())
                 .id_salt("slider")
                 .show(ui)
                 .value()
                 .copied();
             let field = match measure {
-                Measure::Percent => NumberField::new(label.clone(), Bind::given(shown)).unit_kind(UnitKind::Percent),
-                Measure::Length(lengths) => NumberField::length(label.clone(), Bind::given(shown), lengths),
+                Measure::Percent => NumberField::new(name.clone(), Bind::given(shown)).unit_kind(UnitKind::Percent),
+                Measure::Length(lengths) => NumberField::length(name.clone(), Bind::given(shown), lengths),
             };
             let typed = field.range(-limit..=limit).id_salt("field").show(ui).edit.value().cloned().flatten();
             edit = typed.or(dragged);
@@ -361,11 +363,12 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits,
     let (mut angle, mut toggled, mut mode) = (None, None, None);
     let read: &DialogFields = fields;
     let shown = Stack::new().show(ui, |ui, _| {
-        Text::new(tl!("Scale")).show(ui);
+        let scale = tl!("Scale");
+        Text::new(scale).show(ui);
         Row::new().show(ui, |ui, _| {
             Stack::new().show(ui, |ui, _| {
                 for (at, (key, label)) in [(hk, tl!("Horizontal:")), (vk, tl!("Vertical:"))].into_iter().enumerate() {
-                    scales[at] = side(ui, key, label, field_number(read, key), measure, &rail, limit);
+                    scales[at] = side(ui, key, (scale, label), field_number(read, key), measure, &rail, limit);
                 }
             });
             if link == ScaleLink::Toggle {
@@ -375,9 +378,10 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits,
         if link == ScaleLink::Toggle {
             mode = mode_radios(ui, !absolute);
         }
-        Text::new(tl!("Move")).show(ui);
+        let shift = tl!("Move");
+        Text::new(shift).show(ui);
         for (at, (key, label)) in [("moveH", tl!("Horizontal:")), ("moveV", tl!("Vertical:"))].into_iter().enumerate() {
-            moves[at] = side(ui, key, label, Some(num(read, key, 0.0)), Measure::Length(lengths), &MOVE_RAIL, MAX_ABSOLUTE);
+            moves[at] = side(ui, key, (shift, label), Some(num(read, key, 0.0)), Measure::Length(lengths), &MOVE_RAIL, MAX_ABSOLUTE);
         }
         Text::new(tl!("Rotate")).show(ui);
         angle = rotate_row(ui, num(read, "rotate", 0.0));
