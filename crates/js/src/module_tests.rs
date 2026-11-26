@@ -12,6 +12,74 @@ fn es() -> Realm {
 }
 
 #[test]
+fn star_aliases_resolve_each_canonical_target_once_per_name() {
+    let exports: String = (0..100).map(|n| format!("export var v{n} = {n};")).collect();
+    let stars: String = (0..100).map(|n| format!("export * from './alias{n}.mjs';")).collect();
+    let mut supplied = HashSet::new();
+    let mut load = |_: &str, specifier: &str| {
+        let (key, source) = if specifier == "./stars.mjs" { ("stars", &stars) } else { ("canonical", &exports) };
+        Ok(LoadedModule { key: key.into(), source: supplied.insert(key).then(|| source.clone()) })
+    };
+    let mut realm = es();
+    crate::module::RESOLVED_STAR_EDGES.with(|count| count.set(0));
+    realm
+        .run_module("main.mjs", "import * as ns from './stars.mjs'; out.push(ns.v99, Object.keys(ns).length);", ModuleLimits::default(), &mut load)
+        .unwrap();
+    let steps = crate::module::RESOLVED_STAR_EDGES.with(|count| count.get());
+    assert!(steps <= 200, "{steps} star edges inspected");
+    assert_eq!(realm.run("out.join('|')").unwrap(), JsValue::String("99|100".into()));
+}
+
+#[test]
+fn ending_a_module_queue_restores_normal_frame_accounting() {
+    let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { frames: 2, ..Limits::default() });
+    let mut load = loader(&[("./m.mjs", "for (var i = 0; i < 1000; i++) {}")]);
+    realm.start_module("main.mjs", "import './m.mjs';", ModuleLimits::default(), &mut load).unwrap();
+    assert!(matches!(realm.advance(1), Ok(Progress::Paused)));
+    realm.end();
+    assert_eq!(realm.run("function f() { return 1; } f();"), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn pending_module_bodies_do_not_consume_active_call_frames() {
+    let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { frames: 2, ..Limits::default() });
+    let files = [("./a.mjs", "import './b.mjs';"), ("./b.mjs", "import './c.mjs';"), ("./c.mjs", "function f() { return 1; } f();")];
+    let mut load = loader(&files);
+    let result = realm.run_module("main.mjs", "import './a.mjs';", ModuleLimits::default(), &mut load);
+    assert_eq!(result, Ok(JsValue::Undefined));
+    let mut load = loader(&[]);
+    let result = realm.run_module("main.mjs", "function f() { return f(); } f();", ModuleLimits::default(), &mut load);
+    assert_eq!(result.map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Frames)));
+}
+
+#[test]
+fn module_stack_excludes_bodies_waiting_to_run() {
+    let mut realm = es();
+    realm.define_host_object("$", [("stack".to_string(), crate::HostItem::Script(crate::ScriptItem::Stack))].into_iter().collect()).unwrap();
+    let (result, out) = run_with(
+        &mut realm,
+        "import './m.mjs';",
+        &[("./m.mjs", "function trace() { var s = $.stack; out.push(s.split('[global]').length - 1, s.indexOf('trace:') >= 0); } trace();")],
+        ModuleLimits::default(),
+    );
+    assert_eq!(result, Ok(JsValue::Undefined));
+    assert_eq!(out, "1|true");
+}
+
+#[test]
+fn module_sources_charge_utf16_units_instead_of_utf8_bytes() {
+    let mut remaining = Vec::new();
+    for character in ['a', 'é', '界'] {
+        let source = format!("/*{}*/ export var value = 1;", character.to_string().repeat(1000));
+        let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits::default());
+        let mut load = loader(&[]);
+        realm.start_module("main.mjs", &source, ModuleLimits::default(), &mut load).unwrap();
+        remaining.push(realm.fuel_left());
+    }
+    assert!(remaining.windows(2).all(|pair| pair[0] == pair[1]), "{remaining:?}");
+}
+
+#[test]
 fn default_exported_functions_keep_their_public_names() {
     for (source, name) in [
         ("export default function () {}", "default"),

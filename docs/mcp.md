@@ -2723,7 +2723,8 @@ an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-in
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
 ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+`.jsx` file and a `source` string read ES5.1 when run as scripts. With `module: true`, they run as modules and
+accept the ECMAScript 2015 forms listed here. A `.js` file
 also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
 `f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
 `null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
@@ -2767,6 +2768,8 @@ names the specifier.
   initialized it (in a cycle of imports) throws a `ReferenceError`. Assigning to an import throws a `TypeError`.
 - `import * as ns` gives a namespace object: not extensible, with no prototype, its export names in code unit order
   as properties that cannot be written or deleted, and `[object Module]` from `Object.prototype.toString`.
+  Export redefinitions use the ECMAScript 2020 rule, which accepts a descriptor only when it leaves the current
+  export unchanged (https://262.ecma-international.org/11.0/#sec-module-namespace-exotic-objects-defineownproperty-p-desc).
   `export *` passes on every name but `default`, and `export * as ns from` passes on a namespace.
 - A module's top-level names stay in the module, `this` is `undefined` at its top, it has no preprocessor lines,
   and `import()` is a syntax error. `vc`, `$` and the other globals are there as in a script.

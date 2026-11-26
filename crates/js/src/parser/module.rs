@@ -8,7 +8,7 @@
 //! exported once, and a name an `export { … }` list exports from the module itself must be one it
 //! declares or imports.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::{Parser, Result, describe};
 use crate::ast::{
@@ -25,19 +25,44 @@ struct ClauseExport {
     span: Span,
 }
 
+#[derive(Eq)]
+struct RequestUnits(Vec<u16>);
+
+impl std::hash::Hash for RequestUnits {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.0, state);
+    }
+}
+
+impl PartialEq for RequestUnits {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(test)]
+        REQUEST_SEARCH_STEPS.with(|steps| steps.set(steps.get() + 1));
+        self.0 == other.0
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static REQUEST_SEARCH_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Parser<'_> {
     /// Reads the source as a module: its statements, without its import and export declarations
     /// but with the declarations they export, and what it imports and exports.
     pub(crate) fn parse_module(mut self) -> Result<(Program, ModuleInfo, Vec<Token>)> {
         self.module = true;
+        #[cfg(test)]
+        REQUEST_SEARCH_STEPS.with(|steps| steps.set(0));
         let mut info = ModuleInfo::default();
+        let mut requests = HashMap::new();
         let mut clause = Vec::new();
         let mut body = Vec::new();
         while self.tok.kind != TokenKind::Eof {
             if self.at_keyword(Keyword::Import) {
-                self.import_declaration(&mut info)?;
+                self.import_declaration(&mut info, &mut requests)?;
             } else if self.at_keyword(Keyword::Export) {
-                if let Some(stmt) = self.export_declaration(&mut info, &mut clause)? {
+                if let Some(stmt) = self.export_declaration(&mut info, &mut clause, &mut requests)? {
                     body.push(stmt);
                 }
             } else {
@@ -67,17 +92,22 @@ impl Parser<'_> {
 
     /// A module specifier: a string literal, added to the module's requests once. → its index.
     /// Any string value is a specifier here; the host decides which it can load.
-    fn module_specifier(&mut self, info: &mut ModuleInfo) -> Result<usize> {
+    fn module_specifier(&mut self, info: &mut ModuleInfo, requests: &mut HashMap<RequestUnits, usize>) -> Result<usize> {
         let TokenKind::String(units) = &self.tok.kind else {
             return Err(self.error_at_token(&self.tok, format!("expected a module specifier string but found {}", describe(&self.tok))));
         };
-        let units = units.to_vec();
-        let span = self.bump()?.span;
-        if let Some(i) = info.requests.iter().position(|r| r.units == units) {
-            return Ok(i);
+        if self.tok.legacy_octal {
+            return Err(self.error_at_token(&self.tok, "octal escape sequences are not allowed in strict mode"));
         }
-        let specifier = String::from_utf16_lossy(&units);
-        info.requests.push(ModuleRequest { specifier, units, span });
+        let units = RequestUnits(units.to_vec());
+        let span = self.bump()?.span;
+        if let Some(index) = requests.get(&units) {
+            return Ok(*index);
+        }
+        let specifier = String::from_utf16_lossy(&units.0);
+        let index = info.requests.len();
+        info.requests.push(ModuleRequest { specifier, units: units.0.clone(), span });
+        requests.insert(units, index);
         Ok(info.requests.len() - 1)
     }
 
@@ -93,13 +123,13 @@ impl Parser<'_> {
     }
 
     /// `import …;` (section 15.2.2). Each name it binds is declared in the module's scope.
-    fn import_declaration(&mut self, info: &mut ModuleInfo) -> Result<()> {
+    fn import_declaration(&mut self, info: &mut ModuleInfo, requests: &mut HashMap<RequestUnits, usize>) -> Result<()> {
         let import = self.bump()?;
         if self.at(Punct::LParen) {
             return Err(self.error_at_token(&import, "import() is not supported"));
         }
         if matches!(self.tok.kind, TokenKind::String(_)) {
-            self.module_specifier(info)?;
+            self.module_specifier(info, requests)?;
             return self.semicolon();
         }
         let mut bound: Vec<(ImportName, Name)> = Vec::new();
@@ -135,7 +165,7 @@ impl Parser<'_> {
             }
         }
         self.expect_contextual("from")?;
-        let request = self.module_specifier(info)?;
+        let request = self.module_specifier(info, requests)?;
         self.semicolon()?;
         for (import, local) in bound {
             self.declare_lexical(&local, false)?;
@@ -150,7 +180,12 @@ impl Parser<'_> {
     }
 
     /// `export …` (section 15.2.3). → the declaration it exports, which runs in place.
-    fn export_declaration(&mut self, info: &mut ModuleInfo, clause: &mut Vec<ClauseExport>) -> Result<Option<StmtId>> {
+    fn export_declaration(
+        &mut self,
+        info: &mut ModuleInfo,
+        clause: &mut Vec<ClauseExport>,
+        requests: &mut HashMap<RequestUnits, usize>,
+    ) -> Result<Option<StmtId>> {
         let export = self.bump()?;
         let span = export.span;
         if self.eat(Punct::Star)? {
@@ -158,13 +193,13 @@ impl Parser<'_> {
                 self.bump()?;
                 let (name, _) = self.list_name()?;
                 self.expect_contextual("from")?;
-                let request = self.module_specifier(info)?;
+                let request = self.module_specifier(info, requests)?;
                 self.semicolon()?;
                 info.exports.push(ExportEntry::Indirect { export_name: name.name, request, import: ImportName::Namespace, span: name.span });
                 return Ok(None);
             }
             self.expect_contextual("from")?;
-            let request = self.module_specifier(info)?;
+            let request = self.module_specifier(info, requests)?;
             self.semicolon()?;
             info.exports.push(ExportEntry::Star { request, span });
             return Ok(None);
@@ -190,7 +225,7 @@ impl Parser<'_> {
             self.expect(Punct::RBrace)?;
             if self.at_contextual("from") {
                 self.bump()?;
-                let request = self.module_specifier(info)?;
+                let request = self.module_specifier(info, requests)?;
                 self.semicolon()?;
                 for (local, _, exported) in names {
                     let import = ImportName::Name(local.name);
@@ -296,5 +331,47 @@ impl Parser<'_> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::REQUEST_SEARCH_STEPS;
+    use crate::{Options, parse_module};
+
+    #[test]
+    fn module_specifiers_reject_legacy_octal_escapes() {
+        for source in
+            [r"import './\141.mjs';", r"import value from './\141.mjs';", r"export * from './\141.mjs';", r"export { value } from './\141.mjs';"]
+        {
+            assert!(parse_module(source, &Options::default()).is_err(), "{source}");
+        }
+        for source in [r"import './\u0061.mjs';", r"export * from './\x61.mjs';", r"import './\uD800.mjs';"] {
+            assert!(parse_module(source, &Options::default()).is_ok(), "{source}");
+        }
+    }
+
+    #[test]
+    fn module_request_search_work_is_bounded_by_request_count() {
+        let count = 1_000;
+        let mut source = String::new();
+        for index in 0..count {
+            source.push_str(&format!("import './{index}.mjs';"));
+        }
+        source.push_str(r"import './\u0030.mjs'; import './\uD800.mjs'; import './\uFFFD.mjs'; import './\uDC00.mjs'; import './\uD800.mjs';");
+        let (_, info) = match parse_module(&source, &Options::default()) {
+            Ok(parsed) => parsed,
+            Err(error) => panic!("{error:?}"),
+        };
+        assert_eq!(info.requests.len(), count + 3);
+        for (index, request) in info.requests.iter().take(count).enumerate() {
+            assert_eq!(request.specifier, format!("./{index}.mjs"));
+        }
+        assert_eq!(info.requests[count].units[2], 0xD800);
+        assert_eq!(info.requests[count + 1].units[2], 0xFFFD);
+        assert_eq!(info.requests[count + 2].units[2], 0xDC00);
+        let steps = REQUEST_SEARCH_STEPS.with(std::cell::Cell::get);
+        assert!(steps > 0, "the repeated requests compare their exact UTF-16 keys");
+        assert!(steps <= 2 * (count + 5), "{steps} request-search steps for {} requests", count + 5);
     }
 }

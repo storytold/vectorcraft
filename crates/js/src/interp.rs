@@ -214,6 +214,7 @@ pub(crate) struct Frame {
     /// section 15.2.1.16.5): its completion value is dropped when it returns, and an exception
     /// that leaves it ends the run at the boundary frame without stopping in the frames between.
     chained: bool,
+    pending_module: bool,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
@@ -251,6 +252,7 @@ pub(crate) struct Interp {
     pub(crate) heap: Heap,
     pub(crate) stack: Vec<Value>,
     pub(crate) frames: Vec<Frame>,
+    pending_module_frames: usize,
     /// Values native code holds while it may run JavaScript.
     pub(crate) temp_roots: Vec<Value>,
     /// Environments native code is still building.
@@ -597,6 +599,7 @@ impl Interp {
             heap,
             stack: Vec::new(),
             frames: Vec::new(),
+            pending_module_frames: 0,
             temp_roots: Vec::new(),
             temp_envs: Vec::new(),
             temp_codes: Vec::new(),
@@ -987,7 +990,11 @@ impl Interp {
             self.push(v)?;
             return Ok(None);
         }
+        if self.frames.last().is_some_and(|frame| frame.pending_module) {
+            self.pending_module_frames -= 1;
+        }
         let frame = self.frame_mut()?;
+        frame.pending_module = false;
         let Some(&op) = frame.code.ops.get(frame.pc) else { return internal("ran past the end of the code") };
         frame.pc += 1;
         match op {
@@ -1051,7 +1058,7 @@ impl Interp {
                 }
                 return Ok(());
             }
-            let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
+            let Some(frame) = self.pop_frame() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
             if frame.chained {
                 // The modules under it have not started, so no handler of theirs takes it.
@@ -1067,11 +1074,24 @@ impl Interp {
     /// Each running frame of script code, outermost first: its code, the index of its next
     /// instruction, and whether it runs a function (not global or eval code).
     pub(crate) fn script_frames(&self) -> impl Iterator<Item = (&Rc<Code>, usize, bool)> {
-        self.frames.iter().map(|f| (&f.code, f.pc, f.callee.is_some()))
+        self.frames.iter().filter(|f| !f.pending_module).map(|f| (&f.code, f.pc, f.callee.is_some()))
+    }
+
+    pub(crate) fn clear_frames(&mut self) {
+        self.frames.clear();
+        self.pending_module_frames = 0;
+    }
+
+    fn pop_frame(&mut self) -> Option<Frame> {
+        let frame = self.frames.pop()?;
+        if frame.pending_module {
+            self.pending_module_frames -= 1;
+        }
+        Some(frame)
     }
 
     fn abort_to_boundary(&mut self) {
-        while let Some(frame) = self.frames.pop() {
+        while let Some(frame) = self.pop_frame() {
             self.stack.truncate(frame.base);
             if frame.boundary {
                 break;
@@ -1080,7 +1100,7 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
-        let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
+        let Some(frame) = self.pop_frame() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
         self.drop_left_finally_sites(frame.base);
@@ -1861,7 +1881,7 @@ impl Interp {
         }
     }
 
-    /// A module namespace object's [[DefineOwnProperty]] (ECMA-262 2020 section 9.4.6.6): only a
+    /// A module namespace object's [[DefineOwnProperty]] (ECMA-262 2020 section 9.4.6.5): only a
     /// descriptor that leaves an export as it is (enumerable, writable, not configurable, its
     /// current value) succeeds, and it changes nothing.
     fn define_namespace_export(&mut self, id: ObjId, k: &[u16], desc: &Desc, throw: bool) -> JsResult<bool> {
@@ -3139,9 +3159,7 @@ impl Interp {
     /// the stack.
     fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
         let Entry { callee, code, env, this, args } = entry;
-        if self.frames.len() >= self.limits.frames {
-            return Err(Abrupt::Limit(LimitKind::Frames));
-        }
+        self.check_frame_room()?;
         let params = code.params.iter().chain(&code.pattern_names).fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments = if code.uses_arguments { arguments_bytes(args.len()) } else { 0 };
         // The array a rest parameter gets: its binding and one property for each extra argument.
@@ -3196,6 +3214,7 @@ impl Interp {
             completion: Value::Undefined,
             boundary,
             chained: false,
+            pending_module: false,
         });
         Ok(())
     }
@@ -3685,7 +3704,7 @@ impl Interp {
 
     /// A [`LimitKind::Frames`] error when no other frame fits under the frame limit.
     fn check_frame_room(&self) -> JsResult<()> {
-        if self.frames.len() >= self.limits.frames {
+        if self.frames.len() - self.pending_module_frames >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
         Ok(())
@@ -3707,6 +3726,7 @@ impl Interp {
             completion: Value::Undefined,
             boundary,
             chained: false,
+            pending_module: false,
         });
         Ok(())
     }
@@ -3773,7 +3793,9 @@ impl Interp {
             self.push_code_frame(code.clone(), *env, *var_env, Value::Undefined, last)?;
             if let Some(frame) = self.frames.last_mut() {
                 frame.chained = !last;
+                frame.pending_module = true;
             }
+            self.pending_module_frames += 1;
         }
         Ok(())
     }

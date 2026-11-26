@@ -415,7 +415,7 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.stack.clear();
-        interp.frames.clear();
+        interp.clear_frames();
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;

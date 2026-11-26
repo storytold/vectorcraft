@@ -73,6 +73,11 @@ const MAX_MODULES: usize = 1024;
 /// The most `(module, name)` pairs one export's resolution visits.
 const MAX_RESOLVE_STEPS: usize = 1024;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static RESOLVED_STAR_EDGES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A loaded module.
 struct Record {
     key: String,
@@ -87,7 +92,7 @@ struct Record {
     /// Each name the module exports itself or re-exports by name, with its entry in
     /// `info.exports`.
     explicit: HashMap<String, usize>,
-    /// The request each `export *` of the module names, in order.
+    /// Each `export *` request, replaced by distinct canonical targets after loading, in order.
     stars: Vec<usize>,
 }
 
@@ -149,7 +154,12 @@ impl Graph<'_, '_> {
     /// Parses and compiles a module's source under `tag`.
     fn add(&mut self, key_name: String, source: &str, tag: u32) -> Result<usize, LinkFail> {
         let interp = &mut *self.interp;
-        interp.prepare_source(source.len()).map_err(LinkFail::Run)?;
+        let minimum_units = source.len().div_ceil(3);
+        if u64::try_from(minimum_units).unwrap_or(u64::MAX) > interp.fuel {
+            interp.prepare_source(minimum_units).map_err(LinkFail::Run)?;
+        }
+        interp.prepare_source(0).map_err(LinkFail::Run)?;
+        interp.prepare_source(source.encode_utf16().count()).map_err(LinkFail::Run)?;
         let saved = std::mem::replace(&mut interp.source_tag, tag);
         let compiled = interp.encode_source(source).and_then(|units| interp.compile_module_source(&units));
         interp.source_tag = saved;
@@ -237,6 +247,14 @@ impl Graph<'_, '_> {
                 };
                 self.records[i].requested.push(target);
             }
+            let mut seen_targets = HashSet::new();
+            let targets: Vec<usize> = self.records[i]
+                .stars
+                .iter()
+                .filter_map(|&request| self.records[i].requested.get(request).copied())
+                .filter(|target| seen_targets.insert(*target))
+                .collect();
+            self.records[i].stars = targets;
             i += 1;
         }
         Ok(())
@@ -295,8 +313,10 @@ impl Graph<'_, '_> {
         }
         let mut star = None;
         let stars = record.stars.clone();
-        for request in stars {
-            let Some(t) = self.target(m, request) else { continue };
+        for t in stars {
+            #[cfg(test)]
+            RESOLVED_STAR_EDGES.with(|count| count.set(count.get() + 1));
+            self.interp.use_fuel().map_err(LinkFail::Run)?;
             match self.resolve_export(t, name, seen)? {
                 Err(Ambiguous) => return Ok(Err(Ambiguous)),
                 Ok(None) => {}
