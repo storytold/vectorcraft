@@ -15,6 +15,7 @@
 	Anchors:	앵커:
 	Any Kind	모든 종류
 	Font Technology	글꼴 기술
+@id	language.name	한국어
 font-technology	Variable	가변
 	Ascender	어센더
 	Baseline	기준선
@@ -405,6 +406,9 @@ digits	Malayalam	말라얄람어
 	Artboards	아트보드
 	Convert to Artboards	아트보드로 변환
 	Rearrange All Artboards…	모든 아트보드 재정렬…
+	Rearrange…	재정렬…
+	Selected Artboards: {n}	선택한 아트보드: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	캔버스를 클릭하여 아트보드를 배치하세요(Esc로 취소)
 	Fit to Artwork Bounds	아트워크 경계에 맞추기
 	Fit to Selected Art	선택한 아트에 맞추기
 	Graph	그래프
@@ -575,6 +579,7 @@ digits	Malayalam	말라얄람어
 	Side Length:	변 길이:
 	Make Sides Equal	변 길이 같게
 	Opacity	불투명도
+	Show Opacity	불투명도 표시
 	Pie End Angle:	파이 끝 각도:
 	Pie Start Angle:	파이 시작 각도:
 	Stroke Color	선 색상
@@ -1683,6 +1688,7 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete로 고정점을 제거하고 패스를 연결된 상태로 유지
 	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
@@ -2337,8 +2343,8 @@ antiAlias	Sharp	날카롭게
 	Import Matches	가져오기 대응
 	Remember Import Matches	가져오기 대응 기억
 	Forget Import Matches	가져오기 대응 지우기
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치|기본 단축키 {n}개와 일치
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개|읽지 않은 파일 부분 {n}개
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개
 	Import Transparency Flattener Presets	투명도 병합 프리셋 가져오기
 	Import…	가져오기…
 	In Tangent Handles	안쪽 접선 핸들
@@ -2693,6 +2699,12 @@ antiAlias	Sharp	날카롭게
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	해상도를 알 수 없음
+	estimated memory {memory}	예상 메모리 {memory}
+	memory unavailable	메모리를 알 수 없음
+	Unknown format	알 수 없는 형식
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3332,6 +3344,7 @@ mark-style	Japanese	일본식
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	키를 누르고 있으면 키보드 단축키의 누르고 있기 열에 있는 도구나 명령이 실행되고, 짧게 누르면 평소 단축키가 실행됩니다.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	평소 단축키 대신 길게 누르기 단축키가 실행되기 전까지 키를 누르고 있어야 하는 시간(초)입니다.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete는 선택한 고정점을 제거하고 각 점 주위의 곡선을 다시 맞추며, 그 위치에서 패스를 열지 않습니다.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
@@ -4335,6 +4348,9 @@ file-filter	Swatch libraries	견본 라이브러리
 file-filter	Flattener presets	병합 프리셋
 file-filter	PDF presets	PDF 프리셋
 file-filter	Print presets	인쇄 프리셋
+file-filter	Tracing presets	추적 프리셋
+file-filter	Action sets	액션 세트
+file-filter	Composite fonts	합성 글꼴
 file-filter	Preferences	환경 설정
 file-filter	Export presets	내보내기 사전 설정
 file-filter	SVG Compressed	압축된 SVG
@@ -4713,21 +4729,21 @@ file-filter	Templates	템플릿
 	[Normal Character Style]	[기본 문자 스타일]
 	[Normal Paragraph Style]	[기본 단락 스타일]
 imageTrace	Outline	윤곽선
-@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
+@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
-@plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
-@plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
-@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개|강조된 영역 {n}개
-@plural	{n} color|{n} colors	색상 {n}개|색상 {n}개
-@plural	{n} fill|{n} fills	칠 {n}개|칠 {n}개
-@plural	{n} glyph|{n} glyphs	글리프 {n}개|글리프 {n}개
-@plural	{n} item|{n} items	항목 {n}개|항목 {n}개
-@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개|강조된 개체 {n}개
-@plural	{n} star|{n} stars	별 {n}개|별 {n}개
-@plural	{n} step|{n} steps	단계 {n}개|단계 {n}개
-@plural	{n} stroke|{n} strokes	선 {n}개|선 {n}개
+@plural	{n} Layer|{n} Layers	레이어 {n}개
+@plural	{n} Object|{n} Objects	개체 {n}개
+@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개
+@plural	{n} color|{n} colors	색상 {n}개
+@plural	{n} fill|{n} fills	칠 {n}개
+@plural	{n} glyph|{n} glyphs	글리프 {n}개
+@plural	{n} item|{n} items	항목 {n}개
+@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개
+@plural	{n} star|{n} stars	별 {n}개
+@plural	{n} step|{n} steps	단계 {n}개
+@plural	{n} stroke|{n} strokes	선 {n}개
 	Delete Anchor Points	앵커 포인트 삭제
 	Edit Selection	선택 영역 편집
 	Saved Selection 1	저장된 선택 영역 1
@@ -4771,8 +4787,8 @@ imageTrace	Outline	윤곽선
 	Merged PRs	병합된 PR
 	PRs	PR
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, 줄 +{added} / −{deleted} (Δ {delta}), 바이너리 에셋 +{binary_added} / −{binary_deleted}, {first} – {last}
-@plural	{n} PR|{n} PRs	PR {n}개|PR {n}개
-@plural	{n} commit|{n} commits	커밋 {n}개|커밋 {n}개
+@plural	{n} PR|{n} PRs	PR {n}개
+@plural	{n} commit|{n} commits	커밋 {n}개
 	Commits	커밋
 	Lines added	추가된 줄
 	Lines deleted	삭제된 줄
@@ -6444,6 +6460,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 개체의 메시가 불완전하거나 숫자가 아닌 값을 포함합니다
 @msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
@@ -6916,11 +6933,19 @@ axis	Y Axis	Y축
 @msg	module is {_1} bytes (limit {_2})	모듈이 {_1}바이트입니다(한도 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly 바이너리가 아닙니다(\0asm 헤더 없음)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	함수 형식의 매개변수가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	함수 형식의 결과가 한도인 {MAX_FUNC_TYPE_VALUES}개를 초과합니다
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
 @msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the module must export `{name}` with the type {signature}	모듈은 `{name}`을(를) {signature} 형식으로 내보내야 합니다
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	모듈에 사용자 지정 섹션 `{MANIFEST_SECTION}`이(가) 둘 이상 있습니다
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	메모리 예산(모듈의 초기 메모리가 {initial}바이트, 한도 {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	사용자 지정 섹션 `{MANIFEST_SECTION}`의 매니페스트는 `abi`를 {ABI_VERSION}(으)로 지정해야 합니다. 이는 이 호스트가 구현하는 ABI 버전입니다
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	테이블 예산(모듈이 테이블 {count}개를 정의하며 가장 큰 테이블의 요소는 {largest}개, 한도는 테이블 {MAX_TABLES}개, 각 {MAX_TABLE_ELEMENTS}개 요소)
+@msg	the module's table section could not be read	모듈의 테이블 섹션을 읽을 수 없습니다
 @msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
 @msg	the runtime panicked	런타임이 비정상 종료되었습니다
 @msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다
@@ -6928,6 +6953,10 @@ axis	Y Axis	Y축
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc이 0을 반환했습니다(메모리 부족)
 @msg	vc_alloc returned a block outside memory	vc_alloc이 메모리 밖의 블록을 반환했습니다
 @msg	vc_run returned error code {packed}	vc_run이 오류 코드 {packed}을(를) 반환했습니다
+@msg	did not finish loading within {secs} s	{secs}초 안에 로드를 마치지 못했습니다
+@msg	no thread was left to load it	로드할 스레드가 남아 있지 않았습니다
+@msg	panicked while loading	로드하는 중에 비정상 종료되었습니다
+@msg	panicked while loading: {what}	로드하는 중에 비정상 종료되었습니다: {what}
 @msg	{_1} is not a file	{_1}은(는) 파일이 아닙니다
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}이(가) {_2}바이트입니다(한도 {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	개체 {_1}개(한도 {MAX_OBJECTS})
@@ -6947,6 +6976,11 @@ axis	Y Axis	Y축
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`와 `maxItems`는 0-{MAX_LIST}, `maxItems`는 1 이상이어야 하며 기본값의 항목 수도 그 범위여야 합니다
 @msg	`name` must be a string	`name`은(는) 문자열이어야 합니다
 @msg	`opacity` must be a number	`opacity`은(는) 숫자여야 합니다
+@msg	`opacity` must be a number from 0 to 100	`opacity`은(는) 0에서 100 사이의 숫자여야 합니다
+@msg	`opacity` must be true or false	`opacity`은(는) true 또는 false여야 합니다
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	문자에는 자체 불투명도가 없습니다. 모양새 패널의 새 칠 추가 또는 새 선 추가로 칠이나 선을 추가하세요
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	심볼 인스턴스에서 선택한 개체에는 자체 칠 또는 선 불투명도가 없습니다
+@msg	no target has that fill or stroke to take the opacity	불투명도를 적용할 해당 칠 또는 선이 있는 대상이 없습니다
 @msg	`type` must be "path" or "compound"	`type`은(는) "path" 또는 "compound"여야 합니다
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`은(는) 인쇄 가능한 문자 1-{MAX_UNIT}자여야 합니다
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`에는 `{other}`의 값을 1-{MAX_CONDITION_VALUES}개 나열해야 합니다
@@ -6990,6 +7024,8 @@ axis	Y Axis	Y축
 @msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	컴파운드 패스 {id}에 숨겨졌거나 잠겼거나 안내선인 멤버가 있어 멤버를 바꿀 수 없습니다
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	컴파운드 패스 {id}에 패스가 아닌 멤버가 있어 멤버를 바꿀 수 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
 @msg	a number >= {_1}	{_1} 이상인 숫자
@@ -7079,6 +7115,10 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	전달받은 개체와 문서의 설정, 아트보드, 레이어, 견본 읽기
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`에는 서로 다른 섹션을 나열해야 합니다: settings, artboards, layers 또는 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context`는 `api` 3 이상이고 `doc.read` 권한이 있는 필터 또는 `commands`가 있는 라이브 효과에만 쓸 수 있습니다
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	플러그인이 요청한 문서 정보가 너무 커서 넘길 수 없습니다: 아트보드, 레이어, 견본은 {MAX_CONTEXT_BYTES}바이트 안에서 최대 {MAX_CONTEXT_ITEMS}개입니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	instruction budget	명령어 예산
@@ -8617,7 +8657,7 @@ breakText	Glyphs	글리프
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} 프로파일을 읽을 수 없어 새 문서에 기본 설정을 사용했습니다: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	트랩: 트랩할 만큼 가까운 개체 쌍이 {_1}개보다 많거나, 같은 가로 범위에 있는 개체가 너무 많습니다. 한 번에 더 적은 개체를 트랩하세요
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	위딩 상자 및 선: 아트웍 바깥에 들어갈 위딩 선이 없고 위딩 상자가 꺼져 있습니다
-@msg	\ at end of pattern	패턴 끝에 \이(가) 있습니다
+@msg	\\ at end of pattern	패턴 끝에 \\이(가) 있습니다
 @msg	`alignOn` cannot be empty	`alignOn`은(는) 비워 둘 수 없습니다
 @msg	`alignOn` must be a string	`alignOn`은(는) 문자열이어야 합니다
 @msg	`align` is start, center or end	`align`은(는) start, center 또는 end입니다
@@ -8668,6 +8708,8 @@ breakText	Glyphs	글리프
 @msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
 @msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`은(는) `ids`, `id` 또는 `item`과 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`은(는) `brush`와 함께 쓸 수 없습니다
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
 @msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
 @msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다
@@ -8943,7 +8985,7 @@ breakText	Glyphs	글리프
 @msg	a CMap has too many mappings	CMap에 매핑이 너무 많습니다
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 도면에는 원점이 하나입니다: 아트보드마다 도면을 하나씩 만들려면 useArtboards: true를 전달하세요
 @msg	a PDF presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 PDF 사전 설정 파일입니다
-@msg	a \u escape needs four hexadecimal digits	\u 이스케이프에는 16진수 네 자리가 필요합니다
+@msg	a \\u escape needs four hexadecimal digits	\\u 이스케이프에는 16진수 네 자리가 필요합니다
 @msg	a batch preview cannot switch documents	일괄 처리 미리 보기에서는 문서를 전환할 수 없습니다
 @msg	a brush named `{nn}` exists	`{nn}` 브러시가 이미 있습니다
 @msg	a comma in an XPath expression must separate function arguments	XPath 식의 쉼표는 함수 인수를 구분해야 합니다
@@ -9296,6 +9338,7 @@ breakText	Glyphs	글리프
 @msg	give a pattern name or select an object painted with a pattern	패턴 이름을 지정하거나 패턴으로 칠한 개체를 선택하세요
 @msg	give at least one of clip, invert, disabled, linked	clip, invert, disabled, linked 중 하나 이상을 지정하세요
 @msg	give color, none, swatch or gradient	color, none, swatch 또는 gradient를 지정하세요
+@msg	give color, none, swatch, gradient or opacity	color, none, swatch, gradient 또는 opacity를 지정하세요
 @msg	give dataBase64	dataBase64를 지정하세요
 @msg	give either at (a click) or area (a path drawn around the overlaps)	at(클릭) 또는 area(겹친 부분 둘레에 그린 패스) 중 하나를 지정하세요
 @msg	give exactly one of `at`, `rect` and `points`	`at`, `rect`, `points` 중 정확히 하나를 지정하세요
@@ -9668,7 +9711,7 @@ breakText	Glyphs	글리프
 @msg	not a regular expression	정규식이 아닙니다
 @msg	not a stored or deflated central record	저장 방식이나 deflate 방식의 중앙 레코드가 아닙니다
 @msg	not a valid SVGZ file: {e}	올바른 SVGZ 파일이 아닙니다: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	RTF 파일이 아닙니다: {\rtf(으)로 시작하지 않습니다
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF 파일이 아닙니다: {\\rtf(으)로 시작하지 않습니다
 @msg	not an action set: the text doesn't start with /version and a number	액션 세트가 아닙니다: 텍스트가 /version과 숫자로 시작하지 않습니다
 @msg	not an image VectorCraft reads (see document.formats)	VectorCraft가 읽는 이미지가 아닙니다(document.formats 참조)
 @msg	not area type (text in a frame) outside perspective	원근 밖의 영역 문자(프레임 안의 텍스트)가 아닙니다

@@ -1,8 +1,11 @@
+use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use serde_json::json;
 use vectorcraft_engine::Session;
+use vectorcraft_tools::addons::parametric_shape::ShapeKind;
 
-use super::{ID, KIND, show};
-use crate::tests_labels::painted_text;
+use super::{ID, KIND, readout};
+use crate::addons::dialogs::tests as host;
+use crate::tests::panel_harness::Panel;
 use crate::{VectorcraftApp, menus};
 
 fn app() -> VectorcraftApp {
@@ -11,48 +14,9 @@ fn app() -> VectorcraftApp {
     app
 }
 
-#[test]
-fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let under = |label: &str| entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label);
-    for (label, tool) in [
-        ("Anchor Eraser Brush", "anchorEraserBrush"),
-        ("Extend Path Tool", "extendPath"),
-        ("Measure & Inspect Tool", "measureInspect"),
-        ("Parametric Shape Tool", "parametricShape"),
-        ("Slide Anchor Along Path", "slideAnchor"),
-        ("Tangent Circle Tool", "tangentCircle"),
-        ("Trim at Crossings Tool", "trimAtCrossings"),
-    ] {
-        let e = under(label).expect(label);
-        assert_eq!(vectorcraft_tools::tool_info(tool).map(|t| t.label), Some(label), "the toolbar's label");
-        assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));
-        menus::invoke(&mut app, "tool.select", e.params.clone());
-        assert_eq!(app.session.tool_id(), tool);
-    }
-    for (label, cut) in [("Add Points at Crossings", false), ("Split at Crossings", true)] {
-        let e = under(label).expect(label);
-        assert_eq!(e.command.as_deref(), Some("addon.pathtools.crossings"));
-        assert_eq!(e.params.get("cut").and_then(|v| v.as_bool()).unwrap_or(false), cut);
-    }
-    // Expand Dashes into Paths runs at once: a dashed line becomes its dashes.
-    let line = app.run("path.create", json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}]})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [line]})).unwrap();
-    app.run("stroke.set", json!({"dash": [30, 10]})).unwrap();
-    let expand = under("Expand Dashes into Paths").expect("listed");
-    let (cmd, p) = menus::click_target(&expand.label, expand.command.as_deref().unwrap(), &expand.params);
-    menus::invoke(&mut app, &cmd, p);
-    let selected = app.session.doc().unwrap().selection.objects.len();
-    assert!(selected >= 3, "three dashes selected: {selected}");
-    app.run("edit.undo", json!({})).unwrap();
-    // Artwork Cleanup's submenu and Install Plug-in… are still there.
-    assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins", "Artwork Cleanup"]));
-    assert!(entries.iter().any(|e| e.path == ["Object", "Plug-ins"] && e.label == "Install Plug-in…"));
-    let inspector = under("Anchor Inspector").expect("listed");
-    assert!(!crate::panel_docking::showing(&app.ui, ID));
-    menus::invoke(&mut app, "window.panel", inspector.params.clone());
-    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
+/// An app with a window, which the dialogs open in.
+fn app_with_window() -> VectorcraftApp {
+    crate::testing::windowed(app())
 }
 
 #[test]
@@ -60,103 +24,97 @@ fn the_inspector_shows_the_selected_anchor_and_its_buttons_edit() {
     let mut app = app();
     let r = app.run("path.create", json!({"anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}], "closed": false})).unwrap();
     let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("Direct-select anchor points to edit them.") && text.contains("Make Smooth") && text.contains("Close Path:"), "{text}");
+    let none = readout(&app);
+    assert_eq!((none.count, none.anchor.is_none()), (0, true), "nothing selected: the hint state");
     app.session
         .select(|_, sel| {
             sel.set([id]);
             sel.anchors.insert(id, [(0, 1)].into_iter().collect());
         })
         .unwrap();
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("Anchors selected: 1"), "{text}");
-    // The panel's buttons run the add-on's commands, each one undo step.
-    let steps = app.session.doc().unwrap().history.undo.len();
+    let origin = app.ruler_origin();
+    let shown = readout(&app);
+    assert_eq!(shown.count, 1);
+    let a = shown.anchor.expect("the selected anchor");
+    assert_eq!((a.x, a.y), (110.0 - origin.x, 10.0 - origin.y), "positions are less the ruler origin");
+    assert_eq!((a.lengths, a.angles), ([0.0, 0.0], [None, None]), "a zero-length handle has no angle");
+    // Make Smooth gives the anchor handles, which the readout then shows.
     app.run("addon.pathtools.smooth", json!({})).unwrap();
-    let a = app.session.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[1];
-    assert!(a.has_in() && a.has_out());
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1);
+    let a = readout(&app).anchor.unwrap();
+    assert!(a.lengths.iter().all(|l| *l > 0.0) && a.angles.iter().all(|d| d.is_some()), "{:?} {:?}", a.lengths, a.angles);
+}
+
+/// Runs `f` on the held options dialog, `None` when none is open.
+fn held<R>(app: &VectorcraftApp, f: impl FnOnce(Option<&mut HostedParamDialog>) -> R) -> R {
+    app.dialogs().expect("the window's dialogs").with(|h| f(h.get_mut::<HostedParamDialog>()))
 }
 
 #[test]
 fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
-    let mut app = app();
+    let mut app = app_with_window();
+    let ctx = host::ctx(&app);
+    let numbers = |app: &VectorcraftApp| {
+        held(app, |d| {
+            let f = d.expect("the held dialog").fields();
+            (f.number("size"), f.number("tolerance"), f.bool("pressure"))
+        })
+    };
+    let ok = |app: &mut VectorcraftApp, set: &[(&str, FieldValue)]| {
+        held(app, |d| {
+            let d = d.expect("the held dialog");
+            for (key, value) in set {
+                d.set_field(*key, value.clone());
+            }
+        });
+        app.dialogs().expect("the window's dialogs").with(|h| h.confirm::<HostedParamDialog>(&ctx));
+        crate::dialogs::host::pump(app, &ctx);
+        // A held OK closes at the dialog's next pass.
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
+    };
     app.run("tool.options", json!({"tool": "anchorEraserBrush"})).unwrap();
-    let d = app.ui.dialog.as_mut().expect("the dialog");
-    assert_eq!(d.kind, KIND);
-    assert_eq!((d.f64("size", 0.0), d.f64("tolerance", 0.0), d.bool("pressure")), (20.0, 10.0, false));
-    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Anchor Eraser Brush Options") && text.contains("Tolerance:") && text.contains("Pressure"), "{text}");
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("size".into(), json!(64));
-    d.fields.insert("pressure".into(), json!(true));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    assert_eq!(numbers(&app), (Some(20.0), Some(10.0), Some(false)));
+    ok(&mut app, &[("size", FieldValue::Number(64.0)), ("pressure", FieldValue::Bool(true))]);
+    assert!(held(&app, |d| d.is_none()), "OK closes the dialog");
     let o = app.session.tool_options_of("anchorEraserBrush");
     assert_eq!((o["size"].as_f64(), o["pressure"].as_bool()), (Some(64.0), Some(true)));
-    // The Extend Path tool's mode; the Measure & Inspect tool has none.
+    // The Extend Path tool's mode: a value the tool refuses keeps the dialog open and the option as it was.
     app.run("tool.options", json!({"tool": "extendPath"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("arc"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    ok(&mut app, &[("mode", FieldValue::Text("bogus".into()))]);
+    assert!(held(&app, |d| d.is_some()), "a refusal keeps the dialog open");
+    assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("straight"));
+    ok(&mut app, &[("mode", FieldValue::Text("arc".into()))]);
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
     // The Tangent Circle tool's radius for Shift, Ask For Circle Radius and Auto-Update Default.
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
-    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in ["Tangent Circle Tool Options", "Radius:", "Ask For Circle Radius", "Auto-Update Default"] {
-        assert!(text.contains(s), "{s} in {text}");
-    }
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert!(!d.bool("askRadius") && !d.bool("autoUpdateDefault"));
-    d.fields.insert("radius".into(), json!(12.5));
-    d.fields.insert("askRadius".into(), json!(true));
-    crate::dialogs::confirm(&mut app).unwrap();
+    let shown = held(&app, |d| {
+        let f = d.expect("the held dialog").fields();
+        (f.number("radius"), f.bool("askRadius"), f.bool("autoUpdateDefault"))
+    });
+    assert_eq!(shown, (Some(36.0), Some(false), Some(false)));
+    ok(&mut app, &[("radius", FieldValue::Number(12.5)), ("askRadius", FieldValue::Bool(true))]);
     let o = app.session.tool_options_of("tangentCircle");
     assert_eq!((o["radius"].clone(), o["askRadius"].clone(), o["autoUpdateDefault"].clone()), (json!(12.5), json!(true), json!(false)));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
+    assert_eq!(KIND, "pathToolOptions");
 }
 
 #[test]
-fn the_parametric_shape_panel_opens_from_the_submenu_and_shows_the_shape() {
+fn the_parametric_shape_panel_edits_the_selected_shape_or_the_tools_next_one() {
     let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let under = |label: &str| {
-        let e = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label);
-        (e.command.clone(), e.params.clone())
-    };
-    assert_eq!(under("Convert to Parametric Shape").0.as_deref(), Some("addon.pathtools.shape.convert"));
-    let (command, params) = under("Parametric Shape");
-    assert_eq!(command.as_deref(), Some("window.panel"));
-    menus::invoke(&mut app, "window.panel", params);
-    assert!(crate::panel_docking::showing(&app.ui, super::shape::ID), "the panel opens");
-    // Nothing selected: the fields set the tool's next shape.
-    let text = painted_text(&mut app, super::shape::show);
-    assert!(text.contains("With none selected") && text.contains("Polygon") && text.contains("Count:") && text.contains("Corner Radius:"), "{text}");
+    // Nothing selected: the tool's next shape.
+    let (id, shape) = super::shape::target(&app);
+    assert!(id.is_none() && shape.kind == ShapeKind::Polygon && !super::shape::plain_selected(&app));
     app.run("tool.setOption", json!({"tool": "parametricShape", "values": {"kind": "gear"}})).unwrap();
-    let text = painted_text(&mut app, super::shape::show);
-    assert!(text.contains("Gear") && text.contains("Tooth Height:"), "{text}");
+    assert!(super::shape::target(&app).1.kind == ShapeKind::Gear);
     // A shape selected: its own numbers.
     app.run("addon.pathtools.shape.create", json!({"kind": "bubble", "center": [150, 150]})).unwrap();
-    let text = painted_text(&mut app, super::shape::show);
-    assert!(text.contains("Speech Bubble") && text.contains("Tail:") && text.contains("Tip:") && !text.contains("With none selected"), "{text}");
-    assert!(!text.contains("Count:"), "a speech bubble has no count: {text}");
-}
-
-#[test]
-fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let e = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Corner Tool").expect("listed");
-    assert!(!crate::panel_docking::showing(&app.ui, ID));
-    menus::invoke(&mut app, e.command.as_deref().unwrap(), e.params.clone());
-    assert_eq!(app.session.tool_id(), "cornerTool");
-    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
-    // Neither toolbar shows it, the All Tools list does.
-    assert!(
-        vectorcraft_tools::catalog::all_tools().any(|t| t.id == "cornerTool")
-            && vectorcraft_tools::catalog::all_tools().any(|t| t.id == "slideAnchor")
-    );
-    assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "cornerTool" || t.id == "slideAnchor"));
+    let (id, shape) = super::shape::target(&app);
+    assert!(id.is_some() && shape.kind == ShapeKind::Bubble && !super::shape::plain_selected(&app));
+    // A plain object selected: the fallback, and Convert is on offer.
+    let plain = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [plain]})).unwrap();
+    let (id, _) = super::shape::target(&app);
+    assert!(id.is_none() && super::shape::plain_selected(&app));
 }
 
 /// The Corner Tool and Shared Edge Merge Tool items leave a floating Anchor Inspector showing
@@ -165,99 +123,45 @@ fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
 fn the_tool_items_keep_a_floating_anchor_inspector_showing() {
     let mut app = app();
     app.run("window.panel.float", json!({ "panel": ID })).unwrap();
-    assert!(crate::panel_docking::visible(&app.ui, ID));
+    assert!(crate::panel_docking::visible(&app, ID));
     for command in [super::corner::COMMAND, super::shared_edge::COMMAND] {
         app.run(command, json!({})).unwrap();
-        assert!(crate::panel_docking::visible(&app.ui, ID), "{command} leaves the panel showing");
+        assert!(crate::panel_docking::visible(&app, ID), "{command} leaves the panel showing");
     }
     app.ui.screen_mode = 3;
     app.run(super::corner::COMMAND, json!({})).unwrap();
     assert_eq!(app.session.tool_id(), "cornerTool");
     app.ui.screen_mode = 0;
-    assert!(crate::panel_docking::visible(&app.ui, ID), "the panel shows when Presentation Mode ends");
+    assert!(crate::panel_docking::visible(&app, ID), "the panel shows when Presentation Mode ends");
 }
 
 #[test]
-fn the_shared_edge_item_selects_the_tool_and_opens_its_panel_section() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let e = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Shared Edge Merge Tool").expect("listed");
-    assert!(!crate::panel_docking::showing(&app.ui, ID));
-    menus::invoke(&mut app, e.command.as_deref().unwrap(), e.params.clone());
-    assert_eq!(app.session.tool_id(), "sharedEdge");
-    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
-    // Neither toolbar shows it and it has no shortcut; the All Tools list does.
-    let tool = vectorcraft_tools::catalog::all_tools().find(|t| t.id == "sharedEdge").expect("in All Tools");
-    assert!(tool.shortcut.is_none());
-    assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "sharedEdge"));
-    // The panel's section shows the tool's values and its option acts.
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("Shared Edges") && text.contains("Coincidence:") && text.contains("Keep Shared Points Together"), "{text}");
-    app.run("addon.pathtools.movePointsTogether", json!({ "enabled": true })).unwrap();
-    assert_eq!(app.session.tool_options_of("sharedEdge")["together"], json!(true));
-}
-
-#[test]
-fn the_corner_section_shows_the_tools_values_and_applies_them_to_the_selection() {
+fn the_corner_section_counts_the_corners_apply_would_edit_and_applies_the_tools_values() {
     let mut app = app();
     let r = app
         .run("path.create", json!({"anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}, {"x": 10, "y": 110}], "closed": true}))
         .unwrap();
     let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
-    let text = painted_text(&mut app, show);
-    assert!(
-        text.contains("Corners selected: 4") && text.contains("Radius:") && text.contains("Round") && text.contains("Apply to Selected Anchors"),
-        "{text}"
-    );
+    assert_eq!(super::corner::selected_corners(&app), 4, "a path selected whole offers all its corners");
     app.run("tool.setOption", json!({"tool": "cornerTool", "values": {"radius": 12, "kind": "chamfer"}})).unwrap();
-    assert!(painted_text(&mut app, show).contains("Chamfer"));
     app.session
         .select(|_, sel| {
             sel.set([id]);
             sel.anchors.insert(id, [(0, 1), (0, 2)].into_iter().collect());
         })
         .unwrap();
-    assert!(painted_text(&mut app, show).contains("Corners selected: 2"));
+    assert_eq!(super::corner::selected_corners(&app), 2, "only the direct-selected corners");
     // What Apply runs: the tool's values on the selected corners, one undo step.
     let steps = app.session.doc().unwrap().history.undo.len();
     let options = app.session.tool_options_of("cornerTool");
     app.run("addon.pathtools.cornerSet", json!({"radius": options["radius"], "kind": options["kind"]})).unwrap();
     assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1);
     assert_eq!(app.session.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchor_count(), 6);
-    assert!(painted_text(&mut app, show).contains("Corners selected: 2"), "still selected");
+    assert_eq!(super::corner::selected_corners(&app), 2, "still selected");
 }
 
 #[test]
-fn effect_path_effects_lists_the_live_effects_and_their_dialogs_pick_from_their_values() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let at = |label: &str| entries.iter().find(|e| e.path == ["Effect", "Path Effects"] && e.label == label);
-    for label in [
-        "Dashes to Geometry…",
-        "Add Anchors…",
-        "Extend Path…",
-        "Close Path…",
-        "Smooth Anchors…",
-        "Retract Handles…",
-        "Simplify Anchors…",
-        "Split at Anchors…",
-    ] {
-        assert_eq!(at(label).expect(label).command.as_deref(), Some("effect.dialog"), "{label}");
-    }
-    // No options: applied at once.
-    assert_eq!(at("Reverse Direction").expect("listed").command.as_deref(), Some("effect.apply"));
-    assert_eq!(entries.iter().filter(|e| e.path == ["Effect", "Path Effects"]).count(), 9);
-    // The dialog opens with the effect's parameters, each choice on a list.
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
-    menus::invoke(&mut app, "effect.dialog", json!({"effect": "addon.path.addAnchors"}));
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("effect"));
-    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Add Anchors") && text.contains("Max Count:") && text.contains("All"), "{text}");
-    app.ui.dialog = None;
-    let _ = app.session.cancel_interaction();
-    menus::invoke(&mut app, "effect.dialog", json!({"effect": "addon.path.dashes"}));
-    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Dash 1:") && text.contains("Gap 5:") && text.contains("Align to Corners and Ends:"), "{text}");
+fn the_effect_choices_offer_the_effects_default_and_only_values_its_params_name() {
     for (effect, key) in [
         ("addon.path.addAnchors", "target"),
         ("addon.path.addAnchors", "spacing"),
@@ -275,82 +179,12 @@ fn effect_path_effects_lists_the_live_effects_and_their_dialogs_pick_from_their_
     }
 }
 
-/// Object › Plug-ins › Path Precision Tools › Common Tangents… opens the command dialog on all
-/// tangents without the centerline, Preview off. With Preview on the lines show on the canvas;
-/// Cancel takes them away with no step of history, and OK keeps them as one step. Nested circles
-/// change nothing and say why.
-#[test]
-fn common_tangents_previews_cancels_and_runs_on_ok() {
-    let mut app = app();
-    let circle = |app: &mut VectorcraftApp, x: f64, r: f64| {
-        app.run("shape.ellipse", json!({"x": x - r, "y": 150.0 - r, "width": 2.0 * r, "height": 2.0 * r})).unwrap()["id"].as_u64().unwrap()
-    };
-    let (a, b) = (circle(&mut app, 60.0, 20.0), circle(&mut app, 220.0, 40.0));
-    app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
-    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
-    let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
-    let open = |app: &mut VectorcraftApp| {
-        let entries = menus::menu_entries(app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Common Tangents…").unwrap();
-        assert!(item.enabled);
-        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(app, &cmd, p);
-    };
-
-    open(&mut app);
-    let d = app.ui.dialog.as_ref().expect("a dialog opens");
-    assert_eq!((d.str("__command"), d.str("__label")), (super::COMMON_TANGENTS.to_string(), "Common Tangents".to_string()));
-    assert_eq!((d.str("tangents"), d.bool("centerline"), d.bool("preview")), ("all".to_string(), false, false));
-    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in ["Common Tangents", "Tangents", "All", "Centerline", "Preview"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    // Each kind the list offers is one the command takes.
-    for (_, kind) in super::TANGENT_KINDS {
-        assert!(vectorcraft_engine::check_params(super::COMMON_TANGENTS, &json!({"tangents": kind})).is_ok(), "{kind}");
-    }
-    assert_eq!(count(&app), nodes, "no preview without the checkbox");
-
-    // Preview on: the four lines are on the canvas.
-    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert_eq!(count(&app), nodes + 4, "previewed");
-    // External only, with the centerline: two lines and the centerline.
-    let d = app.ui.dialog.as_mut().unwrap();
-    crate::dialogs::set_field(d, "tangents".into(), json!("external"));
-    crate::dialogs::set_field(d, "centerline".into(), json!(true));
-    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert_eq!(count(&app), nodes + 3, "previewed again");
-
-    // Cancel: as it was, with no step of history.
-    crate::dialogs::cancel(&mut app);
-    assert_eq!(app.session.doc().unwrap().doc, start, "Cancel takes the preview away");
-    assert_eq!(steps(&app), n, "and adds no undo step");
-
-    // OK: one step.
-    open(&mut app);
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    assert_eq!(steps(&app), n + 1, "one undo step");
-    assert_eq!(count(&app), nodes + 4);
-
-    // A circle inside another: nothing changes, and a message says why.
-    let inner = circle(&mut app, 220.0, 10.0);
-    app.run("select.set", json!({"ids": [b, inner]})).unwrap();
-    let (n, nodes) = (steps(&app), count(&app));
-    open(&mut app);
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((steps(&app), count(&app)), (n, nodes));
-    assert!(app.ui.status.contains("inside the other"), "{}", app.ui.status);
-}
-
 /// Common Tangents… on a point and an ellipse: every Tangents choice previews the same two lines
 /// from the point, OK keeps them as one step, and a point inside the ellipse changes nothing and
 /// says why.
 #[test]
 fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
-    let mut app = app();
+    let mut app = app_with_window();
     let oval = app.run("shape.ellipse", json!({"x": 180.0, "y": 120.0, "width": 80.0, "height": 60.0})).unwrap()["id"].as_u64().unwrap();
     let point =
         |app: &mut VectorcraftApp, x: f64, y: f64| app.run("path.create", json!({"anchors": [{"x": x, "y": y}]})).unwrap()["id"].as_u64().unwrap();
@@ -378,28 +212,25 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     };
     let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
     let open = |app: &mut VectorcraftApp| {
-        let entries = menus::menu_entries(app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Common Tangents…").unwrap();
-        assert!(item.enabled);
-        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(app, &cmd, p);
+        host::open_item(app, "Path Precision Tools", "Common Tangents…");
+        host::dialog_id(app)
     };
 
     // Each choice previews the same two lines, and OK with that choice keeps them as one step;
     // undo puts the document back as it was.
     let mut first: Option<Vec<Vec<(i64, i64)>>> = None;
     for (_, kind) in super::TANGENT_KINDS {
-        open(&mut app);
-        let d = app.ui.dialog.as_mut().unwrap();
-        crate::dialogs::set_field(d, "preview".into(), json!(true));
-        crate::dialogs::set_field(d, "tangents".into(), json!(kind));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let id = open(&mut app);
+        host::set(&app, id, "preview", json!(true));
+        host::set(&app, id, "tangents", json!(kind));
+        host::frame(&mut app);
         assert_eq!(count(&app), nodes + 2, "{kind}: the two lines from the point");
         let previewed = lines(&app);
         assert_eq!(previewed.len(), 2, "{kind}");
         let first = first.get_or_insert_with(|| previewed.clone());
         assert_eq!(&previewed, first, "{kind}: the same lines as the first choice");
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(host::confirm(&app, id), "{kind}: OK is enabled");
+        host::frame(&mut app);
         assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 2), "{kind}: one undo step");
         assert_eq!(&lines(&app), first, "{kind}: OK keeps the previewed lines");
         app.run("edit.undo", json!({})).unwrap();
@@ -410,16 +241,17 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     let first = first.unwrap();
 
     // Switching the choice while the preview is on keeps the same two lines on the canvas.
-    open(&mut app);
-    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    let id = open(&mut app);
+    host::set(&app, id, "preview", json!(true));
+    host::frame(&mut app);
     for (_, kind) in super::TANGENT_KINDS.iter().rev() {
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "tangents".into(), json!(kind));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        host::set(&app, id, "tangents", json!(kind));
+        host::frame(&mut app);
         assert_eq!(count(&app), nodes + 2, "{kind}: switched in place");
         assert_eq!(lines(&app), first, "{kind}: the same lines after the switch");
     }
-    crate::dialogs::cancel(&mut app);
+    host::cancel(&app, id);
+    host::frame(&mut app);
     assert_eq!(app.session.doc().unwrap().doc, start, "Cancel takes the preview away");
     assert_eq!(steps(&app), n, "and adds no undo step");
 
@@ -427,112 +259,106 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     let inside = point(&mut app, 220.0, 150.0);
     app.run("select.set", json!({"ids": [oval, inside]})).unwrap();
     let (n, nodes) = (steps(&app), count(&app));
-    open(&mut app);
-    crate::dialogs::confirm(&mut app).unwrap();
+    let id = open(&mut app);
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
     assert_eq!((steps(&app), count(&app)), (n, nodes));
     assert!(app.ui.status.contains("The point lies inside the path"), "{}", app.ui.status);
 }
 
-/// Object › Plug-ins › Path Precision Tools › Add Bounding Rectangle… and Add Bounding Circle… are
-/// dimmed with nothing selected and open the command dialog with Offset 0, One per Object off and
-/// Preview off. With Preview on the shape shows on the canvas; Cancel takes it away with no step of
-/// history. OK with the defaults draws one shape around the whole selection; OK with an Offset and
-/// One per Object draws a larger shape around each object, as one undo step. An Offset that takes
-/// the shape past the canvas edge leaves the dialog open, the document unchanged and an error.
+/// A percentage typed alone into a size field (the Corner Tool's radius, a shape's W and Corner Radius, a handle's
+/// Length) is that share of the size the field shows, in a unit other than the stored points too.
 #[test]
-fn add_bounding_rectangle_and_circle_open_a_dialog_with_offset_and_one_per_object() {
+fn a_lone_percentage_in_a_size_field_is_that_share_of_the_size() {
     let mut app = app();
-    let items = [("Add Bounding Rectangle…", super::BOUNDING_RECTANGLE), ("Add Bounding Circle…", super::BOUNDING_CIRCLE)];
-    let find = |app: &VectorcraftApp, label: &str| {
-        let entries = menus::menu_entries(app);
-        entries.into_iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label)
-    };
-    for (label, command) in items {
-        let item = find(&app, label);
-        assert_eq!((item.command.as_deref(), &item.params), (Some(command), &json!({"offset": 0, "each": false})));
-        assert!(!item.enabled, "{label} with nothing selected");
+    app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    app.run("tool.setOption", json!({"tool": "cornerTool", "values": {"radius": 12}})).unwrap();
+    app.run("tool.setOption", json!({"tool": "parametricShape", "values": {"radius": 10}})).unwrap();
+    let r = app.run("path.create", json!({"anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}], "closed": false})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    app.run("addon.pathtools.smooth", json!({})).unwrap();
+    let shape = super::shape::target(&app).1;
+    let length = readout(&app).anchor.unwrap().lengths[0];
+    let halved = |before: f64, after: f64| (after - before / 2.0).abs() < 1e-6;
+
+    // The three panels, each in its own id scope, as their docked panels are.
+    let mut panel = Panel::new(app, |app, ui| {
+        ui.push_id("corner", |ui| super::corner::section(app, ui));
+        ui.push_id("shape", |ui| super::shape::show(app, ui));
+        ui.push_id("inspector", |ui| super::show(app, ui));
+    });
+    for field in ["Radius", "W", "Corner Radius", "Length"] {
+        panel.type_into(field, "50%");
     }
+    let app = panel.app();
+    let radius = app.session.tool_options_of("cornerTool")["radius"].as_f64().unwrap();
+    assert!(halved(12.0, radius), "the Corner Tool's radius is {radius}");
+    let typed = super::shape::target(&app).1;
+    assert!(halved(shape.width, typed.width), "W went from {} to {}", shape.width, typed.width);
+    assert!(halved(shape.radius, typed.radius), "Corner Radius went from {} to {}", shape.radius, typed.radius);
+    let typed = readout(&app).anchor.unwrap().lengths[0];
+    assert!(halved(length, typed), "the handle's Length went from {length} to {typed}");
+}
+
+/// Preferences › Units › Numbers Without Units Are Points reaches a panel's length field as it does a command
+/// dialog's: in a document in picas, `12` typed alone into the Corner Tool's Radius is 12 points while it is on and
+/// 12 picas while it is off.
+#[test]
+fn a_bare_number_in_a_panels_picas_field_follows_numbers_without_units_are_points() {
+    let radius_typed = |on: bool| {
+        let mut app = app();
+        app.run("document.setUnits", json!({"units": "Picas"})).unwrap();
+        app.run("prefs.set", json!({"key": "numbersWithoutUnitsArePoints", "value": on})).unwrap();
+        let mut panel = Panel::new(app, super::corner::section);
+        panel.type_into("Radius", "12");
+        let app = panel.app();
+        app.session.tool_options_of("cornerTool")["radius"].as_f64().unwrap()
+    };
+    let (points, picas) = (radius_typed(true), radius_typed(false));
+    assert!((points - 12.0).abs() < 1e-6, "on: {points} pt");
+    assert!((picas - 144.0).abs() < 1e-6, "off: {picas} pt");
+}
+
+#[test]
+fn add_inscribed_circle_draws_its_circles_without_a_dialog() {
+    let mut app = app_with_window();
+    let find = |app: &VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        entries
+            .into_iter()
+            .find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Add Inscribed Circle")
+            .expect("Add Inscribed Circle")
+    };
+    let item = find(&app);
+    assert_eq!((item.command.as_deref(), &item.params), (Some(super::INSCRIBED_CIRCLE), &json!({})));
+    assert!(!item.enabled, "with nothing selected");
     let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
     let b = app.run("shape.rectangle", json!({"x": 100, "y": 20, "width": 20, "height": 40})).unwrap()["id"].as_u64().unwrap();
-    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
-    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
-    let made = |app: &VectorcraftApp| {
-        let st = app.session.doc().unwrap();
-        st.selection.objects.iter().map(|id| st.doc.bounds_of(&[*id], false).unwrap()).collect::<Vec<_>>()
-    };
-    let open = |app: &mut VectorcraftApp, label: &str| {
-        app.run("select.set", json!({"ids": [a, b]})).unwrap();
-        let item = find(app, label);
-        assert!(item.enabled, "{label}");
-        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(app, &cmd, p);
-    };
-    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(v, w)| (v - w).abs() < 1e-6);
-    for (label, command) in items {
-        let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
-        open(&mut app, label);
-        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{label}: a dialog opens"));
-        assert_eq!((d.str("__command"), d.str("__label")), (command.to_string(), label.trim_end_matches('…').to_string()));
-        assert_eq!((d.f64("offset", -1.0), d.bool("each"), d.bool("preview")), (0.0, false, false), "{label}");
-        let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        for s in [label.trim_end_matches('…'), "Offset", "One per Object", "Preview"] {
-            assert!(shown.contains(s), "{label}: {s} in {shown}");
-        }
-        assert_eq!(count(&app), nodes, "{label}: no preview without the checkbox");
-
-        // Preview on: the shape is on the canvas. Cancel: as it was, with no step of history.
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
-        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-        assert_eq!(count(&app), nodes + 1, "{label}: previewed");
-        crate::dialogs::cancel(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, start, "{label}: Cancel takes the preview away");
-        assert_eq!(steps(&app), n, "{label}: and adds no undo step");
-
-        // OK with the defaults: one shape around the whole selection, from (10, 20) to (120, 60).
-        open(&mut app, label);
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 1), "{label}: one shape, one undo step");
-        let whole = made(&app);
-        if command == super::BOUNDING_RECTANGLE {
-            assert!(near(whole[0], [10.0, 20.0, 120.0, 60.0]), "{label}: {:?}", whole[0]);
-        } else {
-            // The circle on the diagonal, with the 0.01 pt allowance.
-            let r = 110.0f64.hypot(40.0) / 2.0 + 0.01;
-            assert!(near(whole[0], [65.0 - r, 40.0 - r, 65.0 + r, 40.0 + r]), "{label}: {:?}", whole[0]);
-        }
-
-        // OK with an Offset of 5 pt and One per Object: a shape around each object, one undo step.
-        open(&mut app, label);
-        let d = app.ui.dialog.as_mut().unwrap();
-        crate::dialogs::set_field(d, "offset".into(), json!(5));
-        crate::dialogs::set_field(d, "each".into(), json!(true));
-        crate::dialogs::confirm(&mut app).unwrap();
-        assert_eq!((steps(&app), count(&app)), (n + 2, nodes + 3), "{label}: two shapes, one more undo step");
-        let each = made(&app);
-        if command == super::BOUNDING_RECTANGLE {
-            assert!(near(each[0], [5.0, 15.0, 45.0, 65.0]) && near(each[1], [95.0, 15.0, 125.0, 65.0]), "{label}: {each:?}");
-        } else {
-            let (ra, rb) = (30.0f64.hypot(40.0) / 2.0 + 5.01, 20.0f64.hypot(40.0) / 2.0 + 5.01);
-            let want = [[25.0 - ra, 40.0 - ra, 25.0 + ra, 40.0 + ra], [110.0 - rb, 40.0 - rb, 110.0 + rb, 40.0 + rb]];
-            assert!(near(each[0], want[0]) && near(each[1], want[1]), "{label}: {each:?}");
-        }
-
-        // An Offset past the canvas edge: the dialog stays open, nothing is drawn, and the error
-        // says why.
-        let (n, nodes) = (steps(&app), count(&app));
-        open(&mut app, label);
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "offset".into(), json!(5_000_000));
-        let e = crate::dialogs::confirm(&mut app).unwrap_err();
-        assert!(e.contains("the shape would reach past the edge of the canvas"), "{label}: {e}");
-        assert!(app.ui.dialog.is_some(), "{label}: the dialog stays open");
-        crate::dialogs::cancel(&mut app);
-        assert_eq!((steps(&app), count(&app)), (n, nodes), "{label}: nothing drawn");
-    }
-    // Every language with complete menus has the menu items, the dialog's headings and its labels.
-    for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
-        for s in ["Add Bounding Rectangle…", "Add Bounding Circle…", "Offset", "One per Object"] {
-            assert!(crate::i18n::has(lang, s), "{}: {s}", lang.code());
-        }
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let (steps, nodes) = (app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().doc.node_count());
+    let item = find(&app);
+    assert!(item.enabled);
+    let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+    menus::invoke(&mut app, &cmd, p);
+    assert!(held(&app, |d| d.is_none()), "no dialog opens");
+    let st = app.session.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.doc.node_count()), (steps + 1, nodes + 2), "a circle in each rectangle, one undo step");
+    let made = &st.selection.objects;
+    assert_eq!(made.len(), 2, "the two circles are selected: {made:?}");
+    for (id, inside) in made.iter().zip([[10.0, 20.0, 40.0, 60.0], [100.0, 20.0, 120.0, 60.0]]) {
+        assert!(id.0 != a && id.0 != b, "{id:?} is a new object");
+        let live = match &st.doc.node(*id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Path { live, .. } => live.as_deref(),
+            _ => None,
+        };
+        assert!(matches!(live, Some(vectorcraft_doc::LiveShape::Ellipse { w, h, .. }) if w == h), "{id:?} is a live circle");
+        let r = st.doc.bounds_of(&[*id], false).unwrap();
+        assert!(r.x0 >= inside[0] && r.y0 >= inside[1] && r.x1 <= inside[2] && r.y1 <= inside[3], "{r:?} inside {inside:?}");
     }
 }

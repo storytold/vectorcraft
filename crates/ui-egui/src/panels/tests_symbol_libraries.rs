@@ -3,25 +3,20 @@
 //! open libraries, Save Symbols writes User Defined libraries that reopen, and Other Library… turns
 //! down files it can't read.
 
-use egui::{Event, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui::{Event, Modifiers, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
+use super::library_panel::tests::{click, confirm_save, context, menu_library_ids};
 use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use super::symbols::SymbolLibraries;
 use crate::VectorcraftApp;
-use crate::widgets::PanelDrag;
+use crate::i18n::LangExt as _;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
-}
-
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
 }
 
 /// One frame of `draw` with `events`; the texts it painted.
@@ -40,23 +35,6 @@ fn frame(ctx: &egui::Context, events: Vec<Event>, time: f64, mut draw: impl FnMu
     let mut v = vec![];
     out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
     v
-}
-
-/// The centre of the open library panel's tile of symbol `name` (a new window takes a sizing
-/// frame first).
-fn tile(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, time: f64) -> Pos2 {
-    for t in [time, time + 0.25] {
-        frame(ctx, vec![], t, |ui| library_panel::show_window(app, ui.ctx()));
-    }
-    let id = library_panel::tile_id(&last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default(), name);
-    ctx.read_response(id).unwrap_or_else(|| panic!("no tile for {name}")).rect.center()
-}
-
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) {
-    let at = tile(app, ctx, name, time);
-    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
-    let events = vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at), button(true), button(false)];
-    frame(ctx, events, time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
@@ -87,54 +65,14 @@ fn clicking_a_library_symbol_adds_it_to_the_documents_symbols_in_one_step() {
     assert_eq!(symbols(&app), ["Star"]);
     SymbolLibraries::add(&mut app, "basic-shapes", vec!["Hexagon".into(), "Arrow".into()]);
     assert_eq!(symbols(&app), ["Star", "Hexagon", "Arrow"]);
-    // Find filters by name; list rows give the natural size.
+    // List rows give the natural size.
     let lib = SymbolLibraries::get(&app, "basic-shapes").unwrap().1;
-    let rows = SymbolLibraries::rows(&lib, "basic-shapes", "arr");
-    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Arrow"]);
-    assert_eq!(SymbolLibraries::describe(rows[0].item.unwrap()), "48 × 32 pt");
-    // Dragging a symbol out of the panel carries it to the canvas.
-    let at = tile(&mut app, &ctx, "Burst", 6.0);
-    let press = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE };
-    frame(&ctx, vec![Event::PointerMoved(at), press], 6.5, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    for (i, d) in [20.0, 60.0].into_iter().enumerate() {
-        frame(&ctx, vec![Event::PointerMoved(at + vec2(d, d))], 6.6 + 0.1 * i as f64, |ui| library_panel::show_window(&mut app, ui.ctx()));
-    }
-    let carried = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
-    assert_eq!(carried.as_deref(), Some(&PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Burst".into() }));
+    let rows = SymbolLibraries::rows(&lib, "basic-shapes");
+    let arrow = rows.iter().find(|r| r.name == "Arrow").and_then(|r| r.item).unwrap();
+    assert_eq!(SymbolLibraries::describe(arrow), "48 × 32 pt");
     assert!(app.run("window.symbolLibrary", json!({"library": "nope"})).is_err());
     app.run("window.symbolLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
-}
-
-/// A secondary or middle drag out of a library tile carries no symbol and adds nothing; a primary
-/// drag still carries it.
-#[test]
-fn only_a_primary_drag_carries_a_library_symbol_out() {
-    let mut app = app();
-    let ctx = context();
-    app.run("window.symbolLibrary", json!({"library": "Basic Shapes"})).unwrap();
-    let undo = undo_len(&app);
-    let mut time = 0.0;
-    let mut drag = |app: &mut VectorcraftApp, pointer: PointerButton| {
-        let at = tile(app, &ctx, "Burst", time);
-        let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
-        frame(&ctx, vec![Event::PointerMoved(at), button(at, true)], time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
-        for (i, d) in [20.0, 60.0].into_iter().enumerate() {
-            frame(&ctx, vec![Event::PointerMoved(at + vec2(d, d))], time + 0.6 + 0.1 * i as f64, |ui| library_panel::show_window(app, ui.ctx()));
-        }
-        let carried = egui::DragAndDrop::payload::<PanelDrag>(&ctx).map(|p| (*p).clone());
-        let end = at + vec2(60.0, 60.0);
-        frame(&ctx, vec![button(end, false)], time + 0.9, |ui| library_panel::show_window(app, ui.ctx()));
-        frame(&ctx, vec![], time + 1.0, |ui| library_panel::show_window(app, ui.ctx()));
-        time += 2.0;
-        carried
-    };
-    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
-        assert_eq!(drag(&mut app, pointer), None, "a {pointer:?} drag carries nothing");
-    }
-    assert_eq!((symbols(&app).len(), undo_len(&app)), (0, undo), "nothing is added");
-    let carried = drag(&mut app, PointerButton::Primary);
-    assert_eq!(carried, Some(PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Burst".into() }));
 }
 
 #[test]
@@ -161,14 +99,12 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     assert_eq!(has("window.symbolLibrary.other"), Some(true));
     assert_eq!(has("ui.saveSymbolLibrary"), Some(false), "no symbols to save yet");
     assert!(!entries.iter().any(|e| e.path == ["Window", "Symbol Libraries", "User Defined"]), "empty slots are hidden");
-    // The Symbols panel's library button and menu.
-    let ctx = context();
-    let texts = frame(&ctx, vec![], 0.0, |ui| {
-        super::symbols::show(&mut app, ui);
-        super::symbols::menu(&mut app, ui);
-    });
-    for t in ["Open Symbol Library", "Save Symbol Library…"] {
-        assert!(texts.iter().any(|x| x.ends_with(t)), "{t}: {texts:?}");
+    // The Symbols panel's library menus list the same libraries, and each Window row opens its panel.
+    let ids: Vec<String> = opened.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+    assert_eq!(menu_library_ids::<SymbolLibraries>(&app), ids);
+    for id in &ids {
+        app.run("window.symbolLibrary", json!({"library": id})).unwrap();
+        assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some(id.as_str()));
     }
 }
 
@@ -176,23 +112,15 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
 fn save_symbols_writes_a_user_library_that_reopens_and_adds_to_another_document() {
     let dir = std::env::temp_dir().join(format!("vc-symbol-libraries-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.symbol_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     app.run("symbol.new", json!({"name": "Brick"})).unwrap();
     app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
     app.run("symbol.new", json!({"name": "Pebble"})).unwrap();
     app.run("ui.saveSymbolLibrary", json!({"names": ["Brick"]})).unwrap();
-    let d = app.ui.dialog.as_mut().expect("Save Symbol Library opens");
-    assert_eq!((d.kind.as_str(), d.bool("user")), (crate::dialogs::save_symbol_library::KIND, true));
-    d.fields.insert("name".into(), json!("Masonry"));
-    d.fields.insert("selectedOnly".into(), json!(true));
+    confirm_save(&mut app, &[("name", json!("Masonry")), ("selectedOnly", json!(true))]);
     let ctx = context();
-    frame(&ctx, vec![], 0.0, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    let texts = frame(&ctx, vec![], 0.5, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    assert!(texts.iter().any(|t| t == "Selected Symbols Only (1)"), "{texts:?}");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
     let user: Vec<(String, String)> = crate::menus::menu_entries(&app)
         .into_iter()
         .filter(|e| e.path == ["Window", "Symbol Libraries", "User Defined"])
@@ -253,13 +181,7 @@ fn built_in_library_symbols_are_listed_in_the_ui_language() {
     let texts = frame(&ctx, vec![], 0.25, |ui| library_panel::show_window(&mut app, ui.ctx()));
     assert!(texts.iter().any(|t| t == "Éclat") && texts.iter().any(|t| t == "Étoile"), "{texts:?}");
     assert!(!texts.iter().any(|t| t == "Burst"), "{texts:?}");
-    let lib = SymbolLibraries::get(&app, "basic-shapes").unwrap().1;
-    for query in ["éclat", "burst"] {
-        let rows = SymbolLibraries::rows(&lib, "basic-shapes", query);
-        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Burst"], "{query}");
-    }
-    assert!(SymbolLibraries::rows(&lib, "loaded/1", "éclat").is_empty(), "another library's symbol is matched by its own name only");
-    click(&mut app, &ctx, "Star", Modifiers::NONE, 1.0);
+    click(&mut app, &ctx, "Étoile", Modifiers::NONE, 1.0);
     assert_eq!(symbols(&app), ["Star"]);
     crate::i18n::set_current(crate::i18n::Lang::EN);
 }
