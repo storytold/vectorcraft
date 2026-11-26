@@ -8,9 +8,9 @@ pub(super) fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
 }
 
-/// Outline of a node for highlighting (paths, compound children, area type frames, other
-/// text/image bounds, symbol instances' bounds measured by their art from `symbols`; a clip
-/// group's clipping path only, as [`walk_drawn`] visits it).
+/// Outline of a node for highlighting (paths, compound children, area type frames, image bounds,
+/// the box as drawn of type in perspective and of symbol instances, whose art `symbols` measures
+/// ([`Node::drawn_corners`]); a clip group's clipping path only, as [`walk_drawn`] visits it).
 pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
     let mut bp = BezPath::new();
     walk_drawn(n, &mut |c| match &c.kind {
@@ -27,13 +27,19 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
                         bp.line_to(t.xf * b);
                     }
                 }
-            } else if let Some(b) = c.geometric_bounds_with(symbols) {
+            } else if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
+            }
+        }
+        NodeKind::Image(_) => {
+            if let Some(b) = c.geometric_bounds_with(symbols) {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
         }
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
-            if let Some(b) = c.geometric_bounds_with(symbols) {
-                bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
+        // A symbol instance shows its art's box, turned, skewed or in perspective with it.
+        NodeKind::SymbolInstance { .. } => {
+            if let Some(q) = c.drawn_corners(symbols) {
+                corners(&mut bp, q);
             }
         }
         // A placed document shows its box, turned with it.
@@ -54,6 +60,14 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
         _ => {}
     });
     bp
+}
+
+/// Adds the closed outline through the four corners `q` to `bp`.
+fn corners(bp: &mut BezPath, q: [Point; 4]) {
+    let [a, b, c, d] = q;
+    bp.move_to(a);
+    [b, c, d].into_iter().for_each(|p| bp.line_to(p));
+    bp.close_path();
 }
 
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
