@@ -5,12 +5,13 @@
 //! draws columns or bars, and Marker… when every one draws lines, scatter points or radar lines;
 //! both run the same route as their Object › Graph items.
 
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::Row;
 use egui::Ui;
-use serde_json::json;
 use vectorcraft_doc::{Document, GraphKind, MAX_GRAPH_SERIES, NodeId};
 
 use crate::VectorcraftApp;
-use crate::widgets::{self, divider, section_header};
 
 /// The Graph section's optional buttons for the selection.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -74,37 +75,19 @@ fn series_of(doc: &Document, graph: NodeId, id: NodeId) -> Option<usize> {
     }
 }
 
-/// The Graph section for the selection, with the divider after it; nothing without a graph.
+/// The Graph section for the selection; nothing without a graph.
 pub(crate) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(s) = shown(app) else { return };
-    section_header(ui, tl!("Graph"));
-    let mut buttons = vec![(tl!("Graph Type…"), "graph.setType"), (tl!("Graph Data…"), "graph.setData")];
-    if s.column {
-        buttons.push((tl!("Column…"), "graph.column"));
-    }
-    if s.marker {
-        buttons.push((tl!("Marker…"), "graph.marker"));
-    }
-    let full = ui.available_width();
-    let w = (full - 6.0) / 2.0;
-    for pair in buttons.chunks(2) {
-        // Two buttons share a row while both labels fit in half of it; a longer translated label
-        // puts each button of the pair on a row of its own.
-        if pair.iter().all(|(label, _)| widgets::flat_button_fit_width(ui, label, 0.0) <= w) {
-            ui.horizontal(|ui| {
-                for (label, id) in pair {
-                    if widgets::flat_button(ui, label, w).clicked() {
-                        crate::menus::invoke(app, id, json!({}));
-                    }
-                }
-            });
-        } else {
-            for (label, id) in pair {
-                if widgets::flat_button_fit(ui, label, full).clicked() {
-                    crate::menus::invoke(app, id, json!({}));
-                }
+    super::section(tl!("Graph")).show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
+            Button::command("graph.setType").label(tl!("Graph Type…")).show(ui);
+            Button::command("graph.setData").label(tl!("Graph Data…")).show(ui);
+            if s.column {
+                Button::command("graph.column").label(tl!("Column…")).show(ui);
             }
-        }
-    }
-    divider(ui);
+            if s.marker {
+                Button::command("graph.marker").label(tl!("Marker…")).show(ui);
+            }
+        });
+    });
 }

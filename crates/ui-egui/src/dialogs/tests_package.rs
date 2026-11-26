@@ -4,13 +4,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use serde_json::json;
+use craft::ui::dialog::{DialogId, HeldOk, dialog_id};
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::{Access, AutomationRoots};
 
 use super::*;
-use crate::background;
+use crate::i18n::LangExt as _;
 use crate::tests_background::{Files, Gate, written};
+use crate::{VectorcraftApp, background};
 
 /// A fresh folder for one test (removed when dropped).
 struct Folder(std::path::PathBuf);
@@ -33,13 +36,84 @@ impl Drop for Folder {
     }
 }
 
-fn frame(app: &mut VectorcraftApp) -> String {
-    crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()))
+/// An app with a window, so its dialogs have a host.
+fn windowed() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // A window context and a held file service.
+    let _ = crate::tests::picks::scripted(&mut app);
+    app
+}
+
+/// The id of the Package dialog.
+fn package_id() -> DialogId {
+    dialog_id("package")
+}
+
+/// Runs `f` on the open Package dialog.
+fn with_package<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedParamDialog) -> R) -> Option<R> {
+    app.dialogs()?.with(|host| host.get_mut_by_id::<HostedParamDialog>(package_id()).map(f))
+}
+
+/// Sets the Package dialog's field `field`, as automation does.
+fn set(app: &VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, package_id(), field, value))
+}
+
+/// Presses OK on the dialog `id`: it files its answer, the pump runs the app's OK and answers it, and a second OK
+/// closes the dialog when the answer was accepted. Whether it closed.
+fn press_ok_on(app: &mut VectorcraftApp, id: DialogId) -> bool {
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    let dialogs = app.dialogs().unwrap();
+    dialogs.with(|host| host.confirm_by_id(&ctx, id));
+    crate::dialogs::host::pump(app, &ctx);
+    // A refused answer keeps the dialog open with its reason: another press would file the answer again.
+    if matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))) {
+        return false;
+    }
+    dialogs.with(|host| host.confirm_by_id(&ctx, id))
+}
+
+/// [`press_ok_on`] the Package dialog.
+fn press_ok(app: &mut VectorcraftApp) -> bool {
+    press_ok_on(app, package_id())
+}
+
+fn held_state(app: &VectorcraftApp) -> Option<HeldOk> {
+    app.dialogs().unwrap().with(|host| host.held_state(package_id()))
+}
+
+/// What OK does with the dialog's values, for a test that reads the reply (the dialog stays open).
+fn reply(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let fields = with_package(app, |d| d.fields().clone()).expect("the Package dialog is open");
+    package::confirm(app, &fields)
+}
+
+/// The question the package asked (the one that is not the Package dialog), if one is open.
+fn question_id(app: &VectorcraftApp) -> Option<DialogId> {
+    let opened = app.dialogs()?.with(|host| host.open_dialogs());
+    opened.into_iter().rev().find(|d| d.id != package_id()).map(|d| d.id)
+}
+
+/// Answers the question the package asked with OK, and runs what it asks for.
+fn answer_question(app: &mut VectorcraftApp) {
+    let id = question_id(app).expect("a question is open");
+    press_ok_on(app, id);
+}
+
+/// Closes every open dialog, as Escape would.
+fn close_all(app: &VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    app.dialogs().unwrap().with(|host| {
+        for d in host.open_dialogs().into_iter().rev() {
+            host.cancel_by_id(&ctx, d.id);
+        }
+    });
 }
 
 /// An app writing through `std::fs`, with a saved document holding a placed linked image.
 fn saved(dir: &Folder) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = windowed();
     app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let mut png = vec![];
@@ -86,12 +160,13 @@ fn saved(dir: &Folder) -> VectorcraftApp {
 
 #[test]
 fn an_unsaved_document_is_offered_save_as_first() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = windowed();
     assert!(!crate::menus::enabled(&app, "ui.packageDialog"), "no document");
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("ui.packageDialog", json!({})).unwrap();
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("__command")), (confirm::KIND, "file.saveAs".to_string()));
+    let (_, _, command) = confirm::open_question(&app).unwrap();
+    assert_eq!(command, "file.saveAs");
+    assert!(with_package(&app, |_| ()).is_none(), "no Package dialog for a document never saved");
 }
 
 #[test]
@@ -99,29 +174,33 @@ fn package_writes_the_folder_then_offers_to_show_it() {
     let dir = Folder::new("folder");
     let mut app = saved(&dir);
     app.run("ui.packageDialog", json!({})).unwrap();
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("name"), d.bool("copyFonts")), ("package", "card Folder".to_string(), true));
-    assert_eq!(std::path::Path::new(&d.str("folder")), dir.0.as_path(), "next to the document");
-    let text = frame(&mut app);
-    assert!(text.contains("Collect Links in a Separate Folder") && text.contains("Folder Name:"), "{text}");
+    let (name, copy_fonts, folder) = with_package(&app, |d| {
+        (d.fields().text("name").map(str::to_string), d.fields().bool("copyFonts"), d.fields().text("folder").map(str::to_string))
+    })
+    .unwrap();
+    assert_eq!((name.as_deref(), copy_fonts), (Some("card Folder"), Some(true)));
+    assert_eq!(folder.as_deref().map(std::path::Path::new), Some(dir.0.as_path()), "next to the document");
     let out = dir.path("out");
     std::fs::create_dir_all(&out).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
+    set(&app, "folder", json!(out)).unwrap();
     // Unsaved changes are saved first.
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    let r = confirm(&mut app).unwrap();
+    assert!(press_ok(&mut app), "the accepted OK closes the dialog");
     assert!(!app.session.active().unwrap().is_dirty());
     let root = std::path::Path::new(&out).join("card Folder");
-    assert!(root.join("card.vectorcraft").is_file() && root.join("Links/pic.png").is_file(), "{r}");
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("__command")), (confirm::KIND, "file.showPackage".to_string()));
+    assert!(root.join("card.vectorcraft").is_file() && root.join("Links/pic.png").is_file());
+    // The offer to show the folder stays open after the Package dialog closes.
+    let (_, detail, command) = confirm::open_question(&app).unwrap();
+    assert_eq!(command, "file.showPackage");
+    assert!(detail.contains(root.to_string_lossy().as_ref()), "{detail}");
+    assert!(with_package(&app, |_| ()).is_none());
     let opened: Rc<RefCell<Vec<String>>> = Rc::default();
     let o = opened.clone();
     app.services.open_file = Some(Box::new(move |p: &str| {
         o.borrow_mut().push(p.to_string());
         Ok(())
     }));
-    confirm(&mut app).unwrap();
+    answer_question(&mut app);
     assert_eq!(opened.borrow().first().map(std::path::PathBuf::from), Some(root));
 }
 
@@ -142,7 +221,7 @@ fn saved_with_worker(dir: &Folder, gate: &Gate) -> (VectorcraftApp, Files) {
 /// Open the Package dialog for a package in `out`.
 fn package_dialog(app: &mut VectorcraftApp, out: &str) {
     app.run("ui.packageDialog", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
+    set(app, "folder", json!(out)).unwrap();
 }
 
 #[test]
@@ -155,7 +234,7 @@ fn package_is_written_in_the_background_as_it_is_at_once() {
     // With Background Export off, the package is written at once through the UI thread's writer.
     app.session.execute("prefs.set", &json!({"values": {"backgroundExport": false}})).unwrap();
     package_dialog(&mut app, &out);
-    let at_once = confirm(&mut app).unwrap();
+    let at_once = reply(&mut app).unwrap();
     let want: Vec<(String, Vec<u8>)> = at_once["files"]
         .as_array()
         .unwrap()
@@ -164,23 +243,22 @@ fn package_is_written_in_the_background_as_it_is_at_once() {
         .map(|p| (p.to_string_lossy().into_owned(), std::fs::read(&p).unwrap()))
         .collect();
     assert_eq!(want.len(), 3, "the document, its linked file and the report: {at_once}");
-    let (status, detail) = (app.ui.status.clone(), app.ui.dialog.as_ref().unwrap().str("detail"));
+    let (status, detail) = (app.ui.status.clone(), confirm::open_question(&app).unwrap().1);
     std::fs::remove_dir_all(&root).unwrap();
-    app.ui.dialog = None;
+    close_all(&app);
     // With Background Export on, the dialog closes at once, and the same files are written later.
     app.session.execute("prefs.set", &json!({"values": {"backgroundExport": true}})).unwrap();
     package_dialog(&mut app, &out);
-    let r = confirm(&mut app).unwrap();
-    assert_eq!(r["background"], true, "{r}");
-    assert!(app.ui.dialog.is_none(), "closed");
-    assert_eq!(app.ui.status, "Packaging card Folder…");
+    assert!(press_ok(&mut app), "closed");
+    assert!(with_package(&app, |_| ()).is_none());
+    assert!(app.background.jobs.last().is_some_and(|job| job.label.starts_with("Packaging card Folder")), "the job is named for the folder");
     assert!(written(&files).is_empty(), "nothing written yet");
     gate.open();
     background::wait_all(&mut app);
     assert_eq!(*files.lock().unwrap(), want);
     assert_eq!(app.ui.status, status);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("__command"), d.str("detail")), ("file.showPackage".to_string(), detail));
+    let (_, later_detail, command) = confirm::open_question(&app).unwrap();
+    assert_eq!((command.as_str(), later_detail), ("file.showPackage", detail));
 }
 
 #[test]
@@ -190,7 +268,7 @@ fn edits_after_ok_do_not_reach_the_package() {
     let (mut app, files) = saved_with_worker(&dir, &gate);
     let nodes = app.session.active().unwrap().doc.node_count();
     package_dialog(&mut app, &dir.path("out"));
-    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(reply(&mut app).unwrap()["background"], true);
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     app.run("select.all", json!({})).unwrap();
     app.run("edit.clear", json!({})).unwrap();
@@ -198,7 +276,7 @@ fn edits_after_ok_do_not_reach_the_package() {
     app.run("ui.packageDialog", json!({})).unwrap();
     gate.open();
     background::wait_all(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("package"));
+    assert!(with_package(&app, |_| ()).is_some(), "the dialog opened meanwhile stays");
     assert!(app.ui.status.starts_with("Packaged 3 files in "), "{}", app.ui.status);
     let files = files.lock().unwrap();
     let (_, bytes) = files.iter().find(|(p, _)| p.ends_with("card.vectorcraft")).unwrap();
@@ -222,7 +300,7 @@ fn a_dirty_documents_save_is_written_before_its_package() {
         std::thread::sleep(std::time::Duration::from_secs(10));
         opener.open();
     });
-    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(reply(&mut app).unwrap()["background"], true);
     assert_eq!(app.background.jobs.len(), 1, "the save; the package waits for it");
     gate.open();
     background::wait_all(&mut app);
@@ -241,7 +319,7 @@ fn a_dirty_documents_save_is_written_before_its_package() {
         std::thread::sleep(std::time::Duration::from_millis(50));
         opener.open();
     });
-    confirm(&mut app).unwrap();
+    reply(&mut app).unwrap();
     release.join().unwrap();
     assert_eq!(written(&files), [doc]);
     assert!(app.background.jobs.is_empty() && !app.session.active().unwrap().is_dirty());
@@ -268,7 +346,7 @@ fn a_failed_save_before_packaging_writes_no_package() {
         app.session.execute("prefs.set", &json!({"values": {"backgroundExport": background_export}})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
         package_dialog(&mut app, &out);
-        let r = confirm(&mut app);
+        let r = reply(&mut app);
         background::wait_all(&mut app);
         assert!(written(&files).is_empty(), "Background Export {background_export}: {:?}", written(&files));
         assert!(!root.exists(), "Background Export {background_export}: no package folder");
@@ -292,7 +370,7 @@ fn a_canceled_save_before_packaging_writes_no_package() {
     crate::io::export(&mut app, Some("svg"), Some(dir.path("first.svg")), &json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     package_dialog(&mut app, &out);
-    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(reply(&mut app).unwrap()["background"], true);
     assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
     gate.open();
     background::wait_all(&mut app);
@@ -320,7 +398,7 @@ fn a_package_started_after_its_save_keeps_the_automation_roots() {
     let roots = AutomationRoots::new(&[dir.0.as_path()], &[dir.0.as_path()]).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     package_dialog(&mut app, &out);
-    let r = vectorcraft_engine::file_access::confine(roots.as_ref(), || confirm(&mut app)).unwrap();
+    let r = vectorcraft_engine::file_access::confine(roots.as_ref(), || reply(&mut app)).unwrap();
     assert_eq!(r["background"], true, "{r}");
     // The save's result is applied outside the request, as the next frame does.
     background::wait_all(&mut app);
@@ -337,7 +415,7 @@ fn a_package_made_at_once_waits_for_one_in_the_background() {
     let (mut app, files) = saved_with_worker(&dir, &gate);
     let out = dir.path("out");
     package_dialog(&mut app, &out);
-    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(reply(&mut app).unwrap()["background"], true);
     // With Background Export turned off, the same package made again is written after the one in
     // the background.
     app.session.execute("prefs.set", &json!({"values": {"backgroundExport": false}})).unwrap();
@@ -347,7 +425,7 @@ fn a_package_made_at_once_waits_for_one_in_the_background() {
         std::thread::sleep(std::time::Duration::from_millis(500));
         opener.open();
     });
-    confirm(&mut app).unwrap();
+    reply(&mut app).unwrap();
     assert!(app.background.jobs.is_empty(), "the package in the background was written first");
     release.join().unwrap();
     assert_eq!(written(&files).len(), 3);
@@ -365,9 +443,9 @@ fn the_web_downloads_a_zip() {
         Ok(())
     }));
     app.run("ui.packageDialog", json!({})).unwrap();
-    assert!(!frame(&mut app).contains("Location:"), "no folder to choose");
-    confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    assert!(set(&app, "folder", json!("elsewhere")).is_err(), "no folder to choose");
+    assert!(press_ok(&mut app));
+    assert!(with_package(&app, |_| ()).is_none());
     assert!(app.ui.status.contains("Packaged") && app.ui.status.contains("files"), "{}", app.ui.status);
     let got = got.borrow();
     assert_eq!(got.len(), 1);
@@ -384,18 +462,18 @@ fn fonts_left_out_of_the_package_are_named() {
     app.run("ui.packageDialog", json!({})).unwrap();
     let out = dir.path("out");
     std::fs::create_dir_all(&out).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
-    let r = confirm(&mut app).unwrap();
+    set(&app, "folder", json!(out)).unwrap();
+    let r = reply(&mut app).unwrap();
     assert_eq!(r["skippedFonts"], json!([{"font": "No Such Font Family Regular", "reason": "not available on this computer"}]));
     let gone = "fonts not copied: No Such Font Family Regular";
     assert!(app.ui.status.contains(gone), "{}", app.ui.status);
-    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    let (_, detail, _) = confirm::open_question(&app).unwrap();
     assert!(detail.contains(gone) && !detail.contains("Source Sans 3"), "{detail}");
     // The web's download says so too.
-    app.ui.dialog = None;
+    close_all(&app);
     app.services.download = Some(Box::new(|_: &str, _: &[u8]| Ok(())));
     app.run("ui.packageDialog", json!({})).unwrap();
-    confirm(&mut app).unwrap();
+    reply(&mut app).unwrap();
     assert!(app.ui.status.contains(gone), "{}", app.ui.status);
 }
 
@@ -410,53 +488,34 @@ fn a_package_status_is_stored_in_english() {
     app.run("ui.packageDialog", json!({})).unwrap();
     let out = dir.path("out");
     std::fs::create_dir_all(&out).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
+    set(&app, "folder", json!(out)).unwrap();
     crate::i18n::set_current(crate::i18n::Lang::from_code("cs").unwrap());
-    let r = confirm(&mut app);
+    let r = reply(&mut app);
     crate::i18n::set_current(crate::i18n::Lang::EN);
     r.unwrap();
     let status = &app.ui.status;
     assert!(status.starts_with("Packaged "), "{status}");
     assert!(status.contains(&format!(" (fonts not copied: No Such Font Family Regular) in {out}")), "{status}");
-    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
-    assert!(detail.contains("(nezkopírovaná písma: No Such Font Family Regular)"), "{detail}");
-    assert!(detail.ends_with("Zobrazit složku balíčku?"), "{detail}");
-}
-
-/// The dialog's note on linked files left out of a package uses the form the language's plural
-/// rule picks for the count. The status bar's note stays English.
-#[test]
-fn the_missing_links_note_uses_each_count_form() {
-    let note = |code: &str, missing: usize| {
-        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
-        let notes = (package::package_dialog_note(missing, ""), package::package_status_note(missing, ""));
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        notes
-    };
-    assert_eq!(note("en", 1).0, "(1 linked file not found)");
-    assert_eq!(note("en", 2).0, "(2 linked files not found)");
-    assert_eq!(note("cs", 1).0, "(Nenalezen 1 propojený soubor)");
-    assert_eq!(note("cs", 2).0, "(Nenalezeny 2 propojené soubory)");
-    assert_eq!(note("cs", 5).0, "(Nenalezeno 5 propojených souborů)");
-    assert_eq!(note("cs", 1).1, "(1 linked file not found)");
-    assert_eq!(note("cs", 5).1, "(5 linked files not found)");
+    // The prompt is in the interface language: its note is not the English one, and it still names the font.
+    let (_, detail, _) = confirm::open_question(&app).unwrap();
+    assert!(!detail.contains("(fonts not copied: No Such Font Family Regular)"), "{detail}");
+    assert!(detail.contains("No Such Font Family Regular"), "{detail}");
 }
 
 /// A long list of fonts left out is cut short in the desktop's status line, so the status bar can
 /// still translate the line. The dialog names every font.
 #[test]
 fn a_long_list_of_fonts_left_out_is_cut_short_in_the_status() {
-    use crate::i18n::{Lang, message};
     let fonts = (0..200).map(|i| format!("Family {i} Regular")).collect::<Vec<_>>().join(", ");
-    assert_eq!(package::status_fonts("Mono, Sans"), "Mono, Sans");
-    let note = package::package_status_note(0, &package::status_fonts(&fonts));
+    assert_eq!(package::status_fonts("Mono, Sans"), "Mono, Sans", "a short list is kept whole");
+    let cut = package::status_fonts(&fonts);
+    assert!(cut.ends_with(", …") && cut.len() <= package::STATUS_FONTS + ", …".len() && cut.len() < fonts.len(), "{cut}");
+    let note = package::package_status_note(0, &cut);
     assert!(note.starts_with("(fonts not copied: Family 0 Regular, ") && note.ends_with(", …)"), "{note}");
-    let shown = message(Lang::from_code("de").unwrap(), &package::package_status(3, Some("/out/card Folder"), &note));
-    assert!(shown.starts_with("3 Dateien in /out/card Folder verpackt (nicht kopierte Schriften: Family 0 Regular, "), "{shown}");
     assert!(package::package_dialog_note(0, &fonts).contains("Family 199 Regular"));
 }
 
-/// A package written in the background while another dialog is open shows no dialog, so its
+/// A package written in the background while another dialog is open asks nothing, so its
 /// status line names every font left out, however long the list.
 #[test]
 fn a_background_package_behind_another_dialog_names_every_font_in_the_status() {
@@ -467,11 +526,13 @@ fn a_background_package_behind_another_dialog_names_every_font_in_the_status() {
         app.run("text.create", json!({"x": 10, "y": 40 + i, "text": "Gone", "font": format!("No Such Font Family {i}")})).unwrap();
     }
     package_dialog(&mut app, &dir.path("out"));
-    assert_eq!(confirm(&mut app).unwrap()["background"], true);
-    app.run("ui.packageDialog", json!({})).unwrap();
+    assert!(press_ok(&mut app));
+    // File Info stands in for the other dialog: the Package dialog's key holds one dialog.
+    app.run("ui.fileInfoDialog", json!({})).unwrap();
     gate.open();
     background::wait_all(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("package"), "the other dialog stays");
+    assert!(app.any_dialog_open(), "the other dialog stays");
+    assert!(confirm::open_question(&app).is_none(), "nothing is asked behind it");
     let status = &app.ui.status;
     assert!(status.contains("No Such Font Family 0 Regular") && status.contains("No Such Font Family 29 Regular"), "{status}");
     assert!(!status.contains('…'), "{status}");
@@ -509,44 +570,6 @@ fn an_english_package_status_is_translated_after_a_language_switch() {
             assert!(!shown.contains("linked file") && !shown.contains("not copied"), "{}: {shown}", lang.code());
         }
     }
-    let de = Lang::from_code("de").unwrap();
-    assert_eq!(
-        message(de, &package::package_status(1, Some("/out/card (draft)"), "(fonts not copied: Mono)")),
-        "1 Datei in /out/card (draft) verpackt (nicht kopierte Schriften: Mono)"
-    );
-    assert_eq!(
-        message(de, &package::package_status(3, Some("/out/card (draft)"), "(1 linked file not found) (fonts not copied: Mono)")),
-        "3 Dateien in /out/card (draft) verpackt (1 verknüpfte Datei nicht gefunden) (nicht kopierte Schriften: Mono)"
-    );
-    assert_eq!(
-        message(de, &package::package_status(3, None, "(1 linked file not found) (fonts not copied: Mono)")),
-        "3 Dateien verpackt (1 verknüpfte Datei nicht gefunden) (nicht kopierte Schriften: Mono)"
-    );
-    assert_eq!(
-        message(de, &package::package_status(3, None, "(2 linked files not found)")),
-        "3 Dateien verpackt (2 verknüpfte Dateien nicht gefunden)"
-    );
-    let cs = Lang::from_code("cs").unwrap();
-    assert_eq!(message(cs, "Packaged 1 file in /out"), "Zabalen 1 soubor do /out");
-    assert_eq!(message(cs, "Packaged 3 files in /out"), "Zabaleny 3 soubory do /out");
-    assert_eq!(message(cs, "Packaged 5 files in /out"), "Zabaleno 5 souborů do /out");
-    let de = Lang::from_code("de").unwrap();
-    assert_eq!(message(de, "Packaged 1 file"), "1 Datei verpackt");
-    assert_eq!(message(de, "Packaged 3 files in /out"), "3 Dateien in /out verpackt");
-}
-
-#[test]
-fn package_status_without_notes_has_no_extra_spaces() {
-    let dir = Folder::new("spaces");
-    let mut app = saved(&dir);
-    app.run("ui.packageDialog", json!({})).unwrap();
-    let out = dir.path("out");
-    std::fs::create_dir_all(&out).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
-    confirm(&mut app).unwrap();
-    assert!(!app.ui.status.ends_with(' '), "{}", app.ui.status);
-    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
-    assert!(!detail.contains(" ."), "{detail}");
 }
 
 /// A file the writer refuses is named once in the status bar: a refusal from the automation-root
@@ -567,12 +590,12 @@ fn a_refused_file_is_named_once() {
         assert!(refused.ends_with(&doc), "{refused}");
         app.services.write = Some(Box::new(move |p: &str, _: &[u8]| roots.check(p, Access::Write)));
         package_dialog(&mut app, &out);
-        assert_eq!(confirm(&mut app), Err(refused.clone()));
+        assert_eq!(reply(&mut app), Err(refused.clone()));
         assert_eq!(app.ui.status, refused);
     }
     app.services.write = Some(Box::new(|_: &str, _: &[u8]| Err("Access is denied. (os error 5)".into())));
     package_dialog(&mut app, &out);
-    assert!(confirm(&mut app).is_err());
+    assert!(reply(&mut app).is_err());
     assert_eq!(app.ui.status, format!("{doc}: Access is denied. (os error 5)"));
 }
 
@@ -581,7 +604,8 @@ fn package_without_a_location_says_so() {
     let dir = Folder::new("empty");
     let mut app = saved(&dir);
     app.run("ui.packageDialog", json!({})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(" "));
-    assert!(confirm(&mut app).is_err());
-    assert!(app.ui.dialog.is_some(), "stays open");
+    set(&app, "folder", json!(" ")).unwrap();
+    assert!(!press_ok(&mut app));
+    assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))), "OK is refused with its reason");
+    assert!(with_package(&app, |_| ()).is_some(), "stays open");
 }
