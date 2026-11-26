@@ -55,8 +55,14 @@ type Info = Map<String, Value>;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields = app.session.execute("file.info", &json!({})).map_err(|e| e.to_string())?;
     let fields = fields.as_object().cloned().ok_or("file.info gave no fields")?;
-    let ok = |app: &mut VectorcraftApp, fields: &Info| app.run("file.info", Value::Object(fields.clone())).map(|_| ());
-    crate::dialogs::host::open_held(app, FileInfoDialog::new(fields), ok).ok_or("no window")?;
+    let document = app.session.active().ok_or("no document")?.uid;
+    let ok = |app: &mut VectorcraftApp, (document, fields): &(u64, Info)| {
+        if !app.session.active().is_some_and(|active| active.uid == *document) {
+            return Err(tl!("File Info can only change the document it was opened for.").to_owned());
+        }
+        app.run("file.info", Value::Object(fields.clone())).map(|_| ())
+    };
+    crate::dialogs::host::open_held(app, FileInfoDialog::new(document, fields), ok).ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -215,6 +221,7 @@ impl Templates {
 /// The File Info dialog: a form over the fields `file.info` reports, whose OK is held for the app.
 pub(crate) struct FileInfoDialog {
     id: DialogId,
+    document: u64,
     open: bool,
     /// OK files its answer for the app instead of closing ([`HoldsOk::held_ok`]).
     hold: bool,
@@ -230,9 +237,10 @@ pub(crate) struct FileInfoDialog {
 }
 
 impl FileInfoDialog {
-    fn new(value: Info) -> Self {
+    fn new(document: u64, value: Info) -> Self {
         FileInfoDialog {
             id: dialog_id(KEY),
+            document,
             open: true,
             hold: false,
             value,
@@ -371,15 +379,15 @@ fn import_options(ui: &mut egui::Ui, mode: &mut &'static str) -> Option<bool> {
 }
 
 impl HoldsOk for FileInfoDialog {
-    type Answer = Info;
+    type Answer = (u64, Info);
 
     fn held_ok(mut self) -> Self {
         self.hold = true;
         self
     }
 
-    fn take_ok(&mut self) -> Option<Info> {
-        self.held.take()
+    fn take_ok(&mut self) -> Option<Self::Answer> {
+        self.held.take().map(|fields| (self.document, fields))
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
@@ -672,6 +680,58 @@ mod tests {
         assert!(!press_ok(&mut app));
         assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))), "{:?}", held_state(&app));
         assert!(with_dialog(&app, |_| ()).is_some());
+    }
+
+    #[test]
+    fn a_file_info_confirmation_stays_with_its_document() {
+        let mut app = windowed();
+        for (title, author) in [("Source", "Ada"), ("Destination", "Grace")] {
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("file.info", json!({"title": title, "author": author})).unwrap();
+        }
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        activate(&mut app, 0);
+        let a_undo = app.session.active().unwrap().history.undo.len();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Revised Source")).unwrap();
+        set(&app, PENDING, json!("print")).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        assert!(!app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, dialog_id(KEY))), "the edit waits for the application");
+
+        activate(&mut app, 1);
+        let before = app.session.active().unwrap();
+        let document = before.doc.clone();
+        let b_undo = before.history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        let after = app.session.active().unwrap();
+        assert_eq!(after.doc.info_title(), document.info_title(), "the destination's title stays untouched");
+        assert_eq!(after.doc.metadata, document.metadata, "the destination's metadata stays untouched");
+        assert_eq!(after.history.undo.len(), b_undo);
+        assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))));
+
+        activate(&mut app, 0);
+        assert!(press_ok(&mut app), "a fresh confirmation can apply the original draft");
+        let source = app.session.active().unwrap();
+        assert_eq!(source.doc.info_title(), "Revised Source");
+        assert_eq!(source.doc.metadata.author, "Ada");
+        assert_eq!(source.doc.metadata.keywords, ["print"]);
+        assert_eq!(source.history.undo.len(), a_undo + 1);
+    }
+
+    #[test]
+    fn a_reopened_file_info_confirmation_uses_the_new_drafts_document() {
+        let mut app = windowed();
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Revised Destination")).unwrap();
+        assert!(press_ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.info_title(), "Revised Destination");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(app.session.active().unwrap().history.undo.is_empty());
     }
 
     #[test]
