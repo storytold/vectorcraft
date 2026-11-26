@@ -5,7 +5,8 @@
 use craft::behavior::{CanvasView, PressPhase};
 use craft::keymap::Mods;
 use craft::ui::canvas::{
-    Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
+    Canvas, CanvasScrollbars, CanvasSpace, ContextSource, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget,
+    canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::runtime::env::Env;
@@ -108,6 +109,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
         app.ui.home = None;
     }
+    // The Home screen and the empty window show no marks: a closed document's text nodes are not kept.
+    if app.session.active().is_none() {
+        marks::release_text_marks(app);
+    }
     let full = ui.available_rect_before_wrap();
     if crate::menus::home_showing(app) {
         // No type editor shows to lose the keys: the marked text stays as typed.
@@ -133,6 +138,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 struct Body {
     reply: Option<ToolHostResponse>,
     context_at: Option<egui::Pos2>,
+    /// The pasteboard's `context_at` answers the Menu key or Shift+F10, not a secondary click.
+    context_key: bool,
     /// A view a compass or scroll bar edit made this pass.
     edited: Option<CanvasView>,
 }
@@ -147,9 +154,19 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     // A measuring run applies no view request: the view, its request and its fit wait for the pass
     // that shows the canvas.
     let measuring = craft::ui::runtime::measure::active(ui.ctx());
-    let Some(view) = doc_windows::view_mut(app, win) else { return false };
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
-    let refit = !view.fitted || (presenting && view.rect != area);
+    let refits = |v: &crate::state::View| !v.fitted || (presenting && v.rect != area);
+    // The view command this pass runs, made for the display the window is on (Display Print Size at 100% Zoom).
+    let command = doc_windows::view(app, win)
+        .filter(|_| !measuring)
+        .and_then(|v| v.request.map(|(r, _)| r.command()).or_else(|| refits(v).then_some(ViewCommands::FitArtboard)));
+    if let Some(command) = command {
+        app.before_view_command(win, command);
+    }
+    let ppp = ui.ctx().pixels_per_point();
+    let scheme = crate::app::view::zoom_scheme(app.print_ppi_of(Some(win)), ppp / ui.ctx().zoom_factor());
+    let Some(view) = doc_windows::view_mut(app, win) else { return false };
+    let refit = refits(view);
     let (request, moved) = if measuring {
         (view.request, view.moved)
     } else {
@@ -165,6 +182,16 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     }
     let mut cv = view.canvas(scaling, area);
     let given = cv;
+    // A zoom percentage (Actual Size) counts from the density of the display that shows this
+    // window: it runs here with that display's zoom stops, which the canvas's own may not be.
+    let mut moved = moved;
+    if let Some(request) = queued.first().copied().filter(|r| crate::app::view::fits_window(r.command()) == Some(false)) {
+        let layers = move || bounds;
+        if request.command().apply(&mut cv, &target, Some(&layers), ppp, &scheme) && matches!(request, ViewRequest::Command(_)) {
+            moved = Some(ViewMove::Ease(given));
+        }
+        queued.clear();
+    }
     let (x, y, zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
         Some(rulers::strips(zero, kind))
@@ -174,6 +201,11 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     };
     let pasteboard = app.session.documents().get(win.0).map(|st| artboards::pasteboard_color(app, st, app.outline_view()));
     let layers = move || bounds;
+    let host_caps_lock = craft::ui::runtime::lock_keys::caps_lock(ui.ctx());
+    app.follow_caps_lock(host_caps_lock);
+    // The canvas reverses the state it is given while the host's Caps Lock is on: given this, it shows the precise
+    // cursors the tools are told about.
+    let precise = app.precise_cursors() != host_caps_lock;
     let prefs = &app.session.prefs;
     let mut canvas = Canvas::new("Document")
         .id(canvas_id(win))
@@ -185,7 +217,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .body_nudges(ARROWS)
         .rulers(x, y)
         .with_rulers(strips)
-        .precise_cursors(prefs.use_precise_cursors);
+        .precise_cursors(precise);
     if let Some(pasteboard) = pasteboard {
         canvas = canvas.pasteboard(pasteboard);
     }
@@ -210,8 +242,12 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         rulers::apply(app, ui, out);
     }
     let pressed = matches!(output.press.phase, PressPhase::Down { .. });
-    let Body { reply, context_at, edited } = body;
-    let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
+    let Body { reply, context_at, context_key, edited } = body;
+    let request = reply
+        .as_ref()
+        .and_then(|r| r.context.as_ref())
+        .map(|c| context_menu::Request { at: c.at, key: c.source == ContextSource::Key })
+        .or(context_at.map(|at| context_menu::Request { at, key: context_key }));
     let jumped = edited.is_some();
     // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own.
     let view_now =
@@ -222,6 +258,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         view.fitted |= refit;
         // An edit of the compass or a scroll bar reaches the next pass, which stops a running ease.
         view.moved = jumped.then_some(ViewMove::Jump);
+    }
+    if let Some(command) = command {
+        app.after_view_command(win, command);
     }
     if kind == BodyKind::Pane || presenting {
         return pressed;
@@ -242,7 +281,12 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
 fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: Option<&ToolPass>, win: Win, kind: BodyKind) -> Body {
     let live = kind == BodyKind::Live;
     let presenting = app.ui.screen_mode == 3;
-    let mut out = Body { context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)), ..Body::default() };
+    let background = space.background();
+    let mut out = Body {
+        context_at: artboards::show(app, ui, space, win, kind).map(|p| space.view.to_screen(p)),
+        context_key: background.context.is_none() && background.context_key,
+        ..Body::default()
+    };
     grids(app, ui, space, win);
     if live {
         find_shown_tool(app, ui.ctx(), space);
@@ -333,7 +377,7 @@ fn grids(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win) {
     if let Some((grid, in_back)) = app.session.documents().get(win.0).and_then(|st| grid::document_grid(app, st)) {
         let _ = if in_back { grid.picture() } else { grid }.show_at(ui, space.view.rect);
     }
-    if let Some(grid) = grid::pixel_grid(app) {
+    if let Some(grid) = grid::pixel_grid(app, app.print_ppi_of(Some(win))) {
         let _ = grid.show_at(ui, space.view.rect);
     }
 }

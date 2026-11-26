@@ -1839,3 +1839,26 @@ fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
     assert_eq!(filter, format!("{path} › Group"));
     assert_eq!(command, format!("{path} › {}", crate::i18n::tr(zh, "Group")));
 }
+
+/// A UI command whose params are all optional and that no item of the menu bar runs can be given a
+/// key: Keyboard Shortcuts lists it, and the key opens its dialog or says in the status bar why it
+/// cannot.
+#[test]
+fn a_key_runs_a_ui_command_whose_params_are_all_optional() {
+    for id in crate::shortcut_editor::KEY_ONLY_UI {
+        let mut app = app_with_a_selected_rectangle();
+        let listed = app.run("shortcuts.list", json!({"query": id})).unwrap();
+        assert!(listed.as_array().is_some_and(|rows| rows.iter().any(|r| r["id"] == id)), "{id} is listed: {listed}");
+        // Rename edits the name in place and Color Picker… opens the framework's picker; other tests
+        // check what they open.
+        if ["ui.rename", "ui.colorPicker"].contains(&id) {
+            continue;
+        }
+        let ctx = ready(&mut app);
+        bind(&mut app, id, "Cmd+Alt+Shift+F12");
+        app.ui.status.clear();
+        key_frame(&mut app, &ctx, tap(Key::F12, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+        key_frame(&mut app, &ctx, vec![]);
+        assert!(dialog_kind(&app).is_some() || !app.ui.status.is_empty(), "{id}: the key opens a dialog or reports why not");
+    }
+}

@@ -911,6 +911,19 @@ fn cycle_options_steps_through_the_sizes_and_returns_to_the_largest() {
     assert!(!crate::panels::part_hidden(&h.app, "tr-hide-thumbs"), "the largest size shows the thumbnails");
 }
 
+/// The tab strip's Cycle Display Sizes button is named by its label, and no button of a panel's tab
+/// strip is named by a command id.
+#[test]
+fn tab_strip_buttons_are_named_by_their_labels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.activate", json!({"panel": "stroke"})).unwrap();
+    h.frames(3);
+    let buttons: Vec<&str> = h.nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button).filter_map(|(_, n)| n.label()).collect();
+    assert!(buttons.contains(&"Cycle Display Sizes"), "{buttons:?}");
+    let ids: Vec<&&str> = buttons.iter().filter(|l| !l.contains(' ') && l.contains('.') && l.starts_with(|c: char| c.is_ascii_lowercase())).collect();
+    assert!(ids.is_empty(), "buttons named by a command id: {ids:?}");
+}
+
 /// A panel the Window menu floats opens tall enough for its content: every control of Asset Export,
 /// and every Image Trace control down to the top of its Advanced section, lies between the body's
 /// top and bottom, none scrolled or clipped away.
@@ -969,4 +982,45 @@ fn cycle_options_rejects_panels_without_sizes() {
         assert_eq!(h.app.run("window.panel.cycleOptions", params.clone()).unwrap_err(), error, "{params}");
     }
     assert_eq!(h.layout(), before, "a refusal changes nothing");
+}
+
+/// The width of the body of the panel titled `title` as the last frame drew it.
+fn body_width(h: &Harness, title: &str) -> f32 {
+    h.nodes
+        .iter()
+        .find(|(_, node)| node.role() == egui::accesskit::Role::TabPanel && node.label() == Some(title))
+        .and_then(|(_, node)| node.bounds())
+        .map(|b| (b.x1 - b.x0) as f32)
+        .unwrap_or_else(|| panic!("{title}'s body is drawn"))
+}
+
+/// A floating panel's side dragged in past `PANEL_MIN_WIDTH` stops at the minimum.
+#[test]
+fn a_floating_panel_resized_past_the_panel_minimum_stops_at_it() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "stroke", "x": 300, "y": 200, "width": 400, "height": 300})).unwrap();
+    h.frames(3);
+    let before = body_width(&h, "Stroke");
+    assert!((before - 400.0).abs() < 1.0, "a float wider than the minimum keeps its width: {before}");
+    let rect = floating_window(&h.layout(), "stroke").expect("Stroke floats").rect;
+    // The window's right side is its resize grip; the drag goes 300 pt in, well past the minimum.
+    let grip = pos2(rect.right() - 1.0, rect.center().y);
+    h.drag(grip, grip - vec2(300.0, 0.0));
+    let after = body_width(&h, "Stroke");
+    assert!(after < before - 1.0, "the drag narrowed the window: {before} to {after}");
+    assert!(after >= PANEL_MIN_WIDTH - 0.5, "dragged in past the minimum: {after}");
+}
+
+/// A docked column saved narrower than `PANEL_MIN_WIDTH` is drawn at the minimum.
+#[test]
+fn a_docked_column_is_never_narrower_than_the_panel_minimum() {
+    let mut h = Harness::new();
+    let mut layout = h.layout();
+    let columns = end_dock_mut(&mut layout).expect("the default layout has an end dock");
+    for column in columns.iter_mut().filter(|column| !column.iconic) {
+        column.width = Some(100.0);
+    }
+    h.set_layout(layout);
+    h.frames(3);
+    assert!(body_width(&h, "Properties") >= PANEL_MIN_WIDTH - 0.5, "saved 100 pt wide: {}", body_width(&h, "Properties"));
 }

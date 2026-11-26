@@ -415,6 +415,36 @@ fn art_area(app: &VectorcraftApp, w: Win, cell: egui::Rect) -> egui::Rect {
     crate::doc_windows::view(app, w).map(|v| v.rect).filter(|r| r.is_positive()).unwrap_or(cell)
 }
 
+/// Whether window `w`'s view is still where a pane fit left it, in a pane of `size`.
+pub(crate) fn follows_fit(app: &VectorcraftApp, w: Win, size: Option<egui::Vec2>) -> bool {
+    let fit = slot(app, w).and_then(|s| app.canvas.panes.fits.get(&s).copied());
+    crate::doc_windows::view(app, w).is_some_and(|v| v.fitted && fit.is_some_and(|(s, z, c)| Some(s) == size && z == v.zoom && c == v.center))
+}
+
+/// Records window `w`'s view as fitted to a pane of `size` at its zoom and center now, as
+/// [`note_fits`] does after a fit.
+#[cfg(test)]
+pub(crate) fn note_fit(app: &mut VectorcraftApp, w: Win, size: egui::Vec2) {
+    if let (Some(s), Some(v)) = (slot(app, w), crate::doc_windows::view(app, w).copied()) {
+        app.canvas.panes.fits.insert(s, (size, v.zoom, v.center));
+    }
+}
+
+/// The pane fit recorded for window `w` ([`note_fits`]).
+#[cfg(test)]
+pub(crate) fn fit_of(app: &VectorcraftApp, w: Win) -> Option<(egui::Vec2, f64, Point)> {
+    slot(app, w).and_then(|s| app.canvas.panes.fits.get(&s).copied())
+}
+
+/// Window `w`'s view, rescaled while it still fitted its pane ([`follows_fit`]), keeps fitting the
+/// pane at its new zoom and center.
+pub(crate) fn refollow_fit(app: &mut VectorcraftApp, w: Win) {
+    let (Some(s), Some(v)) = (slot(app, w), crate::doc_windows::view(app, w).copied()) else { return };
+    if let Some(fit) = app.canvas.panes.fits.get_mut(&s) {
+        *fit = (fit.0, v.zoom, v.center);
+    }
+}
+
 /// Unfit each window whose view is still where a pane fit left it when its view's area (`areas`,
 /// by window) has changed size, as when the window or a panel is resized: it fits its pane again.
 /// A view zoomed or scrolled since keeps its place. → which of `areas`' views are unfitted now.
@@ -454,16 +484,24 @@ fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui
         craft::behavior::canvas::zoom::fit_rect(&mut view, target, target.size(), pixels_per_point, Vec2::new(FIT_MARGIN, FIT_MARGIN), scheme);
         v.set_canvas(&view, ui_zoom);
         v.fitted = true;
+        v.fit_zoom = Some(v.zoom);
     }
 }
 
-/// Fit window `w`'s view to its pane when it is unfitted, with the zoom stops of `ui`'s scope.
+/// Fit window `w`'s view to its pane when it is unfitted, with the zoom stops of the display that
+/// shows the pane (Display Print Size at 100% Zoom).
 fn fit_window(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) {
+    if !crate::doc_windows::view(app, w).is_some_and(|v| !v.fitted) {
+        return;
+    }
     let area = art_area(app, w, cell);
     let Some(doc) = app.session.documents().get(w.0).map(|st| st.doc.clone()) else { return };
-    let scheme = Env::of(ui).get::<ZoomScheme>();
-    let scaling = (app.ui_scaling(), ui.ctx().pixels_per_point());
-    if let Some(v) = crate::doc_windows::view_mut(app, w).filter(|v| !v.fitted) {
+    // The fit is made for the display the pane is on.
+    app.settle_window_ppi(w, false);
+    let ctx = ui.ctx();
+    let scheme = crate::app::view::zoom_scheme(app.print_ppi_of(Some(w)), ctx.pixels_per_point() / ctx.zoom_factor());
+    let scaling = (app.ui_scaling(), ctx.pixels_per_point());
+    if let Some(v) = crate::doc_windows::view_mut(app, w) {
         fit_pane(v, &doc, area, scaling, &scheme);
     }
 }

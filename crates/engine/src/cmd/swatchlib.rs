@@ -1585,7 +1585,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({"library": shown_library_id(s, &info.id), "added": added_names, "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
-        let only = super::paint::defaults_only(s, p, C)?;
+        let only = super::paint::defaults_only(s, p, C, cmd == "paint.setStroke")?;
         s.execute(cmd, &super::paint::with_defaults_only(json!({"swatch": name, "focus": focus}), only))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");
