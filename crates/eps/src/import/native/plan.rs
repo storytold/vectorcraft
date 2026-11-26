@@ -1,7 +1,7 @@
 use super::layers::closed_where_ends_meet;
 use super::slots::{
-    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, extent, join_pieces, letters, same_type,
-    word_pieces, words,
+    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, drawn_box, extent, join_pieces, letters,
+    same_type, word_pieces, words,
 };
 use super::{Affine, Arc, Node, NodeId, NodeKind, Point, Rect, Story, TextKind};
 
@@ -334,26 +334,6 @@ fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>, laid: bool) -> Vec<
         .collect()
 }
 
-/// Where made type draws: its visual box, point type laid out first. Made type has no layout yet,
-/// and without one the box of point type is an estimate that runs right from its anchor
-/// ([`vectorcraft_doc::TextObject::estimate_bounds`]): beside where right-aligned type draws, over
-/// one half of centered type, across vertical type, and as wide as an average font would set it.
-/// The node keeps no layout: the document's type is measured when it opens. [`made_only`] matches
-/// by this box; [`plan`] doesn't yet.
-fn drawn_box(node: &Node) -> Option<Rect> {
-    if let NodeKind::Text(t) = &node.kind
-        && matches!(t.kind, TextKind::Point)
-        && t.cached_bounds.is_none()
-    {
-        let mut laid = node.clone();
-        if let NodeKind::Text(t) = &mut laid.kind {
-            t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
-        }
-        return laid.visual_bounds();
-    }
-    node.visual_bounds()
-}
-
 /// Mark the made type that has at least half of a piece of the page's type where it draws (or round
 /// it, as far as strokes round type reach) as type the page draws. How many of the page's text
 /// objects no made type takes, shown or not: none that holds a piece of the object has its words
@@ -572,39 +552,5 @@ fn fill_hidden(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], content: &mut
         if let Some(c) = content.get_mut(*slot) {
             *c = Content::Page(parts.into_iter().flat_map(|p| p.iter().cloned()).collect());
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_doc::{CharStyle, Justify, TextObject};
-
-    /// Made point type is matched with the page's type where it draws: right-aligned type before its
-    /// anchor, centered type round it, vertical type down from it. Its node keeps no layout.
-    #[test]
-    fn made_point_type_s_box_is_where_its_alignment_and_orientation_draw_it() {
-        let anchor = 300.0;
-        let made = |justify: Justify, vertical: bool| {
-            let mut t = TextObject::point(Point::new(anchor, 200.0), "Wide heading", CharStyle { size: 40.0, ..CharStyle::default() });
-            t.para.justify = justify;
-            for p in t.para_styles_mut() {
-                p.justify = justify;
-            }
-            t.vertical = vertical;
-            Node::new(NodeId(1), NodeKind::Text(Box::new(t)))
-        };
-        let boxed = |justify, vertical| {
-            let node = made(justify, vertical);
-            let b = drawn_box(&node).unwrap();
-            assert!(matches!(&node.kind, NodeKind::Text(t) if t.cached_bounds.is_none()));
-            b
-        };
-        let (left, right, centered, down) =
-            (boxed(Justify::Left, false), boxed(Justify::Right, false), boxed(Justify::Center, false), boxed(Justify::Left, true));
-        assert!(left.x0 > anchor - 20.0 && left.width() > 100.0, "{left:?}");
-        assert!(right.x1 < anchor + 20.0 && (right.width() - left.width()).abs() < 1.0, "{right:?}");
-        assert!((centered.center().x - anchor).abs() < 20.0 && (centered.width() - left.width()).abs() < 1.0, "{centered:?}");
-        assert!(down.height() > 2.0 * down.width() && down.height() > 100.0, "{down:?}");
     }
 }

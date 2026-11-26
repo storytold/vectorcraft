@@ -5529,6 +5529,21 @@ fn right_aligned_and_centered_point_type_takes_the_pages_type_where_it_draws() {
     }
 }
 
+/// Right-aligned point type that the page draws in another colour differs from the page as type,
+/// where it draws, before its anchor: the layers are read and the note says the type differs.
+/// (Counted as art, away from the box of type that isn't laid out, it sent the file to its page.)
+#[test]
+fn right_aligned_point_type_that_differs_from_the_page_differs_as_type() {
+    let doc = text_document(&[("Hi there\r", 1, (8231.5, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    // The text document's type is magenta; the page draws it black, ending at the anchor.
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 41 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("the type on the layers differs from the file's own page")), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.starts_with("the art on the layers differs")), "{:?}", r.warnings);
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.
