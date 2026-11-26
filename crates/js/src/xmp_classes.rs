@@ -16,6 +16,8 @@
 //! name, `prefix:name`, and either with `[n]` (from 1) or `[last()]` for an array item. An array
 //! property holds simple items; any other value a packet holds is kept as it was written and
 //! `getProperty` gives its text, when it has one, and its options.
+//! `insertArrayItem` inserts before the last existing item when its index is `ARRAY_LAST_ITEM`.
+//! `insertArrayItem` and `setArrayItem` store `null` as an empty item value.
 //!
 //! `XMPFile` reads a file through the host functions `xmpOpen` and `xmpWrite` of `File` and
 //! `Folder` ([`crate::Realm::define_file_classes`]), so it reads and writes only where they may. A
@@ -626,7 +628,10 @@ fn insert_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: Option<i64
     let len = found.map_or(0, |(_, _, len)| len);
     let p = match index {
         None => len,
-        Some(-1) => len,
+        Some(-1) => match len.checked_sub(1) {
+            Some(p) => p,
+            None => return Err(out_of_range(i, what, -1)),
+        },
         Some(n) => match usize::try_from(n) {
             Ok(n) if (1..=len + 1).contains(&n) => n - 1,
             _ => return Err(out_of_range(i, what, n)),
@@ -717,7 +722,8 @@ fn insert_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
     let o = this_meta(i, &this, what)?;
     let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
-    let value = xml_text(i, &arg(args, 3), what)?;
+    let value = arg(args, 3);
+    let value = if matches!(value, Value::Null | Value::Undefined) { String::new() } else { xml_text(i, &value, what)? };
     item_options(i, &arg(args, 4), what)?;
     insert_item(i, o, &ns, &name, Some(index), value, None, what)
 }
@@ -727,7 +733,8 @@ fn set_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
     let o = this_meta(i, &this, what)?;
     let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
-    let value = xml_text(i, &arg(args, 3), what)?;
+    let value = arg(args, 3);
+    let value = if matches!(value, Value::Null | Value::Undefined) { String::new() } else { xml_text(i, &value, what)? };
     item_options(i, &arg(args, 4), what)?;
     set_item(i, o, &ns, &name, index, value, true, what)
 }

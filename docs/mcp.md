@@ -3388,7 +3388,9 @@ rules for these objects:
   `deleteProperty`, `doesPropertyExist`, `countArrayItems`, `getArrayItem`, `appendArrayItem`, `insertArrayItem`,
   `setArrayItem`, `deleteArrayItem`, `doesArrayItemExist`, `getLocalizedText` and `setLocalizedText`, and the
   functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
-  `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. Arrays hold simple items; a structure
+  `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. `insertArrayItem` with
+  `XMPConst.ARRAY_LAST_ITEM` inserts before the last existing item and rejects an empty array. `insertArrayItem`
+  and `setArrayItem` store `null` as an empty item value. Arrays hold simple items; a structure
   or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. An
   array item with an `xml:lang` qualifier has the qualifier and language options in `getProperty` and `getArrayItem`. A
   value with qualifiers in the `rdf:value` form also gives the text of its `rdf:value`, and an empty property element

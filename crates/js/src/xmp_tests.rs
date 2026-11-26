@@ -119,6 +119,24 @@ fn properties_arrays_and_namespaces_round_trip() {
     assert_eq!(string("XMPMeta.getNamespaceURI('dc:')"), "http://purl.org/dc/elements/1.1/");
 }
 
+#[test]
+fn array_last_insertion_precedes_the_last_existing_item() {
+    assert_eq!(
+        string(&with_packet(
+            "m.insertArrayItem(XMPConst.NS_DC, 'subject', XMPConst.ARRAY_LAST_ITEM, 'middle'); [1,2,3].map(function(n) { return m.getArrayItem(XMPConst.NS_DC, 'subject', n).value; }).join('|')"
+        )),
+        "one|middle|two"
+    );
+    assert!(thrown(&with_packet("m.deleteArrayItem(XMPConst.NS_DC, 'subject', 2); m.deleteArrayItem(XMPConst.NS_DC, 'subject', 1); m.insertArrayItem(XMPConst.NS_DC, 'subject', XMPConst.ARRAY_LAST_ITEM, 'x')")).starts_with("RangeError:"));
+}
+
+#[test]
+fn null_array_values_are_empty_items() {
+    truth(&with_packet(
+        "m.insertArrayItem(XMPConst.NS_DC, 'subject', 1, null); m.setArrayItem(XMPConst.NS_DC, 'subject', 2, null); m.getArrayItem(XMPConst.NS_DC, 'subject', 1).value === '' && m.getArrayItem(XMPConst.NS_DC, 'subject', 2).value === ''",
+    ));
+}
+
 /// The prefix `xmlns` and the namespace of `xmlns` attributes are refused, so no packet declares
 /// them.
 #[test]
