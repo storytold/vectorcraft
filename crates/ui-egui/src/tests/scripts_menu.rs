@@ -632,7 +632,9 @@ fn a_menu_run_after_a_first_startup_script_that_cannot_start_shows_it_and_runs_t
     app.session.prefs.show_external_script_warning = false;
     app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
     app.status("before");
-    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    let reply = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    assert_eq!(reply["running"], true, "{reply}");
+    assert_eq!(reply["queued"], true, "{reply}");
     let shown = format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE);
     assert_eq!(app.ui.status, shown);
     finish(&mut app);
