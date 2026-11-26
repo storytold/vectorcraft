@@ -8930,6 +8930,7 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
+ "vectorcraft-tools",
 ]
 
 [[package]]

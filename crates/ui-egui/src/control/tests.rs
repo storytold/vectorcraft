@@ -936,8 +936,8 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     let revision = app.session.active().unwrap().revision;
     let mut merge = vectorcraft_tools::builder::testing::pause_next_merge().unwrap();
     let click = send(&mut app, json!([{"kind": "down", "x": 15, "y": 10}, {"kind": "up", "x": 15, "y": 10}]));
-    merge.wait_started().unwrap();
     assert!(click.try_recv().is_err() && app.session.tool_editing(), "the click is not answered before the merge is applied");
+    merge.wait_started().unwrap();
     // A hover sent meanwhile is answered at once; a click is made after the merge, and its
     // reply waits until then.
     let hover = send(&mut app, json!([{"kind": "move", "x": 35, "y": 10}]));
