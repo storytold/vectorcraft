@@ -2144,6 +2144,17 @@ digits	Malayalam	Malaiàlam
 	Graphic Styles (4)	Estils gràfics (4)
 	Graphic Styles Options	Opcions d’estils gràfics
 	Graphics	Gràfics
+	Show Contrast	Mostra el contrast
+	Contrast For	Contrast per a
+	Normal Text	Text normal
+	Large Text	Text gran
+	Contrast Background	Fons del contrast
+	Behind Selection	Darrere la selecció
+	Current Color	Color actual
+	Pass	Supera
+	Fail	No supera
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contrast mínim de les WCAG 2.2: text normal AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), text gran AA 3:1 i AAA 4.5:1, gràfics i controls AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fons es llegeix al centre de la selecció.
 	Graphics Processor	Processador gràfic
 	Graphics: {adapter}	Gràfics: {adapter}
 	Gravity	Gravetat
@@ -4090,7 +4101,7 @@ digits	Malayalam	Malaiàlam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecció › Igual › Color de farciment, Color del traç i Farciment i traç només coincideixen amb el mateix matís d’una mostra global o de tinta plana, no amb qualsevol matís seu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la pantalla d’inici quan no hi ha cap document obert; desactivada, la finestra queda buida fins que feu clic a Inici.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mesura els objectes amb els traços i els efectes que en canvien la forma per a la mida, la posició i l’alineació; les ombres, les lluïsors i els desenfocaments no es mesuren.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Amb un zoom del 100 %, una polzada del document ocupa 96 punts de pantalla en lloc de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Amb un zoom del 100 %, una polzada del document omple una polzada de la pantalla, o 96 punts de pantalla quan el sistema no n’indica una mida utilitzable.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Fer doble clic en un grup, traçat o imatge amb l’eina Selecció l’obre en mode d’aïllament.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Els farciments i traços de motiu es transformen amb la il·lustració, tret que una transformació o el menú del panell Transforma triï una altra cosa.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Els radis de cantonada dinàmics s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
@@ -7053,6 +7064,12 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
 @msg	no bound object reports a value (locked objects and embedded images report none)	cap objecte vinculat no informa d’un valor (els objectes bloquejats i les imatges incrustades no n’informen cap)
 @msg	nothing selected	no hi ha res seleccionat
+@msg	`{key}` must be a color or {_1}	`{key}` ha de ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	els colors dels objectes seleccionats són diferents: indiqueu `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	els colors dels objectes seleccionats són diferents: indiqueu `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	l’emplenament o el traç actiu no té color: indiqueu `color`
+@msg	the active fill or stroke is hidden: give `color`	l’emplenament o el traç actiu està ocult: indiqueu `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	l’emplenament o el traç actiu es dibuixa a través d’una màscara d’opacitat: indiqueu `color`
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	no hi ha res per exportar: el document no té art visible (o activeu Utilitza els taulers)
@@ -7168,6 +7185,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
+@msg	Plug-in “{name}”: {notice}	Complement «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` ha de ser una cadena amb text visible
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Desa escriu {_1}, no {_2}: fes servir document.export per a altres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Desa escriu {_1}, no {_2}: fes servir file.saveAsTemplate per escriure’l
@@ -7806,7 +7825,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	a list of {min_items} to {max_items} numbers	una llista de {min_items} a {max_items} nombres
 @msg	a new object needs a `path`	un objecte nou necessita un `path`
 @msg	a number	un nombre
-@msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un efecte dinàmic de pintura només retorna `objects` i `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	s’ha omès un objecte de només lectura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut
@@ -7911,6 +7930,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` només pot ser true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` només és per a un importador (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» obre fitxers però no els col·loca: el seu manifest no defineix `place`
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`

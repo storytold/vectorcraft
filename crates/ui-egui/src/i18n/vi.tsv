@@ -1933,6 +1933,17 @@ file-filter	Templates	Mẫu
 	Graphic Styles	Kiểu đồ họa
 	Graphic Styles Options	Tùy chọn kiểu đồ họa
 	Graphics	Đồ họa
+	Show Contrast	Hiện độ tương phản
+	Contrast For	Tương phản cho
+	Normal Text	Văn bản thường
+	Large Text	Văn bản lớn
+	Contrast Background	Nền tương phản
+	Behind Selection	Phía sau vùng chọn
+	Current Color	Màu hiện tại
+	Pass	Đạt
+	Fail	Không đạt
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Độ tương phản tối thiểu theo WCAG 2.2: văn bản thường AA 4.5:1 (1.4.3) và AAA 7:1 (1.4.6), văn bản lớn AA 3:1 và AAA 4.5:1, đồ họa và điều khiển AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Nền được đọc tại tâm vùng chọn.
 	Graphics Processor	Bộ xử lý đồ họa
 	Graphics: {adapter}	Đồ họa: {adapter}
 	Gravity	Trọng lực
@@ -3702,7 +3713,7 @@ mark-style	Japanese	Kiểu Nhật
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Vùng chọn › Giống nhau › Màu tô, Màu nét và Tô & Nét chỉ khớp với cùng sắc độ của một mẫu màu toàn cục hoặc màu pha, không phải mọi sắc độ của nó.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiển thị màn hình Trang chủ khi không có tài liệu nào mở; khi tắt, cửa sổ để trống cho đến khi bạn nhấp vào Trang chủ.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Đo đối tượng cùng với nét và các hiệu ứng thay đổi hình dạng cho kích thước, vị trí và căn chỉnh; bóng đổ, ánh sáng và làm mờ không được đo.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Ở mức thu phóng 100%, một inch của tài liệu chiếm 96 điểm màn hình thay vì 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Ở mức thu phóng 100%, một inch của tài liệu chiếm một inch trên màn hình, hoặc 96 điểm màn hình khi hệ thống không báo kích thước màn hình dùng được.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Nhấp đúp vào một nhóm, đường dẫn hoặc hình ảnh bằng công cụ Vùng chọn sẽ mở nó trong chế độ cô lập.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Phần tô và nét họa tiết biến đổi cùng hình minh họa, trừ khi phép biến đổi hoặc menu của bảng Biến đổi chọn khác.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Bán kính góc động co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
@@ -5992,6 +6003,12 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	finish editing the pattern first	hãy hoàn tất chỉnh sửa họa tiết trước
 @msg	nothing encoded	không có gì được mã hóa
 @msg	nothing selected	chưa chọn gì
+@msg	`{key}` must be a color or {_1}	`{key}` phải là một màu hoặc {_1}
+@msg	the selected objects' colors differ: give `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `opacity` hoặc `color`
+@msg	the active fill or stroke has no color: give `color`	phần tô hoặc nét đang hoạt động không có màu: hãy cung cấp `color`
+@msg	the active fill or stroke is hidden: give `color`	phần tô hoặc nét đang hoạt động bị ẩn: hãy cung cấp `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	phần tô hoặc nét đang hoạt động được vẽ qua mặt nạ độ mờ: hãy cung cấp `color`
 @msg	nothing selected is in a group	không mục nào được chọn nằm trong nhóm
 @msg	nothing to align	không có gì để căn chỉnh
 @msg	nothing to distort	không có gì để làm méo
@@ -6978,6 +6995,8 @@ axis	Y Axis	Trục Y
 	Cancel Plug-in Run	Hủy lần chạy plug-in
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} đã chạy xong, nhưng tài liệu hoặc plug-in đã thay đổi trong lúc đó: hãy chạy lại
 @msg	Running “{name}”…	Đang chạy “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” báo: {notice}
+@msg	`notice` must be a string with visible text	`notice` phải là một chuỗi có văn bản hiển thị
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	hiệu ứng trực tiếp chạy trong lúc tài liệu được vẽ nên không thể là `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	plug-in xuất luôn nhận ngân sách của một lần xuất: hãy bỏ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” yêu cầu ngân sách tính toán lớn (mỗi lần chạy tới {minutes} phút và gấp {times} lần số lệnh thông thường): cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `allowHeavy: true` trong phiên khởi động bằng --allow-plugin-grants
@@ -7070,7 +7089,7 @@ axis	Y Axis	Trục Y
 @msg	a list of {min_items} to {max_items} numbers	một danh sách gồm {min_items} đến {max_items} số
 @msg	a new object needs a `path`	đối tượng mới cần một `path`
 @msg	a number	một số
-@msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
+@msg	a painted live effect returns only `objects` and `notice`	hiệu ứng động kiểu tô chỉ trả về `objects` và `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
@@ -7175,6 +7194,8 @@ axis	Y Axis	Trục Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` chỉ có thể là true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` chỉ dành cho hiệu ứng trực tiếp (`kind` "effect") ở `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` chỉ dành cho trình nhập (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” mở tệp nhưng không đặt chúng: tệp kê khai của nó không đặt `place`
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in loại `{_1}` cần quyền `{_2}`

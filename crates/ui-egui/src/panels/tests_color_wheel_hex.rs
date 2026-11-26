@@ -119,18 +119,33 @@ fn show_hex_field_is_a_setting_of_the_panel() {
     assert!(field(&p).is_none(), "no field while unchecked");
 }
 
-/// An explicit null for any `ui.colorWheel` key keeps that key's value, as leaving the key out does,
-/// and the other keys of the same call still apply.
+/// An explicit null for any `ui.colorWheel` key but `contrastBackground` (where null unpins the
+/// background) keeps that key's value, as leaving the key out does, and the other keys of the same
+/// call still apply.
 #[test]
 fn ui_color_wheel_keeps_a_key_given_as_null() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let set = json!({
         "view": "box", "channel": "red", "opacity": true, "hexField": true, "sliders": "oklch",
-        "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
+        "gamut": true, "harmony": true, "harmonyRule": "triad", "contrast": true, "contrastFor": "largeText",
+        "contrastBackground": null, "vision": true, "documentColors": true
     });
     let all = app.run("ui.colorWheel", set.clone()).unwrap();
     assert_eq!(all, set);
-    for key in ["view", "channel", "opacity", "hexField", "sliders", "gamut", "harmony", "harmonyRule", "vision", "documentColors"] {
+    for key in [
+        "view",
+        "channel",
+        "opacity",
+        "hexField",
+        "sliders",
+        "gamut",
+        "harmony",
+        "harmonyRule",
+        "contrast",
+        "contrastFor",
+        "vision",
+        "documentColors",
+    ] {
         assert_eq!(app.run("ui.colorWheel", json!({ key: null })).unwrap(), all, "{key}: null");
     }
     let got = app.run("ui.colorWheel", json!({"view": null, "channel": "blue", "opacity": null, "hexField": false})).unwrap();
@@ -138,7 +153,8 @@ fn ui_color_wheel_keeps_a_key_given_as_null() {
         got,
         json!({
             "view": "box", "channel": "blue", "opacity": true, "hexField": false, "sliders": "oklch",
-            "gamut": true, "harmony": true, "harmonyRule": "triad", "vision": true, "documentColors": true
+            "gamut": true, "harmony": true, "harmonyRule": "triad", "contrast": true, "contrastFor": "largeText",
+            "contrastBackground": null, "vision": true, "documentColors": true
         })
     );
 }

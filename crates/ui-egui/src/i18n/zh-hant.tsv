@@ -1669,6 +1669,17 @@ file-filter	Templates	範本
 	Graphic Styles	繪圖樣式
 	Graphic Styles Options	繪圖樣式選項
 	Graphics	圖形
+	Show Contrast	顯示對比度
+	Contrast For	對比度適用於
+	Normal Text	一般文字
+	Large Text	大型文字
+	Contrast Background	對比度背景
+	Behind Selection	選取範圍後方
+	Current Color	目前顏色
+	Pass	通過
+	Fail	未通過
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低對比度：一般文字 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大型文字 AA 3:1 和 AAA 4.5:1，圖形和控制項 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在選取範圍的中心讀取。
 	Graphics Processor	圖形處理器
 	Graphics: {adapter}	圖形：{adapter}
 	Gravity	重力
@@ -3065,6 +3076,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	無法貼上：要貼上的文件已關閉
 @msg	nothing selected	未選取任何物件
+@msg	`{key}` must be a color or {_1}	`{key}` 必須是顏色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所選物件的顏色不同：請提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所選物件的顏色不同：請提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	作用中的填色或筆畫沒有顏色：請提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	作用中的填色或筆畫已隱藏：請提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	作用中的填色或筆畫透過不透明度遮色片繪製：請提供 `color`
 @msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
@@ -4683,7 +4700,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選取 › 相同 › 填色顏色、筆畫顏色和填色與筆畫只符合全域色票或特別色色票的相同色調，而不是其任意色調。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	沒有開啟文件時顯示首頁畫面；關閉時，視窗保持空白，直到你按下首頁。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和對齊中依物件的筆畫和改變形狀的效果測量物件；陰影、光暈和模糊不計入測量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	縮放為 100% 時，文件的一英吋佔 96 個螢幕點，而不是 72 個。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	縮放為 100% 時，文件的一英吋佔顯示器上的一英吋；系統未回報可用的顯示器尺寸時佔 96 個螢幕點。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用選取工具按兩下群組、路徑或影像時，會在隔離模式中開啟它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	圖樣填色和筆畫隨圖稿一起變形，除非變形指令或變形面板的選單另有選擇。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	即時轉角半徑隨圖稿一起縮放，除非縮放指令另有選擇。
@@ -6981,6 +6998,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	取消執行增效模組
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文件或增效模組在此期間已變更：請重新執行
 @msg	Running “{name}”…	正在執行「{name}」…
+@msg	Plug-in “{name}”: {notice}	增效模組「{name}」：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必須是包含可見文字的字串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `allowHeavy: true`
@@ -7072,7 +7091,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 個數字的清單
 @msg	a new object needs a `path`	新物件需要 `path`
 @msg	a number	數字
-@msg	a painted live effect returns only `objects`	繪製型即時效果只傳回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	繪製型即時效果只傳回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一個唯讀物件
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它
@@ -7177,6 +7196,8 @@ axis	Y Axis	Y 軸
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` 只能為 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
+@msg	`place` is only for an importer (`kind` "importer")	`place` 僅適用於匯入器 (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	「{shown}」只開啟檔案而不置入：其資訊清單未設定 `place`
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`

@@ -82,13 +82,13 @@ fn a_drag_in_the_field_is_one_undo_step_and_the_strip_sets_the_channel() {
 #[test]
 fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let harmony = json!({
-        "opacity": false, "hexField": false, "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": false,
-        "documentColors": false
+    let others = json!({
+        "opacity": false, "hexField": false, "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "contrast": false,
+        "contrastFor": "normalText", "contrastBackground": null, "vision": false, "documentColors": false
     });
     let with = |v: serde_json::Value| {
         let mut v = v;
-        v.as_object_mut().unwrap().extend(harmony.as_object().unwrap().clone());
+        v.as_object_mut().unwrap().extend(others.as_object().unwrap().clone());
         v
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), with(json!({"view": "wheel", "channel": "hue"})));
@@ -137,12 +137,12 @@ fn ui_color_wheel_rejects_other_params() {
     let e = app.run("ui.colorWheel", json!({"veiw": "wheel"})).unwrap_err();
     assert_eq!(
         e,
-        "unknown parameter `veiw`; the command takes: view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, vision, documentColors"
+        "unknown parameter `veiw`; the command takes: view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, contrast, contrastFor, contrastBackground, vision, documentColors"
     );
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "chanel": "blue"})).unwrap_err();
     assert_eq!(
         e,
-        "unknown parameter `chanel`; the command takes: view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, vision, documentColors"
+        "unknown parameter `chanel`; the command takes: view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, contrast, contrastFor, contrastBackground, vision, documentColors"
     );
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Red, ..Default::default() }, "an error changes nothing");
 }

@@ -1677,6 +1677,17 @@ font-technology	Variable	Variables
 	Graphic Styles	Estilos gráficos
 	Graphic Styles Options	Opciones de estilos gráficos
 	Graphics	Gráficos
+	Show Contrast	Mostrar contraste
+	Contrast For	Contraste para
+	Normal Text	Texto normal
+	Large Text	Texto grande
+	Contrast Background	Fondo del contraste
+	Behind Selection	Detrás de la selección
+	Current Color	Color actual
+	Pass	Cumple
+	Fail	No cumple
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste mínimo de WCAG 2.2: texto normal AA 4.5:1 (1.4.3) y AAA 7:1 (1.4.6), texto grande AA 3:1 y AAA 4.5:1, gráficos y controles AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fondo se lee en el centro de la selección.
 	Graphics Processor	Procesador gráfico
 	Graphics: {adapter}	Gráficos: {adapter}
 	Gravity	Gravedad
@@ -3338,7 +3349,7 @@ digits	Malayalam	Malayálam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selección › Igual › Color de relleno, Color de trazo y Relleno y trazo solo coinciden con el mismo matiz de una muestra global o de tinta plana, no con cualquier matiz de ella.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Muestra la pantalla de inicio cuando no hay ningún documento abierto; desactivada, la ventana queda vacía hasta que hace clic en Inicio.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mide los objetos con sus trazos y los efectos que cambian su forma para el tamaño, la posición y la alineación; las sombras, los resplandores y los desenfoques no se miden.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Con un zoom del 100 %, una pulgada del documento ocupa 96 puntos de pantalla en lugar de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Con un zoom del 100 %, una pulgada del documento ocupa una pulgada de la pantalla, o 96 puntos de pantalla si el sistema no indica un tamaño utilizable.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Al hacer doble clic en un grupo, trazado o imagen con la herramienta Selección, se abre en modo de aislamiento.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Los rellenos y trazos de motivo se transforman con la ilustración, salvo que una transformación o el menú del panel Transformar indique otra cosa.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Los radios de esquina dinámicos se escalan con la ilustración, salvo que el escalado indique otra cosa.
@@ -5593,6 +5604,12 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	finish editing the pattern first	termina primero la edición del motivo
 @msg	nothing encoded	no se codificó nada
 @msg	nothing selected	no hay nada seleccionado
+@msg	`{key}` must be a color or {_1}	`{key}` debe ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	los colores de los objetos seleccionados difieren: indique `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	los colores de los objetos seleccionados difieren: indique `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	el relleno o trazo activo no tiene color: indique `color`
+@msg	the active fill or stroke is hidden: give `color`	el relleno o trazo activo está oculto: indique `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	el relleno o trazo activo se dibuja a través de una máscara de opacidad: indique `color`
 @msg	nothing selected is in a group	nada de lo seleccionado está en un grupo
 @msg	nothing to align	no hay nada que alinear
 @msg	nothing to distort	no hay nada que distorsionar
@@ -7303,6 +7320,8 @@ axis	Y Axis	Eje Y
 	Cancel Plug-in Run	Cancelar ejecución del plugin
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} terminó, pero el documento o el plugin cambió entretanto: vuelva a ejecutarlo
 @msg	Running “{name}”…	Ejecutando “{name}”…
+@msg	Plug-in “{name}”: {notice}	Plugin “{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` debe ser una cadena con texto visible
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un efecto interactivo se ejecuta mientras se dibuja el documento, así que no puede ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plugin de exportación siempre recibe el presupuesto de una exportación: omite `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): una persona debe aprobarlo en la aplicación de escritorio, o pasa `allowHeavy: true` en una sesión iniciada con --allow-plugin-grants
@@ -7395,7 +7414,7 @@ axis	Y Axis	Eje Y
 @msg	a list of {min_items} to {max_items} numbers	una lista de {min_items} a {max_items} números
 @msg	a new object needs a `path`	un objeto nuevo necesita un `path`
 @msg	a number	un número
-@msg	a painted live effect returns only `objects`	un efecto dinámico de pintura solo devuelve `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un efecto dinámico de pintura solo devuelve `objects` y `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills` y `strokes`
 @msg	a read-only object was left out	se omitió un objeto de solo lectura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
@@ -7500,6 +7519,8 @@ axis	Y Axis	Eje Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` solo puede ser true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` solo es para un efecto dinámico (`kind` "effect") con `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` solo es para un importador (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» abre archivos pero no los coloca: su manifiesto no establece `place`
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un plugin de tipo `{_1}` necesita el permiso `{_2}`
