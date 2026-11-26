@@ -285,7 +285,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.setter(&name, h2, h3, line);
             }
             // `local['saveAs']`: what the object before the bracket defines, for a call that may follow.
-            "[" => self.index_receiver = self.writer_bits(h0, h1),
+            "[" => {
+                self.index_receiver = self.writer_bits(h0, h1);
+                self.index_stable = h0.is_some_and(|r| self.stable(r.text));
+            }
             "(" => self.call(line),
             // `Name.prototype["+"] = …` defines an operator.
             "=" => {
@@ -308,7 +311,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             && is(h2, "[")
             && let Some(method) = h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
             && catalog::DOM_FILE_WRITES.contains(&method.as_str())
-            && !Self::defines(self.index_receiver, &method)
+            && !(self.index_stable && Self::defines(self.index_receiver, &method))
         {
             self.acc.feature(FeatureId::FileWrite, line);
             self.acc.outside(OutsideId::FilesWritten, line, None);
@@ -335,7 +338,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
             } else if (file && catalog::FILE_WRITES.contains(&n))
-                || (catalog::DOM_FILE_WRITES.contains(&n) && !Self::defines(self.writer_bits(h2, h3), n))
+                || (catalog::DOM_FILE_WRITES.contains(&n) && !(h2.is_some_and(|r| self.stable(r.text)) && Self::defines(self.writer_bits(h2, h3), n)))
             {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
@@ -362,6 +365,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// The methods that `receiver`, which `before` comes before, defines when it is a variable holding
     /// an object literal of the script's own ([`Analyzer::writers`]), not a property of the same name;
     /// 0 for anything else. A receiver the check does not follow may be a document.
+    /// Whether a call of `name`'s own method may be left out: the call is in the global code, or in a
+    /// function body that declares `name` itself. A body that reads `name` from outside may run
+    /// after the variable was given another value, so its calls are not known.
+    fn stable(&self, name: &str) -> bool {
+        self.scopes.last().is_none_or(|s| s.saved.contains_key(name))
+    }
+
     fn writer_bits(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> u8 {
         match receiver {
             Some(r) if r.kind == T::Ident && !member_mark(before) => self.writers.get(r.text).copied().unwrap_or(0),
@@ -395,29 +405,56 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
         let changes = t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--"));
         let key = t.is(":") && (is(h1, "{") || is(h1, ","));
-        let escaped = if word(h0, "delete") {
-            // `delete local…`
-            writer(Some(*t), h0)
-        } else if let Some(name) = writer(h0, h1) {
-            // `local` followed by anything but a member, its own assignment or an object key's `:`.
-            (!t.is(".") && !t.is("[") && !t.is("=") && !key).then_some(name)
-        } else if is(h1, ".") && changes && h0.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&m.text)) {
-            // `local.saveAs = …`
-            writer(h2, h3)
-        } else if is(h0, "[") {
-            // `local[k]` with a key that is not a string literal.
-            writer(h1, h2).filter(|_| t.kind != T::Str)
-        } else if is(h1, "[") && h0.is_some_and(|s| s.kind == T::Str) {
-            // `local['name' + k]`.
-            writer(h2, h3).filter(|_| !t.is("]"))
-        } else if is(h0, "]") && is(h2, "[") && changes && h1.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&unquote(m.text, 32).as_str())) {
-            // `local['saveAs'] = …`
-            writer(h3, None)
+        let escape = |writer: &dyn Fn(Option<Sig<'s>>, Option<Sig<'s>>) -> Option<&'s str>| -> Option<&'s str> {
+            if word(h0, "delete") {
+                // `delete local…`
+                writer(Some(*t), h0)
+            } else if let Some(name) = writer(h0, h1) {
+                // `local` followed by anything but a member, its own assignment or an object key's `:`.
+                (!t.is(".") && !t.is("[") && !t.is("=") && !key).then_some(name)
+            } else if is(h1, ".") && changes && h0.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&m.text)) {
+                // `local.saveAs = …`
+                writer(h2, h3)
+            } else if is(h0, "[") {
+                // `local[k]` with a key that is not a string literal.
+                writer(h1, h2).filter(|_| t.kind != T::Str)
+            } else if is(h1, "[") && h0.is_some_and(|s| s.kind == T::Str) {
+                // `local['name' + k]`.
+                writer(h2, h3).filter(|_| !t.is("]"))
+            } else if is(h0, "]") && is(h2, "[") && changes && h1.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&unquote(m.text, 32).as_str())) {
+                // `local['saveAs'] = …`
+                writer(h3, None)
+            } else {
+                None
+            }
+        };
+        let escaped = escape(&writer);
+        // A function body reads a variable of the enclosing code that no literal has given methods yet
+        // in a way that changes or shares it: the body may run after the literal, as a hoisted
+        // declaration does.
+        let early = if escaped.is_none() && !self.scopes.is_empty() {
+            let captured = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| {
+                s.filter(|s| {
+                    s.kind == T::Ident
+                        && !member_mark(before)
+                        && !self.writers.contains_key(s.text)
+                        && self.scopes.last().is_some_and(|b| !b.saved.contains_key(s.text))
+                })
+                .map(|s| s.text)
+            };
+            escape(&captured)
         } else {
             None
         };
         if let Some(name) = escaped {
             self.writers.remove(name);
+        }
+        if let Some(name) = early
+            && (self.shared_early.contains_key(name) || self.acc.room(self.shared_early.len()))
+        {
+            let open = self.scopes.len();
+            let seen = self.shared_early.entry(name.to_string()).or_insert(open);
+            *seen = (*seen).max(open);
         }
         if changes {
             let rebound = if is(h1, ".") {

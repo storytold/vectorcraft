@@ -637,6 +637,12 @@ struct Analyzer<'s, 'a, 'l> {
     /// document method that writes a file (`{saveAs: …}`), each with a bit per method it defines (bit
     /// `i` for `catalog::DOM_FILE_WRITES[i]`): a call of that method on them writes nothing.
     writers: HashMap<String, u8>,
+    /// The variables a function body read before any literal gave them methods, in a way that
+    /// changes or shares them ([`Analyzer::writer_use`]): the body may run after the literal (a
+    /// hoisted declaration), so the literal's methods are not the script's own. Each name has the
+    /// most function bodies that were open where it was read; a literal in a body with that many
+    /// open or more is unaffected, since it gives a variable of its own.
+    shared_early: HashMap<String, usize>,
     /// The object literals being assigned to a variable, the innermost last, up to
     /// [`crate::Limits::nesting`] of them.
     objects: Vec<ObjectValue>,
@@ -646,6 +652,8 @@ struct Analyzer<'s, 'a, 'l> {
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
+    /// Whether that receiver's own methods hold at this place ([`Analyzer::stable`]).
+    index_stable: bool,
     /// The depths of the open `[` that index the global object (`$.global[`, `this[`,
     /// `globalThis[`), the innermost last, up to [`crate::Limits::nesting`] of them.
     global_indexes: Vec<usize>,
@@ -728,9 +736,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             maybe_files: known.files.difference(&known.folders).chain(declared.rebound.iter()).cloned().collect(),
             maybe_files_full: false,
             writers: HashMap::new(),
+            shared_early: HashMap::new(),
             objects: vec![],
             closed: None,
             index_receiver: 0,
+            index_stable: false,
             global_indexes: vec![],
             global_index_closed: false,
             unsure: known.unsure || declared.unsure,
@@ -1392,7 +1402,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 let body = self.scopes.last().map_or(0, |s| s.depth);
                 let starts = before.is_none()
                     || [";", "{", "}"].iter().any(|p| is(before, p))
-                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !word(before, "else") && !word(before, "do"));
+                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !is(before, ":") && !word(before, "else") && !word(before, "do"));
                 let whole = word(declaration, "var") && starts && depth.checked_sub(1) == Some(body);
                 if self.objects.len() < self.acc.limits.nesting {
                     self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole, value: None });
@@ -1441,6 +1451,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && self.shared_early.get(&name).is_none_or(|&open| open <= self.scopes.len())
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {
             self.writers.insert(name, bits);

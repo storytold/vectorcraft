@@ -715,6 +715,51 @@ fn an_own_save_as_that_may_replace_itself_writes_a_file() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 6, 7][..]));
 }
 
+/// A function declared before the literal is hoisted, so it may change or share the variable before
+/// the literal's later calls run: its calls then keep reporting the write. A function with a
+/// variable of its own of the same name, and one that only calls the method, leave the method the
+/// script's own.
+#[test]
+fn a_hoisted_function_that_changes_or_shares_the_variable_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a(w) { local.saveAs = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { use(other); }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { var calm = app.activeDocument; use(calm); }\n",
+        "var calm = {saveAs: function () {}};\n",
+        "calm.saveAs(f);\n",
+        "function d() { quiet.saveAs(f); }\n",
+        "var quiet = {saveAs: function () {}};\n",
+        "quiet.saveAs(f);\n",
+        "function g1() { use(mine); }\n",
+        "function g2() { var mine = {saveAs: function () {}}; mine.saveAs(f); }\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 11][..]));
+}
+
+/// A function that reads the variable from outside runs after whatever the script gave it since, so
+/// its calls keep reporting the write. A `var` after a label or a `case` is in a branch as well.
+#[test]
+fn a_captured_or_labelled_own_save_as_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}};\n",
+        "function run() { local.saveAs(f); }\n",
+        "function run2() { local['saveAs'](f); }\n",
+        "local = app.activeDocument;\n",
+        "run();\n",
+        "function own() { var inner = {saveAs: function () {}}; inner.saveAs(f); inner['saveAs'](f); }\n",
+        "if (flag) skip:\n",
+        "var lab = {saveAs: function () {}};\n",
+        "lab.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4, 10][..]));
+}
+
 /// Only a `var` statement directly in a function body or the global code that gives its first name
 /// the literal as its whole value makes the literal's `saveAs` the script's own, from the end of the
 /// statement. A literal given in a branch, one the value goes on from, one given by an assignment
