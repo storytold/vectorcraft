@@ -54,15 +54,18 @@ pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<((u64, u64), WindowVi
             if !v.fitted || v.rect.width() <= 0.0 || v.rect.height() <= 0.0 {
                 return None;
             }
-            let size = [f64::from(v.rect.width()) * scaling, f64::from(v.rect.height()) * scaling];
-            Some(((uid, v.runtime_id), WindowView { center: v.center, zoom: v.zoom, rotation: v.rotation, size, screen_mode: mode }))
+            let print = app.print_ppi_of(Some(window));
+            let baseline = crate::state::zoom_baseline(print);
+            let size = [f64::from(v.rect.width()) * scaling / baseline, f64::from(v.rect.height()) * scaling / baseline];
+            let zoom = crate::state::zoom_display_percent(v.zoom, print) / 100.0;
+            Some(((uid, v.runtime_id), WindowView { center: v.center, zoom, zoom_baseline: baseline, rotation: v.rotation, size, screen_mode: mode }))
         })
         .collect();
     app.session.window_views.clone_from(&shared);
     shared
 }
 
-/// Takes the zoom, centre and screen mode a script gave the views [`share_views`] gave.
+/// Applies the zoom, center and screen mode a script assigned to the views from [`share_views`].
 pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[((u64, u64), WindowView)]) {
     let (min, max) = WindowView::ZOOM_RANGE;
     for (key, before) in shared {
@@ -71,7 +74,9 @@ pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[((u64, u64), Window
             continue;
         }
         if let Some(v) = crate::doc_windows::view_by_id_mut(app, *key) {
-            v.zoom = now.zoom.clamp(min, max);
+            if now.zoom != before.zoom {
+                v.zoom = (now.zoom * now.zoom_baseline).clamp(min, max);
+            }
             v.center = now.center;
         }
     }

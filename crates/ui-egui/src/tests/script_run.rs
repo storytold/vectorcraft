@@ -522,7 +522,7 @@ fn a_script_sees_the_window_and_sets_its_zoom_centre_and_screen_mode() {
     app.run("script.run", json!({"source": source, "name": "v.js"})).unwrap();
     finish(&mut app);
     let report = app.session.script_report().cloned().unwrap();
-    assert_eq!(report["log"][0].as_f64(), Some(600.0), "the view is as wide as the canvas at 100%");
+    assert_eq!(report["log"][0].as_f64(), Some(600.0), "the bounds use the physical camera scale");
     let now = *app.view().unwrap();
     assert!(now.zoom > before.zoom && now.center != before.center);
     assert_eq!(app.ui.screen_mode, 2);

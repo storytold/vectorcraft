@@ -195,7 +195,14 @@ fn ruler_origin_round_trips_without_moving_art() {
 
 /// A window on the document of [`doc`] that shows 300 × 200 pt around (200, 150) at 200%.
 fn window() -> WindowView {
-    WindowView { center: vectorcraft_geom::Point::new(200.0, 150.0), zoom: 2.0, rotation: 0.0, size: [600.0, 400.0], screen_mode: 0 }
+    WindowView {
+        center: vectorcraft_geom::Point::new(200.0, 150.0),
+        zoom: 2.0,
+        zoom_baseline: 1.0,
+        rotation: 0.0,
+        size: [600.0, 400.0],
+        screen_mode: 0,
+    }
 }
 
 /// Shows the active document in the window `v`.

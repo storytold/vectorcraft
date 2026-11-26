@@ -46,7 +46,9 @@
 //! - `Document.views` holds the document's drawn windows ([`crate::Session::window_views`]),
 //!   in view-number order, and none without one. View objects keep their window's identity when
 //!   windows are renumbered. The screen mode is the app's:
-//!   setting it on one view sets it on every view. Its `zoom` is 1 at 100%, from 0.0313 to 640; `screenMode` reads
+//!   setting it on one view sets it on every view. Its `zoom` is 1 at the window's displayed 100%;
+//!   the physical camera scale ranges from 0.0313 to 640, and the allowed zoom ratios account for
+//!   the window's display density with Display Print Size at 100% Zoom enabled. `screenMode` reads
 //!   Presentation Mode as `ScreenMode.FULLSCREEN`. Changing a view runs no command, is not
 //!   undoable and stays when the run fails.
 //!   A center outside the canvas after coordinate conversion throws a `RangeError`.
@@ -1457,9 +1459,9 @@ fn view_zoom(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn view_set_zoom(h: &Host, a: &[Data]) -> Answer {
-    let (doc, id, _) = this_view(h, a)?;
+    let (doc, id, v) = this_view(h, a)?;
     let z = number(arg(a, 1), "zoom")?;
-    let (min, max) = WindowView::ZOOM_RANGE;
+    let (min, max) = v.zoom_range();
     if !(min..=max).contains(&z) {
         return Err(HostError::Range(format!("zoom must be from {min} to {max}")));
     }

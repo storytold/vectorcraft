@@ -2792,8 +2792,10 @@ other files through `$`:
   uses the size of the area it last drew the document in. A document the app has not drawn yet, and every document without a window (headless),
   has none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
   `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
-  rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at 100% and goes
-  from 0.0313 to 640 (VectorCraft's own range). A zoom outside it, or a `centerPoint` outside the canvas after
+  rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at the window's
+  displayed 100%. With Display Print Size at 100% Zoom off, the range is 0.0313 to 640 (VectorCraft's own range).
+  With it enabled, the app divides these limits by the window's scale at 100% (the screen points per inch used for
+  that window divided by 72). A zoom outside that range, or a `centerPoint` outside the canvas after
   coordinate conversion, throws a `RangeError`. A `centerPoint` that is not two numbers throws a `TypeError`. `screenMode` reads Normal as
   `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
   Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it

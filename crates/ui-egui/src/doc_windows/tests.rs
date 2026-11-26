@@ -207,8 +207,85 @@ fn a_script_sees_each_window_at_its_own_size() {
 }
 
 #[test]
+fn script_view_zoom_uses_each_windows_display_percentage_and_keeps_physical_bounds() {
+    for print_size in [true, false] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.newWindow", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": print_size})).unwrap();
+        for (number, ppi, percent) in [(1, 96.0, 100.0), (2, 144.0, 200.0)] {
+            let v = view_mut(&mut app, (0, number)).unwrap();
+            v.shown_ppi = Some(crate::ScreenPpi::Read(Some(ppi)));
+            v.rotation = 0.0;
+            v.zoom = crate::state::zoom_from_display_percent(percent, crate::state::print_ppi(print_size, Some(ppi)));
+        }
+        let shared = crate::script_runs::share_views(&mut app);
+        for (number, (_, script_view)) in (1..).zip(&shared) {
+            let camera = view(&app, (0, number)).unwrap();
+            let width = f64::from(camera.rect.width()) * f64::from(app.ui_scaling()) / camera.zoom;
+            assert!((script_view.visible().width() - width).abs() < 1e-9);
+        }
+        app.session.script_frames = false;
+        let report = app
+            .session
+            .execute(
+                "script.run",
+                &json!({"source":
+                    "var vs = app.activeDocument.views; vc.log(vs[0].zoom); vc.log(vs[1].zoom); vs[0].zoom = 3; vs[1].zoom = 4;"
+                }),
+            )
+            .unwrap();
+        assert_eq!(report["log"], json!([1, 2]), "print size: {print_size}");
+        crate::script_runs::take_views(&mut app, &shared);
+        for (number, percent) in [(1, 300.0), (2, 400.0)] {
+            let shown = crate::state::zoom_display_percent(view(&app, (0, number)).unwrap().zoom, app.print_ppi_of(Some((0, number))));
+            assert!((shown - percent).abs() < 1e-9, "window {number}, print size {print_size}: {shown}");
+        }
+    }
+}
+
+#[test]
+fn script_view_center_changes_preserve_zoom_at_camera_limits() {
+    for zoom in [0.0313, 640.0] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        let v = view_mut(&mut app, (0, 1)).unwrap();
+        v.shown_ppi = Some(crate::ScreenPpi::Read(Some(96.0)));
+        v.zoom = zoom;
+        let shared = crate::script_runs::share_views(&mut app);
+        app.session.script_frames = false;
+        app.session.execute("script.run", &json!({"source": "app.activeDocument.views[0].centerPoint = [10, 20];"})).unwrap();
+        crate::script_runs::take_views(&mut app, &shared);
+        assert_eq!(view(&app, (0, 1)).unwrap().zoom, zoom);
+    }
+}
+
+#[test]
+fn script_view_zoom_refuses_values_outside_each_windows_camera_range() {
+    for ppi in [96.0, 144.0] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        view_mut(&mut app, (0, 1)).unwrap().shown_ppi = Some(crate::ScreenPpi::Read(Some(ppi)));
+        let shared = crate::script_runs::share_views(&mut app);
+        app.session.script_frames = false;
+        let requested = 640.0 / crate::state::zoom_baseline(Some(ppi)) * 1.1;
+        let source = format!("try {{ app.activeDocument.views[0].zoom = {requested}; vc.log('accepted'); }} catch (e) {{ vc.log(e.name); }}");
+        let report = app.session.execute("script.run", &json!({"source": source})).unwrap();
+        assert_eq!(report["log"], json!(["RangeError"]));
+        crate::script_runs::take_views(&mut app, &shared);
+    }
+}
+
+#[test]
 fn a_script_lists_and_changes_each_view_of_one_document() {
     let mut app = app_with(1);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.newWindow", json!({})).unwrap();
@@ -243,6 +320,7 @@ fn a_script_lists_and_changes_each_view_of_one_document() {
 #[test]
 fn a_script_retains_view_identity_after_renumbering_and_reusing_a_window_number() {
     let mut app = app_with(1);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.newWindow", json!({})).unwrap();

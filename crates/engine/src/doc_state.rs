@@ -8,8 +8,10 @@ use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access}
 pub struct WindowView {
     /// The document point at the centre of the canvas.
     pub center: vectorcraft_geom::Point,
-    /// The zoom: 1 is 100%.
+    /// The zoom is 1 at the window's displayed 100%.
     pub zoom: f64,
+    /// The camera uses this scale at the window's displayed 100%.
+    pub zoom_baseline: f64,
     /// The view's rotation in degrees, clockwise on screen.
     pub rotation: f64,
     /// The canvas's width and height in document points at a zoom of 1.
@@ -20,8 +22,14 @@ pub struct WindowView {
 }
 
 impl WindowView {
-    /// The smallest and largest zoom the canvas shows.
+    /// The physical camera scale stays within these limits.
     pub const ZOOM_RANGE: (f64, f64) = (0.0313, 640.0);
+
+    /// `zoom_range` returns this window's allowed displayed zoom ratios.
+    pub fn zoom_range(&self) -> (f64, f64) {
+        let (min, max) = Self::ZOOM_RANGE;
+        (min / self.zoom_baseline, max / self.zoom_baseline)
+    }
 
     /// The part of the document the canvas shows: the box around its four corners, which a
     /// rotated view turns.
