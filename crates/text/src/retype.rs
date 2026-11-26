@@ -360,13 +360,25 @@ impl RetypeIndex {
 
     /// [`Self::all_matches`], and when the shape fits no glyph as it is, its contours read the
     /// other way round: for a part of a compound path, which Make Compound Path may have turned so
-    /// it cuts a hole in the paths behind it.
+    /// it cuts a hole in the paths behind it. When neither reading fits, the contours are read the
+    /// way their depth gives, outer contours one way and their counters the other, both ways round:
+    /// an even-odd compound paints the same whichever way each contour runs, so an o's counter may
+    /// run the same way as its outer contour.
     pub fn matches_either_way(&self, shape: &BezPath) -> Vec<GlyphMatch> {
         let found = self.matches_read(shape, shape);
         if !found.is_empty() {
             return found;
         }
-        self.matches_read(shape, &shape.reverse_subpaths())
+        let found = self.matches_read(shape, &shape.reverse_subpaths());
+        if !found.is_empty() {
+            return found;
+        }
+        let Some(nested) = nested_reading(shape) else { return vec![] };
+        let found = self.matches_read(shape, &nested);
+        if !found.is_empty() {
+            return found;
+        }
+        self.matches_read(shape, &nested.reverse_subpaths())
     }
 
     /// [`Self::all_matches`] of `shape`, its contours read as in `reading` (the same outline).
@@ -880,39 +892,7 @@ pub fn clusters(path: &BezPath) -> Vec<BezPath> {
             },
         }
     }
-    let boxes: Vec<kurbo::Rect> = subs.iter().map(Shape::bounding_box).collect();
-    // Up to MAX_CONTAINMENT_PROBES of each contour's anchor points, evenly spread: a contour lies in
-    // another only when every one of them does.
-    let probes: Vec<Vec<Point>> = subs
-        .iter()
-        .map(|s| {
-            let anchors: Vec<Point> = s.elements().iter().filter_map(|e| e.end_point()).collect();
-            let step = anchors.len().div_ceil(MAX_CONTAINMENT_PROBES).max(1);
-            anchors.into_iter().step_by(step).collect()
-        })
-        .collect();
-    // Each contour's container: the smallest contour around it.
-    let parent: Vec<Option<usize>> = (0..subs.len())
-        .map(|i| {
-            let (Some(bi), Some(pi)) = (boxes.get(i), probes.get(i)) else { return None };
-            if pi.is_empty() {
-                return None;
-            }
-            (0..subs.len())
-                .filter(|&j| j != i)
-                .filter_map(|j| Some((j, boxes.get(j)?, subs.get(j)?)))
-                .filter(|(_, bj, sj)| {
-                    bj.area() > bi.area()
-                        && bj.x0 <= bi.x0
-                        && bj.y0 <= bi.y0
-                        && bj.x1 >= bi.x1
-                        && bj.y1 >= bi.y1
-                        && pi.iter().all(|p| sj.winding(*p) != 0)
-                })
-                .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
-                .map(|(j, _, _)| j)
-        })
-        .collect();
+    let parent = containers(&subs);
     let root = |mut i: usize| {
         // Containers are strictly larger, so the chain ends; the bound keeps it so.
         for _ in 0..subs.len() {
@@ -933,6 +913,90 @@ pub fn clusters(path: &BezPath) -> Vec<BezPath> {
     }
     groups.sort_by_key(|(r, _)| *r);
     groups.into_iter().map(|(_, p)| p).collect()
+}
+
+/// Each contour's container among `subs` (one contour each): the smallest other contour that holds
+/// it, `None` for an outer contour.
+fn containers(subs: &[BezPath]) -> Vec<Option<usize>> {
+    let boxes: Vec<kurbo::Rect> = subs.iter().map(Shape::bounding_box).collect();
+    // Up to MAX_CONTAINMENT_PROBES of each contour's anchor points, evenly spread: a contour lies in
+    // another only when every one of them does.
+    let probes: Vec<Vec<Point>> = subs
+        .iter()
+        .map(|s| {
+            let anchors: Vec<Point> = s.elements().iter().filter_map(|e| e.end_point()).collect();
+            let step = anchors.len().div_ceil(MAX_CONTAINMENT_PROBES).max(1);
+            anchors.into_iter().step_by(step).collect()
+        })
+        .collect();
+    // Each contour's container: the smallest contour around it.
+    (0..subs.len())
+        .map(|i| {
+            let (Some(bi), Some(pi)) = (boxes.get(i), probes.get(i)) else { return None };
+            if pi.is_empty() {
+                return None;
+            }
+            (0..subs.len())
+                .filter(|&j| j != i)
+                .filter_map(|j| Some((j, boxes.get(j)?, subs.get(j)?)))
+                .filter(|(_, bj, sj)| {
+                    bj.area() > bi.area()
+                        && bj.x0 <= bi.x0
+                        && bj.y0 <= bi.y0
+                        && bj.x1 >= bi.x1
+                        && bj.y1 >= bi.y1
+                        && pi.iter().all(|p| sj.winding(*p) != 0)
+                })
+                .min_by(|a, b| a.1.area().total_cmp(&b.1.area()))
+                .map(|(j, _, _)| j)
+        })
+        .collect()
+}
+
+/// `path` with each contour turned to run the way its depth gives (an outer contour one way, its
+/// counters the other, what lies in those the first way again), the outer contours keeping the way
+/// the first of them runs. `None` when that turns no contour (the path read as it is), for a
+/// contour that encloses no area, and for more than [`MAX_CONTOURS`] contours.
+fn nested_reading(path: &BezPath) -> Option<BezPath> {
+    let mut subs: Vec<BezPath> = vec![];
+    for el in path.elements() {
+        if matches!(el, PathEl::MoveTo(_)) {
+            if subs.len() >= MAX_CONTOURS {
+                return None;
+            }
+            subs.push(BezPath::new());
+        }
+        subs.last_mut()?.push(*el);
+    }
+    let parent = containers(&subs);
+    let depth = |mut i: usize| {
+        let mut d = 0usize;
+        // Containers are strictly larger, so the chain ends; the bound keeps it so.
+        for _ in 0..subs.len() {
+            match parent.get(i).copied().flatten() {
+                Some(p) => {
+                    i = p;
+                    d += 1;
+                }
+                None => break,
+            }
+        }
+        d
+    };
+    let areas: Vec<f64> = subs.iter().map(Shape::area).collect();
+    if areas.iter().any(|a| !a.is_normal()) {
+        return None;
+    }
+    let outer = (0..subs.len()).find(|&i| depth(i) == 0).and_then(|i| areas.get(i)).map(|a| a.signum())?;
+    let turned: Vec<bool> = areas.iter().enumerate().map(|(i, a)| a.signum() != if depth(i) % 2 == 0 { outer } else { -outer }).collect();
+    if turned.iter().all(|t| !*t) {
+        return None;
+    }
+    let mut out = BezPath::new();
+    for (s, t) in subs.iter().zip(&turned) {
+        out.extend(if *t { s.reverse_subpaths() } else { s.clone() }.iter());
+    }
+    Some(out)
 }
 
 /// `a` wrapped into −π..π.
@@ -1013,6 +1077,13 @@ fn is_shape_symbol(c: char) -> bool {
         u32::from(c),
         0x2500..=0x25FF | 0x2B00..=0x2BFF | 0x1F780..=0x1F7FF | 0x1FB00..=0x1FBFF | 0xE000..=0xF8FF | 0xF0000..=0x10FFFF
     )
+}
+
+/// Whether `c` is a combining mark (general category Mn, Mc or Me). A mark combines with the
+/// character before it, so no retyped line starts with one.
+pub fn is_combining_mark(c: char) -> bool {
+    use unicode_general_category::{GeneralCategory, get_general_category};
+    matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
 }
 
 /// Complex multiply: `z` (a scaled turn) applied to `p`.
@@ -1659,6 +1730,18 @@ mod tests {
     }
 
     #[test]
+    fn combining_marks_are_told_from_spacing_characters() {
+        // Nonspacing (Mn), spacing (Mc) and enclosing (Me) marks.
+        for c in ['\u{0312}', '\u{05BD}', '\u{0903}', '\u{20DD}'] {
+            assert!(is_combining_mark(c), "{c:?}");
+        }
+        // Spacing forms of the same accents are characters of their own.
+        for c in ['a', '\u{00A8}', '\u{02DC}', '\u{00AF}', '-'] {
+            assert!(!is_combining_mark(c), "{c:?}");
+        }
+    }
+
+    #[test]
     fn degenerate_and_hostile_shapes_give_none() {
         assert!(signature(&BezPath::new()).is_none());
         let mut dot = BezPath::new();
@@ -2269,6 +2352,81 @@ mod tests {
         back.extend(els[..second].iter().copied());
         assert_eq!(clusters(&back).len(), 1);
         assert!(clusters(&BezPath::new()).is_empty());
+    }
+
+    #[test]
+    fn the_nested_reading_turns_counters_against_their_outer_contour() {
+        let split = |p: &BezPath| -> Vec<BezPath> {
+            let mut out: Vec<BezPath> = vec![];
+            for el in p.elements() {
+                if matches!(el, PathEl::MoveTo(_)) {
+                    out.push(BezPath::new());
+                }
+                out.last_mut().unwrap().push(*el);
+            }
+            out
+        };
+        let join = |cs: &[BezPath]| {
+            let mut p = BezPath::new();
+            for c in cs {
+                p.extend(c.iter());
+            }
+            p
+        };
+        let cs = split(&letter());
+        let (outer, counter) = (cs[0].clone(), cs[1].clone());
+        let (same, opposite) = if outer.area().signum() == counter.area().signum() {
+            (counter.clone(), counter.reverse_subpaths())
+        } else {
+            (counter.reverse_subpaths(), counter.clone())
+        };
+        // A counter running the same way as its outer contour is turned; the outer one is kept.
+        let read = nested_reading(&join(&[outer.clone(), same.clone()])).unwrap();
+        let rs = split(&read);
+        assert_eq!(rs[0], outer);
+        assert_eq!(rs[1].area().signum(), opposite.area().signum());
+        // So is the outer contour's way when it comes second.
+        let read = nested_reading(&join(&[opposite.clone(), outer.reverse_subpaths()])).unwrap();
+        let rs = split(&read);
+        assert_eq!(rs[1], outer.reverse_subpaths());
+        assert_eq!(rs[0].area().signum(), outer.area().signum());
+        // Already nested so: nothing to turn.
+        assert!(nested_reading(&join(&[outer.clone(), opposite])).is_none());
+        // A contour enclosing no area gives none.
+        let mut flat = BezPath::new();
+        flat.move_to((0.0, 0.0));
+        flat.line_to((10.0, 0.0));
+        flat.close_path();
+        assert!(nested_reading(&join(&[outer, flat])).is_none());
+    }
+
+    #[test]
+    fn a_part_with_some_contours_turned_still_matches_exactly() {
+        let db = FontDb::with_font_dirs(vec![]);
+        assert_eq!(db.add_font(crate::test_fonts::named_copy(false, ("Turntest", "Regular", "Version 1.000", "Turntest-Regular")).unwrap()), 1);
+        let face = db.face("Turntest", "Regular").unwrap();
+        let o = Affine::translate((40.0, 90.0)) * Affine::scale(0.03) * db.outline_uncached(&face, face.glyph_for('o'));
+        let mut cs: Vec<BezPath> = vec![];
+        for el in o.elements() {
+            if matches!(el, PathEl::MoveTo(_)) {
+                cs.push(BezPath::new());
+            }
+            cs.last_mut().unwrap().push(*el);
+        }
+        assert_eq!(cs.len(), 2, "an o is two contours");
+        let keys = std::iter::once(shape_key(&o).unwrap()).collect();
+        let index = RetypeIndex::build(&db, vec![face], &keys);
+        assert!(!index.all_matches(&o).is_empty());
+        for turned in 0..2 {
+            let mut shape = BezPath::new();
+            for (i, c) in cs.iter().enumerate() {
+                shape.extend(if i == turned { c.reverse_subpaths() } else { c.clone() }.iter());
+            }
+            assert!(index.all_matches(&shape).is_empty(), "contour {turned} turned is no glyph as it is");
+            assert!(index.all_matches(&shape.reverse_subpaths()).is_empty(), "nor read the other way round");
+            let found = index.matches_either_way(&shape);
+            assert!(found.iter().any(|m| m.ch == 'o'), "contour {turned} turned still matches the o");
+        }
     }
 
     #[test]

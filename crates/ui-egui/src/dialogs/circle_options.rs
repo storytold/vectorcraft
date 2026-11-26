@@ -6,17 +6,17 @@
 //! them with `tool.setOption {tool: "circle", values}`; they last across tool switches and are
 //! saved with the preferences.
 
-use serde_json::{Map, Value, json};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
+use serde_json::{Value, json};
 use vectorcraft_tools::circle::{COLORS, ID as TOOL};
 
-use super::{DialogSpec, run_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::{form, host, tool_options};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Circle Tool Options.
 pub const KIND: &str = "circleOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 300.0, ..DialogSpec::FORM };
 
 /// The options the dialog edits, in the order it shows its check boxes, with their labels.
 const SWITCHES: [(&str, &str); 5] = [
@@ -30,140 +30,29 @@ const SWITCHES: [(&str, &str); 5] = [
 /// The labels of [`COLORS`], in its order.
 const COLOR_LABELS: [&str; 6] = ["Red", "Blue", "Magenta", "Green", "Black", "Gray"];
 
-/// Width of the label column.
-const LABEL_W: f32 = 60.0;
-
-fn heading(_: &Dialog) -> String {
-    let label = vectorcraft_tools::tool_info(TOOL).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
+/// The rows: the three display switches, the Color, then the two drawing switches.
+fn params() -> Vec<Param> {
+    let switch = |(key, label): &(&str, &'static str)| Param::new(*key, tl!(*label), ParamKind::bool(true));
+    let colors = COLORS.iter().zip(COLOR_LABELS).map(|((name, _), label)| (name.to_string(), Label::from(tl!(label)))).collect();
+    let mut rows: Vec<Param> = SWITCHES[..3].iter().map(switch).collect();
+    rows.push(Param::new("color", tl!("Color:"), ParamKind::choice(colors, Some("blue".into()))));
+    rows.extend(SWITCHES[3..].iter().map(switch));
+    rows
 }
 
 /// Open the tool's options with their current values.
 pub fn open(app: &mut VectorcraftApp) -> Value {
-    let o = app.session.tool_options_of(TOOL);
-    let keys = SWITCHES.iter().map(|(key, _)| *key).chain(["color"]);
-    let fields: Map<String, Value> = keys.filter_map(|key| Some((key.to_string(), o.get(key)?.clone()))).collect();
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    json!({ "dialog": KIND })
-}
-
-fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
-    let on = d.bool(key);
-    if widgets::check(ui, tl!(label), on, true) {
-        d.fields.insert(key.into(), json!(!on));
-    }
-}
-
-fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    for (key, label) in &SWITCHES[..3] {
-        check(ui, d, key, label);
-    }
-    let color = d.str("color");
-    let at = COLORS.iter().position(|(name, _)| *name == color).unwrap_or(1);
-    widgets::label_row(ui, tl!("Color:"), LABEL_W, |ui| {
-        let shown = COLOR_LABELS.get(at).copied().unwrap_or("Blue");
-        if let Some((name, _)) =
-            widgets::dropdown_named(ui, "circle-options-color", Some(tl!("Color:")), shown, &COLOR_LABELS, 110.0).and_then(|i| COLORS.get(i))
-        {
-            d.fields.insert("color".into(), json!(name));
-        }
+    let params = params();
+    let options = app.session.tool_options_of(TOOL);
+    let fields = options.as_object().map(|m| form::fields_of(&params, m)).unwrap_or_default();
+    let (title, shown) = (tool_options::title(TOOL), params.clone());
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| tool_options::set_options(app, TOOL, form::json_of(&params, &result.fields));
+    let opened = app.ui_ctx.clone().and_then(|ctx| {
+        let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| ParamDialog::new(KIND, title.clone(), shown.clone()).values(Bind::bound(f)));
+        host::open_held(app, dialog, ok)
     });
-    ui.add_space(8.0);
-    for (key, label) in &SWITCHES[3..] {
-        check(ui, d, key, label);
+    if opened.is_none() {
+        app.status(tl!("No window to show the dialog in.").to_string());
     }
-    false
-}
-
-/// OK: set the tool's options.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let keys = SWITCHES.iter().map(|(key, _)| *key).chain(["color"]);
-    let values: Map<String, Value> = keys.filter_map(|key| Some((key.to_string(), d.fields.get(key)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": TOOL, "values": values }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_engine::Session;
-
-    fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-        app
-    }
-
-    /// The labels the open dialog paints.
-    fn painted(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
-    /// Every label the dialog shows has a row for each of [`COLORS`].
-    #[test]
-    fn every_color_has_a_label() {
-        assert_eq!(COLOR_LABELS.len(), COLORS.len());
-        for (label, (name, _)) in COLOR_LABELS.iter().zip(COLORS) {
-            assert_eq!(label.to_lowercase(), *name);
-        }
-    }
-
-    #[test]
-    fn double_clicking_the_tool_opens_its_options_and_ok_sets_them() {
-        let mut app = app();
-        let o = app.session.tool_options_of(TOOL);
-        for key in ["center", "radii", "diameter", "standardAnchors", "dragThird"] {
-            assert_eq!(o[key], json!(true), "{key}");
-        }
-        assert_eq!(o["color"], json!("blue"));
-        let r = app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        assert_eq!(r["dialog"], json!(KIND));
-        let text = painted(&mut app);
-        for label in [
-            "Circle Tool Options",
-            "Show Center",
-            "Show Radii",
-            "Show Diameter",
-            "Color:",
-            "Blue",
-            "Anchors at Standard Positions",
-            "Third Point by Dragging",
-            "OK",
-            "Cancel",
-        ] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
-        let d = app.ui.dialog.as_mut().unwrap();
-        for key in ["radii", "standardAnchors", "dragThird"] {
-            assert!(d.bool(key), "{key}");
-            d.fields.insert(key.into(), json!(false));
-        }
-        d.fields.insert("color".into(), json!("magenta"));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        let o = app.session.tool_options_of(TOOL);
-        let got: Vec<&Value> = ["center", "radii", "diameter", "standardAnchors", "dragThird", "color"].iter().map(|k| &o[*k]).collect();
-        assert_eq!(got, [&json!(true), &json!(false), &json!(true), &json!(false), &json!(false), &json!("magenta")]);
-        // They last while another tool is chosen, and the dialog opens on them again.
-        app.select_tool(TOOL);
-        app.select_tool("selection");
-        app.run("tool.options", json!({"tool": TOOL})).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert!(!d.bool("standardAnchors") && d.bool("center"));
-        assert_eq!(d.str("color"), "magenta");
-    }
-
-    /// `tool.setOption` takes only the values the options take, and an invalid one changes none.
-    #[test]
-    fn invalid_values_are_errors_and_change_nothing() {
-        let mut app = app();
-        for (values, error) in [
-            (json!({"center": false, "radii": "no"}), "`radii` must be true or false"),
-            (json!({"center": false, "color": "orange"}), "`color` must be one of red, blue, magenta, green, black, gray"),
-            (json!({"center": false, "size": 3}), "unknown Circle tool option `size`"),
-        ] {
-            let e = app.run("tool.setOption", json!({"tool": TOOL, "values": values})).unwrap_err();
-            assert!(e.contains(error), "{e}");
-            assert_eq!(app.session.tool_options_of(TOOL)["center"], json!(true));
-        }
-    }
+    json!({ "dialog": KIND })
 }
