@@ -18,7 +18,9 @@ use vectorcraft_ui_egui::{Services, VectorcraftApp, background};
 const COPIED: &str = "Copied the value";
 const LENGTH: &str = "234 pt";
 
-struct Board(Arc<Mutex<Vec<Vec<Flavor>>>>);
+type ClipboardOffers = Arc<Mutex<Vec<Vec<Flavor>>>>;
+
+struct Board(ClipboardOffers);
 
 impl ClipboardBackend for Board {
     fn write(&mut self, flavors: &[Flavor]) -> Result<usize, ClipboardError> {
@@ -231,7 +233,7 @@ fn panel_readout_existing_label_keyboard_and_art_copy_remain_independent() {
     assert_eq!(a.snapshot(), before);
 }
 
-fn hold_art_formats(a: &mut App) -> (Arc<Mutex<Vec<Vec<Flavor>>>>, mpsc::Sender<()>) {
+fn hold_art_formats(a: &mut App) -> (ClipboardOffers, mpsc::Sender<()>) {
     let offers = Arc::new(Mutex::new(Vec::new()));
     a.app.clipboard = Clipboard::new(Board(offers.clone()));
     a.app.services.write_shared = Some(Arc::new(|_: &str, _: &[u8]| Err("no fixture file writes".into())));
