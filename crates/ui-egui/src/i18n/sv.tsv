@@ -196,6 +196,7 @@
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
 	Anti-aliasing Method	Kantutjämningsmetod
+@id	language.name	Svenska
 antiAlias	Sharp	Skarp
 	Crisp	Klar
 	Strong	Kraftig
@@ -909,6 +910,7 @@ font-technology	Variable	Variabla
 	Direct Selection Tool	Direktmarkeringsverktyg
 	Direction Handles	Riktningshandtag
 	Disable Auto Add/Delete	Inaktivera Lägg till/radera automatiskt
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete tar bort ankarpunkter och håller banor sammanhängande
 	Interpolate Control Points When Moving Anchors	Interpolera riktningshandtag vid flyttning av ankarpunkter
 	Disable Opacity Mask	Inaktivera opacitetsmask
 	Discard	Släng
@@ -933,11 +935,6 @@ font-technology	Variable	Variabla
 	Distribute Spacing	Fördela avstånd
 	Distribute Spacing:	Fördela avstånd:
 	Dither:	Dithering:
-	Transparency Dither	Transparensdithering
-	No Transparency Dither	Ingen transparensdithering
-	Diffusion Transparency Dither	Transparensdithering med diffusion
-	Pattern Transparency Dither	Transparensdithering med mönster
-	Noise Transparency Dither	Transparensdithering med brus
 	Divide	Dela upp
 	Divide Horizontally Into	Dela horisontellt i
 	Divide Objects Below	Dela objekt nedanför
@@ -1627,6 +1624,17 @@ font-technology	Variable	Variabla
 	Graphic Styles	Grafikstilar
 	Graphic Styles Options	Grafikstilalternativ
 	Graphics	Grafik
+	Show Contrast	Visa kontrast
+	Contrast For	Kontrast för
+	Normal Text	Normal text
+	Large Text	Stor text
+	Contrast Background	Kontrastbakgrund
+	Behind Selection	Bakom markeringen
+	Current Color	Aktuell färg
+	Pass	Godkänd
+	Fail	Underkänd
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minsta kontrast enligt WCAG 2.2: normal text AA 4.5:1 (1.4.3) och AAA 7:1 (1.4.6), stor text AA 3:1 och AAA 4.5:1, grafik och kontroller AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Bakgrunden läses i mitten av markeringen.
 	Graphics Processor	Grafikprocessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Gravitation
@@ -2411,6 +2419,12 @@ font-technology	Variable	Variabla
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	upplösning inte tillgänglig
+	estimated memory {memory}	uppskattat minne {memory}
+	memory unavailable	minne inte tillgängligt
+	Unknown format	Okänt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -2559,6 +2573,7 @@ font-technology	Variable	Variabla
 	One Point Perspective Preset 5	Förinställning 5 för enpunktsperspektiv
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
+	Show Opacity	Visa opacitet
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -3000,6 +3015,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Skala grafik med rityta
 	Artboards: {n}	Ritytor: {n}
 	Rearrange All Artboards…	Ordna om alla ritytor…
+	Rearrange…	Ordna om…
+	Selected Artboards: {n}	Markerade ritytor: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klicka på arbetsytan för att placera ritytorna (Esc avbryter)
 	Recall Selection	Hämta markering
 	RECENT	SENASTE
 	Recent	Senaste
@@ -3240,7 +3258,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Markera › Samma › Fyllnadsfärg, Konturfärg och Fyllning och kontur hittar bara samma nyans av ett globalt färgprov eller en dekorfärg, inte vilken nyans som helst av det.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Visar startskärmen när inget dokument är öppet; när det är av förblir fönstret tomt tills du klickar på Start.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mäter objekt med deras konturer och formändrande effekter för storlek, position och justering; skuggor, glöd och oskärpa mäts inte.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Vid 100 % zoom tar en tum av dokumentet upp 96 skärmpunkter i stället för 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Vid 100 % zoom fyller en tum av dokumentet en tum av skärmen, eller 96 skärmpunkter om systemet inte anger en användbar skärmstorlek.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dubbelklick på en grupp, en bana eller en bild med verktyget Markering öppnar den i isoleringsläge.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Mönsterfyllningar och -konturer transformeras med grafiken, om inte en transformering eller menyn i panelen Transformera väljer annat.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamiska hörnradier skalas med grafiken, om inte skalningen väljer annat.
@@ -3251,6 +3269,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Om du håller ned en tangent körs verktyget eller kommandot i dess Håll-kolumn i Kortkommandon; ett kort tryck kör dess vanliga kortkommando.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hur många sekunder en tangent måste hållas ned innan dess hållkortkommando körs i stället för dess vanliga kortkommando.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete tar bort de markerade ankarpunkterna och anpassar om kurvan runt var och en i stället för att öppna banan där.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	När du flyttar ankarpunkter behåller varje kurva med en flyttad ände sin form i förhållande till sina ändar.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
 	Shows the bounding box while you move the selection or draw a shape.	Visar avgränsningsramen medan du flyttar markeringen eller ritar en form.
@@ -5454,6 +5473,12 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
 @msg	nothing encoded	inget kodat
 @msg	nothing selected	inget markerat
+@msg	`{key}` must be a color or {_1}	`{key}` måste vara en färg eller {_1}
+@msg	the selected objects' colors differ: give `color`	de markerade objektens färger skiljer sig: ange `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	de markerade objektens färger skiljer sig: ange `opacity` eller `color`
+@msg	the active fill or stroke has no color: give `color`	den aktiva fyllningen eller linjen har ingen färg: ange `color`
+@msg	the active fill or stroke is hidden: give `color`	den aktiva fyllningen eller linjen är dold: ange `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	den aktiva fyllningen eller linjen ritas genom en opacitetsmask: ange `color`
 @msg	nothing selected is in a group	inget av det markerade ligger i en grupp
 @msg	nothing to align	inget att justera
 @msg	nothing to distort	inget att förvränga
@@ -6342,6 +6367,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektets nät är ofullständigt eller innehåller ett värde som inte är ett tal
 @msg	give one <filter> element	ange ett <filter>-element
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
 @msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken
@@ -6854,6 +6880,9 @@ file-filter	Flattener presets	Förinställningar för plattning
 file-filter	PDF presets	PDF-förinställningar
 file-filter	PDF-compatible .ai	PDF-kompatibel .ai
 file-filter	Print presets	Utskriftsförinställningar
+file-filter	Tracing presets	Förinställningar för vektorisering
+file-filter	Action sets	Åtgärdsuppsättningar
+file-filter	Composite fonts	Sammansatta typsnitt
 file-filter	Preferences	Inställningar
 file-filter	Export presets	Exportförinställningar
 file-filter	SVG Compressed	SVG komprimerad
@@ -7349,6 +7378,8 @@ axis	Y Axis	Y-axel
 	Cancel Plug-in Run	Avbryt körning av plugin
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} är klar, men dokumentet eller pluginet ändrades under tiden: kör det igen
 @msg	Running “{name}”…	Kör ”{name}”…
+@msg	Plug-in “{name}”: {notice}	Plugin ”{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` måste vara en sträng med synlig text
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): en person måste godkänna det i skrivbordsappen, eller skicka `allowHeavy: true` i en session som startats med --allow-plugin-grants
@@ -7370,6 +7401,11 @@ axis	Y Axis	Y-axel
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
 @msg	`name` must be a string	`name` måste vara en sträng
 @msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` måste vara ett tal från 0 till 100
+@msg	`opacity` must be true or false	`opacity` måste vara true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tecken i text har ingen egen opacitet: lägg till en fyllning eller kontur med Lägg till ny fyllning eller Lägg till ny kontur i panelen Utseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	ett objekt som är markerat i en symbolinstans har ingen egen opacitet för fyllning eller kontur
+@msg	no target has that fill or stroke to take the opacity	inget mål har den fyllningen eller konturen som kan ta emot opaciteten
 @msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
@@ -7388,7 +7424,7 @@ axis	Y Axis	Y-axel
 @msg	a list of {min_items} to {max_items} numbers	en lista med {min_items} till {max_items} tal
 @msg	a new object needs a `path`	ett nytt objekt behöver en `path`
 @msg	a number	ett tal
-@msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en målande live-effekt returnerar bara `objects` och `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
 @msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs
@@ -7413,6 +7449,8 @@ axis	Y Axis	Y-axel
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kräver ett gradientstopp som är länkat till en dekorfärgruta
 @msg	the output	utdata
 @msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammansatta banan {id} har en dold, låst eller stödlinjemedlem, så dess medlemmar kan inte ersättas
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	den sammansatta banan {id} har en medlem som inte är en bana, så dess medlemmar kan inte ersättas
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	ett tal >= {_1}
@@ -7491,6 +7529,8 @@ axis	Y Axis	Y-axel
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` får bara vara true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gäller bara en liveeffekt (`kind` "effect") med `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` gäller bara en importör (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	”{shown}” öppnar filer men placerar dem inte: dess manifest anger inte `place`
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ett plugin av typen `{_1}` behöver behörigheten `{_2}`
@@ -7502,6 +7542,10 @@ axis	Y Axis	Y-axel
 @msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
 @msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Läsa objekten den får, och dokumentets inställningar, ritytor, lager och färgrutor
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` måste ange olika avsnitt: settings, artboards, layers eller swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` gäller ett filter eller en liveeffekt med `commands`, med `api` 3 eller senare och behörigheten `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	dokumentinformationen som pluginet begär är för stor för att lämnas över: högst {MAX_CONTEXT_ITEMS} ritytor, lager och färgrutor på {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
 @msg	the plug-in's grant can't be removed from the plug-in store	pluginets behörighet kan inte tas bort ur pluginlagret
@@ -8874,6 +8918,8 @@ digits	Hindi	Hindi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` är större än modulgränsen
 @msg	`dataBase64` is not valid base64	`dataBase64` är inte giltig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan inte kombineras med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan inte kombineras med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan inte kombineras med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` och `childLimit` begränsar sammanfattningen: ange `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` är ett designnamn, eller null för vanliga kolumner
 @msg	`design` is a design name, or null for the default marker	`design` är ett designnamn, eller null för standardmarkören
@@ -9326,6 +9372,7 @@ digits	Hindi	Hindi
 @msg	give a pattern name or select an object painted with a pattern	ange ett mönsternamn eller markera ett objekt som är målat med ett mönster
 @msg	give at least one of clip, invert, disabled, linked	ange minst en av clip, invert, disabled, linked
 @msg	give color, none, swatch or gradient	ange color, none, swatch eller gradient
+@msg	give color, none, swatch, gradient or opacity	ange color, none, swatch, gradient eller opacity
 @msg	give dataBase64	ange dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	ange antingen at (ett klick) eller area (en bana ritad runt överlappningarna)
 @msg	give formats or a preset, not both	ange formats eller en förinställning, inte båda
@@ -9621,7 +9668,9 @@ digits	Hindi	Hindi
 @msg	not a print presets file: {e}	inte en fil med utskriftsförinställningar: {e}
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	inte en WebAssembly-binärfil (huvudet \0asm saknas)
+@msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} parametrar
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstyp överskrider gränsen på {MAX_FUNC_TYPE_VALUES} resultat
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel
@@ -9920,6 +9969,12 @@ digits	Hindi	Hindi
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulen måste exportera `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulen har mer än ett anpassat avsnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	minnesbudget (modulens startminne är {initial} byte, gräns {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i det anpassade avsnittet `{MANIFEST_SECTION}` måste ange `abi` som {ABI_VERSION}, den ABI-version som den här värden implementerar
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabellbudget (modulen definierar {count} tabeller, den största med {largest} element; gräns {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} element)
+@msg	the module's table section could not be read	modulens tabellavsnitt kunde inte läsas
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt
 @msg	the object has no graphic style (pass `name`)	objektet har ingen grafikstil (ange `name`)
@@ -10104,6 +10159,10 @@ digits	Hindi	Hindi
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc returnerade 0 (slut på minne)
 @msg	vc_alloc returned a block outside memory	vc_alloc returnerade ett block utanför minnet
 @msg	vc_run returned error code {packed}	vc_run returnerade felkoden {packed}
+@msg	did not finish loading within {secs} s	blev inte färdigläst inom {secs} s
+@msg	no thread was left to load it	ingen tråd fanns kvar som kunde läsa in den
+@msg	panicked while loading	kraschade under inläsningen
+@msg	panicked while loading: {what}	kraschade under inläsningen: {what}
 @msg	view is required	view krävs
 @msg	view must be one of {_1}	view måste vara något av {_1}
 @msg	warpStyle can only edit an applied Warp effect	warpStyle kan bara redigera en tillämpad Förvräng-effekt

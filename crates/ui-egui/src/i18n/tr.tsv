@@ -193,6 +193,7 @@
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
 	Anti-aliased Artwork	Kenar Yumuşatılmış Sanat Çalışması
 	Anti-aliasing Method	Kenar Yumuşatma Yöntemi
+@id	language.name	Türkçe
 antiAlias	Sharp	Keskin
 	Crisp	Net
 	Strong	Güçlü
@@ -219,7 +220,7 @@ font-technology	Variable	Değişken
 	Apply Paragraph Style	Paragraf Stilini Uygula
 	Apply SVG Filter…	SVG Filtresini Uygula…
 	Apply to All	Tümüne Uygula
-@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Tümüne Uygula ({n} daha eksik)
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Tümüne Uygula ({n} daha eksik)|Tümüne Uygula ({n} daha eksik)
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
@@ -602,7 +603,7 @@ font-technology	Variable	Değişken
 	Show Document Colors	Belge Renklerini Göster
 	Document Colors	Belge Renkleri
 	Selection Colors	Seçim Renkleri
-@plural	Used {n} time|Used {n} times	{n} kez kullanıldı
+@plural	Used {n} time|Used {n} times	{n} kez kullanıldı|{n} kez kullanıldı
 	Show Harmony	Uyumu Göster
 	Harmony Rule	Uyum Kuralı
 	Harmony color	Uyum rengi
@@ -905,6 +906,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Bağlantı Noktalarını Kaldırır ve Yolları Birleşik Tutar
 	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
@@ -929,11 +931,6 @@ font-technology	Variable	Değişken
 	Distribute Spacing	Aralığı Dağıt
 	Distribute Spacing:	Aralığı Dağıt:
 	Dither:	Titreme:
-	Transparency Dither	Saydamlık titremesi
-	No Transparency Dither	Saydamlık titremesi yok
-	Diffusion Transparency Dither	Difüzyon saydamlık titremesi
-	Pattern Transparency Dither	Desen saydamlık titremesi
-	Noise Transparency Dither	Gürültü saydamlık titremesi
 	Divide	Böl
 	Divide Horizontally Into	Yatay Olarak Böl
 	Divide Objects Below	Aşağıdaki Nesneleri Böl
@@ -1591,6 +1588,17 @@ font-technology	Variable	Değişken
 	Graphic Styles	Grafik Stilleri
 	Graphic Styles Options	Grafik Stilleri Seçenekleri
 	Graphics	Grafik
+	Show Contrast	Kontrastı Göster
+	Contrast For	Kontrast Hedefi
+	Normal Text	Normal Metin
+	Large Text	Büyük Metin
+	Contrast Background	Kontrast Arka Planı
+	Behind Selection	Seçimin Arkası
+	Current Color	Geçerli Renk
+	Pass	Geçti
+	Fail	Kaldı
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 en düşük kontrast: normal metin AA 4.5:1 (1.4.3) ve AAA 7:1 (1.4.6), büyük metin AA 3:1 ve AAA 4.5:1, grafikler ve denetimler AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Arka plan seçimin ortasında okunur.
 	Graphics Processor	Grafik İşlemcisi
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Yerçekimi
@@ -1873,8 +1881,8 @@ font-technology	Variable	Değişken
 	Import Matches	Eşleşmeleri İçe Aktar
 	Remember Import Matches	İçe Aktarılan Eşleşmeleri Hatırla
 	Forget Import Matches	İçe Aktarma Eşleşmelerini Unutun
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} varsayılan kısayolla eşleşiyor
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	dosyanın {n} bölümü okunamadı
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} varsayılan kısayolla eşleşiyor|{n} varsayılan kısayolla eşleşiyor
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	dosyanın {n} bölümü okunamadı|dosyanın {n} bölümü okunamadı
 	Keywords:	Anahtar Kelimeler:
 	Knife	Bıçak
 	Knockout Group	Nakavt Grubu
@@ -2401,6 +2409,7 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -2533,7 +2542,7 @@ shape	Open	Açık
 	Package	Paket
 	Package collects a saved document with its linked files and fonts.	Paket, kayıtlı bir belgeyi bağlantılı dosyaları ve yazı tipleriyle birlikte toplar.
 	Package created	Paket oluşturuldu
-@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} dosya {folder} klasörüne paketlendi {note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	{n} dosya {folder} klasörüne paketlendi {note}|{n} dosya {folder} klasörüne paketlendi {note}
 	Package…	Paket…
 	Page	Sayfa
 	Page information	Sayfa bilgisi
@@ -2848,6 +2857,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son
@@ -2929,10 +2941,10 @@ digits	Malayalam	Malayalam
 	Searching…	Aranıyor…
 	Not found	Bulunamadı
 	{folders} and {files} searched	{folders} ve {files} arandı
-@plural	{n} folder|{n} folders	{n} klasör
-@plural	{n} file|{n} files	{n} dosya
-@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Diğer uygulamaların ve sistemin klasörleri ve gizli klasörler gibi {n} klasör atlandı
-@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} klasör veya dosya okunamadı
+@plural	{n} folder|{n} folders	{n} klasör|{n} klasör
+@plural	{n} file|{n} files	{n} dosya|{n} dosya
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Diğer uygulamaların ve sistemin klasörleri ve gizli klasörler gibi {n} klasör atlandı|Diğer uygulamaların ve sistemin klasörleri ve gizli klasörler gibi {n} klasör atlandı
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} klasör veya dosya okunamadı|{n} klasör veya dosya okunamadı
 	The search stopped at its limit: search a smaller folder.	Arama sınırda durdu: daha küçük bir klasörde arama yapın.
 	Copy only fonts you own or are licensed to install.	Yalnızca sahip olduğunuz veya yükleme lisansına sahip olduğunuz yazı tiplerini kopyalayın.
 	VectorCraft copies the fonts to {folder}.	VectorCraft yazı tiplerini {folder}'ye kopyalar.
@@ -3085,7 +3097,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Nesneleri boyut, konum ve hizalama için konturları ve şekil değiştiren efektleriyle birlikte ölçer; gölgeler, parlamalar ve bulanıklaştırmalar ölçülmez.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	%100 yakınlaştırmada belgenin bir inçi 72 yerine 96 ekran noktası kaplar.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	%100 yakınlaştırmada belgenin bir inçi ekranın bir inçini kaplar; sistem kullanılabilir bir ekran boyutu bildirmezse 96 ekran noktası kaplar.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Seçim aracıyla bir gruba, yola veya görüntüye çift tıklamak onu yalıtım modunda açar.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Desen dolguları ve konturları, bir dönüşüm veya Dönüştür panelinin menüsü başka bir seçim yapmadıkça resimle birlikte dönüşür.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
@@ -3096,6 +3108,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -3504,8 +3517,8 @@ digits	Malayalam	Malayalam
 	In the menu bar: {path}	Menü çubuğunda: {path}
 	In the {group} group: press and hold to open it	{group} grubunda: açmak için basılı tutun
 	{home}, not shown now	{home}, şu anda gösterilmiyor
-@plural	{n} result|{n} results	{n} sonuç
-@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
+@plural	{n} result|{n} results	{n} sonuç|{n} sonuç
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.|{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Type to search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri aramak için yazın
@@ -4423,19 +4436,19 @@ digits	Malayalam	Malayalam
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
 	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
-@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
-@plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
-@msgplural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?|{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
+@plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı|{n} bağlantılı dosya bulunamadı
+@msgplural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı|{n} bağlantılı dosya bulunamadı
 @msg	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
-@msgplural	({n} linked file not found)|({n} linked files not found)	({n} bağlantılı dosya bulunamadı)
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} bağlantılı dosya bulunamadı)|({n} bağlantılı dosya bulunamadı)
 @msg	(fonts not copied: {fonts})	(kopyalanmayan yazı tipleri: {fonts})
 @msg	({note}) ({more})	({note}) ({more})
 @msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	kopyalanmayan yazı tipleri: {fonts}
-@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
-@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?
-@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} kural daha: Dışa aktarma her birini yazar.
-@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} adsız nesne dışarıda bırakıldı: bunlara ad verin veya panel menüsünde Adsız Nesneler'i açın.
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?|{n} bağlantılı görsel bu belgenin kaydedilmesinden bu yana değiştirildi. Yeni sürümler gösterilsin mi?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?|{n} bağlantılı görsel diskte değiştirildi. Yeni sürümler gösterilsin mi?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	{n} kural daha: Dışa aktarma her birini yazar.|{n} kural daha: Dışa aktarma her birini yazar.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	{n} adsız nesne dışarıda bırakıldı: bunlara ad verin veya panel menüsünde Adsız Nesneler'i açın.|{n} adsız nesne dışarıda bırakıldı: bunlara ad verin veya panel menüsünde Adsız Nesneler'i açın.
 	{effect} is already applied	{effect} zaten uygulandı
 	{format} Options	{format} Seçenekleri
 	{kind} Gradient	{kind} Degrade
@@ -4454,21 +4467,21 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	“{file}” bir şifre ile korunmaktadır.
 	● Recording	● Kayıt
 imageTrace	Outline	Kontur
-@plural	{n} item|{n} items	{n} öğe
-@plural	Color Table ({n} color)|Color Table ({n} colors)	Renk Tablosu ({n} renk)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Bu {n} grafik stili silinsin mi?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	Bu {n} fırça silinsin mi?
-@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Bu {n} renk örneği ve grup silinsin mi?
-@plural	{n} Layer|{n} Layers	{n} Katman
-@plural	{n} Object|{n} Objects	{n} Nesne
-@plural	{n} area highlighted|{n} areas highlighted	{n} alan vurgulandı
-@plural	{n} color|{n} colors	{n} renk
-@plural	{n} fill|{n} fills	{n} dolgu
-@plural	{n} glyph|{n} glyphs	{n} glif
-@plural	{n} object highlighted|{n} objects highlighted	{n} nesne vurgulandı
-@plural	{n} star|{n} stars	{n} yıldız
-@plural	{n} step|{n} steps	{n} adım
-@plural	{n} stroke|{n} strokes	{n} kontur
+@plural	{n} item|{n} items	{n} öğe|{n} öğe
+@plural	Color Table ({n} color)|Color Table ({n} colors)	Renk Tablosu ({n} renk)|Renk Tablosu ({n} renk)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	Bu {n} grafik stili silinsin mi?|Bu {n} grafik stili silinsin mi?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	Bu {n} fırça silinsin mi?|Bu {n} fırça silinsin mi?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	Bu {n} renk örneği ve grup silinsin mi?|Bu {n} renk örneği ve grup silinsin mi?
+@plural	{n} Layer|{n} Layers	{n} Katman|{n} Katman
+@plural	{n} Object|{n} Objects	{n} Nesne|{n} Nesne
+@plural	{n} area highlighted|{n} areas highlighted	{n} alan vurgulandı|{n} alan vurgulandı
+@plural	{n} color|{n} colors	{n} renk|{n} renk
+@plural	{n} fill|{n} fills	{n} dolgu|{n} dolgu
+@plural	{n} glyph|{n} glyphs	{n} glif|{n} glif
+@plural	{n} object highlighted|{n} objects highlighted	{n} nesne vurgulandı|{n} nesne vurgulandı
+@plural	{n} star|{n} stars	{n} yıldız|{n} yıldız
+@plural	{n} step|{n} steps	{n} adım|{n} adım
+@plural	{n} stroke|{n} strokes	{n} kontur|{n} kontur
 	 the object to select  |  	 seçilecek nesne |  
 	 to select multiple objects  |  	 birden fazla nesne seçmek için |  
 	 the object to duplicate	 çoğaltılacak nesne
@@ -4766,8 +4779,8 @@ axis	Both	Her İkisi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: bir iletişim kutusu yerleşik bir işlevin geri çağrısında, bir getter içinde, bir dönüştürmede veya $.evalFile'ın çalıştırdığı bir dosyada açılamaz; bunu betiğin kendi kodundan çağırın
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` içindeki sonraki yanıt {name} için değil, {_1} için
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` içinde bu iletişim kutusu için yanıt kalmadı
-@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` içinde betiğin kullanmadığı {n} yanıt var
-@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}, fırçanın altındaki {n} nesneyi değiştirmeden bıraktı ({_2}): yalnızca yolları yeniden şekillendirir
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` içinde betiğin kullanmadığı {n} yanıt var|`answers` içinde betiğin kullanmadığı {n} yanıt var
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}, fırçanın altındaki {n} nesneyi değiştirmeden bıraktı ({_2}): yalnızca yolları yeniden şekillendirir|{_1}, fırçanın altındaki {n} nesneyi değiştirmeden bıraktı ({_2}): yalnızca yolları yeniden şekillendirir
 liquify-tool	Warp	Çarpıtma
 liquify-tool	Twirl	Burgu
 liquify-tool	Pucker	Büzülme
@@ -4887,7 +4900,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	PDF settings are not an object	PDF ayarları bir nesne değildir
 @msg	PDF security settings are not an object	PDF güvenlik ayarları bir nesne değildir
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})|{n} dosya {folder} klasörüne paketlendi ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` değerini verin, K cinsinden istenen dosya boyutu (1024 bayt): 0'dan büyük ve en çok 1048576 olan bir sayı
 @msg	`startWith` is `current` or `auto`	`startWith` değeri `current` veya `auto` olmalıdır
@@ -5217,8 +5230,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
 @msg	no action set to save	kaydedilecek eylem seti yok
 @msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
-@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
-@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” yüklendi: bilinmeyen komutlu {n} adım korundu; ilki: “{action}”, adım {step}, `{command}`
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı|“{name}” yüklendi: {n} adım atlandı
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” yüklendi: bilinmeyen komutlu {n} adım korundu; ilki: “{action}”, adım {step}, `{command}`|“{name}” yüklendi: bilinmeyen komutlu {n} adım korundu; ilki: “{action}”, adım {step}, `{command}`
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	not an action set file ({e})	bir eylem seti dosyası değil ({e})
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
@@ -5301,6 +5314,12 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	finish editing the pattern first	önce deseni düzenlemeyi bitir
 @msg	nothing encoded	kodlanmış hiçbir şey yok
 @msg	nothing selected	hiçbir şey seçilmedi
+@msg	`{key}` must be a color or {_1}	`{key}` bir renk veya {_1} olmalıdır
+@msg	the selected objects' colors differ: give `color`	seçili nesnelerin renkleri farklı: `color` belirtin
+@msg	the selected objects' colors differ: give `opacity` or `color`	seçili nesnelerin renkleri farklı: `opacity` veya `color` belirtin
+@msg	the active fill or stroke has no color: give `color`	etkin dolgu veya konturun rengi yok: `color` belirtin
+@msg	the active fill or stroke is hidden: give `color`	etkin dolgu veya kontur gizli: `color` belirtin
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	etkin dolgu veya kontur bir opaklık maskesi üzerinden çiziliyor: `color` belirtin
 @msg	nothing selected is in a group	seçilenlerin hiçbiri bir grupta değil
 @msg	nothing to align	hizalanacak hiçbir şey yok
 @msg	nothing to distort	çarpıtılacak hiçbir şey yok
@@ -5570,40 +5589,40 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Placing {_1}	{_1} yerleştiriliyor
 @msg	Pasting	Yapıştırılıyor
 @msg	Saving recovery data for {_1}	{_1} için kurtarma verileri kaydediliyor
-@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
-@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
-@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} notla açıldı: {first}
-@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	{n} notla kopyalandı: {first}
-@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	{n} notla kesildi: {first}
-@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Görüntü {n} notla izlendi: {first}
-@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} notla açıldı: {first}
-@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path}, {n} notla kaydedildi: {first}
-@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın
-@msgplural	Embedded {n} image|Embedded {n} images	{n} görsel gömüldü
-@msgplural	Relinked {n} image|Relinked {n} images	{n} görsel yeniden bağlandı
-@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} görsel yeniden bağlandı; bu klasörde değil: {names}
-@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} görsel yeniden bağlandı; {name} yeniden bağlanamadı: {reason}
-@msgplural	Updated {n} image|Updated {n} images	{n} görsel güncellendi
-@msgplural	Replaced {n} image|Replaced {n} images	{n} görsel değiştirildi
-@msgplural	Broke {n} link|Broke {n} links	{n} bağlantı kesildi
-@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} bağlantı kesildi; {missing} okunamıyor: önce onları yeniden bağlayın veya güncelleyin
-@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} bağlantılı dosya burada okunamıyor: önizlemeleri gösteriliyor
-@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} görüntünün kodu çözülemedi: çarpı işaretli kutular olarak gösteriliyor
-@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} bağlantılı görsel diskte değişti: Bağlantıları Güncelle yeni sürümleri gösterir
-@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Diskte değişen {n} bağlantılı dosya güncellendi
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı|Kurtarılan {n} belge atıldı
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin|Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} notla açıldı: {first}|{n} notla açıldı: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	{n} notla kopyalandı: {first}|{n} notla kopyalandı: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	{n} notla kesildi: {first}|{n} notla kesildi: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Görüntü {n} notla izlendi: {first}|Görüntü {n} notla izlendi: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} notla açıldı: {first}|{notice}. {n} notla açıldı: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path}, {n} notla kaydedildi: {first}|{path}, {n} notla kaydedildi: {first}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın|{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın
+@msgplural	Embedded {n} image|Embedded {n} images	{n} görsel gömüldü|{n} görsel gömüldü
+@msgplural	Relinked {n} image|Relinked {n} images	{n} görsel yeniden bağlandı|{n} görsel yeniden bağlandı
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	{n} görsel yeniden bağlandı; bu klasörde değil: {names}|{n} görsel yeniden bağlandı; bu klasörde değil: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	{n} görsel yeniden bağlandı; {name} yeniden bağlanamadı: {reason}|{n} görsel yeniden bağlandı; {name} yeniden bağlanamadı: {reason}
+@msgplural	Updated {n} image|Updated {n} images	{n} görsel güncellendi|{n} görsel güncellendi
+@msgplural	Replaced {n} image|Replaced {n} images	{n} görsel değiştirildi|{n} görsel değiştirildi
+@msgplural	Broke {n} link|Broke {n} links	{n} bağlantı kesildi|{n} bağlantı kesildi
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	{n} bağlantı kesildi; {missing} okunamıyor: önce onları yeniden bağlayın veya güncelleyin|{n} bağlantı kesildi; {missing} okunamıyor: önce onları yeniden bağlayın veya güncelleyin
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	{n} bağlantılı dosya burada okunamıyor: önizlemeleri gösteriliyor|{n} bağlantılı dosya burada okunamıyor: önizlemeleri gösteriliyor
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} görüntünün kodu çözülemedi: çarpı işaretli kutular olarak gösteriliyor|{n} görüntünün kodu çözülemedi: çarpı işaretli kutular olarak gösteriliyor
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} bağlantılı görsel diskte değişti: Bağlantıları Güncelle yeni sürümleri gösterir|{n} bağlantılı görsel diskte değişti: Bağlantıları Güncelle yeni sürümleri gösterir
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Diskte değişen {n} bağlantılı dosya güncellendi|Diskte değişen {n} bağlantılı dosya güncellendi
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	belge, bu PDF/X dosyasının dışarıda bıraktığı bir taşma payı ayarlıyor: "Belge taşma payı ayarlarını kullan" seçeneğini açın
-@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} nesne kesim kenarına ulaşıyor ancak taşma payından önce bitiyor
-@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} {n} notla dışa aktarıldı: {first}
-@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} yazı tipi dosyası artık {folder} içinde
-@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} yazı tipi dosyası artık {folder} içinde; {failed} eklenemedi: {reason}
-@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} yazı tipi burada kullanılamıyor: metni başka bir yazı tipiyle gösteriliyor
-@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} nesnenin CSS'si kopyalandı
-@msgplural	Downloaded {n} file|Downloaded {n} files	{n} dosya indirildi
-@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} dosya {folder} klasörüne aktarıldı
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} nesne kesim kenarına ulaşıyor ancak taşma payından önce bitiyor|{n} nesne kesim kenarına ulaşıyor ancak taşma payından önce bitiyor
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} {n} notla dışa aktarıldı: {first}|{what} {n} notla dışa aktarıldı: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} yazı tipi dosyası artık {folder} içinde|{n} yazı tipi dosyası artık {folder} içinde
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} yazı tipi dosyası artık {folder} içinde; {failed} eklenemedi: {reason}|{n} yazı tipi dosyası artık {folder} içinde; {failed} eklenemedi: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	{n} yazı tipi burada kullanılamıyor: metni başka bir yazı tipiyle gösteriliyor|{n} yazı tipi burada kullanılamıyor: metni başka bir yazı tipiyle gösteriliyor
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	{n} nesnenin CSS'si kopyalandı|{n} nesnenin CSS'si kopyalandı
+@msgplural	Downloaded {n} file|Downloaded {n} files	{n} dosya indirildi|{n} dosya indirildi
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} dosya {folder} klasörüne aktarıldı|{n} dosya {folder} klasörüne aktarıldı
 @msg	All colors are within the CMYK gamut	Tüm renkler CMYK gamındadır
-@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} renk CMYK gamının dışında
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} renk CMYK gamının dışında|{n} renk CMYK gamının dışında
 @msg	Unembedded to {_1}	{_1}'ye gömülü değil
-@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} görselin gömülmesi kaldırıldı: {folder}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} görselin gömülmesi kaldırıldı: {folder}|{n} görselin gömülmesi kaldırıldı: {folder}
 @msg	every numbered name for {name} is taken in that folder	{name} için numaralandırılmış her ad o klasörde zaten kullanılıyor
 @msg	Reset {_1}	{_1}'yi sıfırla
 @msg	Sent to {_1}	{_1}'ye gönderildi
@@ -6169,6 +6188,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3 boyutlu nesnenin ağı eksik veya sayı olmayan bir değer içeriyor
 @msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
 @msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir
@@ -6690,17 +6710,19 @@ arrowhead	Feather	Tüy
 @id	pathfinder.add	Birleşim
 @msg	give corners of the path: anchors between two straight sides	yolun köşelerini verin: iki düz kenar arasındaki çapalar
 @msg	this kind of brush has no options dialog yet	bu tür bir fırçanın henüz seçenekler iletişim kutusu yok
-@plural	{n} PR|{n} PRs	{n} PR
-@plural	{n} commit|{n} commits	{n} commit
-@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} kısayol birden fazla kez atanmış
+@plural	{n} PR|{n} PRs	{n} PR|{n} PR
+@plural	{n} commit|{n} commits	{n} commit|{n} commit
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	{n} kısayol birden fazla kez atanmış|{n} kısayol birden fazla kez atanmış
 diagnostics	render	işleme
 diagnostics	ui	arayüz
 effect	Horizontal	Yatay
 effect	Points	Noktalar
 effect	Regular	Düzenli
 effect	Vertical	Dikey
+file-filter	Action sets	Eylem setleri
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Composite fonts	Bileşik fontlar
 file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
@@ -6710,6 +6732,7 @@ file-filter	Preferences	Tercihler
 file-filter	SVG Compressed	Sıkıştırılmış SVG
 file-filter	Swatch libraries	Renk örneği kitaplıkları
 file-filter	Templates	Şablonlar
+file-filter	Tracing presets	İzleme önayarları
 file-filter	VectorCraft Template	VectorCraft Şablonu
 gradient-kind	Radial	Radyal
 mark-style	Japanese	Japon
@@ -7176,13 +7199,19 @@ theme	Appearance	Görünüm
 	{file}; {embedding}	{file}; {embedding}
 	unknown type	bilinmeyen tür
 	{type}; {uses}	{type}; {uses}
-@plural	{n} use|{n} uses	{n} kullanım
+@plural	{n} use|{n} uses	{n} kullanım|{n} kullanım
 	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
 	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
 	missing	eksik
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	çözünürlük kullanılamıyor
+	estimated memory {memory}	tahmini bellek {memory}
+	memory unavailable	bellek kullanılamıyor
+	Unknown format	Bilinmeyen biçim
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7191,9 +7220,9 @@ theme	Appearance	Görünüm
 	Conic gradient	Konik degrade
 	Diamond gradient	Elmas degrade
 	Freeform gradient	Serbest biçimli degrade
-@plural	{n} instance|{n} instances	{n} örnek
-@plural	{n} row|{n} rows	{n} satır
-@plural	{n} column|{n} columns	{n} sütun
+@plural	{n} instance|{n} instances	{n} örnek|{n} örnek
+@plural	{n} row|{n} rows	{n} satır|{n} satır
+@plural	{n} column|{n} columns	{n} sütun|{n} sütun
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.
@@ -7337,17 +7366,17 @@ variable-list-end	{0}, {1}	{0} ve {1}
 axis	X Axis	X ekseni
 axis	Y Axis	Y ekseni
 
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}
-@msgplural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi|{n} dosya {folder} klasörüne paketlendi
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}|{n} dosya paketlendi {note}
+@msgplural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi|{n} dosya paketlendi
 # Artwork drag between document tabs.
 	Drop Artwork	Çizimi Bırak
 @msg	{key} must be [x, y] with finite coordinates	{key}, sonlu koordinatlı [x, y] olmalı
 @msg	ids must contain 1–10000 object ids	ids 1–10000 nesne kimliği içermeli
-@plural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi
-@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi
-@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}
-@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} içinde {n} dosya. Paket klasörü gösterilsin mi?
+@plural	Packaged {n} file|Packaged {n} files	{n} dosya paketlendi|{n} dosya paketlendi
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{n} dosya {folder} klasörüne paketlendi|{n} dosya {folder} klasörüne paketlendi
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	{n} dosya paketlendi {note}|{n} dosya paketlendi {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	{folder} içinde {n} dosya. Paket klasörü gösterilsin mi?|{folder} içinde {n} dosya. Paket klasörü gösterilsin mi?
 	Clockwise	Saat yönünde
 	Dither	Titreme
 	Fine noise hides banding in the gradient fill	İnce gürültü, degrade dolgudaki bantları gizler
@@ -7374,6 +7403,8 @@ axis	Y Axis	Y ekseni
 	Cancel Plug-in Run	Eklenti Çalıştırmasını İptal Et
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} bitti, ancak bu sırada belge veya eklenti değişti: yeniden çalıştırın
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
+@msg	Plug-in “{name}”: {notice}	“{name}” eklentisi: {notice}
+@msg	`notice` must be a string with visible text	`notice` görünür metin içeren bir dize olmalıdır
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
@@ -7399,11 +7430,19 @@ axis	Y Axis	Y ekseni
 @msg	module is {_1} bytes (limit {_2})	modül {_1} bayt (sınır {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly ikili dosyası değil (\0asm üst bilgisi eksik)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır
 @msg	the module must export its linear memory as `memory`	modül doğrusal belleğini `memory` olarak dışa aktarmalıdır
+@msg	the module must export `{name}` with the type {signature}	modül `{name}` öğesini {signature} türüyle dışa aktarmalıdır
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modülde birden fazla `{MANIFEST_SECTION}` özel bölümü var
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	bellek bütçesi (modülün başlangıç belleği {initial} bayt, sınır {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` özel bölümündeki bildirim `abi` değerini {ABI_VERSION} olarak vermelidir; bu, bu ana bilgisayarın uyguladığı ABI sürümüdür
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tablo bütçesi (modül {count} tablo tanımlıyor, en büyüğünde {largest} öğe var; sınır {MAX_TABLES} tablo, her biri {MAX_TABLE_ELEMENTS} öğe)
+@msg	the module's table section could not be read	modülün tablo bölümü okunamadı
 @msg	the objects to change are no longer in the document	değiştirilecek nesneler artık belgede değil
 @msg	the runtime panicked	çalışma zamanı çöktü
 @msg	unexpected host trap	ana bilgisayarda beklenmeyen kesme (trap)
@@ -7411,6 +7450,10 @@ axis	Y Axis	Y ekseni
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 0 döndürdü (bellek yetersiz)
 @msg	vc_alloc returned a block outside memory	vc_alloc bellek dışında bir blok döndürdü
 @msg	vc_run returned error code {packed}	vc_run {packed} hata kodunu döndürdü
+@msg	did not finish loading within {secs} s	{secs} sn içinde yüklenmeyi bitirmedi
+@msg	no thread was left to load it	onu yükleyecek iş parçacığı kalmadı
+@msg	panicked while loading	yüklenirken çöktü
+@msg	panicked while loading: {what}	yüklenirken çöktü: {what}
 @msg	{_1} is not a file	{_1} bir dosya değil
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} bayt (sınır {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} nesne (sınır {MAX_OBJECTS})
@@ -7430,6 +7473,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir
@@ -7448,7 +7496,7 @@ axis	Y Axis	Y ekseni
 @msg	a list of {min_items} to {max_items} numbers	{min_items} ile {max_items} arasında sayıdan oluşan bir liste
 @msg	a new object needs a `path`	yeni bir nesnenin `path` değerine ihtiyacı vardır
 @msg	a number	bir sayı
-@msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
+@msg	a painted live effect returns only `objects` and `notice`	boyama türü canlı efekt yalnızca `objects` ve `notice` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün
@@ -7473,6 +7521,8 @@ axis	Y Axis	Y ekseni
 @msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	{id} bileşik yolunun gizli, kilitli veya kılavuz olan bir üyesi var, bu yüzden üyeleri değiştirilemez
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	{id} bileşik yolunun yol olmayan bir üyesi var, bu yüzden üyeleri değiştirilemez
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
 @msg	true or false	true veya false
 @msg	a number >= {_1}	bir sayı >= {_1}
@@ -7551,6 +7601,8 @@ axis	Y Axis	Y ekseni
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
 @msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
+@msg	`place` is only for an importer (`kind` "importer")	`place` yalnızca içe aktarıcı (`kind` "importer") içindir
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” dosyaları açar ama yerleştirmez: bildirimi `place` ayarlamaz
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
@@ -7562,6 +7614,10 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Kendisine verilen nesneleri ve belgenin ayarlarını, çalışma yüzeylerini, katmanlarını ve renk örneklerini okuma
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` farklı bölümleri listelemelidir: settings, artboards, layers veya swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` yalnızca `api` 3 veya sonrasında, `doc.read` izniyle bir filtre ya da `commands` içeren bir canlı efekt içindir
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	eklentinin istediği belge bilgileri aktarılamayacak kadar büyük: {MAX_CONTEXT_BYTES} bayt içinde en fazla {MAX_CONTEXT_ITEMS} çalışma yüzeyi, katman ve renk örneği
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	instruction budget	talimat bütçesi
@@ -8129,6 +8185,8 @@ axis	Y Axis	Y ekseni
 @msg	`dataBase64` is larger than the module limit	`dataBase64` modül sınırından büyük
 @msg	`dataBase64` is not valid base64	`dataBase64` geçerli bir base64 değil
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`; `ids`, `reverse` veya `append` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`; `ids`, `id` veya `item` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`; `brush` ile birleştirilemez
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` ve `childLimit` özeti dilimler: `summary: true` verin
 @msg	`design` is a design name, or null for plain columns	`design` bir tasarım adıdır veya düz sütunlar için null olur
 @msg	`design` is a design name, or null for the default marker	`design` bir tasarım adıdır veya varsayılan işaretçi için null olur
@@ -9486,7 +9544,7 @@ axis	Y Axis	Y ekseni
 	On Artboards	Çalışma Yüzeylerinde
 	All Artboards	Tüm Çalışma Yüzeyleri
 	Include Objects On Canvas	Tuvaldeki Nesneleri Dahil Et
-@plural	Result: {n}|Results: {n}	Sonuç: {n}
+@plural	Result: {n}|Results: {n}	Sonuç: {n}|Sonuç: {n}
 @msg	select one object	bir nesne seçin
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
 @msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
@@ -10399,13 +10457,13 @@ breakText	Glyphs	Glifler
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
 	Export All Open Documents as SVG	Tüm Açık Belgeleri SVG Olarak Dışa Aktar
-@msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı
-@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}
+@msgplural	Exported {n} document|Exported {n} documents	{n} belge dışa aktarıldı|{n} belge dışa aktarıldı
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} belge dışa aktarıldı; {title} yazılamadı: {error}|{n} belge dışa aktarıldı; {title} yazılamadı: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
 	Batch Trace Folder	Klasörü Toplu İzle
-@msgplural	Traced {n} image|Traced {n} images	{n} resim izlendi
-@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} resim izlenemedi
-@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} resim izlendi; izlenemeyen: {failed}
+@msgplural	Traced {n} image|Traced {n} images	{n} resim izlendi|{n} resim izlendi
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} resim izlenemedi|{n} resim izlenemedi
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} resim izlendi; izlenemeyen: {failed}|{n} resim izlendi; izlenemeyen: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Sembol Türü:
 	Dynamic Symbol	Dinamik Sembol
@@ -10506,15 +10564,15 @@ breakText	Glyphs	Glifler
 	Select by Link Status…	Bağlantı Durumuna Göre Seç…
 	Search images	Görüntülerde ara
 	No images match.	Eşleşen görüntü yok.
-@msgplural	Selected {n} linked image|Selected {n} linked images	{n} bağlantılı görüntü seçildi
-@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} gömülü görüntü seçildi
-@msgplural	Selected {n} missing image|Selected {n} missing images	{n} eksik görüntü seçildi
-@msgplural	Selected {n} modified image|Selected {n} modified images	{n} değiştirilmiş görüntü seçildi
-@msgplural	Selected {n} image|Selected {n} images	{n} görüntü seçildi
-@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} tane daha gizli veya kilitli
-@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} tane daha şablon katmanında
-@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} tane daha izole grubun dışında
-@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} tane daha şu anda seçilemiyor
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} bağlantılı görüntü seçildi|{n} bağlantılı görüntü seçildi
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} gömülü görüntü seçildi|{n} gömülü görüntü seçildi
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} eksik görüntü seçildi|{n} eksik görüntü seçildi
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} değiştirilmiş görüntü seçildi|{n} değiştirilmiş görüntü seçildi
+@msgplural	Selected {n} image|Selected {n} images	{n} görüntü seçildi|{n} görüntü seçildi
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} tane daha gizli veya kilitli|{selected}; {n} tane daha gizli veya kilitli
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} tane daha şablon katmanında|{selected}; {n} tane daha şablon katmanında
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} tane daha izole grubun dışında|{selected}; {n} tane daha izole grubun dışında
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} tane daha şu anda seçilemiyor|{selected}; {n} tane daha şu anda seçilemiyor
 
 # Compound Shapes add-on
 	Compound Shapes	Bileşik Şekiller
@@ -10596,9 +10654,9 @@ breakText	Glyphs	Glifler
 	{time}, {calls}	{time}, {calls}
 	slowest: {commands}	en yavaşlar: {commands}
 	{dropped}, {cut}	{dropped}, {cut}
-@plural	{n} host call|{n} host calls	{n} ana bilgisayar çağrısı
-@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eski satır atıldı
-@plural	{n} line cut|{n} lines cut	{n} satır kesildi
+@plural	{n} host call|{n} host calls	{n} ana bilgisayar çağrısı|{n} ana bilgisayar çağrısı
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} eski satır atıldı|{n} eski satır atıldı
+@plural	{n} line cut|{n} lines cut	{n} satır kesildi|{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
 
 # Learn panel
@@ -10642,7 +10700,7 @@ breakText	Glyphs	Glifler
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile
 	Deferred Effects	Ertelenen Efektler
 @msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
-@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.|{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.
 
 # Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
 	Cutting Tools	Kesim Araçları
