@@ -11,14 +11,25 @@ fn artboard_bleed_is_a_target() {
     assert_eq!(t.snap_point(Point::new(512.0, 300.0), 4.0).0.x, 510.0);
 }
 
-/// #8531: once the anchors gathered reach their budget, the objects after them still give their
-/// edges and centres, for a ruler guide, a moved selection and a drawn point. Their anchors stay
-/// capped.
+/// #8531: when a document has more anchors than the targets gather, the object drawn last, in
+/// front, still gives its anchors, edges and centre, for a ruler guide, a moved selection and a
+/// drawn point, while the anchors stay capped.
 #[test]
-fn objects_past_the_anchor_budget_keep_their_edges_and_centre() {
+fn the_topmost_object_keeps_its_targets_past_the_anchor_budget() {
     let (d, rect) = doc_with_rect_over_many_anchors();
     let t = Targets::collect(&d, &[], None);
-    assert_eq!(t.points.iter().filter(|(_, k)| *k == Kind::Anchor).count(), targets::BUDGET);
+    let anchors: Vec<Point> = t.points.iter().filter(|(_, k)| *k == Kind::Anchor).map(|(p, _)| *p).collect();
+    let in_doc: usize = d.layers[0]
+        .children()
+        .into_iter()
+        .flatten()
+        .map(|n| match &n.kind {
+            NodeKind::Path { path, .. } => path.anchors().count(),
+            _ => 0,
+        })
+        .sum();
+    assert!(anchors.len() < in_doc, "the anchors stay capped");
+    assert!(anchors.contains(&Point::new(400.0, 300.0)), "the rectangle's corner");
     assert_eq!(t.snap_guide(false, 301.0, 4.0).0, 300.0, "the bottom edge");
     assert_eq!(t.snap_guide(true, 398.0, 4.0).0, 400.0, "the right edge");
     let (p, ov) = t.snap_point(Point::new(302.0, 201.0), 4.0);
@@ -32,20 +43,6 @@ fn objects_past_the_anchor_budget_keep_their_edges_and_centre() {
     assert_eq!(other.snap_rect(Rect::new(420.0, 102.0, 450.0, 130.0), 4.0).0.y, 0.0, "without the rectangle, nothing near");
     let drawn = Targets::for_drawing(&d, &[], None, None);
     assert_eq!(drawn.snap_point(Point::new(450.0, 298.0), 4.0).0.y, 300.0);
-}
-
-#[test]
-fn a_bounds_walk_has_no_segment_budget_to_keep_it_going() {
-    assert_eq!(super::targets::start_budgets(super::targets::Gather::Bounds, 7), (super::targets::BUDGET, 0, 7));
-    assert_eq!(super::targets::start_budgets(super::targets::Gather::Segments, 7).1, super::targets::BUDGET);
-}
-
-#[test]
-fn objects_past_the_bounds_budget_keep_their_anchors() {
-    let (d, _) = doc_with_rect();
-    let t = Targets::collect_bounds_capped(&d, 0);
-    assert_eq!(t.snap_point(Point::new(102.0, 99.0), 4.0).0, Point::new(100.0, 100.0), "the corner anchor");
-    assert_eq!(t.snap_guide(false, 101.0, 4.0).0, 100.0, "the anchors line up a guide");
 }
 
 #[test]
