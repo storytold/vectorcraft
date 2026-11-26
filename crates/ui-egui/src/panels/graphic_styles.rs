@@ -20,7 +20,7 @@ use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
     Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
-use craft::ui::display::{Divider, Picture, PictureSize};
+use craft::ui::display::{Divider, Picture, PictureSize, Text};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
@@ -404,7 +404,7 @@ fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &Styl
     })
     .extent(PictureSize::Fill)
     .show(ui);
-    ui.label(key);
+    Text::new(key.clone()).show(ui);
 }
 
 // ---------- the panel ----------
