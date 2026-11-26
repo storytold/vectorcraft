@@ -13,7 +13,7 @@
 //! In a frame automation drives with read roots in force, the list names a file outside them by
 //! its file name alone, as `svgInteractivity.info` does; `selected` keeps the file as linked.
 
-use craft::behavior::{Selection, keyed};
+use craft::behavior::{Revision, Selection, keyed};
 use craft::host::PickRequest;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
@@ -203,6 +203,7 @@ fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
     let mut selection = selected.map(|linked| Selection::single(linked.clone())).unwrap_or_default();
     List::new(tl!("Linked files"))
         .select(SelectMode::Single)
+        .rows_stamp(Revision::of(&selected).get())
         .min_rows(LIST_ROWS)
         .max_rows(LIST_ROWS)
         .selection(Bind::bound(&mut selection))
@@ -302,6 +303,11 @@ mod tests {
 
         panel.click("scripts/first.js");
         assert_eq!(json_selected(&panel), "scripts/first.js");
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(json_selected(&panel), "scripts/second.js");
+        // A selection changed outside the list gives the next arrow its new starting row.
+        set_field(&panel, "selected", "scripts/first.js");
+        panel.frame();
         panel.key(Key::ArrowDown, Modifiers::NONE);
         assert_eq!(json_selected(&panel), "scripts/second.js");
         panel.click(tl!("Remove"));
