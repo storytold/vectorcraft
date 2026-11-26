@@ -42,9 +42,27 @@ impl PartialEq for RequestUnits {
     }
 }
 
+#[derive(Eq)]
+struct ImportLocal<'a>(&'a str);
+
+impl std::hash::Hash for ImportLocal<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(self.0, state);
+    }
+}
+
+impl PartialEq for ImportLocal<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(test)]
+        EXPORT_SEARCH_STEPS.with(|steps| steps.set(steps.get() + 1));
+        self.0 == other.0
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     static REQUEST_SEARCH_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static EXPORT_SEARCH_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 impl Parser<'_> {
@@ -307,13 +325,19 @@ impl Parser<'_> {
     /// exported import becomes a re-export of what it imports (section 15.2.1.16.1; a namespace
     /// import as ECMA-262 2020 reads `export * as ns from`).
     fn finish_exports(&self, info: &mut ModuleInfo, clause: Vec<ClauseExport>) -> Result<()> {
+        #[cfg(test)]
+        EXPORT_SEARCH_STEPS.with(|steps| steps.set(0));
+        let mut imports = HashMap::with_capacity(info.imports.len());
+        for import in &info.imports {
+            imports.entry(ImportLocal(&import.local.name)).or_insert(import);
+        }
         let top = self.scopes.first();
         for c in clause {
             let declared = top.is_some_and(|s| s.lexical.contains_key(&c.local) || s.vars.contains(&c.local));
             if !declared {
                 return Err(self.error_at_offset(c.span.start, format!("'{}' is exported but not declared in the module", c.local)));
             }
-            let imported = info.imports.iter().find(|i| i.local.name == c.local);
+            let imported = imports.get(&ImportLocal(&c.local));
             let entry = match imported {
                 Some(i) => ExportEntry::Indirect { export_name: c.export_name, request: i.request, import: i.import.clone(), span: c.span },
                 None => ExportEntry::Local { export_name: c.export_name, local: c.local, span: c.span },
@@ -336,7 +360,7 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::REQUEST_SEARCH_STEPS;
+    use super::{EXPORT_SEARCH_STEPS, REQUEST_SEARCH_STEPS};
     use crate::{Options, parse_module};
 
     #[test]
@@ -373,5 +397,38 @@ mod tests {
         let steps = REQUEST_SEARCH_STEPS.with(std::cell::Cell::get);
         assert!(steps > 0, "the repeated requests compare their exact UTF-16 keys");
         assert!(steps <= 2 * (count + 5), "{steps} request-search steps for {} requests", count + 5);
+    }
+
+    #[test]
+    fn imported_export_resolution_work_is_bounded_by_binding_count() {
+        let count = 1_000;
+        let bindings = (0..count).map(|index| format!("value as local{index}")).collect::<Vec<_>>().join(",");
+        let exports = (0..count).map(|index| format!("local{index} as exported{index}")).collect::<Vec<_>>().join(",");
+        let source = format!(
+            "import {{{bindings}}} from './values.mjs'; import * as ns from './namespace.mjs'; export {{{exports},ns as namespace,local0 as again}};"
+        );
+        let (_, info) = match parse_module(&source, &Options::default()) {
+            Ok(parsed) => parsed,
+            Err(error) => panic!("{error:?}"),
+        };
+        assert_eq!(info.imports.len(), count + 1);
+        assert_eq!(info.exports.len(), count + 2);
+        for (index, export) in info.exports.iter().take(count).enumerate() {
+            assert!(matches!(export, crate::ExportEntry::Indirect { export_name, request: 0, import: crate::ast::ImportName::Name(name), .. }
+                    if export_name == &format!("exported{index}") && name == "value"));
+        }
+        assert!(matches!(info.exports[count], crate::ExportEntry::Indirect { request: 1, import: crate::ast::ImportName::Namespace, .. }));
+        assert!(
+            matches!(&info.exports[count + 1], crate::ExportEntry::Indirect { request: 0, import: crate::ast::ImportName::Name(name), .. } if name == "value")
+        );
+        let steps = EXPORT_SEARCH_STEPS.with(std::cell::Cell::get);
+        assert!(steps > 0);
+        assert!(steps <= 3 * (count + 2), "{steps} import-local comparisons for {} exports", count + 2);
+        for source in [
+            "import {value as x} from './values.mjs'; export {x,x};",
+            "import {value as x} from './values.mjs'; import * as x from './namespace.mjs';",
+        ] {
+            assert!(parse_module(source, &Options::default()).is_err(), "{source}");
+        }
     }
 }
