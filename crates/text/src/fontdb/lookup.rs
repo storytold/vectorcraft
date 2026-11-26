@@ -725,7 +725,8 @@ impl FontDb {
             // As before, keep the prefix emitted before a malformed glyph reports an error.
             let _ = font.draw_to(gid, &mut pen);
         }
-        pen.0
+        // An outline past MAX_OUTLINE_ELEMENTS comes back empty.
+        pen.finish()
     }
 
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).

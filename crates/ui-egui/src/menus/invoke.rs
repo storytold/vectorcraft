@@ -55,6 +55,8 @@ pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Res
         crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
         crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
         crate::dialogs::smart_punctuation::COMMAND => crate::dialogs::smart_punctuation::open(app),
+        // Set Fold Angle… opens on the angle the selected fold lines fold at, and says why while it can change none.
+        crate::addons::packaging::SET_FOLD_ANGLE => crate::addons::packaging::open_dialog(app),
         _ => return None,
     })
 }

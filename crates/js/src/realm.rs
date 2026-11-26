@@ -282,6 +282,7 @@ impl Realm {
     /// Runs `source` as a script in the global environment, then the promise jobs it queued, and
     /// returns its completion value (the value of the last expression statement that ran). A realm
     /// whose built-ins could not be installed runs nothing and gives an internal error.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn run(&mut self, source: &str) -> Result<JsValue, RunError> {
         let code = self.compile(source)?;
         let result = self.interp.run_global(code, false).and_then(|v| self.interp.drain_jobs(v));
@@ -455,6 +456,7 @@ impl Realm {
     }
 
     /// Begins a run that [`Realm::advance`] carries on: compiles `source` and enters it.
+    /// A paused or waiting run ends first; its globals remain available.
     pub fn start(&mut self, source: &str) -> Result<(), RunError> {
         let code = self.compile(source)?;
         match self.interp.enter_global(code, false) {

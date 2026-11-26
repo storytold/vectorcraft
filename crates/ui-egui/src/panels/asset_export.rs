@@ -553,7 +553,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         footer = Some(bar);
     });
     let zone = footed.show(ui, |ui, _| {
-        DropAction::<PanelDrag>::new(|p| matches!(p, PanelDrag::Art { .. })).sizing(Sizing::Fill).show(ui, |ui, _| {
+        let drop_art = DropAction::<PanelDrag>::new(move |p| matches!(p, PanelDrag::Art { document, .. } if *document == uid));
+        drop_art.sizing(Sizing::Fill).show(ui, |ui, _| {
             if st.doc.assets.is_empty() {
                 Notice::new(Tone::Neutral, tl!("Drag art here, or select it and click +. Hold Alt for one asset of several objects."))
                     .title(tl!("No assets"))

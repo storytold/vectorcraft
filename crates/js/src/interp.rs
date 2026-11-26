@@ -1883,7 +1883,7 @@ impl Interp {
 
     /// A module namespace object's [[DefineOwnProperty]] (ECMA-262 2020 section 9.4.6.5): only a
     /// descriptor that leaves an export as it is (enumerable, writable, not configurable, its
-    /// current value) succeeds, and it changes nothing.
+    /// current value) succeeds.
     fn define_namespace_export(&mut self, id: ObjId, k: &[u16], desc: &Desc, throw: bool) -> JsResult<bool> {
         let Some(Prop::Data { value, .. }) = self.own_property(id, k)? else {
             return self.reject_bool(throw, k, "a module namespace object is not extensible");

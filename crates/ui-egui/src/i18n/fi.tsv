@@ -663,6 +663,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraftin yleinen CMYK (SWOP-tyyppinen)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraftin päällystetty CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraftin päällystämätön CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Vanha Macintosh RGB (gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetin standardi-RGB (sRGB)
 	Monitor RGB	Näytön RGB
@@ -9105,6 +9107,11 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Fold Angle	Taittokulma
+	Set Fold Angle…	Aseta taittokulma…
+	Set Fold Angle	Aseta taittokulma
+	Reset Fold Angle	Palauta taittokulma
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	valitse nuuttausviiva, osittainen leikkausviiva tai rei’itysviiva, joka ei ole lukittu eikä piilotettu
 	Check	Tarkista
 	Check Fold Lines	Tarkista taittoviivat
 @msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.
