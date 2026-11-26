@@ -17,6 +17,16 @@
 //! reach past the canvas, the tool shows none and the release draws nothing; for three different
 //! points on one line, or a circle past the canvas, the pointer shows "Circle too large".
 //!
+//! With the option From Center (`fromCenter`, in the Control bar) on, the first point is the
+//! circle's center and the outline passes through the second: a drag from the center, or a click
+//! on the center and then on a point of the outline, draws the circle whose radius is the distance
+//! between them (`shape.circleThroughPoints` with `center`). The second point snaps to anchors and
+//! Smart Guides as the others do, so the outline can pass exactly through another object's anchor.
+//! Shift keeps the second point at 45° steps from the center, and Alt rounds the diameter to the
+//! rulers' ticks. The option in force when the first point is placed applies to that circle, and
+//! `dragThird` does not apply to it, since it has only two points. With `standardAnchors` off, its
+//! one anchor on the outline is the second point.
+//!
 //! The tool's options (Circle Tool Options, `tool.setOption`; kept with the preferences):
 //! `center`, `radii` and `diameter` show or hide the center cross, the radius lines and the
 //! diameter label; `color` is the color of the cross and the lines (one of [`COLORS`]);
@@ -24,7 +34,7 @@
 //! at 0°, 90°, 180° and 270° (`anchors: "points"`); `dragThird` off places the second point with
 //! a click and draws the circle through three points with a third click, and a click on the second
 //! point again (as a double-click there does) draws the circle on the two points. Every option is
-//! on by default, and `color` is blue.
+//! on by default except `fromCenter`, which is off, and `color` is blue.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::MAX_COORD;
@@ -56,7 +66,7 @@ pub const COLORS: &[(&str, [u8; 3])] = &[
 ];
 
 /// The option keys that are true or false.
-const SWITCHES: &[&str] = &["center", "radii", "diameter", "standardAnchors", "dragThird"];
+const SWITCHES: &[&str] = &["center", "radii", "diameter", "standardAnchors", "dragThird", "fromCenter"];
 
 /// The tool's options (see the module comment).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,11 +78,13 @@ struct Options {
     color: usize,
     standard_anchors: bool,
     drag_third: bool,
+    /// The option From Center: the first point is the center.
+    from_center: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { center: true, radii: true, diameter: true, color: 1, standard_anchors: true, drag_third: true }
+        Options { center: true, radii: true, diameter: true, color: 1, standard_anchors: true, drag_third: true, from_center: false }
     }
 }
 
@@ -84,6 +96,7 @@ impl Options {
             "diameter" => &mut self.diameter,
             "standardAnchors" => &mut self.standard_anchors,
             "dragThird" => &mut self.drag_third,
+            "fromCenter" => &mut self.from_center,
             _ => return None,
         })
     }
@@ -143,48 +156,79 @@ pub struct CircleTool {
     press: Option<Press>,
     /// Where the pointer is, snapped: the point the next press or release places.
     pointer: Option<Point>,
+    /// Is the circle being drawn drawn from its center (From Center when its first point was
+    /// placed)?
+    centered: bool,
 }
 
-/// The command the tool runs for `points`; with `standard_anchors` off, the circle's anchors are
-/// at the points.
-fn command(points: &[Point], standard_anchors: bool) -> (String, Value) {
-    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
-    let params = if standard_anchors { json!({ "points": pairs }) } else { json!({ "points": pairs, "anchors": "points" }) };
+/// The command the tool runs for `points`: with `centered`, the first point is the center and
+/// the second is on the outline. With `standard_anchors` off, the circle's anchors are at the
+/// points (from a center, the one point on the outline).
+fn command(points: &[Point], centered: bool, standard_anchors: bool) -> (String, Value) {
+    let pair = |p: &Point| json!([p.x, p.y]);
+    let mut params = match points {
+        [c, p] if centered => json!({ "center": pair(c), "points": [pair(p)] }),
+        _ => json!({ "points": points.iter().map(pair).collect::<Vec<_>>() }),
+    };
+    if !standard_anchors {
+        params["anchors"] = json!("points");
+    }
     ("shape.circleThroughPoints".into(), params)
+}
+
+/// Is the circle at `c` with radius `r` inside the canvas, with its opposite edges on different
+/// numbers (as `shape.circleThroughPoints` requires)?
+fn on_canvas(c: Point, r: f64) -> bool {
+    [c.x - r, c.y - r, c.x + r, c.y + r].iter().all(|v| v.abs() <= MAX_COORD) && c.x - r < c.x + r && c.y - r < c.y + r
 }
 
 /// The circle through two points (the ends of a diameter) or three, as `shape.circleThroughPoints`
 /// draws it: none where no circle passes through them or it would reach past the canvas.
 pub fn circle_of(points: &[Point]) -> Option<(Point, f64)> {
-    let on_canvas = |(c, r): &(Point, f64)| [c.x - r, c.y - r, c.x + r, c.y + r].iter().all(|v| v.abs() <= MAX_COORD);
-    shapes::circle_through_points(points).filter(on_canvas)
+    shapes::circle_through_points(points).filter(|(c, r)| on_canvas(*c, *r))
 }
 
-/// [`circle_of`], as the tool draws it: with `standard_anchors` off, also none where the path with
-/// an anchor at each point ([`shapes::circle_with_anchors_at`]) reaches past the canvas, since its
-/// curves can reach slightly outside the circle.
-fn drawn_circle(points: &[Point], standard_anchors: bool) -> Option<(Point, f64)> {
+/// The circle `points` give: with `centered`, the circle at the first point whose outline passes
+/// through the second, as `shape.circleThroughPoints` with `center` draws it (none for a second
+/// point on the center or a circle past the canvas); otherwise [`circle_of`].
+fn circle_for(points: &[Point], centered: bool) -> Option<(Point, f64)> {
+    match *points {
+        [c, p] if centered => {
+            let r = c.distance(p);
+            (c.is_finite() && r.is_finite() && r > 0.0 && on_canvas(c, r)).then_some((c, r))
+        }
+        _ if centered => None,
+        _ => circle_of(points),
+    }
+}
+
+/// [`circle_for`], as the tool draws it: with `standard_anchors` off, also none where the path with
+/// an anchor at each point ([`shapes::circle_with_anchors_at`]; from a center, the one point on the
+/// outline) reaches past the canvas, since its curves can reach slightly outside the circle.
+fn drawn_circle(points: &[Point], centered: bool, standard_anchors: bool) -> Option<(Point, f64)> {
+    let anchors = if centered { points.get(1..).unwrap_or(&[]) } else { points };
     let fits = |(c, r): &(Point, f64)| {
-        let b = vectorcraft_geom::Shape::bounding_box(&shapes::circle_with_anchors_at(*c, *r, points).to_bezpath());
+        let b = vectorcraft_geom::Shape::bounding_box(&shapes::circle_with_anchors_at(*c, *r, anchors).to_bezpath());
         [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)
     };
-    circle_of(points).filter(|c| standard_anchors || fits(c))
+    circle_for(points, centered).filter(|c| standard_anchors || fits(c))
 }
 
-/// With Alt, `p` moved along the line from `first` so that their distance (the diameter) is on
-/// the nearest ruler tick at the current zoom, in the General unit; `p` itself without Alt, and
-/// when that rounding leaves no distance.
-fn round_diameter(cx: &ToolContext, first: Point, p: Point, mods: Mods) -> Point {
-    let d = first.distance(p);
+/// With Alt, `p` moved along the line from `first` so that the diameter (their distance, or twice
+/// it from a center) is on the nearest ruler tick at the current zoom, in the General unit; `p`
+/// itself without Alt, and when that rounding leaves no distance.
+fn round_diameter(cx: &ToolContext, first: Point, p: Point, mods: Mods, centered: bool) -> Point {
+    let per = if centered { 2.0 } else { 1.0 };
+    let d = first.distance(p) * per;
     let rounded = cx.unit.snap_to_ruler_tick(d, cx.zoom);
     if mods.alt && d > 0.0 && rounded > 0.0 && rounded.is_finite() { first + (p - first) * (rounded / d) } else { p }
 }
 
 /// Are the points two or more different points through which no circle is drawn: three on one
 /// line, or a circle that would reach past the canvas?
-fn too_large(points: &[Point], standard_anchors: bool) -> bool {
+fn too_large(points: &[Point], centered: bool, standard_anchors: bool) -> bool {
     let distinct = points.iter().enumerate().all(|(i, p)| !points.iter().take(i).any(|q| q == p));
-    points.len() >= 2 && distinct && drawn_circle(points, standard_anchors).is_none()
+    points.len() >= 2 && distinct && drawn_circle(points, centered, standard_anchors).is_none()
 }
 
 impl CircleTool {
@@ -193,7 +237,19 @@ impl CircleTool {
         self.second = None;
         self.press = None;
         self.pointer = None;
+        self.centered = false;
         self.snap.clear();
+    }
+
+    /// [`round_diameter`] for the circle being drawn.
+    fn round(&self, cx: &ToolContext, first: Point, p: Point, mods: Mods) -> Point {
+        round_diameter(cx, first, p, mods, self.centered)
+    }
+
+    /// Does a drag place the third point? A circle drawn from its center has no third point, so
+    /// `dragThird` does not apply to it.
+    fn drag_third(&self) -> bool {
+        self.options.drag_third || self.centered
     }
 
     /// How the second point keeps to the first: Shift's 45° steps and the construction guides. A
@@ -222,9 +278,12 @@ impl CircleTool {
             Some(Press::First { .. }) | None => out.extend(self.pointer.filter(|_| self.first.is_some())),
             // A press on the first point adds no point: a drag from it drags out a diameter.
             Some(Press::Second { on_first: true, dragged, .. }) => out.extend(self.pointer.filter(|_| dragged)),
+            // From a center, the second point follows the pointer once the press has been dragged;
+            // until then it is the pressed point, which a release within DRAG_PX draws through.
+            Some(Press::Second { dragged: true, .. }) if self.centered => out.extend(self.pointer),
             Some(Press::Second { at, dragged: false, .. }) => out.push(at),
             // With `dragThird` off, a drag moves the second point.
-            Some(Press::Second { at, .. }) if !self.options.drag_third => out.push(at),
+            Some(Press::Second { at, .. }) if !self.drag_third() => out.push(at),
             Some(Press::Second { snapped, dragged: true, .. }) => {
                 out.push(snapped);
                 out.extend(self.pointer);
@@ -234,13 +293,17 @@ impl CircleTool {
         out
     }
 
-    /// The second point as the tool shows it: none for a press on the first point.
+    /// The second point as the tool shows it: none for a press on the first point, nor for a
+    /// circle drawn from its center, whose second point follows the pointer.
     fn second(&self) -> Option<Point> {
+        if self.centered {
+            return None;
+        }
         if let Some((b, _)) = self.second {
             return Some(b);
         }
         match self.press {
-            Some(Press::Second { on_first: false, at, .. }) if !self.options.drag_third => Some(at),
+            Some(Press::Second { on_first: false, at, .. }) if !self.drag_third() => Some(at),
             Some(Press::Second { on_first: false, dragged: false, at, .. }) => Some(at),
             Some(Press::Second { on_first: false, dragged: true, snapped, .. }) => Some(snapped),
             _ => None,
@@ -250,11 +313,12 @@ impl CircleTool {
     /// Runs the circle through `points` and starts afresh; where no circle is drawn through them
     /// (the tool showed none), it only starts afresh.
     fn draw(&mut self, points: &[Point]) -> Vec<Action> {
+        let centered = self.centered;
         self.clear();
-        if drawn_circle(points, self.options.standard_anchors).is_none() {
+        if drawn_circle(points, centered, self.options.standard_anchors).is_none() {
             return vec![];
         }
-        let (c, v) = command(points, self.options.standard_anchors);
+        let (c, v) = command(points, centered, self.options.standard_anchors);
         vec![Action::Exec(c, v)]
     }
 
@@ -267,7 +331,7 @@ impl CircleTool {
         if on_second && !dragged {
             return self.draw(&[a, b]);
         }
-        if (on_first && !dragged) || drawn_circle(&[a, b, at], self.options.standard_anchors).is_none() {
+        if (on_first && !dragged) || drawn_circle(&[a, b, at], false, self.options.standard_anchors).is_none() {
             self.snap.clear();
             return vec![];
         }
@@ -329,7 +393,7 @@ impl Tool for CircleTool {
                 let p = self.snap.hover(cx, ev.pos, &[], leave.as_ref());
                 // Alt's rounding of the diameter is for the second point only.
                 let rounds = self.first.filter(|_| self.second.is_none());
-                self.pointer = Some(rounds.map_or(p, |a| round_diameter(cx, a, p, ev.mods)));
+                self.pointer = Some(rounds.map_or(p, |a| self.round(cx, a, p, ev.mods)));
                 vec![]
             }
             PointerKind::Down => {
@@ -352,13 +416,14 @@ impl Tool for CircleTool {
                     None => {
                         let at = self.snap.press(cx, ev.pos, &[], None);
                         self.first = Some(at);
+                        self.centered = self.options.from_center;
                         self.press = Some(Press::First { at, from: ev.pos, dragged: false });
                         self.pointer = Some(at);
                     }
                     Some(a) => {
                         let leave = self.leave(cx, ev.mods);
                         let snapped = self.snap.press(cx, ev.pos, &[], leave.as_ref());
-                        let at = round_diameter(cx, a, snapped, ev.mods);
+                        let at = self.round(cx, a, snapped, ev.mods);
                         let on_first = snapped == a || ev.pos.distance(a) <= cx.tol(REACH_PX);
                         self.press = Some(Press::Second { at, snapped, from: ev.pos, on_first, dragged: false });
                         self.pointer = Some(at);
@@ -367,7 +432,8 @@ impl Tool for CircleTool {
                 vec![]
             }
             PointerKind::Drag => {
-                let drag_third = self.options.drag_third;
+                let centered = self.centered;
+                let drag_third = self.drag_third();
                 let first = self.first;
                 match &mut self.press {
                     // With `dragThird` off, the second point follows the pointer as it does before
@@ -378,7 +444,7 @@ impl Tool for CircleTool {
                         if *dragged {
                             let leave = first.map(|a| Leave::segment(cx, a, ev.mods.shift));
                             *snapped = self.snap.drag(cx, ev.pos, leave.as_ref());
-                            *at = first.map_or(*snapped, |a| round_diameter(cx, a, *snapped, ev.mods));
+                            *at = first.map_or(*snapped, |a| round_diameter(cx, a, *snapped, ev.mods, false));
                             self.pointer = Some(*at);
                         }
                     }
@@ -392,15 +458,16 @@ impl Tool for CircleTool {
                     Some(Press::First { at, from, dragged }) => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
                         let leave = Leave::segment(cx, *at, ev.mods.shift);
-                        self.pointer = Some(round_diameter(cx, *at, self.snap.drag(cx, ev.pos, Some(&leave)), ev.mods));
+                        self.pointer = Some(round_diameter(cx, *at, self.snap.drag(cx, ev.pos, Some(&leave)), ev.mods, centered));
                     }
                     // Dragged from the first point, the pointer is the other end of a diameter, as
-                    // for a drag from a first press.
-                    Some(Press::Second { from, on_first: true, dragged, .. }) => {
+                    // for a drag from a first press; from a center, the second point is always the
+                    // pointer.
+                    Some(Press::Second { from, dragged, on_first, .. }) if *on_first || centered => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
                         let leave = self.first.map(|a| Leave::segment(cx, a, ev.mods.shift));
                         let p = self.snap.drag(cx, ev.pos, leave.as_ref());
-                        self.pointer = Some(self.first.map_or(p, |a| round_diameter(cx, a, p, ev.mods)));
+                        self.pointer = Some(self.first.map_or(p, |a| round_diameter(cx, a, p, ev.mods, centered)));
                     }
                     Some(Press::Second { from, dragged, .. }) => {
                         *dragged |= ev.pos.distance(*from) >= cx.tol(DRAG_PX);
@@ -414,15 +481,22 @@ impl Tool for CircleTool {
                 (Some(Press::Third { at, on_first, on_second, dragged, .. }), ..) => self.third_up(at, on_first, on_second, dragged),
                 // With `dragThird` off, the release places the second point; let go on the first
                 // point, as a press there is, it places nothing.
-                (Some(Press::Second { at, snapped, on_first: false, .. }), Some(a), _) if !self.options.drag_third => {
+                (Some(Press::Second { at, snapped, on_first: false, .. }), Some(a), _) if !self.drag_third() => {
                     if !(at == a || snapped == a || ev.pos.distance(a) <= cx.tol(REACH_PX)) {
                         self.second = Some((at, ev.pos));
                     }
                     self.snap.clear();
                     vec![]
                 }
-                (Some(Press::First { at, dragged: true, .. }), _, Some(b)) if b.distance(at) >= cx.tol(DRAG_PX) => self.draw(&[at, b]),
-                // A click places the first point; the guides of the press go.
+                // A release DRAG_PX or more from the press draws the circle the tool shows; where it
+                // shows none, the release draws nothing and starts afresh.
+                (Some(Press::First { at, dragged: true, .. }), _, Some(b))
+                    if b.distance(at) >= cx.tol(DRAG_PX) || circle_for(&[at, b], self.centered).is_some() =>
+                {
+                    self.draw(&[at, b])
+                }
+                // A click, or a drag back onto the press, places the first point; the guides of the
+                // press go.
                 (Some(Press::First { .. }), ..) => {
                     self.snap.clear();
                     vec![]
@@ -431,6 +505,9 @@ impl Tool for CircleTool {
                 // a drag from there draws the circle on the diameter it drags out.
                 (Some(Press::Second { on_first: true, dragged: false, .. }), ..) => vec![],
                 (Some(Press::Second { on_first: true, dragged: true, .. }), Some(a), Some(c)) => self.draw(&[a, c]),
+                // From a center: the outline passes through the point the tool shows it on, where
+                // the drag ends or, within DRAG_PX of the press, the pressed point.
+                (Some(Press::Second { .. }), Some(a), Some(c)) if self.centered => self.draw(&[a, c]),
                 (Some(Press::Second { at, dragged: false, .. }), Some(a), _) => self.draw(&[a, at]),
                 // Three points: Alt's rounding of the diameter does not apply.
                 (Some(Press::Second { snapped, dragged: true, .. }), Some(a), Some(c)) => self.draw(&[a, snapped, c]),
@@ -487,12 +564,14 @@ impl Tool for CircleTool {
         let mut o = self.snap.guides().to_vec();
         let points = self.points();
         let color = crate::draw2::FEEDBACK;
-        if let Some((c, r)) = drawn_circle(&points, self.options.standard_anchors) {
-            // The path the release draws: with `standardAnchors` off, the one with an anchor at each point.
+        if let Some((c, r)) = drawn_circle(&points, self.centered, self.options.standard_anchors) {
+            // The path the release draws: with `standardAnchors` off, the one with an anchor at each
+            // point (from a center, at the one point on the outline).
             let path = if self.options.standard_anchors {
                 shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath()
             } else {
-                shapes::circle_with_anchors_at(c, r, &points).to_bezpath()
+                let on_outline = if self.centered { points.get(1..).unwrap_or(&[]) } else { &points[..] };
+                shapes::circle_with_anchors_at(c, r, on_outline).to_bezpath()
             };
             // The canvas draws a dashed outline dash by dash along its whole length: a circle longer
             // than DASHED_PX on screen is drawn solid instead.
@@ -501,7 +580,8 @@ impl Tool for CircleTool {
             let opts = self.options;
             let lines = COLORS.get(opts.color).map_or(color, |(_, rgb)| *rgb);
             if opts.radii {
-                for p in &points {
+                // A circle drawn from its center has one radius, to the point on its outline.
+                for p in points.iter().filter(|p| **p != c) {
                     o.push(Overlay::Line { a: c, b: *p, color: lines, dashed: false });
                 }
             }
@@ -513,7 +593,7 @@ impl Tool for CircleTool {
             if let Some(p) = self.pointer.filter(|_| cx.measurement_labels && opts.diameter) {
                 o.push(Overlay::Measure { p: p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("D: {}", cx.len(2.0 * r)) });
             }
-        } else if let Some(p) = self.pointer.filter(|_| too_large(&points, self.options.standard_anchors)) {
+        } else if let Some(p) = self.pointer.filter(|_| too_large(&points, self.centered, self.options.standard_anchors)) {
             o.push(Overlay::Label { p, text: "Circle too large".into(), color });
         }
         for p in self.first.into_iter().chain(self.second()) {
@@ -536,6 +616,7 @@ impl Tool for CircleTool {
             "color": color,
             "standardAnchors": o.standard_anchors,
             "dragThird": o.drag_third,
+            "fromCenter": o.from_center,
         })
     }
 
@@ -545,7 +626,8 @@ impl Tool for CircleTool {
     }
 
     /// Sets one option; a value the option does not take leaves it as it was. Switching
-    /// `dragThird` drops the points placed so far.
+    /// `dragThird` drops the points placed so far; a circle being drawn keeps the `fromCenter` mode
+    /// it started with.
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "color" {
             if let Some(i) = value.as_str().and_then(|s| COLORS.iter().position(|(name, _)| *name == s)) {
@@ -558,7 +640,8 @@ impl Tool for CircleTool {
         if let Some(switch) = self.options.switch(key) {
             *switch = on;
         }
-        if self.options.drag_third != was {
+        // A circle drawn from its center has no third point, so its center stays placed.
+        if self.options.drag_third != was && !self.centered {
             self.clear();
         }
     }

@@ -1633,6 +1633,17 @@ file-filter	Templates	模板
 	Graphic Styles	图形样式
 	Graphic Styles Options	图形样式选项
 	Graphics	图形
+	Show Contrast	显示对比度
+	Contrast For	对比度适用于
+	Normal Text	普通文本
+	Large Text	大号文本
+	Contrast Background	对比度背景
+	Behind Selection	所选对象后方
+	Current Color	当前颜色
+	Pass	通过
+	Fail	未通过
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低对比度：普通文本 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大号文本 AA 3:1 和 AAA 4.5:1，图形和控件 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在所选对象的中心读取。
 	Gravity	重力
 	Grays	灰度级数
 	Grays and Neutrals	灰色和中性色
@@ -3222,7 +3233,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和对齐中按对象的描边和改变形状的效果测量对象；阴影、发光和模糊不计入测量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	缩放为 100% 时，文档的一英寸占 96 个屏幕点，而不是 72 个。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	缩放为 100% 时，文档的一英寸占显示器上的一英寸；系统未报告可用的显示器尺寸时占 96 个屏幕点。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用选择工具双击编组、路径或图像时，会在隔离模式中打开它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	图案填色和描边随图稿一起变换，除非变换命令或变换面板的菜单另有选择。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
@@ -5720,6 +5731,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	无法粘贴：要粘贴到的文档已关闭
 @msg	nothing selected	未选择任何对象
+@msg	`{key}` must be a color or {_1}	`{key}` 必须是颜色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所选对象的颜色不同：请提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所选对象的颜色不同：请提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	现用填色或描边没有颜色：请提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	现用填色或描边已隐藏：请提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	现用填色或描边通过不透明度蒙版绘制：请提供 `color`
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
@@ -7148,6 +7165,8 @@ axis	Y Axis	Y 轴
 	Cancel Plug-in Run	取消运行插件
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文档或插件在此期间已更改：请重新运行
 @msg	Running “{name}”…	正在运行“{name}”…
+@msg	Plug-in “{name}”: {notice}	增效工具“{name}”：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必须是包含可见文本的字符串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
@@ -7239,7 +7258,7 @@ axis	Y Axis	Y 轴
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
 @msg	a new object needs a `path`	新对象需要 `path`
 @msg	a number	数字
-@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	绘制型实时效果只返回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一个只读对象
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一个只读对象：请以单独的 {{"id": …}} 或原样返回它
@@ -7344,6 +7363,8 @@ axis	Y Axis	Y 轴
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` 只能为 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 仅适用于 `api` 2 的实时效果 (`kind` "effect")
+@msg	`place` is only for an importer (`kind` "importer")	`place` 仅适用于导入器 (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” 只打开文件而不置入：其清单未设置 `place`
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`

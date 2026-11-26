@@ -3346,7 +3346,7 @@ mark-style	Japanese	日本式
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 表示のとき、ドキュメントの 1 インチをディスプレイの 1 インチで表示します。システムが使用できるディスプレイのサイズを報告しない場合は 96 スクリーンポイントで表示します。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。
@@ -4445,6 +4445,17 @@ file-filter	Templates	テンプレート
 	Stacked	積み重ね
 	Graphic Style Libraries Menu	グラフィックスタイルライブラリメニュー
 	Graphics	グラフィックス
+	Show Contrast	コントラストを表示
+	Contrast For	コントラストの対象
+	Normal Text	通常のテキスト
+	Large Text	大きなテキスト
+	Contrast Background	コントラストの背景
+	Behind Selection	選択範囲の背後
+	Current Color	現在のカラー
+	Pass	合格
+	Fail	不合格
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 の最小コントラスト：通常のテキスト AA 4.5:1 (1.4.3) と AAA 7:1 (1.4.6)、大きなテキスト AA 3:1 と AAA 4.5:1、グラフィックとコントロール AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景は選択範囲の中央で読み取ります。
 	Greek & Cyrillic	ギリシャ文字とキリル文字
 	Hex by Column	六角形 (列)
 	Hex by Row	六角形 (行)
@@ -6065,6 +6076,12 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
 @msg	Couldn't paste: the document it was pasted in was closed	貼り付けられませんでした: 貼り付け先のドキュメントは閉じられています
 @msg	nothing selected	何も選択されていません
+@msg	`{key}` must be a color or {_1}	`{key}` はカラーまたは {_1} である必要があります
+@msg	the selected objects' colors differ: give `color`	選択したオブジェクトのカラーが異なります：`color` を指定してください
+@msg	the selected objects' colors differ: give `opacity` or `color`	選択したオブジェクトのカラーが異なります：`opacity` または `color` を指定してください
+@msg	the active fill or stroke has no color: give `color`	アクティブな塗りまたは線にカラーがありません：`color` を指定してください
+@msg	the active fill or stroke is hidden: give `color`	アクティブな塗りまたは線が非表示です：`color` を指定してください
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	アクティブな塗りまたは線は不透明マスクを通して描画されます：`color` を指定してください
 @msg	nothing selected is in a group	選択したオブジェクトはどれもグループ内にありません
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
 @msg	unknown tool `{tool}`	`{tool}` は不明なツールです
@@ -7013,6 +7030,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	プラグインの実行をキャンセル
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} は完了しましたが、その間にドキュメントまたはプラグインが変更されました。もう一度実行してください
 @msg	Running “{name}”…	「{name}」を実行中…
+@msg	Plug-in “{name}”: {notice}	プラグイン「{name}」: {notice}
+@msg	`notice` must be a string with visible text	`notice` は表示される文字を含む文字列にしてください
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
@@ -7104,7 +7123,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	{min_items} から {max_items} 個の数値のリスト
 @msg	a new object needs a `path`	新しいオブジェクトには `path` が必要です
 @msg	a number	数値
-@msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
+@msg	a painted live effect returns only `objects` and `notice`	ペイント型のライブ効果が返すのは `objects` と `notice` だけです
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
 @msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください
@@ -7209,6 +7228,8 @@ axis	Y Axis	Y 軸
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
+@msg	`place` is only for an importer (`kind` "importer")	`place` はインポーター (`kind` "importer") 専用です
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	「{shown}」はファイルを開きますが配置はしません: マニフェストで `place` が設定されていません
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です

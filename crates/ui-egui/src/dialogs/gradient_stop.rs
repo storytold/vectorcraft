@@ -30,12 +30,12 @@ use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
-use vectorcraft_color::{Color, FreeformPoint, GradientKind, GradientStop, Paint};
+use vectorcraft_color::{Color, FreeformPoint, GradientStop, Paint};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::params::color_json;
 
 use crate::VectorcraftApp;
-use crate::panels::gradient::{edit_point, set_stops, set_stops_keeping_models, shown_points};
+use crate::panels::gradient::{edit_point, edits_points, set_stops, set_stops_keeping_models, shown_points};
 use crate::panels::{Live, active_paint, c32};
 
 /// The dialog kind of the gradient stop popover.
@@ -82,7 +82,7 @@ impl Target {
 
 fn selected(app: &VectorcraftApp) -> Option<Target> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
-    if g.gradient.kind == GradientKind::Freeform {
+    if edits_points(app, &g) {
         let f = shown_points(&g);
         let i = app.session.selected_freeform_point().filter(|i| *i < f.points.len())?;
         return Some(Target::Point(f.points[i], i));
@@ -390,7 +390,7 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let Some(dialogs) = app.dialogs() else { return };
     if let Paint::Gradient(g) = active_paint(app)
-        && g.gradient.kind != GradientKind::Freeform
+        && !edits_points(app, &g)
         && app.session.selected_stop() != Some(index)
     {
         // An index past the last stop selects nothing, and `selected` then finds nothing to edit.

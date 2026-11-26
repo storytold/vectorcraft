@@ -376,6 +376,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` geldt voor lineaire, radiale, conische en ruitvormige verlopen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} is voltooid, maar het document of de plug-in is intussen gewijzigd: voer het opnieuw uit
 @msg	Running “{name}”…	„{name}” wordt uitgevoerd…
+@msg	Plug-in “{name}”: {notice}	Plug-in „{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` moet een tekenreeks met zichtbare tekst zijn
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	een live-effect wordt uitgevoerd terwijl het document wordt getekend, dus kan het niet `heavy` zijn
 @msg	an exporter always gets an export's budget: leave `budget` out	een exportplug-in krijgt altijd het budget van een export: laat `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” vraagt om een groot rekenbudget (elke uitvoering tot {minutes} minuten en {times} keer het gebruikelijke aantal instructies): een persoon moet dit goedkeuren in de desktop-app, of geef `allowHeavy: true` door in een sessie die is gestart met --allow-plugin-grants
@@ -466,7 +468,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	a list of {min_items} to {max_items} numbers	een lijst met {min_items} tot {max_items} getallen
 @msg	a new object needs a `path`	een nieuw object heeft een `path` nodig
 @msg	a number	een getal
-@msg	a painted live effect returns only `objects`	een geschilderd live-effect geeft alleen `objects` terug
+@msg	a painted live effect returns only `objects` and `notice`	een geschilderd live-effect geeft alleen `objects` en `notice` terug
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills` en `strokes`
 @msg	a read-only object was left out	een alleen-lezen object is weggelaten
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {{"id": …}} of zoals het is gegeven
@@ -552,6 +554,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` is {_1}; deze host implementeert plug-in-API-niveaus 1 tot {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` mag alleen true zijn
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` is alleen voor een live-effect (`kind` "effect") bij `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` is alleen voor een importer (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” opent bestanden maar plaatst ze niet: het manifest stelt `place` niet in
 @msg	`grant` must be a list of permission names	`grant` moet een lijst met namen van machtigingen zijn
 @msg	`grant` names an unknown permission `{shown}`	`grant` noemt een onbekende machtiging `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	een plug-in van het soort `{_1}` heeft de machtiging `{_2}` nodig
@@ -2626,6 +2630,17 @@ digits	Malayalam	Malayalam
 	Create New Sublayer	Nieuwe sublaag maken
 	Search All	Alles doorzoeken
 	Graphics	Illustraties
+	Show Contrast	Contrast tonen
+	Contrast For	Contrast voor
+	Normal Text	Normale tekst
+	Large Text	Grote tekst
+	Contrast Background	Contrastachtergrond
+	Behind Selection	Achter selectie
+	Current Color	Huidige kleur
+	Pass	Geslaagd
+	Fail	Niet geslaagd
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimumcontrast volgens WCAG 2.2: normale tekst AA 4.5:1 (1.4.3) en AAA 7:1 (1.4.6), grote tekst AA 3:1 en AAA 4.5:1, illustraties en bedieningselementen AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	De achtergrond wordt in het midden van de selectie gemeten.
 	Local Libraries	Lokale bibliotheken
 	Add Content	Inhoud toevoegen
 	Click to apply to the selected type	Klik om toe te passen op de geselecteerde tekst
@@ -5156,7 +5171,7 @@ font-technology	Variable	Variabel
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecteren › Zelfde › Vulkleur, Contourkleur en Vulling en contour vinden alleen dezelfde tint van een globaal of steunkleurstaal, niet elke tint ervan.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Toont het startscherm wanneer er geen document open is; uitgeschakeld blijft het venster leeg totdat u op Home klikt.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Meet objecten met hun contouren en vormveranderende effecten voor grootte, positie en uitlijning; schaduwen, gloed en vervagingen worden niet gemeten.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Bij 100% zoom neemt één inch van het document 96 schermpunten in beslag in plaats van 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Bij 100% zoom vult één inch van het document één inch van het scherm, of 96 schermpunten als het systeem geen bruikbare schermgrootte doorgeeft.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dubbelklikken op een groep, pad of afbeelding met het gereedschap Selectie opent die in de isolatiemodus.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Patroonvullingen en -contouren transformeren mee met de illustratie, tenzij een transformatie of het menu van het deelvenster Transformeren anders kiest.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamische hoekradii schalen mee met de illustratie, tenzij het schalen anders kiest.
@@ -5968,6 +5983,12 @@ imageTrace	Outline	Contour
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
 @msg	nothing encoded	niets gecodeerd
 @msg	nothing selected	niets geselecteerd
+@msg	`{key}` must be a color or {_1}	`{key}` moet een kleur of {_1} zijn
+@msg	the selected objects' colors differ: give `color`	de kleuren van de geselecteerde objecten verschillen: geef `color` op
+@msg	the selected objects' colors differ: give `opacity` or `color`	de kleuren van de geselecteerde objecten verschillen: geef `opacity` of `color` op
+@msg	the active fill or stroke has no color: give `color`	de actieve vulling of lijn heeft geen kleur: geef `color` op
+@msg	the active fill or stroke is hidden: give `color`	de actieve vulling of lijn is verborgen: geef `color` op
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	de actieve vulling of lijn wordt door een dekkingmasker getekend: geef `color` op
 @msg	nothing selected is in a group	niets van de selectie zit in een groep
 @msg	nothing to align	niets om uit te lijnen
 @msg	nothing to distort	niets om te vervormen

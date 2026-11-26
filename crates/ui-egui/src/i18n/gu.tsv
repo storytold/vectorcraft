@@ -1730,6 +1730,18 @@
 	Graphic Styles	ગ્રાફિક સ્ટાઇલ્સ
 	Graphic Styles Options	ગ્રાફિક સ્ટાઇલ્સ વિકલ્પો
 	Graphics	ગ્રાફિક્સ
+	Contrast	કોન્ટ્રાસ્ટ
+	Show Contrast	કોન્ટ્રાસ્ટ બતાવો
+	Contrast For	આના માટે કોન્ટ્રાસ્ટ
+	Normal Text	સામાન્ય ટેક્સ્ટ
+	Large Text	મોટું ટેક્સ્ટ
+	Contrast Background	કોન્ટ્રાસ્ટ પૃષ્ઠભૂમિ
+	Behind Selection	પસંદગીની પાછળ
+	Current Color	વર્તમાન રંગ
+	Pass	પાસ
+	Fail	નાપાસ
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 લઘુત્તમ કોન્ટ્રાસ્ટ: સામાન્ય ટેક્સ્ટ AA 4.5:1 (1.4.3) અને AAA 7:1 (1.4.6), મોટું ટેક્સ્ટ AA 3:1 અને AAA 4.5:1, ગ્રાફિક્સ અને નિયંત્રણો AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	પૃષ્ઠભૂમિ પસંદગીના કેન્દ્રમાં વાંચવામાં આવે છે.
 	Graphics Processor	ગ્રાફિક્સ પ્રોસેસર
 	Graphics: {adapter}	ગ્રાફિક્સ: {adapter}
 	Gravity	ગ્રેવિટી
@@ -3379,7 +3391,7 @@ arrowhead	Feather	પીંછું
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	પસંદ કરો › સમાન › ભરવાનો રંગ, સ્ટ્રોક રંગ અને ભરો અને સ્ટ્રોક ફક્ત ગ્લોબલ કે સ્પોટ સ્વૉચના એ જ ટિન્ટ સાથે મેળ ખાય છે, તેના કોઈપણ ટિન્ટ સાથે નહીં.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	કોઈ દસ્તાવેજ ખુલ્લો ન હોય ત્યારે હોમ સ્ક્રીન બતાવે છે; બંધ હોય ત્યારે તમે હોમ પર ક્લિક ન કરો ત્યાં સુધી વિન્ડો ખાલી રહે છે.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	કદ, સ્થાન અને ગોઠવણી માટે ઑબ્જેક્ટને તેમના સ્ટ્રોક અને આકાર બદલતી ઇફેક્ટ્સ સાથે માપે છે; છાયા, ગ્લો અને બ્લર માપવામાં આવતા નથી.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ 72 ને બદલે 96 સ્ક્રીન પોઇન્ટ લે છે.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ ડિસ્પ્લેનો એક ઇંચ ભરે છે, અથવા સિસ્ટમ ડિસ્પ્લેનું ઉપયોગી કદ ન જણાવે ત્યારે 96 સ્ક્રીન પોઇન્ટ લે છે.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	પસંદગી ટૂલથી ગ્રુપ, પાથ કે છબી પર ડબલ-ક્લિક કરવાથી તે આઇસોલેશન મોડમાં ખુલે છે.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	પૅટર્ન ભરણ અને સ્ટ્રોક આર્ટવર્ક સાથે ટ્રાન્સફોર્મ થાય છે, સિવાય કે કોઈ ટ્રાન્સફોર્મ કે ટ્રાન્સફોર્મ પેનલનું મેનૂ બીજું પસંદ કરે.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	લાઇવ ખૂણાઓની ત્રિજ્યાઓ આર્ટવર્ક સાથે સ્કેલ થાય છે, સિવાય કે સ્કેલિંગ બીજું પસંદ કરે.
