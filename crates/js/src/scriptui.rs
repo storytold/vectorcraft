@@ -61,7 +61,7 @@
 
 use crate::HostItem;
 use crate::builtins::{arg, constructor, data, method, native, pausable_method};
-use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key};
+use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
 use crate::host::Data;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
 use crate::value::{Value, index_key};
@@ -1104,14 +1104,15 @@ fn own_kids(i: &Interp, o: ObjId) -> JsResult<Vec<Value>> {
     Ok(own)
 }
 
-/// The controls in `c` and in the containers it holds, `c` included, and their list items.
-fn subtree_counts(i: &mut Interp, c: &Value) -> JsResult<(f64, f64)> {
-    let (mut controls, mut items) = (0.0, 0.0);
+/// The controls in `c` and in the containers it holds, `c` included, and the number of their list
+/// items.
+fn subtree(i: &mut Interp, c: &Value) -> JsResult<(Vec<ObjId>, f64)> {
+    let (mut controls, mut items) = (Vec::new(), 0.0);
     let mut stack = vec![c.clone()];
     while let Some(v) = stack.pop() {
         i.use_fuel()?;
         let Some(o) = v.as_object() else { continue };
-        controls += 1.0;
+        controls.push(o);
         items += items_of(i, o)?.len() as f64;
         stack.extend(own_kids(i, o)?);
     }
@@ -1164,38 +1165,57 @@ fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
         return Err(i.type_error("remove: this is not a ScriptUI window or control"));
     }
     let gone = kids.remove(at);
-    i.rooted(std::slice::from_ref(&gone), |i| {
-        i.rooted(&kids.clone(), |i| {
-            let kept = list(i, &kids, false)?;
-            set_slot(i, o, KIDS, Value::Object(kept))?;
-            let copy = list(i, &kids, true)?;
-            set_open(i, o, "children", Value::Object(copy))
-        })?;
-        let (controls, items) = subtree_counts(i, &gone)?;
-        let count = number_slot(i, win, COUNT)?;
-        set_slot(i, win, COUNT, Value::Number((count - controls).max(0.0)))?;
-        let total = number_slot(i, win, ITEM_COUNT)?;
-        set_slot(i, win, ITEM_COUNT, Value::Number((total - items).max(0.0)))?;
-        detach(i, &gone)
+    let Some(root) = gone.as_object() else { return Ok(Value::Undefined) };
+    let mut keep = kids.clone();
+    keep.push(gone);
+    i.rooted(&keep, |i| {
+        // Everything that can fail runs before the first change, so a run that ends here (out of
+        // fuel or memory) leaves the container, the dialog's counts and the control as they were.
+        let (controls, items) = subtree(i, &keep[keep.len() - 1])?;
+        let kept = Value::Object(list(i, &kids, false)?);
+        i.rooted(std::slice::from_ref(&kept), |i| {
+            let copy = Value::Object(list(i, &kids, true)?);
+            i.rooted(std::slice::from_ref(&copy), |i| {
+                let count = number_slot(i, win, COUNT)?;
+                let total = number_slot(i, win, ITEM_COUNT)?;
+                let mut writes = vec![
+                    (o, KIDS, kept.clone(), 0),
+                    (o, "children", copy.clone(), OPEN),
+                    (win, COUNT, Value::Number((count - controls.len() as f64).max(0.0)), 0),
+                    (win, ITEM_COUNT, Value::Number((total - items).max(0.0)), 0),
+                ];
+                writes.extend(detached(root, &controls));
+                // The heap grows only by the properties a write adds, so the room for them is
+                // checked once, before the first write.
+                let mut growth = 0;
+                for (at, name, _, _) in &writes {
+                    if !i.object(*at)?.props.contains(&key(name)) {
+                        growth += PROP_BYTES + string_bytes(name.len());
+                    }
+                }
+                i.reserve_heap(growth)?;
+                for (at, name, value, flags) in writes {
+                    i.define(at, key(name), Prop::Data { value, flags })?;
+                }
+                Ok(())
+            })
+        })
     })?;
     Ok(Value::Undefined)
 }
 
-/// Takes the control `c`, removed from its container, out of the dialog: it has no container,
-/// and neither it nor the controls it holds belong to the dialog any longer, so their `window` is
-/// `null`.
-fn detach(i: &mut Interp, c: &Value) -> JsResult<()> {
-    let Some(root) = c.as_object() else { return Ok(()) };
-    let mut stack = vec![c.clone()];
-    while let Some(v) = stack.pop() {
-        i.use_fuel()?;
-        let Some(o) = v.as_object() else { continue };
-        stack.extend(own_kids(i, o)?);
-        set_slot(i, o, WINDOW, Value::Null)?;
-        set_open(i, o, "window", Value::Null)?;
+/// The writes that take the control `root`, removed from its container, out of the dialog: it has
+/// no container, and neither it nor `controls`, the controls it holds, belong to the dialog any
+/// longer, so their `window` is `null`.
+fn detached(root: ObjId, controls: &[ObjId]) -> Vec<(ObjId, &'static str, Value, u8)> {
+    let mut writes = Vec::with_capacity(2 * controls.len() + 2);
+    for &o in controls {
+        writes.push((o, WINDOW, Value::Null, 0));
+        writes.push((o, "window", Value::Null, OPEN));
     }
-    set_slot(i, root, PARENT, Value::Null)?;
-    set_open(i, root, "parent", Value::Null)
+    writes.push((root, PARENT, Value::Null, 0));
+    writes.push((root, "parent", Value::Null, OPEN));
+    writes
 }
 
 fn control_show(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {

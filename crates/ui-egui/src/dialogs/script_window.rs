@@ -22,14 +22,15 @@ use craft::behavior::{Selection, SelectionChange, keyed};
 use craft::theme::Variant;
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Scroll, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::display::{Progress, Text};
+use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::focus::Initial;
 use craft::ui::runtime::keys::take_submit;
-use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::sections::{DialogRole, FooterButton, GroupBox};
 use craft::ui::text::TextField;
 use craft::ui::value_drag::Slider;
 use egui::Ui;
@@ -293,42 +294,56 @@ impl StackDialog for ScriptWindow {
             "" => tl!("Script Alert").to_string(),
             title => shown_text(title, false),
         };
-        let mut events = Vec::new();
-        let mut typing = false;
-        let mut submit = false;
         let buttons = [FooterButton::new(tl!("Stop"), DialogRole::Other).stays_open(true)];
         let ScriptWindow { window, waiting, drafts, open, .. } = self;
-        let (window, waiting) = (&*window, *waiting);
+        let (window, waiting, drafts) = (&*window, *waiting, &*drafts);
         // The dialog opens with the focus on its default button, so Enter clicks it until the
         // person moves the focus into a field; without one that can be clicked, on its first control.
         let focus_default = window.default_element.and_then(|i| window.nodes.get(i)).is_some_and(|n| n.visible && n.enabled);
         let initial = if focus_default { Initial::Default } else { Initial::First };
         let dialog = Dialog::new(heading).buttons(buttons).initial_focus(initial).opened(Bind::bound(open));
+        // The body can run twice in a pass (measure, then paint), so it only reports what the
+        // person did; the dialog applies the last run's report after the container.
         let shown = dialog.show(ui, |ui, _| {
             let (width, height) = window.size();
             let size = egui::vec2(width.max(1.0), height.max(1.0));
-            egui::ScrollArea::both().max_width(MAX_SHOWN.x).max_height(MAX_SHOWN.y).auto_shrink([true, true]).show(ui, |ui| {
-                let (area, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-                // Each container comes before the controls it holds.
-                let mut containers: Vec<Option<egui::Id>> = vec![None; window.nodes.len()];
-                for (i, n) in window.nodes.iter().enumerate().skip(1) {
-                    if !n.visible {
-                        continue;
+            let mut pass = Pass::default();
+            ui.scope(|ui| {
+                ui.set_max_size(MAX_SHOWN);
+                Stack::new().scroll(Scroll::both()).show(ui, |ui, _| {
+                    let origin = ui.cursor().min;
+                    ui.set_min_size(size);
+                    // Each container comes before the controls it holds.
+                    let mut containers: Vec<Option<egui::Id>> = vec![None; window.nodes.len()];
+                    for (i, n) in window.nodes.iter().enumerate().skip(1) {
+                        if !n.visible {
+                            continue;
+                        }
+                        let parent = containers.get(n.parent).copied().flatten();
+                        let place = Place { origin, enabled: waiting && n.enabled, default: window.default_element == Some(i), parent };
+                        let shown = control(ui, drafts, &place, (i, n, prompt_of(window, i)));
+                        if let Some(slot) = containers.get_mut(i) {
+                            *slot = shown.container;
+                        }
+                        pass.typing |= shown.typing;
+                        pass.events.extend(shown.event);
+                        pass.drafts.extend(shown.draft.map(|d| (n.id, d)));
                     }
-                    let parent = containers.get(n.parent).copied().flatten();
-                    let place = Place { origin: area.min, enabled: waiting && n.enabled, default: window.default_element == Some(i), parent };
-                    let shown = control(ui, drafts, &place, (i, n, prompt_of(window, i)));
-                    if let Some(slot) = containers.get_mut(i) {
-                        *slot = shown.container;
-                    }
-                    typing |= shown.typing;
-                    events.extend(shown.event);
-                }
+                });
             });
-            // An Enter the focused control left untaken (a slider, a check box) is the dialog's,
-            // unless a question is open over it.
-            submit = top && !typing && take_submit(ui.ctx());
+            pass
         });
+        let pass = shown.inner.unwrap_or_default();
+        for (id, draft) in pass.drafts {
+            match draft {
+                Some(text) => self.drafts.insert(id, text),
+                None => self.drafts.remove(&id),
+            };
+        }
+        let (mut events, typing) = (pass.events, pass.typing);
+        // An Enter the focused control left untaken (a slider, a check box, a button) is the
+        // dialog's, unless a question is open over it or a field has the focus.
+        let submit = top && !typing && take_submit(ui.ctx());
         if shown.output.picked == Some(0) {
             self.stop = true;
             return None;
@@ -342,8 +357,7 @@ impl StackDialog for ScriptWindow {
         }
         // Enter in a field belongs to the field; with the focus on any other control, it clicks the
         // default button.
-        let enter = submit || (top && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none()));
-        if events.is_empty() && self.waiting && !typing && enter {
+        if events.is_empty() && self.waiting && submit {
             events.extend(self.window.default_element.map(UiEvent::Click));
         }
         if !events.is_empty() {
@@ -395,12 +409,23 @@ struct Place {
 }
 
 /// What drawing a control gave: the event it gives, whether an edit field has the keyboard focus,
-/// and a group's or a panel's accessibility node.
+/// a group's or a panel's accessibility node, and an edit field's typed text to keep (`Some`) or
+/// forget (`None`).
 #[derive(Default)]
 struct Shown {
     event: Option<UiEvent>,
     typing: bool,
     container: Option<egui::Id>,
+    draft: Option<Option<String>>,
+}
+
+/// What one run of the dialog's body gave: the events, whether an edit field has the keyboard
+/// focus, and the typed texts to keep or forget, by field id.
+#[derive(Default)]
+struct Pass {
+    events: Vec<UiEvent>,
+    typing: bool,
+    drafts: Vec<(u64, Option<String>)>,
 }
 
 /// The text of the visible static text just before control `i` in its container: the visible
@@ -415,110 +440,98 @@ pub(crate) fn prompt_of(w: &ScriptUiDialog, i: usize) -> &str {
 }
 
 /// Draws control `i` (`n`, with the prompt [`prompt_of`] gives) at its place.
-fn control(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, place: &Place, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
+fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
     let rect = egui::Rect::from_min_size(place.origin + egui::vec2(n.rect.x, n.rect.y), egui::vec2(n.rect.w, n.rect.h));
     let mut shown = Shown::default();
     let enabled = place.enabled;
     let salt = (KIND, n.id);
     // A control in a group or a panel is that container's child in the accessibility tree.
-    let builder = egui::UiBuilder::new().max_rect(rect);
+    let builder = egui::UiBuilder::new().id_salt(n.id).max_rect(rect);
     let builder = match place.parent {
         Some(parent) => builder.accessibility_parent(parent),
         None => builder,
     };
-    ui.push_id(n.id, |ui| {
-        ui.scope_builder(builder, |ui| match n.kind {
-            UiKind::Dialog => {}
-            UiKind::Group => shown.container = Some(group(ui, rect, n, enabled)),
-            UiKind::Panel => shown.container = Some(panel(ui, rect, n, enabled)),
-            UiKind::StaticText => {
-                Text::new(n.text.clone()).show(ui);
+    ui.scope_builder(builder, |ui| match n.kind {
+        UiKind::Dialog => {}
+        UiKind::Group => shown.container = Some(group(ui, rect, n, enabled)),
+        UiKind::Panel => shown.container = Some(panel(ui, rect, n, enabled)),
+        UiKind::StaticText => {
+            Text::new(n.text.clone()).show(ui);
+        }
+        UiKind::Button => {
+            let mut button = Button::new(n.text.clone()).id_salt(salt).enabled(enabled);
+            if place.default {
+                button = button.variant(Variant::PRIMARY).default_stop();
             }
-            UiKind::Button => {
-                let mut button = Button::new(n.text.clone()).id_salt(salt).enabled(enabled);
-                if place.default {
-                    button = button.variant(Variant::PRIMARY).default_stop();
-                }
-                if clicked(&button.show(ui)) {
-                    shown.event = Some(UiEvent::Click(i));
-                }
+            if clicked(&button.show(ui)) {
+                shown.event = Some(UiEvent::Click(i));
             }
-            UiKind::CheckBox => {
-                let out = Checkbox::new(Bind::given(n.checked)).label(n.text.clone()).id_salt(salt).enabled(enabled).show(ui);
-                if out.events.committed().is_some() {
-                    shown.event = Some(UiEvent::Click(i));
-                }
+        }
+        UiKind::CheckBox => {
+            let out = Checkbox::new(Bind::given(n.checked)).label(n.text.clone()).id_salt(salt).enabled(enabled).show(ui);
+            if out.events.committed().is_some() {
+                shown.event = Some(UiEvent::Click(i));
             }
-            UiKind::RadioButton => {
-                let mut picked = false;
-                let out = RadioGroup::new(n.text.clone(), Bind::given(n.checked)).id_salt(salt).enabled(enabled).show(ui, |ui, _| {
-                    picked = clicked(&Radio::new(true).label(n.text.clone()).enabled(enabled).show(ui));
-                });
-                if picked || out.events.committed().is_some() {
-                    shown.event = Some(UiEvent::Click(i));
-                }
+        }
+        UiKind::RadioButton => {
+            let mut picked = false;
+            let out = RadioGroup::new(n.text.clone(), Bind::given(n.checked)).id_salt(salt).enabled(enabled).show(ui, |ui, _| {
+                picked = clicked(&Radio::new(true).label(n.text.clone()).enabled(enabled).show(ui));
+            });
+            if picked || out.events.committed().is_some() {
+                shown.event = Some(UiEvent::Click(i));
             }
-            UiKind::EditText => shown = edit(ui, drafts, enabled, (i, n, prompt)),
-            UiKind::DropDownList => {
-                let entries: Vec<Entry<Option<usize>>> = n.items.iter().enumerate().map(|(k, item)| Entry::new(Some(k), item.clone())).collect();
-                let out = Select::new(list_name(n, prompt), Bind::given(n.selection), &entries).id_salt(salt).enabled(enabled).show(ui);
-                if let Some(k) = out.events.committed().copied().filter(|k| *k != n.selection) {
-                    shown.event = Some(UiEvent::Change(i, UiValue::Index(k)));
-                }
+        }
+        UiKind::EditText => shown = edit(ui, drafts, enabled, (i, n, prompt)),
+        UiKind::DropDownList => {
+            let entries: Vec<Entry<Option<usize>>> = n.items.iter().enumerate().map(|(k, item)| Entry::new(Some(k), item.clone())).collect();
+            let out = Select::new(list_name(n, prompt), Bind::given(n.selection), &entries).id_salt(salt).enabled(enabled).show(ui);
+            if let Some(k) = out.events.committed().copied().filter(|k| *k != n.selection) {
+                shown.event = Some(UiEvent::Change(i, UiValue::Index(k)));
             }
-            UiKind::ListBox => {
-                let keys: Vec<usize> = (0..n.items.len()).collect();
-                let source = keyed(&keys, |k: &usize| *k);
-                let selection = n.selection.map(Selection::single).unwrap_or_default();
-                // Screen readers read the box as a list box, by its name or the static text before
-                // it, with the selected item as its value.
-                let out = List::<usize>::options(list_name(n, prompt))
-                    .id_salt(salt)
-                    .enabled(enabled)
-                    .max_rows(list_rows(n.rect.h))
-                    .selection(Bind::given(selection))
-                    .show_items(ui, &source, &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()));
-                // A click activates a row; the arrow keys and typed letters select one.
-                for event in out.events {
-                    let picked = match event {
-                        CollectionEvent::Activate(k) => Some(k),
-                        CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
-                        _ => None,
-                    };
-                    if let Some(k) = picked.filter(|k| n.selection != Some(*k)) {
-                        shown.event = Some(UiEvent::Change(i, UiValue::Index(Some(k))));
-                    }
+        }
+        UiKind::ListBox => {
+            let keys: Vec<usize> = (0..n.items.len()).collect();
+            let source = keyed(&keys, |k: &usize| *k);
+            let selection = n.selection.map(Selection::single).unwrap_or_default();
+            // Screen readers read the box as a list box, by its name or the static text before
+            // it, with the selected item as its value.
+            let out = List::<usize>::options(list_name(n, prompt))
+                .id_salt(salt)
+                .enabled(enabled)
+                .max_rows(list_rows(n.rect.h))
+                .selection(Bind::given(selection))
+                .show_items(ui, &source, &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()));
+            // A click activates a row; the arrow keys and typed letters select one.
+            for event in out.events {
+                let picked = match event {
+                    CollectionEvent::Activate(k) => Some(k),
+                    CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
+                    _ => None,
+                };
+                if let Some(k) = picked.filter(|k| n.selection != Some(*k)) {
+                    shown.event = Some(UiEvent::Change(i, UiValue::Index(Some(k))));
                 }
             }
-            UiKind::Slider => {
-                let out =
-                    Slider::new(Bind::given(n.value), n.min..=n.max).label(screen_reader_name(n, prompt)).id_salt(salt).enabled(enabled).show(ui);
-                if let Some(v) = out.events.committed().copied().filter(|v| *v != n.value) {
-                    shown.event = Some(UiEvent::Change(i, UiValue::Number(v)));
-                }
+        }
+        UiKind::Slider => {
+            let out = Slider::new(Bind::given(n.value), n.min..=n.max).label(screen_reader_name(n, prompt)).id_salt(salt).enabled(enabled).show(ui);
+            if let Some(v) = out.events.committed().copied().filter(|v| *v != n.value) {
+                shown.event = Some(UiEvent::Change(i, UiValue::Number(v)));
             }
-            UiKind::ProgressBar => {
-                Progress::new(n.fraction()).label(screen_reader_name(n, prompt)).id_salt(salt).show(ui);
-            }
-        });
+        }
+        UiKind::ProgressBar => {
+            Progress::new(n.fraction()).label(screen_reader_name(n, prompt)).id_salt(salt).show(ui);
+        }
     });
     shown
 }
 
-/// A panel's frame, with its text over the frame's top edge; screen readers read it as a group,
-/// disabled when the panel is. → the id of its node in the accessibility tree.
+/// A panel: a group box titled by its text over the panel's place; screen readers read it as a
+/// group, disabled when the panel is. → the id of its node in the accessibility tree.
 fn panel(ui: &mut Ui, rect: egui::Rect, n: &UiNode, enabled: bool) -> egui::Id {
-    let frame = rect.shrink(1.0);
-    let (enabled, name) = (enabled && ui.is_enabled(), n.text.clone());
-    let r = ui.interact(rect, ui.scope_id().with("panel"), egui::Sense::hover());
-    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Group, enabled, &name));
-    let visuals = ui.visuals();
-    ui.painter().rect_stroke(frame, 4.0, visuals.widgets.noninteractive.bg_stroke, egui::StrokeKind::Inside);
-    if !n.text.is_empty() {
-        let color = visuals.text_color();
-        ui.painter().text(frame.min + egui::vec2(8.0, -6.0), egui::Align2::LEFT_TOP, &n.text, egui::FontId::proportional(11.0), color);
-    }
-    r.id
+    let shown = GroupBox::new(n.text.clone(), None).id_salt((KIND, n.id)).enabled(enabled).show_at(ui, rect, |_, _| ());
+    shown.output.response.id
 }
 
 /// A group, which draws nothing; screen readers read it as a group called by the name the script
@@ -566,7 +579,7 @@ pub(crate) const DRAFT_CHARS: usize = 2 * MAX_TEXT_BYTES;
 
 /// An edit field: its text is kept in the dialog while it is typed and given to the script when
 /// the field loses the focus, or at Enter in a one-line field.
-fn edit(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, enabled: bool, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
+fn edit(ui: &mut Ui, drafts: &BTreeMap<u64, String>, enabled: bool, (i, n, prompt): (usize, &UiNode, &str)) -> Shown {
     let mut text = drafts.get(&n.id).cloned().unwrap_or_else(|| n.text.clone());
     let mut field = TextField::new(screen_reader_name(n, prompt), Bind::bound(&mut text))
         .limit(DRAFT_CHARS)
@@ -578,19 +591,16 @@ fn edit(ui: &mut Ui, drafts: &mut BTreeMap<u64, String>, enabled: bool, (i, n, p
     }
     let out = field.show(ui);
     let focused = out.response.has_focus();
-    if out.events.value().is_some() || text != n.text {
-        drafts.insert(n.id, text.clone());
-    }
+    let mut draft = (out.events.value().is_some() || text != n.text).then(|| Some(text.clone()));
     let committed = out.submitted || out.events.committed().is_some() || out.response.lost_focus();
     if committed && text != n.text && !n.readonly {
-        drafts.remove(&n.id);
-        return Shown { event: Some(UiEvent::Change(i, UiValue::Text(text))), typing: true, container: None };
+        return Shown { event: Some(UiEvent::Change(i, UiValue::Text(text))), typing: true, container: None, draft: Some(None) };
     }
     // A text the script refused stays in the field until the person changes it.
     if !focused && text == n.text {
-        drafts.remove(&n.id);
+        draft = Some(None);
     }
-    Shown { event: None, typing: focused || committed, container: None }
+    Shown { event: None, typing: focused || committed, container: None, draft }
 }
 
 /// The event in the dialog's fields, for the dialog `w`.

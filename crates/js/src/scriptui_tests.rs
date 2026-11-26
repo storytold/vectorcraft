@@ -666,6 +666,35 @@ fn a_removed_control_leaves_its_dialog() {
 }
 
 #[test]
+fn a_remove_that_runs_out_of_fuel_leaves_the_dialog_as_it_was() {
+    let (mut r, _, _) = realm(Vec::new());
+    r.run("var w = new Window('dialog'); var g = w.add('group'); for (var n = 0; n < 300; n++) g.add('button');").unwrap();
+    let mut failed = 0;
+    for fuel in 1..20_000 {
+        r.set_limits(Limits { fuel, ..Limits::default() });
+        if r.run("w.remove(g);").is_ok() {
+            break;
+        }
+        r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+        let state = r.run("[w.children.length, g.parent === w, g.window === w, g.children[299].window === w].join()").unwrap();
+        // The run may end after remove returned, with the group already removed.
+        if state == JsValue::String("0,false,false,false".into()) {
+            break;
+        }
+        failed += 1;
+        assert_eq!(state, JsValue::String("1,true,true,true".into()), "a remove that ended at fuel {fuel} changed the dialog");
+    }
+    assert!(failed > 300, "the runs ended inside remove's walk of the group ({failed})");
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    let v = r
+        .run(
+            "var added = 0; try { while (true) { w.add('button'); added++; } } catch (e) {} [w.children.length, g.parent, g.window, added].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("512|||512".into()), "the removed group's controls are counted off the dialog once");
+}
+
+#[test]
 fn a_text_getter_that_changes_a_list_while_remove_looks_it_up_makes_remove_throw() {
     let (mut r, _, _) = realm(Vec::new());
     let v = r

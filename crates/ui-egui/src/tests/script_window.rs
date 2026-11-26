@@ -365,15 +365,22 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_after_it_loses_the_focus()
     assert!(!until_window(&mut app));
 }
 
-/// One pass of the dialog host with accessibility on. → the nodes it reports.
-fn access_nodes(app: &VectorcraftApp) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
+/// One pass of the dialog host with accessibility on, drawn as part of the window. → what the pass
+/// gave.
+fn access_frame(app: &mut VectorcraftApp) -> egui::FullOutput {
     let ctx = app.ui_ctx.clone().unwrap();
     ctx.enable_accesskit();
-    let dialogs = app.dialogs().unwrap();
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
-    out.textures_delta.clear();
-    out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    crate::testing::part_frame(app, &ctx, egui::RawInput { screen_rect, ..Default::default() }, |app, ui| {
+        if let Some(dialogs) = app.dialogs() {
+            dialogs.with(|host| host.run(ui));
+        }
+    })
+}
+
+/// One pass of the dialog host with accessibility on. → the nodes it reports.
+fn access_nodes(app: &mut VectorcraftApp) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
+    access_frame(app).platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
 }
 
 #[test]
@@ -382,8 +389,8 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_when_a_click_on_a_button_t
     start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, 'a'); w.add('button', undefined, 'OK'); vc.log(w.show());");
     assert!(until_window(&mut app));
     step(&mut app, Vec::new());
-    access_nodes(&app);
-    let nodes = access_nodes(&app);
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
     let center = |found: Option<&egui::accesskit::Node>, what: &str| {
         let b = found.and_then(egui::accesskit::Node::bounds).unwrap_or_else(|| panic!("no {what}"));
         egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
@@ -422,8 +429,8 @@ fn screen_readers_read_a_group_by_its_name() {
     );
     assert!(until_window(&mut app));
     step(&mut app, Vec::new());
-    access_nodes(&app);
-    let nodes = access_nodes(&app);
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
     let group = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Group && n.label() == Some("opts"));
     let (group, _) = group.unwrap_or_else(|| panic!("the group is in the accessibility tree"));
     let bold = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::CheckBox && n.label() == Some("Bold"));
@@ -449,8 +456,8 @@ fn an_edit_field_takes_at_most_its_draft_limit_while_it_is_typed() {
     start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, ''); w.add('button', undefined, 'OK'); vc.log(w.show());");
     assert!(until_window(&mut app));
     step(&mut app, Vec::new());
-    access_nodes(&app);
-    let nodes = access_nodes(&app);
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
     let b = nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::TextInput).and_then(egui::accesskit::Node::bounds);
     let b = b.unwrap_or_else(|| panic!("no edit field"));
     let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
@@ -735,8 +742,8 @@ fn a_title_a_handler_changes_and_a_list_box_reach_the_dialog() {
     give(&mut app, json!({"event": "click", "control": "Rename"})).unwrap();
     assert!(until_window(&mut app));
     assert_eq!(title(&app), "Renamed", "the heading follows the handler's title");
-    access_nodes(&app);
-    let nodes = access_nodes(&app);
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
     let list = nodes.iter().any(|(_, n)| n.role() == egui::accesskit::Role::ListBox && n.label() == Some("Fruit:"));
     assert!(list, "screen readers read the list box by its prompt");
     let pear = nodes.iter().any(|(_, n)| n.label() == Some("pear") && n.is_selected() == Some(true));
@@ -760,12 +767,7 @@ fn an_arrow_key_and_a_click_in_a_list_box_give_the_script_the_change() {
     let mut on_list = false;
     for _ in 0..8 {
         step(&mut app, vec![key(egui::Key::Tab)]);
-        let ctx = app.ui_ctx.clone().unwrap();
-        ctx.enable_accesskit();
-        let dialogs = app.dialogs().unwrap();
-        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
-        out.textures_delta.clear();
+        let out = access_frame(&mut app);
         on_list = out.platform_output.accesskit_update.is_some_and(|u| {
             u.nodes.iter().any(|(id, n)| *id == u.focus && matches!(n.role(), egui::accesskit::Role::ListBox | egui::accesskit::Role::ListItem))
         });
@@ -777,8 +779,8 @@ fn an_arrow_key_and_a_click_in_a_list_box_give_the_script_the_change() {
     step(&mut app, vec![key(egui::Key::ArrowDown)]);
     assert!(until_window(&mut app), "the change handler runs and the dialog waits again");
     step(&mut app, Vec::new());
-    access_nodes(&app);
-    let nodes = access_nodes(&app);
+    access_nodes(&mut app);
+    let nodes = access_nodes(&mut app);
     let b = nodes
         .iter()
         .map(|(_, n)| n)
@@ -805,12 +807,7 @@ fn enter_with_the_focus_on_a_slider_clicks_the_default_button() {
     let mut on_slider = false;
     for _ in 0..8 {
         step(&mut app, vec![key(egui::Key::Tab)]);
-        let ctx = app.ui_ctx.clone().unwrap();
-        ctx.enable_accesskit();
-        let dialogs = app.dialogs().unwrap();
-        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
-        out.textures_delta.clear();
+        let out = access_frame(&mut app);
         on_slider = out
             .platform_output
             .accesskit_update
@@ -846,7 +843,7 @@ fn stop_ends_the_run() {
     start(&mut app, &format!("{DRAW} {FORM} w.show();"));
     assert!(until_window(&mut app));
     step(&mut app, Vec::new());
-    let nodes = access_nodes(&app);
+    let nodes = access_nodes(&mut app);
     let stop = nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::Button && n.label() == Some("Stop"));
     let b = stop.and_then(egui::accesskit::Node::bounds).expect("a Stop button");
     let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
