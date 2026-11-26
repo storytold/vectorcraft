@@ -29,7 +29,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::prefs::{prefs_enabled, prefs_path};
+use super::prefs::prefs_enabled;
+use super::prefs_dir::prefs_dir;
 
 /// The endpoint file, next to the preferences.
 const FILE_NAME: &str = "instance.json";
@@ -66,7 +67,7 @@ pub fn start(automation: bool, new_instance: bool, safe_mode: bool, files: &[Str
     if automation || !prefs_enabled() {
         return Start::Running(None);
     }
-    let Some(path) = prefs_path().and_then(|p| Some(p.parent()?.join(FILE_NAME))) else { return Start::Running(None) };
+    let Some(path) = prefs_dir().map(|dir| dir.join(FILE_NAME)) else { return Start::Running(None) };
     start_at(&path, new_instance, safe_mode, files)
 }
 
@@ -143,10 +144,11 @@ pub fn launch_with_plug_ins(files: &[String]) -> io::Result<()> {
 }
 
 /// The command [`launch_with_plug_ins`] runs: `exe -- files…`, so a file whose name starts with '-'
-/// stays a file.
+/// stays a file. A nightly launch hands its profile on first (`launch_profile::child_args`), or the
+/// child would refuse to start without one.
 fn app_with_plug_ins(exe: &Path, files: &[String]) -> std::process::Command {
     let mut command = std::process::Command::new(exe);
-    command.arg("--").args(files);
+    command.args(super::launch_profile::child_args(files));
     command
 }
 
