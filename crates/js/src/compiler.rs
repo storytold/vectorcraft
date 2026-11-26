@@ -492,7 +492,10 @@ impl<'a> FnCompiler<'a> {
     fn lexical_decls(&mut self, decls: &[VarDecl]) -> CResult<()> {
         for d in decls {
             match (d.init, &d.target) {
-                (Some(init), Binding::Name(name)) => self.named_expr(init, &name.name)?,
+                (Some(init), Binding::Name(name)) => {
+                    let public_name = if name.name == crate::ast::DEFAULT_BINDING { "default" } else { &name.name };
+                    self.named_expr(init, public_name)?;
+                }
                 (Some(init), Binding::Pattern(_)) => self.expr(init)?,
                 (None, Binding::Name(_)) => self.emit(Op::Undefined),
                 (None, Binding::Pattern(_)) => return internal("a destructuring declaration without an initializer"),
@@ -2247,7 +2250,10 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
         pattern_names,
-        own_name: es2015.then(|| key_of(f.name.as_ref().map_or("", |n| n.name.as_str()))),
+        own_name: es2015.then(|| {
+            let name = f.name.as_ref().map_or("", |n| n.name.as_str());
+            key_of(if f.kind == FunctionKind::Declaration && name == crate::ast::DEFAULT_BINDING { "default" } else { name })
+        }),
         method: es2015 && matches!(f.kind, FunctionKind::Method | FunctionKind::Getter | FunctionKind::Setter),
     };
     c.finish(hoisted, meta)

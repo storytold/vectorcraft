@@ -12,6 +12,31 @@ fn es() -> Realm {
 }
 
 #[test]
+fn default_exported_functions_keep_their_public_names() {
+    for (source, name) in [
+        ("export default function () {}", "default"),
+        ("export default () => {};", "default"),
+        ("export default (function () {});", "default"),
+        ("export default function named() {}", "named"),
+    ] {
+        let out = run("import value from './m.mjs'; out.push(value.name);", &[("./m.mjs", source)]);
+        assert_eq!(out, name, "{source}");
+    }
+}
+
+#[test]
+fn symbol_writes_through_namespace_prototypes_are_refused() {
+    let out = run(
+        "import * as ns from './m.mjs'; var k = Symbol('new'), child = Object.create(ns); \
+         try { child[k] = 1; } catch (e) { out.push(e.name); } \
+         out.push(Object.getOwnPropertySymbols(child).length); \
+         Object.defineProperty(child, k, {value: 3, writable: true}); child[k] = 4; out.push(child[k]);",
+        &[("./m.mjs", "export var value = 1;")],
+    );
+    assert_eq!(out, "TypeError|0|4");
+}
+
+#[test]
 fn a_namespace_exposes_its_own_immutable_symbol_tag() {
     let out = run(
         "import * as ns from './m.mjs'; \

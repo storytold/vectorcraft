@@ -394,8 +394,27 @@ impl Interp {
             Some(Prop::Accessor { set: None, .. }) => return self.reject_sym(throw, &k, "it has only a getter"),
             None => {}
         }
-        let proto = self.object(id)?.proto;
-        match proto.map(|p| self.find_sym(p, &k)).transpose()?.flatten() {
+        let mut cur = self.object(id)?.proto;
+        let mut inherited = None;
+        let mut steps = 0usize;
+        while let Some(object) = cur {
+            if matches!(self.object(object)?.class, crate::heap::Class::ModuleNamespace(_)) {
+                return self.reject_sym(throw, &k, "a module namespace object is read-only");
+            }
+            if let Some(property) = self.get_own_sym(object, &k)? {
+                inherited = Some(property);
+                break;
+            }
+            cur = self.object(object)?.proto;
+            if cur.is_some() {
+                self.use_fuel()?;
+            }
+            steps += 1;
+            if steps > 1_000_000 {
+                return Err(crate::interp::Abrupt::Internal("prototype chain too long".into()));
+            }
+        }
+        match inherited {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => return self.reject_sym(throw, &k, "it has only a getter"),
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject_sym(throw, &k, "it is read-only"),
