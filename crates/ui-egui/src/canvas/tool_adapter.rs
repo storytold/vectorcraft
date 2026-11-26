@@ -133,17 +133,6 @@ pub(crate) fn tool_enter(app: &mut VectorcraftApp, mods: Mods, view: ViewInfo) -
     opened
 }
 
-/// The modifiers held when the primary button went up in this pass: its first release, as a pass carries a press only
-/// as its last pointer event. `None` without a release in the pass.
-fn release_mods(ctx: &egui::Context) -> Option<egui::Modifiers> {
-    ctx.input(|i| {
-        i.events.iter().find_map(|e| match e {
-            egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
-            _ => None,
-        })
-    })
-}
-
 /// The session as a tool for one pass. The host's trait takes `&self` for the cursor and the claims, which the
 /// session answers through `&mut`, so the app sits in a cell.
 struct SessionTool<'a> {
@@ -161,12 +150,14 @@ impl<'a> SessionTool<'a> {
         Self { app: RefCell::new(app), view, carrying: Cell::new(false), ctx: ui.ctx().clone(), layer: ui.layer_id() }
     }
 
-    /// `ev` with Shift, Alt, Cmd and Ctrl as they were held when the primary button went up in this pass to end the
-    /// gesture, instead of as they are at the end of the pass: a modifier pressed or let go after the release does not
-    /// count for it. Space and Backtick stay as the host holds them. Unchanged without a release in the pass.
-    fn at_release(&self, mut ev: PointerEvent) -> PointerEvent {
-        if let Some(m) = release_mods(&self.ctx) {
-            ev.mods = tool_mods(craft::keymap::Mods::from_egui(&m, crate::keymap::platform()), ev.mods.space);
+    /// `ev` with Shift, Alt, Cmd and Ctrl as they were held when the gesture's button went up in this pass, latched ones
+    /// included (the pointer frame's `pick_mods`), instead of as they are at the end of the pass: a modifier pressed or
+    /// let go after the release does not count for it. Space and Backtick stay as the host holds them. Unchanged in a
+    /// pass where that button did not come up.
+    fn at_release(&self, pointer: &ToolPointer, mut ev: PointerEvent) -> PointerEvent {
+        let frame = craft::ui::runtime::pointer::frame(&self.ctx);
+        if frame.release == Some(pointer.button) {
+            ev.mods = tool_mods(frame.pick_mods, ev.mods.space);
         }
         ev
     }
@@ -344,7 +335,7 @@ impl CanvasTool for SessionTool<'_> {
         let carried = super::drops::carry_out(&mut self.app(), cx, pointer, covered);
         if !carried {
             // The moves of the pass that releases the press came before its release, with the keys held then.
-            let ev = self.at_release(pointer_event(PointerKind::Drag, pointer, cx));
+            let ev = self.at_release(pointer, pointer_event(PointerKind::Drag, pointer, cx));
             dispatch(&mut self.app(), &ev, self.view);
             self.app().canvas.last_drag = Some((pointer.pos, ev));
         }
@@ -363,7 +354,7 @@ impl CanvasTool for SessionTool<'_> {
         }
         drop(app);
         // The press ends where it went up, with the keys held at its release.
-        let up = self.at_release(pointer_event(PointerKind::Up, pointer, cx));
+        let up = self.at_release(pointer, pointer_event(PointerKind::Up, pointer, cx));
         let covered = self.covered(pointer);
         let carried = super::drops::carried(&self.app(), cx, pointer, covered);
         self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));

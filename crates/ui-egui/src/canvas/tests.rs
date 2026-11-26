@@ -533,8 +533,14 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
 }
 
-/// A Rectangle tool on a new 400 × 300 document, after one frame, with Smart Guides and Snap to
-/// Point off → (the app, its context, the canvas view).
+/// One frame of the whole app on `ctx` with `events`, in a 1600 × 850 window, as the hosts run it.
+fn app_step(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0));
+    crate::testing::app_frame(app, ctx, egui::RawInput { screen_rect: Some(screen), events, ..Default::default() });
+}
+
+/// A Rectangle tool on a new 400 × 300 document in the whole app, after three frames, with Smart
+/// Guides and Snap to Point off → (the app, its context, the canvas view).
 fn rectangle_tool() -> (VectorcraftApp, egui::Context, craft::behavior::CanvasView) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -542,7 +548,9 @@ fn rectangle_tool() -> (VectorcraftApp, egui::Context, craft::behavior::CanvasVi
     app.ui.view.snap_to_point = false;
     app.select_tool("rectangle");
     let ctx = crate::testing::ui_context();
-    frame(&mut app, &ctx, vec![]);
+    for _ in 0..3 {
+        app_step(&mut app, &ctx, vec![]);
+    }
     let xf = app.canvas_view().unwrap();
     (app, ctx, xf)
 }
@@ -578,15 +586,15 @@ fn tool_drag_ends_with_the_modifiers_of_its_button_release() {
         let (mut app, ctx, xf) = rectangle_tool();
         let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
         let none = egui::Modifiers::NONE;
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
-        frame(&mut app, &ctx, vec![primary(from, true, none)]);
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
-        frame(
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        app_step(&mut app, &ctx, vec![primary(from, true, none)]);
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+        app_step(
             &mut app,
             &ctx,
             vec![egui::Event::PointerMoved(to), egui::Event::ModifiersChanged(held), primary(to, false, held), egui::Event::ModifiersChanged(after)],
         );
-        frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(none)]);
+        app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(none)]);
         let paths = drawn_paths(&app);
         assert_eq!(paths.len(), 1, "the drag draws one rectangle");
         paths[0]
@@ -606,11 +614,11 @@ fn tool_drag_ends_with_the_modifiers_of_its_button_release() {
 fn shift_pressed_at_a_still_release_constrains_the_tool_drag() {
     let (mut app, ctx, xf) = rectangle_tool();
     let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, egui::Modifiers::NONE)]);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
-    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), primary(to, false, egui::Modifiers::SHIFT)]);
-    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, egui::Modifiers::NONE)]);
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+    app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), primary(to, false, egui::Modifiers::SHIFT)]);
+    app_step(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
     let paths = drawn_paths(&app);
     assert_eq!(paths.len(), 1, "the drag draws one rectangle");
     assert!((paths[0].width() - paths[0].height()).abs() < 1e-3, "Shift pressed at a still release draws a square: {:?}", paths[0]);
@@ -625,13 +633,13 @@ fn the_move_of_a_releasing_frame_counts_for_the_tool_drag() {
         let (mut app, ctx, xf) = rectangle_tool();
         let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(160.0, 130.0)));
         let none = egui::Modifiers::NONE;
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, none)]);
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from), primary(from, true, none)]);
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, 0.5))]);
         if space {
-            frame(&mut app, &ctx, vec![space_key(true)]);
+            app_step(&mut app, &ctx, vec![space_key(true)]);
         }
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to), primary(to, false, none)]);
-        frame(&mut app, &ctx, if space { vec![space_key(false)] } else { vec![] });
+        app_step(&mut app, &ctx, vec![egui::Event::PointerMoved(to), primary(to, false, none)]);
+        app_step(&mut app, &ctx, if space { vec![space_key(false)] } else { vec![] });
         let paths = drawn_paths(&app);
         assert_eq!(paths.len(), 1, "the drag draws one rectangle");
         paths[0]
