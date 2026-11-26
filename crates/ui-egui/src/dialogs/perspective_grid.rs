@@ -134,6 +134,7 @@ fn open_on(app: &mut VectorcraftApp, def: GridDefinition, mode: GridMode) -> Res
     let dialog = GridDialog::new(
         def,
         mode,
+        app.session.active().map(|st| st.uid),
         (general_lengths(app).pixels_per_inch, app.session.prefs.numbers_without_units_are_points),
         app.session.perspective_presets(),
         app.session.new_perspective_preset_name(),
@@ -171,6 +172,8 @@ pub fn open_edit(app: &mut VectorcraftApp, original: Option<&str>, base: &str) -
 pub(super) struct GridDialog {
     id: DialogId,
     mode: GridMode,
+    /// The document whose grid Define Grid edits.
+    source_document: Option<u64>,
     draft: GridDraft,
     /// The presets the Preset row offers, as the document and the preferences have them.
     presets: Vec<GridDefinition>,
@@ -190,10 +193,18 @@ pub(super) struct GridDialog {
 }
 
 impl GridDialog {
-    fn new(def: GridDefinition, mode: GridMode, (ppi, bare_points): (f64, bool), presets: Vec<GridDefinition>, new_name: String) -> Self {
+    fn new(
+        def: GridDefinition,
+        mode: GridMode,
+        source_document: Option<u64>,
+        (ppi, bare_points): (f64, bool),
+        presets: Vec<GridDefinition>,
+        new_name: String,
+    ) -> Self {
         let mut dialog = GridDialog {
             id: dialog_id(KIND),
             mode,
+            source_document,
             draft: GridDraft { def },
             presets: Vec::new(),
             rows: Vec::new(),
@@ -516,9 +527,12 @@ enum Next {
     Presets(String),
 }
 
-fn file(app: &mut VectorcraftApp, mode: &GridMode, def: &GridDefinition) -> Result<Next, String> {
+fn file(app: &mut VectorcraftApp, mode: &GridMode, source_document: Option<u64>, def: &GridDefinition) -> Result<Next, String> {
     let mut params = serde_json::to_value(def).map_err(|e| e.to_string())?;
     if *mode == GridMode::Define {
+        if app.session.active().map(|st| st.uid) != source_document {
+            return Err(tl!("Define Grid can only change the document where it was opened.").to_owned());
+        }
         app.run("perspective.grid.define", params)?;
         return Ok(Next::Close);
     }
@@ -546,10 +560,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let filed = dialogs.with(|host| {
         let dialog = host.get_mut::<GridDialog>()?;
         dialog.set_presets(presets, new_name);
-        dialog.held.take().map(|def| (dialog.mode.clone(), def))
+        dialog.held.take().map(|def| (dialog.mode.clone(), dialog.source_document, def))
     });
-    let Some((mode, def)) = filed else { return };
-    let next = file(app, &mode, &def);
+    let Some((mode, source_document, def)) = filed else { return };
+    let next = file(app, &mode, source_document, &def);
     if let Err(why) = &next {
         app.status(why.clone());
     }

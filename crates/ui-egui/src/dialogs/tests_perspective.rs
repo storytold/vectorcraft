@@ -105,6 +105,39 @@ fn define_grid_opens_on_the_grid_and_applies_its_fields() {
 }
 
 #[test]
+fn define_grid_applies_only_to_the_document_where_it_opened() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let destination = app.session.active().unwrap();
+    let destination_uid = destination.uid;
+    let destination_undo = destination.history.undo.len();
+    let destination_grid = grid(&app);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let source_uid = app.session.active().unwrap().uid;
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "rightColor", json!("#112233")).unwrap();
+    let ctx = window(&app);
+    let id = dialog_id(super::perspective_grid::KIND);
+    host(&app, |h| {
+        assert!(!h.confirm_by_id(&ctx, id));
+        assert_eq!(h.held_state(id), Some(HeldOk::Waiting));
+    });
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    super::perspective_grid::pump(&mut app, &ctx);
+    assert_eq!(app.session.active().unwrap().uid, destination_uid);
+    assert_eq!(grid(&app), destination_grid, "the first document's draft leaves the active grid alone");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), destination_undo);
+    assert!(matches!(host(&app, |h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source_uid);
+    ok(&mut app);
+    assert_eq!(kind(&app), None);
+    assert_eq!(grid(&app).right_color.hex(), "#112233");
+}
+
+#[test]
 fn define_grid_loads_and_saves_presets() {
     let mut app = app();
     app.run("ui.perspectiveGridDialog", json!({})).unwrap();

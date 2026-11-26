@@ -100,6 +100,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
 @msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
 @msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	the script file permissions could not be read: {e}	scriptets filtilladelser kunne ikke læses: {e}
 @msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
 @msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
@@ -770,6 +771,21 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	time budget	tidsbudget
 @msg	memory budget (the selection is too large to hand over)	hukommelsesbudget (markeringen er for stor til at blive overdraget)
 @msg	output size ({what} is {len} bytes, limit {max})	outputstørrelse ({what} fylder {len} byte, grænse {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linje {line}, kolonne {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	hukommelsesbudget
+@msg	call depth	kaldedybde
+@msg	run(input, params) returned no output object	run(input, params) returnerede intet outputobjekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" kræver `script`: navnet på plug-in'ets .js-fil ved siden af manifestet
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` skal være navnet på en .js-fil i manifestets mappe: 1-128 byte, ingen mappe, intet `:`, må ikke starte med `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` er scriptets tekst og angives kun i den JSON, som dataBase64 i plugin.install tager: en .vcplugin-fil navngiver sit script i `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	et JavaScript-plug-ins manifest angiver `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" er til et objektfilter (`kind` "filter"), ikke `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	et JavaScript-plug-in kan ikke angive tilladelsen `{name}`: af værtens tilladelser må det angive `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	et WebAssembly-moduls manifest udelader `runtime`: "js" er til et JavaScript-plug-in
+@msg	a JavaScript plug-in makes no command calls	et JavaScript-plug-in kalder ingen kommandoer
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) tager to tal
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) tager et niveau, 0 (fejl), 1 (advarsel), 2 (information) eller 3 (fejlsøgning), og en streng
 @msg	the plug-in's grant can't be removed from the plug-in store	plug-in'ets tilladelse kan ikke fjernes fra plug-in-lageret
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	tilladelsen `{shown}` er reserveret til et senere plug-in-API; denne vært tildeler den ikke
 @msg	unknown permission `{shown}`	ukendt tilladelse `{shown}`
@@ -7754,6 +7770,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
 	Allow Once	Tillad én gang
 	Always Allow This Script	Tillad altid dette script
+	No script has kept file access.	Intet script har gemt adgang til filer.
+	Read file	Læs fil
+	Read and write file	Læs og skriv fil
+	Read and write folder	Læs og skriv mappe
+	Revoke	Tilbagekald
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Tilbagekald fjerner den adgang, der er gemt for hver version af scriptet. Adgang til en mappe omfatter alt i den.
+@msg	Script file access revoked	Scriptets adgang til filer er tilbagekaldt
+@msg	The script file access was already revoked	Scriptets adgang til filer var allerede tilbagekaldt
 	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen

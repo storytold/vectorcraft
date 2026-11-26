@@ -4,7 +4,9 @@
 //! JavaScript recursion uses the heap, not the Rust stack. The loop runs again inside a Rust call
 //! only where the language needs a function's result in the middle of an operation (a getter or
 //! setter, `valueOf` and `toString` during a conversion, indirect `eval`); those nested runs are
-//! counted against [`crate::Limits::reentry`].
+//! counted against [`crate::Limits::reentry`]. A generator's body runs in a frame of its own,
+//! which `yield` moves into the generator object, operands included, and a call to its `next`,
+//! `return` or `throw` pushes again ([`crate::generator`]).
 //!
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
@@ -198,22 +200,24 @@ pub(crate) struct Frame {
     pub(crate) code: Rc<Code>,
     pub(crate) pc: usize,
     /// Where this frame's operands start on the operand stack.
-    base: usize,
+    pub(crate) base: usize,
     pub(crate) env: EnvId,
     pub(crate) var_env: EnvId,
     /// `with` and catch environments entered and not yet left.
-    env_depth: u32,
-    this: Value,
-    callee: Option<ObjId>,
+    pub(crate) env_depth: u32,
+    pub(crate) this: Value,
+    pub(crate) callee: Option<ObjId>,
     /// The object `new` made, returned unless the function returns an object.
-    construct: Option<ObjId>,
-    completion: Value,
+    pub(crate) construct: Option<ObjId>,
+    pub(crate) completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
-    boundary: bool,
+    pub(crate) boundary: bool,
+    /// The generator object whose body this frame runs, once [`Op::GeneratorStart`] has made it.
+    pub(crate) generator: Option<ObjId>,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
-type ThrowSite = (Rc<Code>, usize);
+pub(crate) type ThrowSite = (Rc<Code>, usize);
 
 /// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
 pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
@@ -530,7 +534,7 @@ fn arguments_bytes(args: usize) -> usize {
 }
 
 /// A call to a function written in JavaScript, ready to enter.
-struct Entry {
+pub(crate) struct Entry {
     callee: ObjId,
     code: Rc<Code>,
     env: EnvId,
@@ -539,9 +543,11 @@ struct Entry {
 }
 
 /// What a call resolved to.
-enum Prepared {
+pub(crate) enum Prepared {
     Closure(Entry),
     Done(Value),
+    /// A generator's `next`, `return` or `throw` that goes on with its body.
+    Resume(Box<crate::generator::Resumed>),
 }
 
 /// A variable found in the environment chain.
@@ -868,7 +874,7 @@ impl Interp {
 
     /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
     /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
-    fn drop_left_finally_sites(&mut self, len: usize) {
+    pub(crate) fn drop_left_finally_sites(&mut self, len: usize) {
         while let Some(&(_, slot)) = self.finally_sites.last() {
             #[cfg(test)]
             SITE_CHECKS.with(|c| c.set(c.get() + 1));
@@ -896,7 +902,7 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.generator.iter()));
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -995,6 +1001,8 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.return_value(v)
             }
+            Op::GeneratorStart => self.op_generator_start(),
+            Op::Yield(raw) => self.op_yield(raw),
             _ => self.exec(op).map(|()| None),
         }
     }
@@ -1049,6 +1057,7 @@ impl Interp {
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
+            self.end_generator(frame.generator);
             if frame.boundary {
                 self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
@@ -1065,6 +1074,7 @@ impl Interp {
     fn abort_to_boundary(&mut self) {
         while let Some(frame) = self.frames.pop() {
             self.stack.truncate(frame.base);
+            self.end_generator(frame.generator);
             if frame.boundary {
                 break;
             }
@@ -1072,8 +1082,15 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+        // A generator's body that returns ends it, and its caller gets `{ value, done: true }`,
+        // made while the frame is still there to fail in.
+        let v = match self.frames.last().and_then(|f| f.generator) {
+            Some(_) => crate::builtins::iterator::iter_result(self, v, true)?,
+            None => v,
+        };
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        self.end_generator(frame.generator);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
         self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
@@ -1254,7 +1271,12 @@ impl Interp {
             Op::PatternGet(n) => self.op_pattern_get(n),
             Op::InitIndex => self.op_init_index(),
             Op::InitAccessorIndex(getter) => self.op_init_accessor_index(getter),
-            Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
+            Op::Resume(t) => self.op_resume(t),
+            Op::DelegateIterator => self.op_delegate_iterator(),
+            Op::DelegateCall(t) => self.op_delegate_call(t),
+            Op::DelegateResult(t) => self.op_delegate_result(t),
+            Op::DelegateDone(t) => self.op_delegate_done(t),
+            Op::Return | Op::ReturnCompletion | Op::GeneratorStart | Op::Yield(_) => internal("a frame-ending instruction reached the dispatcher"),
         }
     }
 
@@ -2407,7 +2429,8 @@ impl Interp {
             Some(_) => self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) }),
             None => env,
         };
-        let proto = self.intrinsics.function_proto;
+        let generator = code.generator.then(|| self.symbols.objects.map(|o| (o.generator_function_proto, o.generator_proto))).flatten();
+        let proto = generator.map_or(self.intrinsics.function_proto, |(function_proto, _)| function_proto);
         let length = code.length;
         let strict = code.strict;
         let arrow = code.arrow;
@@ -2420,6 +2443,18 @@ impl Interp {
         self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: length_flags })?;
         if let Some(name) = own_name {
             self.define(f, key("name"), Prop::Data { value: Value::String(Str::from_rc(name)), flags: CONFIGURABLE })?;
+        }
+        // A generator function's `prototype`, a generator method's included, inherits from
+        // %GeneratorPrototype% and has no `constructor` (ECMA-262 11th edition, section 14.4.13).
+        // A generator function has no own `caller` or `arguments`, strict or not
+        // (section 16.2).
+        if let (false, Some((_, generator_proto))) = (arrow, generator) {
+            let p = self.heap.alloc_object(Object::new(Class::Ordinary, Some(generator_proto)));
+            self.define(f, key("prototype"), Prop::Data { value: Value::Object(p), flags: WRITABLE })?;
+            if let Some(name) = self_name {
+                self.env_insert(env, name, Binding::new(Value::Object(f), false, false))?;
+            }
+            return Ok(f);
         }
         // An arrow function, a method and an accessor of ECMAScript 2015 code have no
         // `prototype` and cannot be constructed (sections 14.2.16 and 14.3.8).
@@ -2819,6 +2854,11 @@ impl Interp {
                     let callee = f.as_object().ok_or_else(|| Abrupt::Internal("callee is not an object".into()))?;
                     return Ok(Prepared::Closure(Entry { callee, code, env, this, args }));
                 }
+                Func::Native { kind: NativeKind::Resume(mode), .. } => {
+                    self.use_fuel()?;
+                    let sent = args.into_iter().next().unwrap_or(Value::Undefined);
+                    return self.prepare_resume(this, mode, sent);
+                }
                 Func::Native { kind: NativeKind::Call, .. } => {
                     self.use_fuel()?;
                     f = this;
@@ -2944,6 +2984,10 @@ impl Interp {
                 self.stack.truncate(start);
                 self.enter_function(entry, None, false)
             }
+            Prepared::Resume(r) => {
+                self.stack.truncate(start);
+                self.enter_resumed(*r, false)
+            }
         }
     }
 
@@ -2964,6 +3008,7 @@ impl Interp {
         }
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.generator => Err(self.type_error("a generator function is not a constructor")),
             Some(Func::Closure { code, .. }) if code.method => Err(self.type_error("a method is not a constructor")),
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
@@ -3066,6 +3111,7 @@ impl Interp {
             construct,
             completion: Value::Undefined,
             boundary,
+            generator: None,
         });
         Ok(())
     }
@@ -3300,6 +3346,7 @@ impl Interp {
         match prepared? {
             Prepared::Done(v) => Ok(Some(v)),
             Prepared::Closure(entry) => self.enter_function(entry, None, true).map(|()| None),
+            Prepared::Resume(resumed) => self.enter_resumed(*resumed, true).map(|()| None),
         }
     }
 
@@ -3309,6 +3356,11 @@ impl Interp {
             Prepared::Closure(entry) => {
                 self.stack.truncate(saved);
                 self.enter_function(entry, None, true)?;
+                self.execute()
+            }
+            Prepared::Resume(r) => {
+                self.stack.truncate(saved);
+                self.enter_resumed(*r, true)?;
                 self.execute()
             }
         }
@@ -3560,6 +3612,7 @@ impl Interp {
             construct: None,
             completion: Value::Undefined,
             boundary,
+            generator: None,
         });
         Ok(())
     }

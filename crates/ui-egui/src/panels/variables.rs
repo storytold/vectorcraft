@@ -546,6 +546,8 @@ fn variable_table(ui: &mut Ui, vars: &[VarRow], sort: VariableSort, states: &Row
             CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } if !opening_menu => {
                 acts.extend(keys.into_iter().next().map(Act::Click));
             }
+            // A click on the highlighted row changes no selection, and still selects what it drives.
+            CollectionEvent::Picked { key, .. } if !opening_menu => acts.push(Act::Click(key)),
             CollectionEvent::Activate(name) if !states.locked => acts.push(Act::Options(name)),
             _ => {}
         }
@@ -1238,6 +1240,30 @@ mod tests {
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"].as_array().unwrap().len(), 1);
         assert_eq!(sets["datasets"][0]["name"], "Data Set 2");
+    }
+
+    /// A click on the highlighted row selects what it drives again, as a click on any other row
+    /// does: after the art is deselected on the canvas, the row stays highlighted, and a second
+    /// click on it selects the bound object.
+    #[test]
+    fn a_click_on_the_highlighted_row_selects_its_bound_object_again() {
+        use crate::tests::panel_harness::Panel;
+        let mut app = app_with_data();
+        let bound = app.session.doc().unwrap().doc.variables.objects_of("Name")[0];
+        app.session.execute("select.set", &json!({"ids": []})).unwrap();
+        let mut p = Panel::new(app, show);
+        let selected = |p: &Panel| p.app().session.doc().unwrap().selection.objects.clone();
+        let highlighted = |p: &Panel| highlighted_row(p.app().session.doc().unwrap());
+        p.click("Name");
+        assert_eq!(highlighted(&p).as_deref(), Some("Name"));
+        assert_eq!(selected(&p), vec![bound], "the first click selects the bound object");
+        p.app().session.execute("select.set", &json!({"ids": []})).unwrap();
+        assert!(selected(&p).is_empty());
+        // A second later, so the two clicks are not a double click.
+        p.advance(1.0);
+        p.click("Name");
+        assert_eq!(highlighted(&p).as_deref(), Some("Name"));
+        assert_eq!(selected(&p), vec![bound], "a click on the highlighted row selects the bound object again");
     }
 
     /// The rows as the panel built them on every frame before [`cached_rows`] kept them: the
