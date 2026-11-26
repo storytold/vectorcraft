@@ -10,6 +10,34 @@ use crate::*;
 
 const DENIED: &str = "Script file access denied";
 
+#[test]
+fn file_wrappers_report_encoder_warnings_without_changing_their_return_values() {
+    for method in ["exportFile", "saveAs", "exportForScreens"] {
+        let base = folder(&format!("encoder-warnings-{method}"));
+        let mut s = session(&base);
+        s.execute("file.new", &json!({"width": 80, "height": 40})).unwrap();
+        crate::tests_menucmds::place_undecodable_png(&mut s);
+        let format = if method == "saveAs" { "pdf" } else { "png" };
+        let expected = s.execute("document.export", &json!({"format": format})).unwrap()["warnings"].clone();
+        let warnings = expected.as_array().unwrap();
+        assert!(!warnings.is_empty(), "the fixture must produce an encoder warning");
+        let dir = data_folder(&mut s, &base);
+        let path = quoted(&dir.join("output.png"));
+        let call = match method {
+            "exportFile" => format!("d.exportFile(new File({path}), ExportType.PNG24)"),
+            "saveAs" => format!("d.saveAs(new File({}))", quoted(&dir.join("output.pdf"))),
+            _ => format!("d.exportForScreens(new Folder({}), ExportForScreensType.SE_PNG24)", quoted(&dir.join("screens"))),
+        };
+        let report =
+            run(&mut s, &base, &format!("Folder.userData; var d = app.activeDocument; var answer = {call}; vc.log(answer === undefined);")).unwrap();
+        assert_eq!(report["log"], json!([true]), "{method}: {report}");
+        let lines = report["console"]["lines"].as_array().unwrap();
+        for warning in warnings.iter().filter_map(Value::as_str) {
+            assert!(lines.iter().filter_map(Value::as_str).any(|line| line.contains(warning)), "{method}: {warning}: {lines:?}");
+        }
+    }
+}
+
 /// A fresh folder for test `name`, by its real path, with `main` for the script.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-save-{name}-{}", std::process::id()));

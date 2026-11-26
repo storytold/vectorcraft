@@ -12,7 +12,8 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/> describe.
 //!
 //! Each method runs a command (`file.saveAs`, `document.export`, `document.open`) inside the run's
-//! transaction. The file is a `File` object, and the method reads and writes only where that
+//! transaction and writes command warnings to the run's console.
+//! The file is a `File` object, and the method reads and writes only where that
 //! `File` may ([`super::super::files`]): the path is checked before the command runs, and the
 //! command's own reads and writes leave out the files of the open documents that `vc.run`'s
 //! commands may use.
@@ -663,6 +664,14 @@ fn exactly(h: &Host, f: impl FnOnce() -> Answer) -> Answer {
     r
 }
 
+fn file_command(h: &Host, id: &str, params: &Value) -> Answer {
+    let (data, result) = super::command_value(h, id, params)?;
+    for warning in result.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+        super::super::each_line(&format!("{id}: {warning}"), |line, cut| h.line(super::super::console::Entry::Log(line), cut));
+    }
+    Ok(data)
+}
+
 /// The path to give a command for the real path `real`.
 fn plain(real: std::path::PathBuf) -> String {
     crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()
@@ -723,7 +732,7 @@ fn doc_save_as(h: &Host, a: &[Data]) -> Answer {
     }
     let real = h.disk.borrow().save_target(path).map_err(|m| refused(m, path))?;
     p.insert("path".into(), json!(plain(real)));
-    exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &Value::Object(p))))?;
+    exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "file.saveAs", &Value::Object(p))))?;
     Ok(Data::Undefined)
 }
 
@@ -777,7 +786,7 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
     let named = with_extension(path, &kind, svgz);
     let real = h.disk.borrow().save_target(&named).map_err(|m| refused(m, &named))?;
     p.insert("path".into(), json!(plain(real)));
-    exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "document.export", &Value::Object(p))))?;
+    exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "document.export", &Value::Object(p))))?;
     Ok(Data::Undefined)
 }
 
@@ -823,7 +832,7 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
     }
     let real = h.disk.borrow().open_target(path).map_err(|m| refused(m, path))?;
     p.insert("path".into(), json!(plain(real)));
-    let r = exactly(h, || command(h, "document.open", &Value::Object(p)))?;
+    let r = exactly(h, || file_command(h, "document.open", &Value::Object(p)))?;
     let index = match &r {
         Data::Object(items) => items.iter().find_map(|(k, v)| match (k.as_str(), v) {
             ("index", Data::Number(n)) => whole(*n).and_then(|i| usize::try_from(i).ok()),
@@ -923,7 +932,7 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
                 let name = super::with_doc(h, doc, |_, st| st.title());
                 let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;
                 let p = json!({"path": plain(real), "format": format});
-                exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &p)))?;
+                exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "file.saveAs", &p)))?;
             }
             _ => return Err(HostError::Error(UNSAVED_CHANGES.into())),
         }

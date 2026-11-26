@@ -2907,6 +2907,7 @@ other files through `$`:
   each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
   `EPSPostScriptLevelEnum`, `PDFOverprint`, `SaveOptions` and `UserInteractionLevel` hold strings such as
   `"ExportType.PNG24"`.
+  `saveAs`, `exportFile`, `exportForScreens`, and `app.open` write their command warnings to the run's console.
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
   command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
   document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is

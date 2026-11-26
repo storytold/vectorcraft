@@ -45,8 +45,8 @@ use serde_json::{Map, Value, json};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember};
 
 use super::{
-    Answer, Default, Host, Link, MAX_TEXT_BYTES, OptionClass, arg, boolean, builtin_preset_name, command, current, exactly, fresh, given, member,
-    method, named, num, on_doc, plain, refused, text, this_doc, typename, whole, whole_in, written_as_range,
+    Answer, Default, Host, Link, MAX_TEXT_BYTES, OptionClass, arg, boolean, builtin_preset_name, current, exactly, file_command, fresh, given,
+    member, method, named, num, on_doc, plain, refused, text, this_doc, typename, whole, whole_in, written_as_range,
 };
 
 /// The enumerations these members use, as `dom`'s are made.
@@ -474,7 +474,7 @@ fn doc_export_for_screens(h: &Host, a: &[Data]) -> Answer {
         for items in exports {
             let mut p = base.clone();
             p.extend(items);
-            exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "document.exportForScreens", &Value::Object(p))))?;
+            exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "document.exportForScreens", &Value::Object(p))))?;
         }
         Ok(Data::Undefined)
     })
