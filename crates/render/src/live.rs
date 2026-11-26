@@ -583,7 +583,7 @@ impl Renderer {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate || knockout) {
             let blends = self.blends_through(a);
-            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
+            let bounds = if blends { self.frame_bounds_of(f, a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_live_body(c, fr, a, true));
         } else {

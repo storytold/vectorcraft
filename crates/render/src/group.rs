@@ -312,7 +312,10 @@ impl Renderer {
     /// `c` over the backdrop and its shape are drawn offscreen over `c`'s bounds, and `c` is drawn
     /// as in the other knockout passes (groups in it can't copy their backdrop).
     pub(crate) fn knockout_over(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>, backdrop: &Arc<Pixmap>) {
-        let bounds = self.bounds_of(f.symbols, c);
+        let bounds = self.frame_bounds_of(f, c);
+        if f.patch_rejected() {
+            return;
+        }
         let Some(r) = region(ctx, f, bounds) else { return };
         let view = Affine::translate((-(r.x as f64), -(r.y as f64))) * f.view;
         let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, r.w as f64, r.h as f64));

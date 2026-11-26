@@ -11,12 +11,36 @@ impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
     /// measured by their art box from `symbols`.
     pub(crate) fn bounds_of(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Rect> {
+        self.bounds_with_patch(symbols, a, None)
+    }
+
+    pub(crate) fn frame_bounds_of(&mut self, f: &Frame, a: &Arc<Node>) -> Option<Rect> {
+        self.bounds_with_patch(f.symbols, a, f.patch.map(|_| f))
+    }
+
+    fn bounds_with_patch(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>, patch: Option<&Frame<'_>>) -> Option<Rect> {
+        if patch.is_some_and(Frame::patch_rejected) {
+            return None;
+        }
         let key = Arc::as_ptr(a) as usize;
         if let Some(e) = self.geom.get_mut(&key)
             && Arc::ptr_eq(&e.node, a)
         {
             e.stamp = self.stamp;
             return e.bounds;
+        }
+        if let Some(f) = patch {
+            // The full renderer can reuse its 3D art. A cold scratch renderer may otherwise
+            // build it while calculating cull bounds, including bounds of symbol definitions.
+            let symbol_needs_full = match &a.kind {
+                NodeKind::SymbolInstance { symbol, .. } => {
+                    symbols.symbol(symbol).is_some_and(|s| holds_measured_three_d(&s.art) || holds_instance(&s.art) && symbols.has_effects(symbol))
+                }
+                _ => false,
+            };
+            if (measures_three_d(a) || symbol_needs_full) && f.reject_patch() {
+                return None;
+            }
         }
         let b = match &a.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
@@ -25,7 +49,10 @@ impl Renderer {
                 let source = a.extras().trace.is_some().then(|| children.first()).flatten();
                 for c in children {
                     if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
-                        acc = vectorcraft_geom::union_opt(acc, self.bounds_of(symbols, c));
+                        acc = vectorcraft_geom::union_opt(acc, self.bounds_with_patch(symbols, c, patch));
+                        if patch.is_some_and(Frame::patch_rejected) {
+                            return None;
+                        }
                     }
                 }
                 acc
@@ -227,7 +254,11 @@ impl Renderer {
         if crate::node_checks::left_out(f.opts, f.doc, a) {
             return true;
         }
-        match self.bounds_of(f.symbols, a) {
+        let bounds = self.frame_bounds_of(f, a);
+        if f.patch_rejected() {
+            return true;
+        }
+        match bounds {
             Some(b) => {
                 let pad = f.px * 2.0;
                 // Level of detail: leaves smaller than a quarter pixel are invisible.
@@ -272,7 +303,10 @@ impl Renderer {
         let Some(m) = a.extras().mask.as_deref().filter(|m| !m.disabled && !f.opts.outline && !self.is_shape(a)) else { return false };
         // A masked object is a non-isolated group of its own, drawn over its own pixels: the
         // mask is rendered over those only.
-        let bounds = self.bounds_of(f.symbols, a);
+        let bounds = self.frame_bounds_of(f, a);
+        if f.patch_rejected() {
+            return true;
+        }
         let Some((r, sub)) = group::area(ctx, f, bounds) else { return true };
         let Some(mask) = self.mask_values(&sub, m, r.w, r.h) else { return true };
         let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
@@ -396,7 +430,7 @@ impl Renderer {
             return;
         }
         // A cancelled export stops drawing; whoever asked for the picture drops it (see `cancel`).
-        if f.patch_rejected() || vectorcraft_doc::cancel::is_cancelled() {
+        if f.patch_rejected() || f.patch.is_some() && measures_three_d(n) && f.reject_patch() || vectorcraft_doc::cancel::is_cancelled() {
             return;
         }
         if force {
@@ -682,7 +716,7 @@ impl Renderer {
             let inverse = im.xf.inverse();
             let (mut x0, mut x1, mut y0, mut y1) = (0.0_f64, w, 0.0_f64, h);
             for c in shapes {
-                if let Some(b) = self.bounds_of(f.symbols, c).map(|b| b.inflate(f.px * 2.0, f.px * 2.0)) {
+                if let Some(b) = self.frame_bounds_of(f, c).map(|b| b.inflate(f.px * 2.0, f.px * 2.0)) {
                     for q in [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)] {
                         let p = inverse * kurbo::Point::new(q.0, q.1);
                         if p.x.is_finite() && p.y.is_finite() {
@@ -745,7 +779,11 @@ impl Renderer {
         if crate::node_checks::left_out(f.opts, f.doc, c) {
             return;
         }
-        match self.bounds_of(f.symbols, c) {
+        let bounds = self.frame_bounds_of(f, c);
+        if f.patch_rejected() {
+            return;
+        }
+        match bounds {
             Some(b) => {
                 let pad = f.px * 2.0;
                 if !rects_overlap(b.inflate(pad, pad), f.visible) {
