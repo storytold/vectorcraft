@@ -7985,6 +7985,11 @@ shape	Open	Otvoren
 	No objects are selected.	Nijedan objekat nije odabran.
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
+	Fold Angle	Ugao savijanja
+	Set Fold Angle…	Postavi ugao savijanja…
+	Set Fold Angle	Postavi ugao savijanja
+	Reset Fold Angle	Poništi ugao savijanja
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	odaberite liniju bigovanja, djelimičnog rezanja ili perforacije koja nije zaključana ni skrivena
 	Check	Provjeri
 	Check Fold Lines	Provjeri linije savijanja
 @msg	No cut lines are in the selection.	U odabiru nema linija rezanja.

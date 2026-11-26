@@ -16298,10 +16298,11 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 ## Packaging Tools add-on
 
 Packaging Tools is a built-in add-on for the dielines of boxes and other folded packaging. Its commands are
-`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`, `addon.packaging.check` and
-`addon.packaging.fold`. In the desktop app, Object › Plug-ins › Packaging Tools › Fold Lines opens the Fold Lines panel,
-Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line run `addon.packaging.setRole` on the
-selection, Check Fold Lines runs `addon.packaging.check`, and Fold Preview runs `ui.foldPreview`.
+`addon.packaging.setRole`, `addon.packaging.roles`, `addon.packaging.setRoleSwatch`, `addon.packaging.check`,
+`addon.packaging.setFoldAngle` and `addon.packaging.fold`. In the desktop app, Object › Plug-ins › Packaging Tools › Fold
+Lines opens the Fold Lines panel, Make Cut Line, Make Crease Line, Make Partial Cut Line and Make Perforation Line run
+`addon.packaging.setRole` on the selection, Check Fold Lines runs `addon.packaging.check`, Set Fold Angle… opens the
+options of `addon.packaging.setFoldAngle`, and Fold Preview runs `ui.foldPreview`.
 
 ### Fold line roles
 
@@ -16332,11 +16333,17 @@ the color it shows, no longer linked to the swatch, and stops overprinting. Text
 objects are skipped and counted. The command fails with an unknown role and when the objects hold no path it can change. One undo
 step, none when nothing changes. Result: `{ids, changed, skipped}`.
 
-`addon.packaging.roles` (`{ids?}`) returns `{roles: [{role, name, swatch, exists, count}], scope, selected}`: each role's
-swatch, whether the document has it, and how many of the objects have the role. It counts the selection, or every object
-of the document while nothing is selected and `ids` is left out (`scope` says which). Locked and hidden objects are
-counted in every scope, and an object is counted once when both it and its group are given. The Fold Lines panel shows
-these counts; clicking a role gives the selected paths that role. With nothing selected the panel says so.
+`addon.packaging.roles` (`{ids?}`) returns `{roles: [{role, name, swatch, exists, count}], scope, selected, foldLines,
+foldAngle, ownAngles, storedAngles}`: each role's swatch, whether the document has it, and how many of the objects have
+the role. It counts the selection, or every object of the document while nothing is selected and `ids` is left out
+(`scope` says which). Locked and hidden objects are counted in every scope, and an object is counted once when both it
+and its group are given. `foldLines` is how many of the Crease, Partial Cut and Perforation lines among them
+`addon.packaging.setFoldAngle` can change, which leaves out locked and hidden lines; it is 0 while nothing is selected
+and `ids` is left out, and while the selection holds only a layer and objects in it. `foldAngle` is the angle in degrees
+those lines all fold at (see Fold angles), or null when they fold at different angles or there are none; `ownAngles` is
+how many of them have an angle of their own, and `storedAngles` how many hold stored angle text, an angle or not, which
+`reset: true` removes. The Fold Lines panel shows these counts; clicking a role gives the selected paths that role. With
+nothing selected the panel says so.
 
 `addon.packaging.setRoleSwatch` (`{role, swatch}`) makes another global or spot color swatch carry the role. Objects
 stroked with the old swatch keep their color and no longer have the role. It fails with a missing swatch, a gradient or
@@ -16397,17 +16404,47 @@ The list is shown until the document changes.
 {"name":"run_command","arguments":{"command":"addon.packaging.check","params":{"tolerance":0.5,"select":true}}}
 ```
 
+### Fold angles
+
+A Crease or a Perforation folds 90° away from the printed side, so the print ends up outside, and a Partial Cut folds
+90° toward it. A Crease, Partial Cut or Perforation line can have an angle of its own instead, from -180° to 180°: a
+positive angle folds away from the printed side and a negative one toward it. The angle is stored in the line's data
+under `vc-fold-angle` as a number of degrees, rounded to the millionth of a degree (a stored value with more places
+folds at it rounded the same way). Native files keep it. SVG export leaves it out of the path's attributes; an SVG with
+`preserveEditing` keeps it in the document the SVG carries. A value that is not a number from -180 to 180 counts as no
+angle of its own. A cut line ignores it. A line keeps its own angle when `addon.packaging.setRole` gives it another
+role, or `none`, so a line made a Partial Cut after it was given 45° still folds at 45°; `reset: true` takes the angle
+away. In the Fold Preview window, a panel folded flat onto another (180°) is drawn behind that panel's printed side, and
+at -180° in front of it. Panels folded flat onto each other stack as they do when the blank is folded about its largest
+panel, whichever panel the window folds about.
+
+`addon.packaging.setFoldAngle` (`{angle?: -180..180, reset?: false, ids?}`) gives each Crease, Partial Cut and
+Perforation line among the objects (the selection by default), through groups and clip groups, the angle, or with
+`reset: true` takes the line's own angle away. Give exactly one of `angle` and `reset: true`. Locked and hidden objects
+are skipped as `addon.packaging.setRole` skips them; cut lines and objects without a role are skipped and counted. The
+command fails when the objects hold no Crease, Partial Cut or Perforation line it can change, and with an angle outside
+the range or one that is not a number. One undo step, none when nothing changes. Result: `{ids, changed, skipped}`.
+
+Set Fold Angle… opens its options (`ui.menuDialog {command: "addon.packaging.setFoldAngle"}`, kind `command`) on the
+angle that the selected lines it can change fold at (90° when they differ), shown with every decimal place it has.
+While the selection holds no such line, `ui.menuDialog` fails with the reason the command gives. While the selection
+holds such lines, the Fold Lines panel shows a Fold Angle field with that angle, empty when they differ. Typing an angle there sets it, and the Reset button beside it takes their own angles away.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.packaging.setFoldAngle","params":{"angle":135}}}
+```
+
 ### Fold Preview
 
 `addon.packaging.fold` (`{ids?, base?: [x, y], amount?: 1, tolerance?: 0.1}`) folds a blank into its 3D shape. It reads
 the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
 the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
-to the base, each by its angle times `amount` (0 is flat, 1 is folded): a Crease or a Perforation folds 90° away from
-the printed side, so the print ends up outside, and a Partial Cut folds 90° toward it. A hinge that closes a loop of
-panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all the way,
-whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no chain of
-hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel; anything
-else is an error. The command does not change the document.
+to the base, each by its angle times `amount` (0 is flat, 1 is folded). A hinge's angle is the fold angle of the line
+with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A hinge that closes
+a loop of panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all
+the way, whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no
+chain of hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel;
+anything else is an error. The command does not change the document.
 
 Result: `{ok, blank, blanks, base, panels: [{outline, frame: {x, y, z, origin}, parent, depth}], hinges: [{a, b,
 angle, kind, closes, gap}], collisions: [[a, b]], issues}`. `outline` is the panel's SVG path data in document
