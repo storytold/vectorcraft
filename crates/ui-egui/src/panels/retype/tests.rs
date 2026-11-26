@@ -5,6 +5,7 @@ use vectorcraft_engine::Session;
 
 use super::{ID, Size, show};
 use crate::VectorcraftApp;
+use crate::tests::panel_harness::Panel;
 
 const SCREEN: egui::Rect = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(600.0, 900.0));
 
@@ -143,6 +144,23 @@ fn a_failed_search_leaves_the_list_as_it_was() {
     select(&mut app, &[t]);
     assert!(app.run("retype.find", json!({})).is_err(), "live type alone holds no shape");
     assert_eq!(app.run("retype.list", json!({})).unwrap(), listed);
+}
+
+#[test]
+fn typing_updates_the_preview_without_enter_and_escape_keeps_it() {
+    let mut panel = Panel::new(app(), show);
+    let label = "Type your text to preview";
+    panel.click(label);
+    assert!(panel.focused(label));
+    panel.type_text("Preview");
+    assert_eq!(panel.app().run("retype.list", json!({})).unwrap()["text"], "Preview");
+    panel.type_text(" sample");
+    assert_eq!(panel.app().run("retype.list", json!({})).unwrap()["text"], "Preview sample");
+
+    panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!panel.focused(label));
+    assert_eq!(panel.value(label).as_deref(), Some("Preview sample"));
+    assert_eq!(panel.app().run("retype.list", json!({})).unwrap()["text"], "Preview sample");
 }
 
 #[test]

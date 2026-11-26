@@ -93,9 +93,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let typed = TextField::new(tl!("Type your text to preview"), Bind::given(Mixed::Same(app.ui.retype.text.clone())))
         .placeholder(tl!("Type your text to preview"))
+        .keeps_on_escape()
         .limit(MAX_TEXT)
         .show(ui);
-    if let Some(text) = typed.events.committed() {
+    if let Some(text) = typed.events.value().filter(|text| **text != app.ui.retype.text) {
         run = Some(("retype.preview", json!({ "text": text })));
     }
     Divider::horizontal().show(ui);
