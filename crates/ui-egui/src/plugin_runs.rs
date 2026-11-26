@@ -24,6 +24,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
 use vectorcraft_engine::cmd::plugin::FilterRun;
+use vectorcraft_plugins::{permissions, registry};
 
 use crate::VectorcraftApp;
 use crate::export_progress;
@@ -148,6 +149,47 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     if let Err(e) = app.run("plugin.run", r.params) {
         app.status(format!("{} failed: {e}", r.who));
     }
+}
+
+/// Shows in the status bar the notice of the plug-in run that command `cmd` (`plugin.run` or a
+/// plug-in command) applied, with result `r`: `Plug-in “name”: notice`, the name of the plug-in that
+/// ran (`pluginName`) escaped and capped as prompts show it. The notice is shown as the run returned
+/// it (escaped and capped by the host) and never translated. A result without a notice leaves the
+/// status bar as it is. For a `command.batch`, such as an action's steps, the last plug-in run among
+/// its steps with a notice shows it.
+pub fn show_notice(app: &mut VectorcraftApp, cmd: &str, r: &Value) {
+    let r = if cmd == "command.batch" {
+        match last_batch_notice(r) {
+            Some(step) => step,
+            None => return,
+        }
+    } else if cmd == "plugin.run" || vectorcraft_engine::cmd::plugin::is_command_id(cmd) {
+        r
+    } else {
+        return;
+    };
+    let (Some(notice), Some(id)) = (r.get("notice").and_then(Value::as_str), r.get("plugin").and_then(Value::as_str)) else { return };
+    let name = r
+        .get("pluginName")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| registry::get(id).map(|p| p.manifest().name.clone()))
+        .map(|name| name.trim().trim_end_matches('…').trim_end().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| id.to_string());
+    let name = permissions::display_text(&name, permissions::MAX_SHOWN_NAME);
+    let status = format!("Plug-in “{name}”: {notice}");
+    let before = status.strip_suffix(notice).unwrap_or_default().to_string();
+    app.status(status);
+    app.ui.status_kept = Some((before, notice.to_string(), String::new()));
+}
+
+/// The result of the last step of `command.batch` result `r` that a plug-in run with a notice gave
+/// (`{plugin, ids, notice}`).
+fn last_batch_notice(r: &Value) -> Option<&Value> {
+    r.get("results")?.as_array()?.iter().rev().find(|step| {
+        step.get("notice").is_some_and(Value::is_string) && step.get("plugin").is_some_and(Value::is_string) && step.get("ids").is_some()
+    })
 }
 
 /// The progress window's Cancel (also Esc): every filter running in the background stops (at once when it checks
