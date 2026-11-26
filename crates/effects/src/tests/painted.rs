@@ -353,6 +353,74 @@ fn returned_svg_filters_remain_separate_on_transform_copies() {
 }
 
 #[test]
+fn row_transforms_include_the_dressed_pieces_enclosing_appearance() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.dressedgroup";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Dressed group","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "opacity": 0.5, "effects": [
+        {"id": "path.offsetPath", "params": {"offset": 3.0}},
+        {"id": "stylize.dropShadow", "params": {"x": 3.0, "y": 4.0}}
+    ]}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    for stroke in [false, true] {
+        for copies in [1, 0] {
+            let appearance = if stroke {
+                Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0)
+            } else {
+                Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)
+            };
+            let mut source = Node::path(NodeId(9), path.clone(), appearance);
+            source.appearance.items.iter_mut().find(|row| row.is_fill() != stroke).unwrap().effects_mut().extend([
+                Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+                Effect { id: "distort.transform".into(), params: json!({"copies": copies, "rotate": 90.0}), visible: true },
+            ]);
+            let art = reshape(None, &source, None).unwrap();
+            assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+            let mut opacities = 0;
+            let mut shadows = vec![];
+            art.walk(&mut |node| {
+                opacities += usize::from(node.opacity == 0.5);
+                shadows.extend(node.appearance.effects.iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.clone()));
+            });
+            assert_eq!(opacities, copies + 1, "stroke={stroke} copies={copies}");
+            assert_eq!(shadows.len(), copies + 1);
+            assert!(shadows.iter().any(|params| *params != json!({"x": 3.0, "y": 4.0})), "{shadows:?}");
+        }
+    }
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
+fn copied_dressed_pieces_turn_the_source_rows_shadow() {
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let id = "test.effects.returned.dressedrowshadow";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Dressed row shadow","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#);
+    let output = json!({"objects": [{"path": path, "opacity": 0.5, "effects": [{"id": "path.offsetPath", "params": {"offset": 3.0}}]}]});
+    let module = wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut source = Node::path(NodeId(9), path, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    source.appearance.items.iter_mut().find(|row| row.is_fill()).unwrap().effects_mut().extend([
+        Effect { id: "stylize.dropShadow".into(), params: json!({"x": 11.0, "y": 22.0}), visible: true },
+        Effect { id: format!("plugin.{id}"), params: json!({}), visible: true },
+        Effect { id: "distort.transform".into(), params: json!({"copies": 1, "rotate": 90.0}), visible: true },
+    ]);
+    let art = reshape(None, &source, None).unwrap();
+    assert_eq!(vectorcraft_plugins::effect::last_error(id), None);
+    let mut shadows = vec![];
+    art.walk(&mut |node| {
+        for item in &node.appearance.items {
+            shadows.extend(item.effects().iter().filter(|effect| effect.id == "stylize.dropShadow").map(|effect| effect.params.clone()));
+        }
+    });
+    assert_eq!(shadows.len(), 2);
+    assert!(shadows.iter().any(|params| *params != json!({"x": 11.0, "y": 22.0})), "{shadows:?}");
+    vectorcraft_plugins::registry::remove(id);
+}
+
+#[test]
 fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
     let check = crate::check_returned_effect;

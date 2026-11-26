@@ -3168,6 +3168,30 @@ fn transform_piece(
         let mut holds = false;
         let stage = vectorcraft_plugins::deferred::Stage { object: seed, effect: kept.get(j).copied().unwrap_or(j), item: Some(source) };
         let at = PieceStage { j, from, outer, seed, bounds, doc, stage };
+        let pending = later_raster.iter().map(|(_, after)| *after).min();
+        if let Some(effect) = enclosing_piece_transform(p, j, pending.unwrap_or(j + 1)) {
+            let before =
+                art_cost(p).plus(shares.iter().filter(|share| **share).fold(Budget { anchors: 0, lines: 0 }, |sum, _| sum.plus(piece_share())));
+            let room = max.minus(used.minus(before));
+            if let Some((art, made, counted)) = transform_enclosing_piece(p, &effect, &at, &shares, room) {
+                *p = art;
+                *used = used.minus(before).plus(made);
+                shares = counted;
+                let params = merged_params(&effect.id, &effect.params);
+                let copies = crate::distort::transform_map(bounds, &params, seed).1;
+                let lift = copies > 0 && !crate::distort::TransformOptions::of(&params).reach_appearance();
+                if let Some(after) = pending.or(lift.then_some(j + 1)) {
+                    later_raster.clear();
+                    raster_groups.clear();
+                    later_raster.push((vec![], after));
+                    raster_groups.insert(vec![]);
+                }
+                if crate::raster::holds_back(&effect) {
+                    held = held.max(j);
+                }
+                continue;
+            }
+        }
         // Stage `j` on `leaf`, a path `used` counts at `piece_cost` when `share`: whether `used`
         // counts each path it became so, or `None` when it stays as it was.
         let lifts = |e: &Effect| {
@@ -3394,6 +3418,141 @@ fn transform_piece(
             item.effects_mut().retain(|e| !(e.visible && is_geometry(&e.id)));
         }
     });
+}
+
+fn enclosing_piece_transform(node: &Node, at: usize, tail: usize) -> Option<Effect> {
+    let mut appearance = false;
+    node.walk(&mut |part| {
+        appearance |= part.children().is_some()
+            && (part.opacity != 1.0
+                || part.blend != Default::default()
+                || part.isolate
+                || part.extras().mask.is_some()
+                || part.appearance.effects.iter().any(|effect| effect.visible && crate::is_raster(&effect.id)));
+    });
+    if !appearance {
+        return None;
+    }
+    let mut first: Option<(Effect, Vec<Effect>)> = None;
+    let mut matching = true;
+    node.walk(&mut |part| {
+        if leaf_geometry(part).is_none() {
+            return;
+        }
+        for item in part.appearance.items.iter().filter(|item| crate::paints(item)) {
+            let effects = item.effects();
+            let Some(effect) = effects.get(at).filter(|effect| effect.visible && effect.id == "distort.transform") else {
+                matching = false;
+                continue;
+            };
+            let later = effects.get(tail..).unwrap_or_default();
+            match &first {
+                Some((was, rest)) => matching &= effect == was && later == rest.as_slice(),
+                None => first = Some((effect.clone(), later.to_vec())),
+            }
+        }
+    });
+    matching.then_some(first?.0)
+}
+
+fn transform_enclosing_piece(node: &Node, effect: &Effect, at: &PieceStage, shares: &[bool], room: Budget) -> Option<(Node, Budget, Vec<bool>)> {
+    if shares.is_empty() {
+        return None;
+    }
+    let mut stripped = node.clone();
+    let mut rows = vec![];
+    for_each_leaf(&mut stripped, &mut |leaf| {
+        rows.push(leaf.appearance.items.iter_mut().map(|item| std::mem::take(item.effects_mut())).collect::<Vec<_>>());
+    });
+    if rows.is_empty() || rows.len() != shares.len() {
+        return None;
+    }
+    let before = art_cost(node).plus(shares.iter().filter(|share| **share).fold(Budget { anchors: 0, lines: 0 }, |sum, _| sum.plus(piece_share())));
+    let mut used = before;
+    let params = merged_params(&effect.id, &effect.params);
+    let (map, copies) = crate::distort::transform_map(at.bounds, &params, at.seed);
+    let options = crate::distort::TransformOptions::of(&params);
+    let wholes = HashMap::new();
+    let step = Step {
+        e: effect,
+        params: &params,
+        bounds: at.bounds,
+        seed: at.seed,
+        effect: Some(at.stage.effect),
+        apart: false,
+        rows: false,
+        painted: true,
+        doc: at.doc,
+        wholes: &wholes,
+        held: false,
+        strict: false,
+    };
+    let mut art = Node::group(node.id, vec![Arc::new(stripped)]);
+    let ran = step.run(&mut art, room, &mut used, false, None, false, 0);
+    if ran.kept || ran.masks {
+        art = node.clone();
+        used = before;
+    }
+    let moved = ran.took && !ran.kept && !ran.masks;
+    let leaves = leaf_count(&art);
+    let blocks = leaves / rows.len();
+    let mut visit = 0;
+    for_each_leaf(&mut art, &mut |leaf| {
+        let original = &rows[visit % rows.len()];
+        let placement = if copies > 0 && options.objects { blocks.saturating_sub(1 + visit / rows.len()) } else { 1 };
+        let mut mapping = Affine::IDENTITY;
+        for _ in 0..placement {
+            mapping *= map;
+        }
+        for (item, original) in leaf.appearance.items.iter_mut().zip(original) {
+            let mut effects = original.clone();
+            let copied = copies_carry(original, effect, at);
+            if moved
+                && options.objects
+                && options.strokes
+                && let Some(scale) = vectorcraft_doc::Scaling::factor(mapping).filter(|scale| scale.is_finite() && *scale > 0.0)
+            {
+                for effect in effects.iter_mut().take(at.j) {
+                    if copied { scale_unfollowed(effect, scale) } else { crate::scale_effect(effect, scale) }
+                }
+            }
+            if moved && options.objects && copies == 0 {
+                let was = original.get(at.from..at.j).unwrap_or_default();
+                let mut followed = was.to_vec();
+                if crate::raster::follow_one(&mut followed, effect) {
+                    for (index, (new, old)) in followed.into_iter().zip(was).enumerate() {
+                        if new != *old {
+                            effects[at.from + index] = new;
+                        }
+                    }
+                }
+            }
+            *item.effects_mut() = effects;
+        }
+        visit += 1;
+    });
+    if moved && copies > 0 && options.objects {
+        let first = rows.iter().flat_map(|items| items.iter()).find(|effects| effects.get(at.j) == Some(effect));
+        if let Some(first) = first.filter(|effects| copies_carry(effects, effect, at)) {
+            let mut start = 0;
+            for index in 0..=at.j {
+                if index == at.j || first.get(index).is_some_and(|effect| effect.id == "distort.transform") {
+                    if start < index {
+                        follow_copies(&mut art, map, Some(start..index));
+                    }
+                    start = index + 1;
+                }
+            }
+        }
+    }
+    if copies == 0
+        && !ran.kept
+        && !ran.masks
+        && let Some([one]) = art.children().map(Vec::as_slice)
+    {
+        art = one.as_ref().clone();
+    }
+    Some((art, used, shares.iter().copied().cycle().take(leaves).collect()))
 }
 
 /// A fill's or stroke's live-effect plug-in run in a placing of [`transform_piece`]: not run yet,
@@ -3648,14 +3807,16 @@ fn follow_copies(leaf: &mut Node, m: Affine, range: Option<std::ops::Range<usize
     let mut a = Affine::IDENTITY;
     for c in children.iter_mut().rev().skip(1) {
         a *= step;
-        for item in &mut Arc::make_mut(c).appearance.items {
-            let fx = item.effects_mut();
-            let fx = match &range {
-                Some(r) => fx.get_mut(r.clone()).unwrap_or_default(),
-                None => fx.as_mut_slice(),
-            };
-            crate::raster::follow_contents(fx, a, Affine::IDENTITY);
-        }
+        for_each_leaf(Arc::make_mut(c), &mut |leaf| {
+            for item in &mut leaf.appearance.items {
+                let fx = item.effects_mut();
+                let fx = match &range {
+                    Some(r) => fx.get_mut(r.clone()).unwrap_or_default(),
+                    None => fx.as_mut_slice(),
+                };
+                crate::raster::follow_contents(fx, a, Affine::IDENTITY);
+            }
+        });
     }
 }
 

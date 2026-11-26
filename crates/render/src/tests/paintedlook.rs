@@ -161,31 +161,39 @@ fn later_painted_pieces_keep_the_earlier_piece_transparency_as_a_group() {
 #[test]
 fn later_source_copies_composite_each_returned_piece_opacity() {
     for stage in ["object", "fill", "stroke"] {
-        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyopacity.{stage}"), 1.0, false, false, stage, false);
+        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyopacity.{stage}"), 1.0, false, false, stage, false, false);
+        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyopacity.dressed.{stage}"), 1.0, false, false, stage, false, true);
     }
 }
 
 #[test]
 fn later_source_copies_keep_source_opacity_outside_returned_pieces() {
-    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.outer", 0.5, true, false, "object", false);
+    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.outer", 0.5, true, false, "object", false, false);
 }
 
 #[test]
 fn later_source_copies_keep_source_mask_outside_returned_pieces() {
-    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.mask", 1.0, true, true, "object", false);
+    assert_copied_piece_opacity("test.render.paintedlook.copyopacity.mask", 1.0, true, true, "object", false, false);
 }
 
 #[test]
 fn later_row_blur_applies_once_to_the_copied_painted_pieces() {
     for stage in ["fill", "stroke"] {
-        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyblur.{stage}"), 1.0, false, false, stage, true);
+        assert_copied_piece_opacity(&format!("test.render.paintedlook.copyblur.{stage}"), 1.0, false, false, stage, true, false);
     }
 }
 
-fn assert_copied_piece_opacity(id: &str, source_opacity: f32, shadow: bool, mask: bool, stage: &str, row_blur: bool) {
+fn assert_copied_piece_opacity(id: &str, source_opacity: f32, shadow: bool, mask: bool, stage: &str, row_blur: bool, dressed: bool) {
     let mut look = json!({"opacity": 0.5});
+    let mut effects = vec![];
+    if dressed {
+        effects.push(json!({"id": "path.offsetPath", "params": {"offset": 3.0}}));
+    }
     if shadow {
-        look["effects"] = json!([{"id": "stylize.dropShadow", "params": {"x": 50.0, "y": 0.0, "blur": 0.0}}]);
+        effects.push(json!({"id": "stylize.dropShadow", "params": {"x": 50.0, "y": 0.0, "blur": 0.0}}));
+    }
+    if !effects.is_empty() {
+        look["effects"] = effects.into();
     }
     if stage == "stroke" {
         let mut result: serde_json::Value = serde_json::from_str(&output(120.0, &look)).unwrap();
@@ -230,7 +238,8 @@ fn assert_copied_piece_opacity(id: &str, source_opacity: f32, shadow: bool, mask
     for _ in 0..2 {
         let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
         let appearance = if stage == "stroke" { Appearance::basic(Paint::None, red, 4.0) } else { Appearance::basic(red, Paint::None, 0.0) };
-        let mut child = Node::path(expected.alloc_id(), square_at(120.0), appearance);
+        let path = if dressed { shapes::rectangle(Rect::new(117.0, 37.0, 143.0, 63.0)) } else { square_at(120.0) };
+        let mut child = Node::path(expected.alloc_id(), path, appearance);
         child.opacity = 0.5;
         children.push(std::sync::Arc::new(child));
     }
@@ -241,7 +250,13 @@ fn assert_copied_piece_opacity(id: &str, source_opacity: f32, shadow: bool, mask
         group.appearance.effects.push(Effect { id: "blur.gaussian".into(), params: json!({"radius": 4.0}), visible: true });
     }
     *expected.node_mut(source).unwrap() = group;
-    let x = if stage == "stroke" || row_blur { 120.0 } else { 130.0 };
+    let x = if stage == "stroke" {
+        if dressed { 117.0 } else { 120.0 }
+    } else if row_blur {
+        120.0
+    } else {
+        130.0
+    };
     let got = pixel(&actual, x, 50.0);
     let want = pixel(&expected, x, 50.0);
     assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 8), "{got:?} != {want:?}");
