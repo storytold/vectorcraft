@@ -766,6 +766,16 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     assert!(listed.iter().all(|(.., p)| *p == ids), "{listed:?}");
     let shown = |app: &VectorcraftApp, c: &str| menus::shown_state(app, c, &ids).map(|(enabled, _)| enabled);
     assert_eq!((shown(app, &command("tidy")), shown(app, &command("text"))), (Some(true), Some(false)), "no type object is selected");
+    fn rendered_enabled(nodes: &[menus::Node], command: &str) -> Option<bool> {
+        nodes.iter().find_map(|node| match node {
+            menus::Node::Item(item) if item.command.id == command => Some(item.enabled),
+            menus::Node::Submenu { children, .. } => rendered_enabled(children, command),
+            _ => None,
+        })
+    }
+    let rendered = menus::context_items(app);
+    assert_eq!(rendered_enabled(&rendered, &command("tidy")), Some(true));
+    assert_eq!(rendered_enabled(&rendered, &command("text")), Some(false));
 
     let doc = app.session.doc().unwrap().doc.clone();
     let rows = |ids: &[u64]| context_commands(ContextMenu::Layers, &doc, ids);
