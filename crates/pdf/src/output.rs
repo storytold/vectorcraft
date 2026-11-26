@@ -615,6 +615,10 @@ impl Dest {
 
 /// The catalog entries `set` asks for (none in PDF/A files, which carry their own); a PDF/X file's
 /// output intent profile is `cmyk_profile` (the CMYK profile in effect) unless `set` names one.
+/// When the settings leave the condition identifier blank, a profile computed for a registered
+/// printing condition ([`cms::characterization`]) gives the condition's name as the identifier,
+/// and its registry when the settings leave the registry blank too. An identifier set in the
+/// settings is written as given, with the settings' registry.
 fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
     let o = &set.output;
     if set.standard == Standard::PdfA2b {
@@ -631,13 +635,13 @@ fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
             ProfileKind::Gray => None,
         });
         let text = |s: &str| s.trim().chars().take(MAX_TEXT).collect::<String>();
-        OutputIntent {
-            id: text(if id.is_empty() { name } else { id }),
-            condition: text(&o.output_condition),
-            registry: text(&o.registry),
-            info: text(name),
-            profile,
-        }
+        // Without a condition identifier, a profile computed for a registered printing condition
+        // names that condition and, unless the settings name one, the registry it belongs to.
+        let (id, registry) = match cms::characterization(name) {
+            Some((reference, registry)) if id.is_empty() => (reference, if o.registry.trim().is_empty() { registry } else { o.registry.as_str() }),
+            _ => (if id.is_empty() { name } else { id }, o.registry.as_str()),
+        };
+        OutputIntent { id: text(id), condition: text(&o.output_condition), registry: text(registry), info: text(name), profile }
     });
     let trapped = (o.trapped || intent.is_some()).then_some(o.trapped);
     (intent.is_some() || trapped.is_some()).then_some(Catalog { intent, trapped })
