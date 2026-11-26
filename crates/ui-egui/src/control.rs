@@ -1465,6 +1465,11 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 {
                     params["dialog"] = json!(top.id.value().to_string());
                 }
+                if method == "ui.dialog.set"
+                    && let Ok(id) = craft::automation::dialogs::dialog_id(host, &params)
+                {
+                    crate::dialogs::effect::normalize_set_mode(app, id, &mut params);
+                }
                 let sets = params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"));
                 let set = if answer.is_none() || sets {
                     craft::automation::dialogs::dialog_method(host, ctx, method, &params)
