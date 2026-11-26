@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi, transparency: {gridSize: small|medium|large, gridColors: [#rrggbb, #rrggbb], gridColorsName (a preset's name or Custom), simulatePaper, flattenerPreset} (File › Document Setup's transparency settings, which the document category lists), selectedArtboards: [{index, name, width, height, x, y}] (while the Artboard tool is the current tool, the artboards it has selected, in the document's units, x and y those of the top-left corner from the ruler origin of its active artboard, which the document category lists after the artboards; else empty)}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontUses: [{font, type: truetype|opentype|unknown, uses}] (each font of fonts, in order: truetype or opentype by the outlines (glyf, or CFF or CFF2) of the face its type is drawn in, unknown for a font not installed in the family and style it names; uses: the text objects set in it, each once however many of its runs use the font, the type in a mask or in a symbol's or pattern's art once however many objects show it; the fonts category's rows give them as `TrueType; 2 uses`), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi, transparency: {gridSize: small|medium|large, gridColors: [#rrggbb, #rrggbb], gridColorsName (a preset's name or Custom), simulatePaper, flattenerPreset} (File › Document Setup's transparency settings, which the document category lists), selectedArtboards: [{index, name, width, height, x, y}] (while the Artboard tool is the current tool, the artboards it has selected, in the document's units, x and y those of the top-left corner from the ruler origin of its active artboard, which the document category lists after the artboards; else empty)}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontUses: [{font, type: truetype|opentype|unknown, uses}] (each font of fonts, in order: truetype or opentype by the outlines (glyf, or CFF or CFF2) of the face its type is drawn in, unknown for a font not installed in the family and style it names; uses: the text objects set in it, each once however many of its runs use the font, the type in a mask or in a symbol's or pattern's art once however many objects show it; the fonts category's rows give them as `TrueType; 2 uses`), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file, format, effectivePpi, memoryBytes, storedBytes}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one; format: a linked image's file format by its extension, else the format of the pixels the document holds, null when unknown; effectivePpi: [x, y] pixels per inch at the size it is placed at, a distorted image measured at its middle, null when it has no area; memoryBytes: for an embedded image width × height × 4, the bytes of the 8-bit RGBA pixels it is drawn from, else null; storedBytes: for an embedded image the bytes of the encoded image the document holds, else null; a Linked Images row gives the format, the size, the resolution and the file (`PNG; 1200 × 800 px; 150 ppi — /art/photo.png`), an Embedded Images row the format, the size and the memory (`PNG; 1200 × 800 px; estimated memory 3.7 MiB`)), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -183,8 +183,126 @@ fn count_fonts(fonts: &mut BTreeMap<super::fonts::UsedFont, usize>, t: &vectorcr
     }
 }
 
-/// An image object as Document Info lists it: (name, width, height, linked file).
-type ImageRow = (String, u32, u32, Option<String>);
+/// An image object as Linked Images or Embedded Images lists it.
+struct ImageRow {
+    name: String,
+    width: u32,
+    height: u32,
+    /// What a linked image's row names: its file's path, or the file's name alone when the request
+    /// may not read it. `None` for an embedded image.
+    file: Option<String>,
+    /// The image's format ([`image_format`]); `None` when it is not known.
+    format: Option<&'static str>,
+    /// The pixels per inch across and down at the size the image is placed at; `None` when its
+    /// transform flattens it.
+    ppi: Option<[f64; 2]>,
+    /// For an embedded image, the bytes its pixels take when drawn (8-bit RGBA: width × height × 4).
+    memory: Option<u64>,
+    /// For an embedded image, the bytes of the encoded image the document holds.
+    stored: Option<u64>,
+}
+
+impl ImageRow {
+    /// Image object `n` (image `im`) of `d`, `file` the row value of its link.
+    fn of(d: &Document, n: &Node, im: &vectorcraft_doc::ImageObject, file: Option<String>) -> Self {
+        let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
+        // A distorted image is measured at its middle, as `image.info` measures it.
+        let xf = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf);
+        let ppi = super::place::effective_ppi(xf);
+        // An image with no pixels across or down has no area, and so does one whose transform lays
+        // both pixel axes on one line. The determinant is compared with the product of the two
+        // axes' lengths, at any scale.
+        let [xx, xy, yx, yy, ..] = xf.as_coeffs();
+        let has_area = im.width > 0 && im.height > 0 && xf.determinant().abs() > 1e-9 * xx.hypot(xy) * yx.hypot(yy);
+        let embedded = im.link.is_none();
+        let memory = || u64::from(im.width).checked_mul(u64::from(im.height))?.checked_mul(4);
+        Self {
+            name,
+            width: im.width,
+            height: im.height,
+            file,
+            format: image_format(d, im),
+            ppi: (has_area && ppi.iter().all(|v| *v > 0.0 && v.is_finite())).then_some(ppi),
+            memory: if embedded { memory() } else { None },
+            stored: if embedded { d.images.get(&im.key).map(|b| b.bytes.len() as u64) } else { None },
+        }
+    }
+
+    /// The row's value: the format, the size in pixels, and for a linked image its resolution and
+    /// file, for an embedded one the memory its pixels take.
+    fn value(&self) -> String {
+        let format = self.format.unwrap_or("Unknown format");
+        let size = format!("{} × {} px", self.width, self.height);
+        match &self.file {
+            Some(file) => {
+                let ppi = match self.ppi {
+                    Some([x, y]) if ppi_number(x) == ppi_number(y) => format!("{} ppi", ppi_number(x)),
+                    Some([x, y]) => format!("{} × {} ppi", ppi_number(x), ppi_number(y)),
+                    None => "resolution unavailable".into(),
+                };
+                format!("{format}; {size}; {ppi} — {file}")
+            }
+            None => {
+                let memory = self.memory.map_or_else(|| "memory unavailable".to_string(), |b| format!("estimated memory {}", byte_size(b)));
+                format!("{format}; {size}; {memory}")
+            }
+        }
+    }
+
+    /// The row's `imageObjects` entry.
+    fn entry(&self) -> Value {
+        json!({
+            "name": self.name,
+            "width": self.width,
+            "height": self.height,
+            "linked": self.file.is_some(),
+            "file": self.file,
+            "format": self.format,
+            "effectivePpi": self.ppi,
+            "memoryBytes": self.memory,
+            "storedBytes": self.stored,
+        })
+    }
+}
+
+/// The format of image `im` of `d`, as the Links panel names it: for a linked image its file's, by
+/// its extension (DCS for a separated one), else the type of the pixels the document holds for it;
+/// `None` when neither names a known format.
+fn image_format(d: &Document, im: &vectorcraft_doc::ImageObject) -> Option<&'static str> {
+    use super::fileio;
+    if im.link.is_some() && d.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated) {
+        return Some("DCS");
+    }
+    im.link
+        .as_ref()
+        .and_then(|l| fileio::format_for_name(l.name()).or_else(|| fileio::readable_format_for_name(l.name())))
+        .or_else(|| d.images.get(&im.key).and_then(|b| fileio::FORMATS.iter().find(|f| f.raster && f.mime == b.mime)))
+        .map(|f| f.label)
+}
+
+/// A resolution as Document Info shows it: rounded to a tenth (below 1, to a hundredth), without a
+/// trailing `.0`.
+pub fn ppi_number(ppi: f64) -> String {
+    let k = if ppi.abs() < 1.0 { 100.0 } else { 10.0 };
+    format!("{}", (ppi * k).round() / k)
+}
+
+/// A number of bytes as Document Info shows it: in B below 1 KiB, else in KiB, MiB or GiB rounded
+/// to a tenth.
+pub fn byte_size(bytes: u64) -> String {
+    const UNITS: [&str; 3] = ["KiB", "MiB", "GiB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut v = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    // 1023.96 KiB is shown as 1 MiB rather than as 1024 KiB.
+    while v >= 1023.95 && unit + 1 < UNITS.len() {
+        v /= 1024.0;
+        unit += 1;
+    }
+    format!("{} {}", (v * 10.0).round() / 10.0, UNITS[unit])
+}
 
 /// A Repeat object as Document Info lists it: its `repeatObjects` entry, and its row, which gives
 /// its name and then its kind with the number of instances it draws (for a grid, its rows and
@@ -337,11 +455,9 @@ fn sections(
                 "symbols" => names("symbols"),
                 "fonts" => fonts.to_vec(),
                 "fontDetails" => font_details.to_vec(),
-                "linkedImages" => {
-                    images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
-                }
+                "linkedImages" => images.iter().filter(|i| i.file.is_some()).map(|i| (i.name.clone(), i.value())).collect(),
                 "repeats" => repeats.to_vec(),
-                _ => images.iter().filter(|i| i.3.is_none()).map(|(name, w, h, _)| (name.clone(), format!("{w} × {h} px"))).collect(),
+                _ => images.iter().filter(|i| i.file.is_none()).map(|i| (i.name.clone(), i.value())).collect(),
             };
             Section { id, title, rows }
         })
@@ -753,8 +869,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                         im.key.clone(),
                         json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": link.and_then(|(l, ok)| ok.then_some(&l.path)) }),
                     );
-                    let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
-                    image_rows.push((name, im.width, im.height, link.map(|(l, ok)| if ok { l.path.clone() } else { l.name().to_string() })));
+                    let file = link.map(|(l, ok)| if ok { l.path.clone() } else { l.name().to_string() });
+                    image_rows.push(ImageRow::of(d, n, im, file));
                     Some("images")
                 }
                 NodeKind::SymbolInstance { symbol, .. } => {
@@ -835,13 +951,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let font_names: Vec<String> = fonts.keys().map(super::fonts::font_label).collect();
     let (font_uses, font_use_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(|(f, n)| font_use(f, *n)).unzip();
     let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.keys().map(font_detail).unzip();
-    // The image objects in walk order, as Linked Images and Embedded Images list them: `file` is a
-    // linked image's row value (its path, or its file name alone when the request may not read it),
-    // and null for an embedded one.
-    let image_objects: Vec<Value> = image_rows
-        .iter()
-        .map(|(name, w, h, file)| json!({ "name": name, "width": w, "height": h, "linked": file.is_some(), "file": file }))
-        .collect();
+    // The image objects in walk order, as Linked Images and Embedded Images list them.
+    let image_objects: Vec<Value> = image_rows.iter().map(ImageRow::entry).collect();
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
@@ -2246,9 +2357,154 @@ mod tests {
         assert_eq!(objects.len(), 2, "{objects:?}");
         for (o, r) in objects.iter().zip(&embedded) {
             assert_eq!((o["linked"].clone(), o["file"].clone(), o["name"].clone()), (json!(false), Value::Null, r[0].clone()), "{o}");
-            assert_eq!(r[1], format!("{} × {} px", o["width"], o["height"]));
+            let memory = byte_size(o["memoryBytes"].as_u64().unwrap());
+            assert_eq!(r[1], format!("{}; {} × {} px; estimated memory {memory}", o["format"].as_str().unwrap(), o["width"], o["height"]));
         }
         assert!(section("linkedImages").is_empty());
+    }
+
+    /// An image object to place: (key, MIME type, linked path, width, height, transform).
+    type Placed<'a> = (&'a str, &'a str, Option<&'a str>, u32, u32, Affine);
+
+    /// Image objects `images` placed in a new document, with a blob of `100 + n` bytes of type
+    /// `mime` for each new key; their ids in order.
+    fn images_in(s: &mut Session, images: &[Placed]) -> Vec<NodeId> {
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.edit("Place", |d, _| {
+            let mut ids = vec![];
+            for (n, (key, mime, link, width, height, xf)) in images.iter().enumerate() {
+                if !d.images.contains_key(*key) {
+                    d.images.insert((*key).into(), vectorcraft_doc::ImageBlob::new(*mime, vec![0; 100 + n]));
+                }
+                let id = d.alloc_id();
+                let im = vectorcraft_doc::ImageObject {
+                    key: (*key).into(),
+                    width: *width,
+                    height: *height,
+                    xf: *xf,
+                    link: link.map(vectorcraft_doc::LinkInfo::new),
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                d.insert(d.default_layer(), usize::MAX, Node::new(id, NodeKind::Image(Box::new(im))))?;
+                ids.push(id);
+            }
+            Ok(ids)
+        })
+        .unwrap()
+    }
+
+    /// Linked Images gives each linked image's format, size in pixels, resolution at the size it is
+    /// placed at and file, and Embedded Images each embedded image's format, size and the memory
+    /// its pixels take; `imageObjects` gives the same facts with the bytes the document holds for an
+    /// embedded image, the text report writes the same rows, and Selection Only lists the selected
+    /// images alone.
+    #[test]
+    fn image_rows_give_format_resolution_and_memory() {
+        let mut s = Session::new();
+        let half = Affine::scale(0.5);
+        let ids = images_in(
+            &mut s,
+            &[
+                ("a", "image/png", None, 1200, 800, half),
+                ("b", "image/jpeg", None, 10, 10, half),
+                ("c", "image/x-unheard-of", None, 3, 2, half),
+                ("a", "image/png", Some("/art/photo.png"), 1200, 800, Affine::scale(0.48)),
+                ("a", "image/png", Some("/art/photo.png"), 1200, 800, Affine::scale(0.24)),
+                ("a", "image/png", Some("/art/wide.png"), 1200, 800, Affine::scale_non_uniform(0.5, 1.0)),
+                ("a", "image/png", Some("/art/scan.tif"), 1200, 800, half),
+                ("a", "image/png", Some("/art/flat.png"), 1200, 800, Affine::scale_non_uniform(0.5, 0.0)),
+                // Both pixel axes on one line: neither has length 0, but the image has no area.
+                ("a", "image/png", Some("/art/line.png"), 1200, 800, Affine::new([0.5, 0.5, 1.0, 1.0, 0.0, 0.0])),
+                ("c", "image/x-unheard-of", Some("/art/odd.qqq"), 3, 2, half),
+            ],
+        );
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let rows = |i: &Value, id: &str| -> Vec<(String, String)> {
+            let section = i["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap().clone();
+            section["rows"].as_array().unwrap().iter().map(|r| (r[0].as_str().unwrap().into(), r[1].as_str().unwrap().into())).collect()
+        };
+        let embedded = rows(&i, "embeddedImages");
+        let values: Vec<&str> = embedded.iter().map(|(_, v)| v.as_str()).collect();
+        assert_eq!(
+            values,
+            [
+                "PNG; 1200 × 800 px; estimated memory 3.7 MiB",
+                "JPEG; 10 × 10 px; estimated memory 400 B",
+                "Unknown format; 3 × 2 px; estimated memory 24 B"
+            ]
+        );
+        let linked = rows(&i, "linkedImages");
+        assert_eq!(
+            linked,
+            [
+                ("photo.png", "PNG; 1200 × 800 px; 150 ppi — /art/photo.png"),
+                ("photo.png", "PNG; 1200 × 800 px; 300 ppi — /art/photo.png"),
+                ("wide.png", "PNG; 1200 × 800 px; 144 × 72 ppi — /art/wide.png"),
+                ("scan.tif", "TIFF; 1200 × 800 px; 144 ppi — /art/scan.tif"),
+                ("flat.png", "PNG; 1200 × 800 px; resolution unavailable — /art/flat.png"),
+                ("line.png", "PNG; 1200 × 800 px; resolution unavailable — /art/line.png"),
+                ("odd.qqq", "Unknown format; 3 × 2 px; 144 ppi — /art/odd.qqq"),
+            ]
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+        );
+        let objects = i["imageObjects"].as_array().unwrap();
+        assert_eq!(objects.len(), 10);
+        assert_eq!(
+            (objects[0]["format"].clone(), objects[0]["effectivePpi"].clone(), objects[0]["memoryBytes"].clone(), objects[0]["storedBytes"].clone()),
+            (json!("PNG"), json!([144.0, 144.0]), json!(1200 * 800 * 4), json!(100))
+        );
+        assert_eq!((objects[1]["format"].clone(), objects[1]["storedBytes"].clone()), (json!("JPEG"), json!(101)));
+        assert_eq!(objects[2]["format"], Value::Null);
+        // A linked image gives no memory and no stored bytes: the document holds only its preview.
+        assert_eq!((objects[3]["memoryBytes"].clone(), objects[3]["storedBytes"].clone()), (Value::Null, Value::Null));
+        let ppi = |o: &Value| -> Vec<f64> { o["effectivePpi"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect() };
+        assert!(ppi(&objects[3]).iter().all(|v| (v - 150.0).abs() < 1e-9), "{}", objects[3]);
+        assert_eq!(ppi(&objects[5]), [144.0, 72.0]);
+        assert_eq!((objects[7]["effectivePpi"].clone(), objects[8]["effectivePpi"].clone()), (Value::Null, Value::Null));
+        let text = s.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("\nphoto.png: PNG; 1200 × 800 px; 150 ppi — /art/photo.png\n"), "{text}");
+        assert!(text.contains(": JPEG; 10 × 10 px; estimated memory 400 B\n"), "{text}");
+        // Selection Only lists the selected images alone, with the same rows.
+        s.execute("select.set", &json!({"ids": [ids[1].0, ids[5].0]})).unwrap();
+        let selected = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
+        assert_eq!(rows(&selected, "embeddedImages").iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>(), [values[1]]);
+        assert_eq!(rows(&selected, "linkedImages"), [linked[2].clone()]);
+    }
+
+    /// An image placed at a very small size still has an area, so its row gives a resolution.
+    #[test]
+    fn a_tiny_placement_still_gives_a_resolution() {
+        let mut s = Session::new();
+        images_in(&mut s, &[("a", "image/png", Some("/art/huge.png"), 100_000, 100_000, Affine::scale(1e-7))]);
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let ppi = i["imageObjects"][0]["effectivePpi"].as_array().map(|v| v.iter().map(|v| v.as_f64().unwrap_or(0.0)).collect::<Vec<_>>());
+        let ppi = ppi.unwrap_or_default();
+        assert!(ppi.len() == 2 && ppi.iter().all(|v| (v / 7.2e8 - 1.0).abs() < 1e-9), "{}", i["imageObjects"][0]);
+    }
+
+    /// An image with no pixels across or down has no area, so its row gives no resolution whatever
+    /// its transform.
+    #[test]
+    fn a_zero_pixel_image_has_no_resolution() {
+        let mut s = Session::new();
+        let half = Affine::scale(0.5);
+        images_in(&mut s, &[("a", "image/png", Some("/art/none.png"), 0, 800, half), ("a", "image/png", Some("/art/flat.png"), 1200, 0, half)]);
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let objects = i["imageObjects"].as_array().cloned().unwrap_or_default();
+        assert_eq!(objects.iter().map(|o| o["effectivePpi"].clone()).collect::<Vec<_>>(), [Value::Null, Value::Null], "{objects:?}");
+        let text = s.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap_or_default().to_string();
+        assert!(text.contains("none.png: PNG; 0 × 800 px; resolution unavailable — /art/none.png\n"), "{text}");
+        assert!(text.contains("flat.png: PNG; 1200 × 0 px; resolution unavailable — /art/flat.png\n"), "{text}");
+    }
+
+    /// A number of bytes reads in B below 1 KiB, else in KiB, MiB or GiB to a tenth, and a
+    /// resolution to a tenth without a trailing `.0`.
+    #[test]
+    fn byte_sizes_and_resolutions_read_to_a_tenth() {
+        let shown = [0, 1023, 1024, 1536, 1024 * 1024 - 1, 3_840_000, 5 << 30, u64::MAX].map(byte_size);
+        assert_eq!(shown, ["0 B", "1023 B", "1 KiB", "1.5 KiB", "1 MiB", "3.7 MiB", "5 GiB", "17179869184 GiB"]);
+        assert_eq!([150.0, 72.0 / 0.48, 205.714, 0.04, 0.001].map(ppi_number), ["150", "150", "205.7", "0.04", "0"]);
     }
 
     /// A `gradientObjects` entry's `kinds` gives the kind of each gradient listed by its kind

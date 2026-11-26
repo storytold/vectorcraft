@@ -365,12 +365,13 @@ fn find_str_const(src: &str, name: &str) -> Option<String> {
 
 fn reexport_targets<'a>(src: &'a str, const_name: &str) -> Vec<Vec<&'a str>> {
     let mut out = Vec::new();
-    for line in src.lines() {
-        let t = line.trim();
-        if !t.starts_with("pub use ") {
+    // A `pub use` that starts a line runs to its `;`, over as many lines as rustfmt wraps it to.
+    for (at, _) in src.match_indices("pub use ") {
+        if !src[..at].rsplit('\n').next().is_some_and(|indent| indent.trim().is_empty()) {
             continue;
         }
-        let rest = t.trim_start_matches("pub use ").trim_end_matches(';').trim();
+        let stmt = &src[at + "pub use ".len()..];
+        let rest = stmt[..stmt.find(';').unwrap_or(stmt.len())].trim();
         if let Some((path, braced)) = rest.split_once("::{") {
             let names = braced.trim_end_matches('}');
             let hit = names.split(',').map(str::trim).any(|n| n == const_name);
@@ -462,5 +463,11 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     fn find_const_in_source() {
         let src = r#"pub const ZOOM: &str = "addon.arrange.zoomSelection";"#;
         assert_eq!(find_str_const(src, "ZOOM").as_deref(), Some("addon.arrange.zoomSelection"));
+    }
+
+    #[test]
+    fn follows_a_wrapped_reexport() {
+        let src = "pub use edits::{\n    CLEAR, RENAME_ACTION,\n    reset,\n};\n// pub use other::RENAME_ACTION;\n";
+        assert_eq!(reexport_targets(src, "RENAME_ACTION"), vec![vec!["edits"]]);
     }
 }
