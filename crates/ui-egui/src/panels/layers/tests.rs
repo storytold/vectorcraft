@@ -343,6 +343,30 @@ fn rows_list_by_depth_and_ruler_guide_nodes_get_no_object_row() {
     assert_eq!(ids, [second, first, rect]);
 }
 
+/// A horizontal and a vertical ruler guide's rows each show a glyph of their own, in place of the
+/// guide kind's ruler, and both glyphs are in the app's icon set.
+#[test]
+fn horizontal_and_vertical_guide_rows_show_their_own_drawn_glyphs() {
+    use craft::ui::primitives::{has_icon, register_app_icons};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": false, "pos": 40})).unwrap();
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 60})).unwrap();
+    let st = app.session.active().unwrap();
+    let rows = LayerRows::new(&app, st);
+    let icon_of = |vertical: bool| {
+        let i = st.doc.ruler_guides().iter().position(|g| g.vertical == vertical).unwrap();
+        rows.info(&RowId::Guide(i)).icon.unwrap_or_else(|| panic!("the vertical: {vertical} guide row has no glyph of its own"))
+    };
+    let (across, down) = (icon_of(false), icon_of(true));
+    assert_ne!(across, down, "the two kinds of guide rows look alike");
+    register_app_icons(&crate::icons::APP_ICONS);
+    for icon in [&across, &down] {
+        assert!(has_icon(icon), "{icon:?} is in no icon set, so the row draws nothing");
+    }
+}
+
 /// The undo steps of the active document.
 pub(super) fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
