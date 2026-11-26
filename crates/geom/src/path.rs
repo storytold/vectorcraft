@@ -444,6 +444,59 @@ impl SubPath {
         }
         true
     }
+    /// Bend segment `seg` as the arrow keys do: its anchors stay and its handles go where
+    /// [`Self::nudged_handles`] puts them. A handle that keeps its direction leaves a smooth anchor
+    /// smooth; one that flips or grows out of its anchor makes it a corner, so the segment beside
+    /// it stays as it is. False, with nothing changed, when the bend changes nothing.
+    pub fn nudge_segment(&mut self, seg: usize, dv: kurbo::Vec2) -> bool {
+        let Some((h_out, h_in)) = self.nudged_handles(seg, dv) else { return false };
+        let n = self.anchors.len();
+        // Turned when the new handle doesn't point the way the old one did.
+        let turned = |a: &Anchor, old: Point, new: Point| (old - a.p).dot(new - a.p) <= 0.0;
+        if let Some(a) = self.anchors.get_mut(seg % n)
+            && h_out != a.h_out
+        {
+            let independent = turned(a, a.h_out, h_out);
+            a.set_handle(true, h_out, independent);
+        }
+        if let Some(b) = self.anchors.get_mut((seg + 1) % n)
+            && h_in != b.h_in
+        {
+            let independent = turned(b, b.h_in, h_in);
+            b.set_handle(false, h_in, independent);
+        }
+        true
+    }
+    /// The outgoing handle at the start and the incoming one at the end that segment `seg` gets
+    /// from the arrow keys' step `dv`. Each handle keeps its direction and changes length in
+    /// proportion to `dv` projected onto that direction, so the curve bulges toward `dv`: the
+    /// middle of the curve moves by `dv`'s length along `dv`, or less when the handles point
+    /// mostly across it. A handle can shrink through its anchor and come out the other way. A
+    /// retracted handle takes the direction from its anchor to the other handle's end. `None` when
+    /// there is no such segment, it is a straight line, or both handles are at right angles to
+    /// `dv`, so nothing changes.
+    pub fn nudged_handles(&self, seg: usize, dv: kurbo::Vec2) -> Option<(Point, Point)> {
+        if seg >= self.segment_count() || self.segment_is_line(seg) {
+            return None;
+        }
+        let c = self.segment(seg);
+        let direction = |anchor: Point, handle: Point, other: Point| {
+            let dir = if handle.distance(anchor) > EPS { handle - anchor } else { other - anchor };
+            let len = dir.hypot();
+            if len > EPS { dir / len } else { kurbo::Vec2::ZERO }
+        };
+        let (u0, u1) = (direction(c.p0, c.p1, c.p2), direction(c.p3, c.p2, c.p1));
+        let (d0, d1) = (dv.dot(u0), dv.dot(u1));
+        // Handles that change by k·d0 and k·d1 move the middle B(1/2) by 3/8·k·(d0·u0 + d1·u1),
+        // whose part along dv is 3/8·k·(d0² + d1²)/|dv|: one |dv| for k = 8/3·|dv|²/(d0² + d1²),
+        // kept to at most 8/3 so that handles nearly across dv don't grow without bound.
+        let sum = d0 * d0 + d1 * d1;
+        if sum <= EPS * EPS {
+            return None;
+        }
+        let k = 8.0 / 3.0 * (dv.hypot2() / sum).min(1.0);
+        Some((c.p1 + u0 * (k * d0), c.p2 + u1 * (k * d1)))
+    }
 
     /// Split segment `seg` at parameter `t`, inserting a new anchor. Returns the new anchor index.
     pub fn insert_anchor(&mut self, seg: usize, t: f64) -> usize {
