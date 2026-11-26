@@ -575,7 +575,9 @@ fn outline_stroke_menu_ignores_a_point_with_a_nonpainting_cap() {
     for (cap, closed) in [("butt", false), ("round", false), ("square", false), ("butt", true), ("round", true), ("square", true)] {
         let mut app = app();
         let point = NodeId(
-            app.run("path.create", json!({"closed": closed, "anchors": [{"x": 250, "y": 200}, {"x": 250, "y": 200}]})).unwrap()["id"].as_u64().unwrap(),
+            app.run("path.create", json!({"closed": closed, "anchors": [{"x": 250, "y": 200}, {"x": 250, "y": 200}]})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
         );
         app.run("paint.setFill", json!({"none": true})).unwrap();
         app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
