@@ -1,5 +1,5 @@
 //! How the host's generated dialogs show a plug-in's parameters: the optional `label`, `unit`,
-//! `group`, `help`, `helpUrl`, `visibleWhen`, `widget` and `step` keys of each one
+//! `group`, `help`, `helpUrl`, `visibleWhen` and `widget` keys of each one
 //! (docs/plugins.md › Parameters).
 //!
 //! These keys are presentation only. A host from before them ignores them, so a plug-in that
@@ -62,11 +62,6 @@ pub struct ParamUi {
     /// The control that shows a number: [`Widget::Slider`] adds a slider beside its field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub widget: Option<Widget>,
-    /// How far the slider moves the value at a time, counted from `min` (a whole number for an
-    /// `int`); without it, a slider moves a `number` to two decimal places (more when `max` minus
-    /// `min` is under 1) and an `int` by 1.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub step: Option<f64>,
 }
 
 /// The control a `number` or `int` parameter's row shows besides its number field (`widget`).
@@ -94,30 +89,17 @@ impl ParamUi {
         }
     }
 
-    /// Checks `widget` and `step` against parameter `spec`; `bad` builds the error.
+    /// Checks `widget` against parameter `spec`; `bad` builds the error.
     fn validate_slider(&self, spec: &ParamSpec, bad: impl Fn(&str) -> Result<()>) -> Result<()> {
-        if self.widget.is_none() {
-            return match self.step {
-                Some(_) => bad("`step` is only for a parameter with a slider"),
-                None => Ok(()),
-            };
+        if self.widget.is_none() || self.slider_range(spec).is_some() {
+            return Ok(());
         }
-        let Some(range) = self.slider_range(spec) else {
-            return match spec {
-                ParamSpec::Number { .. } | ParamSpec::Int { .. } => {
-                    bad(&format!("a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}"))
-                }
-                _ => bad("a slider is only for `number` and `int` parameters"),
-            };
-        };
-        let Some(step) = self.step else { return Ok(()) };
-        if !step.is_finite() || step <= 0.0 || step > range.end() - range.start() {
-            return bad("`step` must be a number above 0 and at most `max` minus `min`");
+        match spec {
+            ParamSpec::Number { .. } | ParamSpec::Int { .. } => {
+                bad(&format!("a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}"))
+            }
+            _ => bad("a slider is only for `number` and `int` parameters"),
         }
-        if matches!(spec, ParamSpec::Int { .. }) && step.fract() != 0.0 {
-            return bad("an `int` parameter's `step` must be a whole number");
-        }
-        Ok(())
     }
 }
 
@@ -369,20 +351,20 @@ mod tests {
         assert!(Manifest::parse(fine.as_bytes()).is_ok());
     }
 
-    /// A `number` or `int` parameter with a range may ask for a slider, with a step from `min`;
-    /// the keys read back as written, and a parameter without them shows no slider.
+    /// A `number` or `int` parameter with a range may ask for a slider; the key reads back as
+    /// written, and a parameter without it asks for none.
     #[test]
-    fn slider_keys_parse_and_round_trip() {
+    fn slider_key_parses_and_round_trips() {
         let m = Manifest::parse(
             br#"{"id":"a","name":"x","kind":"filter","params":{
                 "area":{"type":"number","min":0,"max":100,"default":10,"widget":"slider"},
-                "count":{"type":"int","min":1,"max":20,"default":4,"widget":"slider","step":2},
+                "count":{"type":"int","min":1,"max":20,"default":4,"widget":"slider"},
                 "plain":{"type":"number","min":0,"max":100,"default":10}}}"#,
         )
         .unwrap();
         let (area, count, plain) = (m.param("area").unwrap(), m.param("count").unwrap(), m.param("plain").unwrap());
         assert_eq!(area.ui.slider_range(&area.spec), Some(0.0..=100.0));
-        assert_eq!((count.ui.slider_range(&count.spec), count.ui.step), (Some(1.0..=20.0), Some(2.0)));
+        assert_eq!(count.ui.slider_range(&count.spec), Some(1.0..=20.0));
         assert_eq!(plain.ui.slider_range(&plain.spec), None);
         assert_eq!(Manifest::parse(&serde_json::to_vec(&m).unwrap()).unwrap(), m);
         assert_eq!(serde_json::to_value(&m).unwrap()["params"]["count"]["widget"], json!("slider"));
@@ -398,14 +380,8 @@ mod tests {
             r#"{"type":"numberList","min":0,"max":1,"widget":"slider"}"#,
             r#"{"type":"number","min":5,"max":5,"default":5,"widget":"slider"}"#,
             r#"{"type":"int","min":0,"max":9007199254740993,"widget":"slider"}"#,
-            // A control the host doesn't have, and a step without a slider.
+            // A control the host doesn't have.
             r#"{"type":"number","min":0,"max":1,"default":0,"widget":"knob"}"#,
-            r#"{"type":"number","min":0,"max":1,"default":0,"step":0.1}"#,
-            // Steps that go nowhere, past the range, or between whole numbers.
-            r#"{"type":"number","min":0,"max":1,"default":0,"widget":"slider","step":0}"#,
-            r#"{"type":"number","min":0,"max":1,"default":0,"widget":"slider","step":-0.5}"#,
-            r#"{"type":"number","min":0,"max":1,"default":0,"widget":"slider","step":2}"#,
-            r#"{"type":"int","min":0,"max":10,"widget":"slider","step":2.5}"#,
         ] {
             assert!(Manifest::parse(param(bad).as_bytes()).is_err(), "{bad}");
         }
@@ -413,7 +389,7 @@ mod tests {
         let command = |p: &str| format!(r#"{{"id":"a","name":"x","kind":"filter","commands":[{{"id":"go","label":"Go","params":{{"p":{p}}}}}]}}"#);
         assert!(Manifest::parse(command(r#"{"type":"number","min":0,"max":1,"default":0,"widget":"slider"}"#).as_bytes()).is_ok());
         assert!(Manifest::parse(command(r#"{"type":"bool","widget":"slider"}"#).as_bytes()).is_err());
-        let fine = param(r#"{"type":"int","min":0,"max":10,"widget":"slider","step":10}"#);
+        let fine = param(r#"{"type":"int","min":0,"max":10,"widget":"slider"}"#);
         assert!(Manifest::parse(fine.as_bytes()).is_ok());
     }
 }

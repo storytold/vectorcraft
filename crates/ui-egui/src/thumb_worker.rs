@@ -117,9 +117,9 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
                     if skip {
                         continue;
                     }
-                    let t0 = crate::now_ms();
+                    let t0 = craft::platform::clock::monotonic_ms();
                     let img = (job.run)(&mut r);
-                    let done = Done { key: job.key, img, ms: crate::now_ms() - t0 };
+                    let done = Done { key: job.key, img, ms: craft::platform::clock::monotonic_ms() - t0 };
                     // Sent under the lock, so a `forget` either drops it here or comes after it
                     // and finds it in the next `poll`.
                     let Ok(f) = gone.lock() else { break };
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn jobs_come_back_newest_last_per_slot() {
-        let Some(w) = ThumbWorker::<u8, u32>::start(&egui::Context::default(), "test") else { return };
+        let Some(w) = ThumbWorker::<u8, u32>::start(&crate::testing::ui_context(), "test") else { return };
         let job = |n: u32| -> JobFn { Box::new(move |_| Some(Rendered { width: n, height: 1, pixels: vec![0; 4] })) };
         for k in 1..=3 {
             assert!(w.submit(0, k, job(k)));
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn discarded_jobs_do_not_run_and_the_running_one_finishes() {
-        let Some(w) = ThumbWorker::<u8, u32>::start(&egui::Context::default(), "test") else { return };
+        let Some(w) = ThumbWorker::<u8, u32>::start(&crate::testing::ui_context(), "test") else { return };
         let job = |n: u32| -> JobFn { Box::new(move |_| Some(Rendered { width: n, height: 1, pixels: vec![0; 4] })) };
         // A job that holds the thread until it is let go, so the others queue behind it.
         let (started, running) = channel::<()>();
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn settles_after_the_document_stays_unchanged() {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut s = Settle::default();
         assert!(!s.settled(&ctx, 1, 1, 10.0), "a change starts the wait");
         assert!(!s.settled(&ctx, 1, 1, 10.05));

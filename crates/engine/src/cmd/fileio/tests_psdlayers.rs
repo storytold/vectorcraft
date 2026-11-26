@@ -405,9 +405,9 @@ fn zipped_and_32_bit_layers_read() {
 /// A layer without a Unicode name takes the name its Pascal string holds, read as Mac Roman.
 #[test]
 fn names_without_a_unicode_name_read_as_mac_roman() {
-    let l = L { legacy: Some(b"Caf\x8E \xD2Old\xD3"), ..layer("", [0, 0, 1, 1], [0, 0, 0, 255]) };
+    let l = L { legacy: Some(b"Caf\x8E\xCA\xD2Old\xD3\xDB"), ..layer("", [0, 0, 1, 1], [0, 0, 0, 255]) };
     let (s, r) = open(&file(1, 1, &[l], 8, false, false), json!({}));
-    assert_eq!(name(&s.doc().unwrap().doc.layers[0]), "Café “Old”", "{r}");
+    assert_eq!(name(&s.doc().unwrap().doc.layers[0]), "Café\u{a0}“Old”€", "{r}");
 }
 
 #[test]

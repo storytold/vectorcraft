@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use serde_json::json;
 use vectorcraft_color::cms::{self, DEVICE_CMYK, GENERIC_CMYK, SRGB};
 use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
@@ -879,7 +879,7 @@ fn group_profiles(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {
             let cs: i32 = cs.trim_start().split(' ').next().unwrap().parse().unwrap();
             let space = text.split(&format!("\n{cs} 0 obj\n")).nth(1).unwrap();
             let stream: i32 = space.strip_prefix("[/ICCBased ").unwrap().split(' ').next().unwrap().parse().unwrap();
-            let profile = file.xref().get::<Stream<'_>>(craft_pdf::syntax::object::ObjectIdentifier::new(stream, 0)).unwrap();
+            let profile = file.xref().get::<Stream<'_>>(craft::pdf::syntax::object::ObjectIdentifier::new(stream, 0)).unwrap();
             Some(profile.decoded().unwrap().into_owned())
         })
         .collect()
@@ -1099,7 +1099,7 @@ fn masked_doc(mask: Vec<u8>, clip: bool, invert: bool) -> Document {
 /// A Press Quality export of `d`: the file, and the decoded soft mask of each CMYK image (`None`:
 /// it has none).
 fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
-    let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
+    let press = builtin_presets(APP).into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
     let out = export_with_report(d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
     let file = Pdf::new(Arc::new(out.bytes.clone())).unwrap();
     let smasks = file
@@ -1208,6 +1208,52 @@ fn a_distorted_cmyk_image_and_its_grid_mask_with_the_same_corners_write_it_as_it
         assert!(color_masked || !String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
         assert!(!smasks.is_empty() && smasks.iter().all(|m| m.as_deref() == Some(&[255, 128, 0, 64][..])), "{color_masked}: {smasks:?}");
     }
+}
+
+/// A distorted CMYK image masked on its pixel grid is resampled for the size its mesh's pieces
+/// share, as it is without the mask, and not for the smaller size its transform places it at:
+/// every piece draws the one image, so a smaller one would lower the resolution of every piece.
+#[test]
+fn a_distorted_cmyk_image_with_its_grid_mask_is_resampled_for_the_size_of_its_pieces() {
+    let side = 400u32;
+    let cmyk_widths = |masked: bool| {
+        let mut d = Document::new_with_mode(400.0, 400.0, ColorMode::Cmyk);
+        let inks = Inks::new(side, side, flat([0u8, 102, 255, 0], (side * side) as usize)).unwrap();
+        d.images.insert("img".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+        let alpha = image::GrayImage::from_fn(side, side, |x, y| image::Luma([((x + y) % 256) as u8]));
+        d.images.insert("alpha".into(), ImageBlob::new("image/png", png(alpha)));
+        let image = |key: &str| {
+            NodeKind::Image(Box::new(ImageObject {
+                key: key.into(),
+                width: side,
+                height: side,
+                // 50 pt: smaller than the corners below.
+                xf: Affine::scale(0.125),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            }))
+        };
+        let q = [(0.0, 0.0), (150.0, 0.0), (125.0, 150.0), (25.0, 150.0)].map(|(x, y)| Point::new(x, y));
+        let mut n = Node::new(d.alloc_id(), image("img"));
+        if masked {
+            let mut art = Node::new(d.alloc_id(), image("alpha"));
+            art.set_image_corners(q).unwrap();
+            n = n.with_mask(Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true))));
+        }
+        n.set_image_corners(q).unwrap();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let s = json!({"compression": {"color": {"downsample": "bicubic", "ppi": 72.0, "abovePpi": 100.0}}});
+        let out = export_with_report(&d, &opts(s)).unwrap();
+        let w = written(&out.bytes);
+        assert_eq!(w.iter().filter(|w| w.space == "DeviceCMYK" && w.smask).count(), usize::from(masked), "{w:?}");
+        w.iter().filter(|w| w.space == "DeviceCMYK").map(|w| w.width).collect::<Vec<_>>()
+    };
+    let plain = cmyk_widths(false);
+    assert_eq!(plain.len(), 1, "one image for every piece: {plain:?}");
+    assert!(plain[0] > 100 && plain[0] < side, "resampled for the pieces, not for the transform's 50 pt: {plain:?}");
+    assert_eq!(cmyk_widths(true), plain);
 }
 
 /// A color-masked CMYK image with a gray mask of its grid keeps its inks and its hidden colors
@@ -1547,9 +1593,9 @@ fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
 #[test]
 fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
     let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
-    let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None, file_font: Default::default() };
     let d = image_doc(blob, 4, 4);
-    let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
+    let press = builtin_presets(APP).into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
     assert_eq!(press.output.conversion, ColorConversion::PreserveNumbers);
     let options = PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() };
     let w = written(&export_with_report(&d, &options).unwrap().bytes);
@@ -1564,12 +1610,13 @@ fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
 /// out CMYK.
 #[test]
 fn press_quality_writes_cmyk_in_an_rgb_document_too() {
-    let press = || PdfOptions { settings: builtin_preset("Press Quality").unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
+    let press =
+        || PdfOptions { settings: builtin_preset("Press Quality", APP).unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
     assert_eq!(press().settings.output.destination, DOCUMENT_CMYK);
     let ink = [0u8, 102, 255, 0];
     let tiff = ImageBlob::cmyk_tiff(&Inks::new(4, 4, flat(ink, 16)).unwrap()).unwrap();
     let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
-    let png_blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    let png_blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None, file_font: Default::default() };
     for (what, blob) in [("CMYK image", tiff), ("RGB image", png_blob)] {
         let mut d = image_doc(blob, 4, 4);
         d.color_mode = ColorMode::Rgb;
