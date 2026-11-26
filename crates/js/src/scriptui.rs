@@ -107,12 +107,14 @@ const VALUE: &str = "__vcValue";
 const LISTENERS: &str = "__vcListeners";
 const STOPPED: &str = "__vcStopped";
 const ID: &str = "__vcId";
+/// The number of listeners an element has had registered, which numbers each registration.
+const REGISTERED: &str = "__vcRegistered";
 
 /// The longest array an element keeps in a slot: a list's items, a container's controls, its
-/// listeners (three values each), and the elements of a description.
+/// listeners (four values each), and the elements of a description.
 const LIST_CAP: u32 = {
     let most = if MAX_ITEMS > MAX_CONTROLS + 1 { MAX_ITEMS } else { MAX_CONTROLS + 1 };
-    let most = if most > 3 * MAX_LISTENERS { most } else { 3 * MAX_LISTENERS };
+    let most = if most > 4 * MAX_LISTENERS { most } else { 4 * MAX_LISTENERS };
     most as u32
 };
 
@@ -527,6 +529,11 @@ fn add_resource(i: &mut Interp, parent: ObjId, spec: &Spec) -> JsResult<Value> {
     // A list's `items` gives its item texts, as `add`'s third argument does.
     let list_kind = matches!(class.as_str(), "dropdownlist" | "listbox");
     let items = match spec.props.iter().rev().find(|(name, _)| name == "items") {
+        // Only an array is item texts; `add` would read an object third as creation properties.
+        Some((_, Res::Null)) if list_kind => Value::Undefined,
+        Some((_, v)) if list_kind && !matches!(v, Res::Array(_)) => {
+            return Err(i.type_error("items: give a list's items as an array"));
+        }
         Some((_, v)) if list_kind => {
             let v = resource_value(i, v)?;
             i.temp_roots.push(v.clone());
@@ -688,14 +695,16 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
                         return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
                     }
                     // Each item is read as a script reads it, so an index getter gives its value.
+                    let mut texts = Vec::with_capacity(length);
                     for n in 0..length {
                         let n = u32::try_from(n).map_err(|_| Abrupt::Internal("a list is too long".into()))?;
                         let item = i.get_value(&Value::Object(a), &index_key(n))?;
                         i.temp_roots.push(item.clone());
                         let text = text_arg(i, &item)?;
-                        new_item(i, c, text)?;
-                        staged += 1;
+                        i.temp_roots.push(text.clone());
+                        texts.push(text);
                     }
+                    staged = new_items(i, c, &texts)?;
                 }
                 _ => return Err(i.type_error("add: give a list's items as an array")),
             }
@@ -750,6 +759,32 @@ fn new_item(i: &mut Interp, o: ObjId, text: Value) -> JsResult<Value> {
             Ok(Value::Object(item))
         })
     })
+}
+
+/// Gives the new list `o`, which has no items yet, an item for each of `texts`, building its
+/// arrays of items once, without counting them in the dialog's items. → how many were added.
+fn new_items(i: &mut Interp, o: ObjId, texts: &[Value]) -> JsResult<usize> {
+    let proto = classes(i)?.item_proto;
+    let mark = i.temp_roots.len();
+    let r = (|| {
+        let mut items = Vec::with_capacity(texts.len());
+        for text in texts {
+            i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(4)))?;
+            let item = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+            i.temp_roots.push(Value::Object(item));
+            set_slot(i, item, LIST, Value::Object(o))?;
+            set_open(i, item, "text", text.clone())?;
+            items.push(Value::Object(item));
+        }
+        let kept = list(i, &items, false)?;
+        i.temp_roots.push(Value::Object(kept));
+        set_slot(i, o, ITEMS, Value::Object(kept))?;
+        let copy = list(i, &items, true)?;
+        set_open(i, o, "items", Value::Object(copy))?;
+        Ok(items.len())
+    })();
+    i.temp_roots.truncate(mark);
+    r
 }
 
 fn list_of(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
@@ -957,17 +992,26 @@ fn radio_set(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<V
     Ok(Value::Undefined)
 }
 
-/// The listeners registered on `o`: each event type, handler and capture flag.
-fn listeners_of(i: &Interp, o: ObjId) -> JsResult<Vec<(Value, Value, bool)>> {
+/// A listener registered on an element: its event type, handler, capture flag and registration
+/// number.
+type Listener = (Value, Value, bool, f64);
+
+/// The listeners registered on `o`, in the order they were added.
+fn listeners_of(i: &Interp, o: ObjId) -> JsResult<Vec<Listener>> {
     let flat = match object_slot(i, o, LISTENERS)? {
         Some(a) => list_values(i, a)?,
         None => Vec::new(),
     };
-    Ok(flat.as_chunks::<3>().0.iter().map(|[t, f, c]| (t.clone(), f.clone(), c.truthy())).collect())
+    Ok(flat
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|[t, f, c, n]| (t.clone(), f.clone(), c.truthy(), if let Value::Number(n) = n { *n } else { 0.0 }))
+        .collect())
 }
 
-fn set_listeners(i: &mut Interp, o: ObjId, all: &[(Value, Value, bool)]) -> JsResult<()> {
-    let flat: Vec<Value> = all.iter().flat_map(|(t, f, c)| [t.clone(), f.clone(), Value::Bool(*c)]).collect();
+fn set_listeners(i: &mut Interp, o: ObjId, all: &[Listener]) -> JsResult<()> {
+    let flat: Vec<Value> = all.iter().flat_map(|(t, f, c, n)| [t.clone(), f.clone(), Value::Bool(*c), Value::Number(*n)]).collect();
     i.rooted(&flat.clone(), |i| {
         let kept = list(i, &flat, false)?;
         set_slot(i, o, LISTENERS, Value::Object(kept))
@@ -1004,11 +1048,15 @@ fn add_event_listener(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     }
     let capture = arg(args, 2).truthy();
     let mut all = listeners_of(i, o)?;
-    if !all.iter().any(|(t, g, c)| is_type(t, ty) && same(g, &f) && *c == capture) {
+    if !all.iter().any(|(t, g, c, _)| is_type(t, ty) && same(g, &f) && *c == capture) {
         if all.len() >= MAX_LISTENERS {
             return Err(range(i, &format!("addEventListener: a window or control takes at most {MAX_LISTENERS} listeners")));
         }
-        all.push((Value::str(ty), f, capture));
+        // A listener removed and added again is a new registration, which an event already
+        // running does not reach.
+        let n = number_slot(i, o, REGISTERED)? + 1.0;
+        set_slot(i, o, REGISTERED, Value::Number(n))?;
+        all.push((Value::str(ty), f, capture, n));
         set_listeners(i, o, &all)?;
     }
     Ok(Value::Undefined)
@@ -1022,7 +1070,7 @@ fn remove_event_listener(i: &mut Interp, this: Value, args: &[Value], _: bool) -
     let capture = arg(args, 2).truthy();
     let mut all = listeners_of(i, o)?;
     let before = all.len();
-    all.retain(|(t, g, c)| !(is_type(t, ty) && same(g, &f) && *c == capture));
+    all.retain(|(t, g, c, _)| !(is_type(t, ty) && same(g, &f) && *c == capture));
     if all.len() != before {
         set_listeners(i, o, &all)?;
     }
@@ -1041,13 +1089,14 @@ fn event_stop(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Val
 }
 
 /// Runs the listeners for `ty` on `at` (only those for `capture` unless it is `None`), with `event`,
-/// in the order they were added. A listener that an earlier one removed does not run.
+/// in the order they were added. A listener that an earlier one removed does not run, even when
+/// it was added again.
 fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, event: ObjId, phase: f64) -> JsResult<bool> {
-    let wanted = |i: &Interp| -> JsResult<Vec<(Value, bool)>> {
+    let wanted = |i: &Interp| -> JsResult<Vec<(Value, f64)>> {
         Ok(listeners_of(i, at)?
             .into_iter()
-            .filter(|(t, _, c)| is_type(t, ty) && capture.is_none_or(|want| *c == want))
-            .map(|(_, f, c)| (f, c))
+            .filter(|(t, _, c, _)| is_type(t, ty) && capture.is_none_or(|want| *c == want))
+            .map(|(_, f, _, n)| (f, n))
             .collect())
     };
     let first = wanted(i)?;
@@ -1058,8 +1107,8 @@ fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, eve
     i.rooted(&functions, |i| {
         set_open(i, event, "currentTarget", Value::Object(at))?;
         set_open(i, event, "eventPhase", Value::Number(phase))?;
-        for (f, c) in &first {
-            if !wanted(i)?.iter().any(|(g, d)| same(g, f) && d == c) {
+        for (f, n) in &first {
+            if !wanted(i)?.iter().any(|(_, m)| m == n) {
                 continue;
             }
             i.call(f, &Value::Object(at), &[Value::Object(event)])?;
@@ -1416,7 +1465,13 @@ fn show(i: &mut Interp, this: Value, _: &[Value]) -> JsResult<Pause> {
             return Err(e);
         }
     };
-    let open = host_fn(i, "open")?;
+    let open = match host_fn(i, "open") {
+        Ok(open) => open,
+        Err(e) => {
+            set_showing(i, None);
+            return Err(e);
+        }
+    };
     Ok(Pause {
         host: open,
         args: vec![desc],
@@ -1469,6 +1524,10 @@ fn next(i: &mut Interp, win: ObjId) -> JsResult<Value> {
             continue;
         }
         let (desc, nodes, def, cancel, lists) = describe(i, win)?;
+        // A getter that `describe` ran may have closed the dialog.
+        if matches!(slot(i, win, CLOSING)?, Value::Number(_)) {
+            continue;
+        }
         let wait = host_fn(i, "wait")?;
         i.again = Some(Pause {
             host: wait,
@@ -1484,8 +1543,16 @@ fn next(i: &mut Interp, win: ObjId) -> JsResult<Value> {
 /// Runs `r`; when it fails, the dialog is no longer showing.
 fn guarded(i: &mut Interp, keep: &[Value], r: impl FnOnce(&mut Interp) -> JsResult<Value>) -> JsResult<Value> {
     let v = r(i);
-    if v.is_err() {
+    if let Err(e) = &v {
+        // The thrown value stays kept from collection while `failed` runs.
+        let thrown = match e {
+            Abrupt::Throw(t) => vec![t.clone()],
+            _ => Vec::new(),
+        };
+        let mark = i.temp_roots.len();
+        i.temp_roots.extend(thrown);
         failed(i, keep);
+        i.temp_roots.truncate(mark);
     }
     v
 }
@@ -1689,10 +1756,10 @@ fn describe(i: &mut Interp, win: ObjId) -> JsResult<Described> {
 /// A description, the elements in its order, the default and cancel elements, and the lists' items.
 type Described = (Value, ObjId, f64, f64, ObjId);
 
-/// Has each list in `order` the array of items it had when it was described?
-fn lists_unchanged(i: &Interp, order: &[(ObjId, String, f64)], snapshot: &[Value]) -> JsResult<bool> {
-    for ((o, ..), kept) in order.iter().zip(snapshot) {
-        if !matches!(kept, Value::Undefined) && !same(&slot(i, *o, ITEMS)?, kept) {
+/// Has each list in `order` the array of items and the selection it had when it was described?
+fn lists_unchanged(i: &Interp, order: &[(ObjId, String, f64)], snapshot: &[Value], selections: &[f64]) -> JsResult<bool> {
+    for (((o, ..), kept), sel) in order.iter().zip(snapshot).zip(selections) {
+        if !matches!(kept, Value::Undefined) && (!same(&slot(i, *o, ITEMS)?, kept) || number_slot(i, *o, SELECTION)? != *sel) {
             return Ok(false);
         }
     }
@@ -1745,9 +1812,12 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     let mut items_total = 0usize;
     // Each list's array of items as it is read; a change to it means a later getter changed the list.
     let mut snapshot = Vec::with_capacity(order.len());
+    // Each list's selection as it is read; a later getter may change it.
+    let mut selections = Vec::with_capacity(order.len());
     for (o, kind, parent) in &order {
         let o = *o;
         let mut listed = Value::Undefined;
+        let mut selected = -1.0;
         let name_v = get(i, o, "name")?;
         let name = text_of(i, &name_v, "a control's name")?;
         let text_v = get(i, o, "text")?;
@@ -1781,6 +1851,13 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         }
         let a = get_kept(i, o, "alignment")?;
         d.push(("alignment".into(), alignment(i, &a)?));
+        // The characters a text field or static text reserves room for in its width.
+        if matches!(kind.as_str(), "edittext" | "statictext") {
+            let n = get(i, o, "characters")?;
+            if !matches!(n, Value::Undefined | Value::Null) {
+                d.push(("characters".into(), Data::Number(number_arg(i, &n, "show: a control's characters")?)));
+            }
+        }
         if matches!(kind.as_str(), "dialog" | "group" | "panel") {
             let orientation = get(i, o, "orientation")?;
             d.push(("orientation".into(), Data::String(text_of(i, &orientation, "an orientation")?.to_lowercase())));
@@ -1828,6 +1905,8 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
                     texts.push(Data::String(text_of(i, &t, "a list item's text")?));
                 }
                 d.push(("items".into(), Data::Array(texts)));
+                // The item texts' getters ran above, so the selection is read after them.
+                selected = number_slot(i, o, SELECTION)?;
                 let sel = selection_index(i, o)?.filter(|n| *n < items.len());
                 d.push(("selection".into(), sel.map_or(Data::Null, |n| Data::Number(n as f64))));
             }
@@ -1835,6 +1914,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         }
         nodes.push(Data::Object(d));
         snapshot.push(listed);
+        selections.push(selected);
     }
     let target = |i: &mut Interp, name: &str, word: &str| -> JsResult<f64> {
         let given = get(i, win, name)?;
@@ -1849,7 +1929,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     };
     let def = target(i, "defaultElement", "ok")?;
     let cancel = target(i, "cancelElement", "cancel")?;
-    if !lists_unchanged(i, &order, &snapshot)? || !tree_unchanged(i, &order, &tree)? {
+    if !lists_unchanged(i, &order, &snapshot, &selections)? || !tree_unchanged(i, &order, &tree)? {
         return Ok(None);
     }
     let desc = Data::Object(vec![

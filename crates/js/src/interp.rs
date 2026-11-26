@@ -3228,9 +3228,13 @@ impl Interp {
                 Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &Value::Undefined, &args, &read),
                 _ => self.call(&host, &Value::Undefined, &args),
             };
-            if answer.is_err()
+            if let Err(e) = &answer
                 && let Some(failed) = failed
             {
+                // The thrown value stays kept from collection while `failed` runs.
+                if let Abrupt::Throw(v) = e {
+                    self.temp_roots.push(v.clone());
+                }
                 failed(self, &keep);
             }
             self.temp_roots.truncate(mark);

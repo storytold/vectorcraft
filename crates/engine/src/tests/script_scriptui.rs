@@ -367,6 +367,22 @@ fn sizes_and_places_are_clamped_and_the_layout_follows_the_containers() {
 }
 
 #[test]
+fn characters_reserve_the_width_of_an_edit_field_or_a_static_text() {
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let text = |kind: &str, t: &str| with(node(kind, 0.0), "text", Data::String(t.into()));
+    let field = with(text("edittext", "Sample"), "characters", Data::Number(35.0));
+    let plain = text("edittext", "Sample");
+    let label = with(text("statictext", "Hi"), "characters", Data::Number(10.0));
+    let sized = with(with(text("edittext", "Sample"), "characters", Data::Number(35.0)), "size", pair(100.0, 20.0));
+    let dialog = with(node("dialog", -1.0), "orientation", Data::String("row".into()));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog, field, plain, label, sized])).unwrap();
+    assert_eq!(d.nodes[1].rect.w, 35.0 * 7.0 + 12.0, "35 characters of room");
+    assert_eq!(d.nodes[2].rect.w, 80.0, "without characters, the text's own width and the 80 minimum");
+    assert_eq!(d.nodes[3].rect.w, 10.0 * 7.0 + 4.0);
+    assert_eq!(d.nodes[4].rect.w, 100.0, "a size set takes the place of the characters' width");
+}
+
+#[test]
 fn a_hidden_control_and_what_it_holds_take_no_room() {
     let dialog = with(node("dialog", -1.0), "orientation", Data::String("row".into()));
     let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);

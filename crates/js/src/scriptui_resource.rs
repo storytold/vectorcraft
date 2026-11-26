@@ -101,7 +101,7 @@ impl Reader {
     fn expected(&self, what: &str) -> Fault {
         match self.peek() {
             Some(c) => Fault::Syntax(format!("expected {what} at character {}, found {c:?}", self.at + 1)),
-            None => Fault::Syntax(format!("expected {what} at the end of the resource specification")),
+            None => Fault::Syntax(format!("expected {what} at character {}, the end of the resource specification", self.at + 1)),
         }
     }
 
@@ -251,7 +251,9 @@ impl Reader {
                 'u' | 'x' => {
                     let digits = if e == 'u' { 4 } else { 2 };
                     let hex: String = self.chars.iter().skip(self.at).take(digits).collect();
-                    match u32::from_str_radix(&hex, 16).ok().filter(|_| hex.len() == digits).and_then(char::from_u32) {
+                    // `from_str_radix` also takes a sign, which an escape does not have.
+                    let valid = hex.len() == digits && hex.chars().all(|c| c.is_ascii_hexdigit());
+                    match u32::from_str_radix(&hex, 16).ok().filter(|_| valid).and_then(char::from_u32) {
                         Some(c) => {
                             s.push(c);
                             self.at += digits;
@@ -318,10 +320,19 @@ mod tests {
             "dialog { a: [Button {}] }",
             "dialog { v: orange }",
             "dialog { t: '\\u12' }",
+            "dialog { t: '\\x+A' }",
+            "dialog { t: '\\u+00A' }",
             "{ }",
         ] {
             assert!(matches!(parse(text), Err(Fault::Syntax(_))), "{text}: {:?}", parse(text));
         }
+        assert_eq!(parse("dialog { t: '\\x0A\\u0041' }"), Ok(spec("dialog", vec![("t", Res::String("\nA".into()))])));
+    }
+
+    #[test]
+    fn a_resource_specification_that_ends_early_says_at_which_character() {
+        assert_eq!(parse("dialog {"), Err(Fault::Syntax("expected a name at character 9, the end of the resource specification".into())));
+        assert_eq!(parse("dialog"), Err(Fault::Syntax("expected { after the type at character 7, the end of the resource specification".into())));
     }
 
     #[test]

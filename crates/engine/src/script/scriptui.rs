@@ -152,6 +152,8 @@ pub struct UiNode {
     min_size: [Option<f32>; 2],
     max_size: [Option<f32>; 2],
     bounds: Option<UiRect>,
+    /// The characters an edit field or static text reserves room for in its width.
+    characters: Option<f32>,
 }
 
 impl UiNode {
@@ -522,6 +524,8 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             min_size,
             max_size,
             bounds,
+            // At most as many characters as the longest text holds.
+            characters: number(field(f, "characters")).filter(|c| *c > 0.0).map(|c| (c as f32).min(MAX_TEXT_BYTES as f32)),
         });
     }
     let target = |name: &str| number(field(top, name)).map(|k| k as usize).filter(|k| nodes.get(*k).is_some_and(|n| n.kind == UiKind::Button));
@@ -537,12 +541,16 @@ fn own_size(n: &UiNode) -> [f32; 2] {
     let widest = |lines: &mut dyn Iterator<Item = &str>| lines.map(chars).fold(0.0, f32::max);
     let lines = |s: &str| s.lines().count().max(1) as f32;
     let longest_item = n.items.iter().map(|t| chars(t)).fold(0.0, f32::max);
+    // `characters` reserves room for that many characters, however long the text is now.
+    let reserved = n.characters.unwrap_or(0.0);
     match n.kind {
-        UiKind::StaticText => [widest(&mut n.text.lines()) * CHAR + 4.0, lines(&n.text) * LINE + 4.0],
+        UiKind::StaticText => [widest(&mut n.text.lines()).max(reserved) * CHAR + 4.0, lines(&n.text) * LINE + 4.0],
         UiKind::Button => [(chars(&n.text) * CHAR + 24.0).max(80.0), 24.0],
         UiKind::CheckBox | UiKind::RadioButton => [chars(&n.text) * CHAR + 24.0, 20.0],
-        UiKind::EditText if n.multiline => [(widest(&mut n.text.lines()) * CHAR + 12.0).max(160.0), lines(&n.text).max(3.0) * LINE + 10.0],
-        UiKind::EditText => [(chars(&n.text) * CHAR + 12.0).max(80.0), 24.0],
+        UiKind::EditText if n.multiline => {
+            [(widest(&mut n.text.lines()).max(reserved) * CHAR + 12.0).max(160.0), lines(&n.text).max(3.0) * LINE + 10.0]
+        }
+        UiKind::EditText => [(chars(&n.text).max(reserved) * CHAR + 12.0).max(80.0), 24.0],
         UiKind::DropDownList => [(longest_item * CHAR + 40.0).max(100.0), 24.0],
         UiKind::ListBox => [(longest_item * CHAR + 24.0).max(120.0), (n.items.len() as f32).clamp(3.0, 10.0) * 18.0 + 6.0],
         UiKind::Slider => [160.0, 20.0],

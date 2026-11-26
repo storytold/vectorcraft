@@ -68,6 +68,9 @@ pub(crate) enum Queued {
     /// A change, and for a list's, the list's items as the person saw them.
     Change(u64, UiValue, Option<Vec<String>>),
     Close,
+    /// Escape or `ui.dialog.cancel` while a handler ran: the click on the cancel button of the
+    /// dialog the run waits at next, or its close box.
+    Cancel,
 }
 
 /// The ScriptUI dialog on the window's dialog host; at most one is open.
@@ -269,7 +272,14 @@ fn resolved(w: &ScriptUiDialog, q: Queued) -> Option<UiEvent> {
             Some(UiEvent::Change(i, v))
         }
         Queued::Close => Some(UiEvent::Close),
+        Queued::Cancel => Some(cancel_event(w)),
     }
+}
+
+/// The dialog `w`'s cancel: a click on its cancel button, or its close box when it has none or the
+/// button cannot be clicked.
+fn cancel_event(w: &ScriptUiDialog) -> UiEvent {
+    w.cancel_element.map(UiEvent::Click).filter(|e| check_event(w, e.clone()).is_ok()).unwrap_or(UiEvent::Close)
 }
 
 /// The index of the control whose id ([`UiNode::id`]) is `id` in the dialog `w`, if it has one.
@@ -605,6 +615,10 @@ fn edit(ui: &mut Ui, drafts: &BTreeMap<u64, String>, enabled: bool, (i, n, promp
 
 /// The event in the dialog's fields, for the dialog `w`.
 fn event_of(w: &ScriptUiDialog, d: &ScriptWindow) -> Result<UiEvent, String> {
+    // A close names no control, so a `control` left from an earlier event does not stop it.
+    if d.event.as_deref() == Some("close") {
+        return Ok(UiEvent::Close);
+    }
     let control = match &d.control {
         Some(Value::Number(n)) => n.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or("`control` must be a control's index, name or text")?,
         Some(Value::String(s)) => w.find(s).ok_or_else(|| format!("the dialog has no control named {}", cut_to(s, 64)))?,
@@ -612,7 +626,6 @@ fn event_of(w: &ScriptUiDialog, d: &ScriptWindow) -> Result<UiEvent, String> {
     };
     let list = w.nodes.get(control).is_some_and(|n| matches!(n.kind, UiKind::DropDownList | UiKind::ListBox));
     match (d.event.as_deref(), &d.value) {
-        (Some("close"), _) => Ok(UiEvent::Close),
         (Some("click"), _) => Ok(UiEvent::Click(control)),
         (Some("change"), Some(Value::String(t))) => Ok(UiEvent::Change(control, UiValue::Text(t.clone()))),
         (Some("change"), Some(Value::Number(v))) if list => match list_index(v) {
@@ -681,10 +694,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp) {
     if with_window(app, |d| d.shown()) != Some(w.shown) {
         return;
     }
-    if let Some(event) = with_window(app, |d| d.next_event(&w)).flatten()
-        && let Err(e) = give(app, &w, event)
-    {
-        app.status(e);
+    if let Some(event) = with_window(app, |d| d.next_event(&w)).flatten() {
+        // A typed text the script refuses (an earlier handler disabled its field, say) goes back
+        // in its field, so the person does not have to type it again.
+        let typed = match &event {
+            UiEvent::Change(i, UiValue::Text(t)) => w.nodes.get(*i).map(|n| (n.id, t.clone())),
+            _ => None,
+        };
+        if let Err(e) = give(app, &w, event) {
+            if let Some((id, text)) = typed {
+                with_window(app, |d| d.drafts.insert(id, text));
+            }
+            app.status(e);
+        }
     }
 }
 
@@ -733,11 +755,13 @@ pub(crate) fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// Escape or `ui.dialog.cancel`: a click on the cancel button, or the close box when the dialog
 /// has none or it cannot be clicked, after the text still typed in its fields. Events the script
 /// has not had yet go after the ones before them. A typed text the script would refuse is an
-/// error, and the dialog is left as it was.
+/// error, and the dialog is left as it was. While a handler runs, the cancel waits for the dialog
+/// the run waits at next.
 pub(crate) fn cancel(app: &mut VectorcraftApp) -> Result<(), String> {
-    let Some(w) = app.session.script_window() else { return Ok(()) };
-    let click = w.cancel_element.map(UiEvent::Click).filter(|e| check_event(&w, e.clone()).is_ok());
-    let mut events = vec![click.unwrap_or(UiEvent::Close)];
+    let Some(w) = app.session.script_window() else {
+        return with_window(app, |d| d.queue.push_back(Queued::Cancel)).ok_or_else(|| "no script dialog waits".to_string());
+    };
+    let mut events = vec![cancel_event(&w)];
     with_window(app, |d| d.commit_drafts(&w, &mut events)).unwrap_or(Ok(()))?;
     let empty = with_window(app, |d| d.queue.is_empty()).unwrap_or(true);
     let mut events = events.into_iter();

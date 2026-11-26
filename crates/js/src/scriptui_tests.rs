@@ -306,6 +306,23 @@ fn a_resource_list_s_items_are_the_items_the_dialog_shows() {
     let both =
         r.run("try { new Window(\"dialog { l: ListBox { items: ['a'], properties: {items: ['b']} } }\"); 'made' } catch (e) { e.name }").unwrap();
     assert_eq!(both, JsValue::String("TypeError".into()), "items given both ways");
+    let object = r
+        .run("try { new Window(\"dialog { l: ListBox { items: {}, properties: {name: 'choices'} } }\"); 'made' } catch (e) { e.name + ': ' + e.message }")
+        .unwrap();
+    assert_eq!(object, JsValue::String("TypeError: items: give a list's items as an array".into()), "an object is not item texts");
+    let none = r
+        .run("var n = new Window(\"dialog { l: ListBox { items: null, properties: {name: 'choices'} } }\"); [n.l.items.length, n.l.name].join()")
+        .unwrap();
+    assert_eq!(none, JsValue::String("0,choices".into()));
+}
+
+#[test]
+fn an_edit_field_s_and_a_static_text_s_characters_reach_the_description() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    r.run("var w = new Window(\"dialog { e: EditText { text: 'Sample', characters: 35 }, s: StaticText { text: 'Hi' } }\"); w.show()").unwrap();
+    let first = nodes(&seen.borrow().descriptions[0]);
+    assert_eq!(field(&first[1], "characters"), &Data::Number(35.0));
+    assert_eq!(field(&first[2], "characters"), &Data::Undefined, "a control without characters gives none");
 }
 
 #[test]
@@ -352,6 +369,9 @@ fn a_resource_specification_keeps_to_the_dialog_limits() {
         ))
         .unwrap();
     assert_eq!(added, JsValue::String(format!("RangeError,{}", scriptui::MAX_CONTROLS - 1)), "the group took a place before its second button");
+    let kept =
+        r.run("var g = w.children[w.children.length - 1]; [g.type, g.children.length, g.a === g.children[0], g.b === undefined].join()").unwrap();
+    assert_eq!(kept, JsValue::String("group,1,true,true".into()), "the first button stays in the group");
     let nested = |depth: usize| {
         format!(
             "var s = ''; for (var d = 0; d < {depth}; d++) s += 'g: Group {{ '; for (d = 0; d < {depth}; d++) s += '}} '; \
@@ -846,6 +866,43 @@ fn a_listener_removed_by_an_earlier_one_in_the_same_event_does_not_run() {
         )
         .unwrap();
     assert_eq!(v, JsValue::String("1".into()));
+}
+
+#[test]
+fn a_listener_removed_and_added_again_in_the_same_event_does_not_run_in_it() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var ran = []; var once = true; function second() { ran.push(2); } \
+             b.addEventListener('click', function () { ran.push(1); if (once) { once = false; b.removeEventListener('click', second); b.addEventListener('click', second); } }); \
+             b.addEventListener('click', second); b.notify('onClick'); b.notify('onClick'); ran.join(',')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1,1,2".into()), "the second registration runs from the next event on");
+}
+
+#[test]
+fn a_close_a_getter_asks_for_while_the_dialog_is_read_again_ends_show() {
+    let (mut r, seen, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'Go'); var armed = false; \
+        b.onClick = function () { armed = true; }; \
+        Object.defineProperty(b, 'text', {get: function () { if (armed) { armed = false; w.close(7); } return 'Go'; }}); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(7.0));
+    assert_eq!(seen.borrow().ends, vec![(7.0, true)]);
+}
+
+#[test]
+fn a_selection_a_later_getter_changes_is_described_as_it_is() {
+    let (mut r, seen, _) = realm(vec![click(2)]);
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A', 'B']); var b = w.add('button', undefined, 'OK'); \
+        var moved = false; Object.defineProperty(b, 'text', {get: function () { if (!moved) { moved = true; l.selection = 1; } return 'OK'; }}); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(1.0));
+    assert_eq!(field(&nodes(&seen.borrow().descriptions[0])[1], "selection"), &Data::Number(1.0), "the description shows the selection as it is");
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A', 'B']); var b = w.add('button', undefined, 'OK'); \
+        var reads = 0; Object.defineProperty(b, 'text', {get: function () { reads++; l.selection = reads % 2; return 'OK'; }}); \
+        try { w.show(); } catch (e) { e.message }";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items or a container's controls changed while the dialog was read".into()));
 }
 
 #[test]

@@ -872,3 +872,58 @@ fn a_large_dialog_draws_in_a_small_window() {
     assert!(!until_window(&mut app));
     assert_eq!(log(&app), json!([1]));
 }
+
+#[test]
+fn a_close_closes_the_dialog_after_a_click_on_a_control_it_lacks() {
+    let mut app = app();
+    start(&mut app, &format!("{FORM} vc.log(w.show());"));
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    assert!(give(&mut app, json!({"event": "click", "control": "missing"})).is_err());
+    // Only `event` changes; `control` still names the missing control.
+    let id = open_id(&app, KIND);
+    with_host(&app, |host, ctx| host.set_json_field(ctx, id, "event", json!("close"))).unwrap().unwrap();
+    script_window::confirm(&mut app).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([0]));
+}
+
+#[test]
+fn a_cancel_while_a_handler_runs_reaches_the_dialog_s_next_wait() {
+    let mut app = app();
+    start(&mut app, &format!("{FORM} vc.log([w.show(), name.text]);"));
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    give(&mut app, json!({"event": "click", "control": "Bold"})).unwrap();
+    assert!(app.session.script_window().is_none(), "the click's handler has not run yet");
+    script_window::cancel(&mut app).unwrap();
+    assert_eq!(queued(&app), vec![Queued::Cancel]);
+    assert!(until_window(&mut app));
+    step(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued cancel clicks Cancel");
+    assert_eq!(log(&app), json!([[2, "clicked"]]));
+}
+
+#[test]
+fn a_queued_text_the_script_refuses_goes_back_in_its_field() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var name = w.add('edittext', undefined, 'first', {name: 'name'}); \
+         var lock = w.add('checkbox', undefined, 'Lock'); lock.onClick = function () { name.enabled = false; }; \
+         w.add('button', undefined, 'OK'); vc.log([w.show(), name.text]);",
+    );
+    assert!(until_window(&mut app));
+    with_window(&app, |d| {
+        d.queue(&UiEvent::Click(2));
+        d.queue(&UiEvent::Change(1, UiValue::Text("Ann".into())));
+    })
+    .unwrap();
+    step(&mut app, Vec::new());
+    assert!(until_window(&mut app), "the click's handler disabled the field");
+    step(&mut app, Vec::new());
+    assert_eq!(typed(&app, 1).as_deref(), Some("Ann"), "the refused text stays in its field");
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[1, "first"]]));
+}
