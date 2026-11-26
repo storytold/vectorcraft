@@ -215,17 +215,17 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
     ] {
         let button = bar.settle().named(name);
         assert_eq!(bar.tree().role_of(button.node), Some(Role::BUTTON));
-        // Native IconButton reports selected state, replacing the old widget's ad-hoc toggled mark.
-        assert_eq!(bar.tree().selected_of(button.node), Some(false));
+        // Native IconButton exposes its active state as pressed/toggled through its BUTTON role.
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(false)));
         let before = bar.app().run_count;
         bar.click_on(&button).settle();
         assert_eq!(bar.app().run_count, before + 1, "direct {name} uses the existing command entry");
         assert_eq!(crate::menus::checked(&bar.app(), command, &json!({})), Some(true));
         let button = bar.named(name);
-        assert_eq!(bar.tree().selected_of(button.node), Some(true));
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(true)));
         crate::menus::invoke(&mut bar.app(), command, json!({}));
         let button = bar.settle().named(name);
-        assert_eq!(bar.tree().selected_of(button.node), Some(false), "reverse commands refresh the live button");
+        assert_eq!(bar.tree().toggled_of(button.node), Some(Mixed::Same(false)), "reverse commands refresh the live button");
     }
     for (name, command) in [
         ("Smart Guides", "view.smartGuides"),
