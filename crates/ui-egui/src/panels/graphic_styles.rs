@@ -485,9 +485,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .popup(PopupKind::Menu)
             .pressed(library_panel::any_open::<GraphicStyleLibraries>(&app.ui)),
         FooterAction::new(svg("link-2-off"), tl!("Break Link to Graphic Style")).enabled(linked),
-        FooterAction::new(svg("trash-2"), tl!("Delete Graphic Style")).enabled(!sel.is_empty()).takes_drops_disabled(true).accepts_drops(ours),
+        FooterAction::new(svg("trash-2"), tl!("Delete Graphic Style (Alt-click: without asking)"))
+            .enabled(!sel.is_empty())
+            .takes_drops_disabled(true)
+            .accepts_drops(ours),
         // A style dropped here is duplicated with or without art selected.
-        FooterAction::new(svg("dc-new-item"), tl!("New Graphic Style"))
+        FooterAction::new(svg("dc-new-item"), tl!("New Graphic Style (Alt-click to name it)"))
             .enabled(selection_len(app) > 0)
             .takes_drops_disabled(true)
             .accepts_drops(ours),
@@ -1429,5 +1432,23 @@ mod tests {
         let names: Vec<Vec<String>> =
             app.session.documents().iter().map(|st| st.doc.graphic_styles.iter().map(|g| g.name.clone()).collect()).collect();
         assert!(names.iter().all(|n| n.iter().any(|g| g == "Mine")), "no style is renamed: {names:?}");
+    }
+
+    /// The New and Delete buttons name what an Alt-click does, and an Alt-click does it: New asks for a name, Delete
+    /// deletes without asking.
+    #[test]
+    fn the_new_and_delete_buttons_name_their_alt_click() {
+        use crate::tests::panel_harness::Panel;
+        use egui::Modifiers;
+        let mut panel = Panel::new(app(), show);
+        panel.click_with("New Graphic Style (Alt-click to name it)", Modifiers::ALT);
+        assert!(open_dialog(&panel.app(), graphic_style_options::KIND).is_some(), "Alt-click on New asks for a name");
+        let mut app = app();
+        app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
+        let mut panel = Panel::new(app, show);
+        panel.click("Mine");
+        panel.click_with("Delete Graphic Style (Alt-click: without asking)", Modifiers::ALT);
+        let app = panel.app();
+        assert!(!names(&app).iter().any(|s| s == "Mine") && confirm::open_question(&app).is_none(), "Alt-click on Delete deletes at once");
     }
 }

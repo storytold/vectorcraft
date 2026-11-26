@@ -2959,9 +2959,12 @@ impl Interp {
                         return Err(self.type_error("apply was called on a value that is not a function"));
                     }
                     let list = args.get(1).cloned().unwrap_or(Value::Undefined);
+                    let mut roots = vec![f.clone(), this.clone()];
+                    roots.extend(args.iter().cloned());
+                    let expanded = self.rooted(&roots, |i| i.list_from_array_like(&list))?;
                     f = this;
                     this = args.first().cloned().unwrap_or(Value::Undefined);
-                    args = self.list_from_array_like(&list)?;
+                    args = expanded;
                 }
                 Func::Bound { target, this: bound_this, args: bound_args } => {
                     self.use_fuel()?;
