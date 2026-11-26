@@ -1597,8 +1597,24 @@ impl Interp {
         if let Some(i) = array_index(k)
             && let Some(f) = self.host_indexer(start)?
         {
-            return self.host_index(&f, start, i);
+            return self.host_index(&f, start, crate::Data::Number(f64::from(i)), false);
         }
+        match self.find_property(start, k)? {
+            // A name the object and its prototypes lack is the indexer's answer too.
+            None => match self.host_indexer(start)? {
+                Some(f) => self.host_index(&f, start, Self::indexer_key(k), false),
+                None => Ok(Value::Undefined),
+            },
+            Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
+            Some(Prop::Data { value, .. }) => Ok(value),
+            Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
+        }
+    }
+
+    /// [[Get]] of a name that is not an array index, without the indexer of an object of a host
+    /// class: a name the object and its prototypes lack is `undefined`. For names the engine looks
+    /// up itself, such as `toJSON`, which a collection's indexer would answer with an error.
+    pub(crate) fn get_property_only(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
         match self.find_property(start, k)? {
             None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
             Some(Prop::Data { value, .. }) => Ok(value),
@@ -1894,10 +1910,17 @@ impl Interp {
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
             _ => {}
         }
-        let o = self.object(id)?;
-        if !o.extensible {
+        if !self.object(id)?.extensible {
+            // A name that an object of a host class with an indexer lacks is read with the indexer
+            // first, so assigning it throws what reading it throws.
+            if array_index(&k).is_none()
+                && let Some(f) = self.host_indexer(id)?
+            {
+                self.host_index(&f, id, Self::indexer_key(&k), false)?;
+            }
             return self.reject(throw, &k, "the object is not extensible");
         }
+        let o = self.object(id)?;
         if let Class::Array { length, length_writable: false } = o.class
             && array_index(&k).is_some_and(|i| i >= length)
         {
@@ -3880,10 +3903,12 @@ impl Interp {
                     return self.xml_has(b, a).map(Value::Bool);
                 }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
-                match self.to_prop_key(a)? {
-                    crate::symbol::PropKey::Str(k) => self.has_property_indexed(*o, &k).map(Value::Bool),
-                    k @ crate::symbol::PropKey::Sym(_) => self.has_pk(*o, &k).map(Value::Bool),
+                let k = self.to_prop_key(a)?;
+                match &k {
+                    PropKey::Str(name) => self.has_property_indexed(*o, name),
+                    PropKey::Sym(_) => self.has_pk(*o, &k),
                 }
+                .map(Value::Bool)
             }
         }
     }

@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Points",
             [],
             None,
-            "{} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
+            "{keepEmpty?: bool (keep a compound path left with no members)} delete the direct-selected anchors and their segments, opening closed paths there, and delete objects selected whole alongside them; what remains of a path stays selected, so a second Delete removes it (the Delete key, unless the deleteKeepsPathsJoined preference is on)",
             has_anchors,
             delete_anchors
         ),
@@ -328,10 +328,21 @@ pub(crate) fn interpolates_handles(s: &mut Session, p: &Value, cmd: &str) -> Res
     Ok(on)
 }
 
-/// [`transform_selected`] on the active document's selection, as one undo step `label`.
+/// [`transform_selected`] on the active document's selection, as one undo step `label`. A
+/// transform other than a move also transforms the selected ruler guides
+/// ([`Document::transform_ruler_guides`]).
 pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_geom::Affine, sc: Scaling, interpolate: bool) -> Result<()> {
     let sel = s.doc()?.selection.clone();
-    s.edit(label, |doc, _| transform_selected(doc, &sel, xf, sc, interpolate))
+    // As [`transform_selected`] tells a move apart, which moves the guides itself.
+    let c = xf.as_coeffs();
+    let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
+    s.edit(label, |doc, live| {
+        transform_selected(doc, &sel, xf, sc, interpolate)?;
+        if !is_translation {
+            doc.transform_ruler_guides(live, xf);
+        }
+        Ok(())
+    })
 }
 
 /// Apply `xf` to the direct-selected anchors, their handles with them, and (with `sc`) to the
@@ -1720,6 +1731,7 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: bool) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1737,12 +1749,16 @@ pub(crate) fn delete_anchors_joined(s: &mut Session, p: &Value, keep_joined: boo
             .copied()
             .filter(|id| !d.ancestry(*id).unwrap_or_default().iter().rev().skip(1).any(|ancestor| targets.contains(ancestor)))
             .collect();
-        // The compound paths that hold a deleted object; one left with no members goes too.
-        let compounds: BTreeSet<NodeId> = whole_ids
-            .iter()
-            .chain(sel.keys())
-            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
-            .collect();
+        // The compound paths that hold a deleted object; one left with no members goes too, unless `keepEmpty`.
+        let compounds: BTreeSet<NodeId> = if keep_empty {
+            BTreeSet::new()
+        } else {
+            whole_ids
+                .iter()
+                .chain(sel.keys())
+                .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+                .collect()
+        };
         if !whole_ids.is_empty() {
             d.remove_many(&whole_ids)?;
         }

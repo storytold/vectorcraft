@@ -99,6 +99,12 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
             Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
             None => label.into(),
         },
+        // Apply Last Filter and Last Filter… are named after the filter that ran last.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => match crate::dialogs::plugin::last_filter_name(app) {
+            Some(name) if id == crate::dialogs::plugin::APPLY_LAST => format!("Apply {name}"),
+            Some(name) => format!("{name}…"),
+            None => label.into(),
+        },
         // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
         "object.envelope.editContents" => {
             let editing = app.session.active().is_some_and(|st| {
@@ -193,6 +199,12 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
                 let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
                 fmt(tl!("Last Effect: {name}"), &[("name", crate::i18n::tr_id(lang, e, name))])
             }
+            None => crate::i18n::tr_id(lang, id, label).to_string(),
+        },
+        // The filter's name is the plug-in's own text, never translated.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => match crate::dialogs::plugin::last_filter_name(app) {
+            Some(name) if id == crate::dialogs::plugin::APPLY_LAST => fmt(tl!("Apply {filter}"), &[("filter", &name)]),
+            Some(name) => format!("{name}…"),
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
         _ => {

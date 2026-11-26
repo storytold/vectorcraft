@@ -558,7 +558,7 @@ fn footer(ui: &mut Ui, states: &RowStates) -> Option<&'static str> {
     FooterBar::body().show(ui, |ui, _| {
         Stack::new().show(ui, |ui, _| {
             for row in FOOTER {
-                Row::new().show(ui, |ui, _| {
+                Row::new().wrap(true).show(ui, |ui, _| {
                     for &(icon, id) in row {
                         let name = title(id, states.locked);
                         let button = IconButton::new(IconId::new(icon)).label(name).tooltip(name).enabled(states.enabled(id));

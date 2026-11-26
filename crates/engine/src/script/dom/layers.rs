@@ -12,8 +12,8 @@
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `layers` lists layers top first, as the Layers panel shows them; `groupItems`,
-//!   `compoundPathItems` and a layer's or group's `pageItems` list art in paint order, bottom first,
-//!   as `pageItems` does. The document's `groupItems` and `compoundPathItems` hold every group or
+//!   `compoundPathItems` and a layer's or group's `pageItems` list art topmost first,
+//!   as the document's `pageItems` does. The document's `groupItems` and `compoundPathItems` hold every group or
 //!   compound path at any depth; a layer's or group's hold the ones directly in it.
 //! - `layers.add()` on the document makes a layer above every top-level layer; on a layer it makes
 //!   a sublayer on top of that layer's contents. The new layer becomes the current one.
@@ -41,7 +41,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
     boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
-    method, named, num, number, on_doc, page_items, placement_of, property, text, typename, whole, with_doc,
+    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -256,6 +256,11 @@ fn layer_parent(h: &Host, a: &[Data]) -> Answer {
 fn layer_typename(h: &Host, a: &[Data]) -> Answer {
     this_layer(h, a)?;
     Ok(text("Layer"))
+}
+
+/// `toString()`: `[Layer name]`, `[Layer ]` for a layer with no name.
+fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
+    super::named_text("Layer", layer_name(h, a))
 }
 
 /// The layer's place among the layers beside it, from 1 at the bottom. Art beside a sublayer is
@@ -522,7 +527,7 @@ fn layers_add(h: &Host, a: &[Data]) -> Answer {
             return Err(HostError::Error("the layer is hidden or locked".into()));
         }
     }
-    let (_, r) = on_doc(h, doc.uid, true, |h| match parent {
+    let (_, r) = on_doc_layer(h, doc.uid, true, false, |h| match parent {
         None => command_value(h, "layer.new", &json!({"top": true})),
         Some(p) => command_value(h, "layer.newSublayer", &json!({"parent": p.0})),
     })?;
@@ -574,8 +579,8 @@ pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId
 /// How many lists of art [`super::State`] keeps at once.
 pub(super) const ART_LISTS: usize = 4;
 
-/// The objects of `kind` in `container` (directly), or in the whole document at any depth, in
-/// paint order. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
+/// The objects of `kind` in `container` (directly), or in the whole document at any depth,
+/// topmost first. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
 /// loop over groups that reads each group's `pageItems` builds each list once. Each new list is
 /// charged by the objects it looks at.
 fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
@@ -598,7 +603,7 @@ fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> R
         Some(c) => {
             let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
             h.charge_call(children.len() as u64)?;
-            children.iter().filter(|n| kind.holds(n)).map(|n| n.id).collect()
+            children.iter().rev().filter(|n| kind.holds(n)).map(|n| n.id).collect()
         }
     };
     let ids = Rc::new(ids);
@@ -905,7 +910,7 @@ fn doc_set_active_layer(h: &Host, a: &[Data]) -> Answer {
     }
     let now = with_doc(h, doc, |_, st| st.current_layer());
     if now != Some(id) {
-        on_doc(h, doc.uid, true, |h| command(h, "layer.setCurrent", &json!({"id": id.0})))?;
+        on_doc_layer(h, doc.uid, true, false, |h| command(h, "layer.setCurrent", &json!({"id": id.0})))?;
     }
     Ok(Data::Undefined)
 }
@@ -1291,6 +1296,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     let mut layer = named(vec![
         ("typename", get(l, layer_typename)),
         ("name", property(l, layer_name, layer_set_name)),
+        ("toString", method(l, layer_to_string)),
         ("visible", property(l, layer_visible, layer_set_visible)),
         ("locked", property(l, layer_locked, layer_set_locked)),
         ("printable", property(l, layer_printable, layer_set_printable)),
