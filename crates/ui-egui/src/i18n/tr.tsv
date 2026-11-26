@@ -1588,6 +1588,17 @@ font-technology	Variable	Değişken
 	Graphic Styles	Grafik Stilleri
 	Graphic Styles Options	Grafik Stilleri Seçenekleri
 	Graphics	Grafik
+	Show Contrast	Kontrastı Göster
+	Contrast For	Kontrast Hedefi
+	Normal Text	Normal Metin
+	Large Text	Büyük Metin
+	Contrast Background	Kontrast Arka Planı
+	Behind Selection	Seçimin Arkası
+	Current Color	Geçerli Renk
+	Pass	Geçti
+	Fail	Kaldı
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 en düşük kontrast: normal metin AA 4.5:1 (1.4.3) ve AAA 7:1 (1.4.6), büyük metin AA 3:1 ve AAA 4.5:1, grafikler ve denetimler AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Arka plan seçimin ortasında okunur.
 	Graphics Processor	Grafik İşlemcisi
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Yerçekimi
@@ -3086,7 +3097,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Nesneleri boyut, konum ve hizalama için konturları ve şekil değiştiren efektleriyle birlikte ölçer; gölgeler, parlamalar ve bulanıklaştırmalar ölçülmez.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	%100 yakınlaştırmada belgenin bir inçi 72 yerine 96 ekran noktası kaplar.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	%100 yakınlaştırmada belgenin bir inçi ekranın bir inçini kaplar; sistem kullanılabilir bir ekran boyutu bildirmezse 96 ekran noktası kaplar.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Seçim aracıyla bir gruba, yola veya görüntüye çift tıklamak onu yalıtım modunda açar.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Desen dolguları ve konturları, bir dönüşüm veya Dönüştür panelinin menüsü başka bir seçim yapmadıkça resimle birlikte dönüşür.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
@@ -5312,6 +5323,12 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	finish editing the pattern first	önce deseni düzenlemeyi bitir
 @msg	nothing encoded	kodlanmış hiçbir şey yok
 @msg	nothing selected	hiçbir şey seçilmedi
+@msg	`{key}` must be a color or {_1}	`{key}` bir renk veya {_1} olmalıdır
+@msg	the selected objects' colors differ: give `color`	seçili nesnelerin renkleri farklı: `color` belirtin
+@msg	the selected objects' colors differ: give `opacity` or `color`	seçili nesnelerin renkleri farklı: `opacity` veya `color` belirtin
+@msg	the active fill or stroke has no color: give `color`	etkin dolgu veya konturun rengi yok: `color` belirtin
+@msg	the active fill or stroke is hidden: give `color`	etkin dolgu veya kontur gizli: `color` belirtin
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	etkin dolgu veya kontur bir opaklık maskesi üzerinden çiziliyor: `color` belirtin
 @msg	nothing selected is in a group	seçilenlerin hiçbiri bir grupta değil
 @msg	nothing to align	hizalanacak hiçbir şey yok
 @msg	nothing to distort	çarpıtılacak hiçbir şey yok
@@ -7395,6 +7412,8 @@ axis	Y Axis	Y ekseni
 	Cancel Plug-in Run	Eklenti Çalıştırmasını İptal Et
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} bitti, ancak bu sırada belge veya eklenti değişti: yeniden çalıştırın
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
+@msg	Plug-in “{name}”: {notice}	“{name}” eklentisi: {notice}
+@msg	`notice` must be a string with visible text	`notice` görünür metin içeren bir dize olmalıdır
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
@@ -7486,7 +7505,7 @@ axis	Y Axis	Y ekseni
 @msg	a list of {min_items} to {max_items} numbers	{min_items} ile {max_items} arasında sayıdan oluşan bir liste
 @msg	a new object needs a `path`	yeni bir nesnenin `path` değerine ihtiyacı vardır
 @msg	a number	bir sayı
-@msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
+@msg	a painted live effect returns only `objects` and `notice`	boyama türü canlı efekt yalnızca `objects` ve `notice` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün
@@ -7591,6 +7610,8 @@ axis	Y Axis	Y ekseni
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
 @msg	`paintOutput` may only be true	`paintOutput` yalnızca true olabilir
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
+@msg	`place` is only for an importer (`kind` "importer")	`place` yalnızca içe aktarıcı (`kind` "importer") içindir
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” dosyaları açar ama yerleştirmez: bildirimi `place` ayarlamaz
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır

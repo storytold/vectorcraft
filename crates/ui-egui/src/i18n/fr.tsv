@@ -1667,6 +1667,17 @@ font-technology	Variable	Variables
 	Graphic Styles	Styles graphiques
 	Graphic Styles Options	Options des styles graphiques
 	Graphics	Graphiques
+	Show Contrast	Afficher le contraste
+	Contrast For	Contraste pour
+	Normal Text	Texte normal
+	Large Text	Grand texte
+	Contrast Background	Arrière-plan du contraste
+	Behind Selection	Derrière la sélection
+	Current Color	Couleur actuelle
+	Pass	Réussi
+	Fail	Échec
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contraste minimal WCAG 2.2 : texte normal AA 4.5:1 (1.4.3) et AAA 7:1 (1.4.6), grand texte AA 3:1 et AAA 4.5:1, graphiques et commandes AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	L’arrière-plan est lu au centre de la sélection.
 	Graphics Processor	Processeur graphique
 	Graphics: {adapter}	Carte graphique : {adapter}
 	Gravity	Gravité
@@ -3315,7 +3326,7 @@ digits	Malayalam	Malayalam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Sélection › Identique › Couleur de fond, Couleur du contour et Fond et contour ne retiennent que la même teinte d’une nuance globale ou d’une couleur d’accompagnement, et non toutes ses teintes.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Affiche l’écran d’accueil quand aucun document n’est ouvert. Désactivée, la fenêtre reste vide jusqu’à ce que vous cliquiez sur Accueil.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mesure les objets avec leurs contours et leurs effets qui modifient la forme pour la taille, la position et l’alignement. Les ombres, lueurs et flous ne sont pas mesurés.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	À 100 % de zoom, un pouce du document occupe 96 points d’écran au lieu de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	À 100 % de zoom, un pouce du document occupe un pouce de l’écran, ou 96 points d’écran si le système n’indique pas de taille d’écran utilisable.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Un double-clic sur un groupe, un tracé ou une image avec l’outil Sélection l’ouvre en mode Isolation.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Les fonds et contours de motif se transforment avec l’illustration, sauf si une transformation ou le menu du panneau Transformation en décide autrement.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Les rayons d’angle dynamiques se mettent à l’échelle avec l’illustration, sauf si la mise à l’échelle en décide autrement.
@@ -5545,6 +5556,12 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
 @msg	nothing encoded	rien n’a été encodé
 @msg	nothing selected	aucune sélection
+@msg	`{key}` must be a color or {_1}	`{key}` doit être une couleur ou {_1}
+@msg	the selected objects' colors differ: give `opacity` or `color`	les couleurs des objets sélectionnés diffèrent : indiquez `opacity` ou `color`
+@msg	the selected objects' colors differ: give `color`	les couleurs des objets sélectionnés diffèrent : indiquez `color`
+@msg	the active fill or stroke has no color: give `color`	le fond ou le contour actif n’a pas de couleur : indiquez `color`
+@msg	the active fill or stroke is hidden: give `color`	le fond ou le contour actif est masqué : indiquez `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	le fond ou le contour actif est dessiné à travers un masque d’opacité : indiquez `color`
 @msg	nothing selected is in a group	aucun élément sélectionné ne se trouve dans un groupe
 @msg	nothing to align	rien à aligner
 @msg	nothing to distort	rien à déformer
@@ -7326,6 +7343,8 @@ axis	Y Axis	Axe Y
 @msg	`name` must be 1-64 printable characters	`name` doit compter 1-64 caractères imprimables
 @msg	`version`, `description` or `author` is too long	`version`, `description` ou `author` est trop long
 @msg	`warnings` must be a list of strings	`warnings` doit être une liste de chaînes
+@msg	Plug-in “{name}”: {notice}	Plug-in “{name}” ({notice})
+@msg	`notice` must be a string with visible text	`notice` doit être une chaîne avec du texte visible
 @msg	`{k}` must be one of {_1}	`{k}` doit valoir l’une de ces valeurs : {_1}
 @msg	`{k}` must be {what}	`{k}` doit être {what}
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’exportation déclare de 1 à {MAX_EXTENSIONS} `extensions`
@@ -7410,7 +7429,7 @@ axis	Y Axis	Axe Y
 @msg	a list of {min_items} to {max_items} numbers	une liste de {min_items} à {max_items} nombres
 @msg	a new object needs a `path`	un nouvel objet nécessite un `path`
 @msg	a number	un nombre
-@msg	a painted live effect returns only `objects`	un effet dynamique de peinture renvoie seulement `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un effet dynamique de peinture renvoie seulement `objects` et `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	une pièce d’un effet dynamique de peinture a seulement `path`, `fillRule`, `fills` et `strokes`
 @msg	a read-only object was left out	un objet en lecture seule a été omis
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {{"id": …}} seul ou tel qu’il a été fourni
@@ -7515,6 +7534,8 @@ axis	Y Axis	Axe Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` ne peut valoir que true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` est réservé à un effet dynamique (`kind` "effect") avec `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` est réservé à un importateur (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	Le plug-in {shown} ouvre des fichiers mais ne les place pas, car son manifeste ne définit pas `place`
 @msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
 @msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`

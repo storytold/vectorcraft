@@ -1699,6 +1699,17 @@ file-filter	Templates	Шаблони
 	Graphic Styles	Графічні стилі
 	Graphic Styles Options	Параметри графічних стилів
 	Graphics	Графіка
+	Show Contrast	Показати контраст
+	Contrast For	Контраст для
+	Normal Text	Звичайний текст
+	Large Text	Великий текст
+	Contrast Background	Фон контрасту
+	Behind Selection	За виділенням
+	Current Color	Поточний колір
+	Pass	Відповідає
+	Fail	Не відповідає
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Мінімальний контраст за WCAG 2.2: звичайний текст AA 4.5:1 (1.4.3) і AAA 7:1 (1.4.6), великий текст AA 3:1 і AAA 4.5:1, графіка й елементи керування AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон визначається в центрі виділення.
 	Graphics Processor	Графічний процесор
 	Graphics: {adapter}	Графіка: {adapter}
 	Gravity	Гравітація
@@ -3371,7 +3382,7 @@ digits	Malayalam	Малаялам
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Вимірює об’єкти з обведеннями та ефектами, що змінюють форму, для розміру, положення й вирівнювання; тіні, світіння та розмиття не враховуються.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	За масштабу 100 % один дюйм документа займає 96 екранних пунктів замість 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	За масштабу 100 % один дюйм документа займає один дюйм дисплея або 96 екранних пунктів, якщо система не повідомляє придатний розмір дисплея.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Подвійне клацання на групі, контурі або зображенні інструментом «Виділення» відкриває їх у режимі ізоляції.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки й обведення візерунком трансформуються разом із графікою, якщо трансформування або меню панелі «Трансформувати» не задає іншого.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
@@ -5600,6 +5611,12 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	`{key}` must be a color or {_1}	`{key}` має бути кольором або {_1}
+@msg	the selected objects' colors differ: give `color`	кольори виділених об’єктів відрізняються: укажіть `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	кольори виділених об’єктів відрізняються: укажіть `opacity` або `color`
+@msg	the active fill or stroke has no color: give `color`	активна заливка чи обведення не має кольору: укажіть `color`
+@msg	the active fill or stroke is hidden: give `color`	активна заливка чи обведення приховані: укажіть `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активна заливка чи обведення малюються крізь маску непрозорості: укажіть `color`
 @msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати
@@ -6927,6 +6944,8 @@ axis	Y Axis	Вісь Y
 	Cancel Plug-in Run	Скасувати запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершився, але документ або модуль тим часом змінився: запустіть його знову
 @msg	Running “{name}”…	Виконується «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` має бути рядком із видимим текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
@@ -7018,7 +7037,7 @@ axis	Y Axis	Вісь Y
 @msg	a list of {min_items} to {max_items} numbers	список із {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому об’єкту потрібен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
+@msg	a painted live effect returns only `objects` and `notice`	малювальний динамічний ефект повертає лише `objects` і `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
@@ -7123,6 +7142,8 @@ axis	Y Axis	Вісь Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` може бути лише true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` дозволено лише для імпортера (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» відкриває файли, але не розміщує їх: його маніфест не задає `place`
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`

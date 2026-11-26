@@ -1587,6 +1587,17 @@ font-technology	Variable	Μεταβλητές
 	Graphic Styles	Στυλ γραφικών
 	Graphic Styles Options	Επιλογές στυλ γραφικών
 	Graphics	Γραφικά
+	Show Contrast	Εμφάνιση αντίθεσης
+	Contrast For	Αντίθεση για
+	Normal Text	Κανονικό κείμενο
+	Large Text	Μεγάλο κείμενο
+	Contrast Background	Φόντο αντίθεσης
+	Behind Selection	Πίσω από την επιλογή
+	Current Color	Τρέχον χρώμα
+	Pass	Επιτυχία
+	Fail	Αποτυχία
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Ελάχιστη αντίθεση κατά WCAG 2.2: κανονικό κείμενο AA 4.5:1 (1.4.3) και AAA 7:1 (1.4.6), μεγάλο κείμενο AA 3:1 και AAA 4.5:1, γραφικά και στοιχεία ελέγχου AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Το φόντο διαβάζεται στο κέντρο της επιλογής.
 	Graphics Processor	Επεξεργαστής γραφικών
 	Graphics: {adapter}	Γραφικά: {adapter}
 	Gravity	Βαρύτητα
@@ -4156,7 +4167,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Τα Επιλογή › Ίδιο › Χρώμα γεμίσματος, Χρώμα περιγράμματος και Γέμισμα και περίγραμμα βρίσκουν μόνο την ίδια απόχρωση ενός καθολικού ή σημειακού δείγματος, όχι οποιαδήποτε απόχρωσή του.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Εμφανίζει την αρχική οθόνη όταν δεν είναι ανοιχτό κανένα έγγραφο· όταν είναι ανενεργό, το παράθυρο μένει κενό μέχρι να κάνετε κλικ στην Αρχική οθόνη.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Μετρά τα αντικείμενα μαζί με τα περιγράμματα και τα εφέ που αλλάζουν το σχήμα τους για μέγεθος, θέση και στοίχιση· οι σκιές, οι λάμψεις και οι θολώσεις δεν μετρώνται.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Σε ζουμ 100%, μία ίντσα του εγγράφου καταλαμβάνει 96 στιγμές οθόνης αντί για 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Σε ζουμ 100%, μία ίντσα του εγγράφου γεμίζει μία ίντσα της οθόνης, ή 96 στιγμές οθόνης όταν το σύστημα δεν αναφέρει χρησιμοποιήσιμο μέγεθος οθόνης.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Το διπλό κλικ σε ομάδα, διαδρομή ή εικόνα με το εργαλείο Επιλογή την ανοίγει σε λειτουργία απομόνωσης.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Τα γεμίσματα και τα περιγράμματα μοτίβου μετασχηματίζονται μαζί με το γραφικό, εκτός αν ένας μετασχηματισμός ή το μενού του πλαισίου Μετασχηματισμός επιλέξει κάτι άλλο.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Οι ακτίνες των δυναμικών γωνιών κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
@@ -5538,6 +5549,12 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	`{key}` must be a color or {_1}	το `{key}` πρέπει να είναι χρώμα ή {_1}
+@msg	the selected objects' colors differ: give `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `opacity` ή `color`
+@msg	the active fill or stroke has no color: give `color`	το ενεργό γέμισμα ή η πινελιά δεν έχει χρώμα: δώστε `color`
+@msg	the active fill or stroke is hidden: give `color`	το ενεργό γέμισμα ή η πινελιά είναι κρυφό: δώστε `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	το ενεργό γέμισμα ή η πινελιά σχεδιάζεται μέσα από μάσκα αδιαφάνειας: δώστε `color`
 @msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
@@ -7312,6 +7329,8 @@ axis	Y Axis	Άξονας Y
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…
+@msg	Plug-in “{name}”: {notice}	Πρόσθετο «{name}»: {notice}
+@msg	`notice` must be a string with visible text	το `notice` πρέπει να είναι συμβολοσειρά με ορατό κείμενο
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): πρέπει να το εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `allowHeavy: true` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
@@ -7404,7 +7423,7 @@ axis	Y Axis	Άξονας Y
 @msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
 @msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
 @msg	a number	αριθμός
-@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect returns only `objects` and `notice`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects` και `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
@@ -7509,6 +7528,8 @@ axis	Y Axis	Άξονας Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
 @msg	`paintOutput` may only be true	Το `paintOutput` μπορεί να είναι μόνο true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	το `paintOutput` ισχύει μόνο για ζωντανό εφέ (`kind` "effect") με `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	το `place` ισχύει μόνο για εισαγωγέα (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	το «{shown}» ανοίγει αρχεία αλλά δεν τα τοποθετεί: το manifest του δεν ορίζει `place`
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`

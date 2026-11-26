@@ -69,7 +69,7 @@ pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths tha
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
     "repeats, placed documents, intertwines and distorted images are written as their art in the editing data for other apps";
-pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort more than 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
+pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort nested 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
