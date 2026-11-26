@@ -13,6 +13,18 @@ pub struct Effect {
     pub visible: bool,
 }
 
+impl Effect {
+    /// Whether this effect gives an image's fill or stroke a shape to paint: it is a visible
+    /// Convert to Shape or Outline Object.
+    pub fn gives_image_shape(&self) -> bool {
+        self.visible
+            && matches!(
+                self.id.as_str(),
+                "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" | "path.outlineObject"
+            )
+    }
+}
+
 fn yes() -> bool {
     true
 }

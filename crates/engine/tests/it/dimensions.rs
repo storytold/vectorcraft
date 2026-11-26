@@ -226,6 +226,28 @@ fn dimension_angles_circles_arcs_and_curves() {
 }
 
 #[test]
+fn an_angular_dimension_can_take_its_vertex_from_an_anchor() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let request = json!({
+        "mode": "angular", "a": [172, 100], "b": [100, 172], "options": {"precision": 1},
+        "source": {"kind": "points", "vertex": {"node": line, "subpath": 0, "anchor": 0}}
+    });
+    let id = run(&mut s, "dimension.create", request.clone())["id"].as_u64().unwrap();
+    assert_eq!(text(&s, id), "90.0°");
+    run(&mut s, "select.set", json!({"ids": [line]}));
+    run(&mut s, "object.move", json!({"dx": 18, "dy": 0}));
+    assert!(near(recipe(&s, id).vertex, vectorcraft_geom::Point::new(118.0, 100.0)));
+
+    let mut invalid = request.clone();
+    invalid["vertex"] = json!("bad point");
+    assert!(s.execute("dimension.create", &invalid).is_err());
+    let mut missing = request;
+    missing["source"]["vertex"] = Value::Null;
+    assert!(s.execute("dimension.create", &missing).is_err());
+}
+
+#[test]
 fn dimension_rejects_bad_input_without_mutation() {
     let mut s = session();
     let line = edge(&mut s);
@@ -464,6 +486,160 @@ fn turned_horizontal_dimensions_stay_horizontal() {
     assert_eq!((text(&s, id), recipe(&s, id).orientation), ("0.00 pt".to_string(), Orientation::Horizontal));
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(text(&s, id), "100.00 pt");
+}
+
+/// A dimension of a whole path measures the path's overall width, or its height when vertical,
+/// between its outermost points, and follows the path when it turns. Turned 30°, a 100 × 60
+/// rectangle is 100 cos 30° + 60 sin 30° wide, more than either side; a turned ellipse is measured
+/// at the outermost points of its curves, which are not anchors.
+#[test]
+fn a_dimension_of_a_whole_path_measures_its_overall_width_and_height() {
+    let value = |s: &Session, id: u64| text(s, id).trim_end_matches(" pt").parse::<f64>().unwrap();
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let source = json!({"kind":"extent","node":rect});
+    let id = run(&mut s, "dimension.create", json!({"source":source,"orientation":"horizontal","offset":-30}))["id"].as_u64().unwrap();
+    assert_eq!(text(&s, id), "100.00 pt");
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "object.rotate", json!({"angle":30}));
+    let wide = 100.0 * 30f64.to_radians().cos() + 60.0 * 30f64.to_radians().sin();
+    assert!((value(&s, id) - wide).abs() < 0.01, "{} against {wide}", text(&s, id));
+    // The rectangle's box: left, top, right, bottom.
+    let bounds = |s: &Session| {
+        let anchors = s.doc().unwrap().doc.node(NodeId(rect)).unwrap().path_data().unwrap().subpaths[0].anchors.clone();
+        let (xs, ys): (Vec<f64>, Vec<f64>) = anchors.iter().map(|a| (a.p.x, a.p.y)).unzip();
+        let low = |v: &[f64]| v.iter().copied().fold(f64::INFINITY, f64::min);
+        let high = |v: &[f64]| v.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        (low(&xs), low(&ys), high(&xs), high(&ys))
+    };
+    // The line stays 30 pt above the turned rectangle's topmost corner, clear of the art.
+    let (left, top, right, _) = bounds(&s);
+    let line = recipe(&s, id).line_ends().0.y;
+    assert!((line - (top - 30.0)).abs() < 0.01, "line at y = {line}, top at {top}");
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"vertical"}));
+    let tall = 100.0 * 30f64.to_radians().sin() + 60.0 * 30f64.to_radians().cos();
+    assert!((value(&s, id) - tall).abs() < 0.01, "{} against {tall}", text(&s, id));
+    let d = recipe(&s, id);
+    let (top, bottom) = (d.a.y.min(d.b.y), d.a.y.max(d.b.y));
+    assert!(((bottom - top) - tall).abs() < 0.01, "the points are the topmost and bottommost: {:?} {:?}", d.a, d.b);
+    // The line was 30 pt above the path; turned, it is 30 pt beside it.
+    let line = d.line_ends().0.x;
+    assert!((line - (left - 30.0)).abs() < 0.01 || (line - (right + 30.0)).abs() < 0.01, "line at x = {line}, path from {left} to {right}");
+    run(&mut s, "edit.undo", json!({}));
+    assert!((value(&s, id) - wide).abs() < 0.01, "{}", text(&s, id));
+    // A linear dimension only.
+    assert!(s.execute("dimension.create", &json!({"mode":"angular","source":source})).is_err());
+
+    let ellipse = run(&mut s, "shape.ellipse", json!({"x":300,"y":100,"width":100,"height":50}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":ellipse},"orientation":"horizontal"}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[ellipse]}));
+    run(&mut s, "object.rotate", json!({"angle":45}));
+    let anchors = s.doc().unwrap().doc.node(NodeId(ellipse)).unwrap().path_data().unwrap().subpaths[0].anchors.clone();
+    let between_anchors = anchors.iter().map(|a| a.p.x).fold(f64::MIN, f64::max) - anchors.iter().map(|a| a.p.x).fold(f64::MAX, f64::min);
+    // 2 √(50² cos² 45° + 25² sin² 45°)
+    let across = 2.0 * (2500.0f64 * 0.5 + 625.0 * 0.5).sqrt();
+    assert!(value(&s, id) > between_anchors + 1.0, "{} against the anchors' {between_anchors}", text(&s, id));
+    assert!((value(&s, id) - across).abs() < 0.1, "{} against {across}", text(&s, id));
+}
+
+/// A dimension of a whole path measures the segments the path draws: an anchor that starts no
+/// segment does not widen it. Its line stays clear of the whole path when only parts other than
+/// its measured points move, also when it is aligned or is scaled together with the path, when the
+/// path's direction is reversed or the path is reflected onto itself, and when it becomes aligned.
+/// A reflection that moves the path puts the line on the reflected side.
+#[test]
+fn a_dimension_of_a_whole_path_stays_clear_of_the_path_it_draws() {
+    let mut s = session();
+    let lone = run(&mut s, "path.create", json!({"d":"M100 300 L110 300 M200 400","closed":false}))["id"].as_u64().unwrap();
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(lone)).unwrap().path_data().unwrap().subpaths.len(), 2, "the lone anchor is kept");
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":lone},"orientation":"horizontal"}))["id"].as_u64().unwrap();
+    assert_eq!(text(&s, id), "10.00 pt");
+
+    // A triangle whose top rises while its leftmost and rightmost points stay: the line stays
+    // 30 pt above the top.
+    let tri = run(&mut s, "path.create", json!({"d":"M100 200 L150 120 L200 200 Z","closed":true}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":tri},"orientation":"horizontal","offset":-110}))["id"]
+        .as_u64()
+        .unwrap();
+    assert!((recipe(&s, id).line_ends().0.y - 90.0).abs() < 1e-6);
+    run(&mut s, "select.set", json!({"ids":[tri]}));
+    run(&mut s, "object.scale", json!({"sx":100,"sy":150,"origin":[150,200]}));
+    let line = recipe(&s, id).line_ends().0.y;
+    assert!((line - 50.0).abs() < 1e-6, "line at y = {line}");
+    // The same for an aligned dimension, and for a dimension scaled together with its path.
+    for (x, orientation, with_dimension) in [(300.0, "aligned", false), (500.0, "horizontal", true)] {
+        let d = format!("M{x} 200 L{} 120 L{} 200 Z", x + 50.0, x + 100.0);
+        let tri = run(&mut s, "path.create", json!({"d":d,"closed":true}))["id"].as_u64().unwrap();
+        let source = json!({"kind":"extent","node":tri});
+        let id = run(&mut s, "dimension.create", json!({"source":source,"orientation":orientation,"offset":-110}))["id"].as_u64().unwrap();
+        let ids = if with_dimension { vec![tri, id] } else { vec![tri] };
+        run(&mut s, "select.set", json!({"ids":ids}));
+        run(&mut s, "object.scale", json!({"sx":100,"sy":150,"origin":[x + 50.0, 200]}));
+        let line = recipe(&s, id).line_ends().0.y;
+        assert!((line - 50.0).abs() < 1e-6, "{orientation}: line at y = {line}");
+    }
+    // Reversing the path's direction draws the same outline: the line stays above it.
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":400,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":rect},"orientation":"horizontal","offset":-30}))["id"]
+        .as_u64()
+        .unwrap();
+    run(&mut s, "path.reverse", json!({"ids":[rect]}));
+    let line = recipe(&s, id).line_ends().0.y;
+    assert!((line - 370.0).abs() < 1e-6, "line at y = {line}");
+    // So does a reflection onto itself whose coordinates do not come out exactly, while a
+    // reflection that moves the art puts the line on the reflected side.
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":500.2,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":rect},"orientation":"horizontal","offset":-30}))["id"]
+        .as_u64()
+        .unwrap();
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,530.2]}));
+    let line = recipe(&s, id).line_ends().0.y;
+    assert!((line - 470.2).abs() < 1e-6, "line at y = {line}");
+    let tri = run(&mut s, "path.create", json!({"d":"M100 700 L150 620 L200 700 Z","closed":true}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":tri},"orientation":"horizontal","offset":-110}))["id"]
+        .as_u64()
+        .unwrap();
+    run(&mut s, "select.set", json!({"ids":[tri]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,700]}));
+    let line = recipe(&s, id).line_ends().0.y;
+    assert!((line - 810.0).abs() < 1e-6, "line at y = {line}");
+
+    // Made aligned, the line runs from the leftmost to the rightmost point, with every corner of
+    // the rectangle on one side of it and 40 pt from the nearest, as it was 40 pt above the top.
+    let rect = run(&mut s, "shape.rectangle", json!({"x":300,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":rect},"orientation":"horizontal","offset":-40}))["id"]
+        .as_u64()
+        .unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"aligned"}));
+    let (a, b) = recipe(&s, id).line_ends();
+    let side = |x: f64, y: f64| (b - a).cross(vectorcraft_geom::Point::new(x, y) - a) / (b - a).hypot();
+    let sides = [side(300.0, 100.0), side(400.0, 100.0), side(400.0, 160.0), side(300.0, 160.0)];
+    assert!(sides.iter().all(|v| *v > 1e-6) || sides.iter().all(|v| *v < -1e-6), "{a:?} to {b:?}: {sides:?}");
+    let nearest = sides.iter().map(|v| v.abs()).fold(f64::INFINITY, f64::min);
+    assert!((nearest - 40.0).abs() < 1e-6, "nearest corner {nearest} pt from the line");
+
+    // A line across the path, 30 pt below the top, made vertical: it goes 30 pt past the path's
+    // side rather than onto it.
+    let rect = run(&mut s, "shape.rectangle", json!({"x":600,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":rect},"orientation":"horizontal","offset":30}))["id"]
+        .as_u64()
+        .unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"vertical"}));
+    let line = recipe(&s, id).line_ends().0.x;
+    assert!((line - 570.0).abs() < 1e-6 || (line - 730.0).abs() < 1e-6, "line at x = {line}, path from 600 to 700");
+    // When that would put the line farther from its first point than an offset may be, the
+    // change is refused rather than leaving the line across the path.
+    let far = run(&mut s, "path.create", json!({"d":"M0 0 L950000 -100 L950000 200000 Z","closed":true}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":far},"orientation":"horizontal","offset":100000}))["id"]
+        .as_u64()
+        .unwrap();
+    assert!(s.execute("dimension.update", &json!({"ids":[id],"orientation":"vertical"})).is_err());
+    assert_eq!(recipe(&s, id).orientation, vectorcraft_doc::dimension::Orientation::Horizontal);
+    // An offset given with the orientation places the line instead.
+    run(&mut s, "dimension.update", json!({"ids":[id],"orientation":"vertical","offset":-30}));
+    let line = recipe(&s, id).line_ends().0.x;
+    assert!((line - 950030.0).abs() < 1e-6, "line at x = {line}");
 }
 
 /// The line of a linked horizontal dimension keeps its gap from the outermost point on its side
@@ -1089,6 +1265,48 @@ fn free_points_survive_a_native_file() {
     let d = recipe(&reopened, id);
     let v = vectorcraft_geom::Vec2::new(40.0, -30.0);
     assert!(near(d.a, before.a + v) && near(d.b, before.b + v), "{before:?} → {d:?}");
+}
+
+/// Saved and opened again, a dimension of a whole path still measures the path: turned, the path
+/// is wider than before, and so is the dimension.
+#[test]
+fn a_dimension_of_a_whole_path_survives_a_native_file() {
+    let value = |s: &Session, id: u64| text(s, id).trim_end_matches(" pt").parse::<f64>().unwrap();
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
+    let id = run(&mut s, "dimension.create", json!({"source":{"kind":"extent","node":rect},"orientation":"horizontal","offset":-30}))["id"]
+        .as_u64()
+        .unwrap();
+    let before = recipe(&s, id);
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let mut reopened = Session::new();
+    reopened.add_document(doc, None);
+    assert_eq!(recipe(&reopened, id).source, before.source);
+    run(&mut reopened, "select.set", json!({"ids":[rect]}));
+    run(&mut reopened, "object.rotate", json!({"angle":30}));
+    let wide = 100.0 * 30f64.to_radians().cos() + 60.0 * 30f64.to_radians().sin();
+    assert!((value(&reopened, id) - wide).abs() < 0.01, "{} against {wide}", text(&reopened, id));
+
+    // A file whose dimension names a node that is not there: the next edit unlinks it.
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    fn dangle(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                if m.get("kind") == Some(&json!("extent")) {
+                    m.insert("node".into(), json!(99999));
+                }
+                m.values_mut().for_each(dangle);
+            }
+            Value::Array(a) => a.iter_mut().for_each(dangle),
+            _ => {}
+        }
+    }
+    dangle(&mut v);
+    let mut dangling = Session::new();
+    dangling.add_document(vectorcraft_format::load(&serde_json::to_vec(&v).unwrap()).unwrap(), None);
+    assert!(recipe(&dangling, id).source.is_some());
+    run(&mut dangling, "shape.rectangle", json!({"x":300,"y":300,"width":10,"height":10}));
+    assert!(recipe(&dangling, id).source.is_none(), "no longer linked");
 }
 
 /// A linked dimension opened from a file with options it cannot be drawn with keeps its art, as a

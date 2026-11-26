@@ -79,17 +79,20 @@ fn explicit_dash_folder_does_not_consume_version() {
 }
 
 /// `--control` without a port no longer starts the app without a control server, and the
-/// argument after it isn't reinterpreted (#1373).
+/// argument after it isn't reinterpreted (#1373). The port's wording and range are the framework's
+/// (`control_port`; port 0 picks a free port).
 #[test]
 fn control_without_a_valid_port_fails_before_startup() {
-    let need = "--control needs a port number from 1 to 65535";
-    rejects(&["--control", "--automation-read-root", ".", "--automation-write-root", "."], &format!("{need}, not `--automation-read-root`"));
-    rejects(&["--control"], need);
-    rejects(&["--control", "abc"], &format!("{need}, not `abc`"));
-    rejects(&["--control=0"], &format!("{need}, not `0`"));
-    rejects(&["--control="], &format!("{need}, not ``"));
-    rejects(&["--control", "7979", "--control", "7980"], "--control given twice");
-    rejects_with_env(&[], &[("VECTORCRAFT_CONTROL_PORT", "abc")], "VECTORCRAFT_CONTROL_PORT needs a port number from 1 to 65535, not `abc`");
+    use craft::automation::args::OptionsError;
+    let not_a_port = |value: &str, shown: &str| OptionsError::NotAPort { value: value.into(), shown: shown.into() }.to_string();
+    let flag = "--control <PORT>";
+    rejects(&["--control", "--automation-read-root", ".", "--automation-write-root", "."], &not_a_port("--automation-read-root", flag));
+    rejects(&["--control"], "a value is required for '--control' but none was supplied");
+    rejects(&["--control", "abc"], &not_a_port("abc", flag));
+    rejects(&["--control=65536"], &not_a_port("65536", flag));
+    rejects(&["--control="], &not_a_port("", flag));
+    rejects(&["--control", "7979", "--control", "7980"], "the argument '--control' cannot be used multiple times");
+    rejects_with_env(&[], &[("VECTORCRAFT_CONTROL_PORT", "abc")], &not_a_port("abc", "VECTORCRAFT_CONTROL_PORT"));
 }
 
 #[test]
