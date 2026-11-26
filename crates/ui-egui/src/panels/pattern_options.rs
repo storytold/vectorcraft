@@ -280,4 +280,26 @@ mod tests {
         assert!(named(&panel, "Waves"), "Enter applies the name");
         assert!(!panel.focused("Name"), "Enter ends the editing");
     }
+
+    #[test]
+    fn a_name_draft_does_not_follow_pattern_options_to_the_next_document() {
+        let mut panel = editing_panel();
+        {
+            let mut app = panel.app();
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+            app.run("object.pattern.make", json!({"name": "Dots"})).unwrap();
+        }
+        let source = panel.app().session.active().unwrap().uid;
+        panel.click_role("Name", craft::ui::contract::Role::TEXT_INPUT);
+        panel.type_text("Stripes");
+        assert_eq!(panel.value("Name").as_deref(), Some("Stripes"));
+
+        panel.app().run("window.nextDocument", json!({})).unwrap();
+        panel.frame();
+        assert_ne!(panel.app().session.active().unwrap().uid, source);
+        assert_eq!(panel.value("Name").as_deref(), Some("Dots"));
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(panel.app().session.active().unwrap().doc.pattern("Dots").is_some());
+    }
 }
