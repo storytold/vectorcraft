@@ -263,12 +263,15 @@ fn from_editing_data_alone(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions)
         return None;
     }
     let private = opened.illustrator_data()?;
-    Some(editing_copy_alone(&private, opts))
+    // A placeholder page's fonts aren't the art's.
+    Some(editing_copy_alone(&private, opts, Default::default()))
 }
 
-/// [`from_editing_data_alone`] of `private`, the editor's copy already read.
-fn editing_copy_alone(private: &[u8], opts: &LoadOptions) -> Result<(Document, Vec<String>)> {
-    vectorcraft_eps::ai_alone_with(private, opts.legacy_names)
+/// [`from_editing_data_alone`] of `private`, the editor's copy already read, with `widths`, the
+/// widths the file's PDF part gives the characters of its fonts, which tell installed copies of a
+/// font apart ([`vectorcraft_eps::AiLayers::with_page_widths`]).
+fn editing_copy_alone(private: &[u8], opts: &LoadOptions, widths: vectorcraft_pdf::PageWidths) -> Result<(Document, Vec<String>)> {
+    vectorcraft_eps::ai_alone_with(private, opts.legacy_names, widths)
         .map_err(|why| err(format!("this file was saved without PDF compatibility, and its editing data can't be read ({why})")))
 }
 
@@ -453,6 +456,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 Err(e) => Err(err(e)),
             };
             let mut read = restore_or_import(editing, || {
+                // The widths the PDF part gives the characters of its fonts, which tell installed
+                // copies of a font apart: read once, when the editing copy is.
+                let page_widths = std::cell::OnceCell::new();
+                let widths = || page_widths.get_or_init(|| opened.as_ref().map(vectorcraft_pdf::Opened::page_widths).unwrap_or_default()).clone();
                 // Type all from the text document and nothing that needs the PDF part: the layers
                 // alone, the PDF part not imported. Else what was read of the layers is kept for
                 // reading them with the PDF part.
@@ -460,7 +467,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 if let Some((o, private)) = opened.as_ref().ok().filter(|_| reads_layers_alone(opts)).and_then(|o| Some((o, editing_copy(o, opts)?)))
                 {
                     let pages = o.trim_pages();
-                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names) {
+                    match vectorcraft_eps::ai_layers_alone(&private, &pages.sizes, pages.user_unit, opts.legacy_names, widths()) {
                         Ok((mut doc, warnings)) => {
                             doc.setup.bleed = pages.bleed;
                             editing_data = true;
@@ -482,9 +489,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         // decoded draws nothing either): its notes are at most the page's own.
                         let empty = draws_nothing(&r.document) && r.warnings.iter().all(|w| is_page_note(w));
                         let copy_alone = || match &private {
-                            Some(private) => Some(editing_copy_alone(private, opts)),
+                            Some(private) => Some(editing_copy_alone(private, opts, widths())),
                             None if layers.is_some() => {
-                                opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p, opts))
+                                opened.as_ref().ok().and_then(|o| editing_copy(o, opts)).map(|p| editing_copy_alone(&p, opts, widths()))
                             }
                             None => None,
                         };
@@ -496,7 +503,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         let (doc, warnings, read) = match alone {
                             Some((doc, warnings)) => (doc, warnings, true),
                             None => {
-                                let layers = layers.or_else(|| private.as_deref().map(vectorcraft_eps::AiLayers::decode));
+                                let layers =
+                                    layers.or_else(|| private.as_deref().map(|p| vectorcraft_eps::AiLayers::decode(p).with_page_widths(widths())));
                                 through_editing_data(layers, opts, r.document, r.warnings, r.user_unit)
                             }
                         };

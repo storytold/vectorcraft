@@ -1570,11 +1570,7 @@ impl Families {
     /// The family and style of a font with base (PostScript) name `name`, or of weight `weight`
     /// and slant `italic` when the name has no style; whether the family is available.
     pub fn resolve(&self, name: &str, weight: Option<u32>, italic: bool) -> (String, String, bool) {
-        // A subset's six-letter tag.
-        let name = match name.split_once('+') {
-            Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest,
-            _ => name,
-        };
+        let name = crate::import_scan::without_subset_tag(name);
         // An installed face of that exact PostScript name: its own family and style.
         if let Some((family, style)) = vectorcraft_text::FontDb::global().by_postscript_name(name) {
             return (family, style, true);

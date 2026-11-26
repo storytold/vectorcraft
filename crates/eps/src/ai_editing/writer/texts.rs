@@ -615,7 +615,7 @@ fn font_name(st: &CharStyle) -> FontRecord {
                 .collect();
             let name = face.postscript_name();
             // The reader takes the face of a name alone as `postscript_face` finds it.
-            let by_name = crate::import::postscript_face(&name, None).is_some_and(|f| f.id() == face.id());
+            let by_name = crate::import::postscript_face(&name, None, None).is_some_and(|f| f.id() == face.id());
             let version = if design.is_empty() && by_name { String::new() } else { face.version.clone() };
             FontRecord { name, truetype: face.is_truetype(), design, version }
         }
@@ -662,7 +662,7 @@ fn fixed(v: f32) -> i64 {
 fn font_kept(st: &CharStyle) -> bool {
     let record = font_name(st);
     let version = crate::import::record_version(&record.version);
-    let (family, style, read) = crate::import::document_font(&record.name, version);
+    let (family, style, read) = crate::import::document_font(&record.name, version, None);
     let db = vectorcraft_text::FontDb::global();
     let face = |family: &str, style: &str, version: Option<&str>| db.face_version(family, style, version).map(|f| f.id());
     family == st.font_family

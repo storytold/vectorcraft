@@ -1431,6 +1431,7 @@ impl<'a> Reader<'a> {
             },
             styles_read,
             text_patterns,
+            page_widths: Default::default(),
             canvas_scale: self.canvas_scale,
             symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,

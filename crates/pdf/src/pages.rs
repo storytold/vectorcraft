@@ -288,6 +288,13 @@ impl Opened {
         crate::file_info::file_info_in(&self.pdf)
     }
 
+    /// The widths the pages give the characters of the fonts they set type in, from the fonts'
+    /// dictionaries ([`crate::PageWidths`]), without importing any page's art.
+    pub fn page_widths(&self) -> crate::PageWidths {
+        let pages = self.pdf.pages();
+        crate::page_widths::page_widths(pages.iter().map(|p| p.resources()))
+    }
+
     /// How many pages the PDF has, as [`info`] lists them.
     pub fn page_count(&self) -> usize {
         self.pdf.pages().len()

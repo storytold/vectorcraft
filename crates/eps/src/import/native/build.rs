@@ -178,17 +178,25 @@ impl ReadText {
         self.frames.get_or_insert_with(|| ai::text_frames(data))
     }
 
-    /// The text document of `data` ([`Texts::read`]), if it has one that can be read.
-    fn texts(&mut self, data: &[u8]) -> Option<&Texts> {
+    /// The text document of `data` ([`Texts::read`]), if it has one that can be read, with the widths
+    /// `page_widths` the file's page gives its fonts ([`Texts::with_page_widths`]). They are given
+    /// when it is first read, before any of its fonts is found: each is found once, with the widths
+    /// it has then. Every check and build of one open passes the same widths.
+    fn texts(&mut self, data: &[u8], page_widths: &vectorcraft_pdf::PageWidths) -> Option<&Texts> {
         self.forget_in_tests();
-        self.texts.get_or_insert_with(|| Texts::read(data)).as_ref()
+        self.texts.get_or_insert_with(|| Texts::read(data).map(|t| t.with_page_widths(page_widths))).as_ref()
     }
 
     /// [`Self::texts`] with its characters painted by `patterns` ([`Texts::with_patterns`]).
-    fn texts_with(&mut self, data: &[u8], patterns: std::collections::HashMap<String, vectorcraft_color::Paint>) -> Option<&Texts> {
+    fn texts_with(
+        &mut self,
+        data: &[u8],
+        patterns: std::collections::HashMap<String, vectorcraft_color::Paint>,
+        page_widths: &vectorcraft_pdf::PageWidths,
+    ) -> Option<&Texts> {
         self.forget_in_tests();
-        let texts = self.texts.take().unwrap_or_else(|| Texts::read(data)).map(|t| t.with_patterns(patterns));
-        self.texts.insert(texts).as_ref()
+        let read = self.texts.take().unwrap_or_else(|| Texts::read(data).map(|t| t.with_page_widths(page_widths)));
+        self.texts.insert(read.map(|t| t.with_patterns(patterns))).as_ref()
     }
 }
 
@@ -217,7 +225,7 @@ fn type_all_made(structure: &Structure, data: &[u8], text: &mut ReadText) -> boo
     for info in &mut infos {
         info.art_path = info.story.and_then(|s| frames.get(&(s, info.frame))).map(|p| PathData::from_bezpath(&(structure.to_doc * p.clone())));
     }
-    let Some(texts) = text.texts(data) else { return false };
+    let Some(texts) = text.texts(data, &structure.page_widths) else { return false };
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
         .iter()
@@ -337,6 +345,7 @@ pub(super) fn build_weighing(
         envelopes_drawn,
         styles_read,
         text_patterns,
+        page_widths,
         canvas_scale,
         symbols_own_size,
         xml_ids,
@@ -497,7 +506,7 @@ pub(super) fn build_weighing(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = text.texts_with(data, text_patterns);
+    let texts = text.texts_with(data, text_patterns, &page_widths);
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos

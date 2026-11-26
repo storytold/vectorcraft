@@ -6,7 +6,8 @@
 //! of every kind with random contents) opened, placed or pasted, nor PICT pictures (damaged files,
 //! opcodes with random contents) opened or placed, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
-//! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
+//! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor the widths a
+//! `.ai`'s PDF part gives its fonts' characters (hostile font dictionaries), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
 //! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
 //! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
@@ -1070,6 +1071,58 @@ proptest! {
         }
         b.truncate(cut.min(b.len()).max(9));
         survive("mutated pdf", || vectorcraft_pdf::import(&b).ok())?;
+    }
+}
+
+/// A font dictionary whose widths are hostile, for [`vectorcraft_pdf::Opened::page_widths`]: any
+/// subtype, encoding and first code, widths that are huge, negative or not numbers, a composite
+/// font's `W` of any shape, and the `ToUnicode` map of object 5.
+fn arb_width_font() -> impl Strategy<Value = String> {
+    (
+        prop::sample::select(vec!["/TrueType", "/Type1", "/Type0", "/Type3", "/MMType1", "7"]),
+        prop::sample::select(vec!["/WinAnsiEncoding", "/Identity-H", "/Identity-V", "/MacRomanEncoding", "<< /Differences [65 /A] >>", "null"]),
+        prop::sample::select(vec!["0", "65", "-5", "255", "256", "4294967295", "1e30", "/X"]),
+        prop::collection::vec(prop::sample::select(vec!["500", "0", "-1", "1e40", "NaN", "null", "[1 2]", "/W"]), 0..12),
+        prop::collection::vec(prop::sample::select(vec!["1", "[500 600]", "65", "4294967295", "300", "-1", "[]", "1e9", "0 65535 7"]), 0..10),
+        prop::sample::select(vec!["/ABCDEF+Fuzz", "/Fuzz", "/ABCDEF+", "/+", "()", "/Fuzz-Identity-H"]),
+        any::<bool>(),
+    )
+        .prop_map(|(subtype, encoding, first, widths, w, name, mapped)| {
+            let map = if mapped { "/ToUnicode 5 0 R" } else { "" };
+            format!(
+                "<< /Type /Font /Subtype {subtype} /BaseFont {name} /Encoding {encoding} /FirstChar {first} /Widths [{}] {map} \
+                 /DescendantFonts [<< /Subtype /CIDFontType2 /BaseFont {name} /W [{}] >>] >>",
+                widths.join(" "),
+                w.join(" ")
+            )
+        })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// The widths a page's fonts give their characters (read for a `.ai`'s text document) are read
+    /// without a panic from hostile font dictionaries, `ToUnicode` maps of any text, and forms that
+    /// draw themselves.
+    #[test]
+    fn pdf_font_widths_never_panic(
+        fonts in prop::collection::vec(arb_width_font(), 1..4),
+        cmap in prop::collection::vec(prop::sample::select(vec![
+            "begincmap", "1 begincodespacerange", "<0000> <FFFF>", "<00> <FF>", "endcodespacerange", "2 beginbfchar", "<0001> <0041>",
+            "<0002> <D800>", "<41> <FFFD>", "1 beginbfrange", "<0000> <FFFF> <0000>", "<FFFF> <0000> <0041>", "<0001> <0003> [<0041> <0042>]",
+            "endbfrange", "endbfchar", "endcmap", "/Identity-H usecmap", "99999999999 beginbfchar",
+        ]), 0..12),
+    ) {
+        let list: Vec<String> = fonts.iter().enumerate().map(|(i, f)| format!("/F{i} {f}")).collect();
+        let map = cmap.join("\n");
+        let form = format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Resources << /Font << /F0 {} >> /XObject << /X0 6 0 R >> >> /Length 0 >>\nstream\n\nendstream",
+            fonts[0]
+        );
+        let more = [format!("<< /Length {} >>\nstream\n{map}\nendstream", map.len() + 1).into_bytes(), form.into_bytes()];
+        let pdf = handmade_pdf_with("", &format!("<< /Font << {} >> /XObject << /X0 6 0 R >> >>", list.join(" ")), "[0 0 100 100]", &more);
+        let read = catch_quiet(|| vectorcraft_pdf::open_pdf(&pdf, None).ok().map(|o| o.page_widths()));
+        prop_assert!(read.is_ok(), "{fonts:?} {cmap:?}: {read:?}");
     }
 }
 

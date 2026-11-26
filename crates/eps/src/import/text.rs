@@ -44,7 +44,7 @@ fn style_word(w: &str) -> String {
 
 /// A font's PostScript name without a subset prefix (`ABCDEF+`) or the `*1` of a re-encoded copy
 /// (`ABCDEF+RollerBabyBV*1` is `RollerBabyBV`).
-fn bare_name(name: &str) -> &str {
+pub(super) fn bare_name(name: &str) -> &str {
     let name = match name.split_once('+') {
         Some((prefix, rest)) if prefix.len() == 6 && prefix.bytes().all(|b| b.is_ascii_uppercase()) => rest,
         _ => name,
@@ -56,14 +56,15 @@ fn bare_name(name: &str) -> &str {
 }
 
 /// The font of type that a text document's font record names: by `name`, its PostScript name, and
-/// `version`, the version string (name ID 5) the record keeps, if any. An installed face of that
-/// name gives its font ([`named_font`]). Without one, `name` is split ([`family_style`]) and the
-/// family spelled as an available family is ([`FontDb::find_family`]: `MicrosoftYaHei` is
+/// `version`, the version string (name ID 5) the record keeps, if any; `widths`, the widths the
+/// file's page gives the font's characters, if it has them ([`postscript_face`]). An installed face
+/// of that name gives its font ([`named_font`]). Without one, `name` is split ([`family_style`])
+/// and the family spelled as an available family is ([`FontDb::find_family`]: `MicrosoftYaHei` is
 /// Microsoft YaHei). → (family, style, version).
 ///
 /// [`FontDb::find_family`]: vectorcraft_text::FontDb::find_family
-pub(crate) fn document_font(name: &str, version: Option<&str>) -> (String, String, Option<String>) {
-    named_font(name, version).unwrap_or_else(|| {
+pub(crate) fn document_font(name: &str, version: Option<&str>, widths: Option<&vectorcraft_pdf::FontWidths>) -> (String, String, Option<String>) {
+    named_font(name, version, widths).unwrap_or_else(|| {
         let (family, style) = family_style(name);
         let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
         (family, style, None)
@@ -71,37 +72,69 @@ pub(crate) fn document_font(name: &str, version: Option<&str>) -> (String, Strin
 }
 
 /// The font of type set in the installed face of PostScript name `name` (a subset prefix and a
-/// re-encoded copy's `*1` aside) in `version` ([`postscript_face`]): that face's own family and
-/// style, and its version when the family and style alone resolve to another installed copy of
-/// the font. A library can keep two copies under one family and style that differ in their
-/// PostScript names or their versions, and draw the same text at different widths. → (family,
-/// style, version); `None` when no installed face has the name.
-pub(crate) fn named_font(name: &str, version: Option<&str>) -> Option<(String, String, Option<String>)> {
-    let face = postscript_face(bare_name(name), version)?;
+/// re-encoded copy's `*1` aside) in `version`, or that sets the characters at `widths`
+/// ([`postscript_face`]): that face's own family and style, and its version when the family and
+/// style alone resolve to another installed copy of the font. A library can keep two copies under
+/// one family and style that differ in their PostScript names or their versions, and draw the same
+/// text at different widths. → (family, style, version); `None` when no installed face has the name.
+pub(crate) fn named_font(
+    name: &str,
+    version: Option<&str>,
+    widths: Option<&vectorcraft_pdf::FontWidths>,
+) -> Option<(String, String, Option<String>)> {
+    let face = postscript_face(bare_name(name), version, widths)?;
     // As the PDF import names a version: only one that the family and style don't resolve to.
     let default = vectorcraft_text::FontDb::global().face(&face.family, &face.style);
     let version = default.filter(|d| d.version != face.version).map(|_| face.version.clone());
     Some((face.family.clone(), face.style.clone(), version))
 }
 
+/// How far an installed face's advance may be from the width a page gives a character, in
+/// thousandths of an em, for the face to set it at that width: files write widths rounded.
+const PAGE_WIDTH_SLACK: f64 = 1.0;
+
+/// The most characters of a page's font [`sets_page_widths`] compares.
+const MAX_WIDTHS_COMPARED: usize = 512;
+
+/// Does installed `face` set the characters of `widths` (a page's, [`vectorcraft_pdf::FontWidths`])
+/// at their widths, each within [`PAGE_WIDTH_SLACK`]? The first [`MAX_WIDTHS_COMPARED`] characters
+/// in code-point order are compared; a character the face has no glyph for isn't set at its width.
+fn sets_page_widths(face: &vectorcraft_text::FontFace, widths: &vectorcraft_pdf::FontWidths) -> bool {
+    let k = 1000.0 / face.units_per_em();
+    widths.iter().take(MAX_WIDTHS_COMPARED).all(|(c, w)| {
+        let gid = face.glyph_for(*c);
+        gid != 0 && (face.advance(gid) * k - f64::from(*w)).abs() <= PAGE_WIDTH_SLACK
+    })
+}
+
 /// The installed face of PostScript name `name` (without a subset prefix), among the installed
 /// faces that answer to it ([`FontDb::postscript_faces`]): those of exactly that name when there
 /// are any (PostScript names are case-sensitive, so `SampleSans` isn't the face named
 /// `SAMPLESANS`, and `SampleSerif-Bold` isn't `SampleSerifBold`), and of those the one in
-/// `version` when it is installed, else the first. `None` when no installed face has the name.
+/// `version` when it is installed. Without a version, copies whose names, family and style are all
+/// one can still set the type at other widths: of those, the first that sets the characters of
+/// `widths` (the file's page's, when it has them) at their widths ([`sets_page_widths`], which
+/// compares the first 512 characters). Else the first. `None` when no installed face has the name.
 ///
 /// [`FontDb::postscript_faces`]: vectorcraft_text::FontDb::postscript_faces
-pub(crate) fn postscript_face(name: &str, version: Option<&str>) -> Option<Arc<vectorcraft_text::FontFace>> {
+pub(crate) fn postscript_face(
+    name: &str,
+    version: Option<&str>,
+    widths: Option<&vectorcraft_pdf::FontWidths>,
+) -> Option<Arc<vectorcraft_text::FontFace>> {
     let db = vectorcraft_text::FontDb::global();
     let found = db.find_postscript(name)?;
-    if found.postscript_name() == name && version.is_none_or(|v| v == found.version) {
+    let widths = widths.filter(|_| version.is_none());
+    let on_page = |f: &vectorcraft_text::FontFace| widths.is_none_or(|w| sets_page_widths(f, w));
+    if found.postscript_name() == name && version.is_none_or(|v| v == found.version) && on_page(&found) {
         return Some(found);
     }
     let faces = db.postscript_faces(name);
     let named: Vec<_> = faces.iter().filter(|f| f.postscript_name() == name).cloned().collect();
     let pool = if named.is_empty() { faces } else { named };
     let in_version = version.and_then(|v| pool.iter().find(|f| f.version == v).cloned());
-    Some(in_version.or_else(|| pool.into_iter().next()).unwrap_or(found))
+    let by_widths = || pool.iter().find(|f| on_page(f)).cloned();
+    Some(in_version.or_else(by_widths).or_else(|| pool.into_iter().next()).unwrap_or(found))
 }
 
 /// A font's family and style from its PostScript name, without a subset prefix (`ABCDEF+`) or the
@@ -620,7 +653,7 @@ impl Interp<'_> {
         }
         // The installed face of that PostScript name, as type from a text document takes it; else
         // the available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
-        let (font_family, font_style, font_version) = document_font(&name, None);
+        let (font_family, font_style, font_version) = document_font(&name, None, None);
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
         let style = CharStyle { font_family, font_style, font_version, size, fill, stroke: Paint::None, ..CharStyle::default() };
         let mut t = TextObject::point(Point::ZERO, text, style);

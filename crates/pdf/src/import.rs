@@ -38,6 +38,7 @@ mod entry;
 mod reshaped;
 mod state;
 
+pub(crate) use cid::replacement;
 #[cfg(test)]
 pub(crate) use cid::{CidText, font_chars, identify_glyph, unify_radical};
 #[cfg(any(test, feature = "read-count"))]

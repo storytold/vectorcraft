@@ -62,6 +62,7 @@ mod lab_spot;
 mod linearize;
 mod marks;
 mod output;
+mod page_widths;
 mod pages;
 mod patch;
 mod pdfx;
@@ -84,6 +85,7 @@ pub use import::{
 };
 pub use marks::{leaves_out_bleed, page_bleed, printer_marks};
 pub use output::ActiveProfiles;
+pub use page_widths::{FontWidths, PageWidths};
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
 pub use pages::{

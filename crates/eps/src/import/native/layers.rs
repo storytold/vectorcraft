@@ -149,7 +149,7 @@ pub fn layered_ai_from(
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
     };
-    let AiLayers { data, structure, alone, mut text } = layers;
+    let AiLayers { data, structure, alone, mut text, page_widths } = layers;
     let data = match data {
         Ok(data) => data,
         Err(why) => return (visible, unread(warnings, &why), false),
@@ -189,10 +189,17 @@ pub fn layered_ai_from(
         add_notes(&mut all, read.notes());
         (visible, all, false)
     };
+    // The layers read, with the widths the PDF part gives the characters of its fonts.
+    let read = || {
+        ai::read_over_page(&data, false, names).map(|mut structure| {
+            structure.page_widths = page_widths.clone();
+            structure
+        })
+    };
     // The envelopes of type the page doesn't hold against layers that don't draw as it, and how many
     // envelopes of type the layers had.
     let (mut free, mut count) = (None, 0);
-    let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
+    let built = structure.unwrap_or_else(|| read().map(Box::new)).and_then(|structure| {
         count = structure.warped_type.envelope_count();
         build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free, &mut text)
     });
@@ -205,7 +212,7 @@ pub fn layered_ai_from(
     let live = free.is_none() && matches!(&built, Ok((done, _)) if holds_type_envelope(&done.layers));
     if !live
         && let Some((mut done, notes)) = alone.and_then(|(pages, unit)| {
-            let mut structure = ai::read_over_page(&data, false, names).ok()?;
+            let mut structure = read().ok()?;
             // With none free, nothing needs settling again: every envelope keeps its drawn art.
             if let Some(free) = free.as_deref().filter(|free| !free.is_empty()) {
                 structure.warped_type.open_alone(free, count);
@@ -244,32 +251,41 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
 /// reading it, when the file's text document makes all of its type and nothing in its layers needs
 /// the PDF part (see `build_without_page`). Nothing is compared with the PDF part. Else, as the
 /// error, what was decoded and read of the editing copy, for [`layered_ai_from`] once the PDF part
-/// is imported. `names`: the encoding of names that aren't UTF-8.
-pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), AiLayers> {
+/// is imported. `names`: the encoding of names that aren't UTF-8. `page_widths`: the widths the
+/// PDF part gives the characters of its fonts, which tell installed copies of a font apart
+/// ([`AiLayers::with_page_widths`]).
+pub fn ai_layers_alone(
+    private: &[u8],
+    pages: &[(f64, f64)],
+    unit: f64,
+    names: ai::NameEncoding,
+    page_widths: vectorcraft_pdf::PageWidths,
+) -> Result<(Document, Vec<String>), AiLayers> {
     let data = match ai::decode_private(private) {
         Ok(data) => data,
-        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None, text: Box::default() }),
+        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None, text: Box::default(), page_widths }),
     };
     if !has_layers(&data) {
-        return Err(AiLayers { data: Ok(data), structure: None, alone: None, text: Box::default() });
+        return Err(AiLayers { data: Ok(data), structure: None, alone: None, text: Box::default(), page_widths });
     }
     // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
-    let structure = match ai::read_over_page(&data, false, names) {
+    let mut structure = match ai::read_over_page(&data, false, names) {
         Ok(structure) => structure,
-        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None, text: Box::default() }),
+        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None, text: Box::default(), page_widths }),
     };
+    structure.page_widths = page_widths.clone();
     let mut text = Box::<ReadText>::default();
     // An envelope of type opens live only where the layers with it draw as the page, as the other
     // live envelopes do: the PDF part is imported to compare them with. Should none open live, the
     // layers open alone as they would have, the envelopes keeping their drawn art ([`layered_ai_from`]).
     if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit, &mut text).is_some() {
         let alone = Some((pages.to_vec(), unit));
-        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone, text });
+        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone, text, page_widths });
     }
     match build_without_page(structure, &data, pages, unit, &mut text) {
         Ok(Ok((doc, notes))) => Ok((doc, notes)),
-        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None, text }),
-        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None, text }),
+        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None, text, page_widths }),
+        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None, text, page_widths }),
     }
 }
 
@@ -286,12 +302,27 @@ pub struct AiLayers {
     alone: Option<(Vec<(f64, f64)>, f64)>,
     /// The text objects' frames and the text document of the editing copy, as far as they were read.
     text: Box<ReadText>,
+    /// The widths the PDF part gives the characters of its fonts ([`Self::with_page_widths`]).
+    page_widths: vectorcraft_pdf::PageWidths,
 }
 
 impl AiLayers {
     /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
     pub fn decode(private: &[u8]) -> Self {
-        Self { data: ai::decode_private(private), structure: None, alone: None, text: Box::default() }
+        Self { data: ai::decode_private(private), structure: None, alone: None, text: Box::default(), page_widths: Default::default() }
+    }
+
+    /// The editing copy with `page_widths`, the widths the file's PDF part gives the characters of
+    /// its fonts ([`vectorcraft_pdf::Opened::page_widths`]): type whose font record keeps no
+    /// version is set in the installed copy of its font that sets them at those widths, where
+    /// several copies answer to its name. The layers read before take them too, and a text document
+    /// read before is read again with them, since its fonts are found once, with the widths they had
+    /// then.
+    pub fn with_page_widths(mut self, page_widths: vectorcraft_pdf::PageWidths) -> Self {
+        if let Some(Ok(structure)) = &mut self.structure {
+            structure.page_widths = page_widths.clone();
+        }
+        Self { page_widths, text: Box::default(), ..self }
     }
 }
 
@@ -581,13 +612,17 @@ fn place_art(layer: &mut Node, pages: &[Rect], moves: &[Vec2]) {
 /// Editing data written on a large canvas comes in at its declared scale: no page holds the size.
 /// Names that aren't UTF-8 are read as Windows-1252 ([`ai_alone_with`]).
 pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
-    ai_alone_with(private, ai::NameEncoding::default())
+    ai_alone_with(private, ai::NameEncoding::default(), Default::default())
 }
 
-/// [`ai_alone`], with the names that aren't UTF-8 read in `names`.
-pub fn ai_alone_with(private: &[u8], names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+/// [`ai_alone`], with the names that aren't UTF-8 read in `names`, and `page_widths`, the widths the
+/// file's PDF part gives the characters of its fonts when it has one that holds the art
+/// ([`AiLayers::with_page_widths`]).
+pub fn ai_alone_with(private: &[u8], names: ai::NameEncoding, page_widths: vectorcraft_pdf::PageWidths) -> Result<(Document, Vec<String>), String> {
     let data = ai::decode_private(private)?;
-    build_from(ai::read_in(&data, true, names)?, &data, None, Page::Artboard, false, false, 1.0)
+    let mut structure = ai::read_in(&data, true, names)?;
+    structure.page_widths = page_widths;
+    build_from(structure, &data, None, Page::Artboard, false, false, 1.0)
 }
 
 /// [`ai_alone`] for a `.ai` whose PDF part can't be read, its first page `page` (width and height)

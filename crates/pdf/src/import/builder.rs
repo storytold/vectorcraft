@@ -1184,11 +1184,7 @@ impl<'p> Builder<'p> {
         let data = o.font_data();
         let name = self.fonts.get(&key).map(|f| f.name.clone()).or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
         let (weight, italic) = data.as_ref().map_or((None, false), |d| (d.weight, d.is_italic));
-        // A subset's six-letter tag.
-        let ps = name.as_deref().map(|n| match n.split_once('+') {
-            Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest.to_string(),
-            _ => n.to_string(),
-        });
+        let ps = name.as_deref().map(|n| crate::import_scan::without_subset_tag(n).to_string());
         let installed = ps.as_deref().and_then(|ps| vectorcraft_text::FontDb::global().find_postscript(ps));
         let n = match (installed, name) {
             (Some(face), _) => FontInfo { family: face.family.clone(), style: face.style.clone(), face: Some(face) },
