@@ -327,7 +327,7 @@ impl VectorcraftApp {
 
     /// Preferences › User Interface › UI Scaling, as the interface applies it.
     pub(crate) fn ui_scaling(&self) -> f32 {
-        self.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32
+        super::applied_ui_scaling(self.session.prefs.ui_scaling)
     }
 
     /// Ask the active view's canvas to run `request` in its next pass; `bounds` are the layers' bounds

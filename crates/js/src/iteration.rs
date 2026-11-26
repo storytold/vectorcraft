@@ -162,7 +162,7 @@ impl Interp {
 
     /// IteratorClose (section 7.4.6) with a normal completion: calls the iterator's `return`
     /// method, unless it is done, and checks that it gives an object.
-    fn iter_close(&mut self, rec: ObjId) -> JsResult<()> {
+    pub(crate) fn iter_close(&mut self, rec: ObjId) -> JsResult<()> {
         let r = self.record(rec)?;
         if r.done {
             return Ok(());
