@@ -1036,6 +1036,55 @@ fn isolation_leaves_a_translucent_normal_row_as_it_draws() {
     }
 }
 
+/// Two squares over locked orange, each with a 50 % white top fill over a blue Multiply fill, one
+/// isolating its blending: the blue multiplies with the orange in one and draws over nothing in the
+/// other, so the white draws over different rows and there is no one answer. A given background
+/// stands for the rows below and answers.
+#[test]
+fn a_translucent_row_over_a_blending_row_in_objects_of_different_isolation_has_no_one_answer() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 180, "height": 180})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff8000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let square = |s: &mut Session, x: i32, isolate: bool| {
+        let n = id(s.execute("shape.rectangle", &json!({"x": x, "y": 50, "width": 50, "height": 100})).unwrap());
+        s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("appearance.addFill", &json!({})).unwrap();
+        let st = s.active().unwrap();
+        let items = &st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items;
+        let top = items.iter().rposition(|i| i.is_fill()).unwrap();
+        let lower = items.iter().position(|i| i.is_fill()).unwrap();
+        s.execute("appearance.setItem", &json!({"index": top, "color": "#ffffff", "opacity": 50})).unwrap();
+        s.execute("appearance.setItem", &json!({"index": lower, "blend": "multiply"})).unwrap();
+        s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+        if isolate {
+            s.execute("transparency.set", &json!({"item": null, "isolate": true})).unwrap();
+        }
+        n
+    };
+    let a = square(&mut s, 30, false);
+    let b = square(&mut s, 120, true);
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let ra = ratio(&s.execute("color.contrast", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    let rb = ratio(&s.execute("color.contrast", &json!({})).unwrap());
+    assert!((ra - rb).abs() > 0.1, "the white draws over different rows: {ra} {rb}");
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("the selected objects' colors differ"), "{e}");
+    s.execute("color.contrast", &json!({"against": "#000000"})).unwrap();
+    // A blending row at no opacity does not show, so the isolation no longer changes the answer.
+    for n in [a, b] {
+        let st = s.active().unwrap();
+        let lower = st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items.iter().position(|i| i.is_fill()).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [n], "index": lower, "opacity": 0})).unwrap();
+    }
+    s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+}
+
 /// A Difference square centered on the edge between locked black and white art: the art behind it
 /// is not one color where it is read, so no one color stands for it; a given background answers,
 /// and over one color the background is read as before.

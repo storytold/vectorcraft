@@ -1236,7 +1236,8 @@ is drawn); a picked object of a dynamic symbol instance hides only itself, and t
 These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
 selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
 `"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending, or
-with a translucent or blending row over different shown rows below it), where hidden objects do not count, and the
+with a translucent or blending row over different shown rows below it, or over a shown row that blends in objects
+that differ in isolating their blending), where hidden objects do not count, and the
 error names `opacity` when giving it settles the difference; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
 proxy's object drawn through an opacity mask that is not disabled, its own or that of a group, layer or instance
 around it, since the mask sets how much of the color shows at each point; and with `"below"`, a color drawn with a

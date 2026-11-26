@@ -1418,7 +1418,8 @@ fn composite(mode: BlendMode, x: ([f32; 3], f32), opacity: f32, backdrop: ([f32;
 /// levels that change what they draw must be the same objects too, since the art below each one is
 /// read with that object hidden, and the object's opacity must be the same apart from its row's,
 /// since the row draws over the object's rows below it and the object over the art behind it, and a
-/// row that blends or is translucent must lie over the same shown rows.
+/// row that blends or is translucent must lie over the same shown rows, and over a lower row that
+/// blends, with the same isolation.
 fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let counts = |l: &&Level| l.blend != BlendMode::Normal || l.isolate || (!given_opacity && l.opacity < 1.0);
     let level = |x: &Level, y: &Level| {
@@ -1434,10 +1435,26 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let total = |d: &Drawn| d.opacity * d.row.map_or(1.0, |r| r.1);
     // A row that blends or lets art through draws over the rows below it, read at one point.
     let over_rows = |d: &Drawn| d.row.is_some_and(|(m, o)| m != BlendMode::Normal || o < 1.0);
+    // A lower row that blends reads the art behind the object unless the object isolates its
+    // blending, so a row drawn over it reads a backdrop that depends on the isolation. A blending
+    // row at no opacity does not show, nor does a fill row without effects under an opaque solid
+    // Normal fill row without effects, which covers the same shape (a stroke reaches outside it).
+    let plain_fill = |i: &vectorcraft_doc::AppearanceItem| i.is_fill() && i.effects().is_empty();
+    let covers = |i: &vectorcraft_doc::AppearanceItem| {
+        plain_fill(i) && i.blend() == BlendMode::Normal && i.opacity() >= 1.0 && matches!(i.paint(), Paint::Solid { .. })
+    };
+    let over_blended = |d: &Drawn| {
+        over_rows(d)
+            && d.lower
+                .iter()
+                .enumerate()
+                .any(|(k, i)| i.blend() != BlendMode::Normal && i.opacity() > 0.0 && !(plain_fill(i) && d.lower[k + 1..].iter().any(covers)))
+    };
     row(a) == row(b)
         && (given_opacity || !below || !(over_rows(a) || over_rows(b)) || a.lower == b.lower)
         && a.blend == b.blend
         && (row(a).is_none() || a.isolate == b.isolate)
+        && (given_opacity || !below || !(over_blended(a) || over_blended(b)) || a.isolate == b.isolate)
         && (given_opacity || (total(a) - total(b)).abs() < 1e-6)
         && (given_opacity || (row(a).is_none() && !below) || (a.opacity - b.opacity).abs() < 1e-6)
         && la.len() == lb.len()
