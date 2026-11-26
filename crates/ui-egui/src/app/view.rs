@@ -423,7 +423,12 @@ impl VectorcraftApp {
         if self.canvas.host_caps_lock == Some(on) {
             return;
         }
+        let first_reading = self.canvas.host_caps_lock.is_none();
         self.canvas.host_caps_lock = Some(on);
+        // A `view.capsLock` call that ran before the first reading stays in place; that reading is only the baseline.
+        if first_reading && self.session.caps_lock {
+            return;
+        }
         if self.session.caps_lock != on
             && let Err(err) = self.run("view.capsLock", serde_json::json!({ "on": on }))
         {

@@ -136,3 +136,19 @@ fn the_caps_lock_command_gives_the_brushes_the_crosshair() {
     assert!(shows_tip(&mut app));
     assert_ne!(craft::ui::runtime::cursor::current(&ctx), crosshair);
 }
+
+/// A `view.capsLock` call that runs before the first canvas pass stays in place when the host's Caps Lock is off.
+#[test]
+fn the_caps_lock_command_before_the_first_frame_stays_in_place() {
+    use craft::ui::runtime::windows::WindowHost;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", serde_json::json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("blobBrush");
+    app.run("view.capsLock", serde_json::json!({"on": true})).unwrap();
+    let ctx = crate::testing::ui_context();
+    WindowHost::of(&ctx).set_caps_lock(Some(false));
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.session.caps_lock, "the first host reading is only the baseline");
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.session.caps_lock);
+}
