@@ -10,6 +10,7 @@
 //! effect's defaults for the rest.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
@@ -48,6 +49,8 @@ pub(crate) struct EffectDialogs {
 pub(crate) struct Open {
     /// The dialog's id; while [`asking`](Open::asking), the question's.
     pub id: DialogId,
+    /// Identity of this opening, since effect dialogs reuse the same dialog ID.
+    opening: Arc<()>,
     /// The item the effect goes to, resolved.
     target: Value,
     /// The parameters that find the applied effect (`item`, `aligned`).
@@ -69,6 +72,26 @@ pub(crate) struct Open {
     asking: bool,
 }
 
+/// Match an automation request's blend-mode spelling to the mode shown in the targeted effect dialog.
+pub(crate) fn normalize_set_mode(app: &VectorcraftApp, id: DialogId, params: &mut Value) {
+    let Some(open) = app.effect_dialogs.effect.as_ref() else { return };
+    if id != open.id || open.asking || !vectorcraft_effects::takes_blend_mode(&open.cx.id, "mode") {
+        return;
+    }
+    let normalize = |field: &mut Value| {
+        if field["field"] == "mode"
+            && let Some(mode) = field["value"].as_str().and_then(vectorcraft_effects::parse_blend_mode)
+        {
+            field["value"] = json!(vectorcraft_effects::blend_mode_id(mode));
+        }
+    };
+    if let Some(fields) = params.get_mut("fields").and_then(Value::as_array_mut) {
+        fields.iter_mut().for_each(normalize);
+    } else {
+        normalize(params);
+    }
+}
+
 /// `effect.dialog {effect, index?, item?}`: edit applied effect `index` of `item` (null: the
 /// object's effects; omitted: the active item's, else the object's) prefilled with its values,
 /// or add `effect`, first asking when that list already has it.
@@ -87,6 +110,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let target = edit_target.get("item").cloned().unwrap_or(target);
     let mut open = Open {
         id: DialogId::NULL,
+        opening: Arc::new(()),
         target: target.clone(),
         edit_target,
         index: None,
@@ -124,6 +148,7 @@ pub(crate) fn open_last(app: &mut VectorcraftApp, effect: &str, params: Value) -
     vectorcraft_effects::effect_info(effect).ok_or_else(|| format!("unknown effect `{effect}`"))?;
     let open = Open {
         id: DialogId::NULL,
+        opening: Arc::new(()),
         target: Value::Null,
         edit_target: json!({}),
         index: None,
@@ -445,7 +470,18 @@ fn drive(app: &mut VectorcraftApp, mut open: Open) {
     let _ = open.preview.run(app, previewing, &english, cmd, &params);
     if let Some(request) = path {
         let (id, key) = (open.id, request.key);
-        pick_texture(app, Owner::Document, move |app, path, fields| {
+        let opening = Arc::clone(&open.opening);
+        let is_current = move |app: &VectorcraftApp| {
+            app.effect_dialogs.effect.as_ref().is_some_and(|current| current.id == id && Arc::ptr_eq(&opening, &current.opening))
+        };
+        let same_opening = is_current.clone();
+        let is_live = move |app: &VectorcraftApp| {
+            same_opening(app) && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get_by_id::<HostedParamDialog>(id).is_some()))
+        };
+        pick_texture_while(app, Owner::Document, is_live, move |app, path, fields| {
+            if !is_current(app) {
+                return;
+            }
             let Some(dialogs) = app.dialogs() else { return };
             dialogs.with(|h| {
                 if let Some(d) = h.get_mut_by_id::<HostedParamDialog>(id) {
@@ -467,10 +503,19 @@ pub(super) fn pick_texture(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, PathBuf, [(&'static str, FieldValue); 2]) + 'static,
 ) {
+    pick_texture_while(app, owner, |_| true, then);
+}
+
+fn pick_texture_while(
+    app: &mut VectorcraftApp,
+    owner: Owner,
+    current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, PathBuf, [(&'static str, FieldValue); 2]) + 'static,
+) {
     use vectorcraft_engine::cmd::fileio;
     let rasters = fileio::FORMATS.iter().filter(|f| f.read && f.raster);
     let request = rasters.fold(PickRequest::open("texture"), |r, f| r.filter(f.label, fileio::read_extensions(f)));
-    file_asks::ask(app, request, owner, move |app: &mut VectorcraftApp, picked: Picked| {
+    file_asks::ask_while(app, request, owner, current, move |app: &mut VectorcraftApp, picked: Picked| {
         let Some(path) = picked.first_path() else { return Ok(Value::Null) };
         let bytes = match picked {
             Picked::Contents(mut files) if !files.is_empty() => files.swap_remove(0).1,
@@ -645,6 +690,77 @@ mod tests {
             ok(&mut app);
             let p = params(&app, node);
             assert_eq!((&p["texture"], &p["textureImage"]), (&json!("loaded"), &json!(stored)), "{effect}");
+        }
+    }
+
+    #[test]
+    fn a_delayed_texture_reply_only_reaches_the_effect_opening_that_requested_it() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        use craft::ui::testing::{Fixture, Room};
+        use vectorcraft_effects::pixel::TEXTURE_IMAGE;
+
+        let mut png = Vec::new();
+        let img: image::DynamicImage = image::RgbaImage::from_pixel(6, 4, image::Rgba([40, 60, 90, 255])).into();
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        for (reopen, switch_document) in [(true, false), (false, true), (false, false)] {
+            let mut app = app();
+            rect(&mut app, 10);
+            app.run("select.all", json!({})).unwrap();
+            let app = Rc::new(RefCell::new(app));
+            let shown = Rc::clone(&app);
+            let mut fixture = Fixture::new(move |ui| crate::tests::picks::dialogs(&mut shown.borrow_mut(), ui));
+            fixture.in_room(Room::Window);
+            let ctx = fixture.ctx().clone();
+            app.borrow_mut().ui_ctx = Some(ctx.clone());
+            let picker = crate::tests::picks::scripted(&mut app.borrow_mut());
+            let open = || app.borrow_mut().run("effect.dialog", json!({"effect": ROUGH_PASTELS})).unwrap();
+            open();
+            fixture.settle();
+            let browse = fixture.by_label("Browse…").expect("the Load Texture Browse button");
+            fixture.click(&browse).settle();
+            assert_eq!(picker.requests().len(), 1, "Browse requested a file");
+
+            if reopen || switch_document {
+                let dialog = id(&app.borrow());
+                assert!(app.borrow().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog)));
+            }
+            if switch_document {
+                let mut app = app.borrow_mut();
+                let original = app.session.active().unwrap().uid;
+                // The reply arrives before the host pump has cleared the closed effect's app record.
+                app.session.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+                let active = app.session.active().unwrap().uid;
+                assert_ne!(active, original, "a different document is active");
+                let status = app.ui.status.clone();
+                picker.answer_contents(&[("invalid.png", b"not an image")]);
+                crate::file_asks::poll(&mut app);
+                assert_eq!(app.session.active().unwrap().uid, active, "a stale reply cannot switch documents");
+                assert_eq!(app.ui.status, status, "a stale reply cannot report a texture error");
+                continue;
+            }
+            if reopen {
+                fixture.settle();
+                open();
+                fixture.settle();
+            }
+            let current = || {
+                let app = app.borrow();
+                fields(&app, id(&app))
+            };
+            let before = current();
+            picker.answer_contents(&[("texture.png", &png)]);
+            crate::file_asks::poll(&mut app.borrow_mut());
+            fixture.settle();
+            let after = current();
+            if reopen {
+                assert_eq!(after.text("texture"), before.text("texture"), "a reopened effect keeps its own texture choice");
+                assert_eq!(after.text(TEXTURE_IMAGE), before.text(TEXTURE_IMAGE), "the previous effect's image is absent");
+            } else {
+                assert_eq!(after.text("texture"), Some("loaded"), "the originating effect loads the picked texture");
+                assert!(after.text(TEXTURE_IMAGE).and_then(vectorcraft_effects::pixel::texture).is_some());
+            }
         }
     }
 

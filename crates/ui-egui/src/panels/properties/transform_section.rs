@@ -12,11 +12,13 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind};
 
 use crate::VectorcraftApp;
+use crate::edits::{EditPath, apply_edits};
 use crate::panels::{self, first_selected, transform};
 
 /// The Transform section for the selection: its position and size about the reference point, the
@@ -73,34 +75,60 @@ fn more_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     app.ui.properties_panel.more_options_open = open;
 }
 
-/// The Corners of the one path whose corners Direct Selection has selected: their kind and radius,
-/// which `object.setLiveShape` sets on those corners. The Properties panel overview shows the
-/// control while the Direct Selection tool is chosen and a corner of an object is selected
-/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
-/// A live rectangle's and a live polygon's own rows already set the selected corners.
+/// The Corners of the paths whose corners Direct Selection has selected: their kind, and their
+/// radius with the Corners link beside it, which `object.setLiveShape` sets on those corners
+/// ([`panels::picked_corners`]); the link opens the Corners pop-up for them. The Properties panel
+/// overview shows the control while the Direct Selection tool is chosen and a corner of an object
+/// is selected
+/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>),
+/// and the Corners link opens the corner settings
+/// (<https://web.archive.org/web/20200308215011/https://helpx.adobe.com/illustrator/using/reshape-with-live-corners.html>).
+/// One live rectangle or live polygon selected alone has its own kind and radius rows, which
+/// already set the selected corners: it shows the Corners link alone, also while it is selected
+/// whole.
 pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() != "directSelection" {
         return;
     }
     let Some(st) = app.session.active() else { return };
-    let [id] = st.selection.objects[..] else { return };
-    let Some(n) = st.doc.node(id) else { return };
-    if matches!(n.live_shape(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
+    let own_rows = matches!(st.selection.objects[..], [id]
+        if st.doc.node(id).is_some_and(|n| matches!(n.live_shape(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. }))));
+    // A corner of a path is Direct-Selected.
+    let corner_selected = st.selection.objects.iter().any(|id| {
+        st.doc.node(*id).and_then(LiveCorners::of).is_some_and(|lc| st.selection.partial(*id).is_some_and(|a| !lc.corners_of(a).is_empty()))
+    });
+    if !own_rows && !corner_selected {
         return;
     }
-    let Some(lc) = LiveCorners::of(n) else { return };
-    if st.selection.partial(id).is_none_or(|a| lc.corners_of(a).is_empty()) {
+    let Some(picked) = panels::picked_corners(app) else { return };
+    if own_rows {
+        Row::new().show(ui, |ui, _| panels::corners_link(app, ui));
         return;
     }
-    let n = n.clone();
     // The corners differ in kind: no entry is the value.
-    let kind = panels::corner_style(app, &n).1.map_or(Mixed::Mixed, Mixed::Same);
+    let kind = picked.kind.map_or(Mixed::Mixed, Mixed::Same);
     let entries = panels::corner_entries();
-    let picked = Field::new(tl!("Corner")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
-    if let Some(Some(kind)) = picked {
-        app.run("object.setLiveShape", json!({"kind": kind})).ok();
+    let chosen = Field::new(tl!("Corner")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
+    if let Some(Some(kind)) = chosen {
+        panels::set_picked_corners(app, &picked, json!({"kind": kind}));
     }
-    Field::new(tl!("Corner Radius")).show(ui, |ui, _| panels::corner_radius_field(app, ui, &n));
+    let lengths = crate::canvas::general_lengths(app);
+    let mut edit = None;
+    Field::new(tl!("Corner Radius")).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            edit = Some(NumberField::length(tl!("Corner Radius"), Bind::given(picked.radius), lengths).show(ui).edit);
+            panels::corners_link(app, ui);
+        });
+    });
+    if let Some(edit) = edit {
+        // Every value of a scrub sets the corners; the gesture is one undo step.
+        apply_edits(app, &edit, EditPath::Scope, |app, v: &Option<f64>, _| {
+            // A negative radius typed in rounds nothing: the command takes 0 or more.
+            if let Some(r) = v {
+                panels::set_picked_corners(app, &picked, json!({"radius": r.max(0.0)}));
+            }
+        });
+    }
 }
 
 /// Ruler guides selected on their own: a Transform section with the X of the vertical ones and

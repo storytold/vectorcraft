@@ -8,6 +8,7 @@ use vectorcraft_three_d::fold::{Blank, FoldLine, Issue, IssueCode, LineKind, MAX
 
 use super::super::super::pathops::length_given;
 use super::super::super::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, switch_or};
+use super::angle::own_angle;
 use super::roles::{Role, RoleTable, can_carry, role_targets};
 use crate::{Result, Session};
 
@@ -92,7 +93,8 @@ fn on_non_printing_layer(d: &Document, id: NodeId) -> bool {
     d.ancestry(id).unwrap_or_default().iter().filter_map(|a| d.node(*a)).any(|n| matches!(n.kind, NodeKind::Layer { printable: false, .. }))
 }
 
-fn kind(role: Role) -> LineKind {
+/// The kind of fold line a line with `role` is.
+pub(super) fn kind(role: Role) -> LineKind {
     match role {
         Role::Cut => LineKind::Cut,
         Role::Crease => LineKind::Crease,
@@ -155,7 +157,7 @@ fn lines_of(d: &Document, scope: &'static str, targets: Vec<NodeId>) -> Lines {
             non_printing.push(id.0);
         }
         segments = segments.saturating_add(path.subpaths.iter().map(|sp| sp.segment_count()).sum());
-        lines.push(FoldLine { path, kind: kind(role), key: id.0, angle: None });
+        lines.push(FoldLine { path, kind: kind(role), key: id.0, angle: own_angle(n) });
     }
     Lines { scope, lines, non_printing }
 }
