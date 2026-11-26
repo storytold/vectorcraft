@@ -2161,6 +2161,20 @@ one opens as before and draws it as `rgb`:
 → invalid parameters for `effect.setParams`: `channel` must be one of rgb, red, green, blue
 ```
 
+The `mode` of Drop Shadow, Inner Glow and Outer Glow must name one of the 16 blend modes: `normal`, `darken`,
+`multiply`, `colorBurn`, `lighten`, `screen`, `colorDodge`, `overlay`, `softLight`, `hardLight`, `difference`,
+`exclusion`, `hue`, `saturation`, `color` or `luminosity`. The name is read in any letter case and with any spaces,
+hyphens or underscores (`Color Burn` and `color-burn` are `colorBurn`). An omitted `mode` keeps the effect's default
+(`multiply` for Drop Shadow, `screen` for the glows). New `effect.apply` and `effect.setParams` calls refuse any other
+value. An older document, action or journal with an unknown name still draws it as `normal`. A non-string value uses
+the effect's default. The effect dialogs and the Appearance panel show `mode` as a blend-mode menu.
+`ui.dialog.set` accepts the same blend-mode spellings.
+
+```json
+{"id": "effect.setParams", "params": {"index": 0, "params": {"mode": "multipy"}}}
+→ invalid parameters for `effect.setParams`: `mode` must be one of normal, darken, multiply, colorBurn, lighten, screen, colorDodge, overlay, softLight, hardLight, difference, exclusion, hue, saturation, color, luminosity
+```
+
 Radial Blur's Blur Center, `centerX` and `centerY`, must each be a number from 0 to 1: the share of the object's bounds
 across from its left edge and down from its top edge (0.5 each, the object's center, by default). The effect turns or
 zooms about that point, which moves and scales with the object. `effect.apply` and `effect.setParams` refuse any other

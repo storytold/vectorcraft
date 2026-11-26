@@ -69,6 +69,26 @@ pub(crate) struct Open {
     asking: bool,
 }
 
+/// Match an automation request's blend-mode spelling to the mode shown in the targeted effect dialog.
+pub(crate) fn normalize_set_mode(app: &VectorcraftApp, id: DialogId, params: &mut Value) {
+    let Some(open) = app.effect_dialogs.effect.as_ref() else { return };
+    if id != open.id || open.asking || !vectorcraft_effects::takes_blend_mode(&open.cx.id, "mode") {
+        return;
+    }
+    let normalize = |field: &mut Value| {
+        if field["field"] == "mode"
+            && let Some(mode) = field["value"].as_str().and_then(vectorcraft_effects::parse_blend_mode)
+        {
+            field["value"] = json!(vectorcraft_effects::blend_mode_id(mode));
+        }
+    };
+    if let Some(fields) = params.get_mut("fields").and_then(Value::as_array_mut) {
+        fields.iter_mut().for_each(normalize);
+    } else {
+        normalize(params);
+    }
+}
+
 /// `effect.dialog {effect, index?, item?}`: edit applied effect `index` of `item` (null: the
 /// object's effects; omitted: the active item's, else the object's) prefilled with its values,
 /// or add `effect`, first asking when that list already has it.
