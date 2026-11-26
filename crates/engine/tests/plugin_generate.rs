@@ -301,6 +301,24 @@ fn a_missing_generator_in_a_symbol_definition_is_named_on_open() {
     assert!(warnings[0].contains("test.gen.symbol.gone") && warnings[0].contains("isn't installed"), "{warnings:?}");
 }
 
+#[test]
+fn generated_art_inside_live_containers_can_be_drawn_again() {
+    for (index, command) in ["object.blend.make", "object.repeat.grid", "object.envelope.makeWithWarp"].into_iter().enumerate() {
+        let mut s = Session::new();
+        let plugin = format!("test.gen.container.{index}");
+        sizes(&mut s, &plugin);
+        let generated = generated(&mut s, &plugin);
+        let other = s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap()["id"].clone();
+        s.execute(command, &json!({"ids": [generated, other]})).unwrap();
+        let before = steps(&s);
+        s.execute("plugin.editGenerated", &json!({"id": generated, "params": {"size": 20}})).unwrap();
+        assert_eq!(art(&s, generated), ["Big", "Line"], "{command}");
+        assert_eq!(steps(&s), before + 1, "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(art(&s, generated), ["Small"], "{command}");
+    }
+}
+
 /// The saved native text `bytes` with the generated art object's JSON changed by `f`.
 fn tampered(bytes: &[u8], f: impl FnOnce(&mut Value)) -> Vec<u8> {
     fn find(v: &mut Value) -> Option<&mut Value> {

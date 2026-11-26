@@ -1325,10 +1325,7 @@ impl Plan {
             } else if let Some(r) = self.replace.remove(&c.id) {
                 emitted.push(Arc::new(r));
                 changed = true;
-            } else if let Some(ch) = match &c.kind {
-                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => self.list(Some(c.id), children),
-                _ => None,
-            } {
+            } else if let Some(ch) = c.children().and_then(|children| self.list(Some(c.id), children)) {
                 let mut m = (**c).clone();
                 if let Some(slot) = m.children_mut() {
                     *slot = ch;

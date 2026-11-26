@@ -121,6 +121,27 @@ fn generator_dialog_validates_supplied_parameters_and_runs_an_empty_object() {
     }
 }
 
+#[test]
+fn editing_generated_art_resolves_saved_parameters_after_an_update() {
+    let id = "test.ui.generator.narrower";
+    let mut app = app(id);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let generated = app.run("plugin.generate", json!({"id": id, "params": {"size": 80}})).unwrap()["id"].clone();
+    let manifest = tpl::generator(
+        id,
+        r#"{"show":{"type":"bool","default":false},"size":{"type":"int","min":1,"max":20,"default":10,"visibleWhen":{"show":[true]}}}"#,
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, BIG)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module), "replace": true})).unwrap();
+    app.run(plugin::EDIT_COMMAND, json!({"id": generated})).unwrap();
+    assert_eq!(fields(&app)["size"].as_f64(), Some(20.0));
+    frame(&mut app);
+    let before = steps(&app);
+    try_confirm(&mut app).unwrap();
+    assert_eq!(steps(&app), before + 1);
+    assert_eq!(art(&app, generated.as_u64().unwrap()), ["Big"]);
+}
+
 /// Edit Generated Art… is for one selected object: a generated art object selected with another
 /// object is not. OK in its dialog draws the object of the document it was opened in: after another
 /// document comes to the front, OK draws nothing there, closes the dialog and says why.

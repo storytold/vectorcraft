@@ -680,12 +680,7 @@ const EDIT_DOC_GONE: &str = "the document it was prepared for is no longer activ
 fn open_generate(app: &mut VectorcraftApp, plugin: &Plugin, edit: Option<EditTarget>, values: &Map<String, Value>) -> Result<(), String> {
     let m = plugin.manifest();
     let look = Look { title: m.name.trim_end_matches('…').to_string(), description: m.description.clone(), previews: false, note: false, ok: None };
-    let mut rows = m.defaults();
-    for (k, v) in values {
-        if let Some(slot) = rows.get_mut(k) {
-            *slot = v.clone();
-        }
-    }
+    let rows = vectorcraft_plugins::generate::resolve_over(plugin, values, &Value::Null).map_err(|error| error.to_string())?;
     let (id, params) = open_hosted(app, GENERATE_KIND, plugin.id(), m.clone(), rows, look)?;
     app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Generate { plugin: plugin.id().to_string(), edit, params } });
     Ok(())
