@@ -136,7 +136,7 @@ pub(crate) fn builtin_arrow_name(label: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
-/// The preview cache key of `a`: its name, and for a custom head its art.
+/// The preview cache key of `a`: its name, and for a custom head its art and where the stroke ends.
 fn arrow_key(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => {
@@ -148,6 +148,7 @@ fn arrow_key(a: Option<&Arrowhead>) -> String {
                     (p.x.to_bits(), p.y.to_bits()).hash(&mut h);
                 }
             }
+            c.stop().to_bits().hash(&mut h);
             format!("custom:{}:{:x}", c.name, h.finish())
         }
         _ => format!("{a:?}"),
@@ -487,8 +488,13 @@ pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -
         let weight = fit(w - 6.0, long).min(fit(h / 2.0 - 1.0, half)).min(2.5);
         inset = -b.x0.min(0.0) * weight;
         if weight < LEAST {
-            let path = c.path.transformed(vectorcraft_geom::Affine::scale(weight / LEAST));
-            a = Some(Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path))));
+            let shrink = weight / LEAST;
+            let path = c.path.transformed(vectorcraft_geom::Affine::scale(shrink));
+            let mut head = vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path);
+            if let Some(stop) = c.stop {
+                head = head.with_stop(stop * shrink);
+            }
+            a = Some(Arrowhead::Custom(std::sync::Arc::new(head)));
         }
         scale = scale.min(weight.max(LEAST) / WIDTH * 100.0);
     }
@@ -733,6 +739,26 @@ mod tests {
         assert!((middle - (r.height() / 2.0 - 1.0)).abs() < 1e-3, "the widest point fills the box ({middle})");
         let (top, bottom) = profile_outline(r, None);
         assert!(top.iter().chain(&bottom).all(|p| (p.y - r.center().y).abs() <= 0.35 * (r.height() / 2.0 - 1.0) + 1e-3));
+    }
+
+    #[test]
+    fn custom_arrowhead_thumbnails_preserve_where_the_stroke_ends() {
+        use vectorcraft_doc::CustomArrowhead;
+        use vectorcraft_geom::{PathData, Point, SubPath};
+
+        let outline = PathData::single(SubPath::polyline(&[Point::new(0.0, -60.0), Point::new(4.0, 60.0), Point::new(4.0, -60.0)], true));
+        let custom = CustomArrowhead::new("Wide Flag".into(), outline);
+        let halfway = Arrowhead::Custom(std::sync::Arc::new(custom.clone()));
+        let explicit_stop = Arrowhead::Custom(std::sync::Arc::new(custom.with_stop(0.75)));
+        assert_ne!(arrow_key(Some(&halfway)), arrow_key(Some(&explicit_stop)), "each stroke attachment needs its own thumbnail");
+
+        let preview = arrow_doc(Some(explicit_stop), true, 56.0, 22.0).unwrap();
+        let node = preview.node(preview.selectable_art()[0]).unwrap();
+        let Some(Arrowhead::Custom(head)) = &node.appearance.stroke().unwrap().start_arrow else {
+            panic!("the preview should draw the custom arrowhead");
+        };
+        // The preview has 10 points above the line. At the minimum weight, 60 units would need 15.
+        assert_eq!(head.stop, Some(0.5));
     }
 
     #[test]

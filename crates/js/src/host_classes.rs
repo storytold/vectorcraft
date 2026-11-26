@@ -172,6 +172,12 @@ impl Interp {
         Ok(Some(host_ref(&name, &h.handle)))
     }
 
+    pub(crate) fn host_ref_size(&self, id: ObjId) -> JsResult<Option<(usize, usize)>> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
+        let name = self.host_classes.get(h.class as usize).map(|e| e.name.len()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
+        Ok(Some((name, h.handle.len())))
+    }
+
     /// The object of a host class that `d`, which a host function gave, stands for.
     pub(crate) fn write_host_ref(&mut self, d: &Data) -> JsResult<Value> {
         let Some((name, handle)) = host_ref_parts(d) else {
@@ -220,11 +226,10 @@ impl Interp {
     /// gets `true` as a third argument.
     pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, k: Data, probe: bool) -> JsResult<Value> {
         self.use_fuel()?;
-        let Some(this) = self.host_ref_of(id)? else { return Ok(Value::Undefined) };
-        let mut args = vec![this, k];
-        if probe {
-            args.push(Data::Bool(true));
+        if self.host_ref_size(id)?.is_none() {
+            return Ok(Value::Undefined);
         }
+        let args = self.read_index_args(id, k, probe)?;
         match f(args) {
             Ok(d) => self.write_hosted(d),
             Err(HostError::Wait) => Err(Abrupt::Internal("a host class's indexer waited for its result".into())),

@@ -218,6 +218,45 @@ fn a_launch_that_stopped_while_two_plug_ins_loaded_offers_to_disable_both() {
 }
 
 #[test]
+fn startup_scripts_wait_for_the_choice_and_disable_and_continue_leaves_out_the_one_that_was_running() {
+    let _f = fresh();
+    let dir = tmp_dir("startup");
+    let scripts = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&scripts).unwrap();
+    let a = scripts.join("a.jsx");
+    std::fs::write(&a, "vc.log('a');").unwrap();
+    std::fs::write(scripts.join("b.jsx"), "vc.log('b');").unwrap();
+    let launch_dir = dir.join("Launch");
+    std::fs::create_dir_all(&launch_dir).unwrap();
+    let item = json!({"format": "vectorcraft-launch", "version": 1, "item": {"file": a.display().to_string(), "name": "a.jsx"}});
+    std::fs::write(launch_dir.join("launch-1-dead.json"), item.to_string()).unwrap();
+    let stopped = ui::begin_launch(Some(&launch_dir), false);
+    let mut session = Session::new();
+    session.attach_startup_scripts_dir(scripts);
+    session.prefs.run_startup_scripts = true;
+    let mut app = VectorcraftApp::new(session, Services::default());
+    ui::after_start(&mut app, stopped);
+    let ctx = window();
+    asking_frames(&mut app, &ctx);
+    assert!(ui::choosing(&app));
+    vectorcraft_ui_egui::script_runs::run_at_launch(&mut app);
+    assert!(!app.session.script_running(), "nothing runs while Safe Mode waits for the choice");
+    confirm(&mut app, &ctx);
+    assert!(!safe_mode::active() && !ui::choosing(&app));
+    for _ in 0..10_000 {
+        if !app.session.script_running() {
+            break;
+        }
+        vectorcraft_ui_egui::script_runs::poll(&mut app);
+    }
+    let lines = app.session.script_console().to_json();
+    let started: Vec<&str> = lines["lines"].as_array().unwrap().iter().filter(|l| l["kind"] == "start").filter_map(|l| l["name"].as_str()).collect();
+    assert_eq!(started, ["b.jsx"], "the startup scripts run once Safe Mode ends, without the disabled one");
+    done(&launch_dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     let _f = fresh();
     let dir = store_with_two("normal");

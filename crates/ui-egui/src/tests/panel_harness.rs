@@ -11,6 +11,7 @@ use std::{
 };
 
 use craft::behavior::PartRef;
+use craft::ui::contract::Role;
 use craft::ui::runtime::frame::take_output;
 use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Target};
@@ -63,7 +64,7 @@ impl Panel {
     }
 
     /// One frame with `events`, its input taken from the app first.
-    fn frame_with(&mut self, events: Vec<Event>) {
+    pub(crate) fn frame_with(&mut self, events: Vec<Event>) {
         self.take_input();
         self.fixture.frame(events);
         self.take_input();
@@ -229,6 +230,13 @@ impl Panel {
         self.after();
     }
 
+    /// Turns the wheel by `dy` points over `at`.
+    pub(crate) fn scroll_at(&mut self, at: Pos2, dy: f32) {
+        self.frame_with(vec![Event::PointerMoved(at)]);
+        self.frame_with(vec![craft::ui::testing::pointer::wheel(dy)]);
+        self.after();
+    }
+
     /// Drags from the control named `from` to the one named `to`.
     pub(crate) fn drag(&mut self, from: &str, to: &str, mods: Modifiers) {
         let to = self.find(to).center();
@@ -302,6 +310,12 @@ impl Panel {
     /// Whether the latest frame shows a control named `name`.
     pub(crate) fn shows(&self, name: &str) -> bool {
         self.fixture.by_label(name).is_some()
+    }
+
+    /// Whether the latest frame has a status announcement with this text.
+    pub(crate) fn announces(&self, text: &str) -> bool {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().any(|key| tree.role_of(key) == Some(Role::STATUS) && tree.name_of(key) == Some(text))
     }
 
     /// Whether some of the control named `name` can be seen in the latest frame.
