@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical, sweeps the stops once around the center, clockwise from the vector, with a seam where the last stop meets the first; diamond runs the stops from the center out to a square with a corner at the end of the vector; freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (how the colours between the stops mix: in display RGB, perceptually (OKLab) so the steps look even, or around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next, the hue angle falling with hue-clockwise (red, magenta, blue, cyan, green, yellow) and rising with hue-counterclockwise; two stops whose hues are less than half a color level apart keep that hue; a stop whose RGB numbers are less than half a color level apart is gray and takes the hue of the stop it mixes with, and black that stop's saturation too; these two methods are VectorCraft's own, and SVG and PDF exports draw their gradients as RGB images, CMYK and spot color stops included; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear, radial, conic or diamond, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), spread?: pad|repeat|reflect (linear, radial, conic and diamond: what the gradient paints past the ends of its stops: pad carries the end colors on; repeat and reflect run the stops `repeats` times along the vector (around the circle, for a conic) and on past both ends, reflect mirroring every other run; an error on a freeform gradient), repeats?: 1..100 (a whole number: how many times repeat and reflect run the stops along the vector; VectorCraft's own limit; pad keeps it unused), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg counter-clockwise (0: the gradient runs left to right; radial, conic and diamond: the vector turns about the center), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep and is an error for the other kinds; an error when no object is edited, as with nothing selected, the Live Paint Bucket's gradient, or a fill edit of a Live Paint group without faces: the default gradient fits each new object and keeps no aspect), reverse?: bool (the same ramp the other way round: the stops in reverse order, and a hue method turned the other way unless `method` is given too), dither?: bool (fills only: a linear, radial, conic or diamond gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.setFill; without stroke, the kind of the row edited), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient. Without `item`, a Live Paint group's faces take a fill edit and its edges take a stroke edit. On a path directly in a graph series, the graph also stores the gradient when it is on the topmost visible fill or stroke (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its placement), and on its characters their gradient without its placement, fitted to each label. While the Live Paint Bucket is the active tool and no ids, id or item are given (a null ids or id counts as none), only the default changes (the paint the bucket paints with)",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical, sweeps the stops once around the center, clockwise from the vector, with a seam where the last stop meets the first; diamond runs the stops from the center out to a square with a corner at the end of the vector; freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (how the colours between the stops mix: in display RGB, perceptually (OKLab) so the steps look even, or around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next, the hue angle falling with hue-clockwise (red, magenta, blue, cyan, green, yellow) and rising with hue-counterclockwise; two stops whose hues are less than half a color level apart keep that hue; a stop whose RGB numbers are less than half a color level apart is gray and takes the hue of the stop it mixes with, and black that stop's saturation too; these two methods are VectorCraft's own, and SVG and PDF exports draw their gradients as RGB images, CMYK and spot color stops included; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear, radial, conic or diamond, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), spread?: pad|repeat|reflect (linear, radial, conic and diamond: what the gradient paints past the ends of its stops: pad carries the end colors on; repeat and reflect run the stops `repeats` times along the vector (around the circle, for a conic) and on past both ends, reflect mirroring every other run; an error on a freeform gradient), repeats?: 1..100 (a whole number: how many times repeat and reflect run the stops along the vector; VectorCraft's own limit; pad keeps it unused), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg counter-clockwise (0: the gradient runs left to right; radial, conic and diamond: the vector turns about the center), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep and is an error for the other kinds; an error when no object is edited, as with nothing selected, the Live Paint Bucket's gradient, the Shape Builder's fill, or a fill edit of a Live Paint group without faces: the default gradient fits each new object and keeps no aspect), reverse?: bool (the same ramp the other way round: the stops in reverse order, and a hue method turned the other way unless `method` is given too), dither?: bool (fills only: a linear, radial, conic or diamond gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.setFill; without stroke, the kind of the row edited), ids?|id?, defaultsOnly?: bool (as paint.setFill), strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient. Without `item`, a Live Paint group's faces take a fill edit and its edges take a stroke edit. On a path directly in a graph series, the graph also stores the gradient when it is on the topmost visible fill or stroke (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its placement), and on its characters their gradient without its placement, fitted to each label. While the Live Paint Bucket, or for a fill the Shape Builder, is the active tool and no ids, id or item are given (a null ids or id counts as none), or `defaultsOnly: true` is given, only the default changes (the paint the tool paints with)",
             has_doc,
             edit_gradient
         ),
@@ -42,7 +42,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Gradient Stop",
             [],
             None,
-            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint; the default paint's while the Live Paint Bucket is the active tool): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on; refused while an object of a symbol instance's art is selected, except while the Live Paint Bucket is the active tool → {index}",
+            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint; the default paint's while the Live Paint Bucket, or with the Fill proxy in front the Shape Builder, is the active tool): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on; refused while an object of a symbol instance's art is selected, except while the proxy in front shows the default paint that way → {index}",
             always,
             select_stop
         ),
@@ -61,9 +61,9 @@ pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
 fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "gradient.selectStop";
     // No document is needed for the default paint's gradient, so this does not use `refuse_symbol_part`.
-    // While the Live Paint Bucket is active the proxies show the default paint, whose stops can be
-    // selected with a part picked.
-    if !s.bucket_paints() && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
+    // While the Live Paint Bucket is active the proxies show the default paint (the Shape Builder's
+    // Fill proxy does too), whose stops can be selected with a part picked.
+    if !s.tool_paints(!s.fill_active) && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) {
         return Err(super::brushsym::part_only());
     }
     let index = match p.get("index") {
@@ -84,10 +84,10 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Whose gradient a selected stop belongs to: the active document, its first selected object
 /// (None: the default paint), whether a part of a symbol instance's art is picked, the proxy in
-/// front, the Appearance panel's active item and whether the Live Paint Bucket is the active tool
-/// (its proxies show the default paint). Selecting other art, picking a part of the instance,
-/// toggling the proxy, picking another item or choosing the bucket or leaving it leaves no stop
-/// selected.
+/// front, the Appearance panel's active item and the tool the proxy in front shows the default
+/// paint for (the Live Paint Bucket, or the Shape Builder's Fill proxy). Selecting other art,
+/// picking a part of the instance, toggling the proxy, picking another item or choosing such a
+/// tool or leaving it leaves no stop selected.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StopOwner {
     doc: Option<usize>,
@@ -98,7 +98,8 @@ pub(crate) struct StopOwner {
     part: bool,
     fill: bool,
     item: Option<usize>,
-    bucket: bool,
+    /// The tool whose color the proxy in front stood for ([`Session::painting_tool`]).
+    painter: Option<&'static str>,
 }
 
 impl StopOwner {
@@ -111,19 +112,24 @@ impl StopOwner {
             part: st.is_some_and(|d| d.selection.symbol_part.is_some()),
             fill: s.fill_active,
             item: s.appearance_item(),
-            bucket: s.bucket_paints(),
+            painter: s.painting_tool(!s.fill_active),
         }
+    }
+
+    /// The tool whose gradient the stop is on; None for the selection's paint.
+    pub(crate) fn painter(&self) -> Option<&'static str> {
+        self.painter
     }
 }
 
 impl Session {
     /// Does `paint.editGradient` without `ids` edit objects on the fill (or the stroke, `stroke`)? It does not
-    /// while the Live Paint Bucket is active or when nothing it can paint is selected (a Live Paint group stands
-    /// only for its faces in a fill edit and its edges in a stroke edit): it then edits no object and takes no
-    /// `aspect`.
+    /// while the active tool paints with the chosen fill (or stroke: [`Session::tool_paints`]) or when nothing it
+    /// can paint is selected (a Live Paint group stands only for its faces in a fill edit and its edges in a stroke
+    /// edit): it then edits no object and takes no `aspect`.
     pub fn gradient_edit_has_objects(&self, stroke: bool) -> bool {
         let p = json!({ "stroke": stroke });
-        !super::paint::for_bucket(self, &p)
+        !super::paint::for_tool(self, &p, stroke)
             && item_target(self, &p, "paint.editGradient")
                 .is_ok_and(|item| item.of_kind(self, !stroke).targets_for(self, &p, !stroke).is_ok_and(|ids| !ids.is_empty()))
     }
@@ -526,9 +532,10 @@ fn apply_gradient_edit_in_model(
         if let Some(b) = bounds {
             gp.seed_freeform(b, if switched { inside } else { &|_| true });
         }
+        // Without points (the default gradient's, placed on no object yet) the stops are the colors.
         if recolor
             && !switched
-            && let Some(f) = &mut gp.freeform
+            && let Some(f) = gp.freeform.as_mut().filter(|f| !f.points.is_empty())
         {
             f.recolor(&gp.gradient);
             gp.gradient.stops = f.stops();
@@ -546,9 +553,10 @@ fn apply_gradient_edit_in_model(
 
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
-    // While the Live Paint Bucket is active, the gradient it paints with changes; the selection keeps its own.
-    let bucket = super::paint::bucket_color_params(s, p, C)?;
-    let p = bucket.as_ref().unwrap_or(p);
+    // While the active tool paints with the chosen fill or stroke, the gradient it paints with changes; the
+    // selection keeps its own.
+    let for_tool = super::paint::tool_gradient_params(s, p, C)?;
+    let p = for_tool.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?;
     let stroke = edits_stroke(s, p, item, !s.fill_active, C)?;
     check_switches(p, &["reverse", "dither"], C)?;
@@ -649,7 +657,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     if let Some(m) = mode
         && !selected
-        && (bucket.is_some() || p.get("ids").is_none())
+        && (for_tool.is_some() || p.get("ids").is_none())
         && let Some(st) = s.new_art_stroke_mut()
     {
         st.gradient_mode = m;

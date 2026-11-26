@@ -8,10 +8,13 @@ use std::path::PathBuf;
 pub(crate) struct Folder(PathBuf);
 
 impl Folder {
-    /// A new empty folder `vectorcraft-<name>-<process id>` in the system temporary folder. One
-    /// left there by an earlier process with the same id is removed first.
+    /// A new empty folder `vectorcraft-<name>-<process id>-<n>` in the system temporary folder,
+    /// `n` counting this process's folders so two tests running at once under one name don't
+    /// remove each other's. One left there by an earlier process with the same id is removed first.
     pub(crate) fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("vectorcraft-{name}-{}", std::process::id()));
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("vectorcraft-{name}-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Self(dir)
@@ -56,14 +59,25 @@ fn a_folder_is_removed_when_its_test_ends() {
 
 #[test]
 fn a_folder_is_removed_when_its_test_panics() {
-    let path = std::env::temp_dir().join(format!("vectorcraft-ui-folder-panics-{}", std::process::id()));
+    let path = std::sync::Mutex::new(PathBuf::new());
     let r = vectorcraft_testkit::catch_quiet::<()>(|| {
         let folder = Folder::new("ui-folder-panics");
         folder.file("a.txt", b"a");
+        *path.lock().unwrap() = folder.to_path_buf();
         panic!("the test fails");
     });
     assert_eq!(r.err().as_deref(), Some("the test fails"));
-    assert!(!path.exists(), "{} is left", path.display());
+    let path = path.into_inner().unwrap();
+    assert!(path.is_absolute() && !path.exists(), "{} is left", path.display());
+}
+
+#[test]
+fn two_folders_under_one_name_are_apart() {
+    let a = Folder::new("ui-folder-twice");
+    let b = Folder::new("ui-folder-twice");
+    a.file("a.txt", b"a");
+    drop(b);
+    assert!(a.join("a.txt").is_file(), "dropping one folder removed the other");
 }
 
 #[test]

@@ -131,9 +131,12 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
     let mut keys: Vec<&str> = info.lengths.keys(relative).collect();
     keys.extend(merged.as_object().into_iter().flat_map(|m| m.keys()).map(String::as_str).filter(|k| crate::raster_px_range(&e.id, k).is_some()));
     for k in keys {
-        let missing =
-            if k == "precision" && crate::takes_pathfinder_options(&e.id) { crate::PathfinderEffectOptions::default().precision } else { f64::NAN };
-        let v = util::num(&merged, k, missing);
+        // A Pathfinder effect's precision that is not a number scales the precision it evaluates with.
+        let v = if k == "precision" && crate::takes_pathfinder_options(&e.id) {
+            crate::group::stored_precision(&merged).unwrap_or(crate::PathfinderEffectOptions::default().precision)
+        } else {
+            util::num(&merged, k, f64::NAN)
+        };
         if v.is_finite() {
             if !e.params.is_object() {
                 e.params = Value::Object(Map::new());

@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 craft-svg = { workspace = true }
+craft-xml = { workspace = true }
 craft-mime = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
