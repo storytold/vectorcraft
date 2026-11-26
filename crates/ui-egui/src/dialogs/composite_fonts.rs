@@ -26,6 +26,7 @@
 
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
+use std::path::Path;
 use std::sync::Arc;
 
 use craft::behavior::{ColumnKey, ColumnWidth, Selection, SelectionChange, keyed};
@@ -892,14 +893,19 @@ fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest, owner: Arc<()>
 
 /// Reads the fonts of the file picked and gives them to the dialog (Load… or Replace…).
 fn load_file(app: &mut VectorcraftApp, request: &PresetFileRequest, replace: bool, picked: &Picked) -> Result<Value, String> {
-    // PLAN: assumed fl.A23 `file_asks::open_params(&Picked) -> Option<Map<String, Value>>`; `None` is a cancelled pick.
     let Some(mut params) = open_params(picked) else { return Ok(Value::Null) };
+    let browser_name = params.remove("name");
+    let name = picked
+        .first_path()
+        .as_deref()
+        .or_else(|| browser_name.as_ref().and_then(Value::as_str).map(Path::new))
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     params.insert("apply".into(), json!(false));
     let read = app.run(IMPORT, Value::Object(params))?;
     let fonts: Vec<CompositeFont> = serde_json::from_value(read["fonts"].clone()).map_err(|e| e.to_string())?;
     with_dialog(app, |d| d.load(fonts, replace));
-    let name = picked.first_path().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_default();
-    // Only the file's name goes into the status line.
     if let Some(event) = request.loaded(name, Vec::new()) {
         report(app, event);
     }

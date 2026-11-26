@@ -97,6 +97,36 @@ fn delayed_load_and_replace_leave_the_reopened_composite_fonts_draft_alone() {
     }
 }
 
+#[test]
+fn load_and_replace_accept_a_browser_picked_file() {
+    let choices: [(PresetCommands, &[&str]); 2] = [(PresetCommands::Load, &["Draft", "From Web"]), (PresetCommands::Replace, &["From Web"])];
+    for (command, expected) in choices {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        let bytes = dialog(&mut app, |d| {
+            d.new_font("From Web".into());
+            file_bytes(&d.fonts).unwrap()
+        });
+        cancel(&mut app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("Draft".into()));
+        let dialogs = app.dialogs().unwrap();
+        ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
+        let step = steps(&app);
+
+        request(&mut app, command, None);
+        picker.answer_contents(&[("picked.vccomposite", &bytes)]);
+        poll(&mut app, &ctx);
+        let draft_names = dialog(&mut app, |d| d.fonts.iter().map(|font| font.name.clone()).collect::<Vec<_>>());
+        assert_eq!(draft_names, expected, "{}", app.ui.status);
+        assert!(app.ui.status.contains("picked.vccomposite"), "{}", app.ui.status);
+        assert!(names(&app).is_empty(), "picking a file edits only the draft");
+        assert_eq!(steps(&app), step);
+    }
+}
+
 fn steps(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
