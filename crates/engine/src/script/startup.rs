@@ -80,13 +80,13 @@ pub fn list_with(root: &Path, limits: &folder::Limits, elapsed: &mut dyn FnMut()
         if !kind.is_file() || kind.is_symlink() || entry.metadata().is_ok_and(|m| folder::hidden_meta(&m)) {
             continue;
         }
-        if names.len() >= limits.scripts {
-            listing.truncated = true;
-            continue;
-        }
         names.push(name);
     }
     names.sort_by(|a, b| (a.to_lowercase(), a).cmp(&(b.to_lowercase(), b)));
+    if names.len() > limits.scripts {
+        listing.truncated = true;
+        names.truncate(limits.scripts);
+    }
     listing.scripts = names.into_iter().map(|n| root.join(n)).collect();
     listing
 }
