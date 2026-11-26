@@ -28,8 +28,10 @@ mod commands;
 mod common;
 mod cut;
 mod freehand;
+mod quickpen;
 mod smooth;
 
+pub(super) use anchors::{following_anchors, remove_anchors_of};
 pub use commands::specs;
 pub(super) use common::{center_strokes, ids_json, replace_with_pieces, usize_opt};
 pub(super) use cut::{components, erase_outline};

@@ -180,6 +180,48 @@ fn average_at_the_mean_adds_no_undo_step() {
     assert!(state(&s) == before);
 }
 
+/// An instance the brush reaches but leaves as it is (the Symbol Screener with Alt on an opaque
+/// instance, or without Alt on one at the lowest opacity it gives) is not counted, and a stroke
+/// that changes no instance adds no undo step.
+#[test]
+fn an_instance_left_as_it_is_is_not_counted() {
+    let mut s = session();
+    let (opaque, faint) = (dot(&mut s, 100.0, 150.0), dot(&mut s, 300.0, 150.0));
+    s.execute("transparency.set", &json!({"ids": [faint.0], "opacity": 5})).unwrap();
+    let before = state(&s);
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[100, 150]], "radius": 30, "intensity": 10, "alt": true}));
+    assert_eq!(r["count"], 0, "Alt on an opaque instance");
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[300, 150]], "radius": 30, "intensity": 10}));
+    assert_eq!(r["count"], 0, "an instance at 5%");
+    assert!(state(&s) == before, "a stroke that changes nothing changed the document or its history");
+    // A stroke over both counts only the instance it changes.
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[200, 150]], "radius": 150, "intensity": 10}));
+    assert_eq!(r["count"], 1);
+    assert!(node(&s, opaque).opacity < 1.0 && node(&s, faint).opacity == 0.05);
+}
+
+/// Average gives an opacity below 5% when that is the mean: the Symbol Sprayer's new instance and
+/// the Symbol Screener's instances take the mean of the instances under the brush.
+#[test]
+fn average_keeps_a_mean_opacity_below_five_percent() {
+    let mut s = session();
+    let set = NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[200, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let first = members(&s, set)[0];
+    s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 2})).unwrap();
+    s.select(|_, sel| sel.set([set])).unwrap();
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[215, 150]], "radius": 30})).unwrap();
+    let sprayed = *members(&s, set).last().unwrap();
+    assert!((node(&s, sprayed).opacity - 0.02).abs() < 1e-6, "{}", node(&s, sprayed).opacity);
+    // Two instances at 0% and 4%: Average brings both toward 2%, and neither goes past it.
+    let mut s = session();
+    let (a, b) = (dot(&mut s, 200.0, 150.0), dot(&mut s, 220.0, 150.0));
+    s.execute("transparency.set", &json!({"ids": [a.0], "opacity": 0})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [b.0], "opacity": 4})).unwrap();
+    adjust(&mut s, json!({"tool": "screen", "points": [[210, 150]], "radius": 40, "intensity": 10, "method": "average"}));
+    let (pa, pb) = (node(&s, a).opacity, node(&s, b).opacity);
+    assert!(pa > 0.0 && pa <= 0.02 + 1e-6 && (0.02 - 1e-6..0.04).contains(&pb), "{pa} {pb}");
+}
+
 /// Average evens out the Symbol Stainer's amount and the Symbol Scruncher's spacing.
 #[test]
 fn average_evens_out_the_stain_and_the_spacing() {
@@ -279,6 +321,38 @@ fn an_unknown_method_is_refused() {
     assert_eq!(center(&s, a), Point::new(200.0, 150.0));
 }
 
+/// `tool.setOption` refuses a Symbolism Tools Options value of the wrong kind or name, and the
+/// tool's options stay as they were.
+#[test]
+fn tool_set_option_refuses_bad_symbolism_options() {
+    let mut s = session();
+    let before = s.tool_options_of("symbolSizer");
+    for (key, bad, want) in [
+        ("method", json!("smooth"), "`method` must be one of userDefined, average, random"),
+        ("sprayStain", json!("random"), "`sprayStain` must be one of average, userDefined"),
+        ("usePressure", json!("yes"), "`usePressure` must be true or false"),
+        ("diameter", json!("big"), "`diameter` must be a number from 2 to 2000"),
+        ("style", json!(3), "`style` must be a string or null"),
+        ("diameter", json!(1), "`diameter` must be a number from 2 to 2000"),
+    ] {
+        let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {key: bad}}));
+        assert_eq!(r, Err(want.to_string()), "{key}");
+        assert_eq!(s.tool_options_of("symbolSizer"), before, "{key}");
+    }
+    let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {"method": "random", "sprayStain": "userDefined"}})).unwrap();
+    assert_eq!((r["method"].as_str(), r["sprayStain"].as_str()), (Some("random"), Some("userDefined")));
+    // Every option the options dialog sends is taken, together.
+    let all = json!({
+        "diameter": 100.0, "intensity": 6.0, "density": 4.0, "usePressure": true, "method": "average", "showBrush": false,
+        "sprayScrunch": "userDefined", "spraySize": "userDefined", "spraySpin": "userDefined", "sprayScreen": "userDefined",
+        "sprayStain": "average", "sprayStyle": "userDefined", "proportional": false, "affectsDensity": true,
+    });
+    let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": all})).unwrap();
+    for (key, v) in all.as_object().unwrap() {
+        assert_eq!(&r[key], v, "{key}");
+    }
+}
+
 /// With `usePressure` each point's pen pressure is the intensity there; without it the pressure is
 /// not used. A pressure that isn't a number is an error.
 #[test]
@@ -315,6 +389,13 @@ fn pen_pressure_is_the_intensity_with_use_pressure() {
             "symbol.adjust",
             json!({"tool": tool, "points": [[200, 150, "hard"]], "usePressure": true}),
             "a point's pressure must be a number, not \"hard\"",
+        );
+        // Also on a point without coordinates, beside one that has them.
+        refused(
+            &mut s,
+            "symbol.adjust",
+            json!({"tool": tool, "points": [[200, 150], [null, 0, "bad"]], "usePressure": true}),
+            "a point's pressure must be a number, not \"bad\"",
         );
     }
     for key in ["usePressure", "proportional", "affectsDensity"] {
@@ -644,6 +725,45 @@ fn set_density_starts_from_the_density_a_set_was_sprayed_at() {
     assert!((center(&s, a).x - (150.0 - 50.0 * 0.25 / 0.65)).abs() < 1e-9, "{:?}", center(&s, a));
 }
 
+/// A set duplicated packs from the density recorded for its source, and a pasted set from the
+/// density its source had at Copy: after Cut, after the source is given another density, and in
+/// another document.
+#[test]
+fn a_copied_set_packs_from_the_density_of_its_source() {
+    for copy in ["duplicate", "paste", "cut", "changed after copy", "other document"] {
+        let mut s = session();
+        let row: Vec<Value> = (0..4).map(|i| json!([60.0 + 60.0 * f64::from(i), 150.0])).collect();
+        let set =
+            NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": row, "radius": 4, "density": 2})).unwrap()["id"].as_u64().unwrap());
+        s.select(|_, sel| sel.set([set])).unwrap();
+        let first = match copy {
+            "duplicate" => "edit.duplicate",
+            "cut" => "edit.cut",
+            _ => "edit.copy",
+        };
+        s.execute(first, &json!({})).unwrap();
+        if copy == "changed after copy" {
+            s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [set.0]})).unwrap();
+        }
+        if copy == "other document" {
+            s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        }
+        if copy != "duplicate" {
+            s.execute("edit.paste", &json!({})).unwrap();
+        }
+        let copied = s.doc().unwrap().selection.objects.clone();
+        assert!(copied.len() == 1 && (copy == "other document" || copied[0] != set), "{copy}: {copied:?}");
+        let ids = members(&s, copied[0]);
+        let xs = |s: &Session| ids.iter().map(|id| center(s, *id).x).collect::<Vec<_>>();
+        let was = xs(&s);
+        let middle = was.iter().sum::<f64>() / 4.0;
+        s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [copied[0].0]})).unwrap();
+        for (before, after) in was.iter().zip(xs(&s)) {
+            assert!((after - (middle + (before - middle) * 0.25 / 0.95)).abs() < 1e-9, "{copy}: {before} -> {after}");
+        }
+    }
+}
+
 /// A set of one instance takes the new density without moving, as one undo step, so a later change
 /// packs it from that density; setting the density it already has adds no undo step.
 #[test]
@@ -719,6 +839,102 @@ fn set_density_refuses_bad_densities_and_objects_without_a_set() {
     assert!(state(&s) == before);
 }
 
+/// The Symbol Styler applies the style gradually, by the brush's strength at the instance: the pen
+/// pressure with Use Pressure Pen, else the intensity, less toward the brush's edge. Random gives
+/// each instance a share of that amount.
+#[test]
+fn the_styler_applies_the_style_by_the_brushs_strength() {
+    let styled = |extra: Value, x: f64| {
+        let mut s = session();
+        let a = dot(&mut s, 100.0, 150.0);
+        let id = s.execute("shape.rectangle", &json!({"x": 300, "y": 250, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("graphicStyle.new", &json!({"name": "Blue", "id": id})).unwrap();
+        s.select(|_, sel| sel.clear()).unwrap();
+        let mut p = json!({"tool": "style", "points": [[x, 150]], "radius": 10, "style": "Blue"});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        adjust(&mut s, p);
+        node(&s, a).appearance.fill().map_or(0.0, |f| f.opacity)
+    };
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-6;
+    assert!(near(styled(json!({"intensity": 10}), 100.0), 1.0), "full strength at the center");
+    assert!(near(styled(json!({"intensity": 5}), 100.0), 0.5));
+    assert!(near(styled(json!({"intensity": 10}), 105.0), 0.5), "half way to the edge");
+    assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 0.25]]}), 100.0), 0.25));
+    assert!(near(styled(json!({"usePressure": true, "points": [[100, 150, 1.0]]}), 100.0), 1.0));
+    assert_eq!(styled(json!({"usePressure": true, "points": [[100, 150, 0.0]]}), 100.0), 0.0, "no pressure, no style");
+    // Random: instances the same distance from the point take different amounts, each from none to
+    // the User Defined amount there (0.25: pressure 0.5, half way to the brush's edge).
+    let mut s = session();
+    let ring: Vec<NodeId> = (0..6)
+        .map(|i| {
+            let a = f64::from(i) * std::f64::consts::TAU / 6.0;
+            dot(&mut s, 100.0 + 5.0 * a.cos(), 150.0 + 5.0 * a.sin())
+        })
+        .collect();
+    let id = s.execute("shape.rectangle", &json!({"x": 300, "y": 250, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Blue", "id": id})).unwrap();
+    s.select(|_, sel| sel.clear()).unwrap();
+    adjust(&mut s, json!({"tool": "style", "points": [[100, 150, 0.5]], "radius": 10, "usePressure": true, "method": "random", "style": "Blue"}));
+    let amounts: Vec<f32> = ring.iter().map(|a| node(&s, *a).appearance.fill().map_or(0.0, |f| f.opacity)).collect();
+    assert!(amounts.iter().all(|a| *a <= 0.25 + 1e-6), "{amounts:?}");
+    assert!(amounts.iter().any(|a| *a > 0.0), "{amounts:?}");
+    assert!(amounts.iter().any(|a| (a - amounts[0]).abs() > 1e-6), "{amounts:?}");
+}
+
+/// A sprayed instance's Average stain is the stain of the nearest instance whose stain shows: one
+/// at no opacity is passed over and counts as no stain in the mean amount.
+#[test]
+fn average_spray_passes_over_a_stain_at_no_opacity() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let set =
+        NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[100, 150], [130, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let ids = members(&s, set);
+    assert_eq!(ids.len(), 2);
+    s.edit("Stains", |d, _| {
+        for (id, color, amount) in [(ids[0], Color::rgb(1.0, 0.0, 0.0), 0.0), (ids[1], Color::rgb(0.0, 0.0, 1.0), 1.0)] {
+            let n = d.node_mut(id).unwrap();
+            n.appearance.items.retain(|i| !matches!(i, vectorcraft_doc::AppearanceItem::Fill(_)));
+            let mut f = vectorcraft_doc::FillLayer::new(Paint::solid(color));
+            f.opacity = amount;
+            n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(f));
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[100, 150]], "radius": 40})).unwrap();
+    let new: Vec<NodeId> = members(&s, set).into_iter().filter(|id| !ids.contains(id)).collect();
+    assert_eq!(new.len(), 1);
+    let f = node(&s, new[0]).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    assert!((f.opacity - 0.5).abs() < 1e-6, "{}", f.opacity);
+}
+
+/// The Symbol Shifter moves an instance whose transform flattens it (it has no size), as it moves
+/// any other, and counts it.
+#[test]
+fn the_shifter_moves_an_instance_without_a_size() {
+    let mut s = session();
+    let a = dot(&mut s, 200.0, 150.0);
+    s.edit("Flatten", |d, _| {
+        if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(a).map(|n| &mut n.kind) {
+            *xf = Affine::new([0.0, 0.0, 0.0, 0.0, 200.0, 150.0]);
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = adjust(&mut s, json!({"tool": "shift", "points": [[200, 150], [210, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 1);
+    assert!(center(&s, a).x > 200.0, "{:?}", center(&s, a));
+    // Average has no mean of such instances to move toward: it leaves them as they are.
+    let (before, x) = (state(&s), center(&s, a).x);
+    let r = adjust(&mut s, json!({"tool": "screen", "method": "average", "points": [[x, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 0);
+    assert!(state(&s) == before);
+}
+
 /// An instance with no size is shifted and screened as before; only Average, which needs its size,
 /// leaves it as it is.
 #[test]
@@ -757,6 +973,29 @@ fn an_instance_without_a_size_is_changed_by_every_method_but_average() {
     let r = adjust(&mut s, json!({"tool": "screen", "points": [[200, 150]], "radius": 5, "intensity": 10, "method": "average"}));
     assert_eq!(r["count"], 0);
     assert!(state(&s) == before);
+}
+
+/// Average Stainer: an instance whose stain is at no opacity has no stain of its own, so it takes
+/// the stain the mean picks, not its hidden paint.
+#[test]
+fn average_stain_replaces_a_stain_at_no_opacity() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let (a, b) = (dot(&mut s, 100.0, 150.0), dot(&mut s, 120.0, 150.0));
+    s.edit("Stains", |d, _| {
+        for (id, color, amount) in [(a, Color::rgb(1.0, 0.0, 0.0), 0.0), (b, Color::rgb(0.0, 0.0, 1.0), 1.0)] {
+            let n = d.node_mut(id).unwrap();
+            let mut f = vectorcraft_doc::FillLayer::new(Paint::solid(color));
+            f.opacity = amount;
+            n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(f));
+        }
+        Ok(())
+    })
+    .unwrap();
+    adjust(&mut s, json!({"tool": "stain", "method": "average", "points": [[100, 150]], "radius": 40, "intensity": 10}));
+    let f = node(&s, a).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    assert!(f.opacity > 0.0, "{}", f.opacity);
 }
 
 /// A stroke that leaves every instance under the brush as it is (each already at full stain, or

@@ -707,6 +707,12 @@ impl Targets {
         self
     }
 
+    /// These targets without the ruler guides, once they stop showing during the drag they were
+    /// gathered for (#8363).
+    pub(crate) fn forget_rulers(&mut self) {
+        self.rulers.clear();
+    }
+
     /// The ruler guides alone ([`Self::with_rulers`]): what a dragged selection's grabbed point
     /// still snaps to with View → Snap to Point when Smart Guides line the selection up.
     pub(crate) fn rulers(cx: &ToolContext) -> Self {
@@ -772,27 +778,35 @@ impl Targets {
     /// that way into line with the nearest target; else, before lining up, it lands on a
     /// construction guide through it, where a target's line crosses the guide if one does nearby.
     pub fn snap_from(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>) {
+        let (q, guides, _) = self.snap_hit(p, from, tol);
+        (q, guides)
+    }
+
+    /// [`Self::snap_from`], and whether `p` landed on a target (an anchor or center, a crossing,
+    /// a segment, a construction guide or a target's line), whether or not its guides show. A
+    /// point Shift kept to its angle without lining up with a target landed on none.
+    pub(crate) fn snap_hit(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>, bool) {
         if let Some(f) = from
             && let Some(q) = f.constrained(p)
         {
             return match self.slide(f.at, q - f.at, q, tol, true) {
-                Some((q, target)) => (q, self.lined_up(q, target)),
-                None => (q, vec![]),
+                Some((q, target)) => (q, self.lined_up(q, target), true),
+                None => (q, vec![], false),
             };
         }
         if let Some((q, k)) = self.nearest_point(p, tol) {
-            return (q, self.label(q, k.label()).into_iter().collect());
+            return (q, self.label(q, k.label()).into_iter().collect(), true);
         }
         if let Some(q) = self.crossing(p, tol) {
-            return (q, self.label(q, "intersect").into_iter().collect());
+            return (q, self.label(q, "intersect").into_iter().collect(), true);
         }
         if let Some(f) = from.filter(|f| f.contact)
             && let Some((q, perpendicular, dir)) = self.touching(f.at, p, tol)
         {
-            return (q, self.touch_guides(f.at, q, perpendicular, dir, tol));
+            return (q, self.touch_guides(f.at, q, perpendicular, dir, tol), true);
         }
         if let Some(q) = self.on_segment(p, tol) {
-            return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
+            return (q, self.label(q, Kind::Edge.label()).into_iter().collect(), true);
         }
         // A construction guide through the point it leaves, else a dragged segment's extension:
         // it lands on the guide, sliding into line with a target crossing it nearby.
@@ -803,8 +817,8 @@ impl Targets {
         {
             let construction = |q: Point| Overlay::Line { a: at, b: q, color: self.style.color, dashed: false };
             return match self.slide(at, dir, q, tol, false) {
-                Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect()),
-                None => (q, vec![construction(q)]),
+                Some((q, target)) => (q, std::iter::once(construction(q)).chain(self.lined_up(q, target)).collect(), true),
+                None => (q, vec![construction(q)], true),
             };
         }
         let mut out = p;
@@ -834,7 +848,7 @@ impl Targets {
         if aligned {
             ov.extend(self.label(out, "align"));
         }
-        (out, ov)
+        (out, ov, aligned)
     }
 
     /// Where a line from `at` through a point near `p` touches a target segment: square to it

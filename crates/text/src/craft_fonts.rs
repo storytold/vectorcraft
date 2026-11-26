@@ -4,25 +4,30 @@
 //! manifest (Japanese UI and document fonts, Arabic fonts and Noto Sans Thai); built without it,
 //! it is empty and that text falls back to the installed system fonts. Release builds always set it. See `build.rs`.
 
-/// A font from the optional craft-fonts build input (empty unless built with `CRAFT_FONTS_DIR`).
-pub struct CraftFont {
-    pub family: &'static str,
-    pub style: &'static str,
-    /// ISO 15924 scripts the font is for, e.g. `"Jpan"`.
-    pub scripts: &'static [&'static str],
-    pub bytes: &'static [u8],
-}
+pub use craft_fonts_build::EmbeddedFace;
+#[cfg(target_arch = "wasm32")]
+pub use craft_fonts_build::ServedFace;
+
+/// The craft-fonts faces embedded in the build (empty unless built with `CRAFT_FONTS_DIR`).
+pub static CRAFT_FONTS: &[EmbeddedFace] = include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
+
+/// The craft-fonts faces the web build's interface font stack fetches from beside the wasm when its
+/// text needs them: the `startup` and `demand` lines of `crates/text/web-fonts.txt` (empty unless
+/// built with `CRAFT_FONTS_DIR`).
+#[cfg(target_arch = "wasm32")]
+pub static SERVED_FONTS: &[ServedFace] = include!(concat!(env!("OUT_DIR"), "/craft_fonts_served.rs"));
 
 /// A craft-fonts face the web (wasm32) build fetches from beside the wasm instead of embedding,
-/// listed in `crates/text/web-fonts.txt` (empty unless built with `CRAFT_FONTS_DIR`). Fetched by
-/// `apps/vectorcraft-web/src/fonts.rs`; copied into the site by `cargo xtask web-fonts`.
+/// listed in `crates/text/web-fonts.txt` (empty unless built with `CRAFT_FONTS_DIR`). Fetched into
+/// the document font database by `apps/vectorcraft-web/src/fonts.rs`; copied into the site by
+/// `cargo xtask web-fonts`.
 pub struct WebFont {
     pub family: &'static str,
     pub style: &'static str,
     /// Fetched before the app starts (a fallback the first frame needs).
     pub startup: bool,
-    /// Fetched only when the interface needs a character of one of [`WebFont::scripts`] (see
-    /// [`demand_fonts`]). With neither this nor `startup`, fetched in the background.
+    /// Fetched only by the interface font stack, when its text needs one of the face's scripts
+    /// ([`SERVED_FONTS`]). With neither this nor `startup`, fetched in the background.
     pub demand: bool,
     /// ISO 15924 scripts the face is for (its craft-fonts manifest row), e.g. `"Hang"`.
     pub scripts: &'static [&'static str],
@@ -32,48 +37,33 @@ pub struct WebFont {
     pub integrity: &'static str,
 }
 
-include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
+/// The faces of `web-fonts.txt` (empty unless built with `CRAFT_FONTS_DIR`).
+pub static WEB_FONTS: &[WebFont] = include!(concat!(env!("OUT_DIR"), "/web_fonts.rs"));
 
-impl CraftFont {
-    /// Is the font for Japanese text?
-    pub fn is_japanese(&self) -> bool {
-        self.scripts.contains(&"Jpan")
-    }
-    /// Is the font for Arabic text?
-    pub fn is_arabic(&self) -> bool {
-        self.scripts.contains(&"Arab")
-    }
-    /// Is the font for Thai text?
-    pub fn is_thai(&self) -> bool {
-        self.scripts.contains(&"Thai")
-    }
-    /// Is the font for Georgian text?
-    pub fn is_georgian(&self) -> bool {
-        self.scripts.contains(&"Geor")
-    }
-    /// A serif (Mincho) family, for document text.
-    pub fn is_mincho(&self) -> bool {
-        self.family.contains("Mincho")
-    }
-    /// A sans (Gothic) family, for UI text.
-    pub fn is_gothic(&self) -> bool {
-        self.family.contains("Gothic")
-    }
-    /// A bold face.
-    pub fn is_bold(&self) -> bool {
-        crate::style_weight(self.style) >= 600.0
-    }
+/// A serif (Mincho) family, for document text.
+fn is_mincho(f: &EmbeddedFace) -> bool {
+    f.family.contains("Mincho")
+}
+
+/// A sans (Gothic) family, for UI text.
+fn is_gothic(f: &EmbeddedFace) -> bool {
+    f.family.contains("Gothic")
+}
+
+/// A bold face.
+fn is_bold(f: &EmbeddedFace) -> bool {
+    f.weight() >= 600
 }
 
 /// The craft-fonts faces for Japanese text, best for document text first: Mincho (serif) families,
 /// then the others, regular weights before bold. Empty when built without craft-fonts.
-pub fn japanese_document_fonts() -> Vec<&'static CraftFont> {
+pub fn japanese_document_fonts() -> Vec<&'static EmbeddedFace> {
     japanese_document_fonts_from(CRAFT_FONTS)
 }
 
-fn japanese_document_fonts_from(fonts: &[CraftFont]) -> Vec<&CraftFont> {
-    let mut v: Vec<_> = fonts.iter().filter(|f| f.is_japanese()).collect();
-    v.sort_by_key(|f| (!f.is_mincho(), f.is_bold()));
+fn japanese_document_fonts_from(fonts: &[EmbeddedFace]) -> Vec<&EmbeddedFace> {
+    let mut v: Vec<_> = fonts.iter().filter(|f| f.has_script("Jpan")).collect();
+    v.sort_by_key(|f| (!is_mincho(f), is_bold(f)));
     v
 }
 
@@ -83,103 +73,35 @@ fn japanese_document_fonts_from(fonts: &[CraftFont]) -> Vec<&CraftFont> {
 /// (Noto Sans Thai: the fallback for Thai text where no Thai font is installed, and on the web),
 /// then the Georgian ones (Noto Sans Georgian, the same for Georgian). Remaining faces follow in manifest order, so every explicitly supplied family can be selected.
 /// Empty when built without craft-fonts.
-pub fn document_fonts() -> Vec<&'static CraftFont> {
+pub fn document_fonts() -> Vec<&'static EmbeddedFace> {
     document_fonts_from(CRAFT_FONTS)
 }
 
-fn document_fonts_from(fonts: &[CraftFont]) -> Vec<&CraftFont> {
+fn document_fonts_from(fonts: &[EmbeddedFace]) -> Vec<&EmbeddedFace> {
     let mut v = japanese_document_fonts_from(fonts);
-    v.extend(fonts.iter().filter(|f| f.is_arabic() && !f.is_japanese()));
-    v.extend(fonts.iter().filter(|f| f.is_thai() && !f.is_japanese() && !f.is_arabic()));
-    v.extend(fonts.iter().filter(|f| f.is_georgian() && !f.is_japanese() && !f.is_arabic() && !f.is_thai()));
-    v.extend(fonts.iter().filter(|f| !f.is_japanese() && !f.is_arabic() && !f.is_thai() && !f.is_georgian()));
+    let rest = |f: &&EmbeddedFace, earlier: &[&str]| !f.has_script("Jpan") && !earlier.iter().any(|s| f.has_script(s));
+    v.extend(fonts.iter().filter(|f| f.has_script("Arab") && rest(f, &[])));
+    v.extend(fonts.iter().filter(|f| f.has_script("Thai") && rest(f, &["Arab"])));
+    v.extend(fonts.iter().filter(|f| f.has_script("Geor") && rest(f, &["Arab", "Thai"])));
+    v.extend(fonts.iter().filter(|f| rest(f, &["Arab", "Thai", "Geor"])));
     v
-}
-
-/// The craft-fonts faces for Georgian UI text (Noto Sans Georgian), in manifest order. The UI fonts
-/// have no Georgian letters. Empty when built without craft-fonts, and on the web, which fetches
-/// the face at startup (`web-fonts.txt`) instead of embedding it.
-pub fn georgian_ui_fonts() -> Vec<&'static CraftFont> {
-    CRAFT_FONTS.iter().filter(|f| f.is_georgian() && !f.is_japanese()).collect()
 }
 
 /// The craft-fonts faces for Japanese text, best for UI text first: Gothic (sans) families, then
 /// the others; `bold` puts bold faces before regular ones. Empty when built without craft-fonts.
-pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static CraftFont> {
-    let mut v: Vec<&'static CraftFont> = CRAFT_FONTS.iter().filter(|f| f.is_japanese()).collect();
-    v.sort_by_key(|f| (!f.is_gothic(), f.is_bold() != bold));
+pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static EmbeddedFace> {
+    let mut v: Vec<&'static EmbeddedFace> = CRAFT_FONTS.iter().filter(|f| f.has_script("Jpan")).collect();
+    v.sort_by_key(|f| (!is_gothic(f), is_bold(f) != bold));
     v
-}
-
-/// The script of `c` that a `demand` web face is fetched for: `"Hang"` for Hangul (jamo,
-/// compatibility jamo, syllables and the halfwidth forms), `"Deva"` for Devanagari (with its
-/// extended blocks and the Vedic extensions), and `"Hebr"` for Hebrew (including Alphabetic
-/// Presentation Forms). `None` for every other character.
-pub fn demand_script(c: char) -> Option<&'static str> {
-    match c as u32 {
-        0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF | 0xFFA0..=0xFFDC => Some("Hang"),
-        0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF | 0x11B00..=0x11B5F => Some("Deva"),
-        0x0590..=0x05FF | 0xFB1D..=0xFB4F => Some("Hebr"),
-        _ => None,
-    }
-}
-
-/// The indexes in `fonts` of the `demand` faces for the scripts of `chars` (by
-/// [`demand_script`]), each once, in `fonts` order.
-pub fn demand_fonts(fonts: &[WebFont], chars: impl IntoIterator<Item = char>) -> Vec<usize> {
-    let mut scripts: Vec<&str> = Vec::new();
-    for s in chars.into_iter().filter_map(demand_script) {
-        if !scripts.contains(&s) {
-            scripts.push(s);
-        }
-    }
-    fonts.iter().enumerate().filter(|(_, f)| f.demand && f.scripts.iter().any(|s| scripts.contains(s))).map(|(i, _)| i).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn web_font(family: &'static str, startup: bool, demand: bool, scripts: &'static [&'static str]) -> WebFont {
-        WebFont { family, style: "Regular", startup, demand, scripts, url: "", integrity: "" }
-    }
-
-    #[test]
-    fn demand_scripts_of_hangul_and_devanagari() {
-        for c in ['한', '국', 'ㄱ', 'ᄀ', 'ﾡ'] {
-            assert_eq!(demand_script(c), Some("Hang"), "{c}");
-        }
-        for c in ['ह', 'ि', '्', '़', '।', '\u{A8F2}'] {
-            assert_eq!(demand_script(c), Some("Deva"), "{c}");
-        }
-        for c in ['א', 'ע', 'ת', '\u{05B0}'] {
-            assert_eq!(demand_script(c), Some("Hebr"), "{c}");
-        }
-        for c in ['A', 'é', 'ا', 'ก', 'ა', '日', 'ロ', '中'] {
-            assert_eq!(demand_script(c), None, "{c}");
-        }
-    }
-
-    #[test]
-    fn demand_fonts_follow_the_scripts_painted() {
-        let fonts = [
-            web_font("Arabic", true, false, &["Arab"]),
-            web_font("Picked", false, false, &["Hang"]),
-            web_font("Korean", false, true, &["Hang", "Kore"]),
-            web_font("Devanagari", false, true, &["Deva"]),
-            web_font("Hebrew", false, true, &["Hebr"]),
-        ];
-        assert_eq!(demand_fonts(&fonts, "한국어".chars()), [2], "Korean fetches only the Korean face");
-        assert_eq!(demand_fonts(&fonts, "हिन्दी".chars()), [3], "Hindi fetches only the Devanagari face");
-        assert_eq!(demand_fonts(&fonts, "עברית".chars()), [4], "Hebrew fetches only the Hebrew face");
-        assert_eq!(demand_fonts(&fonts, "हिन्दी 한국어 עברית Layer".chars()), [2, 3, 4], "each once, in list order");
-        assert!(demand_fonts(&fonts, "English العربية 日本語".chars()).is_empty(), "other scripts fetch nothing");
-        assert!(demand_fonts(&[], "한국어".chars()).is_empty(), "built without craft-fonts: nothing to fetch");
-    }
-
     #[test]
     fn document_fonts_keep_script_priority_and_include_every_face_once() {
-        let font = |family, style, scripts| CraftFont { family, style, scripts, bytes: &[] };
+        let font = |family, style, scripts| EmbeddedFace { family, style, scripts, index: 0, bytes: &[], role: None };
         let fonts = [
             font("Chinese", "Regular", &["Hans"]),
             font("Thai", "Regular", &["Thai", "Arab"]),

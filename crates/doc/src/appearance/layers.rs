@@ -13,6 +13,18 @@ pub struct Effect {
     pub visible: bool,
 }
 
+impl Effect {
+    /// Whether this effect gives an image's fill or stroke a shape to paint: it is a visible
+    /// Convert to Shape or Outline Object.
+    pub fn gives_image_shape(&self) -> bool {
+        self.visible
+            && matches!(
+                self.id.as_str(),
+                "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" | "path.outlineObject"
+            )
+    }
+}
+
 fn yes() -> bool {
     true
 }
@@ -195,12 +207,14 @@ impl StrokeLayer {
             wheel: None,
         }
     }
+    /// The least weight an arrowhead is drawn at, in points ([`Self::arrow_weight`]).
+    pub const LEAST_ARROW_WEIGHT: f64 = 0.25;
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
-    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide (see
+    /// [`Self::LEAST_ARROW_WEIGHT`]. A head of weight `hw` fits a box about `4·hw` long and wide (see
     /// [`Arrowhead::reach`] and [`Arrowhead::half_width`]).
     pub fn arrow_weight(&self, end: bool) -> f64 {
         let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
-        (self.width * pct / 100.0).max(0.25)
+        (self.width * pct / 100.0).max(Self::LEAST_ARROW_WEIGHT)
     }
     /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
     /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.

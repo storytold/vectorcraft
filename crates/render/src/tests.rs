@@ -224,6 +224,33 @@ fn hidden_and_culled() {
     assert_eq!(rr.stats.culled, 1);
 }
 
+#[test]
+fn a_render_leaves_out_every_object_of_a_large_hidden_set() {
+    // 2,000 one-pixel-wide strips; the strips in even columns are in `hidden`.
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let mut hidden = std::collections::HashSet::new();
+    for row in 0..20 {
+        for col in 0..100 {
+            let r = Rect::new(f64::from(col), f64::from(row * 5), f64::from(col + 1), f64::from(row * 5 + 5));
+            let n = rect_node(&mut d, r, Paint::solid(Color::BLACK), Paint::None, 0.0);
+            let id = d.insert(Some(l), usize::MAX, n).unwrap();
+            if col % 2 == 0 {
+                hidden.insert(id);
+            }
+        }
+    }
+    assert_eq!(hidden.len(), 1_000);
+    let opts = RenderOptions { hidden, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    for row in 0..20 {
+        for col in 0..100 {
+            let want = if col % 2 == 0 { [0, 0, 0, 0] } else { [0, 0, 0, 255] };
+            assert_eq!(r.pixel(col, row * 5 + 2), want, "column {col}, row {row}");
+        }
+    }
+}
+
 /// A document with symbol "Far" holding a red rectangle `art`, and an instance of it moved by
 /// (-50, -50): its 20 × 20 square, (-60, -60) to (-40, -40), lies outside a view of the page.
 fn far_instance(art: Rect) -> Document {
@@ -576,6 +603,35 @@ fn outline_mode_no_fill() {
         Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
     assert_eq!(r.pixel(50, 50), [255, 255, 255, 255]);
     assert!(r.pixel(10, 50)[0] < 200);
+}
+
+/// Outline view draws a distorted image's frame through its corners: a slanted side, and nothing
+/// inside or along the rectangle it was placed in.
+#[test]
+fn outline_mode_draws_a_distorted_images_frame_through_its_corners() {
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    let im = vectorcraft_doc::ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    let q = [(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    n.set_image_corners(q).unwrap();
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let r =
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
+    // On the left side, halfway down: from (40, 0) to (0, 100).
+    assert!(r.pixel(20, 50)[0] < 200, "the slanted side");
+    // The old rectangle's left edge and the inside of the quad stay blank.
+    assert_eq!(r.pixel(1, 30), [255; 4]);
+    assert_eq!(r.pixel(50, 50), [255; 4]);
 }
 
 /// A 100 × 100 document with each kind of path Outline view draws, and the ids of its objects by

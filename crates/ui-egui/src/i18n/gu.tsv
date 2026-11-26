@@ -149,6 +149,7 @@
 	Add Selected Artwork as One Asset	પસંદ કરેલી આર્ટવર્ક એક સંપત્તિ તરીકે ઉમેરો
 	Add Spine Point	સ્પાઇન બિંદુ ઉમેરો
 	Add Used Colors	વપરાયેલા રંગ ઉમેરો
+	Add Selected Colors	પસંદ કરેલા રંગ ઉમેરો
 	Add as Effect	ઇફેક્ટ તરીકે ઉમેરો
 	Add space to fit	ફિટ કરવા જગ્યા ઉમેરો
 	Add to Brushes	બ્રશમાં ઉમેરો
@@ -282,6 +283,10 @@
 	Arc Lower…	નીચે આર્ક…
 	Arc Segment Tool Options	આર્ક સેગમેન્ટ ટૂલ વિકલ્પો
 	Arc Tool	આર્ક ટૂલ
+	Three-Point Arc Tool	ત્રણ-પૉઇન્ટ આર્ક ટૂલ
+	Three-Point Arc	ત્રણ-પૉઇન્ટ આર્ક
+	Arc too large	આર્ક ખૂબ મોટો છે
+	Third Point Sets Direction	ત્રીજો પૉઇન્ટ દિશા નક્કી કરે છે
 	Arc Upper…	ઉપર આર્ક…
 	Arch…	કમાન…
 	Arc…	આર્ક…
@@ -509,6 +514,7 @@
 	Assign profile:	પ્રોફાઇલ સોંપો:
 	Preserve the color numbers	રંગોની સંખ્યાઓ જાળવો
 	Convert to keep the colors' appearance	રંગોનો દેખાવ જાળવવા રૂપાંતરિત કરો
+@id	language.name	ગુજરાતી
 @msg	`{path}` goes with `{key}`: "assign" only	`{path}` ફક્ત `{key}`: "assign" સાથે જ વપરાય છે
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	પેસ્ટ કરેલા રંગો એવા દસ્તાવેજમાંથી આવે છે જેની {model} પ્રોફાઇલ “{from}” છે; આ દસ્તાવેજની “{to}” છે.
 	CSS Properties	CSS ગુણધર્મો
@@ -601,6 +607,11 @@
 	Circle	વર્તુળ
 	Circle Tool	વર્તુળ ટૂલ
 	Circle too large	વર્તુળ ખૂબ મોટું છે
+	Show Radii	ત્રિજ્યાઓ બતાવો
+	Show Diameter	વ્યાસ બતાવો
+	Anchors at Standard Positions	પ્રમાણભૂત સ્થાનો પર એન્કર બિંદુઓ
+	Third Point by Dragging	ખેંચીને ત્રીજું બિંદુ
+	Gray	રાખોડી
 	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
@@ -1062,6 +1073,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete એન્કર બિંદુઓ દૂર કરે છે અને પાથને જોડાયેલા રાખે છે
 	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
@@ -1718,6 +1730,18 @@
 	Graphic Styles	ગ્રાફિક સ્ટાઇલ્સ
 	Graphic Styles Options	ગ્રાફિક સ્ટાઇલ્સ વિકલ્પો
 	Graphics	ગ્રાફિક્સ
+	Contrast	કોન્ટ્રાસ્ટ
+	Show Contrast	કોન્ટ્રાસ્ટ બતાવો
+	Contrast For	આના માટે કોન્ટ્રાસ્ટ
+	Normal Text	સામાન્ય ટેક્સ્ટ
+	Large Text	મોટું ટેક્સ્ટ
+	Contrast Background	કોન્ટ્રાસ્ટ પૃષ્ઠભૂમિ
+	Behind Selection	પસંદગીની પાછળ
+	Current Color	વર્તમાન રંગ
+	Pass	પાસ
+	Fail	નાપાસ
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 લઘુત્તમ કોન્ટ્રાસ્ટ: સામાન્ય ટેક્સ્ટ AA 4.5:1 (1.4.3) અને AAA 7:1 (1.4.6), મોટું ટેક્સ્ટ AA 3:1 અને AAA 4.5:1, ગ્રાફિક્સ અને નિયંત્રણો AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	પૃષ્ઠભૂમિ પસંદગીના કેન્દ્રમાં વાંચવામાં આવે છે.
 	Graphics Processor	ગ્રાફિક્સ પ્રોસેસર
 	Graphics: {adapter}	ગ્રાફિક્સ: {adapter}
 	Gravity	ગ્રેવિટી
@@ -2035,6 +2059,12 @@
 	Knife	નાઇફ
 	Knockout Group	નૉકઆઉટ ગ્રૂપ
 	LZW Compression	LZW કમ્પ્રેશન
+	OKLCH Sliders	OKLCH સ્લાઇડર્સ
+	HSL Sliders	HSL સ્લાઇડર્સ
+	Chroma	ક્રોમા
+	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
+	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
+	Lightness	લાઇટનેસ
 	Lab Spot Colors:	Lab સ્પોટ રંગો:
 	Landscape	લેન્ડસ્કેપ
 	Language	ભાષા
@@ -2164,6 +2194,8 @@
 	List Workspaces	વર્કસ્પેસની યાદી
 	Live Paint	લાઇવ પેઇન્ટ
 	Live Paint Bucket	લાઇવ પેઇન્ટ બકેટ
+	Fill Area	વિસ્તાર ભરો
+	Fill Area Tool	વિસ્તાર ભરો ટૂલ
 	Live Paint Bucket (Stroke)	લાઇવ પેઇન્ટ બકેટ (સ્ટ્રોક)
 	Live Paint Info	લાઇવ પેઇન્ટ માહિતી
 	Live Paint Selection Tool	લાઇવ પેઇન્ટ પસંદગી ટૂલ
@@ -2604,6 +2636,7 @@
 	One page per artboard.	દરેક આર્ટબોર્ડ માટે એક પેજ.
 	Only Web Colors	માત્ર વેબ રંગો
 	Opacity	અપારદર્શકતા
+	Show Opacity	અપારદર્શકતા બતાવો
 	Opacity & Mask Define Knockout Shape	અપારદર્શકતા અને માસ્ક નૉકઆઉટ આકાર વ્યાખ્યાયિત કરે છે
 	Opacity Mask Info	અપારદર્શકતા માસ્ક માહિતી
 	Opacity Mask Options	અપારદર્શકતા માસ્ક વિકલ્પો
@@ -2805,6 +2838,15 @@
 	Pause For	આ સમય માટે થોભાવો
 	Pen	પેન
 	Pen Tool	પેન ટૂલ
+	Quick Pen Tool	ક્વિક પેન ટૂલ
+	Quick Pen	ક્વિક પેન
+	Quick Pen Toolbar	ક્વિક પેન ટૂલબાર
+	Continuous Arc	સતત આર્ક
+	Sharp Corner Arc	તીક્ષ્ણ ખૂણાવાળો આર્ક
+	Flip Arc	આર્ક ફ્લિપ કરો
+	Hide Toolbar	ટૂલબાર છુપાવો
+	Pin Toolbar Position	ટૂલબાર સ્થિતિ પિન કરો
+	Reset Toolbar Position	ટૂલબાર સ્થિતિ રીસેટ કરો
 	Pencil	પેન્સિલ
 	Pencil Tool	પેન્સિલ ટૂલ
 	Percent:	ટકા:
@@ -2900,6 +2942,11 @@
 	Preserve Alpha Transparency	આલ્ફા પારદર્શિતા જાળવો
 	Preserve Appearance and Overprints	દેખાવ અને ઓવરપ્રિન્ટ જાળવો
 	Preserve CMYK Numbers	CMYK નંબર જાળવો
+	Preserve RGB Numbers	RGB નંબર જાળવો
+	Device to Simulate:	અનુકરણ કરવાનું ઉપકરણ:
+	Simulate Paper Color	કાગળના રંગનું અનુકરણ કરો
+	Simulate Black Ink	કાળી શાહીનું અનુકરણ કરો
+	Load…	લોડ કરો…
 	Preserve Editing Capabilities	સંપાદન ક્ષમતાઓ જાળવો
 	Preserve Lightness	તેજ જાળવો
 	Preserve Overprints and Spot Colors	ઓવરપ્રિન્ટ અને સ્પોટ રંગ જાળવો
@@ -3038,6 +3085,7 @@
 	Read Shortcut Set File	શોર્ટકટ સેટ ફાઇલ વાંચો
 	Read files you open in its format and make documents from them	તમે ખોલો તે ફાઇલોને તેના ફોર્મેટમાં વાંચો અને તેમાંથી દસ્તાવેજ બનાવો
 	Read the objects it is given	આપેલી ઑબ્જેક્ટ્સ વાંચો
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	આપેલી ઑબ્જેક્ટ્સ અને દસ્તાવેજની સેટિંગ્સ, આર્ટબોર્ડ, લેયર્સ અને સ્વેચ વાંચો
 	Reading the file…	ફાઇલ વાંચી રહ્યું છે…
 	Reads or sets environment variables	એન્વાયર્નમેન્ટ વેરીએબલ વાંચે કે સેટ કરે છે
 	Ready	તૈયાર
@@ -3048,6 +3096,9 @@
 	Rearrange All	બધું ફરીથી ગોઠવો
 	Rearrange All Artboards	બધા આર્ટબોર્ડ ફરીથી ગોઠવો
 	Rearrange All Artboards…	બધા આર્ટબોર્ડ ફરીથી ગોઠવો…
+	Rearrange…	ફરીથી ગોઠવો…
+	Selected Artboards: {n}	પસંદ કરેલા આર્ટબોર્ડ: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	આર્ટબોર્ડ મૂકવા કેનવાસ પર ક્લિક કરો (Esc રદ કરે છે)
 	Rearrange Artboards	આર્ટબોર્ડ ફરીથી ગોઠવો
 	Recall Selection	પસંદગી યાદ કરો
 	Recent Colors	તાજેતરના રંગો
@@ -3154,6 +3205,37 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	ત્રિકોણ (ખુલ્લો)
+	Circle (open)	વર્તુળ (ખુલ્લું)
+	Square (open)	ચોરસ (ખુલ્લો)
+	Arrow (open)	તીર (ખુલ્લું)
+	Barbed	કાંટાળું
+arrowhead	Feather	પીંછું
+	Half Arrow (left)	અડધું તીર (ડાબે)
+	Half Arrow (right)	અડધું તીર (જમણે)
+	Double Bar	બેવડી પટ્ટી
+	Dot on Bar	પટ્ટી પર બિંદુ
+	Chevron	શેવરોન
+	Cross	ક્રોસ
+	Plus	પ્લસ
+	Hexagon (open)	ષટ્કોણ (ખુલ્લો)
+	Tag	ટૅગ
+	Tag (open)	ટૅગ (ખુલ્લો)
+	Half Circle	અર્ધવર્તુળ
+	Drop	ટીપું
+	Slash	સ્લૅશ
+	Double Slash	બેવડો સ્લૅશ
+	Diamond (open)	ડાયમંડ (ખુલ્લો)
+	Reverse Triangle	ઊંધો ત્રિકોણ
+	Swallowtail	અબાબીલની પૂંછડી
+	Bracket	કૌંસ
+	Fork	કાંટો
+	Leaf	પાંદડું
+	Kite	પતંગ
+	Triangle to Bar	ત્રિકોણથી પટ્ટી
+	Oval	અંડાકાર
+	Line Arrow	રેખા તીર
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
 	Common Tangents	સામાન્ય સ્પર્શરેખાઓ
@@ -3241,6 +3323,8 @@
 	Reselect	ફરી પસંદ કરો
 	Reset	રીસેટ કરો
 	Reset Bar Position	બાર સ્થિતિ રીસેટ કરો
+	Bar Actions	બાર ક્રિયાઓ
+	Reset Bar Actions	બાર ક્રિયાઓ રીસેટ કરો
 	Reset Bounding Box	બાઉન્ડિંગ બોક્સ રીસેટ કરો
 	Rotate Bounding Box	બાઉન્ડિંગ બોક્સ ફેરવો
 	Rotate Bounding Box…	બાઉન્ડિંગ બોક્સ ફેરવો…
@@ -3305,7 +3389,7 @@
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	પસંદ કરો › સમાન › ભરવાનો રંગ, સ્ટ્રોક રંગ અને ભરો અને સ્ટ્રોક ફક્ત ગ્લોબલ કે સ્પોટ સ્વૉચના એ જ ટિન્ટ સાથે મેળ ખાય છે, તેના કોઈપણ ટિન્ટ સાથે નહીં.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	કોઈ દસ્તાવેજ ખુલ્લો ન હોય ત્યારે હોમ સ્ક્રીન બતાવે છે; બંધ હોય ત્યારે તમે હોમ પર ક્લિક ન કરો ત્યાં સુધી વિન્ડો ખાલી રહે છે.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	કદ, સ્થાન અને ગોઠવણી માટે ઑબ્જેક્ટને તેમના સ્ટ્રોક અને આકાર બદલતી ઇફેક્ટ્સ સાથે માપે છે; છાયા, ગ્લો અને બ્લર માપવામાં આવતા નથી.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ 72 ને બદલે 96 સ્ક્રીન પોઇન્ટ લે છે.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ ડિસ્પ્લેનો એક ઇંચ ભરે છે, અથવા સિસ્ટમ ડિસ્પ્લેનું ઉપયોગી કદ ન જણાવે ત્યારે 96 સ્ક્રીન પોઇન્ટ લે છે.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	પસંદગી ટૂલથી ગ્રુપ, પાથ કે છબી પર ડબલ-ક્લિક કરવાથી તે આઇસોલેશન મોડમાં ખુલે છે.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	પૅટર્ન ભરણ અને સ્ટ્રોક આર્ટવર્ક સાથે ટ્રાન્સફોર્મ થાય છે, સિવાય કે કોઈ ટ્રાન્સફોર્મ કે ટ્રાન્સફોર્મ પેનલનું મેનૂ બીજું પસંદ કરે.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	લાઇવ ખૂણાઓની ત્રિજ્યાઓ આર્ટવર્ક સાથે સ્કેલ થાય છે, સિવાય કે સ્કેલિંગ બીજું પસંદ કરે.
@@ -3316,6 +3400,7 @@
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ટ્રેકપેડ પર બે આંગળીથી ફેરવવાનો હાવભાવ કેનવાસનું દૃશ્ય ફેરવે છે.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	કી દબાવી રાખવાથી કીબોર્ડ શૉર્ટકટમાં તેની હોલ્ડ કૉલમનું ટૂલ અથવા કમાન્ડ ચાલે છે; ટૂંકું દબાણ તેનો સામાન્ય શોર્ટકટ ચલાવે છે.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	કીનો હોલ્ડ શોર્ટકટ તેના સામાન્ય શોર્ટકટને બદલે ચાલે તે પહેલાં કીને કેટલી સેકન્ડ દબાવી રાખવી પડે.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete પસંદ કરેલા એન્કર પોઇન્ટ દૂર કરે છે અને ત્યાં પાથ ખોલવાને બદલે દરેકની આસપાસ વળાંકને ફરી ગોઠવે છે.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	જ્યારે તમે એન્કર પોઇન્ટ ખસેડો છો, ત્યારે એક ખસેલા છેડાવાળો દરેક વળાંક તેના છેડાઓની સાપેક્ષે પોતાનો આકાર જાળવે છે.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ટૂલની શોર્ટકટ કી દબાવી રાખવાથી છોડો ત્યાં સુધી તે ટૂલ પસંદ રહે છે, પછી અગાઉનું ટૂલ ફરી પસંદ થાય છે.
 	Shows the bounding box while you move the selection or draw a shape.	તમે પસંદગી ખસેડો કે આકાર દોરો ત્યારે બાઉન્ડિંગ બોક્સ બતાવે છે.
@@ -3400,9 +3485,14 @@
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	લાઇન સેગમેન્ટના છેડાને એ રીતે સ્નેપ કરે છે કે તે નજીકના સીધા સેગમેન્ટને કાટખૂણે મળે.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	કેનવાસ પર દરેક સ્લાઇસનો નંબર તેના ઉપરના ડાબા ખૂણે એક બૉક્સમાં બતાવે છે; બંધ હોય ત્યારે પણ સ્લાઇસની રૂપરેખાઓ દેખાય છે.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	યુઝર અને ઑબ્જેક્ટ સ્લાઇસની રૂપરેખાઓ અને તેમના નંબર બૉક્સનો રંગ; ઑટો સ્લાઇસ તેની ઝાંખી છાયા વાપરે છે.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંના શબ્દને ફક્ત તેમાં લખેલા હાઇફન પર જ હાઇફન લાગે છે, અથવા કોઈ ન હોય તો ક્યારેય નહીં, તેની ભાષા કે કેસ ગમે તે હોય.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	ડેસ્કટોપ સંસ્કરણમાં, આ ફોલ્ડરના .wasm પ્લગ-ઇન્સ શરૂઆતમાં અને ઠીક નવું ફોલ્ડર સેટ કરે ત્યારે લોડ થાય છે, સેફ મોડ સિવાય; પરવાનગીઓ માગતું પ્લગ-ઇન તમે તે આપો પછી જ લોડ થાય છે. વેબ સંસ્કરણ કોઈ લોડ કરતું નથી.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	મોટું ફિલ્ટર કે કમાન્ડ પ્લગ-ઇનના દરેક રનને એ જ સમય મર્યાદા સાથે ઓછામાં ઓછી 250 મિલિયન સૂચનાઓ આપે છે; સામાન્ય પ્લગ-ઇનનું પોતાનું બજેટ રાખે છે. લાઇવ ઇફેક્ટ્સ, એક્સપોર્ટર્સ અને ઇમ્પોર્ટર્સ પોતાનું રાખે છે.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેની ભાષા કે કેસ ગમે તે હોય.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	ડેસ્કટોપ સંસ્કરણમાં, આ ફોલ્ડરના .wasm પ્લગ-ઇન્સ શરૂઆતમાં અને અહીં નવા ફોલ્ડર સાથે ઠીક પર ક્લિક કરો ત્યારે લોડ થાય છે, સેફ મોડ સિવાય; વેબ સંસ્કરણ તેમને લોડ કરતું નથી.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	સામાન્ય દરેક પ્લગ-ઇનની પોતાની મર્યાદાઓ રાખે છે; મોટું સાથે, પ્લગ-ઇન ફિલ્ટર અથવા આદેશ તેના ઇનપુટ માટેની સૂચનાઓ ઉપરાંત ઓછામાં ઓછી 250 મિલિયન સૂચનાઓ ચલાવી શકે છે. સમય મર્યાદા એ જ રહે છે.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	પ્લગ-ઇનના ઑબ્જેક્ટ ફિલ્ટરનું દરેક રન કેટલી સૂચનાઓ વાપરી શકે; મોટું સામાન્ય કરતાં વધુ મંજૂરી આપે છે, 60 સેકન્ડની એ જ મર્યાદા સાથે. ભારે ફિલ્ટર પોતાનું બજેટ રાખે છે.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	પ્રથમ સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	બીજી સ્ક્રેચ ડિસ્ક પસંદગી: Startup, None અથવા ફોલ્ડરનો પાથ; VectorCraft તેને સાચવે છે, પરંતુ હજી સ્ક્રેચ ડિસ્કનો ઉપયોગ કરતું નથી.
 	How light or dark the interface is.	ઇન્ટરફેસ કેટલું આછું કે ઘેરું છે.
@@ -3413,14 +3503,17 @@
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ટૂલબારમાં દરેક ટૂલ ગ્રૂપનું નામ તેના ટૂલ્સની ઉપર બતાવે છે; બંધ હોય ત્યારે, ગ્રૂપ વચ્ચે કંઈ રાખ્યા વિના એક પછી એક આવે છે.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	હવેથી તમે ખોલો કે બનાવો તે દસ્તાવેજો ટેબ તરીકે ખૂલે છે; બંધ હોય ત્યારે, દરેક એક ફ્લોટિંગ વિન્ડોમાં ખૂલે છે. પહેલેથી ખુલ્લા દસ્તાવેજો જ્યાં છે ત્યાં જ રહે છે.
 	Makes the document tabs taller and their names larger.	દસ્તાવેજના ટૅબને ઊંચા અને તેમનાં નામ મોટાં બનાવે છે.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	આગલી શરૂઆતથી, જ્યાં VectorCraft અન્યથા પોતાનો ટાઇટલ બાર દોરે ત્યાં સિસ્ટમ વિન્ડોનો ટાઇટલ બાર દોરે છે.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	આગલી શરૂઆતથી, ડેસ્કટોપ વિન્ડોનો ટાઇટલ બાર દોરે ત્યાં પણ VectorCraft તેને દોરે છે, સિવાય કે સિસ્ટમ ટાઇટલ બાર ચાલુ હોય.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	આગલી શરૂઆતથી, જ્યાં VectorCraft અન્યથા પોતાનો ટાઇટલ બાર દોરે ત્યાં સિસ્ટમ વિન્ડોનો ટાઇટલ બાર દોરે છે; Linux અને BSD પર VECTORCRAFT_TITLEBAR ચલને અગ્રતા મળે છે.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	આગલી શરૂઆતથી, ડેસ્કટોપ વિન્ડોનો ટાઇટલ બાર દોરે ત્યાં પણ VectorCraft તેને દોરે છે, સિવાય કે સિસ્ટમ ટાઇટલ બાર ચાલુ હોય અથવા VECTORCRAFT_TITLEBAR ચલ તેને પસંદ કરે.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	ઇન્ટરફેસને મોટું કે નાનું બનાવે છે; સમાન ઝૂમ પર કેનવાસ પરની આર્ટ પોતાનું કદ જાળવે છે.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft જે ટૂલ પોઇન્ટર દોરે છે તે UI સ્કેલિંગ સાથે મોટા અને નાના થાય છે; બંધ હોય ત્યારે, તે પોતાનું કદ જાળવે છે.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ઇન્ટરફેસની ભાષા; ઑટો સિસ્ટમની ભાષા વાપરે છે. તમે ભાષા પસંદ કરો કે તરત જ ડાયલોગ તે ભાષામાં બદલાય છે.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ઍનિમેટેડ ઝૂમ ફક્ત આ ચાલુ હોય ત્યારે જ કામ કરે છે; બંધ હોય ત્યારે, ઍનિમેટેડ ઝૂમ ઝાંખું થાય છે અને ઝૂમ ઍનિમેટ થતું નથી.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	વ્હીલથી ઝૂમ સરળતાથી સરકે છે, અને ઝૂમ ટૂલ તમે બાજુમાં ખેંચો અથવા દબાવી રાખો ત્યારે ઝૂમ કરે છે; બંધ હોય ત્યારે, ઝૂમ ટૂલ તમે ખેંચો તે વિસ્તાર પર ઝૂમ કરે છે.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	આગલી શરૂઆતથી, ડેસ્કટોપ સંસ્કરણ આ પ્રકારના ગ્રાફિક્સ પ્રોસેસર દ્વારા કેનવાસ બતાવે છે; આર્ટવર્ક હંમેશાં CPU પર દોરાય છે. સ્વચાલિત Windows અને macOS પર સંકલિત પ્રોસેસરને પસંદ કરે છે. વેબ સંસ્કરણ તેનો ઉપયોગ કરતું નથી.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	આગલી શરૂઆતથી, જ્યાં ગ્રાફિક્સ ડ્રાઇવર મંજૂરી આપે ત્યાં વિન્ડો ડિસ્પ્લેના રિફ્રેશની રાહ જોયા વિના દરેક ફ્રેમ બતાવે છે, સેકન્ડ દીઠ વધુમાં વધુ 240 ફ્રેમ.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	આગલી શરૂઆતથી, ડેસ્કટોપ સંસ્કરણ આ પ્રકારના ગ્રાફિક્સ પ્રોસેસરથી દોરે છે; સ્વચાલિત ડિસ્પ્લે ચલાવતા પ્રોસેસરને પસંદ કરે છે. વેબ સંસ્કરણ તેનો ઉપયોગ કરતું નથી.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	આગલી શરૂઆતથી, વિન્ડો ડિસ્પ્લે રિફ્રેશની રાહ જોયા વિના ફ્રેમ બતાવે છે, સેકન્ડમાં વધુમાં વધુ 240; બંધ હોય ત્યારે ગતિ ડિસ્પ્લે નક્કી કરે છે. શરૂઆતમાં સેટ કરેલો પ્રેઝન્ટ મોડ પ્રાથમિકતા ધરાવે છે.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	દરેક દસ્તાવેજ રાખે તે પૂર્વવત્ પગલાંની મહત્તમ સંખ્યા; ઓછી સંખ્યા ઠીક પર ક્લિક કરો ત્યારે સૌથી જૂનાં પગલાં દૂર કરે છે. પગલાં વધુ મેમરી લે ત્યારે વહેલાં પણ દૂર થઈ શકે છે.
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	તમે ખેંચો ત્યારે આર્ટ બદલાતી બતાવે છે; બંધ હોય ત્યારે, રૂપરેખાઓ ખેંચાણને અનુસરે છે અને તમે છોડો ત્યારે આર્ટ બદલાય છે. રૂલરની માર્ગદર્શિકા ખેંચતી વખતે હંમેશા ખસે છે.
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	કેટલા વર્કર થ્રેડ આર્ટ દોરે છે; -1 VectorCraft વાપરી શકે તે કોરથી એક ઓછો વાપરે છે, વધુમાં વધુ 8, અને 0 એક પણ નહીં. વેબ સંસ્કરણ ક્યારેય કોઈ વાપરતું નથી.
@@ -3437,6 +3530,9 @@
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	તાજેતરની ફાઇલો ખોલો અને હોમ સ્ક્રીન વધુમાં વધુ આટલી તાજેતરની ફાઇલો બતાવે છે; 0 એક પણ બતાવતું નથી, અને VectorCraft તો પણ 30 સુધી યાદ રાખે છે.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	દસ્તાવેજ ખૂલે ત્યારે, પોતાનું સાચવેલું પૂર્વાવલોકન બતાવતી લિંક કરેલી EPS છબી EPS ફાઇલ ફરીથી વાંચવાને બદલે તે પૂર્વાવલોકન રાખે છે; બદલાયેલી ફાઇલો હજુ પણ લિંક અપડેટ કરો ને અનુસરે છે.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	પિક્સેલ પૂર્વાવલોકનમાં, છબીઓ સુંવાળી દોરાય છે; બંધ હોય ત્યારે, તેમના પિક્સેલ તીક્ષ્ણ કિનારીઓ સાથે દેખાય છે. પિક્સેલ પૂર્વાવલોકનની બહાર, છબીઓ હંમેશા સુંવાળી હોય છે.
+	PDF Text	PDF ટેક્સ્ટ
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	તમે ખોલો કે એમ્બેડ કરો તે PDF નું ટેક્સ્ટ સંપાદનયોગ્ય ટેક્સ્ટ તરીકે આવે છે, અથવા આઉટલાઇન્સ તરીકે, જે તેના ફૉન્ટ વગરના કમ્પ્યુટર પર પણ એકસરખી દેખાય છે.
+	Linked pages show the file's own text.	લિંક કરેલાં પેજ ફાઇલનું પોતાનું ટેક્સ્ટ બતાવે છે.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	લિંક કરેલી ફાઇલ બદલાય ત્યારે, આપમેળે તેને ફરીથી વાંચે છે, ફેરફાર થાય ત્યારે પૂછો પહેલાં તમને પૂછે છે, અને જાતે તેને એમ જ રહેવા દે છે અને સ્ટેટસ બારમાં નોંધ બતાવે છે.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	ડેસ્કટોપ સંસ્કરણમાં, જે ફોલ્ડરમાં ટેમ્પ્લેટમાંથી નવું… અને ટેમ્પ્લેટ તરીકે સાચવો… શરૂ થાય છે; તમારા દસ્તાવેજ ફોલ્ડરમાંના VectorCraft Templates માટે તેને ખાલી છોડો.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	મૂળ સંપાદિત કરો લિંક કરેલી ફાઇલને તેના પ્રકાર માટેની સિસ્ટમની ડિફૉલ્ટ ઍપમાં ખોલે છે; બંધ હોય ત્યારે, લિંક કરેલી રાસ્ટર છબી PhotoCraft ઇન્સ્ટોલ હોય તો તેમાં ખૂલે છે.
@@ -3447,6 +3543,10 @@
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft આ પસંદગી સાચવે છે, પણ નકલ અને કાપો હજી લેગસી વેક્ટર ક્લિપબોર્ડ ફોર્મેટ વાપરતા નથી.
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	લેગસી વેક્ટર ક્લિપબોર્ડ માટે પાથ જાળવો અથવા દેખાવ અને ઓવરપ્રિન્ટ જાળવો; VectorCraft પસંદગી સાચવે છે પણ હજી તેને વાપરતું નથી.
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	ફોર્મેટિંગ રાખો VectorCraftના ટેક્સ્ટ ઑબ્જેક્ટમાંથી નકલ કરેલા ટેક્સ્ટને ટેક્સ્ટ ઑબ્જેક્ટમાં ચોંટાડતાં તેની શૈલીઓ રાખે છે; સાદો ટેક્સ્ટ રાખો તેને જ્યાં પડે ત્યાંની શૈલી આપે છે.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	બધા બ્લેક્સ રિચ બ્લેક તરીકે બતાવો કેનવાસ પર શુદ્ધ CMYK બ્લેક (માત્ર 100% બ્લેક શાહી)ને RGB બ્લેક તરીકે બતાવે છે; બધા બ્લેક્સ ચોક્કસ રીતે બતાવો તેને કાર્યકારી CMYK સ્પેસ દ્વારા રૂપાંતરિત કરે છે.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	બધા બ્લેકને રિચ બ્લેક તરીકે આઉટપુટ કરો RGB અને ગ્રેસ્કેલ રાસ્ટર એક્સપોર્ટમાં અને બિટમેપ તરીકે પ્રિન્ટ કરો સાથે શુદ્ધ CMYK બ્લેકને RGB બ્લેક તરીકે દોરે છે; તે વેક્ટર એક્સપોર્ટ, CMYK JPEG, TIFF અને PSD કે અન્ય પ્રિન્ટિંગ બદલતું નથી.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	ટચ સ્ક્રીન પર ટચ વર્કસ્પેસમાં બદલે છે; આ વિકલ્પ બંધ કરવાથી અથવા ટચ સ્ક્રીન ન મળે ત્યારે તે પહેલાંના વર્કસ્પેસમાં પાછું જાય છે.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	કેનવાસ પર બે આંગળીનો ટૅપ પૂર્વવત્ કરે છે, અથવા ટચ વર્કસ્પેસમાં પસંદગી અને ડ્રોઇંગ ટૂલ વચ્ચે બદલે છે, અને ત્રણ આંગળીનો ટૅપ ફરીથી કરે છે; પ્રેઝન્ટેશન મોડમાં બેમાંથી કોઈ કામ કરતું નથી.
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	દસ્તાવેજ સેટઅપની ભાષા અંગ્રેજી: USA હોય અને [Normal Character Style] કોઈ ભાષા સેટ ન કરે ત્યાં સુધી નવા ટેક્સ્ટને આ ભાષા મળે છે; દસ્તાવેજમાં પહેલેથી રહેલું ટેક્સ્ટ પોતાની ભાષા રાખે છે.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	હાઇફનેટ કરો ચાલુ હોય તેવા ફકરાઓમાં, સૂચિમાંનો શબ્દ ફક્ત તેમાં લખેલા હાઇફન પર જ તૂટે છે, અથવા કોઈ ન હોય તો ક્યાંય નહીં, તેનો કેસ ગમે તે હોય; કોરિયન શબ્દોને હાઇફન મળતો નથી, અને ભારતીય ભાષાઓના શબ્દો અક્ષર-સમૂહની અંદર તૂટતા નથી.
 	Restored documents open unsaved: save them to keep them.	પુનઃસ્થાપિત દસ્તાવેજો અસાચવેલા ખુલશે: તેમને રાખવા માટે સાચવો.
@@ -3730,6 +3830,9 @@
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
+	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
+	Recent	તાજેતરના
+	Clear Recent Commands	તાજેતરના આદેશો સાફ કરો
 	Search commands	આદેશો શોધો
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
@@ -3955,6 +4058,10 @@
 	Add Color Tool	રંગ ઉમેરો સાધન
 	Remove Color Tool	રંગ દૂર કરો સાધન
 	Remove Color	રંગ દૂર કરો
+	Set As Base Color	આધાર રંગ તરીકે સેટ કરો
+	Select Shade	છાયા પસંદ કરો
+	Add New Color	નવો રંગ ઉમેરો
+	Set Current Color As Base Color	વર્તમાન રંગને આધાર રંગ તરીકે સેટ કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
@@ -4743,9 +4850,14 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	વ્હીલ વ્યૂ
 	Box View	બૉક્સ વ્યૂ
+	Show Out-of-Gamut Colors	ગેમટ બહારના રંગો બતાવો
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો
+	Show Document Colors	દસ્તાવેજના રંગો બતાવો
+	Document Colors	દસ્તાવેજના રંગો
+	Selection Colors	પસંદગીના રંગો
+@plural	Used {n} time|Used {n} times	{n} વાર વપરાયો|{n} વાર વપરાયો
 	Show Harmony	હાર્મની બતાવો
 	Harmony Rule	હાર્મની નિયમ
 	Harmony color	હાર્મની રંગ
@@ -5057,6 +5169,7 @@ antiAlias	Sharp	શાર્પ
 	Composition	કમ્પોઝિશન
 	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
 	Replace Brush Art	બ્રશ આર્ટ બદલો
+	Replace Pattern Art	પેટર્ન આર્ટ બદલો
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
 	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
 	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો
@@ -5112,6 +5225,12 @@ antiAlias	Sharp	શાર્પ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	રિઝોલ્યુશન ઉપલબ્ધ નથી
+	estimated memory {memory}	અંદાજિત મેમરી {memory}
+	memory unavailable	મેમરી ઉપલબ્ધ નથી
+	Unknown format	અજ્ઞાત ફોર્મેટ
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -5143,7 +5262,7 @@ antiAlias	Sharp	શાર્પ
 	Align On:	આના પર સંરેખિત કરો:
 	Delete Tab	ટૅબ કાઢી નાખો
 	Face	સપાટી
-	Graphics map onto the Plane, Extrude and Revolve object types.	ગ્રાફિક્સને Plane, Extrude અને Revolve પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	ગ્રાફિક્સને Plane, Extrude, Revolve અને Inflate પ્રકારના ઑબ્જેક્ટ્સ પર મેપ કરી શકાય છે.
 	Justify with last line aligned center	છેલ્લી લાઇન મધ્યમાં રાખીને જસ્ટિફાઇ કરો
 	Justify with last line aligned right	છેલ્લી લાઇન જમણે રાખીને જસ્ટિફાઇ કરો
 	Leader:	લીડર:
@@ -5169,16 +5288,20 @@ antiAlias	Sharp	શાર્પ
 anchor	Points:	પોઇન્ટ્સ:
 diagnostics	render	રેન્ડર
 diagnostics	ui	ઇન્ટરફેસ
+file-filter	Action sets	ઍક્શન સેટ
 file-filter	All placeable files	પ્લેસ કરી શકાય તેવી બધી ફાઇલો
 file-filter	All readable files	વાંચી શકાય તેવી બધી ફાઇલો
+file-filter	Composite fonts	કમ્પોઝિટ ફોન્ટ્સ
 file-filter	Export presets	એક્સપોર્ટ પ્રીસેટ્સ
 file-filter	Flattener presets	ફ્લેટનર પ્રીસેટ્સ
 file-filter	PDF presets	PDF પ્રીસેટ્સ
 file-filter	PDF-compatible .ai	PDF-સુસંગત .ai
+file-filter	Perspective grid presets	પરસ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ
 file-filter	Print presets	પ્રિન્ટ પ્રીસેટ્સ
 file-filter	SVG Compressed	સંકુચિત SVG
 file-filter	Swatch libraries	સ્વેચ લાઇબ્રેરીઓ
 file-filter	Templates	ટેમ્પ્લેટ્સ
+file-filter	Tracing presets	ટ્રેસિંગ પ્રીસેટ્સ
 file-filter	VectorCraft Template	VectorCraft ટેમ્પ્લેટ
 gradient-kind	Radial	રેડિયલ
 lighting	Light	લાઇટ
@@ -5578,6 +5701,43 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Nature Icons	પ્રકૃતિ ચિહ્નો
+	Flower	ફૂલ
+	Tree	વૃક્ષ
+	Mountain	પર્વત
+	Ornamental	અલંકારિક
+	Scrollwork	વળાંકવાળી સજાવટ
+	Filigree Arrow	નાજુક કોતરણીવાળું તીર
+	Petal Sweep	પાંખડીઓનો વળાંક
+	Twin Curl	બેવડો વળાંક
+	Vector Packs	વેક્ટર પૅક
+	Compass Rose	દિશાસૂચક ગુલાબ
+	Botanical Sprig	વનસ્પતિ ડાળી
+	Facet Diamond	પાસાદાર હીરો
+	Tide Crest	તરંગ શિખર
+	Leaf Vine	પાંદડાની વેલ
+	Blossom Chain	ફૂલોની સાંકળ
+	Pennant Garland	ધ્વજપટ્ટીની માળા
+	Lantern String	ફાનસની હાર
+	Orbit Lines	ભ્રમણકક્ષાની રેખાઓ
+	Petal Garland	પાંખડીઓની માળા
+	Lattice Braid	જાળી વેણી
+	Facet Sweep	પાસાદાર રેખા
+	Artistic Brushes	કલાત્મક બ્રશ
+	Paint	રંગકામ
+	Flat Sweep	સપાટ લસરકો
+	Dry Drag	સૂકો ઘસારો
+	Loaded Stroke	ઘાટો પીંછીનો ઘસારો
+	Fan Sweep	પંખા જેવો લસરકો
+@msg	`at` must be "start" or "end"	`at` "start" અથવા "end" હોવું જોઈએ
+@msg	give exactly one of `through` and `toward`	`through` અને `toward` માંથી બરાબર એક આપો
+@msg	no arc fits these points: two are the same or all three lie on one line	આ પૉઇન્ટ્સમાં કોઈ આર્ક બેસતો નથી: બે એકસરખા છે અથવા ત્રણેય એક જ રેખા પર છે
+@msg	give `at` only with `toward`	`at` ફક્ત `toward` સાથે જ આપો
+	Engraving	કોતરણી
+	Fine Hatching	ઝીણી રેખાઓ
+	Dense Hatching	ગાઢ રેખાઓ
+	Tapered Hatching	પાતળી થતી રેખાઓ
+	Broken Hatching	તૂટક રેખાઓ
 	Image Brush	છબી બ્રશ
 	Soft Bloom	નરમ ફૂલ
 	Halftone Field	હાફટોન ક્ષેત્ર

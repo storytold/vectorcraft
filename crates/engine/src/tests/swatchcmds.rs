@@ -125,6 +125,69 @@ fn add_used_colors_skips_colours_that_have_swatches() {
     assert!(doc(&s).swatch("R=171 G=205 B=239").unwrap().global);
 }
 
+/// A run that finds no new color, over all the art or the selection, records no undo step.
+#[test]
+fn add_used_colors_with_no_new_color_records_no_undo_step() {
+    let mut s = session();
+    let a = rect_filled(&mut s, json!({"color": "#123456"}));
+    run(&mut s, "swatch.addUsedColors", json!({}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    for p in [json!({}), json!({"selection": true, "global": true})] {
+        assert_eq!(run(&mut s, "swatch.addUsedColors", p), json!({"added": [], "linked": 0}));
+        assert_eq!(undo_len(&s), undo);
+        assert_eq!(*doc(&s), before);
+    }
+    // An empty selection is still an error, with nothing changed.
+    run(&mut s, "select.set", json!({"ids": []}));
+    let undo = undo_len(&s);
+    assert!(s.execute("swatch.addUsedColors", &json!({"selection": true})).is_err());
+    assert_eq!(undo_len(&s), undo);
+}
+
+/// A run that finds no new color, while the Type tool is typing, still ends the typing session: the
+/// typing is its own undo step.
+#[test]
+fn add_used_colors_with_no_new_color_ends_the_typing() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::default();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 10, "text": "Hello"}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.addUsedColors", json!({}));
+    s.select_tool("type", v).unwrap();
+    let b = doc(&s).bounds_of(&[t], false).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, b.x1 - 1.0, b.center().y), v).unwrap();
+    }
+    s.tool_text("!", v).unwrap();
+    assert!(crate::cmd::typing_in_progress(&s));
+    let steps = undo_len(&s);
+    assert_eq!(run(&mut s, "swatch.addUsedColors", json!({})), json!({"added": [], "linked": 0}));
+    assert!(!crate::cmd::typing_in_progress(&s));
+    let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Typing")));
+}
+
+/// Add Selected Colors while Global Edit is on links only the selected art: a member of the same
+/// shape with another color keeps its color and stays unlinked, and Global Edit stays on.
+#[test]
+fn add_selected_colors_in_global_edit_keeps_the_other_members_colors() {
+    let mut s = session();
+    let a = rect_filled(&mut s, json!({"color": "#123456"}));
+    let b = rect_filled(&mut s, json!({"color": "#654321"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let r = run(&mut s, "select.globalEdit", json!({}));
+    assert_eq!((r["active"].clone(), r["ids"].clone()), (json!(true), json!([a.0, b.0])), "the other rectangle is a member");
+    let other = fill(&s, b);
+    let undo = undo_len(&s);
+    run(&mut s, "swatch.addUsedColors", json!({"selection": true, "global": true}));
+    assert!(matches!(fill(&s, a), Paint::Solid { swatch: Some(_), .. }), "{:?}", fill(&s, a));
+    assert_eq!(fill(&s, b), other, "the unselected member keeps its color");
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(s.doc().unwrap().global_edit.is_some(), "Global Edit stays on");
+}
+
 /// Give `id` the fill `p` exactly as written (a command would round or convert some colors).
 fn set_fill(s: &mut Session, id: NodeId, p: Paint) {
     std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance.set_fill(p);

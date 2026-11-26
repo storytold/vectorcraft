@@ -34,6 +34,7 @@ const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const TYPE_ITEMS: &str = "fills and strokes added to whole type objects are left out of text entities (outline the text to keep them)";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
@@ -671,7 +672,18 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // DXF clips nothing, so a distorted image is written at the affine placement nearest
+                // its corners, with the warning once it is written.
+                Some(xf) => {
+                    if self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() }) {
+                        self.warn(DISTORTED_IMAGES);
+                    }
+                }
+                None => {
+                    self.image(&self.doc.shown_image(n, im));
+                }
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
@@ -1325,18 +1337,19 @@ impl<'a> Scene<'a> {
         name
     }
 
-    /// A placed image, linked to its file (written once per image).
-    fn image(&mut self, im: &ImageObject) {
+    /// A placed image, linked to its file (written once per image). False when no `IMAGE` entity is
+    /// written.
+    fn image(&mut self, im: &ImageObject) -> bool {
         if !self.o.version.handles() {
             self.warn(NO_IMAGES);
-            return;
+            return false;
         }
         if !self.o.include_images {
             self.note_setting(IMAGES_OFF);
-            return;
+            return false;
         }
-        let Some(i) = self.image_def(im) else { return };
-        let Some((dw, dh)) = self.images.get(i).map(|d| (f64::from(d.size.0), f64::from(d.size.1))) else { return };
+        let Some(i) = self.image_def(im) else { return false };
+        let Some((dw, dh)) = self.images.get(i).map(|d| (f64::from(d.size.0), f64::from(d.size.1))) else { return false };
         let (w, h) = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
         let map = self.to_dxf * im.xf;
         let lin = |v: kurbo::Vec2| (map * v.to_point()) - (map * Point::ZERO);
@@ -1349,7 +1362,7 @@ impl<'a> Scene<'a> {
         let at = map * Point::new(0.0, h);
         let handle = self.handle();
         let reactor = self.handle();
-        let Some(def) = self.images.get_mut(i) else { return };
+        let Some(def) = self.images.get_mut(i) else { return false };
         def.reactors.push((reactor, handle));
         let def = def.handle;
         let layer = self.layer.clone();
@@ -1375,6 +1388,7 @@ impl<'a> Scene<'a> {
         if self.o.version >= crate::DxfVersion::R2010 {
             self.e.int(290, 0);
         }
+        true
     }
 
     /// The image file for image `im`, encoded once in the chosen format (`None`: left out).

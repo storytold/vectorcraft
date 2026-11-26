@@ -124,7 +124,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii"], "object.setLiveShape")?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -202,6 +202,16 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // A polygon's Polygon Properties: its angle, radius or side length, Make Sides Equal.
     let (polygon_angle, polygon_radius, side) = (angle("polygonAngle")?, length("polygonRadius")?, length("sideLength")?);
     let equal = p.get("makeSidesEqual").and_then(Value::as_bool) == Some(true);
+    // A rectangle's Rectangle Angle and an ellipse's Ellipse Angle, as `polygonAngle` turns a polygon.
+    let (rectangle_angle, ellipse_angle) = (angle("rectangleAngle")?, angle("ellipseAngle")?);
+    // Whether a shape at `now` already stands at `a`: a turn the rounding of an earlier one left
+    // (89.999999999°, or 359.9999999999° against 0°) counts as no change.
+    let at_angle = |now: Option<f64>, a: f64| {
+        now.is_some_and(|n| {
+            let d = (n - a).rem_euclid(360.0);
+            d.min(360.0 - d) < 1e-9
+        })
+    };
     // A line's Line Properties: its length (its first end stays) and its angle (about its midpoint).
     // A line's length can reach across the whole canvas, past `MAX_COORD`: its ends are checked below.
     let line_length = number("lineLength", |x| x > 0.0, "a length in points above 0")?;
@@ -225,6 +235,13 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // When every value given is the current one, the document and its undo history stay as they
     // are.
     let st = s.doc()?;
+    // `rectanglesOnly`: the live rectangles among the targets; the other objects stay as they are.
+    let ids: Vec<NodeId> = if p.get("rectanglesOnly").and_then(Value::as_bool) == Some(true) {
+        let rectangle = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if matches!(**l, LiveShape::Rectangle { .. }));
+        ids.into_iter().filter(rectangle).collect()
+    } else {
+        ids
+    };
     // The lines that Line Length or Line Angle changes, as they become. A line that would reach
     // past the document's coordinate limit is an error before anything changes.
     let mut lines = std::collections::BTreeMap::new();
@@ -249,12 +266,15 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Polygon { sides: now, .. })
                 if !(sides.is_none_or(|n| n.clamp(3, 1000) == u64::from(*now))
                     && (!equal || l.polygon_sides_equal())
-                    && polygon_angle.is_none_or(|a| l.polygon_angle() == Some(a))
+                    && polygon_angle.is_none_or(|a| at_angle(l.polygon_angle(), a))
                     && side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius).is_none_or(|r| l.polygon_radius() == Some(r))) =>
             {
                 return false;
             }
-            Some(LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie => return false,
+            Some(l @ LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie || ellipse_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => {
+                return false;
+            }
+            Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
         if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
@@ -265,16 +285,23 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Some(c) = LiveCorners::new(path, live.as_deref()) else { return true };
         let picked = corners_of(*id).unwrap_or_else(|| c.picked(st.selection.anchors.get(id)));
-        // Setting corners folds a scale left in a rectangle's transform into its size, which
-        // changes it.
-        live.as_deref().is_none_or(|l| l.folded() == *l)
+        // Setting a radius folds a scale left in a rectangle's transform into its size, which
+        // changes it. A kind the corners already have leaves the rectangle as it is.
+        (radius.is_none() || live.as_deref().is_none_or(|l| l.folded() == *l))
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
-                    && radius.is_none_or(|r| (c.drawn_radius(*k) - r.max(0.0)).abs() < 1e-9)
+                    // A radius stored in document units can be larger than it draws; a relative
+                    // one is a fraction, so it is compared as drawn.
+                    && radius.is_none_or(|r| {
+                        let now = if c.radii_relative() { c.drawn_radius(*k) } else { c.radius(*k) };
+                        (now - r.max(0.0)).abs() < 1e-9
+                    })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
     };
-    if ids.iter().all(has_values) {
+    // The objects every value given already matches stay as they are, beside others that change.
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !has_values(id)).collect();
+    if ids.is_empty() {
         return ok();
     }
     s.edit("Live Shape", |d, sel| {
@@ -298,9 +325,18 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 *path = l.to_path();
             }
-            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_deref_mut()
-                && (pie_start.is_some() || pie_end.is_some() || invert)
+            if let Some(a) = rectangle_angle
+                && let Some(l @ LiveShape::Rectangle { .. }) = live.as_deref_mut()
             {
+                l.set_shape_angle(a);
+                *path = l.to_path();
+            }
+            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_deref_mut()
+                && (pie_start.is_some() || pie_end.is_some() || invert || ellipse_angle.is_some())
+            {
+                if let Some(a) = ellipse_angle {
+                    l.set_shape_angle(a);
+                }
                 if let LiveShape::Ellipse { pie, .. } = l {
                     *pie = pie_of(*pie);
                 }
@@ -338,6 +374,11 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         }
         for id in &ids {
             super::pixelgrid::resnap(d, *id);
+        }
+        // A shape named in `ids` and not selected is not checked after the edit: one that a turn or
+        // a new radius would take past the coordinate limit is an error here, and nothing changes.
+        if !crate::sanity::objects_in_range(d, &ids) {
+            return Err(bad("object.setLiveShape", format!("coordinate out of range (limit ±{MAX_COORD} pt)")));
         }
         Ok(())
     })?;

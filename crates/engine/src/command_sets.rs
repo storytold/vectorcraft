@@ -105,6 +105,7 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
     "symbol.selectInstances",
     "view.guides.lock",
     "view.proofSetup",
+    "view.proofSetup.load",
     "view.proofColors",
     "view.overprintPreview",
     "view.separationsPreview",
@@ -122,6 +123,14 @@ const WAIT_FOR_TOOL_EDIT: &[&str] = &[
 /// its own state (the active artboard) applies them first itself.
 pub fn waits_for_tool_edit(id: &str) -> bool {
     find_command(id).is_some_and(|spec| spec.journal || WAIT_FOR_TOOL_EDIT.contains(&id))
+}
+
+/// Does command `id` first install the plug-ins still loading on other threads
+/// ([`crate::Session::finish_plugin_loads`])? Plug-in commands do, a plug-in's own commands
+/// included, and so does every command that waits for a tool edit ([`waits_for_tool_edit`]);
+/// queries that only read, and view commands, go ahead while the plug-ins load.
+pub fn waits_for_plugin_loads(id: &str) -> bool {
+    id.starts_with(vectorcraft_plugins::PREFIX) || waits_for_tool_edit(id)
 }
 
 /// Journaled commands that write a file and change nothing in the document: with an object of a

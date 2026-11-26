@@ -1,17 +1,26 @@
-use vectorcraft_pathops::addons::pathtools as pt;
+use std::collections::HashMap;
 
-use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, subpath_len, target_paths};
+use vectorcraft_pathops::addons::pathtools as pt;
+use vectorcraft_pathops::start_nearest;
+
+use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, ranged, subpath_len, target_paths};
 use super::{
-    Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Rect, Result, Session, SimplifyOptions, SubPath, Value, json,
-    number_or, po,
+    Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Rect, Result, Session, SimplifyOptions, SubPath, Value, bad,
+    json, number_or, po,
 };
 
 // ---------- Smooth ----------
 
 /// The spread (points) of the Gaussian the Smooth tool smooths a path along its length with before
-/// refitting it, as a share of the tool's reach: a third, so each point is averaged with the stretch
-/// of path within the reach on either side of it. VectorCraft's own value.
+/// refitting it at the default Smoothness ([`SMOOTH_SMOOTHNESS`]), as a share of the tool's reach: a
+/// third, so each point is averaged with the stretch of path within the reach on either side of it.
+/// The spread grows in proportion to the Smoothness, from none at 0% to twice this at 100%.
+/// VectorCraft's own value.
 const SMOOTH_SPREAD: f64 = 1.0 / 3.0;
+
+/// The Smoothness (percent) `path.smoothRegion` smooths with when the drag leaves it out. VectorCraft's
+/// own value.
+const SMOOTH_SMOOTHNESS: f64 = 50.0;
 
 /// The degrees by which a path must turn at an anchor, and over the tool's reach and twice its reach
 /// on either side of it, for the Smooth tool to keep the anchor as a corner ([`smooth_corners`]): a
@@ -323,84 +332,6 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
     out.into_vec()
 }
 
-/// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
-/// instead of at a new one split in beside it.
-const START_SNAP: f64 = 1e-3;
-
-/// Distance (points) within which two points of a smoothed closed path count as equally near its
-/// old start.
-const START_TIE: f64 = 1e-6;
-
-/// Where `p` lies along the closed `orig` from its first anchor: the segment index and parameter of
-/// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
-/// when there is none.
-fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
-    let mut best: Option<(f64, usize, f64)> = None;
-    for j in 0..orig.anchors.len() {
-        let hit = orig.segment(j).nearest(p, 1e-9);
-        if hit.distance_sq.is_finite() && hit.t.is_finite() && best.is_none_or(|(d, ..)| hit.distance_sq < d) {
-            best = Some((hit.distance_sq, j, hit.t));
-        }
-    }
-    best.map_or((usize::MAX, f64::INFINITY), |(_, j, t)| (j, t))
-}
-
-/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
-/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
-/// `start`, the one earliest along `orig` (the path before smoothing) from its first anchor is used,
-/// then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest point,
-/// is returned as it is.
-fn start_nearest(mut sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
-    let n = sp.anchors.len();
-    if !sp.closed || n < 2 {
-        return sp;
-    }
-    // (distance, place along `orig` once a tie needs it, segment of `sp`, parameter)
-    type Best = (f64, Option<(usize, f64)>, usize, f64);
-    let mut best: Option<Best> = None;
-    for i in 0..n {
-        let c = sp.segment(i);
-        let hit = c.nearest(start, 1e-9);
-        if !hit.distance_sq.is_finite() || !hit.t.is_finite() {
-            continue;
-        }
-        let d = hit.distance_sq.sqrt();
-        match &mut best {
-            None => best = Some((d, None, i, hit.t)),
-            Some((bd, bplace, bi, bt)) if (d - *bd).abs() <= START_TIE => {
-                let held = *bplace.get_or_insert_with(|| place_along(orig, sp.segment(*bi).eval(*bt)));
-                let place = place_along(orig, c.eval(hit.t));
-                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
-                    best = Some((d, Some(place), i, hit.t));
-                }
-            }
-            Some((bd, ..)) if d < *bd => best = Some((d, None, i, hit.t)),
-            Some(_) => {}
-        }
-    }
-    let Some((_, _, i, t)) = best else { return sp };
-    let c = sp.segment(i);
-    let at = c.eval(t);
-    let first = if at.distance(c.p0) <= START_SNAP {
-        i
-    } else if at.distance(c.p3) <= START_SNAP {
-        (i + 1) % n
-    } else {
-        let mid = if sp.segment_is_line(i) {
-            Anchor::corner(at)
-        } else {
-            let (l, r) = (c.subsegment(0.0..t), c.subsegment(t..1.0));
-            sp.anchors[i].h_out = l.p1;
-            sp.anchors[(i + 1) % n].h_in = r.p2;
-            Anchor::with_handles(at, l.p2, r.p1)
-        };
-        sp.anchors.insert(i + 1, mid);
-        i + 1
-    };
-    sp.anchors.rotate_left(first);
-    sp
-}
-
 /// Pieces of curve that one Smooth drag measures against the drag while it searches the segments
 /// under it ([`reach_samples`]), shared equally by the curved segments that come within its reach,
 /// each of which gets at least one: enough to search 300,000 pt of curve within the default reach
@@ -421,6 +352,8 @@ fn drag_stretches(pts: &[Point]) -> Vec<usize> {
 /// The stretches of the drag `pts` among `of` whose bounds come within `radius` of `r` on both
 /// axes: every stretch within `radius` of a point in `r`, and perhaps a few more.
 fn stretches_near(pts: &[Point], of: &[usize], r: Rect, radius: f64) -> Vec<usize> {
+    #[cfg(test)]
+    STRETCH_TESTS.with(|c| c.set(c.get() + of.len()));
     let r = r.inflate(radius, radius);
     of.iter()
         .copied()
@@ -432,8 +365,115 @@ fn stretches_near(pts: &[Point], of: &[usize], r: Rect, radius: f64) -> Vec<usiz
         .collect()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times this thread measured a point or a box against one stretch of a drag.
+    static STRETCH_TESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Most grid cells [`DragReach`] lists one stretch of the drag in. A stretch whose reach covers more
+/// is measured against every point and box instead.
+const MAX_STRETCH_CELLS: usize = 64;
+
+/// Most grid cells across the drag's bounds on each axis in [`DragReach`].
+const MAX_DRAG_CELLS: f64 = 1024.0;
+
+/// The stretches of a Smooth drag listed by the cells of a grid that their reach covers, so that a
+/// point or a piece of path is measured only against the stretches whose reach it is in. Each query
+/// gives at least every stretch that measuring against the whole drag finds in reach, so the results
+/// are the same as measuring against the whole drag.
+struct DragReach<'a> {
+    pts: &'a [Point],
+    radius: f64,
+    /// Every stretch of the drag, in order.
+    all: Vec<usize>,
+    /// The drag's bounds grown by more than `radius`, with the cell size; `None` when the drag or
+    /// the reach is not a finite number, and then every query gives every stretch.
+    grid: Option<(Rect, f64)>,
+    cells: HashMap<(i64, i64), Vec<usize>>,
+    /// The stretches whose reach covers more than [`MAX_STRETCH_CELLS`] cells.
+    wide: Vec<usize>,
+}
+
+impl<'a> DragReach<'a> {
+    fn new(pts: &'a [Point], radius: f64) -> Self {
+        let all = drag_stretches(pts);
+        let mut reach = DragReach { pts, radius, all, grid: None, cells: HashMap::new(), wide: vec![] };
+        if pts.is_empty() || !radius.is_finite() || pts.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+            return reach;
+        }
+        // Enough more than the reach to cover the rounding of each distance and box measured.
+        let size = pts.iter().fold(0.0_f64, |m, p| m.max(p.x.abs()).max(p.y.abs()));
+        let pad = radius + 1e-6 * radius.max(1.0) + 1e-9 * size;
+        let area = poly_bounds(pts, pad);
+        let cell = pad.max(area.width().max(area.height()) / MAX_DRAG_CELLS);
+        if !(cell.is_finite() && cell > 0.0 && area.width().is_finite() && area.height().is_finite()) {
+            return reach;
+        }
+        reach.grid = Some((area, cell));
+        for &k in &reach.all {
+            let Some(&a) = pts.get(k) else { continue };
+            let b = pts.get(k + 1).copied().unwrap_or(a);
+            let r = Rect::from_points(a, b).inflate(pad, pad);
+            let ((x0, y0), (x1, y1)) = (reach.cell_of(Point::new(r.x0, r.y0)), reach.cell_of(Point::new(r.x1, r.y1)));
+            if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > MAX_STRETCH_CELLS as i64 {
+                reach.wide.push(k);
+                continue;
+            }
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    reach.cells.entry((x, y)).or_default().push(k);
+                }
+            }
+        }
+        reach
+    }
+
+    /// The cell `q` is in, counted from the corner of the grid.
+    fn cell_of(&self, q: Point) -> (i64, i64) {
+        let Some((area, cell)) = self.grid else { return (0, 0) };
+        (((q.x - area.x0) / cell).floor() as i64, ((q.y - area.y0) / cell).floor() as i64)
+    }
+
+    /// Whether `q` is within the reach of the drag, and `slack` more.
+    fn in_reach(&self, q: Point, slack: f64) -> bool {
+        let limit = self.radius + slack;
+        let Some((area, _)) = self.grid else { return dist_to_stretches(self.pts, &self.all, q) <= limit };
+        if !(q.x >= area.x0 && q.x <= area.x1 && q.y >= area.y0 && q.y <= area.y1) {
+            return false;
+        }
+        let listed = self.cells.get(&self.cell_of(q)).map_or(&[][..], Vec::as_slice);
+        dist_to_stretches(self.pts, listed, q).min(dist_to_stretches(self.pts, &self.wide, q)) <= limit
+    }
+
+    /// The stretches, in order, that may come within the reach of `r`: at least every one that
+    /// [`stretches_near`] gives for `r` from the whole drag.
+    fn near_rect(&self, r: Rect) -> Vec<usize> {
+        let Some((area, _)) = self.grid else { return self.all.clone() };
+        let (x0, x1, y0, y1) = (r.x0.max(area.x0), r.x1.min(area.x1), r.y0.max(area.y0), r.y1.min(area.y1));
+        if !(x0 <= x1 && y0 <= y1) {
+            return vec![];
+        }
+        let ((cx0, cy0), (cx1, cy1)) = (self.cell_of(Point::new(x0, y0)), self.cell_of(Point::new(x1, y1)));
+        if (cx1 - cx0 + 1).saturating_mul(cy1 - cy0 + 1) > self.all.len() as i64 {
+            return self.all.clone();
+        }
+        let mut out = self.wide.clone();
+        for x in cx0..=cx1 {
+            for y in cy0..=cy1 {
+                out.extend(self.cells.get(&(x, y)).into_iter().flatten());
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+}
+
 /// The distance from `q` to the nearest of the stretches `of` of the drag `pts`.
 fn dist_to_stretches(pts: &[Point], of: &[usize], q: Point) -> f64 {
+    #[cfg(test)]
+    STRETCH_TESTS.with(|c| c.set(c.get() + of.len()));
     of.iter()
         .filter_map(|&k| {
             let a = *pts.get(k)?;
@@ -468,15 +508,18 @@ fn nearest_to_stretches(s: CubicBez, pts: &[Point], of: &[usize]) -> (f64, f64) 
     best
 }
 
-/// How many curved segments of `pd` may come within `radius` of the drag `pts`.
-fn segments_in_reach(pd: &PathData, pts: &[Point], radius: f64) -> usize {
-    let all = drag_stretches(pts);
+/// How many curved segments of `pd` may come within the reach of the drag.
+fn segments_in_reach(pd: &PathData, reach: &DragReach) -> usize {
     pd.subpaths
         .iter()
         .map(|sp| {
             (0..sp.segment_count())
                 .filter(|&i| {
-                    !vectorcraft_tools::draw2::segment_is_straight(sp, i) && !stretches_near(pts, &all, control_box(sp.segment(i)), radius).is_empty()
+                    if vectorcraft_tools::draw2::segment_is_straight(sp, i) {
+                        return false;
+                    }
+                    let b = control_box(sp.segment(i));
+                    !stretches_near(reach.pts, &reach.near_rect(b), b, reach.radius).is_empty()
                 })
                 .count()
         })
@@ -516,26 +559,26 @@ fn reach_samples(c: CubicBez, (t0, t1): (f64, f64), (pts, of): (&[Point], &[usiz
     reach_samples(c, (mid, t1), (pts, &near), radius, budget, out);
 }
 
-/// `sp` cut where the reach `radius` of the drag `pts` crosses its curved segments, and whether each
+/// `sp` cut where the reach of the drag crosses its curved segments, and whether each
 /// anchor of the result is in reach. An anchor in reach is added in the middle of each stretch of a
 /// segment in reach that does not run on from one of the segment's anchors in reach, and an anchor
 /// out of reach in the middle of each stretch out of reach between two stretches in reach, so that a
 /// stretch in reach is smoothed even when the segment's anchors are not, and the stretches between
 /// stay as they are. A segment is searched no more than half the reach apart where it comes within
 /// the reach of the drag ([`reach_samples`]), measuring up to `share` pieces of each segment.
-fn mark_reached(sp: &SubPath, pts: &[Point], radius: f64, share: usize) -> (SubPath, Vec<bool>) {
-    let near = |q: Point| dist_to_polyline(pts, q) <= radius;
+fn mark_reached(sp: &SubPath, reach: &DragReach, share: usize) -> (SubPath, Vec<bool>) {
+    let (pts, radius) = (reach.pts, reach.radius);
     let n = sp.anchors.len();
-    let marked: Vec<bool> = sp.anchors.iter().map(|a| near(a.p)).collect();
+    let marked: Vec<bool> = sp.anchors.iter().map(|a| reach.in_reach(a.p, 0.0)).collect();
     let mut places = vec![];
-    let all = drag_stretches(pts);
     for i in 0..sp.segment_count() {
         if vectorcraft_tools::draw2::segment_is_straight(sp, i) {
             continue;
         }
         let c = sp.segment(i);
         let (mut samples, mut budget) = (vec![], share);
-        reach_samples(c, (0.0, 1.0), (pts, &all), radius, &mut budget, &mut samples);
+        let near = reach.near_rect(control_box(c.subsegment(0.0..1.0)));
+        reach_samples(c, (0.0, 1.0), (pts, &near), radius, &mut budget, &mut samples);
         // Stretches of samples alike, in order: (in reach, first, last).
         let mut runs: Vec<(bool, usize, usize)> = vec![];
         for (k, s) in samples.iter().enumerate() {
@@ -573,7 +616,7 @@ fn mark_reached(sp: &SubPath, pts: &[Point], radius: f64, share: usize) -> (SubP
         .anchors
         .iter()
         .enumerate()
-        .map(|(j, a)| if added.contains(&j) { dist_to_polyline(pts, a.p) <= radius + 1e-9 * radius.max(1.0) } else { kept.next().unwrap_or(false) })
+        .map(|(j, a)| if added.contains(&j) { reach.in_reach(a.p, 1e-9 * radius.max(1.0)) } else { kept.next().unwrap_or(false) })
         .collect();
     (out, marked)
 }
@@ -581,13 +624,14 @@ fn mark_reached(sp: &SubPath, pts: &[Point], radius: f64, share: usize) -> (SubP
 /// `sp` with the anchors in the drag's reach smoothed and refitted, `None` when none are in reach.
 /// A closed path whose first anchor is in reach starts at the point of the refitted path nearest
 /// that anchor's place (VectorCraft's own rule).
-fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f64, sigma: f64) -> Option<SubPath> {
+fn smooth_subpath(sp: &SubPath, reach: &DragReach, share: usize, tol: f64, sigma: f64) -> Option<SubPath> {
     if sp.anchors.len() < 2 {
         return None;
     }
-    let near = &|q: Point| dist_to_polyline(pts, q) <= radius;
+    let radius = reach.radius;
+    let near = &|q: Point| reach.in_reach(q, 0.0);
     // A drag along a segment smooths it even when its anchors are out of reach.
-    let (sp, marked) = mark_reached(sp, pts, radius, share);
+    let (sp, marked) = mark_reached(sp, reach, share);
     let sp = &sp;
     if !marked.iter().any(|m| *m) {
         return None;
@@ -645,14 +689,28 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     (!same_anchors(&res, &anchors)).then(|| SubPath::new(res, false))
 }
 
-/// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
-/// enters the reach: the part outside, then the part in reach. `None` when no more than a sliver
-/// is outside.
-fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez, CubicBez)> {
+/// How much of a segment that ends in the drag's reach is in reach ([`split_at_reach`]).
+enum Reach {
+    /// All of it, or all but a sliver.
+    Whole,
+    /// No more than a sliver at its end.
+    End,
+    /// The part outside the reach, then the part in reach.
+    Split(CubicBez, CubicBez),
+}
+
+/// Share of the tool's reach that the part of a segment in reach must be longer than for
+/// [`split_at_reach`] to split the segment. VectorCraft's own value.
+const REACH_SLIVER: f64 = 1.0 / 64.0;
+
+/// The segment `c`, which ends in the drag's reach (`near`, `radius` points) and starts outside it,
+/// split where it enters the reach. No more than 2% of its parameter range outside the reach is a
+/// sliver, and so is a part in reach no longer than [`REACH_SLIVER`] of the reach.
+fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool, radius: f64) -> Reach {
     const STEPS: u32 = 32;
     let step = 1.0 / f64::from(STEPS);
     // Back from the end in reach to the first sample outside, then halving to the crossing.
-    let outside = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t)))?;
+    let Some(outside) = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t))) else { return Reach::Whole };
     let (mut lo, mut hi) = (outside, outside + step);
     for _ in 0..20 {
         let mid = (lo + hi) / 2.0;
@@ -668,7 +726,11 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
         let s = c.subsegment(range);
         if straight { CubicBez::new(s.p0, s.p0, s.p3, s.p3) } else { s }
     };
-    (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
+    if hi <= 0.02 {
+        return Reach::Whole;
+    }
+    let (far, reach) = (part(0.0..hi), part(hi..1.0));
+    if polygon_len(reach) <= REACH_SLIVER * radius { Reach::End } else { Reach::Split(far, reach) }
 }
 
 /// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
@@ -693,27 +755,38 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
         }
         i += 1;
     }
-    let mut out = anchors.to_vec();
+    let mut out = EditsFromEnd::new(anchors.to_vec());
     for (a, b) in runs.into_iter().rev() {
-        let lo = a.saturating_sub(1);
-        let hi = (b + 1).min(n - 1);
+        let (mut lo, mut hi) = (a.saturating_sub(1), (b + 1).min(n - 1));
+        // How much of the segments leading out of the run is in reach. A segment that is in reach
+        // only at the run's anchor stays out of the piece, so the piece ends at that anchor rather
+        // than in a sliver of a segment, which would leave the refit no direction to end along.
+        let Some(span) = out.get(lo, hi) else { continue };
+        let (first, start, end, last) = (span[0], span[a - lo], span[b - lo], span[hi - lo]);
+        let after = if hi > b { split_at_reach(CubicBez::new(last.p, last.h_in, end.h_out, end.p), near, radius) } else { Reach::Whole };
+        let before = if lo < a { split_at_reach(CubicBez::new(first.p, first.h_out, start.h_in, start.p), near, radius) } else { Reach::Whole };
+        if matches!(after, Reach::End) {
+            hi = b;
+        }
+        if matches!(before, Reach::End) {
+            lo = a;
+        }
         if hi == lo {
             continue;
         }
-        let mut piece = out[lo..=hi].to_vec();
+        let Some(piece) = out.get(lo, hi) else { continue };
+        let mut piece = piece.to_vec();
         // The anchors outside the reach, kept with the part of their segment that is outside.
         let (mut head, mut tail) = (None, None);
-        if hi > b
+        if let Reach::Split(far, reach) = after
             && let [.., inner, outer] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_in, inner.h_out, inner.p), near)
         {
             inner.h_out = reach.p2;
             tail = Some(Anchor { h_in: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, reach.p1, far.p2);
         }
-        if lo < a
+        if let Reach::Split(far, reach) = before
             && let [outer, inner, ..] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_out, inner.h_in, inner.p), near)
         {
             inner.h_in = reach.p2;
             head = Some(Anchor { h_out: far.p1, ..*outer });
@@ -725,17 +798,148 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
         if same_anchors(&new, &piece) {
             continue;
         }
-        out.splice(lo..=hi, head.into_iter().chain(new).chain(tail));
+        out.replace(lo, hi, head.into_iter().chain(new).chain(tail));
     }
-    out
+    out.finish()
+}
+
+/// A list edited by replacing stretches of it, each one ending no later than where the one before
+/// started, in time proportional to the items replaced and moved rather than to the list's length
+/// for each edit.
+struct EditsFromEnd<T> {
+    /// The start of the list.
+    head: Vec<T>,
+    /// The rest of the list, last item first.
+    rest: Vec<T>,
+}
+
+impl<T> EditsFromEnd<T> {
+    fn new(items: Vec<T>) -> Self {
+        EditsFromEnd { head: items, rest: vec![] }
+    }
+
+    /// The items `lo` to `hi` of the list, `None` when it is shorter.
+    fn get(&mut self, lo: usize, hi: usize) -> Option<&[T]> {
+        while self.head.len() <= hi {
+            self.head.push(self.rest.pop()?);
+        }
+        self.head.get(lo..=hi)
+    }
+
+    /// The list with the items `lo` to `hi` replaced by `with`, as [`Vec::splice`] gives it. Leaves
+    /// the list as it is when it is shorter.
+    fn replace(&mut self, lo: usize, hi: usize, with: impl IntoIterator<Item = T>) {
+        if lo > hi || self.get(lo, hi).is_none() {
+            return;
+        }
+        self.rest.extend(self.head.drain(hi + 1..).rev());
+        self.head.truncate(lo);
+        self.head.extend(with);
+    }
+
+    fn finish(mut self) -> Vec<T> {
+        self.head.extend(self.rest.into_iter().rev());
+        self.head
+    }
+}
+
+/// Most pieces [`roughness`] cuts one curved segment into.
+const ROUGHNESS_SEGMENT_PIECES: usize = 1024;
+
+/// Most pieces [`roughness`] cuts the curved segments of one subpath into, shared equally by them.
+const ROUGHNESS_PIECES: usize = 1 << 18;
+
+/// How rough the subpath `sp` is, measured along the lines between points on each curved segment
+/// about `step` apart along its control polygon (at least 4 and at most
+/// [`ROUGHNESS_SEGMENT_PIECES`] pieces a segment, fewer on a subpath of very many segments): how
+/// much it turns along its length in radians, from the direction each segment leaves its first anchor
+/// along to the one it arrives at its last anchor along, with each turn at an anchor counted twice;
+/// and how much it bends, the sum of each turn between two pieces squared over their mean length.
+/// `None` when a point or a turn is not a number.
+fn roughness(sp: &SubPath, step: f64) -> Option<(f64, f64)> {
+    let segments = sp.segment_count();
+    let most = (ROUGHNESS_PIECES / segments.max(1)).clamp(4, ROUGHNESS_SEGMENT_PIECES);
+    // The directions along the path, each with whether it leaves an anchor, and the pieces' vectors.
+    let (mut dirs, mut pieces): (Vec<(kurbo::Vec2, bool)>, Vec<kurbo::Vec2>) = (vec![], vec![]);
+    for i in 0..segments {
+        let c = sp.segment(i);
+        if sp.segment_is_line(i) {
+            dirs.push((c.p3 - c.p0, true));
+            pieces.push(c.p3 - c.p0);
+            continue;
+        }
+        let leave = [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-12).unwrap_or_default();
+        let arrive = [c.p3 - c.p2, c.p3 - c.p1, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-12).unwrap_or_default();
+        let len = polygon_len(c);
+        let k = if step > 0.0 && step.is_finite() && len.is_finite() { (len / step).ceil().clamp(4.0, most as f64) as usize } else { most };
+        dirs.push((leave, true));
+        let mut at = c.p0;
+        for j in 1..=k {
+            let q = if j == k { c.p3 } else { c.eval(j as f64 / k as f64) };
+            dirs.push((q - at, false));
+            pieces.push(q - at);
+            at = q;
+        }
+        dirs.push((arrive, false));
+    }
+    // A direction of no length is left out; the turn at an anchor is then taken at the next one.
+    let mut kept: Vec<(kurbo::Vec2, bool)> = Vec::with_capacity(dirs.len());
+    let mut at_anchor = false;
+    for (d, anchor) in dirs {
+        at_anchor |= anchor;
+        if d.hypot() > 1e-12 {
+            kept.push((d, at_anchor));
+            at_anchor = false;
+        }
+    }
+    pieces.retain(|d| d.hypot() > 1e-12);
+    let turn = |u: kurbo::Vec2, v: kurbo::Vec2| u.cross(v).atan2(u.dot(v)).abs();
+    let pairs = |n: usize| if sp.closed { n } else { n.saturating_sub(1) };
+    let mut turning = 0.0;
+    for j in 0..pairs(kept.len()) {
+        let (u, (v, anchor)) = (kept[j].0, kept[(j + 1) % kept.len()]);
+        turning += if anchor { 2.0 } else { 1.0 } * turn(u, v);
+    }
+    let mut bending = 0.0;
+    for j in 0..pairs(pieces.len()) {
+        let (u, v) = (pieces[j], pieces[(j + 1) % pieces.len()]);
+        bending += turn(u, v).powi(2) / (0.5 * (u.hypot() + v.hypot()));
+    }
+    (turning.is_finite() && bending.is_finite()).then_some((turning, bending))
+}
+
+/// Whether the Smooth tool keeps `new`, the subpath `old` smoothed with the reach `radius`
+/// (VectorCraft's own rule). Both are measured with [`roughness`] at one spacing, an eighth of the
+/// reach or 1/512 of the diagonal of `old`'s control points, whichever is smaller. `new` must turn
+/// no more than a thousandth more than `old` (counting a turn of less than 1 radian as 1), and it
+/// must have fewer anchors, turn less, or bend more than a ten-thousandth less. A result that would
+/// leave the path rougher, or that adds anchors or changes the path without smoothing it, is not
+/// kept.
+fn smoother(old: &SubPath, new: &SubPath, radius: f64) -> bool {
+    let size = old.anchors.iter().fold(None, |r: Option<Rect>, a| {
+        let b = Rect::from_points(a.p, a.h_in).union_pt(a.h_out);
+        Some(r.map_or(b, |r| r.union(b)))
+    });
+    let step = (radius / 8.0).min(size.map_or(0.0, |r| r.width().hypot(r.height()) / 512.0));
+    let (Some((t0, b0)), Some((t1, b1))) = (roughness(old, step), roughness(new, step)) else { return false };
+    let scale = t0.max(1.0);
+    t1 <= t0 + 1e-3 * scale && (new.anchors.len() < old.anchors.len() || t0 - t1 >= 1e-6 * scale || b0 - b1 > 1e-4 * b0)
 }
 
 pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.smoothRegion";
     let pts = points_param(p, "points", C)?;
-    let radius = number_or(p, "radius", 12.0, C)?.max(0.0);
-    let tol = number_or(p, "fidelity", 2.5, C)?.clamp(vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
-    let sigma = radius * SMOOTH_SPREAD;
+    let radius = ranged(p, "radius", 12.0, vectorcraft_tools::draw2::REACH_RANGE, C)?;
+    let tol = number_or(p, "fidelity", 2.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
+    let smoothness = number_or(p, "smoothness", SMOOTH_SMOOTHNESS, C)?;
+    if !(0.0..=100.0).contains(&smoothness) {
+        return Err(bad(C, "`smoothness` must be from 0 to 100"));
+    }
+    let sigma = radius * SMOOTH_SPREAD * smoothness / SMOOTH_SMOOTHNESS;
     let st = s.doc()?;
     let mut plan = vec![];
     let (mut before, mut after) = (0, 0);
@@ -743,15 +947,16 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     for id in target_paths(&st.doc, &st.selection, poly_bounds(&pts, radius)) {
         paths.push((id, path_of(&st.doc, id)?.0));
     }
+    let reach = DragReach::new(&pts, radius);
     // Each curved segment in reach gets the same share of the search, whatever order they come in.
-    let in_reach: usize = paths.iter().map(|(_, pd)| segments_in_reach(pd, &pts, radius)).sum();
+    let in_reach: usize = paths.iter().map(|(_, pd)| segments_in_reach(pd, &reach)).sum();
     let share = (MAX_REACH_PIECES / in_reach.max(1)).max(1);
     for (id, pd) in paths {
         let mut changed = false;
         let subs: Vec<SubPath> = pd
             .subpaths
             .iter()
-            .map(|sp| match smooth_subpath(sp, &pts, radius, share, tol, sigma) {
+            .map(|sp| match smooth_subpath(sp, &reach, share, tol, sigma) {
                 Some(n) if n != *sp && n.anchors.len() >= 2 => {
                     changed = true;
                     n
@@ -759,7 +964,10 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
                 _ => sp.clone(),
             })
             .collect();
-        if changed {
+        // A subpath whose result would not be smoother stays as it was.
+        let subs: Vec<SubPath> =
+            subs.into_iter().zip(&pd.subpaths).map(|(n, sp)| if n == *sp || smoother(sp, &n, radius) { n } else { sp.clone() }).collect();
+        if changed && subs != pd.subpaths {
             let np = PathData::new(subs);
             before += pd.anchor_count();
             after += np.anchor_count();
@@ -882,7 +1090,7 @@ fn trim_join(d: &vectorcraft_doc::Document, ids: &[NodeId], pts: &[Point], tol: 
 pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.joinScrub";
     let pts = points_param(p, "points", C)?;
-    let tol = number_or(p, "tolerance", 12.0, C)?.max(0.0);
+    let tol = ranged(p, "tolerance", 12.0, vectorcraft_tools::draw2::REACH_RANGE, C)?;
     let st = s.doc()?;
     let targets = target_paths(&st.doc, &st.selection, poly_bounds(&pts, tol));
     // Paths that cross with their ends scrubbed are trimmed there and joined (#5844).
@@ -1009,6 +1217,8 @@ pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use vectorcraft_pathops::START_SNAP;
+
     use super::*;
 
     /// A closed ring of four smooth anchors round (100, 100) with radius 50.
@@ -1125,6 +1335,153 @@ mod tests {
 
     fn polyline(pts: &[(f64, f64)]) -> Vec<Anchor> {
         pts.iter().map(|&(x, y)| Anchor::corner(Point::new(x, y))).collect()
+    }
+
+    /// A path of `n` smooth anchors 1 pt apart, along x and up and down by 3 pt, every segment
+    /// curved; closed, the anchors go round a circle `n` pt long instead.
+    fn wave(n: usize, closed: bool) -> SubPath {
+        let anchors = (0..n)
+            .map(|i| {
+                let f = i as f64;
+                if closed {
+                    let r = n as f64 / std::f64::consts::TAU + f64::from(u8::from(i % 2 == 1)) * 3.0;
+                    let a = f / n as f64 * std::f64::consts::TAU;
+                    let (p, t) = (Point::new(r * a.cos(), r * a.sin()), kurbo::Vec2::new(-a.sin(), a.cos()) * 0.4);
+                    Anchor::with_handles(p, p - t, p + t)
+                } else {
+                    let p = Point::new(f, f64::from(u8::from(i % 2 == 1)) * 3.0);
+                    Anchor::with_handles(p, p - kurbo::Vec2::new(0.4, 0.0), p + kurbo::Vec2::new(0.4, 0.0))
+                }
+            })
+            .collect();
+        SubPath::new(anchors, closed)
+    }
+
+    /// The same drag measured against all of its stretches for every point and box.
+    fn linear<'a>(pts: &'a [Point], radius: f64) -> DragReach<'a> {
+        DragReach { grid: None, ..DragReach::new(pts, radius) }
+    }
+
+    /// How many stretch measures `f` made on this thread.
+    fn stretch_tests(f: impl FnOnce()) -> usize {
+        STRETCH_TESTS.with(|c| c.set(0));
+        f();
+        STRETCH_TESTS.with(std::cell::Cell::get)
+    }
+
+    /// A drag of 200 points over 200 pt of a curved path of 100,000 anchors measures the anchors
+    /// and segments near the drag against the stretches near them, not every anchor and segment
+    /// against every stretch (about 40 million measures), and smooths the path as measuring
+    /// everything does.
+    #[test]
+    fn a_drag_over_a_long_path_measures_only_what_is_near_it() {
+        let sp = wave(100_000, false);
+        let pts: Vec<Point> = (0..200).map(|i| Point::new(50_000.0 + f64::from(i), 1.5)).collect();
+        let reach = DragReach::new(&pts, 12.0);
+        let pd = PathData::single(sp.clone());
+        let mut in_reach = 0;
+        let boxes = stretch_tests(|| in_reach = segments_in_reach(&pd, &reach));
+        assert!(in_reach > 0 && boxes < 100_000, "{in_reach} segments in reach, {boxes} measures");
+        let share = (MAX_REACH_PIECES / in_reach).max(1);
+        let mut got = None;
+        let marks = stretch_tests(|| got = Some(mark_reached(&sp, &reach, share)));
+        assert!(marks < 100_000, "{marks} measures");
+        let smoothed = smooth_subpath(&sp, &reach, share, 2.5, 4.0);
+        assert!(smoothed.is_some());
+        let all = linear(&pts, 12.0);
+        assert_eq!(segments_in_reach(&pd, &all), in_reach);
+        assert_eq!(Some(mark_reached(&sp, &all, share)), got);
+        assert_eq!(smooth_subpath(&sp, &all, share, 2.5, 4.0), smoothed);
+    }
+
+    /// Paths and drags of many shapes, a drag of one point, one far away, one with a stretch longer
+    /// than the grid lists by cell, one with a point that is not a number, and reaches of 0 to 50 pt:
+    /// the grid gives the same segments in reach, the same marks and the same smoothed path as
+    /// measuring against the whole drag.
+    #[test]
+    fn the_drag_grid_gives_the_results_of_measuring_the_whole_drag() {
+        let far = Point::new(1e7, -1e7);
+        let paths = [
+            ring(),
+            wave(1500, false),
+            wave(1500, true),
+            SubPath::polyline(&(0..500).map(|i| Point::new(f64::from(i) * 2.0, f64::from(i % 3) * 4.0)).collect::<Vec<_>>(), false),
+            SubPath::new(
+                vec![Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(3e5, 4e5)), Anchor::corner(Point::new(1e6, 0.0))],
+                false,
+            ),
+            SubPath::new(
+                wave(200, true)
+                    .anchors
+                    .iter()
+                    .map(|a| Anchor::with_handles(a.p + far.to_vec2(), a.h_in + far.to_vec2(), a.h_out + far.to_vec2()))
+                    .collect(),
+                true,
+            ),
+        ];
+        let line = |from: (f64, f64), to: (f64, f64), n: u32| -> Vec<Point> {
+            (0..=n).map(|i| Point::new(from.0, from.1).lerp(Point::new(to.0, to.1), f64::from(i) / f64::from(n))).collect()
+        };
+        let mut loop_drag: Vec<Point> =
+            (0..400).map(|i| Point::new(100.0 + 120.0 * (f64::from(i) * 0.05).cos(), 120.0 * (f64::from(i) * 0.05).sin())).collect();
+        loop_drag.extend(line((0.0, 0.0), (1500.0, 2.0), 50));
+        let drags = [
+            vec![Point::new(150.0, 100.0)],
+            line((40.0, 90.0), (160.0, 110.0), 30),
+            line((-100.0, 1.0), (1600.0, 2.0), 1500),
+            loop_drag,
+            line((5e6, 5e6), (5e6 + 10.0, 5e6), 5),
+            vec![Point::new(0.0, 0.0), Point::new(1500.0, 3.0), Point::new(1500.0, 3.2), Point::new(10.0, 0.5)],
+            vec![Point::new(10.0, 1.0), Point::new(f64::NAN, 0.0), Point::new(12.0, 1.0)],
+            (0..1000).map(|i| Point::new(f64::from(i) * 0.01, 1.0)).collect(),
+            line((far.x, far.y), (far.x + 300.0, far.y + 40.0), 80),
+        ];
+        for pts in &drags {
+            for radius in [0.0, 0.5, 12.0, 50.0] {
+                let (grid, all) = (DragReach::new(pts, radius), linear(pts, radius));
+                for (k, sp) in paths.iter().enumerate() {
+                    let pd = PathData::single(sp.clone());
+                    let in_reach = segments_in_reach(&pd, &all);
+                    assert_eq!(segments_in_reach(&pd, &grid), in_reach, "path {k}, reach {radius}, drag {:?}", pts.first());
+                    let share = (MAX_REACH_PIECES / in_reach.max(1)).max(1);
+                    assert_eq!(mark_reached(sp, &grid, share), mark_reached(sp, &all, share), "path {k}, reach {radius}, drag {:?}", pts.first());
+                    let sigma = radius * SMOOTH_SPREAD;
+                    let want = smooth_subpath(sp, &all, share, 2.5, sigma);
+                    assert_eq!(smooth_subpath(sp, &grid, share, 2.5, sigma), want, "path {k}, reach {radius}, drag {:?}", pts.first());
+                }
+            }
+        }
+    }
+
+    /// Replacing stretches of a list from its end, each one ending no later than where the one
+    /// before started (sometimes on that item, sometimes with nothing or with more items), gives the
+    /// list that [`Vec::splice`] gives.
+    #[test]
+    fn edits_from_the_end_match_splicing() {
+        let mut seed = 0x2545_f491_u64;
+        let mut next = |m: usize| {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            (seed >> 33) as usize % m.max(1)
+        };
+        for round in 0..200 {
+            let items: Vec<usize> = (0..next(60) + 1).collect();
+            let (mut want, mut got) = (items.clone(), EditsFromEnd::new(items.clone()));
+            let mut end = items.len() - 1;
+            loop {
+                let hi = end.saturating_sub(next(3));
+                let lo = hi.saturating_sub(next(6));
+                let with: Vec<usize> = (0..next(5)).map(|j| 1000 * (round + 1) + j).collect();
+                let Some(stretch) = want.get(lo..=hi).map(<[usize]>::to_vec) else { break };
+                assert_eq!(got.get(lo, hi).map(<[usize]>::to_vec), Some(stretch), "round {round}");
+                want.splice(lo..=hi, with.clone());
+                got.replace(lo, hi, with);
+                if lo == 0 {
+                    break;
+                }
+                end = lo;
+            }
+            assert_eq!(got.finish(), want, "round {round}");
+        }
     }
 
     /// Anchors on one point, anchors that are not numbers or are too far out to measure, and a
@@ -1245,5 +1602,31 @@ mod tests {
         assert!(smooth_corners(&jags, true, 1e-6).iter().all(|c| *c), "each jag turns sharply at its anchor");
         assert_eq!(smooth_corners(&jags, true, 12.0), vec![false; 16]);
         assert_eq!(smooth_corners(&polyline(&[(0.0, 0.0), (6.0, 0.0), (3.0, 5.196)]), true, 12.0), vec![true; 3]);
+    }
+
+    /// `sp` scaled by `k` about the origin.
+    fn scaled(sp: &SubPath, k: f64) -> SubPath {
+        let at = |p: Point| Point::new(p.x * k, p.y * k);
+        SubPath::new(sp.anchors.iter().map(|a| Anchor { p: at(a.p), h_in: at(a.h_in), h_out: at(a.h_out), ..*a }).collect::<Vec<Anchor>>(), sp.closed)
+    }
+
+    /// The Smooth tool keeps a result that turns less, and not one that turns more with as many
+    /// anchors, one that adds an anchor and keeps the outline, or one that is the path itself, at
+    /// any size.
+    #[test]
+    fn the_smooth_tool_keeps_only_a_smoother_result() {
+        let round = ring();
+        let mut bumped = ring();
+        bumped.anchors[1].translate(kurbo::Vec2::new(0.0, -25.0));
+        let split = start_nearest(ring(), round.segment(0).eval(0.3), &round);
+        assert_eq!(split.anchors.len(), 5, "{split:?}");
+        for k in [1e-3, 1.0, 1e3] {
+            let (round, bumped, split) = (scaled(&round, k), scaled(&bumped, k), scaled(&split, k));
+            let reach = 12.0 * k;
+            assert!(smoother(&bumped, &round, reach), "at {k}x a bump smoothed away is kept");
+            assert!(!smoother(&round, &bumped, reach), "at {k}x a bump added is not kept");
+            assert!(!smoother(&round, &split, reach), "at {k}x an anchor added on the outline is not kept");
+            assert!(!smoother(&round, &round.clone(), reach), "at {k}x the same path is not kept");
+        }
     }
 }

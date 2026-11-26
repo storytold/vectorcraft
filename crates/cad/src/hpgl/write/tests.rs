@@ -113,6 +113,21 @@ fn each_new_color_is_the_next_pen_and_pens_draw_in_turn() {
 }
 
 #[test]
+fn classic_hpgl_preserves_explicit_pen_gaps_and_path_order() {
+    let d = doc_with(|d| {
+        vec![
+            stroked(d, line((130.0, 70.0), (140.0, 80.0)), Color::rgb8(0, 0, 255)),
+            stroked(d, line((10.0, 20.0), (20.0, 40.0)), Color::rgb8(255, 0, 0)),
+            stroked(d, line((80.0, 60.0), (90.0, 70.0)), Color::rgb8(0, 0, 255)),
+        ]
+    });
+    let out =
+        plot(&d, &HpglOptions { version: Version::Hpgl, origin: Origin::Center, pens: vec![[255, 0, 0], [0, 255, 0], [0, 0, 255]], ..opts(&d) });
+    // The empty green pen must leave the two blue paths on pen three.
+    assert_eq!(out.bytes, b"IN;PU;SP1;PU-1270,423;PD-1129,141;PU;SP3;PU423,-282;PD564,-423;PU-282,-141;PD-141,-282;PU;SP0;");
+}
+
+#[test]
 fn a_filled_path_is_its_closed_outline_and_a_stroke_its_line() {
     let d = doc_with(|d| {
         let mut open = BezPath::new();
@@ -1177,6 +1192,25 @@ fn encoded_numbers_follow_the_reference_guide() {
     pe_number(&mut out, 0);
     // The sign in the low bit: -1 is 3.
     assert_eq!(out, [194, 191]);
+}
+
+/// The app adapter must preserve raw bytes and position across the one-based pen table.
+#[test]
+fn hpgl2_shared_writer_preserves_raw_bytes_and_pen_indices() {
+    let paths = vec![vec![vec![(32, -32)]], vec![], vec![vec![(33, -31)], vec![(34, -30)]]];
+    let pens = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    assert_eq!(encoded(&paths, &pens), b"IN;NP4;PC1,1,2,3;PC2,4,5,6;PC3,7,8,9;PU;SP1;PE<=?\xc0@\xc0;PU;SP3;PE<\xc1\xc1<\xc1\xc1;PU;SP0;");
+}
+
+#[test]
+fn hpgl2_shared_writer_preserves_empty_and_last_admitted_pen() {
+    assert_eq!(encoded(&[], &[]), b"IN;PU;SP0;");
+    let pens = vec![[0, 0, 0]; MAX_PENS];
+    let mut paths = vec![vec![]; MAX_PENS];
+    paths[MAX_PENS - 1] = vec![vec![(0, 0)]];
+    let bytes = encoded(&paths, &pens);
+    assert!(bytes.starts_with(b"IN;NP256;PC1,0,0,0;"));
+    assert!(bytes.ends_with(b"PC255,0,0,0;PU;SP255;PE<=\xbf\xbf;PU;SP0;"));
 }
 
 #[test]

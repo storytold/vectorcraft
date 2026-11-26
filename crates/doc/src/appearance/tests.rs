@@ -221,9 +221,9 @@ fn strokes_without_pressure_round_trip_unchanged() {
 fn profile_interp() {
     let p = WidthProfile::lens();
     assert_eq!(p.at(0.5), (1.0, 1.0));
-    // The lens is a parabola between its ends, so a quarter of the way along is 0.75: above the
-    // 0.5 a straight taper would give.
-    assert_eq!(p.at(0.25), (0.75, 0.75));
+    // Half way up the lens the width curves above the straight ramp (0.5), flattening into its
+    // widest point.
+    assert_eq!(p.at(0.25), (0.625, 0.625));
     assert_eq!(p.at(2.0), (0.0, 0.0));
 }
 
@@ -259,13 +259,13 @@ fn profile_two_point_runs_are_linear() {
     }
 }
 
-/// The lens's one-sided end slopes make it a parabola: at a quarter of the way it is 0.75,
-/// above the 0.5 a straight line between its points would give.
+/// The lens swells above a straight line between its points: a quarter of the way along it is
+/// 0.625, easing flat into its widest point rather than rising at a constant rate.
 #[test]
 fn profile_lens_is_convex() {
     let p = WidthProfile::lens();
-    assert!((p.at(0.25).0 - 0.75).abs() < 1e-12);
-    assert!((p.at(0.75).0 - 0.75).abs() < 1e-12);
+    assert!((p.at(0.25).0 - 0.625).abs() < 1e-12);
+    assert!((p.at(0.75).0 - 0.625).abs() < 1e-12);
     for k in 1..25 {
         let t = k as f64 / 100.0;
         assert!(p.at(t).0 > 2.0 * t, "{} at {t}", p.at(t).0);
@@ -383,6 +383,15 @@ fn custom_arrowheads_carry_their_art_and_measure_it() {
     assert_eq!(head.half_width(), 2.0);
     let Arrowhead::Custom(c) = &head else { panic!("custom") };
     assert_eq!(c.stop(), 1.5, "the line stops halfway along the head");
+    // A head with a stop of its own (an Illustrator file's arrowhead) keeps it, saved and read back.
+    let stopped = (**c).clone().with_stop(0.5);
+    assert_eq!(stopped.stop(), 0.5);
+    let back: CustomArrowhead = serde_json::from_value(serde_json::to_value(&stopped).unwrap()).unwrap();
+    assert_eq!(back, stopped);
+    assert!(!serde_json::to_string(&**c).unwrap().contains("stop"), "a head without one writes none");
+    for odd in [f64::NAN, -0.5, CustomArrowhead::MAX_UNITS + 1.0] {
+        assert_eq!((**c).clone().with_stop(odd).stop(), 1.5, "{odd} is left out");
+    }
     // Saved with the stroke, art and all, beside the built-in heads' names.
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
     (st.start_arrow, st.end_arrow) = (Some(Arrowhead::Triangle), Some(head.clone()));
@@ -404,7 +413,7 @@ fn custom_arrowheads_out_of_bounds_draw_nothing() {
     let mut path = c.path.clone();
     path.subpaths[0].anchors[1] = vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1e9, 0.0));
     // A file can hold what `new` drops: reading it drops it too.
-    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path }).unwrap();
+    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path, stop: None }).unwrap();
     let far: CustomArrowhead = serde_json::from_value(json).unwrap();
     assert_eq!((far.name.as_str(), far.path.subpaths.len()), ("Wedge", 0));
     assert_eq!((far.reach(), far.half_width(), far.stop()), (0.0, 0.0, 0.0));
@@ -415,7 +424,7 @@ fn custom_arrowheads_out_of_bounds_draw_nothing() {
     let mut hollow = c.path.clone();
     hollow.subpaths.extend(std::iter::repeat_n(vectorcraft_geom::SubPath::new(vec![], false), CustomArrowhead::MAX_ANCHORS));
     assert!(!CustomArrowhead::fits(&hollow), "too many subpaths");
-    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow }).unwrap();
+    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow, stop: None }).unwrap();
     let hollow: CustomArrowhead = serde_json::from_value(json).unwrap();
     assert!(hollow.path.subpaths.is_empty(), "too many subpaths, read back");
 }

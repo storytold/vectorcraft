@@ -973,9 +973,11 @@ impl Tool for ShapeTool {
     fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         !self.through.is_empty()
     }
-    /// The pointer left the canvas: the circle's preview through it goes.
+    /// The pointer left the canvas: the circle's preview through it and the Smart Guide of the
+    /// hover go.
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.hover = None;
+        self.snap.clear();
     }
     /// An edit, Undo or Redo made outside the tool, or another document, drops the points placed
     /// for a circle.
@@ -997,7 +999,7 @@ impl Tool for ShapeTool {
         let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
         // The points Shift-clicks placed, and after two of them the circle through them and the
-        // pointer, dashed.
+        // pointer, dashed (solid when it is too long on screen, as the Circle tool draws it).
         for p in &self.through {
             o.push(Overlay::Anchor { p: *p, color: crate::draw2::FEEDBACK, filled: true, size: 6.0 });
         }
@@ -1005,7 +1007,7 @@ impl Tool for ShapeTool {
             && let Some((c, r)) = vectorcraft_geom::shapes::circle_through(*a, *b, h)
         {
             let path = vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
-            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: true });
+            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: crate::circle::preview_dashed(cx, r) });
         }
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });

@@ -7,7 +7,7 @@ use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node};
 use vectorcraft_geom::Rect;
-use vectorcraft_three_d::{Bevel, BevelShape, ClassicShading, ClassicSurface, Extrude, Facet, Light};
+use vectorcraft_three_d::{Bevel, ClassicShading, ClassicSurface, Extrude, Facet, Light};
 
 use super::graphics::map_art::{self, MapArt, MapBudget, SolidLayout};
 use crate::util::{flag, num, text};
@@ -44,13 +44,7 @@ pub fn classic_extrude_options(p: &Value) -> Extrude {
     Extrude {
         depth: num(p, "depth", 50.0),
         cap: flag(p, "cap", true),
-        bevel: BevelShape::parse(text(p, "bevel", "none")).map(|shape| Bevel {
-            shape,
-            width: height,
-            height,
-            inside: flag(p, "bevelInside", false),
-            ..Bevel::default()
-        }),
+        bevel: super::bevel_shape(p).map(|shape| Bevel { shape, width: height, height, inside: flag(p, "bevelInside", false), ..Bevel::default() }),
         hidden: flag(p, "drawHiddenFaces", false) || classic_shading(p).surface == ClassicSurface::Wireframe,
         // The numbered surfaces are laid out only for an effect that maps art onto them.
         map_surfaces: !map_art::surface_maps(p).is_empty(),
@@ -119,9 +113,15 @@ const FLAGS: [&str; 7] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"
 /// Check Extrude & Bevel (Classic)'s parameters `p` (its defaults filled in): every key is one of
 /// its parameters, numbers are in range, flags are true or false, `surface`, `shadingColor` and
 /// `shadingCustom` name a surface, a shading color and a #rrggbb color, and `mapArt` holds valid
-/// maps.
+/// maps. A custom bevel's name and points ([`super::BEVEL_NAME`], [`super::BEVEL_PROFILE`]) are
+/// parameters too, checked with Extrude & Bevel's.
 pub fn validate(p: &Value) -> Result<(), String> {
-    validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)?;
+    let mut rest = p.clone();
+    if let Some(m) = rest.as_object_mut() {
+        m.remove(super::BEVEL_NAME);
+        m.remove(super::BEVEL_PROFILE);
+    }
+    validate_classic(CLASSIC_EXTRUDE, &rest, &RANGES, &FLAGS)?;
     map_art::validate(CLASSIC_EXTRUDE, p)
 }
 

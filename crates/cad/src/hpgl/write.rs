@@ -304,7 +304,7 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
             warn(&mut warnings, PAST_CLASSIC_RANGE);
         }
         let bytes = match opts.version {
-            Version::Hpgl => plain(&by_pen),
+            Version::Hpgl => craft_plotter::hpgl::write::write_hpgl(&by_pen),
             Version::Hpgl2 => encoded(&by_pen, &pens),
         };
         out.push(HpglOutput { bytes, pens: pens.clone(), warnings, setting_notes });
@@ -511,70 +511,15 @@ fn inner_first(left: Vec<(usize, Vec<(i64, i64)>)>, outer: &[Vec<usize>], waitin
     paths.extend(held.into_iter().flatten());
 }
 
-/// HP-GL: `IN;`, each pen's paths as `PU` and `PD`, `PU;SP0;`.
-fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
-    let mut s = String::from("IN;");
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        s.push_str(&format!("PU;SP{};", i + 1));
-        for path in paths {
-            let Some(((x, y), rest)) = path.split_first() else { continue };
-            s.push_str(&format!("PU{x},{y};PD"));
-            for (k, (x, y)) in rest.iter().enumerate() {
-                if k > 0 {
-                    s.push(',');
-                }
-                s.push_str(&format!("{x},{y}"));
-            }
-            s.push(';');
-        }
-    }
-    s.push_str("PU;SP0;");
-    s.into_bytes()
-}
-
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.
 fn encoded(by_pen: &[Vec<Vec<(i64, i64)>>], pens: &[[u8; 3]]) -> Vec<u8> {
-    let mut out = b"IN;".to_vec();
-    if !pens.is_empty() {
-        // Pens 1 to n on a plotter, and on a raster device (whose pens are 0 to NP − 1) too.
-        let np = (pens.len() + 1).next_power_of_two().max(2);
-        out.extend(format!("NP{np};").bytes());
-        for (i, [r, g, b]) in pens.iter().enumerate() {
-            out.extend(format!("PC{},{r},{g},{b};", i + 1).bytes());
-        }
-    }
-    let mut at: Option<(i64, i64)> = None;
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        out.extend(format!("PU;SP{};PE", i + 1).bytes());
-        for path in paths {
-            for (k, &p) in path.iter().enumerate() {
-                if k == 0 {
-                    out.push(b'<');
-                }
-                // The first move of the plot is absolute, and so is one longer than the range a
-                // device takes for each number; every other is relative.
-                match at.map(|a| (p.0 - a.0, p.1 - a.1)).filter(|d| d.0.abs() <= MAX_COORD && d.1.abs() <= MAX_COORD) {
-                    None => {
-                        out.push(b'=');
-                        pe_number(&mut out, p.0);
-                        pe_number(&mut out, p.1);
-                    }
-                    Some((dx, dy)) => {
-                        pe_number(&mut out, dx);
-                        pe_number(&mut out, dy);
-                    }
-                }
-                at = Some(p);
-            }
-        }
-        out.push(b';');
-    }
-    out.extend(b"PU;SP0;");
-    out
+    let pens: Vec<_> = pens.iter().enumerate().map(|(index, &rgb)| craft_plotter::hpgl::write::Pen { number: index + 1, rgb }).collect();
+    craft_plotter::hpgl::write::write_hpgl2(&pens, by_pen)
 }
 
 /// `v` as a base-64 PE number: the sign in the low bit, the low digits from 63 up and the last
 /// digit from 191 up.
+#[cfg(test)]
 fn pe_number(out: &mut Vec<u8>, v: i64) {
     let mut n = (v.unsigned_abs() << 1) | u64::from(v < 0);
     while n >= 64 {
@@ -973,10 +918,8 @@ impl<'a> Walk<'a> {
                     end(&mut cur, &mut out, false);
                     cur.push(p);
                 }
-                PathEl::LineTo(p) => {
-                    if cur.last() != Some(&p) {
-                        cur.push(p);
-                    }
+                PathEl::LineTo(p) if cur.last() != Some(&p) => {
+                    cur.push(p);
                 }
                 PathEl::ClosePath => {
                     let s = cur.first().copied();

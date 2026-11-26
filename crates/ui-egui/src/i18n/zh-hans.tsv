@@ -89,6 +89,7 @@
 	Add to Selection	添加到选区
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
+	Add Selected Colors	添加所选颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
 	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
@@ -155,6 +156,7 @@
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
 	Anti-aliasing Method	消除锯齿方法
+@id	language.name	简体中文
 antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
@@ -183,6 +185,10 @@ antiAlias	Sharp	锐利
 	Arc	弧形
 	Arc Lower…	下弧形…
 	Arc Tool	弧形工具
+	Three-Point Arc Tool	三点弧形工具
+	Three-Point Arc	三点弧形
+	Arc too large	弧形过大
+	Third Point Sets Direction	第三点指示方向
 	Arc Upper…	上弧形…
 	Arch…	拱形…
 	Arc…	弧形…
@@ -451,6 +457,10 @@ antiAlias	Sharp	锐利
 	Cusp	尖点
 	Straight segment	直线段
 	Circle too large	圆形过大
+	Show Radii	显示半径
+	Show Diameter	显示直径
+	Anchors at Standard Positions	锚点位于标准位置
+	Third Point by Dragging	拖动放置第三点
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -552,9 +562,14 @@ antiAlias	Sharp	锐利
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色轮视图
 	Box View	方块视图
+	Show Out-of-Gamut Colors	显示超出色域的颜色
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
+	Show Document Colors	显示文档颜色
+	Document Colors	文档颜色
+	Selection Colors	所选对象的颜色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Show Harmony	显示协调
 	Harmony Rule	协调规则
 	Harmony color	协调颜色
@@ -598,6 +613,8 @@ antiAlias	Sharp	锐利
 	Contextual Task Bar	上下文任务栏
 	Pin Bar Position	固定任务栏位置
 	Reset Bar Position	重置任务栏位置
+	Bar Actions	任务栏操作
+	Reset Bar Actions	重置任务栏操作
 	Resize	调整大小
 	Contrast	对比
 	Control	控制栏
@@ -853,6 +870,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 删除锚点并保持路径连接
 	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
@@ -1410,6 +1428,9 @@ file-filter	Swatch libraries	色板库
 file-filter	Flattener presets	拼合预设
 file-filter	PDF presets	PDF 预设
 file-filter	Print presets	打印预设
+file-filter	Tracing presets	描摹预设
+file-filter	Action sets	动作组
+file-filter	Composite fonts	复合字体
 file-filter	Preferences	首选项
 file-filter	Export presets	导出预设
 file-filter	SVG Compressed	压缩 SVG
@@ -1612,6 +1633,17 @@ file-filter	Templates	模板
 	Graphic Styles	图形样式
 	Graphic Styles Options	图形样式选项
 	Graphics	图形
+	Show Contrast	显示对比度
+	Contrast For	对比度适用于
+	Normal Text	普通文本
+	Large Text	大号文本
+	Contrast Background	对比度背景
+	Behind Selection	所选对象后方
+	Current Color	当前颜色
+	Pass	通过
+	Fail	未通过
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低对比度：普通文本 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大号文本 AA 3:1 和 AAA 4.5:1，图形和控件 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在所选对象的中心读取。
 	Gravity	重力
 	Grays	灰度级数
 	Grays and Neutrals	灰色和中性色
@@ -1659,6 +1691,10 @@ file-filter	Templates	模板
 	Add Color Tool	添加颜色工具
 	Remove Color Tool	删除颜色工具
 	Remove Color	删除颜色
+	Set As Base Color	设为基色
+	Select Shade	选择色调
+	Add New Color	添加新颜色
+	Set Current Color As Base Color	将当前颜色设为基色
 	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
@@ -1852,6 +1888,10 @@ file-filter	Templates	模板
 	Rename Preset	重命名预设
 	Save Image Trace Preset	保存图像描摹预设
 	Delete Image Trace Preset	删除图像描摹预设
+	Tracing Presets…	描摹预设…
+	Import Image Trace Presets	导入图像描摹预设
+	Export Image Trace Presets	导出图像描摹预设
+	Replace the saved presets that have these names?	替换具有这些名称的已存储预设？
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -1945,6 +1985,11 @@ file-filter	Templates	模板
 	Knife	刻刀
 	Knockout Group	挖空组
 	Lab	Lab
+	OKLCH Sliders	OKLCH 滑块
+	HSL Sliders	HSL 滑块
+	Chroma	色度
+	The largest chroma sRGB holds at this lightness and hue	sRGB 在此亮度和色相下可容纳的最大色度
+	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
 	Lab Spot Colors:	Lab 专色：
 	Lab Values	Lab 值
 	Landscape	横向
@@ -2050,6 +2095,8 @@ file-filter	Templates	模板
 	List Workspaces	列出工作区
 	Live Paint	实时上色
 	Live Paint Bucket	实时上色工具
+	Fill Area	填充区域
+	Fill Area Tool	填充区域工具
 	Live Paint Bucket (Stroke)	实时上色工具 (描边)
 	Live Paint Info	实时上色信息
 	Live Paint Selection Tool	实时上色选择工具
@@ -2336,6 +2383,12 @@ file-filter	Templates	模板
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	分辨率不可用
+	estimated memory {memory}	估计内存 {memory}
+	memory unavailable	内存不可用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}
@@ -2482,6 +2535,7 @@ file-filter	Templates	模板
 	One Point Perspective Preset 5	一点透视预设 5
 	Only Web Colors	仅 Web 颜色
 	Opacity	不透明度
+	Show Opacity	显示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度与蒙版定义挖空形状
 	Opacity Mask	不透明度蒙版
 	Opacity Mask Info	不透明度蒙版信息
@@ -2673,6 +2727,15 @@ file-filter	Templates	模板
 	PDF/A files carry their own output intent.	PDF/A 文件自带输出意图。
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a 文件为 CMYK：所有颜色都会转换至目的地 (留空：输出意图的 CMYK 配置文件)，且不加标记。
 	Pen Tool	钢笔工具
+	Quick Pen Tool	快速钢笔工具
+	Quick Pen	快速钢笔
+	Quick Pen Toolbar	快速钢笔工具栏
+	Continuous Arc	连续弧线
+	Sharp Corner Arc	尖角弧线
+	Flip Arc	翻转弧线
+	Hide Toolbar	隐藏工具栏
+	Pin Toolbar Position	固定工具栏位置
+	Reset Toolbar Position	重置工具栏位置
 	Pencil	铅笔
 	Pencil Tool	铅笔工具
 	per slice	每个切片
@@ -2752,6 +2815,11 @@ diagnostics	ui	界面
 	Preserve Alpha Transparency	保留 Alpha 透明度
 	Preserve Appearance and Overprints	保留外观和叠印
 	Preserve CMYK Numbers	保留 CMYK 数值
+	Preserve RGB Numbers	保留 RGB 数值
+	Device to Simulate:	要模拟的设备：
+	Simulate Paper Color	模拟纸张颜色
+	Simulate Black Ink	模拟黑色油墨
+	Load…	载入…
 	Preserve Editing Capabilities	保留编辑功能
 	Preserve editing capabilities	保留编辑能力
 	Preserve Lightness	保留亮度
@@ -2921,6 +2989,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale Artwork with Artboard	随画板缩放图稿
 	Artboards: {n}	画板：{n}
 	Rearrange All Artboards…	重新排列所有画板…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	选定的画板：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	单击画布以放置画板 (Esc 取消)
 	Recall Selection	召回选区
 	RECENT	最近使用
 	Recent	最近使用
@@ -3114,6 +3185,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit Arrowheads	编辑箭头
 	Edit Arrowheads…	编辑箭头…
 	Reload Arrowheads	重新载入箭头
+	Bevels	斜角列表
+	Edit Bevels	编辑斜角
+	Edit Bevels…	编辑斜角…
+	{name} (document)	{name} (文档)
+	Reload Bevels	重新载入斜角
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
@@ -3155,7 +3231,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和对齐中按对象的描边和改变形状的效果测量对象；阴影、发光和模糊不计入测量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	缩放为 100% 时，文档的一英寸占 96 个屏幕点，而不是 72 个。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	缩放为 100% 时，文档的一英寸占显示器上的一英寸；系统未报告可用的显示器尺寸时占 96 个屏幕点。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用选择工具双击编组、路径或图像时，会在隔离模式中打开它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	图案填色和描边随图稿一起变换，除非变换命令或变换面板的菜单另有选择。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
@@ -3166,6 +3242,7 @@ digits	Malayalam	马拉雅拉姆数字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某个键会运行键盘快捷键中其按住列的工具或命令；快速按下则运行其常规快捷键。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某个键多少秒后，运行其按住快捷键而不是常规快捷键。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 会删除所选锚点并重新拟合每个锚点周围的曲线，而不会在该处断开路径。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
@@ -3251,9 +3328,14 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit type set in fonts that aren't available?	要编辑使用了不可用字体的文字吗？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处加断字连字符，没有连字符则从不断字，与语言和大小写无关。
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及通过“确定”设置新文件夹时载入，安全模式除外；请求权限的增效工具只在您授予权限后载入。Web 版不载入任何增效工具。
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	“大”为滤镜或命令增效工具的每次运行提供至少 2.5 亿条指令，时间限制不变；“正常”保留增效工具自己的预算。实时效果、导出器和导入器保留各自的预算。
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与语言和大小写无关。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	“正常”保留每个增效工具自身的限制；选择“大”时，增效工具的滤镜或命令除处理其输入所需的指令外，至少可运行 2.5 亿条指令。时间限制不变。
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	增效工具的对象滤镜每次运行可使用的指令数；“大”比“正常”允许更多，60 秒的时间限制不变。重型滤镜保留自己的预算。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	How light or dark the interface is.	界面的明暗程度。
@@ -3264,14 +3346,17 @@ digits	Malayalam	马拉雅拉姆数字
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	在工具栏中把每个工具组的名称显示在其工具上方；关闭此项后，各组依次排列，中间没有任何内容。
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	从现在起，打开或新建的文档以标签页打开；关闭此项后，每个文档在浮动窗口中打开。已打开的文档保持原位。
 	Makes the document tabs taller and their names larger.	让文档标签页更高，标签上的名称更大。
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏。
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏。
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	从下次启动起，在 VectorCraft 原本会自行绘制标题栏的地方，改由系统绘制窗口的标题栏；在 Linux 和 BSD 上，VECTORCRAFT_TITLEBAR 变量优先。
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	从下次启动起，即使桌面会绘制窗口的标题栏，VectorCraft 也会自行绘制，除非开启了系统标题栏或 VECTORCRAFT_TITLEBAR 变量选择了标题栏。
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	放大或缩小界面；在相同缩放比例下，画布上的图稿保持原有大小。
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft 绘制的工具指针随界面缩放一起变大变小；关闭此项后，指针保持原有大小。
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	界面的语言；“自动”使用系统的语言。选择一种语言后，对话框会立即切换到该语言。
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	只有开启此项时，动画缩放才会起作用；关闭此项后，动画缩放显示为灰色，缩放不带动画。
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	用滚轮缩放时会平滑过渡，缩放工具在你向侧面拖动或按住不放时进行缩放；关闭此项后，缩放工具缩放到你拖过的区域。
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	从下次启动起，桌面版通过这类图形处理器显示画布；图稿始终在 CPU 上绘制。“自动”在 Windows 和 macOS 上优先使用集成图形处理器。Web 版不使用此项。
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	从下次启动起，在图形驱动程序允许时，窗口显示每一帧而不等待显示器刷新，最多每秒 240 帧。
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	从下次启动起，桌面版使用这类图形处理器绘制；“自动”优先使用驱动显示器的图形处理器。Web 版不使用此项。
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	从下次启动起，窗口不等待显示器刷新就显示帧，每秒最多 240 帧；关闭时由显示器决定帧的节奏。启动时设置的呈现模式优先。
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	每个文档保留的最大撤销步骤数；调低后，单击“确定”时会删除最早的步骤。步骤占用过多内存时也可能更早被删除。
 	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	拖动时显示图稿的变化；关闭此项后，由轮廓跟随拖动，松开后图稿才改变。标尺参考线在拖动时总是跟着移动。
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	绘制图稿的工作线程数；-1 使用比 VectorCraft 可用核心数少一个的线程，最多 8 个，0 则不使用。Web 版始终不使用。
@@ -3288,6 +3373,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	“打开最近文件”和主页屏幕最多列出这么多最近文件；为 0 时不列出，但 VectorCraft 仍会记住最多 30 个。
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	打开文档时，显示已保存预览的链接 EPS 图像会保留该预览，而不重新读取 EPS 文件；已更改的文件仍按“更新链接”处理。
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素预览中，图像以平滑方式绘制；关闭此项后，像素边缘清晰锐利。像素预览之外，图像始终平滑显示。
+	PDF Text	PDF 文本
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	打开或嵌入的 PDF 中的文本以可编辑文本导入，或以轮廓导入，在没有其字体的电脑上看起来也一样。
+	Linked pages show the file's own text.	链接的页面显示文件本身的文本。
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	链接文件更改时，“自动”会重新读取，“修改时询问”会先询问你，“手动”则保持不变并在状态栏显示提示。
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，“从模板新建…”和“存为模板…”打开时所在的文件夹；留空则使用文档文件夹中的 VectorCraft Templates。
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	“编辑原稿”用系统中该类型的默认应用打开链接文件；关闭此项后，若已安装 PhotoCraft，链接的栅格图像会在 PhotoCraft 中打开。
@@ -3298,6 +3386,10 @@ digits	Malayalam	马拉雅拉姆数字
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 会存储此选项，但复制和剪切尚不使用旧版矢量剪贴板格式。
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	旧版矢量剪贴板的“保留路径”或“保留外观和叠印”；VectorCraft 会存储所选项，但尚未使用。
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	将从 VectorCraft 文字对象复制的文本粘贴到文字对象时，“保留格式”保留其样式，“保留纯文本”则使用粘贴位置的样式。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	“将所有黑色显示为复合黑”在画布上将纯 CMYK 黑色（仅 100% 黑色油墨）显示为 RGB 黑色；“准确显示所有黑色”则通过工作 CMYK 空间转换它。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	“将所有黑色输出为复合黑”在 RGB 和灰度栅格导出和“以位图打印”中将纯 CMYK 黑色绘制为 RGB 黑色；不改变矢量导出、CMYK JPEG、TIFF 和 PSD 以及其他打印。
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	在触摸屏上切换到触控工作区；关闭此选项或触摸屏不再可用时，返回切换前的工作区。
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	在画布上双指轻点会撤销，在触控工作区中则在选择工具和绘图工具之间切换；三指轻点会重做。两者在演示模式下均不起作用。
 	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	当文档设置的语言为英语：美国且 [正常字符样式] 未设置语言时，新文字使用此语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与大小写无关；韩语单词不加连字符，印度语言的单词不会在字符簇内部断开。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
@@ -3510,6 +3602,8 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
+	Clear Recent Commands	清除最近使用的命令
 	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
@@ -4671,6 +4765,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Fill Area: no enclosed area under the pointer	填充区域：指针下方没有封闭区域
 @msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
@@ -4713,6 +4808,9 @@ imageTrace	Outline	轮廓
 @msg	no such anchor	没有此锚点
 @msg	no such segment	没有此线段
 @msg	no such subpath	没有此子路径
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必须是最多 10000 个片段的列表
+@msg	give either `start` for a new path or `id`, not both	请为新路径指定 `start`，或指定 `id`，不能同时指定
+@msg	`subpath` and `keep` need `id`	`subpath` 和 `keep` 需要 `id`
 @msg	object {id} is not a path	对象 {id} 不是路径
 @msg	object {id} is not a selected top-level object	对象 {id} 不是选中的顶层对象
 @msg	nothing to redo	没有可重做的操作
@@ -4828,6 +4926,10 @@ imageTrace	Outline	轮廓
 @msg	a guide has no curvature circle	参考线没有曲率圆
 @msg	the circle that matches the path there would reach past the canvas	在该处与路径曲率相符的圆会超出画布
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
+@msg	`at` must be "start" or "end"	`at` 必须是 "start" 或 "end"
+@msg	give exactly one of `through` and `toward`	`through` 和 `toward` 必须且只能指定一个
+@msg	no arc fits these points: two are the same or all three lie on one line	没有弧形符合这些点：有两点相同，或三点共线
+@msg	give `at` only with `toward`	`at` 只能与 `toward` 一起指定
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -4874,6 +4976,7 @@ imageTrace	Outline	轮廓
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
+@msg	art painted with `{name}` can't be its tile	使用 `{name}` 上色的图稿不能作为它的拼贴
 @msg	not in pattern editing mode	不在图案编辑模式中
 @msg	finish editing the pattern first	请先完成图案编辑
 @msg	pattern missing	缺少图案
@@ -5278,6 +5381,8 @@ imageTrace	Outline	轮廓
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
 @msg	`view` must be wheel or box	`view` 必须是 wheel 或 box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` 必须是 none、oklch 或 hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false
@@ -5309,6 +5414,10 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	对象 {_1} 是经过透视扭曲或自由变形的图像，此命令不适用于它
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	无法这样扭曲图像 {_1}：其角点不会构成凸形
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	无法这样扭曲图像 {_1}：其角点会越过扭曲的地平线
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	无法这样扭曲图像 {_1}：其角点会太靠近，无法进行透视映射
 @msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
 @msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
 @msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
@@ -5620,6 +5729,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	无法粘贴：要粘贴到的文档已关闭
 @msg	nothing selected	未选择任何对象
+@msg	`{key}` must be a color or {_1}	`{key}` 必须是颜色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所选对象的颜色不同：请提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所选对象的颜色不同：请提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	现用填色或描边没有颜色：请提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	现用填色或描边已隐藏：请提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	现用填色或描边通过不透明度蒙版绘制：请提供 `color`
 @msg	nothing selected is in a group	所选对象均不在编组中
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
@@ -6641,6 +6756,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 对象的网格不完整，或含有非数字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素
@@ -6662,7 +6778,10 @@ lighting	Light	光源
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
-@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必须是 none、{_1} 之一，或带 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，即斜角的点
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必须是字符串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必须是 2 到 {most} 个 [x, y] 点，每个比例在 0 到 1 之间，从 [0, 0]（端面的边缘）到 [1, 1]（侧壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
@@ -6688,9 +6807,11 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
-	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	图形映射到平面、突出、回转和膨胀对象类型上
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	图形映射到平面、突出、回转和膨胀对象类型上。
 @msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	Inflate maps graphics onto its front and back, not onto a side	膨胀将图形映射到正面和背面，不映射到侧面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	对象 {_1}：只有打开“双面”和“封口”后，膨胀的背面才能贴图
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
 @msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
@@ -7042,6 +7163,8 @@ axis	Y Axis	Y 轴
 	Cancel Plug-in Run	取消运行插件
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文档或插件在此期间已更改：请重新运行
 @msg	Running “{name}”…	正在运行“{name}”…
+@msg	Plug-in “{name}”: {notice}	增效工具“{name}”：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必须是包含可见文本的字符串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
@@ -7067,11 +7190,19 @@ axis	Y Axis	Y 轴
 @msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
 @msg	not JSON: {e}	不是 JSON：{e}
-@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二进制文件（缺少 \\0asm 头）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函数类型的参数数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函数类型的结果数目超过上限（{MAX_FUNC_TYPE_VALUES} 个）
 @msg	parameter `{k}`: {what}	参数 `{k}`：{what}
 @msg	parameter `{name}`: {what}	参数 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
 @msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the module must export `{name}` with the type {signature}	模块必须以类型 {signature} 导出 `{name}`
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	模块有多个 `{MANIFEST_SECTION}` 自定义段
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	内存预算（模块的初始内存为 {initial} 字节，上限 {max_memory_bytes}）
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` 自定义段中的清单必须将 `abi` 设为 {ABI_VERSION}，即此宿主实现的 ABI 版本
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	表预算（模块定义了 {count} 个表，最大的有 {largest} 个元素；上限为 {MAX_TABLES} 个表，每个 {MAX_TABLE_ELEMENTS} 个元素）
+@msg	the module's table section could not be read	无法读取模块的表段
 @msg	the objects to change are no longer in the document	要更改的对象已不在文档中
 @msg	the runtime panicked	运行时崩溃
 @msg	unexpected host trap	宿主发生意外的 trap
@@ -7079,6 +7210,10 @@ axis	Y Axis	Y 轴
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
 @msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
 @msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	did not finish loading within {secs} s	未在 {secs} 秒内完成加载
+@msg	no thread was left to load it	没有剩余的线程来加载它
+@msg	panicked while loading	加载时崩溃
+@msg	panicked while loading: {what}	加载时崩溃：{what}
 @msg	{_1} is not a file	{_1} 不是文件
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
@@ -7098,6 +7233,11 @@ axis	Y Axis	Y 轴
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
 @msg	`name` must be a string	`name` 必须是字符串
 @msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必须是 0 到 100 之间的数字
+@msg	`opacity` must be true or false	`opacity` 必须是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字符没有自己的不透明度：请用“外观”面板的“添加新填色”或“添加新描边”添加填色或描边
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符号实例中选中的对象没有自己的填色或描边不透明度
+@msg	no target has that fill or stroke to take the opacity	没有目标具有可接受该不透明度的填色或描边
 @msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
@@ -7116,7 +7256,7 @@ axis	Y Axis	Y 轴
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
 @msg	a new object needs a `path`	新对象需要 `path`
 @msg	a number	数字
-@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	绘制型实时效果只返回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一个只读对象
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一个只读对象：请以单独的 {{"id": …}} 或原样返回它
@@ -7141,6 +7281,8 @@ axis	Y Axis	Y 轴
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	复合路径 {id} 有隐藏、锁定或参考线成员，因此无法替换其成员
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	复合路径 {id} 有不是路径的成员，因此无法替换其成员
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大于或等于 {_1} 的数字
@@ -7219,6 +7361,8 @@ axis	Y Axis	Y 轴
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` 只能为 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 仅适用于 `api` 2 的实时效果 (`kind` "effect")
+@msg	`place` is only for an importer (`kind` "importer")	`place` 仅适用于导入器 (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	“{shown}” 只打开文件而不置入：其清单未设置 `place`
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`
@@ -7230,6 +7374,39 @@ axis	Y Axis	Y 轴
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了两次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
+@msg	only a filter declares `writes`	只有滤镜才能声明 `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` 列出了未知的对象类型 `{shown}`：请使用 type、image 或 symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` 列出了两次 `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` 列出了 `{shown}`，但 `inputs` 未列出它
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` 需要 `api` {WRITES_API} 或更高
+@msg	`writes` needs the permission `doc.write`	`writes` 需要权限 `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} 不是文字、图像或符号实例
+@msg	the text of type given as `truncated` can't be changed	作为 `truncated` 给出的文字对象的文本不能更改
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	必须是最多 {MAX_INPUT_RUNS} 个条目的列表
+@msg	type needs at least one run	文字至少需要一个文本段
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	文本 {bytes} 字节（上限 {MAX_INPUT_TEXT}）
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落 {paragraphs} 个（上限 {MAX_INPUT_RUNS}）
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	整个输出中的文本超过 {MAX_INPUT_TEXT_TOTAL} 字节
+@msg	unknown key '{k}'	未知键 '{k}'
+@msg	must be a list of 6 numbers	必须是 6 个数字的列表
+@msg	a number is out of range (limit ±{MAX_COORD})	有数字超出范围（上限 ±{MAX_COORD}）
+@msg	flattens the object to a line or a point	会把对象压扁成一条线或一个点
+@msg	an object flattened to a line or a point can't be placed again	已压扁成线或点的对象无法重新放置
+@msg	must be a number from 0 to 1	必须是 0 到 1 之间的数字
+@msg	must be the name of a symbol	必须是符号的名称
+@msg	'{shown}' is not a symbol in this document	'{shown}' 不是此文档中的符号
+@msg	a run must be {{"text", "style", "inline"?}}	文本段必须是 {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` 含有随文图形的字符
+@msg	inline graphics can't be added, removed, reordered or changed	随文图形不能添加、删除、重新排序或更改
+@msg	the characters of threaded type can't be changed	串接文本的字符不能更改
+@msg	the characters of type with ruby can't be changed	带注音的文字的字符不能更改
+@msg	expected {count} paragraph styles, one per paragraph	应有 {count} 个段落样式，每个段落一个
+@msg	the document has no Kinsoku set named '{shown}'	文档中没有名为 '{shown}' 的 Kinsoku 集
+@msg	must be 1-{MAX_FAMILY} printable characters	必须是 1-{MAX_FAMILY} 个可打印字符
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	读取交给它的对象，以及文档的设置、画板、图层和色板
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必须列出互不相同的部分：settings、artboards、layers 或 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 仅适用于 `api` 3 或更高、具有权限 `doc.read` 的滤镜或带 `commands` 的实时效果
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	增效工具请求的文档信息太大，无法传递：画板、图层和色板合计最多 {MAX_CONTEXT_ITEMS} 个，最多 {MAX_CONTEXT_BYTES} 字节
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
 @msg	instruction budget	指令预算
@@ -7842,6 +8019,36 @@ anchor	Points:	点：
 @msg	`{id}` is not a colour adjustment	`{id}` 不是颜色调整
 @msg	missing `effect`	缺少 `effect`
 @msg	`params` must be an object	`params` 必须是对象
+# Stroke arrowheads (Stroke panel, Dimension Tool Options and Properties › Arrow Style).
+	Triangle (open)	三角 (空心)
+	Circle (open)	圆形 (空心)
+	Square (open)	正方形 (空心)
+	Arrow (open)	箭头 (空心)
+	Barbed	倒钩
+arrowhead	Feather	羽毛
+	Half Arrow (left)	半箭头 (左)
+	Half Arrow (right)	半箭头 (右)
+	Double Bar	双条形
+	Dot on Bar	条形上的圆点
+	Chevron	人字形
+	Plus	加号
+	Hexagon (open)	六边形 (空心)
+	Tag	标签
+	Tag (open)	标签 (空心)
+	Half Circle	半圆
+	Drop	水滴
+	Slash	斜线
+	Double Slash	双斜线
+	Diamond (open)	菱形 (空心)
+	Reverse Triangle	倒三角
+	Swallowtail	燕尾
+	Bracket	括号
+	Fork	叉形
+	Leaf	叶形
+	Kite	风筝形
+	Triangle to Bar	三角至条形
+	Oval	椭圆
+	Line Arrow	线条箭头
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路径精确工具
 	Anchor Eraser Brush	锚点橡皮擦画笔
@@ -8131,6 +8338,7 @@ breakText	Glyphs	字形
 	Remove Strokes	移除描边
 	Place Brush Art	置入画笔图稿
 	Replace Brush Art	替换画笔图稿
+	Replace Pattern Art	替换图案图稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
 	Apply to Strokes	应用于描边
 	Leave Strokes	保留描边
@@ -8552,7 +8760,7 @@ breakText	Glyphs	字形
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	无法读取配置文件 {name}，因此新文档使用默认设置：{reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	陷印：距离近到需要陷印的对象超过 {_1} 对，或处于同一水平范围的对象过多；请减少每次陷印的对象
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除废框和除废线：图稿外侧放不下任何除废线，且除废框已关闭
-@msg	\ at end of pattern	模式以 \ 结尾
+@msg	\\ at end of pattern	模式以 \\ 结尾
 @msg	`alignOn` cannot be empty	`alignOn` 不能为空
 @msg	`alignOn` must be a string	`alignOn` 必须是字符串
 @msg	`align` must be a string	`align` 必须是字符串
@@ -8662,7 +8870,7 @@ breakText	Glyphs	字形
 @msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字符
 @msg	`{word}` isn't in the custom dictionary	`{word}` 不在自定义词典中
 @msg	a CMap has too many mappings	某个 CMap 的映射过多
-@msg	a \u escape needs four hexadecimal digits	\u 转义需要四位十六进制数字
+@msg	a \\u escape needs four hexadecimal digits	\\u 转义需要四位十六进制数字
 @msg	a comma in an XPath expression must separate function arguments	XPath 表达式中的逗号只能用来分隔函数参数
 @msg	a document holds at most {_1} SVG filters	一个文档最多包含 {_1} 个 SVG 滤镜
 @msg	a document with unsaved changes has no recovery copy	有未保存更改的文档没有恢复副本
@@ -9027,6 +9235,8 @@ breakText	Glyphs	字形
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 超过了模块大小上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能与 `ids`、`reverse` 或 `append` 同时使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能与 `ids`、`id` 或 `item` 同时使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能与 `brush` 同时使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用于截取摘要：请传入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是设计名称，或用 null 表示普通柱形
 @msg	`design` is a design name, or null for the default marker	`design` 是设计名称，或用 null 表示默认标记
@@ -9514,6 +9724,7 @@ breakText	Glyphs	字形
 @msg	give a pattern name or select an object painted with a pattern	请给出图案名称，或选择用图案上色的对象
 @msg	give at least one of clip, invert, disabled, linked	请至少给出 clip、invert、disabled、linked 之一
 @msg	give color, none, swatch or gradient	请给出 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	请给出 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	请给出 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	请给出 at (一次单击) 或 area (围绕重叠处绘制的路径)
 @msg	give formats or a preset, not both	请给出 formats 或一个预设，不能两者都给
@@ -9815,7 +10026,7 @@ breakText	Glyphs	字形
 @msg	not a print presets file: {e}	不是打印预设文件：{e}
 @msg	not a stored or deflated central record	不是以存储或 deflate 方式保存的中央记录
 @msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 文件：{e}
-@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 文件：它不是以 {\rtf 开头
+@msg	not an RTF file: it doesn't start with {\\rtf	不是 RTF 文件：它不是以 {\\rtf 开头
 @msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可读取的图像 (参见 document.formats)
 @msg	not area type (text in a frame) outside perspective	不是透视之外的区域文字 (文本框中的文本)
 @msg	not editing an opacity mask	当前没有在编辑不透明度蒙版
@@ -10527,6 +10738,39 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Nature Icons	自然图标
+	Flower	花朵
+	Tree	树木
+	Mountain	山脉
+	Ornamental	装饰纹样
+	Scrollwork	卷饰
+	Filigree Arrow	花丝箭头
+	Petal Sweep	花瓣曲线
+	Twin Curl	双重卷饰
+	Vector Packs	矢量画笔包
+	Compass Rose	罗盘玫瑰
+	Botanical Sprig	植物枝条
+	Facet Diamond	切面钻石
+	Tide Crest	浪尖
+	Leaf Vine	叶藤
+	Blossom Chain	花链
+	Pennant Garland	旗帜花环
+	Lantern String	灯笼串
+	Orbit Lines	轨道线
+	Petal Garland	花瓣花环
+	Lattice Braid	格纹编织
+	Facet Sweep	切面笔触
+	Artistic Brushes	艺术画笔
+	Paint	绘画
+	Flat Sweep	平刷
+	Dry Drag	干拖
+	Loaded Stroke	厚涂笔触
+	Fan Sweep	扇形笔触
+	Engraving	雕刻
+	Fine Hatching	细线排线
+	Dense Hatching	密集排线
+	Tapered Hatching	渐细排线
+	Broken Hatching	断续排线
 	Image Brush	图像画笔
 	Soft Bloom	柔和花朵
 	Halftone Field	半色调区域

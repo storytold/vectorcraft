@@ -12,6 +12,7 @@
 #
 # Coverage: complete UI, menus, undo labels, swatches, dialogs, and status/error messages.
 # `he`, `he-*`, and legacy `iw` / `iw-*` locales resolve here.
+@id	language.name	עברית
 # Raster effects (Effect menu, their dialogs).
 	Glowing Edges…	קצוות זוהרים…
 	Glowing Edges	קצוות זוהרים
@@ -6762,7 +6763,7 @@ axis	Y Axis	ציר Y
 @msg	module is {_1} bytes (limit {_2})	גודל המודול הוא {_1} בתים (המגבלה היא {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	דורש אישור: הוא מבקש {0}, שהמשתמש מעניק בעת התקנתו בנפרד
 @msg	not JSON: {e}	אינו JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	אינו קובץ בינארי של WebAssembly (חסרה כותרת \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	אינו קובץ בינארי של WebAssembly (חסרה כותרת \\0asm)
 @msg	parameter `{k}`: {what}	פרמטר `{k}`: {what}
 @msg	parameter `{name}`: {what}	פרמטר `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	פרמטרי התוסף חייבים להיות אובייקט JSON
@@ -10220,3 +10221,25 @@ breakText	Glyphs	גליפים
 @msg	Two panels pass through each other.	שני לוחות עוברים זה דרך זה.
 	Edit Original with:	ערוך מקור באמצעות:
 file-filter	Applications	יישומים
+	Device to Simulate:	התקן להדמיה:
+	Preserve RGB Numbers	שמירה על ערכי RGB
+	Simulate Paper Color	הדמיית צבע נייר
+	Simulate Black Ink	הדמיית דיו שחור
+	Load…	טעינה…
+	Nature Icons	סמלי טבע
+	Leaf	עלה
+	Flower	פרח
+	Tree	עץ
+	Mountain	הר
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	הרזולוציה אינה זמינה
+	estimated memory {memory}	זיכרון משוער {memory}
+	memory unavailable	הזיכרון אינו זמין
+	Unknown format	פורמט לא ידוע
+	Rearrange…	סידור מחדש…
+	Selected Artboards: {n}	משטחי יצירה נבחרים: {n}
+file-filter	Tracing presets	הגדרות קבועות מראש לעקיבה
+file-filter	Action sets	ערכות פעולות
+file-filter	Composite fonts	גופנים משולבים
+@msg	Click on the canvas to place the artboards (Esc cancels)	יש ללחוץ על בד הציור כדי למקם את משטחי היצירה (Esc לביטול)

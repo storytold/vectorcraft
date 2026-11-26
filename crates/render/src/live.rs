@@ -51,6 +51,8 @@ pub(crate) struct LiveCache {
     expanded: FrameCache<usize, (Arc<Node>, Expanded, Found)>,
     meshes: FrameCache<(usize, usize), MeshEntry>,
     walks: FrameCache<usize, Walk>,
+    /// A distorted image's art by node and scale step ([`Renderer::distorted_art`]).
+    distorted: FrameCache<(usize, usize), (Arc<Node>, Arc<Node>)>,
     /// How many live objects [`Renderer::live_expanded`] evaluated and how many meshes
     /// [`Renderer::mesh_quads`] tessellated.
     #[cfg(test)]
@@ -66,6 +68,7 @@ impl Default for LiveCache {
             expanded: FrameCache::new(lru::LIVE_BUDGET, 256),
             meshes: FrameCache::new(lru::MESH_BUDGET, 256),
             walks: FrameCache::new(lru::WALK_BUDGET, 256),
+            distorted: FrameCache::new(lru::LIVE_BUDGET, 256),
             #[cfg(test)]
             evaluated: 0,
             #[cfg(test)]
@@ -80,6 +83,7 @@ impl LiveCache {
         self.expanded.sweep(stamp);
         self.meshes.sweep(stamp);
         self.walks.sweep(stamp);
+        self.distorted.sweep(stamp);
     }
 
     /// A cache whose evaluations take at most `budget` bytes.
@@ -522,6 +526,28 @@ impl Renderer {
         v
     }
 
+    /// Distorted image `a`'s art for drawing through `view`
+    /// ([`vectorcraft_doc::image_quad::distorted_art_at`] at the view's largest stretch, rounded to
+    /// a quarter of an octave), kept with `cache` while the node stays the same. `None` when `a` is
+    /// not a distorted image.
+    pub(crate) fn distorted_art(&mut self, a: &Arc<Node>, view: Affine, cache: bool) -> Option<Arc<Node>> {
+        let scale = vectorcraft_doc::image_quad::max_stretch(view);
+        let step = if scale.is_finite() && scale > 0.0 { (scale.log2() * 4.0).round().clamp(-256.0, 256.0) } else { 0.0 };
+        let key = (Arc::as_ptr(a) as usize, (step + 256.0) as usize);
+        if cache
+            && let Some(e) = self.live.distorted.get(&key, self.stamp)
+            && Arc::ptr_eq(&e.0, a)
+        {
+            return Some(e.1.clone());
+        }
+        let density = vectorcraft_doc::image_quad::Density::at_scale((step / 4.0).exp2());
+        let art = Arc::new(vectorcraft_doc::image_quad::distorted_art_at(a, density)?);
+        if cache {
+            self.live.distorted.insert(key, (a.clone(), art.clone()), lru::node_bytes(&art), self.stamp);
+        }
+        Some(art)
+    }
+
     /// The quads of mesh `a` (`m`) at subdivision `level`, kept while the node and the color
     /// settings that colored them ([`GradientMesh::color_at`]) stay the same.
     fn mesh_quads(&mut self, doc: &Document, a: &Arc<Node>, m: &GradientMesh, level: usize, cache: bool) -> Arc<Vec<MeshQuad>> {
@@ -572,6 +598,15 @@ impl Renderer {
         match &a.kind {
             NodeKind::PlacedDocument(p) => self.draw_placed(ctx, f, p),
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
+            // Outline mode draws a distorted image's frame through its corners, not the pieces it
+            // is drawn with.
+            NodeKind::Image(_) if f.opts.outline => self.draw_distorted_frame(ctx, f, a, cache),
+            // A distorted image's mesh is cut for the view's scale.
+            NodeKind::Image(_) => {
+                if let Some(art) = self.distorted_art(a, f.view, cache) {
+                    self.draw_arc(ctx, f, &art);
+                }
+            }
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Repeat(_)

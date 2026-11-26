@@ -5,7 +5,7 @@
 
 use std::io::Cursor;
 
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use image::{DynamicImage, ImageFormat};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -85,7 +85,7 @@ fn resampled_images_keep_their_color_beside_clear_pixels() {
                 .unwrap();
         settings.compression.compress_text = false;
         let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
-        let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(bytes)).unwrap();
         let rgb = file
             .objects()
             .into_iter()
@@ -107,7 +107,7 @@ fn resampled_images_keep_their_color_beside_clear_pixels() {
 
 /// The width and height of each image XObject in `pdf`.
 fn image_sizes(pdf: &[u8]) -> Vec<(u32, u32)> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     file.objects()
         .into_iter()
         .filter_map(|o| match o {
@@ -152,6 +152,74 @@ fn a_warped_image_is_written_once_for_all_its_pieces() {
         sizes.sort_unstable();
         assert_eq!(sizes, [(w, h), (300, 300)], "masked {masked}");
     }
+}
+
+/// An image changed by Perspective Distort is written as the pieces of its mesh, placed so that
+/// its pixel rectangle's corners land on its corners: read back, each corner of the quad is a
+/// corner of one of the pieces' images.
+#[test]
+fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
+    let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let bytes = export_with_report(&d, &PdfOptions::default()).unwrap().bytes;
+    let back = crate::import(&bytes).unwrap();
+    let (mut seen, mut pieces) = ([false; 4], 0);
+    back.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            pieces += 1;
+            let (w, h) = (f64::from(im.width), f64::from(im.height));
+            for p in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)] {
+                let at = im.xf * Point::new(p.0, p.1);
+                for (i, c) in q.iter().enumerate() {
+                    seen[i] |= at.distance(*c) < 0.01;
+                }
+            }
+        }
+    });
+    assert!(pieces > 2, "{pieces}");
+    assert_eq!(seen, [true; 4]);
+    // The pieces are clipped by the quad: a clipping path with its bounds and its area.
+    let mut quad_clips = 0;
+    back.walk(|n| {
+        if let NodeKind::Group { children, clip: true } = &n.kind
+            && let Some(p) = children.first().and_then(|c| c.path_data())
+            && let Some(b) = p.bounds()
+        {
+            let area: f64 = p.subpaths.iter().map(|s| s.area()).sum::<f64>().abs();
+            if [b.x0 - 10.0, b.y0 - 10.0, b.x1 - 90.0, b.y1 - 90.0].iter().all(|v| v.abs() < 0.01) && (area - 4000.0).abs() < 1.0 {
+                quad_clips += 1;
+            }
+        }
+    });
+    assert!(quad_clips >= 1, "no clipping path on the quad");
+}
+
+/// A distorted image's own fill that Convert to Shape gives a shape is written with it.
+#[test]
+fn a_distorted_image_keeps_its_own_shaped_fill() {
+    use vectorcraft_doc::{AppearanceItem, Effect, FillLayer, color::Color, color::Paint};
+    let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    let n = d.node_mut(id).unwrap();
+    n.set_image_corners(q).unwrap();
+    let mut fill = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    fill.effects = vec![Effect { id: "convertToShape.rectangle".into(), params: json!({"relative": true, "extraW": 0, "extraH": 0}), visible: true }];
+    n.appearance.items.push(AppearanceItem::Fill(fill));
+    let bytes = export_with_report(&d, &PdfOptions::default()).unwrap().bytes;
+    let back = crate::import(&bytes).unwrap();
+    let (mut green, mut pieces) = (false, 0);
+    back.walk(|n| match &n.kind {
+        NodeKind::Image(_) => pieces += 1,
+        NodeKind::Path { .. } => {
+            green |= n.appearance.fill().and_then(|f| f.paint.color()).is_some_and(|c| c.to_rgb()[1] > 0.9 && c.to_rgb()[0] < 0.1)
+        }
+        _ => {}
+    });
+    assert!(pieces > 2, "{pieces}");
+    assert!(green, "the fill is written");
 }
 
 #[test]
@@ -371,7 +439,7 @@ struct Written {
 
 /// Each image XObject of `pdf` other than soft masks.
 fn image_spaces(pdf: &[u8]) -> Vec<Written> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     let images: Vec<Stream<'_>> = file
         .objects()
         .into_iter()
@@ -402,7 +470,7 @@ fn image_spaces(pdf: &[u8]) -> Vec<Written> {
 
 /// The decoded samples of each image XObject of `pdf` other than soft masks.
 fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     let images: Vec<Stream<'_>> = file
         .objects()
         .into_iter()
@@ -417,7 +485,7 @@ fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
 
 /// The raw (still encoded) data of each image XObject of `pdf`.
 fn image_data(pdf: &[u8]) -> Vec<Vec<u8>> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     file.objects()
         .into_iter()
         .filter_map(|o| match o {

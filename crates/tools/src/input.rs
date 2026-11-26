@@ -217,6 +217,9 @@ pub enum ToolKey {
     /// A letter key a–z, lowercase (E while dragging a Selection or Group Selection marquee makes it
     /// select only the objects entirely inside it, and E again switches it back).
     Letter(char),
+    /// Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between
+    /// (the Quick Pen tool switches to its next action).
+    AltTap,
 }
 
 /// What a tool asks the engine to do.

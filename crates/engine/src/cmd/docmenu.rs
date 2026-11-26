@@ -14,8 +14,8 @@ use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
-    CommandSpec, EngineError, Point, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok,
-    str_param, switch_or, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok, str_param,
+    switch_or, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -730,13 +730,10 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Find each ruler guide's line and its parent: the guide's layer, else where new art goes.
     let st = s.doc()?;
-    let artboards = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b));
     let mut lines = Vec::with_capacity(rulers.len());
     for &i in &rulers {
         let Some(g) = st.doc.ruler_guide(i) else { continue };
-        let span = st.doc.guide_span(&g).or_else(|| artboards.map(|r| if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) }));
-        let Some((a, b)) = span else { continue };
-        let (a, b) = if g.vertical { (Point::new(g.pos, a), Point::new(g.pos, b)) } else { (Point::new(a, g.pos), Point::new(b, g.pos)) };
+        let Some((a, b)) = st.doc.guide_line(&g) else { continue };
         let parent = match g.layer.filter(|l| st.doc.node(*l).is_some_and(Node::is_layer)) {
             Some(l) => Some(l),
             None => st.target_parent()?,

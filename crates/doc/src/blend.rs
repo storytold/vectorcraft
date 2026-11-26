@@ -1156,6 +1156,23 @@ impl Lerp {
                     (NodeKind::PlacedDocument(o), NodeKind::PlacedDocument(x), NodeKind::PlacedDocument(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
                     _ => {}
                 }
+                // Between distorted images, each step's corners lie between the keys' corners. A
+                // step whose corners would fold keeps the nearer key's.
+                if (a.is_distorted_image() || b.is_distorted_image())
+                    && let (Some(qa), Some(qb)) = (a.image_corners(), b.image_corners())
+                {
+                    let near = if t < 0.5 { qa } else { qb };
+                    if n.set_image_corners([0, 1, 2, 3].map(|i| qa[i].lerp(qb[i], t))).is_err() && n.set_image_corners(near).is_err() {
+                        // Corners from a transform that collapses the image fail the check too: the
+                        // step is then placed as the nearer key is.
+                        if let (NodeKind::Image(o), NodeKind::Image(k)) = (&mut n.kind, &base.kind) {
+                            o.xf = k.xf;
+                        }
+                        if n.extras().image_quad != base.extras().image_quad {
+                            n.extras_mut().image_quad = base.extras().image_quad.clone();
+                        }
+                    }
+                }
                 n.extras_mut().mask = None;
                 n
             }
@@ -2175,6 +2192,13 @@ pub fn blend_steps(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<usize> {
     StepCount::default().blend(keys, spec, Rail::new(keys, spec).as_ref()).0
 }
 
+/// Most steps the blends in `n` and its subtree make in all when drawn: a step that copies a
+/// blend counts that blend's steps again, and each instance of a repeat counts its source's
+/// steps again. Objects that are not blend steps count 0.
+pub fn blend_steps_made(n: &Node) -> usize {
+    StepCount::default().node(n, false)
+}
+
 /// Does each pair of `keys` blended with `spec` ask for the same number of steps
 /// ([`blend_step_count`]) when each coordinate it counts from moves by up to `length` points and,
 /// for Smooth Color, the difference between keys of different colors by up to `color` (0 to 1)?
@@ -2295,6 +2319,54 @@ mod tests {
         let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
         let m = PathPair::new(&line(0.0), &line(100.0), (None, Some(1))).at(0.5);
         assert_eq!(m.subpaths[0].anchors[0].p, Point::new(55.0, 0.0));
+    }
+
+    /// A step between two distorted images has its corners between the keys' corners.
+    #[test]
+    fn steps_between_distorted_images_have_corners_between_theirs() {
+        let image = |q: [(f64, f64); 4]| {
+            let im = crate::ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let mut n = Node::new(NodeId(1), NodeKind::Image(Box::new(im)));
+            n.set_image_corners(q.map(|(x, y)| Point::new(x, y))).unwrap();
+            n
+        };
+        let a = image([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        let b = image([(200.0, 0.0), (300.0, 0.0), (280.0, 100.0), (220.0, 100.0)]);
+        let mid = Lerp::new(&a, &b, (None, None)).at(0.5);
+        let want = [(120.0, 0.0), (180.0, 0.0), (190.0, 100.0), (110.0, 100.0)];
+        let got = mid.image_corners().unwrap();
+        for (g, (x, y)) in got.iter().zip(want) {
+            assert!(g.distance(Point::new(x, y)) < 1e-9, "{got:?}");
+        }
+        // Toward a key flipped left to right, the middle step's corners would meet: each step
+        // there keeps the nearer key's corners, whether that key is distorted or not.
+        let flipped = image([(60.0, 0.0), (40.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        let mirror = image([(100.0, 0.0), (0.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        assert!(!mirror.is_distorted_image());
+        for (b, t) in [(&flipped, 0.5), (&mirror, 0.5), (&mirror, 0.45)] {
+            let got = Lerp::new(&a, b, (None, None)).at(t).image_corners().unwrap();
+            let near = (if t < 0.5 { &a } else { b }).image_corners().unwrap();
+            assert!(got.iter().zip(near).all(|(g, w)| g.distance(w) < 1e-9), "{t}: {got:?} against {near:?}");
+        }
+        // Toward an image whose transform has no height, neither the step's corners nor the
+        // nearer key's pass the check: the step is placed as that key is.
+        let mut flat = image([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let collapsed = Affine::new([-3.0, 0.0, 0.0, 0.0, 100.0, 0.0]);
+        if let NodeKind::Image(im) = &mut flat.kind {
+            im.xf = collapsed;
+        }
+        let step = Lerp::new(&a, &flat, (None, None)).at(0.5);
+        let NodeKind::Image(im) = &step.kind else { panic!("an image") };
+        assert_eq!(im.xf, collapsed);
+        assert!(!step.is_distorted_image() && step.extras().image_quad.is_none());
     }
 
     fn key(x: f64) -> Arc<Node> {

@@ -17,6 +17,7 @@
 //! objects and points. Anything it doesn't read is an error: the caller opens the file the way it
 //! did before (the printed page, or the PDF), with a warning saying why.
 
+mod arrowhead;
 mod blend;
 mod brush;
 mod envelope;

@@ -22,6 +22,7 @@ pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub mod image_quad;
 pub use id_index::{path_lookups, tree_walks};
 pub mod inks;
 mod inline;
@@ -133,10 +134,10 @@ pub use text::GlyphForm;
 pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
-    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
-    JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
-    RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
-    VerticalAlign, WrapShape,
+    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FILE_FONT_MIME, FileFont, FileFontFace, FileFonts,
+    FirstBaseline, HyphenationOptions, InlineArt, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind,
+    TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
 };
 pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet, KinsokuSet};
 pub use trace::TraceView;
@@ -160,10 +161,14 @@ mod records;
 mod stored_art;
 mod units;
 
+#[cfg(any(test, feature = "locked-artboard-count"))]
+#[doc(hidden)]
+pub use artboard::locked_artboard_measures;
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
+pub use document_guides::GuideTransform;
 pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};
 pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
