@@ -15,12 +15,31 @@ const PACKET: &str = "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\
 <dc:format>image/svg+xml</dc:format><dc:subject><rdf:Bag><rdf:li>a</rdf:li><rdf:li>b</rdf:li></rdf:Bag></dc:subject>\
 </rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>";
 
+struct Folder {
+    _guard: vectorcraft_testkit::TempDir,
+    path: PathBuf,
+}
+
+impl std::ops::Deref for Folder {
+    type Target = PathBuf;
+
+    fn deref(&self) -> &Self::Target {
+        &self.path
+    }
+}
+
+impl AsRef<Path> for Folder {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
 /// A fresh folder for test `name`, with a `main` folder inside it for the script, by its real path.
-fn folder(name: &str) -> PathBuf {
-    let base = std::env::temp_dir().join(format!("vc-script-xmp-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+fn folder(name: &str) -> Folder {
+    let guard = vectorcraft_testkit::TempDir::new(&format!("script-xmp-{name}"));
+    let base = std::fs::canonicalize(&*guard).unwrap();
     std::fs::create_dir_all(base.join("main")).unwrap();
-    std::fs::canonicalize(&base).unwrap()
+    Folder { _guard: guard, path: base }
 }
 
 fn write(path: &Path, bytes: &[u8]) {
@@ -163,7 +182,7 @@ fn a_scanned_sidecar_is_read_only() {
 
 /// The state an `XMPFile` keeps cannot be changed by the script: a sidecar opened for reading is
 /// not written by `closeFile` after the script assigns, defines or deletes the properties that
-/// hold the packet, the path and the open flags, or calls `closeFile` on another object that holds
+/// name the packet, the path and the open flags, or calls `closeFile` on another object that holds
 /// properties of the same names, plain or made from `XMPFile.prototype`.
 #[test]
 fn a_script_cannot_change_the_state_of_an_xmp_file() {
@@ -175,7 +194,7 @@ fn a_script_cannot_change_the_state_of_an_xmp_file() {
         &format!(
             "var p = Folder.userData.fsName + '/r.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close();\n\
              var x = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_READ); var out = [];\n\
-             x.__vcXmpPending = 'not a packet'; x.__vcXmpFlags = XMPConst.OPEN_FOR_UPDATE;\n\
+             x.__vcXmpPending = 'not a packet'; x.__vcXmpFlags = XMPConst.OPEN_FOR_UPDATE; x.__vcXmpPath = p + '.other';\n\
              try {{ Object.defineProperty(x, '__vcXmpPending', {{ value: 'not a packet' }}); out.push('defined'); }} catch (e) {{ out.push(e.name); }}\n\
              out.push(typeof x.__vcXmpPending, x.getFileInfo().openFlags == XMPConst.OPEN_FOR_READ);\n\
              [{{}}, Object.create(XMPFile.prototype)].forEach(function (fake) {{\n\
@@ -185,10 +204,30 @@ fn a_script_cannot_change_the_state_of_an_xmp_file() {
              x.closeFile(); out.push(delete x.__vcXmpPath); vc.log(out); vc.log(p);"
         ),
     );
-    assert_eq!(log[0], json!(["TypeError", "undefined", true, "TypeError", "TypeError", false]));
+    assert_eq!(log[0], json!(["defined", "string", true, "TypeError", "TypeError", true]));
     let text = std::fs::read_to_string(log[1].as_str().unwrap()).unwrap();
     assert_eq!(text, PACKET);
     let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn xmp_file_buffers_are_not_script_properties() {
+    let base = folder("native-packet");
+    let mut session = with_data(&base);
+    let log = logged(
+        &mut session,
+        &base,
+        &format!(
+            "var p = Folder.userData.fsName + '/native.xmp', file = new File(p);\n\
+             file.open('w'); file.write({PACKET:?}); file.close();\n\
+             var x = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE), m = x.getXMP();\n\
+             m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m);\n\
+             vc.log([typeof x.__vcXmpPacket, typeof x.__vcXmpPending, typeof x.__vcXmpPath,\n\
+                     Object.getOwnPropertyNames(x).filter(function (name) {{ return name.indexOf('__vcXmp') === 0; }}).length,\n\
+                     x.getXMP().getProperty(XMPConst.NS_DC, 'format').value]); x.closeFile();"
+        ),
+    );
+    assert_eq!(log[0], json!(["undefined", "undefined", "undefined", 0, "changed"]));
 }
 
 /// A path outside the script's places, a missing file and a file opened for update where the run
@@ -451,6 +490,32 @@ fn an_open_utf16_file_reads_the_written_packet() {
     );
     assert_eq!(log[0], json!(["UTF-16LE", "<?xpa", "UTF-8", "<?xpacket", true]));
     let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn an_xmp_update_resets_bom_readers_and_keeps_unmarked_reader_positions() {
+    for bom in [true, false] {
+        let base = folder(if bom { "utf8bomopen" } else { "utf8open" });
+        let mut session = with_data(&base);
+        let data = logged(&mut session, &base, "vc.log(Folder.userData.fsName);");
+        let data = PathBuf::from(data[0].as_str().unwrap());
+        let mut bytes = if bom { vec![0xEF, 0xBB, 0xBF] } else { Vec::new() };
+        bytes.extend_from_slice(PACKET.as_bytes());
+        write(&data.join("u.xmp"), &bytes);
+        let log = logged(
+            &mut session,
+            &base,
+            &format!(
+                "var p = Folder.userData.fsName + '/u.xmp', f = new File(p); f.open('r');\n\
+                 if (!{bom}) f.read(3); var before = f.tell();\n\
+                 var x = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE), m = x.getXMP();\n\
+                 m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m); x.closeFile();\n\
+                 var after = f.tell(), text = f.read(); f.close(); vc.log([before, after, text.slice(0, 9)]);"
+            ),
+        );
+        assert_eq!(log[0], if bom { json!([3, 0, "<?xpacket"]) } else { json!([3, 3, "packet be"]) });
+        let _ = std::fs::remove_dir_all(base);
+    }
 }
 
 /// Opens that cannot take a packet need no write grant, even with `OPEN_FOR_UPDATE`: a scanned

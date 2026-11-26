@@ -722,6 +722,35 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` angiver `{shown}` to gange
 @msg	`inputs` needs `api` 2 or later	`inputs` kræver `api` 2 eller nyere
 @msg	`inputs` needs the permission `doc.read`	`inputs` kræver tilladelsen `doc.read`
+@msg	only a filter declares `writes`	kun et filter angiver `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` angiver en ukendt objekttype `{shown}`: brug type, image eller symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` angiver `{shown}` to gange
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` angiver `{shown}`, som `inputs` ikke angiver
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` kræver `api` {WRITES_API} eller nyere
+@msg	`writes` needs the permission `doc.write`	`writes` kræver tilladelsen `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} er hverken tekst, et billede eller en symbolforekomst
+@msg	the text of type given as `truncated` can't be changed	teksten i et tekstobjekt givet som `truncated` kan ikke ændres
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	skal være en liste med højst {MAX_INPUT_RUNS} elementer
+@msg	type needs at least one run	tekst skal have mindst ét tekststykke
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte tekst (grænse {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} afsnit (grænse {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mere end {MAX_INPUT_TEXT_TOTAL} byte tekst i hele outputtet
+@msg	unknown key '{k}'	ukendt nøgle '{k}'
+@msg	must be a list of 6 numbers	skal være en liste med 6 tal
+@msg	a number is out of range (limit ±{MAX_COORD})	et tal er uden for området (grænse ±{MAX_COORD})
+@msg	flattens the object to a line or a point	gør objektet fladt til en linje eller et punkt
+@msg	an object flattened to a line or a point can't be placed again	et objekt, der er gjort fladt til en linje eller et punkt, kan ikke placeres igen
+@msg	must be a number from 0 to 1	skal være et tal fra 0 til 1
+@msg	must be the name of a symbol	skal være navnet på et symbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' er ikke et symbol i dette dokument
+@msg	a run must be {{"text", "style", "inline"?}}	et tekststykke skal være {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` indeholder tegnet for en indlejret grafik
+@msg	inline graphics can't be added, removed, reordered or changed	indlejrede grafikker kan ikke tilføjes, fjernes, omarrangeres eller ændres
+@msg	the characters of threaded type can't be changed	tegnene i sammenkædet tekst kan ikke ændres
+@msg	the characters of type with ruby can't be changed	tegnene i tekst med ruby kan ikke ændres
+@msg	expected {count} paragraph styles, one per paragraph	forventede {count} afsnitsstile, én pr. afsnit
+@msg	the document has no Kinsoku set named '{shown}'	dokumentet har intet Kinsoku-sæt med navnet '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	skal være 1-{MAX_FAMILY} tegn, der kan udskrives
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Læse de objekter, den får, og dokumentets indstillinger, tegneflader, lag og farveprøver
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` skal angive forskellige afsnit: settings, artboards, layers eller swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` er til et filter eller en live-effekt med `commands`, ved `api` 3 eller senere og med tilladelsen `doc.read`
@@ -3412,6 +3441,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-generisk CMYK (SWOP-lignende)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestrøget CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft ubestrøget CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Ældre Macintosh RGB (gamma 1,8)
 	Internet Standard RGB (sRGB)	Internetstandard-RGB (sRGB)
 	Monitor RGB	Skærm-RGB
@@ -10891,6 +10922,11 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Fold Angle	Foldevinkel
+	Set Fold Angle…	Angiv foldevinkel…
+	Set Fold Angle	Angiv foldevinkel
+	Reset Fold Angle	Nulstil foldevinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markér en rillelinje, delvis skærelinje eller perforeringslinje, der hverken er låst eller skjult
 	Check	Kontrollér
 	Check Fold Lines	Kontrollér foldelinjer
 @msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.

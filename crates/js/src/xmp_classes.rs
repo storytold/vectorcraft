@@ -26,12 +26,13 @@
 //! VectorCraft's own rules: only a `.xmp` file opened with `OPEN_FOR_UPDATE` takes `putXMP`;
 //! `closeFile` always replaces the file through a temporary one when the folder may hold one, and
 //! with `CLOSE_UPDATE_SAFELY` it writes no other way, throwing and keeping the packet instead; an
-//! `XMPFile` is open only in the run that opened it, and a packet it kept and did not write is
-//! dropped when the run ends. A member the reference lists that is not built yet, and a flag,
-//! format or option not handled yet, throws an error that says so.
+//! `XMPFile` is open only in the file run that opened it. Closing it successfully or beginning
+//! another file run with `Realm::reset_folder_current` releases its packet buffers. A member the
+//! reference lists that is not built yet, and a flag, format or option not handled yet, throws an
+//! error that says so.
 
 use crate::builtins::{arg, data, method, native};
-use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
+use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, PropMap, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
 use crate::xmp::{self, Form, Item, Meta, Registry, Step, XmpError};
@@ -82,6 +83,10 @@ struct Ids {
 }
 
 impl Classes {
+    pub(crate) fn bytes(&self) -> usize {
+        self.registry.bytes()
+    }
+
     /// The objects a collection keeps.
     pub(crate) fn objects(&self) -> [ObjId; 7] {
         let i = self.ids;
@@ -199,19 +204,42 @@ fn spend(i: &mut Interp, bytes: usize) -> JsResult<()> {
 }
 
 fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
+    if let Some(Class::XmpFile(fields)) = i.heap.object(o).map(|object| &object.class) {
+        return Ok(fields.get(&key(name)).cloned().unwrap_or(Value::Undefined));
+    }
     Ok(match i.get_own_property(o, &key(name))? {
         Some(Prop::Data { value, .. }) => value,
         _ => Value::Undefined,
     })
 }
 
-/// Sets the slot `name` of `o` as a property that is not writable, enumerable or configurable, so
-/// a script cannot assign, redefine or delete it.
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
+    if let Some(Class::XmpFile(fields)) = i.heap.object(o).map(|object| &object.class) {
+        let name = key(name);
+        let added = if fields.contains(&name) { 0 } else { PROP_BYTES + string_bytes(name.len()) };
+        let strings = if let Value::String(s) = &value { string_bytes(s.len()) } else { 0 };
+        return i.rooted(&[Value::Object(o), value.clone()], |i| {
+            i.reserve_heap(added + strings)?;
+            if let Some(Class::XmpFile(fields)) = i.heap.object_mut(o).map(|object| &mut object.class) {
+                fields.insert(name, value);
+                i.heap.bytes = i.heap.bytes.saturating_add(added);
+            }
+            Ok(())
+        });
+    }
     if let Value::String(s) = &value {
         i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES + string_bytes(s.len())))?;
     }
     i.define(o, key(name), Prop::Data { value, flags: 0 })
+}
+
+pub(crate) fn reset_file_state(fields: &mut PropMap<Value>) {
+    if let Some(packet) = fields.get_mut(&key(PACKET)) {
+        *packet = Value::Null;
+    }
+    if let Some(pending) = fields.get_mut(&key(PENDING)) {
+        *pending = Value::Undefined;
+    }
 }
 
 /// A string value, charged to the heap.
@@ -312,12 +340,17 @@ fn new_meta(i: &mut Interp, meta: Meta) -> JsResult<Value> {
 
 /// The metadata of the packet `text`, read for `what`.
 fn parse_packet(i: &mut Interp, what: &str, text: &str) -> JsResult<Meta> {
-    // Reading copies the realm's namespaces.
-    let copied = registry(i)?.bytes();
-    spend(i, text.len().saturating_add(copied))?;
-    let budget = i.limits.heap_bytes;
-    let r = xmp::parse_within(text, registry(i)?, budget);
-    r.map_err(|e| xmp_error(i, what, e, ""))
+    let mut staged = registry(i)?.clone();
+    let copied = staged.bytes();
+    spend(i, text.len().saturating_add(2 * copied))?;
+    i.collect_garbage();
+    let budget = i.limits.heap_bytes.saturating_sub(i.heap.bytes).saturating_sub(OBJECT_BYTES);
+    let meta = xmp::parse_within(text, &mut staged, budget).map_err(|e| xmp_error(i, what, e, ""))?;
+    let growth = staged.bytes().saturating_sub(copied);
+    i.reserve_heap(OBJECT_BYTES.saturating_add(meta.heap_bytes()).saturating_add(growth))?;
+    *registry(i)? = staged;
+    i.heap.bytes = i.heap.bytes.saturating_add(growth);
+    Ok(meta)
 }
 
 fn meta_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -896,9 +929,14 @@ fn register_namespace(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     let what = "XMPMeta.registerNamespace";
     let uri = text(i, &arg(args, 0))?;
     let prefix = text(i, &arg(args, 1))?;
+    let (proposed, growth) = registry(i)?.registration(&uri, &prefix).map_err(|e| xmp_error(i, what, e, &prefix))?;
+    i.reserve_heap(growth.saturating_add(string_bytes(proposed.len() + 1)))?;
     let r = registry(i)?.register(&uri, &prefix);
     match r {
-        Ok(p) => string(i, &format!("{p}:")),
+        Ok(p) => {
+            i.heap.bytes = i.heap.bytes.saturating_add(growth);
+            string(i, &format!("{p}:"))
+        }
         Err(e) => Err(xmp_error(i, what, e, &prefix)),
     }
 }
@@ -958,7 +996,7 @@ not_yet_fns! {
 /// The `XMPFile` `this`, refused when the `XMPFile` constructor did not make it.
 fn this_file(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
     if let Some(o) = this.as_object()
-        && matches!(i.heap.object(o).map(|ob| &ob.class), Some(Class::XmpFile))
+        && matches!(i.heap.object(o).map(|ob| &ob.class), Some(Class::XmpFile(_)))
         && matches!(slot(i, o, PATH)?, Value::String(_))
     {
         return Ok(o);
@@ -1008,8 +1046,10 @@ fn file_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
         let sidecar = field(i, "sidecar")?.truthy();
         let reported = if format == FILE_UNKNOWN && sidecar { FILE_XML } else { format };
         let file_proto = ids(i)?.file_proto;
-        i.reserve_heap(OBJECT_BYTES + 12 * PROP_BYTES)?;
-        let o = i.heap.alloc_object(Object::new(Class::XmpFile, Some(file_proto)));
+        let state_bytes = std::mem::size_of::<PropMap<Value>>();
+        i.reserve_heap(OBJECT_BYTES + state_bytes + 12 * PROP_BYTES)?;
+        let o = i.heap.alloc_object(Object::new(Class::XmpFile(Box::default()), Some(file_proto)));
+        i.heap.bytes = i.heap.bytes.saturating_add(state_bytes);
         i.rooted(&[Value::Object(o)], |i| {
             let packet = field(i, "packet")?;
             let fields = [
@@ -1109,7 +1149,7 @@ fn packet_arg(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
     // registers nothing.
     let mut scratch = registry(i)?.clone();
     spend(i, s.len().saturating_add(2 * scratch.bytes()))?;
-    xmp::parse_within(&s, &mut scratch, i.limits.heap_bytes).map_err(|e| xmp_error(i, what, e, ""))?;
+    xmp::validate_within(&s, &mut scratch, i.limits.heap_bytes).map_err(|e| xmp_error(i, what, e, ""))?;
     Ok(s)
 }
 
@@ -1168,6 +1208,7 @@ fn close_file(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
         }
     }
     set_slot(i, o, PENDING, Value::Undefined)?;
+    set_slot(i, o, PACKET, Value::Null)?;
     set_slot(i, o, OPEN, Value::Bool(false))?;
     Ok(Value::Undefined)
 }
@@ -1273,8 +1314,8 @@ fn link(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
 }
 
 /// Adds the global `ExternalObject`, which defines `XMPMeta`, `XMPFile` and `XMPConst` when a
-/// script loads the XMP library ([`crate::Realm::define_external_object`]). A second call is
-/// refused and changes nothing, so the namespaces registered stay.
+/// script loads the XMP library ([`crate::Realm::define_external_object`]). A call after a
+/// successful installation is refused and preserves registered namespaces. A failed installation can be retried.
 pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
     if i.xmp.is_some() {
         return Err(Abrupt::Internal("ExternalObject is already added".into()));
@@ -1286,26 +1327,62 @@ pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
     let file_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
     let property_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
     let keep = [external_proto, meta_proto, file_proto, property_proto].map(Value::Object);
-    i.rooted(&keep, |i| {
+    let installed = i.rooted(&keep, |i| {
         let meta = native(i, "XMPMeta", meta_ctor, 1, NativeKind::Plain, true)?;
         i.rooted(&[Value::Object(meta)], |i| {
             let file = native(i, "XMPFile", file_ctor, 3, NativeKind::Plain, true)?;
             i.rooted(&[Value::Object(file)], |i| {
                 let constants = constants(i)?;
-                i.xmp = Some(Classes {
-                    ids: Ids { external_proto, meta, meta_proto, file, file_proto, constants, property_proto },
-                    registry: Registry::default(),
-                });
+                let registry = Registry::default();
+                i.rooted(&[Value::Object(constants)], |i| i.reserve_heap(registry.bytes()))?;
+                i.heap.bytes = i.heap.bytes.saturating_add(registry.bytes());
+                i.xmp = Some(Classes { ids: Ids { external_proto, meta, meta_proto, file, file_proto, constants, property_proto }, registry });
                 link(i, meta, meta_proto)?;
                 link(i, file, file_proto)?;
                 meta_members(i, meta, meta_proto)?;
                 file_members(i, file, file_proto)?;
                 method(i, property_proto, "toString", property_to_string, 0)?;
                 let external = native(i, "ExternalObject", external_ctor, 1, NativeKind::Plain, true)?;
-                crate::builtins::constructor(i, "ExternalObject", external, external_proto)?;
-                method(i, external, "search", external_search, 1)?;
-                method(i, external_proto, "terminate", external_terminate, 0)
+                i.rooted(&[Value::Object(external)], |i| {
+                    method(i, external, "search", external_search, 1)?;
+                    method(i, external_proto, "terminate", external_terminate, 0)?;
+                    crate::builtins::constructor(i, "ExternalObject", external, external_proto)
+                })
             })
         })
-    })
+    });
+    if installed.is_err() {
+        i.xmp = None;
+    }
+    installed
+}
+
+#[cfg(test)]
+mod namespace_heap_tests {
+    use super::*;
+
+    #[test]
+    fn parsed_namespaces_fit_with_the_metadata_before_registration() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        interp.collect_garbage();
+        interp.limits.heap_bytes = interp.heap.bytes + (24 << 10);
+        let mut declarations = String::new();
+        let mut properties = String::new();
+        let mut first_uri = String::new();
+        for index in 0..16 {
+            let uri = format!("urn:{index}:{}", "x".repeat(950));
+            if index == 0 {
+                first_uri.clone_from(&uri);
+            }
+            declarations.push_str(&format!(" xmlns:n{index}=\"{uri}\""));
+            properties.push_str(&format!("<n{index}:value>text</n{index}:value>"));
+        }
+        let packet = format!(
+            "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"{declarations}><rdf:Description>{properties}</rdf:Description></rdf:RDF>"
+        );
+        let result = parse_packet(&mut interp, "XMPMeta", &packet).and_then(|meta| new_meta(&mut interp, meta));
+        assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Heap))), "{result:?}");
+        assert!(registry(&mut interp).unwrap().prefix_of(&first_uri).is_none(), "a failed allocation leaves the namespaces unchanged");
+    }
 }

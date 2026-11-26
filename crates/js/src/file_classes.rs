@@ -1117,11 +1117,37 @@ fn folder_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
 pub(crate) fn reset_current(i: &mut Interp) -> JsResult<()> {
     let Some(c) = i.files.as_mut() else { return Ok(()) };
     c.run += 1.0;
+    i.heap.reset_xmp_files();
     let start = host(i, "current", &[])?;
     if let Some(c) = i.files.as_mut() {
         c.current = start;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod xmp_run_tests {
+    use super::*;
+    use crate::heap::PropMap;
+
+    #[test]
+    fn a_failed_folder_reset_releases_native_xmp_buffers() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        let host = interp.heap.alloc_object(Object::new(Class::Ordinary, None));
+        interp.files = Some(Classes { file_proto: host, folder_proto: host, host, current: Value::str("start"), run: 0.0 });
+        let mut fields = PropMap::default();
+        fields.insert(key("__vcXmpPacket"), Value::str("packet"));
+        fields.insert(key("__vcXmpPending"), Value::str("pending"));
+        fields.insert(key("__vcXmpPath"), Value::str("kept.xmp"));
+        let file = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), None));
+        let result = interp.rooted(&[Value::Object(file)], reset_current);
+        assert!(result.is_err(), "the host has no current function");
+        assert_eq!(run_count(&interp), Some(1.0));
+        let Class::XmpFile(fields) = &interp.heap.object(file).unwrap().class else { panic!("native file") };
+        assert!(matches!(fields.get(&key("__vcXmpPacket")), Some(Value::Null)));
+        assert!(matches!(fields.get(&key("__vcXmpPending")), Some(Value::Undefined)));
+        assert!(matches!(fields.get(&key("__vcXmpPath")), Some(Value::String(path)) if path.to_rust_string() == "kept.xmp"));
+    }
 }
 
 /// Adds `File` and `Folder` to the global object, their work done by the host functions in

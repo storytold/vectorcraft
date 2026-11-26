@@ -182,6 +182,8 @@ pub(crate) enum Value {
     /// options and its text when it has one.
     Other {
         xml: String,
+        /// Validation counts the expanded XML without retaining it.
+        expanded_bytes: usize,
         options: u32,
         text: Option<String>,
         /// The most namespace declarations `xml` puts in scope at one of its elements.
@@ -233,7 +235,7 @@ impl Prop {
         let value = match &self.value {
             Value::Simple { text, .. } => text.len(),
             Value::Array { items, .. } => items.iter().map(|i| 48 + i.text.len() + i.lang.as_ref().map_or(0, String::len)).sum(),
-            Value::Other { xml, text, .. } => xml.len() + text.as_ref().map_or(0, String::len),
+            Value::Other { expanded_bytes, text, .. } => expanded_bytes + text.as_ref().map_or(0, String::len),
         };
         96 + self.ns.len() + self.name.len() + value
     }
@@ -309,8 +311,19 @@ impl Registry {
     /// [`MAX_URI_BYTES`] or a prefix over [`MAX_PREFIX_BYTES`] is [`XmpError::TooLarge`], and a
     /// namespace past [`MAX_NAMESPACES`] or [`MAX_REGISTRY_BYTES`] is [`XmpError::Namespaces`].
     pub(crate) fn register(&mut self, uri: &str, suggested: &str) -> Result<String, XmpError> {
+        let (prefix, growth) = self.registration(uri, suggested)?;
+        if growth != 0 {
+            self.bytes += growth;
+            self.prefixes.insert(uri.to_string(), prefix.clone());
+            self.uris.insert(prefix.clone(), uri.to_string());
+        }
+        Ok(prefix)
+    }
+
+    /// The prefix and retained bytes a registration would add, without changing the registry.
+    pub(crate) fn registration(&self, uri: &str, suggested: &str) -> Result<(String, usize), XmpError> {
         if let Some(p) = self.prefix_of(uri) {
-            return Ok(p.to_string());
+            return Ok((p.to_string(), 0));
         }
         let suggested = suggested.strip_suffix(':').unwrap_or(suggested);
         if uri.len() > MAX_URI_BYTES || suggested.len() > MAX_PREFIX_BYTES {
@@ -336,10 +349,8 @@ impl Registry {
         if bytes > MAX_REGISTRY_BYTES {
             return Err(XmpError::Namespaces);
         }
-        self.bytes = bytes;
-        self.prefixes.insert(uri.to_string(), prefix.clone());
-        self.uris.insert(prefix.clone(), uri.to_string());
-        Ok(prefix)
+        let growth = entry_bytes(uri, &prefix);
+        Ok((prefix, growth))
     }
 }
 
@@ -478,9 +489,17 @@ pub(crate) fn parse(text: &str, registry: &mut Registry) -> Result<Meta, XmpErro
 /// [`Meta::heap_bytes`] counts them. A packet that fails to read leaves `registry` unchanged.
 pub(crate) fn parse_within(text: &str, registry: &mut Registry, budget: usize) -> Result<Meta, XmpError> {
     let mut staged = registry.clone();
-    let meta = parse_into(text, &mut staged, budget)?;
+    let meta = parse_into(text, &mut staged, budget, true)?;
     *registry = staged;
     Ok(meta)
+}
+
+/// Checks a packet within `budget` without retaining expanded XML fragments.
+pub(crate) fn validate_within(text: &str, registry: &mut Registry, budget: usize) -> Result<(), XmpError> {
+    let mut staged = registry.clone();
+    parse_into(text, &mut staged, budget, false)?;
+    *registry = staged;
+    Ok(())
 }
 
 /// The properties a packet has given so far.
@@ -493,6 +512,7 @@ struct Reading {
     /// The bytes `meta` holds, and the most it may hold.
     bytes: usize,
     budget: usize,
+    retain_fragments: bool,
 }
 
 impl Reading {
@@ -524,7 +544,7 @@ fn is_stray_text(node: &Node) -> bool {
     matches!(node, Node::Text(t) | Node::CData(t) if !t.trim_matches([' ', '\t', '\r', '\n']).is_empty())
 }
 
-fn parse_into(text: &str, registry: &mut Registry, budget: usize) -> Result<Meta, XmpError> {
+fn parse_into(text: &str, registry: &mut Registry, budget: usize, retain_fragments: bool) -> Result<Meta, XmpError> {
     if text.len() > MAX_BYTES {
         return Err(XmpError::TooLarge);
     }
@@ -546,7 +566,7 @@ fn parse_into(text: &str, registry: &mut Registry, budget: usize) -> Result<Meta
     if rdf.children.iter().any(is_stray_text) {
         return Err(XmpError::Malformed);
     }
-    let mut reading = Reading { meta: Meta::default(), seen: HashSet::new(), pool: HashSet::new(), bytes: 32, budget };
+    let mut reading = Reading { meta: Meta::default(), seen: HashSet::new(), pool: HashSet::new(), bytes: 32, budget, retain_fragments };
     for d in rdf.elements() {
         let mark = scope.len();
         push_decls(d, &mut scope);
@@ -591,6 +611,8 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry, reading: &m
     }
     let prefix = p.name.split_once(':').map_or("ns", |(p, _)| p);
     registry.register(&ns, prefix)?;
+    let ns = reading.intern(ns);
+    let duplicate = reading.seen.contains(&(Rc::clone(&ns), local.to_string()));
     let own = attrs(p);
     let children: Vec<&El> = p.elements().collect();
     let value = if children.is_empty() && own.is_empty() {
@@ -610,10 +632,11 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry, reading: &m
         }
         register_names(p, scope, registry)?;
         register_nested(p, scope, registry)?;
-        other(p, &own, &children, scope, mark)?
+        let available = if duplicate { usize::MAX } else { reading.budget.saturating_sub(reading.bytes).saturating_sub(96 + ns.len() + local.len()) };
+        other(p, &own, &children, scope, mark, (available, reading.retain_fragments && !duplicate))?
     };
     scope.truncate(mark);
-    Ok(Prop { ns: reading.intern(ns), name: local.to_string(), value })
+    Ok(Prop { ns, name: local.to_string(), value })
 }
 
 /// Registers the namespaces of the name and the attributes of `el`, with `scope` holding the
@@ -686,18 +709,18 @@ fn array_of(children: &[&El], scope: &mut Scope) -> Option<Value> {
 
 /// A value kept as the XML it was read as, refused when the element written for it would hold more
 /// than [`MAX_ATTRS`] attributes or declarations in scope, which a packet could then not read back.
-fn other(p: &El, own: &[(&str, &str)], children: &[&El], scope: &mut Scope, mark: usize) -> Result<Value, XmpError> {
+fn other(p: &El, own: &[(&str, &str)], children: &[&El], scope: &mut Scope, mark: usize, (budget, keep): (usize, bool)) -> Result<Value, XmpError> {
     let (options, text) = match qualified_value(own, children, scope) {
         Some(found) => found,
         None => kept_form(p, own, children, scope),
     };
-    let mut xml = String::new();
-    let added = write_fragment(p, scope.get(..mark).unwrap_or(&[]), &mut xml);
+    let mut xml = Fragment { text: String::new(), bytes: 0, budget: budget.saturating_sub(text.as_ref().map_or(0, String::len)), keep };
+    let added = write_fragment(p, scope.get(..mark).unwrap_or(&[]), &mut xml)?;
     let decls = added + nested_decls(p);
     if p.attrs.len() + added > MAX_ATTRS || decls > MAX_ATTRS {
         return Err(XmpError::TooLarge);
     }
-    Ok(Value::Other { xml, options, text, decls })
+    Ok(Value::Other { xml: xml.text, expanded_bytes: xml.bytes, options, text, decls })
 }
 
 /// The most namespace declarations `el` and the elements inside it put in scope at one element.
@@ -807,31 +830,73 @@ fn option_bits(options: u32, qualifiers: bool, lang: bool) -> u32 {
     options | qualifiers | if lang { PROP_HAS_LANG } else { 0 }
 }
 
-/// Writes the element `p` as XML, declaring on it the prefixes from `outer` that it and the
-/// elements inside it use and do not declare themselves. → the declarations it added.
-fn write_fragment(p: &El, outer: &[(String, String)], out: &mut String) -> usize {
+#[cfg(test)]
+std::thread_local! {
+    static FRAGMENT_BYTES_WRITTEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+struct Fragment {
+    text: String,
+    bytes: usize,
+    budget: usize,
+    keep: bool,
+}
+
+impl Fragment {
+    fn push(&mut self, text: &str) -> Result<(), XmpError> {
+        if text.len() > self.budget.saturating_sub(self.bytes) {
+            return Err(XmpError::Heap);
+        }
+        self.bytes += text.len();
+        if self.keep {
+            self.text.push_str(text);
+            #[cfg(test)]
+            FRAGMENT_BYTES_WRITTEN.with(|bytes| bytes.set(bytes.get() + text.len()));
+        }
+        Ok(())
+    }
+
+    fn escaped(&mut self, text: &str, attribute: bool) -> Result<(), XmpError> {
+        let mut escaped = String::new();
+        for character in text.chars() {
+            let mut buffer = [0; 4];
+            let character = character.encode_utf8(&mut buffer);
+            if attribute {
+                craft_xml::push_esc_attr(&mut escaped, character);
+            } else {
+                craft_xml::push_esc(&mut escaped, character);
+            }
+            self.push(&escaped)?;
+            escaped.clear();
+        }
+        Ok(())
+    }
+}
+
+/// Writes `p` and its inherited namespace bindings within the remaining property budget.
+fn write_fragment(p: &El, outer: &[(String, String)], out: &mut Fragment) -> Result<usize, XmpError> {
     let mut used: Vec<String> = Vec::new();
     collect_prefixes(p, &mut used);
     let own: Vec<&str> = p.ns_decls().map(|(prefix, _)| prefix).collect();
-    out.push('<');
-    out.push_str(&p.name);
+    out.push("<")?;
+    out.push(&p.name)?;
     let mut added = 0;
     for prefix in used.iter().filter(|u| !own.contains(&u.as_str())) {
         if let Some((_, uri)) = outer.iter().rev().find(|(q, _)| q == prefix) {
             added += 1;
             if prefix.is_empty() {
-                out.push_str(" xmlns=\"");
+                out.push(" xmlns=\"")?;
             } else {
-                out.push_str(" xmlns:");
-                out.push_str(prefix);
-                out.push_str("=\"");
+                out.push(" xmlns:")?;
+                out.push(prefix)?;
+                out.push("=\"")?;
             }
-            craft_xml::push_esc_attr(out, uri);
-            out.push('"');
+            out.escaped(uri, true)?;
+            out.push("\"")?;
         }
     }
-    write_rest(p, out);
-    added
+    write_rest(p, out)?;
+    Ok(added)
 }
 
 /// The prefixes the names of `el` and the elements inside it use, `""` for an unprefixed element.
@@ -855,33 +920,32 @@ fn collect_prefixes(el: &El, used: &mut Vec<String>) {
 }
 
 /// Writes the attributes, the children and the end tag of `el`, whose name is already written.
-fn write_rest(el: &El, out: &mut String) {
+fn write_rest(el: &El, out: &mut Fragment) -> Result<(), XmpError> {
     for (k, v) in &el.attrs {
-        out.push(' ');
-        out.push_str(k);
-        out.push_str("=\"");
-        craft_xml::push_esc_attr(out, v);
-        out.push('"');
+        out.push(" ")?;
+        out.push(k)?;
+        out.push("=\"")?;
+        out.escaped(v, true)?;
+        out.push("\"")?;
     }
     if el.children.is_empty() {
-        out.push_str("/>");
-        return;
+        return out.push("/>");
     }
-    out.push('>');
+    out.push(">")?;
     for n in &el.children {
         match n {
             Node::El(c) => {
-                out.push('<');
-                out.push_str(&c.name);
-                write_rest(c, out);
+                out.push("<")?;
+                out.push(&c.name)?;
+                write_rest(c, out)?;
             }
-            Node::Text(t) | Node::CData(t) => craft_xml::push_esc(out, t),
+            Node::Text(t) | Node::CData(t) => out.escaped(t, false)?,
             Node::Pi { .. } | Node::Comment(_) => {}
         }
     }
-    out.push_str("</");
-    out.push_str(&el.name);
-    out.push('>');
+    out.push("</")?;
+    out.push(&el.name)?;
+    out.push(">")
 }
 
 /// Text written while keeping to [`MAX_BYTES`].
@@ -1095,5 +1159,36 @@ impl Later {
         self.from = from;
         self.found = bytes.get(from..).and_then(|r| r.windows(self.marker.len()).position(|w| w == self.marker)).map(|i| i + from);
         self.found
+    }
+}
+
+#[cfg(test)]
+mod fragment_budget_tests {
+    use super::*;
+
+    #[test]
+    fn expanded_namespace_fragments_stop_before_exceeding_the_heap_budget() {
+        let mut declarations = String::new();
+        let mut fields = String::new();
+        for index in 0..16 {
+            declarations.push_str(&format!(" xmlns:n{index}=\"urn:{index}:{}\"", "x".repeat(950)));
+            fields.push_str(&format!("<n{index}:field>value</n{index}:field>"));
+        }
+        let packet = format!(
+            "<rdf:RDF xmlns:rdf=\"{RDF}\" xmlns:p=\"urn:property\"{declarations}><rdf:Description><p:value rdf:parseType=\"Resource\">{fields}</p:value></rdf:Description></rdf:RDF>"
+        );
+        let budget = 4096;
+        FRAGMENT_BYTES_WRITTEN.with(|bytes| bytes.set(0));
+        assert_eq!(parse_within(&packet, &mut Registry::default(), budget), Err(XmpError::Heap));
+        let written = FRAGMENT_BYTES_WRITTEN.with(std::cell::Cell::get);
+        assert!(written <= budget, "expanded fragment wrote {written} bytes with a {budget}-byte budget");
+        let meta = parse_within(&packet, &mut Registry::default(), 64 * 1024).unwrap();
+        assert!(meta.props[0].heap_bytes() > budget, "the valid control expands inherited namespace bindings");
+        FRAGMENT_BYTES_WRITTEN.with(|bytes| bytes.set(0));
+        validate_within(&packet, &mut Registry::default(), 64 * 1024).unwrap();
+        assert_eq!(FRAGMENT_BYTES_WRITTEN.with(std::cell::Cell::get), 0, "validation must not retain fragment strings");
+        let duplicate = packet.replacen("<p:value rdf:parseType=", "<p:value>first</p:value><p:value rdf:parseType=", 1);
+        let meta = parse_within(&duplicate, &mut Registry::default(), 512).unwrap();
+        assert_eq!(meta.props[0].value.text(), Some("first"), "a duplicate does not consume retained fragment space");
     }
 }

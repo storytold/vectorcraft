@@ -45,6 +45,41 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
 
+fn drop_dithered_rgb_gradient(app: &mut VectorcraftApp, fill: bool) -> NodeId {
+    app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+    let result = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100})).unwrap();
+    let id = NodeId(result["id"].as_u64().unwrap());
+    app.session.fill_active = fill;
+    let mut gradient = GradientPaint::new(Default::default());
+    gradient.gradient.stops[0].color = Color::rgb8(255, 0, 0);
+    gradient.gradient.dither = true;
+    let start = undo_len(app);
+    let drag = PanelDrag::paint(Paint::Gradient(Box::new(gradient)));
+    drop_at(app, Payload::Panel(drag), Point::new(50.0, 50.0), DropOperation::Move).unwrap();
+    assert_eq!(undo_len(app), start + 1);
+    id
+}
+
+#[test]
+fn a_gradient_drop_preserves_rgb_stops_and_fill_dither() {
+    let (mut app, _ctx) = app_with_canvas();
+    let id = drop_dithered_rgb_gradient(&mut app, true);
+    let doc = &app.session.active().unwrap().doc;
+    let Paint::Gradient(fill) = doc.node(id).unwrap().appearance.fill_paint() else { panic!("expected a gradient fill") };
+    assert_eq!(fill.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert!(fill.gradient.dither);
+}
+
+#[test]
+fn a_dithered_gradient_drop_applies_to_a_stroke_without_dither() {
+    let (mut app, _ctx) = app_with_canvas();
+    let id = drop_dithered_rgb_gradient(&mut app, false);
+    let doc = &app.session.active().unwrap().doc;
+    let Paint::Gradient(stroke) = &doc.node(id).unwrap().appearance.stroke().unwrap().paint else { panic!("expected a gradient stroke") };
+    assert_eq!(stroke.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert!(!stroke.gradient.dither);
+}
+
 /// Each payload's effect, on art and off it: a style applies to the object hit (Alt adds on top), a paint fills it
 /// and leaves the selection (a gradient fits it), an appearance copies unless dropped on its source, a brush strokes
 /// the path hit and off art places its art if it has any, a library brush is added and applied in one step, a symbol

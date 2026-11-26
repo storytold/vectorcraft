@@ -6662,6 +6662,8 @@ arrowhead	Feather	Tüy
 	VectorCraft Default	VectorCraft Varsayılanı
 	VectorCraft Defaults	VectorCraft Varsayılanları
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft Genel CMYK (SWOP benzeri)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft Kaplamalı CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft Kaplamasız CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft Renk Örnekleri (.vcswatches)
 	Vertical Align	Dikey Hizalama
 	Vertical Area Type	Dikey Alan Türü
@@ -7614,6 +7616,35 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+@msg	only a filter declares `writes`	`writes` yalnızca bir filtrede bildirilebilir
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
+@msg	`writes` lists `{shown}` twice	`writes` `{shown}` değerini iki kez listeliyor
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` `{shown}` değerini listeliyor, ancak `inputs` listelemiyor
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` için `api` {WRITES_API} veya üstü gerekir
+@msg	`writes` needs the permission `doc.write`	`writes` için `doc.write` izni gerekir
+@msg	{_1} is not type, an image or a symbol instance	{_1} metin, görüntü veya sembol örneği değil
+@msg	the text of type given as `truncated` can't be changed	`truncated` olarak verilen metin nesnesinin metni değiştirilemez
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	en fazla {MAX_INPUT_RUNS} girişli bir liste olmalıdır
+@msg	type needs at least one run	metnin en az bir parçası olmalıdır
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bayt metin (sınır {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraf (sınır {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	çıktının tamamında {MAX_INPUT_TEXT_TOTAL} bayttan fazla metin
+@msg	unknown key '{k}'	bilinmeyen anahtar '{k}'
+@msg	must be a list of 6 numbers	6 sayılık bir liste olmalıdır
+@msg	a number is out of range (limit ±{MAX_COORD})	bir sayı aralık dışında (sınır ±{MAX_COORD})
+@msg	flattens the object to a line or a point	nesneyi bir çizgiye veya noktaya yassılaştırıyor
+@msg	an object flattened to a line or a point can't be placed again	bir çizgiye veya noktaya yassılaşmış nesne yeniden yerleştirilemez
+@msg	must be a number from 0 to 1	0 ile 1 arasında bir sayı olmalıdır
+@msg	must be the name of a symbol	bir sembolün adı olmalıdır
+@msg	'{shown}' is not a symbol in this document	'{shown}' bu belgede bir sembol değil
+@msg	a run must be {{"text", "style", "inline"?}}	bir parça {{"text", "style", "inline"?}} biçiminde olmalıdır
+@msg	`text` holds the character of an inline graphic	`text` satır içi bir grafiğin karakterini içeriyor
+@msg	inline graphics can't be added, removed, reordered or changed	satır içi grafikler eklenemez, kaldırılamaz, yeniden sıralanamaz veya değiştirilemez
+@msg	the characters of threaded type can't be changed	zincirli metnin karakterleri değiştirilemez
+@msg	the characters of type with ruby can't be changed	ruby içeren metnin karakterleri değiştirilemez
+@msg	expected {count} paragraph styles, one per paragraph	her paragraf için bir tane olmak üzere {count} paragraf stili bekleniyordu
+@msg	the document has no Kinsoku set named '{shown}'	belgede '{shown}' adlı Kinsoku seti yok
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} yazdırılabilir karakter olmalıdır
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Kendisine verilen nesneleri ve belgenin ayarlarını, çalışma yüzeylerini, katmanlarını ve renk örneklerini okuma
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` farklı bölümleri listelemelidir: settings, artboards, layers veya swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` yalnızca `api` 3 veya sonrasında, `doc.read` izniyle bir filtre ya da `commands` içeren bir canlı efekt içindir
@@ -10760,6 +10791,11 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Fold Angle	Katlama Açısı
+	Set Fold Angle…	Katlama Açısını Ayarla…
+	Set Fold Angle	Katlama Açısını Ayarla
+	Reset Fold Angle	Katlama Açısını Sıfırla
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	kilitli ya da gizli olmayan bir pilyaj, yarım kesim veya perforaj çizgisi seçin
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Araç çubuğundaki bir aracın ve tuşlarının ne yaptığını ipucu yerine bir kartta gösterir; Araç İpuçlarını Göster gerekir.
 	Selects whole objects and groups to move, resize or rotate them.	Taşımak, yeniden boyutlandırmak veya döndürmek için nesnelerin ve grupların tamamını seçer.

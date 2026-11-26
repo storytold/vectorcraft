@@ -5970,6 +5970,8 @@ digits	Malayalam	Malaiàlam
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft no es va tancar correctament l’última vegada. Aquests documents tenien canvis no desats:
 	VectorCraft documents: one locked object, updated when the file changes.	Documents de VectorCraft: un objecte bloquejat, actualitzat quan canvia el fitxer.
 	VectorCraft Generic CMYK (SWOP-like)	CMYK genèric de VectorCraft (similar a SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK estucat de VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK no estucat de VectorCraft (FOGRA52)
 	VectorCraft Help…	Ajuda de VectorCraft…
 	VectorCraft on getartcraft.com	VectorCraft a getartcraft.com
 	VectorCraft on GitHub	VectorCraft al GitHub
@@ -7929,6 +7931,35 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
 @msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+@msg	only a filter declares `writes`	només un filtre declara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` anomena un tipus d’objecte desconegut `{shown}`: feu servir type, image o symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` inclou `{shown}` dues vegades
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` inclou `{shown}`, que `inputs` no inclou
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` requereix `api` {WRITES_API} o posterior
+@msg	`writes` needs the permission `doc.write`	`writes` requereix el permís `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} no és text, ni una imatge ni una instància de símbol
+@msg	the text of type given as `truncated` can't be changed	no es pot canviar el text d’un text donat com a `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	ha de ser una llista d’un màxim de {MAX_INPUT_RUNS} entrades
+@msg	type needs at least one run	el text necessita almenys un tram
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de text (límit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paràgrafs (límit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	més de {MAX_INPUT_TEXT_TOTAL} bytes de text en tota la sortida
+@msg	unknown key '{k}'	clau desconeguda '{k}'
+@msg	must be a list of 6 numbers	ha de ser una llista de 6 nombres
+@msg	a number is out of range (limit ±{MAX_COORD})	un nombre és fora de l’interval (límit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	redueix l’objecte a una línia o un punt
+@msg	an object flattened to a line or a point can't be placed again	un objecte reduït a una línia o un punt no es pot tornar a col·locar
+@msg	must be a number from 0 to 1	ha de ser un nombre de 0 a 1
+@msg	must be the name of a symbol	ha de ser el nom d’un símbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' no és un símbol d’aquest document
+@msg	a run must be {{"text", "style", "inline"?}}	un tram ha de ser {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` conté el caràcter d’un gràfic en línia
+@msg	inline graphics can't be added, removed, reordered or changed	els gràfics en línia no es poden afegir, eliminar, reordenar ni canviar
+@msg	the characters of threaded type can't be changed	els caràcters del text enllaçat no es poden canviar
+@msg	the characters of type with ruby can't be changed	els caràcters del text amb rubí no es poden canviar
+@msg	expected {count} paragraph styles, one per paragraph	s’esperaven {count} estils de paràgraf, un per paràgraf
+@msg	the document has no Kinsoku set named '{shown}'	el document no té cap conjunt Kinsoku anomenat '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	ha de tenir 1-{MAX_FAMILY} caràcters imprimibles
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Llegir els objectes que rep, i la configuració, els taulers, les capes i les mostres del document
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` ha de llistar seccions diferents: settings, artboards, layers o swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` és per a un filtre, o un efecte dinàmic amb `commands`, amb `api` 3 o posterior i el permís `doc.read`
@@ -9020,6 +9051,11 @@ breakText	Glyphs	Glifs
 	No objects are selected.	No hi ha cap objecte seleccionat.
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
+	Fold Angle	Angle de plegat
+	Set Fold Angle…	Defineix l’angle de plegat…
+	Set Fold Angle	Defineix l’angle de plegat
+	Reset Fold Angle	Restableix l’angle de plegat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccioneu una línia d’hendit, de tall parcial o de perforació que no estigui bloquejada ni amagada
 	Check	Comprova
 	Check Fold Lines	Comprova les línies de plegat
 @msg	No cut lines are in the selection.	No hi ha cap línia de tall a la selecció.

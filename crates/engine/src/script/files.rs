@@ -2040,10 +2040,10 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     }
     if r.is_ok() {
         for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
+            let reset = file.bytes.starts_with(&[0xEF, 0xBB, 0xBF]) || matches!(file.encoding, Encoding::Utf16Le | Encoding::Utf16Be);
             file.bytes.clone_from(&packet);
-            // The packet is UTF-8 without a byte order mark, so an object reading UTF-16 reads it as
-            // UTF-8 from the start.
-            if matches!(file.encoding, Encoding::Utf16Le | Encoding::Utf16Be) {
+            // `File` readers with a UTF-8 byte order mark or UTF-16 encoding restart in UTF-8.
+            if reset {
                 file.encoding = Encoding::Utf8;
                 file.name = Encoding::Utf8.name().to_string();
                 file.pos = 0;

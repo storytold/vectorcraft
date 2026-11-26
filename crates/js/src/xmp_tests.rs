@@ -210,16 +210,18 @@ fn malformed_and_huge_packets_are_refused() {
 
 #[test]
 fn packets_are_found_in_file_bytes() {
+    let header = "<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>";
     let bytes = format!("binary\0\u{1}{PACKET}trailer");
     let span = xmp::find_packet(bytes.as_bytes()).map(|s| (s.start, s.end, s.writeable));
     assert_eq!(span, Some((8, 8 + PACKET.len(), true)));
     assert_eq!(xmp::find_packet(b"<?xpacket begin='' ?> no end"), None);
+    assert_eq!(xmp::find_packet(format!("{header} no end").as_bytes()), None);
     let read_only = PACKET.replace("end=\"w\"", "end=\"r\"");
     assert_eq!(xmp::find_packet(read_only.as_bytes()).map(|s| s.writeable), Some(false));
-    let stray = format!("<?xpacket begin='' ?> junk <?xpacket begin='' ?>{PACKET}");
+    let stray = format!("{header} junk {header}{PACKET}");
     let span = xmp::find_packet(stray.as_bytes()).map(|s| (s.start, s.end));
     assert_eq!(span, Some((stray.len() - PACKET.len(), stray.len())), "a start with no end of its own is skipped");
-    let open_end = format!("<?xpacket begin='' ?> junk <?xpacket end= no close {PACKET}");
+    let open_end = format!("{header} junk <?xpacket end= no close {PACKET}");
     let span = xmp::find_packet(open_end.as_bytes()).map(|s| (s.start, s.end));
     assert_eq!(span, Some((open_end.len() - PACKET.len(), open_end.len())), "a trailer that does not close before the next start is skipped");
     // A start's header must carry the wrapper id, so the same text inside a value does not start a
@@ -487,6 +489,60 @@ fn a_second_external_object_is_refused() {
     assert_eq!(again.map_err(|e| e.kind), Err(RunErrorKind::Internal));
     let prefix = r.run("new ExternalObject('lib:AdobeXMPScript'); XMPMeta.getNamespacePrefix('http://kept/')");
     assert_eq!(prefix.ok(), Some(JsValue::String("kept:".into())));
+}
+
+#[test]
+fn an_external_object_install_can_retry_after_a_heap_limit() {
+    let mut failures = 0;
+    let mut successes = 0;
+    for kib in 0..=128 {
+        let mut realm = Realm::with_options(crate::Options { es2015: true, ..crate::Options::default() }, Limits::default());
+        assert_eq!(realm.run("0").ok(), Some(JsValue::Number(0.0)));
+        let baseline = realm.interp().settled_heap_bytes();
+        realm.set_limits(Limits { heap_bytes: baseline + (kib << 10), ..Limits::default() });
+        match realm.define_external_object() {
+            Ok(()) => successes += 1,
+            Err(error) => {
+                assert_eq!(error.kind, RunErrorKind::Limit(LimitKind::Heap), "additional heap {kib} KiB: {error:?}");
+                failures += 1;
+                realm.set_limits(Limits::default());
+                assert!(realm.define_external_object().is_ok(), "installation could not retry after additional heap {kib} KiB");
+                let result = realm.run("new ExternalObject('lib:AdobeXMPScript'); typeof XMPMeta === 'function' && typeof XMPFile === 'function'");
+                assert_eq!(result.as_ref().ok(), Some(&JsValue::Bool(true)), "additional heap {kib} KiB: {result:?}");
+            }
+        }
+    }
+    assert!(failures > 0 && successes > 0, "failures {failures}, successes {successes}");
+}
+
+#[test]
+fn retained_xmp_namespaces_count_toward_the_heap_limit() {
+    let mut realm = realm();
+    realm.run("new ExternalObject('lib:AdobeXMPScript'); 0").unwrap();
+    realm.interp().collect_for_room();
+    let before = realm.interp().settled_heap_bytes();
+    let suffix = "x".repeat(950);
+    let script = format!("for (var n = 0; n < 16; n++) XMPMeta.registerNamespace('urn:' + n + ':' + {suffix:?}, 'large' + n); 0");
+    realm.run(&script).unwrap();
+    realm.interp().collect_for_room();
+    let after = realm.interp().settled_heap_bytes();
+    assert!(after >= before + 16 * suffix.len(), "retained namespace bytes must remain charged after GC: {before} -> {after}");
+}
+
+#[test]
+fn registering_xmp_namespaces_stops_before_exceeding_the_heap_limit() {
+    let mut realm = realm();
+    realm.run("new ExternalObject('lib:AdobeXMPScript'); 0").unwrap();
+    realm.interp().collect_for_room();
+    let baseline = realm.interp().settled_heap_bytes();
+    realm.set_limits(Limits { heap_bytes: baseline + (32 << 10), ..Limits::default() });
+    let suffix = "x".repeat(950);
+    let script = format!("for (var n = 0; n < 64; n++) XMPMeta.registerNamespace('urn:' + n + ':' + {suffix:?}, 'large' + n); 0");
+    let result = realm.run(&script);
+    assert!(matches!(result, Err(ref error) if error.kind == RunErrorKind::Limit(LimitKind::Heap)), "{result:?}");
+    realm.set_limits(Limits::default());
+    let unchanged = realm.run(&format!("XMPMeta.getNamespacePrefix('urn:' + n + ':' + {suffix:?}) === undefined"));
+    assert_eq!(unchanged.ok(), Some(JsValue::Bool(true)), "the failed registration leaves no namespace entry");
 }
 
 /// A path argument is converted to text once, so one whose text changes on each conversion names
