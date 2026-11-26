@@ -2736,7 +2736,8 @@ https://ecma-international.org/publications-and-standards/standards/ecma-357/): 
 (https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file also has
 `Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a named engine
 (`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later run, as it keeps
-its globals. The script reaches the app through the global object `vc`, and writes to the Script Console and runs
+its globals. The collector retains tagged-template cache entries only while the site's code is reachable.
+The script reaches the app through the global object `vc`, and writes to the Script Console and runs
 other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
