@@ -882,7 +882,7 @@ fn appearance_marker_names_its_state_and_keeps_targeting_actions() {
     let active = "Target appearance: targeted, additional appearance or transparency";
     assert_eq!(panel.description("Target A").as_deref(), Some(idle));
     assert_eq!(panel.description("Target B").as_deref(), Some("Target appearance: not targeted, basic appearance"));
-    assert!(!panel.selected("Target A"));
+    assert_eq!(panel.toggled("Target A"), Some(craft::behavior::Mixed::Same(false)));
     let before = {
         let app = panel.app();
         (app.session.active().unwrap().selection.clone(), undo_len(&app))
@@ -899,11 +899,11 @@ fn appearance_marker_names_its_state_and_keeps_targeting_actions() {
     panel.click("Target A");
     assert_eq!(targeted(&panel.app()), (Some(a), vec![a]));
     assert_eq!(panel.description("Target A").as_deref(), Some(active));
-    assert!(panel.selected("Target A"));
+    assert_eq!(panel.toggled("Target A"), Some(craft::behavior::Mixed::Same(true)));
     panel.click("Target B");
     assert_eq!(panel.description("Target A").as_deref(), Some(idle));
     assert_eq!(panel.description("Target B").as_deref(), Some("Target appearance: targeted, basic appearance"));
-    assert!(panel.selected("Target B"));
+    assert_eq!(panel.toggled("Target B"), Some(craft::behavior::Mixed::Same(true)));
     assert!(target_marks_painted(&mut panel, "Target A").iter().any(|m| m.1), "the appearance stays after targeting other art");
 }
 
