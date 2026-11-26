@@ -3361,7 +3361,10 @@ fn the_eraser_tip_follows_its_variation_modes() {
     assert_eq!(t.check_option("angleMode", &json!("wheel")), Err(format!("`angleMode` {modes}")));
     assert_eq!(t.check_option("angleVariation", &json!(181)), Err("`angleVariation` must be a number from 0 to 180".into()));
     assert_eq!(t.check_option("roundnessVariation", &json!(500)), Err("`roundnessVariation` must be a number from 0 to 100".into()));
-    assert_eq!(GestureTool::new("blobBrush").check_option("sizeMode", &json!("tilt")), Err("`sizeMode` must be one of `fixed`, `pressure`".into()));
+    assert_eq!(
+        GestureTool::new("blobBrush").check_option("sizeMode", &json!("tilt")),
+        Err("`sizeMode` must be one of `fixed`, `pressure`, `stylusWheel`".into())
+    );
     // A mode it does not have leaves the mode as it was; a Variation is kept within its range.
     t.set_option("angleMode", &json!("wheel"));
     t.set_option("roundnessVariation", &json!(500));
@@ -3399,7 +3402,7 @@ fn the_eraser_tip_follows_its_variation_modes() {
     t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
     near(tip(&t), (190.0, 47.5, 210.0, 52.5));
     t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
-    // The Blob Brush's Size is Fixed or Pressure, and its Angle and Roundness have no menus.
+    // The Blob Brush's Size is Fixed, Pressure or Stylus Wheel, and its Angle and Roundness have no menus.
     let mut b = GestureTool::new("blobBrush");
     b.set_option("sizeMode", &json!("tilt"));
     b.set_option("angleMode", &json!("rotation"));
@@ -3407,6 +3410,77 @@ fn the_eraser_tip_follows_its_variation_modes() {
     assert!(b.options().get("angleMode").is_none() && b.options().get("roundnessVariation").is_none());
     b.set_option("sizeMode", &json!("pressure"));
     assert_eq!(b.options()["sizeMode"], json!("pressure"));
+}
+
+/// The Blob Brush's Size on Stylus Wheel follows the wheel the pen recorded, in the tip outline
+/// while it paints (its roundness kept as set, 0% included) and in the points the release sends;
+/// a pen that gives no wheel keeps the Size.
+#[test]
+fn the_blob_brush_size_follows_the_stylus_wheel() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => vectorcraft_geom::Shape::bounding_box(path),
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("blobBrush");
+    assert_eq!(t.check_option("sizeMode", &json!("stylusWheel")), Ok(()));
+    for (k, v) in [("size", json!(20)), ("roundness", json!(50)), ("sizeMode", json!("stylusWheel")), ("sizeVariation", json!(8))] {
+        t.set_option(k, &v);
+    }
+    assert_eq!((t.options()["sizeMode"].clone(), t.options()["sizeVariation"].clone()), (json!("stylusWheel"), json!(8.0)));
+    // Before a press the outline is the set tip, 20 by 10 pt.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
+    near(tip(&t), (90.0, 45.0, 110.0, 55.0));
+    // The wheel at the far end of its travel gives 28 by 14 pt, and half way 20 by 10.
+    let wheel = |w: Option<f32>| Some(PenPose { tilt: None, rotation: None, wheel: w });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (186.0, 43.0, 214.0, 57.0));
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(0.5)), ..PointerEvent::new(PointerKind::Drag, 300.0, 50.0) });
+    near(tip(&t), (290.0, 45.0, 310.0, 55.0));
+    // The wheel turned with the pen held in place: the tip there and the release follow it.
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(0.0)), ..PointerEvent::new(PointerKind::Drag, 300.0, 50.0) });
+    near(tip(&t), (294.0, 47.0, 306.0, 53.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen: wheel(Some(0.0)), ..PointerEvent::new(PointerKind::Up, 300.0, 50.0) });
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!((c.as_str(), &v["sizeMode"], &v["sizeVariation"]), ("path.blob", &json!("stylusWheel"), &json!(8.0)));
+    assert_eq!(
+        v["points"],
+        json!([[100.0, 50.0, null, null, null, null, 1.0], [200.0, 50.0, null, null, null, null, 1.0], [300.0, 50.0, null, null, null, null, 0.0]])
+    );
+    // A pen without a wheel keeps the set tip.
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 45.0, 210.0, 55.0));
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // A 0% round tip stays as flat as set while the wheel widens it.
+    t.set_option("roundness", &json!(0));
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    let flat = tip(&t);
+    assert!((flat.width() - 28.0).abs() < 0.01 && flat.height() < 0.1, "{flat:?}");
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // Size set from Fixed to Stylus Wheel or Pressure during a drag: the release reads no wheel or
+    // pressure for the points before it, so the tip keeps the Size, as the release paints.
+    t.set_option("roundness", &json!(50));
+    for (mode, pressure) in [("stylusWheel", 1.0), ("pressure", 0.25)] {
+        t.set_option("sizeMode", &json!("fixed"));
+        let ev = |kind, x| PointerEvent { pen: wheel(Some(1.0)), pressure, ..PointerEvent::new(kind, x, 50.0) };
+        t.pointer(&cx, &ev(PointerKind::Down, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 200.0));
+        t.set_option("sizeMode", &json!(mode));
+        t.pointer(&cx, &ev(PointerKind::Drag, 300.0));
+        near(tip(&t), (290.0, 45.0, 310.0, 55.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 300.0));
+        let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[100.0, 50.0], [200.0, 50.0], [300.0, 50.0]]), "{mode}");
+    }
 }
 
 /// An Eraser value on Stylus Wheel follows the wheel the pen recorded, in the tip outline while it

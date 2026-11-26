@@ -11,7 +11,7 @@
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
 //! (points; Blob Brush and Eraser), and `sizeMode` and `sizeVariation` (points; Blob Brush and
 //! Eraser: with Pressure the tip is Size − Variation wide at the lightest pen pressure and Size +
-//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed` or `pressure`. The Eraser's
+//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed`, `pressure` or `stylusWheel`. The Eraser's
 //! Angle, Roundness and Size each have a menu (`angleMode`, `roundnessMode`, `sizeMode`: `fixed`,
 //! `random`, `pressure`, `tilt`, `bearing` or `rotation`) before the field and a Variation field
 //! under it (`angleVariation` in degrees, `roundnessVariation` in percent, `sizeVariation`),
@@ -251,7 +251,7 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             rows.push(Param::custom("tip", "", |ui, fields, _| tip_row(ui, fields, 0.0)).full_width());
         }
         if has("sizeMode") {
-            let offered = &[Variation::Fixed, Variation::Pressure];
+            let offered = &vectorcraft_tools::draw2::BLOB_SIZE_MODES;
             rows.push(variation_param("size", tl!("Size:"), UnitKind::Points, 1, (0.1, 1000.0), (0.0, 1000.0), offered));
         } else if has("size") {
             rows.push(Param::number("size", tl!("Size:"), 10.0, 1.0, 1).unit(UnitKind::Points).bounds(Some(0.1), Some(1000.0)));

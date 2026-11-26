@@ -1,5 +1,5 @@
 use super::common::{
-    PenRecord, SIZES, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, ranged, samples_param, size_pressure,
+    PenRecord, SIZES, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, ranged, samples_param, size_profile,
     stroke_paint, subpath_len, target_paths, within_input_bound,
 };
 use super::{
@@ -843,8 +843,8 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let tip = vectorcraft_tools::draw2::blob_tip(angle, roundness);
     let squash = tip.inverse();
-    // Width profiles use distance along the spine, so measure pressure on the same squashed
-    // points that the outline reads for a non-round tip.
+    // Width profiles use distance along the spine, so measure the pressure or wheel on the same
+    // squashed points that the outline reads for a non-round tip.
     let mapped_samples: Vec<Sample> = if roundness < 100.0 {
         samples
             .iter()
@@ -857,7 +857,7 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         samples.clone()
     };
-    let pressure = size_pressure(p, &mapped_samples, C)?;
+    let pressure = size_profile(p, &mapped_samples, C)?;
     let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let mapped_pts: Vec<Point> = mapped_samples.into_iter().map(|s| s.pt).collect();
     // The widest the brush gets: the area merges look in.
@@ -875,12 +875,15 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(tol) => Some(pressure_region(&spine(Some(tol)), size, *variation, prof)?).filter(|r| !r.is_empty()),
                 None => None,
             };
+            let dab = || brush_region(&mapped_pts[..1], vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0)));
             match fitted {
                 Some(r) => r,
-                None => pressure_region(&spine(None), size, *variation, prof)?,
+                // Samples that all lie at one point give a spine with no length: one dab from the
+                // first reading, as a click paints.
+                None => Some(pressure_region(&spine(None), size, *variation, prof)?).filter(|r| !r.is_empty()).unwrap_or_else(dab),
             }
         }
-        // A click: one dab as wide as the pen pressed.
+        // A click: one dab as wide as the pen pressed or the wheel was set.
         (Some((prof, variation)), false) => brush_region(&mapped_pts, vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0))),
         (None, _) => {
             let fitted = fidelity

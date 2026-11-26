@@ -149,9 +149,10 @@ pub struct GestureTool {
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
-    /// Blob Brush and Eraser Tool Options' Size mode: Fixed or Pressure for the Blob Brush (with
-    /// Pressure the tip is `size` − `size_variation` wide at the lightest pen pressure and `size` +
-    /// `size_variation` at the heaviest), and any [`Variation`] for the Eraser.
+    /// Blob Brush and Eraser Tool Options' Size mode: Fixed, Pressure or Stylus Wheel for the Blob
+    /// Brush (with Pressure the tip is `size` − `size_variation` wide at the lightest pen pressure
+    /// and `size` + `size_variation` at the heaviest, and with Stylus Wheel from one end of an
+    /// airbrush pen's finger wheel travel to the other), and any [`Variation`] for the Eraser.
     pub size_mode: Variation,
     /// Blob Brush and Eraser Tool Options' Size Variation, in points.
     pub size_variation: f64,
@@ -1010,12 +1011,13 @@ impl GestureTool {
         }
     }
 
-    /// Give the Eraser's last stroke sample the pen's tilt and rotation of the event `ev`, a drag
-    /// within a pixel of that sample that adds none: a pen turned or tilted in place turns its tip
-    /// there, in the outline and in what the release erases. The sample keeps its pressure, which
-    /// the area outline of the drag was built with, and its pose when `ev` reads none.
+    /// Give the Eraser's or the Blob Brush's last stroke sample the pen's tilt, rotation and wheel
+    /// of the event `ev`, a drag within a pixel of that sample that adds none: a pen turned or
+    /// tilted in place, or its wheel turned there, changes its tip there, in the outline and in
+    /// what the release erases or paints. The sample keeps its pressure, which the area outline of
+    /// the drag was built with, and its pose when `ev` reads none.
     fn refresh_last_pose(&mut self, ev: &PointerEvent) {
-        if self.id != "eraser" || self.poses.len() != self.points.len() || ev.pen.is_none() {
+        if !matches!(self.id, "eraser" | "blobBrush") || self.poses.len() != self.points.len() || ev.pen.is_none() {
             return;
         }
         let pose = ev.pen.map(PenPose::sanitized);
@@ -1135,8 +1137,8 @@ impl GestureTool {
     }
 
     /// The Blob Brush's or the Eraser's tip at the pointer, before and while painting: its outline
-    /// `size` across at its angle and roundness (the Eraser's as the pen varies them while it
-    /// erases, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
+    /// `size` across at its angle and roundness (as the pen varies them while it erases or
+    /// paints, [`Self::tip_now`]), at the zoom, black on a white halo so it reads on
     /// any art. Precise cursors show only the crosshair, and smoothing shows no tip.
     fn tip_outline(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(at) = self.tip_at.filter(|_| !self.smoothing && !cx.precise_cursors) else { return vec![] };
@@ -1284,7 +1286,7 @@ impl GestureTool {
         outline.filter(|o| !o.elements().is_empty())
     }
 
-    /// Does the tool's Size take Fixed or Pressure (the Blob Brush and the Eraser)?
+    /// Does the tool's Size take a variation mode (the Blob Brush and the Eraser)?
     fn varies_size(&self) -> bool {
         matches!(self.id, "blobBrush" | "eraser")
     }
@@ -1374,14 +1376,23 @@ impl GestureTool {
     /// value on a mode that follows the pen goes from the value less its Variation to the value
     /// plus it as the pen reads now (the pressure once the pen has pressed less than fully, the
     /// tilt, rotation and wheel of the last point, and the bearing of the last point the pen leaned 1° or
-    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
-    /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
+    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed, a
+    /// pen that gives no reading and a reading the release does not send (a mode set during the
+    /// drag), the values themselves. The Blob Brush's size follows the pen the
+    /// same way while it paints, as `path.blob` reads the stroke, and its angle and roundness are
+    /// its own values (a roundness of 0 included).
     fn tip_now(&self) -> [f64; 3] {
-        if self.id != "eraser" || !self.active {
+        if !matches!(self.id, "eraser" | "blobBrush") || !self.active {
             return [self.angle, self.roundness, self.size];
         }
-        let pressure = if self.light { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        self.tip_for(pressure, self.poses.last().copied().flatten(), self.bearing)
+        // What the release does not read ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½.
+        let pressure = if self.reads_pressures() { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        let (pose, bearing) = if self.reads_poses() { (self.poses.last().copied().flatten(), self.bearing) } else { (None, None) };
+        let tip = self.tip_for(pressure, pose, bearing);
+        if self.id == "blobBrush" {
+            return [self.angle, self.roundness, tip[2]];
+        }
+        tip
     }
 
     /// The tip's angle, roundness and size for a pen at `pressure` held as `pose`, leaning toward
@@ -2129,10 +2140,10 @@ impl Tool for GestureTool {
         match key {
             "fidelity" => self.fidelity = v.as_f64().unwrap_or(self.fidelity).clamp(super::min_fidelity(self.id), 100.0),
             "size" => self.size = v.as_f64().unwrap_or(self.size).clamp(0.1, 1000.0),
-            // The Blob Brush's Size is Fixed or Pressure; the Eraser's Angle, Roundness and Size
-            // take any mode.
+            // The Blob Brush's Size is Fixed, Pressure or Stylus Wheel; the Eraser's Angle,
+            // Roundness and Size take any mode.
             "sizeMode" if self.varies_size() => match v.as_str().and_then(Variation::parse) {
-                Some(m) if self.id == "eraser" || matches!(m, Variation::Fixed | Variation::Pressure) => self.size_mode = m,
+                Some(m) if self.id == "eraser" || super::BLOB_SIZE_MODES.contains(&m) => self.size_mode = m,
                 _ => {}
             },
             "angleMode" if self.id == "eraser" => self.angle_mode = v.as_str().and_then(Variation::parse).unwrap_or(self.angle_mode),
@@ -2183,9 +2194,9 @@ impl Tool for GestureTool {
             "editWithin" | "closeWithin" => c::number(key, v, 0.0, 100.0),
             "angleVariation" => c::number(key, v, 0.0, 180.0),
             "roundnessVariation" => c::number(key, v, 0.0, 100.0),
-            // The Blob Brush's Size is Fixed or Pressure; the Eraser's Angle, Roundness and Size
-            // take any mode (`set_option`).
-            "sizeMode" if self.id != "eraser" => c::one_of(key, v, &[Variation::Fixed.id(), Variation::Pressure.id()]),
+            // The Blob Brush's Size is Fixed, Pressure or Stylus Wheel; the Eraser's Angle,
+            // Roundness and Size take any mode (`set_option`).
+            "sizeMode" if self.id != "eraser" => c::one_of(key, v, &super::BLOB_SIZE_MODES.map(Variation::id)),
             "sizeMode" | "angleMode" | "roundnessMode" => c::one_of(key, v, &Variation::ALL.map(Variation::id)),
             "fill" | "altSmooth" | "livePreview" | "liveFit" | "keepSelected" | "mergeOnlySelection" => c::boolean(key, v),
             _ => Err(c::unknown(key)),

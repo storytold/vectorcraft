@@ -537,7 +537,10 @@ fn bad_option_values_are_errors_that_set_nothing() {
         (json!({"key": "bogus", "value": 1}), "tool `smooth`: unknown option `bogus`"),
         (json!({"tool": "pencil", "values": {"closeWithin": 5, "fidelity": "x"}}), "tool `pencil`: `fidelity` must be a number from 0.01 to 100"),
         (json!({"tool": "pencil", "key": "fill", "value": "yes"}), "tool `pencil`: `fill` must be true or false"),
-        (json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}), "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`"),
+        (
+            json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}),
+            "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`, `stylusWheel`",
+        ),
         (json!({"tool": "eraser", "key": "fidelity", "value": 4}), "tool `eraser`: unknown option `fidelity`"),
         (json!({"tool": "polygon", "key": "sides", "value": 2}), "tool `polygon`: `sides` must be a whole number from 3 to 1000"),
         (

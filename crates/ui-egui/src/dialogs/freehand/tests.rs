@@ -332,3 +332,30 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     let o = app.session.tool_options_of("pencil");
     assert!(o.get("sizeMode").is_none() && o.get("sizeVariation").is_none());
 }
+
+/// The names and values the window's access tree shows.
+fn shown_text(app: &mut VectorcraftApp) -> String {
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    update.nodes.iter().flat_map(|(_, node)| [node.label(), node.value()]).flatten().collect::<Vec<_>>().join("\n")
+}
+
+/// The Blob Brush's Size menu offers Stylus Wheel beside Fixed and Pressure, Fixed still the
+/// default; the menu shows it once chosen, and OK sets it with the Variation.
+#[test]
+fn the_blob_brush_size_offers_the_stylus_wheel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert_eq!(crate::dialogs::tests::fields(&app)["sizeMode"], json!("fixed"), "Fixed by default");
+    crate::dialogs::tests::set(&mut app, "sizeMode", json!("stylusWheel"));
+    crate::dialogs::tests::set(&mut app, "sizeVariation", json!(5));
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "{text}");
+    assert!(crate::dialogs::tests::confirm(&mut app), "OK closes the dialog");
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("stylusWheel"), Some(5.0)));
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "it shows again on the next open: {text}");
+}

@@ -7235,6 +7235,23 @@ outline of the area a drag covers takes, at each step, the tip the pen's reading
 value shows as the value itself there, since the release draws it.
 `tool.setOption {tool: "eraser"}` takes the same keys, with `sizeVariation` from 0 to 1000.
 
+`path.blob` (the Blob Brush) takes `sizeMode` with `sizeVariation` (points, 0 to 1000), as the Size menu of Blob Brush
+Tool Options sets it: `"fixed"` (the default), `"pressure"` or `"stylusWheel"`. Pressure goes from the size less the
+variation where the pen presses lightest to the size plus it where the pen presses hardest. Stylus Wheel goes from the
+size less the variation at 0 to the size plus it at 1 of an airbrush pen's finger wheel, the seventh value of each
+point; a point without a wheel counts as 0.5, the size itself, and a stroke with no wheel reading, such as a mouse
+drag, paints at the size. With either mode the width is at least 0.1 pt, also where the size less the variation is
+smaller. Which way the wheel runs and the size itself without a reading are VectorCraft's own rules.
+With Pressure or Stylus Wheel, a stroke whose points all lie at one place paints one dab sized from its first point's
+reading, as a single point does.
+The command refuses another mode with an error that names `sizeMode`, and the document does not change. In the
+desktop app the Blob Brush's tip outline at the pointer takes the size the pen gives while it paints, and keeps the
+size when Size is set to Stylus Wheel during the drag, which the release then paints at. A drag that starts on Fixed
+also keeps the size when Size is set to Pressure. A drag that starts on Stylus Wheel records the pen pressure at each
+point, so when Size is set to Pressure the tip and the release follow that pressure from the start of the drag, if the
+pen pressed less than fully anywhere; otherwise they keep the size.
+`tool.setOption {tool: "blobBrush"}` takes `sizeMode` and `sizeVariation` too.
+
 `path.eraseRegion {rect: [x, y, width, height]}` takes a rectangle in place of `points` and erases everything inside
 it from the paths (selected, or all), as an Alt-drag with the Eraser does ([Eraser tool
 reference](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=133)).

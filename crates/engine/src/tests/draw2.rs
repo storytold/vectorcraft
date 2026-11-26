@@ -3,7 +3,7 @@
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 use crate::tooling::{UiRequest, ViewInfo};
 use crate::*;
@@ -736,6 +736,76 @@ fn blob_brush_size_follows_the_pen_pressure() {
     s.pointer(&ev(PointerKind::Up, 20), v).unwrap();
     let (drawn, _) = paths(&s).into_iter().find(|(_, p)| p.control_bounds().is_some_and(|b| b.y0 > 650.0)).unwrap();
     assert!(inside(&s, drawn, 290.0, 707.0) && !inside(&s, drawn, 110.0, 703.0), "the tool's stroke follows the pen");
+}
+
+/// Blob Brush Tool Options' Size set to Stylus Wheel: the brush is Size − Variation wide where an
+/// airbrush pen's finger wheel was at 0 and Size + Variation where it was at 1, in a drag, a click
+/// and with a tip that is not round. A stroke without a wheel keeps the Size, pressure does not
+/// change it, and an unknown mode or a wheel out of its range is refused with nothing painted.
+#[test]
+fn blob_brush_size_follows_the_stylus_wheel() {
+    let mut s = session();
+    let inside = |s: &Session, id: NodeId, x: f64, y: f64| {
+        vectorcraft_geom::hit::fill_contains(&path(s, id).to_bezpath(), FillRule::NonZero, Point::new(x, y))
+    };
+    let blob = |s: &mut Session, p: serde_json::Value| NodeId(s.execute("path.blob", &p).unwrap()["id"].as_u64().unwrap());
+    // The wheel at 0 at the left end and at 1 at the right: about 2 pt wide to 18 pt wide.
+    let wheeled = |y: f64, wheel: &dyn Fn(f64) -> serde_json::Value| {
+        (0..=20).map(|i| json!([100.0 + f64::from(i) * 10.0, y, null, null, null, null, wheel(f64::from(i) / 20.0)])).collect::<Vec<_>>()
+    };
+    let tip = json!({"size": 10, "sizeMode": "stylusWheel", "sizeVariation": 8, "merge": false});
+    let a = blob(&mut s, with(&tip, json!({"points": wheeled(100.0, &|w| json!(w))})));
+    assert!(inside(&s, a, 290.0, 107.0) && !inside(&s, a, 110.0, 103.0), "wide where the wheel was at 1, thin where at 0");
+    let b = blob(&mut s, with(&tip, json!({"points": wheeled(200.0, &|w| json!(1.0 - w))})));
+    assert!(inside(&s, b, 110.0, 207.0) && !inside(&s, b, 290.0, 203.0), "the other way round");
+    // No wheel at any point, and pressure without a wheel: 10 pt wide all along.
+    let none = blob(&mut s, with(&tip, json!({"points": wheeled(300.0, &|_| json!(null))})));
+    let pressed = (0..=20).map(|i| json!([100.0 + f64::from(i) * 10.0, 400.0, f64::from(i) / 20.0])).collect::<Vec<_>>();
+    let pressure = blob(&mut s, with(&tip, json!({"points": pressed})));
+    for (id, y) in [(none, 300.0), (pressure, 400.0)] {
+        assert!(inside(&s, id, 110.0, y + 3.0) && inside(&s, id, 290.0, y + 3.0) && !inside(&s, id, 290.0, y + 7.0), "10 pt at y {y}");
+    }
+    // A click paints one dab as wide as the wheel gives.
+    let wide = blob(&mut s, with(&tip, json!({"points": [[100, 500, null, null, null, null, 1]]})));
+    let thin = blob(&mut s, with(&tip, json!({"points": [[300, 500, null, null, null, null, 0]]})));
+    assert!(inside(&s, wide, 100.0, 508.0) && !inside(&s, thin, 300.0, 503.0), "a dab follows the wheel");
+    // A stroke whose samples all lie at one point paints a dab sized from its first reading, with
+    // the wheel and with pressure.
+    let still = blob(&mut s, with(&tip, json!({"points": [[500, 500, null, null, null, null, 1], [500, 500, null, null, null, null, 0]]})));
+    let pressed_still = blob(&mut s, with(&tip, json!({"sizeMode": "pressure", "points": [[700, 500, 1], [700, 500, 0]]})));
+    for (id, x) in [(still, 500.0), (pressed_still, 700.0)] {
+        assert!(inside(&s, id, x, 508.0) && !inside(&s, id, x, 510.0), "a dab from the first reading at x {x}");
+    }
+    // A 25% round tip lying level: about 0.5 pt tall at the left end to 4.5 pt at the right.
+    let flat = blob(&mut s, with(&tip, json!({"roundness": 25, "points": wheeled(600.0, &|w| json!(w))})));
+    assert!(inside(&s, flat, 290.0, 601.9) && !inside(&s, flat, 110.0, 601.0), "a flat tip follows the wheel");
+    // Refused, with the document and its undo steps as they were.
+    let (before, undo) = (paths(&s).len(), s.doc().unwrap().history.undo.len());
+    for (bad, key) in [
+        (json!({"points": wheeled(700.0, &|w| json!(w)), "sizeMode": "tilt", "sizeVariation": 8}), "sizeMode"),
+        (json!({"points": [[0, 700, null, null, null, null, 1.5], [10, 700]], "sizeMode": "stylusWheel", "sizeVariation": 8}), "wheel"),
+    ] {
+        let err = s.execute("path.blob", &bad).unwrap_err();
+        assert!(err.to_string().contains(key), "{err}");
+    }
+    assert_eq!((paths(&s).len(), s.doc().unwrap().history.undo.len()), (before, undo), "nothing changed");
+    // The tool records the wheel while its Size varies with it.
+    let v = view();
+    s.select_tool("blobBrush", v).unwrap();
+    s.set_tool_option("sizeMode", &json!("stylusWheel"));
+    s.set_tool_option("sizeVariation", &json!(8));
+    assert_eq!(s.tool_options()["sizeMode"], json!("stylusWheel"));
+    let ev = |kind, i: i32| PointerEvent {
+        pen: Some(PenPose { wheel: Some(i as f32 / 20.0), ..PenPose::default() }),
+        ..PointerEvent::new(kind, 100.0 + f64::from(i) * 10.0, 800.0)
+    };
+    s.pointer(&ev(PointerKind::Down, 0), v).unwrap();
+    for i in 1..20 {
+        s.pointer(&ev(PointerKind::Drag, i), v).unwrap();
+    }
+    s.pointer(&ev(PointerKind::Up, 20), v).unwrap();
+    let (drawn, _) = paths(&s).into_iter().find(|(_, p)| p.control_bounds().is_some_and(|b| b.y0 > 750.0)).unwrap();
+    assert!(inside(&s, drawn, 290.0, 807.0) && !inside(&s, drawn, 110.0, 803.0), "the tool's stroke follows the wheel");
 }
 
 /// Eraser Tool Options' Size set to Pressure (#3961): the tip is Size − Variation across where the
