@@ -560,8 +560,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 }
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
-/// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`]. The bar's rows drop the controls that do not fit.
+/// Warp's mesh and pins, the Circle tool's From Center (set through `tool.setOption`). The Artboard
+/// tool's options are drawn by [`crate::panels::artboards::control_bar`]. The bar's rows drop the
+/// controls that do not fit.
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `addons::shapes::control_bar(app, ui)` and `dimension::controls(app, ui)` lose their `reserve` (chrome-w16 ranks).
     if crate::addons::shapes::control_bar(app, ui) {
@@ -583,6 +584,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return crop_options(app, ui);
     }
+    if app.session.tool_id() == vectorcraft_tools::circle::ID {
+        return circle_options(app, ui);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -597,6 +601,16 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(value) = picked {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
+    }
+}
+
+/// The Circle tool's Control bar: From Center (the first point is the circle's center and the
+/// outline passes through the second), set through `tool.setOption`.
+fn circle_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.tool_options()["fromCenter"].as_bool().unwrap_or(false);
+    let picked = Checkbox::new(Bind::given(on)).label(tl!("From Center")).id_salt("fromCenter").show(ui).value().copied();
+    if let Some(value) = picked.filter(|value| *value != on) {
+        app.run("tool.setOption", json!({ "key": "fromCenter", "value": value })).ok();
     }
 }
 

@@ -1111,6 +1111,27 @@ fn control_shown(app: crate::VectorcraftApp) -> Shown {
     Shown::new(app, egui::vec2(1600.0, 300.0), super::control_bar)
 }
 
+/// With the Circle tool, the Control bar shows From Center unchecked; a click on it turns the option on and checks
+/// it, and a second click turns it off and unchecks it.
+#[test]
+fn the_circle_tool_s_from_center_checkbox_sets_the_option() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("circle");
+    let mut bar = control_shown(app);
+    let from_center = |bar: &Shown| bar.app().session.tool_options()["fromCenter"].clone();
+    assert_eq!(from_center(&bar), json!(false));
+    let target = bar.named("From Center");
+    assert!(!bar.checked(&target), "From Center starts unchecked");
+    for want in [true, false] {
+        bar.click("From Center").settle();
+        assert_eq!(from_center(&bar), json!(want));
+        let target = bar.named("From Center");
+        assert_eq!(bar.checked(&target), want, "the checkbox shows the option");
+    }
+}
+
 /// The Control bar's isolation button, if it shows: Isolate Selected Object, Exit Isolation Mode or Exit Symbol
 /// Editing Mode.
 fn isolation_button(bar: &mut Shown) -> Option<Target> {

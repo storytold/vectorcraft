@@ -7466,10 +7466,18 @@ one line (twice the triangle's area at most 10⁻¹⁰ of its longest side squar
 canvas (4,000,000 pt from the origin), when `points` is not two or three pairs of numbers, and when `points` is left
 out and the selection does not hold two or three anchor points of paths.
 
+`shape.circleThroughPoints {center: [x, y], points: [[x, y]]}` draws the circle centered at `center` whose edge passes
+through the one point in `points`: its radius is the distance between them. It returns an error and draws nothing when
+the point is on `center`, when the circle would reach past the canvas, and when `center` is not a pair of numbers or
+`points` does not hold exactly one pair. With `center`, the selected anchor points are not used. With or without
+`center`, a circle whose radius is so small beside its coordinates that its opposite edges round to the same number is
+an error, and nothing is drawn.
+
 `anchors` sets where the circle's anchors go. With `"standard"`, the default, the circle has four anchors at 0°, 90°,
 180° and 270°. With `"points"`, the circle is a plain path with an anchor exactly at each point, and more anchors
 between them, evenly spaced, so that no curve turns more than a quarter of the circle: two points give four anchors,
-and three points give four to six. Any other `anchors` value is an error (`` `anchors` must be one of standard, points ``), and nothing
+and three points give four to six; with `center`, the one point gives an anchor at that point and three more, a quarter
+turn apart. Any other `anchors` value is an error (`` `anchors` must be one of standard, points ``), and nothing
 is drawn.
 
 The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
@@ -7489,7 +7497,7 @@ dragged out, it draws the circle on the diameter it drags out.
 
 Circle Tool Options (`tool.options {tool: "circle"}`, or a double-click on the tool, dialog `circleOptions`) sets the
 tool's options, which `tool.setOption {tool: "circle", values}` also sets and the preferences keep. All are on by
-default, and `color` is `"blue"`:
+default except `fromCenter`, which is off, and `color` is `"blue"`:
 
 - `center`, `radii` and `diameter` (Show Center, Show Radii, Show Diameter) show or hide the cross at the center, the
   lines from the center to the points and the diameter label. The diameter label also needs Measurement Labels on.
@@ -7504,6 +7512,14 @@ default, and `color` is `"blue"`:
   point dragged back and let go on it, places nothing, and a click on the line through the first two points draws
   nothing and keeps them. A drag from the first point still draws the circle on the diameter it drags out, and a drag
   from a second point places it where it is let go. Switching `dragThird` drops the points placed so far.
+- `fromCenter` (From Center, also a checkbox in the Control bar) on makes the first point the circle's center and the
+  outline passes through the second point, which follows the pointer. A drag from the center, or a click on the center
+  and then a click on a point of the outline, draws the circle with `center`. The second point snaps to Smart Guides,
+  anchor points included, as the others do, so a circle centered on one corner of a rectangle can pass exactly through
+  the opposite corner, with the diagonal as its radius. Shift keeps the second point at 45° steps from the center, and
+  Alt rounds the diameter (twice the distance from the center) to the nearest ruler tick. The tool shows one radius, to
+  the pointer. A second click on the center places nothing. The setting in force when the first point is placed applies
+  to that circle, and `dragThird` does not apply to it: switching `dragThird` keeps a placed center.
 
 `tool.setOption` returns an error and changes none of the options when a value is not one the option takes
 (`` `radii` must be true or false ``, `` `color` must be one of red, blue, magenta, green, black, gray ``) or the key is
