@@ -725,7 +725,7 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
     let t0 = monotonic_ms();
     if region.is_none() {
         // Nothing in view to draw again: what was made to measure the edit isn't drawn.
-        app.canvas.renderer.let_go_of_measured();
+        app.canvas.renderer.finish_measurement_only();
     }
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
@@ -755,7 +755,7 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
         tex.set_partial([x0 as usize, y0 as usize], color, options);
         app.canvas.moved |= renderer.stats.moved > 0;
         if plain_patch {
-            app.canvas.renderer.let_go_of_measured();
+            app.canvas.renderer.finish_measurement_only();
         }
     }
     app.canvas.key = Some((*key).clone());
@@ -838,7 +838,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
         (Some(worker), true, false) => {
             // The worker draws the frame: what this thread's renderer made to measure the edit
             // isn't drawn here.
-            app.canvas.renderer.let_go_of_measured();
+            app.canvas.renderer.finish_measurement_only();
             let queued = worker.submit(crate::render_worker::Job {
                 key: key.clone(),
                 doc: doc.clone(),

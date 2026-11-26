@@ -251,9 +251,8 @@ impl Renderer {
         self.placed_frame = None;
     }
 
-    /// End a frame: drop cache entries not used for a few frames (every render, thumbnails too,
-    /// so the nodes they hold go with them).
-    fn end_frame(&mut self) {
+    /// Drop stale bounds and paths, including old versions of edited nodes.
+    fn sweep_node_geometry(&mut self) {
         let g = self.stamp;
         // Swept however few the entries: each keeps its node alive, and an object dragged or
         // edited makes a new node (with its layer) in every frame. Kept until there were 1,024 of
@@ -263,6 +262,23 @@ impl Renderer {
         // A kept path stays while its object is in `geom`, which keeps the objects still drawn.
         let geom = &self.geom;
         self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
+    }
+
+    /// Finish measuring an edit whose frame is drawn elsewhere or needs no pixel update.
+    /// Age the measurement caches and keep the previous draw's effect rasters available.
+    pub fn finish_measurement_only(&mut self) {
+        self.stamp += 1;
+        self.sweep_node_geometry();
+        let g = self.stamp;
+        self.blends.retain(|_, e| g - e.2 <= 3);
+        self.let_go_of_measured();
+    }
+
+    /// End a frame: drop cache entries not used for a few frames (every render, thumbnails too,
+    /// so the nodes they hold go with them).
+    fn end_frame(&mut self) {
+        let g = self.stamp;
+        self.sweep_node_geometry();
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
             let strokes = &self.strokes;
