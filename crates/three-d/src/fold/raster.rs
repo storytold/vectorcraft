@@ -677,37 +677,48 @@ pub fn render(scene: &Scene) -> Option<Image> {
 /// The plane each panel of `folded` lies in, as a number shared by the panels in one plane: their
 /// normals parallel to within [`PARALLEL`] and their planes as far apart as rounding leaves them
 /// ([`COPLANAR`] at their distance from [`Folded::origin`] for each hinge between them and the
-/// base), so a parallel panel any measurable way behind another goes by depth. Each panel is
-/// measured at the middle of its bounds in `blank`, by its pose about [`Folded::origin`]
-/// ([`super::FoldedPanel::local`]), so where the blank lies in the document does not change the
-/// planes. Past [`super::MAX_PANELS`] panels, one plane for all.
+/// base). Each panel's bounds corners are measured by its pose about [`Folded::origin`]
+/// ([`super::FoldedPanel::local`]). Past [`super::MAX_PANELS`] panels, one plane for all.
 fn planes(folded: &Folded, blank: &Blank) -> Vec<u16> {
     let n = folded.panels.len();
     if n > super::MAX_PANELS {
         return vec![0; n];
     }
     let length = |v: V3| dot(v, v).sqrt();
-    // Each plane's normal, a point of it, the size of the coordinates that point came from and the
-    // hinges that placed it.
-    let mut kinds: Vec<(V3, V3, f64, usize)> = vec![];
+    struct Plane {
+        normal: V3,
+        at: V3,
+        size: f64,
+        depth: usize,
+        corners: [V3; 4],
+    }
+    let separation = |normal: V3, at: V3, points: &[V3; 4]| {
+        points.iter().map(|p| dot(normal, [p[0] - at[0], p[1] - at[1], p[2] - at[2]]).abs()).fold(0.0, f64::max)
+    };
+    let mut kinds: Vec<Plane> = vec![];
     folded
         .panels
         .iter()
         .enumerate()
         .map(|(i, f)| {
             let o = folded.origin;
-            let middle = blank.panels.get(i).and_then(|p| p.outline.bounds()).map_or([0.0; 3], |b| [b.center().x - o[0], -b.center().y - o[1], 0.0]);
+            let bounds = blank.panels.get(i).and_then(|p| p.outline.bounds());
+            let middle = bounds.map_or([0.0; 3], |b| [b.center().x - o[0], -b.center().y - o[1], 0.0]);
+            let flat =
+                bounds.map_or([middle; 4], |b| [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1)].map(|(x, y)| [x - o[0], -y - o[1], 0.0]));
+            let corners = flat.map(|p| f.local.apply(p));
             let (normal, at) = (f.local.normal(), f.local.apply(middle));
-            let size = length(at).max(length(middle));
-            let same = |(m, p, s, d): &(V3, V3, f64, usize)| {
+            let size = flat.iter().chain(&corners).map(|&p| length(p)).fold(0.0, f64::max);
+            let same = |p: &Plane| {
+                let m = p.normal;
                 let c = [normal[1] * m[2] - normal[2] * m[1], normal[2] * m[0] - normal[0] * m[2], normal[0] * m[1] - normal[1] * m[0]];
-                let apart = dot(*m, [at[0] - p[0], at[1] - p[1], at[2] - p[2]]).abs();
+                let apart = separation(m, p.at, &corners).max(separation(normal, at, &p.corners));
                 // Saturating: a `Folded` built by a caller may carry any depth.
-                let hinges = f64::from(u32::try_from(f.depth.saturating_add(*d).saturating_add(1)).unwrap_or(u32::MAX));
-                length(c) <= PARALLEL && apart <= COPLANAR * hinges * (1.0 + size.max(*s))
+                let hinges = f64::from(u32::try_from(f.depth.saturating_add(p.depth).saturating_add(1)).unwrap_or(u32::MAX));
+                length(c) <= PARALLEL && apart <= COPLANAR * hinges * (1.0 + size.max(p.size))
             };
             let k = kinds.iter().position(same).unwrap_or_else(|| {
-                kinds.push((normal, at, size, f.depth));
+                kinds.push(Plane { normal, at, size, depth: f.depth, corners });
                 kinds.len() - 1
             });
             u16::try_from(k).unwrap_or(u16::MAX)

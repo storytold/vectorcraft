@@ -140,6 +140,20 @@ fn the_nearer_of_two_panels_shows_and_a_tie_goes_to_the_later_one() {
 }
 
 #[test]
+fn nearly_parallel_panels_that_cross_use_depth_on_both_sides() {
+    let angle = 5e-10f64;
+    let (sin, cos) = angle.sin_cos();
+    let tilted = Pose { m: [[cos, 0.0, sin], [0.0, 1.0, 0.0], [-sin, 0.0, cos]], t: [50.0 * (1.0 - cos), 0.0, 50.0 * sin] };
+    let whole = || panel(vec![square(0.0, 0.0, 100.0, 100.0)]);
+    for (poses, left, right) in [(vec![Pose::IDENTITY, tilted], 1, 0), (vec![tilted, Pose::IDENTITY], 0, 1)] {
+        let (b, f) = scene_of(vec![whole(), whole()], poses);
+        let img = render(&Scene { blank: &b, folded: &f, print: None, inside: [0, 0, 0, 255], outside: WHITE, camera: front() }).expect("drawn");
+        assert_eq!(img.panel_at(25, 50), Some(left));
+        assert_eq!(img.panel_at(75, 50), Some(right));
+    }
+}
+
+#[test]
 fn of_two_parallel_panels_the_nearer_shows_however_close() {
     // 2 and 2.0001 points deep: a hair more than `TIE` apart once subtracted, though 2 + `TIE`
     // equals 2.0001. The panels lie in different planes, so the nearer shows whichever is drawn

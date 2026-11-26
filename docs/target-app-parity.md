@@ -32,7 +32,7 @@
 
 ## Feature submission evidence
 
-- Fold Preview orders overlapping panels by their fold tree, keeps distinct parallel planes in depth order, and calculates poses relative to the blank's center. A hinge uses its longest line across all split pieces. Tests cover flat, near-flat, nested and offset folds in `crates/three-d/src/fold/tests.rs` and `crates/three-d/src/fold/raster/tests.rs`.
+- Fold Preview orders overlapping panels by their fold tree, draws distinct planes and crossing panels by depth, and calculates poses relative to the blank's center. A hinge uses its longest line across all split pieces. Tests cover flat, near-flat, nested and offset folds in `crates/three-d/src/fold/tests.rs` and `crates/three-d/src/fold/raster/tests.rs`.
 
 Variables panel row context menus (2026-11-20, G12): Right-click highlights the clicked variable without changing the canvas selection and offers Select Bound Object, Variable Options…, Unbind Variable, the four Make Dynamic actions, and Delete Variable. Shift+F10 opens the same menu for the focused row; Escape dismisses it. Row actions target that variable; dynamic actions use the canvas selection. Lock and selection checks disable unavailable actions. Headless pointer/accessibility tests cover opening the menu, highlighting, bound-object selection, deletion in one undo step and restoration, and disabled actions. Scores and estimates unchanged.
 
