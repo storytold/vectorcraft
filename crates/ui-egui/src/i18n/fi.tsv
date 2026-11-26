@@ -2136,6 +2136,17 @@ digits	Malayalam	Malajalam
 	Create New Sublayer	Luo uusi alataso
 	Search All	Hae kaikista
 	Graphics	Grafiikka
+	Show Contrast	Näytä kontrasti
+	Contrast For	Kontrasti kohteelle
+	Normal Text	Tavallinen teksti
+	Large Text	Suuri teksti
+	Contrast Background	Kontrastin tausta
+	Behind Selection	Valinnan takana
+	Current Color	Nykyinen väri
+	Pass	Läpäisee
+	Fail	Ei läpäise
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2:n vähimmäiskontrastit: tavallinen teksti AA 4.5:1 (1.4.3) ja AAA 7:1 (1.4.6), suuri teksti AA 3:1 ja AAA 4.5:1, grafiikka ja säätimet AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Tausta luetaan valinnan keskeltä.
 	Local Libraries	Paikalliset kirjastot
 	Add Content	Lisää sisältöä
 	Click to apply to the selected type	Käytä valittuun tekstiin napsauttamalla
@@ -5809,6 +5820,12 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
 @msg	nothing encoded	mitään ei koodattu
 @msg	nothing selected	mitään ei ole valittu
+@msg	`{key}` must be a color or {_1}	`{key}` on oltava väri tai {_1}
+@msg	the selected objects' colors differ: give `color`	valittujen objektien värit eroavat: anna `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	valittujen objektien värit eroavat: anna `opacity` tai `color`
+@msg	the active fill or stroke has no color: give `color`	aktiivisella täytöllä tai viivalla ei ole väriä: anna `color`
+@msg	the active fill or stroke is hidden: give `color`	aktiivinen täyttö tai viiva on piilotettu: anna `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktiivinen täyttö tai viiva piirretään peittävyysmaskin läpi: anna `color`
 @msg	nothing selected is in a group	mikään valituista ei ole ryhmässä
 @msg	nothing to align	ei tasattavaa
 @msg	nothing to distort	ei vääristettävää

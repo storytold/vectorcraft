@@ -2071,6 +2071,17 @@ file-filter	Templates	Sablonok
 	Graphic Styles (4)	Grafikai stílusok (4)
 	Graphic Styles Options	Grafikai stílusok beállításai
 	Graphics	Grafikák
+	Show Contrast	Kontraszt megjelenítése
+	Contrast For	Kontraszt ehhez
+	Normal Text	Normál szöveg
+	Large Text	Nagy szöveg
+	Contrast Background	Kontraszt háttere
+	Behind Selection	A kijelölés mögött
+	Current Color	Aktuális szín
+	Pass	Megfelel
+	Fail	Nem felel meg
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 szerinti minimális kontraszt: normál szöveg AA 4.5:1 (1.4.3) és AAA 7:1 (1.4.6), nagy szöveg AA 3:1 és AAA 4.5:1, grafikák és vezérlők AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	A háttér színét a kijelölés közepén olvassa le a program.
 	Graphics Processor	Grafikus processzor
 	Graphics: {adapter}	Grafika: {adapter}
 	Gravity	Gravitáció
@@ -6277,6 +6288,12 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
 @msg	nothing encoded	nincs kódolt adat
 @msg	nothing selected	nincs kijelölés
+@msg	`{key}` must be a color or {_1}	a(z) `{key}` értéke csak szín vagy {_1} lehet
+@msg	the selected objects' colors differ: give `color`	a kijelölt objektumok színei eltérnek: adja meg a `color` értékét
+@msg	the selected objects' colors differ: give `opacity` or `color`	a kijelölt objektumok színei eltérnek: adja meg az `opacity` vagy a `color` értékét
+@msg	the active fill or stroke has no color: give `color`	az aktív kitöltésnek vagy körvonalnak nincs színe: adja meg a `color` értékét
+@msg	the active fill or stroke is hidden: give `color`	az aktív kitöltés vagy körvonal rejtett: adja meg a `color` értékét
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	az aktív kitöltés vagy körvonal átlátszósági maszkon keresztül rajzolódik: adja meg a `color` értékét
 @msg	nothing selected is in a group	a kijelölésből semmi sincs csoportban
 @msg	nothing to align	nincs mit igazítani
 @msg	nothing to distort	nincs mit torzítani

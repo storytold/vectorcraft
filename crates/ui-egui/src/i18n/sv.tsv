@@ -1624,6 +1624,17 @@ font-technology	Variable	Variabla
 	Graphic Styles	Grafikstilar
 	Graphic Styles Options	Grafikstilalternativ
 	Graphics	Grafik
+	Show Contrast	Visa kontrast
+	Contrast For	Kontrast för
+	Normal Text	Normal text
+	Large Text	Stor text
+	Contrast Background	Kontrastbakgrund
+	Behind Selection	Bakom markeringen
+	Current Color	Aktuell färg
+	Pass	Godkänd
+	Fail	Underkänd
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minsta kontrast enligt WCAG 2.2: normal text AA 4.5:1 (1.4.3) och AAA 7:1 (1.4.6), stor text AA 3:1 och AAA 4.5:1, grafik och kontroller AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Bakgrunden läses i mitten av markeringen.
 	Graphics Processor	Grafikprocessor
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Gravitation
@@ -5462,6 +5473,12 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
 @msg	nothing encoded	inget kodat
 @msg	nothing selected	inget markerat
+@msg	`{key}` must be a color or {_1}	`{key}` måste vara en färg eller {_1}
+@msg	the selected objects' colors differ: give `color`	de markerade objektens färger skiljer sig: ange `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	de markerade objektens färger skiljer sig: ange `opacity` eller `color`
+@msg	the active fill or stroke has no color: give `color`	den aktiva fyllningen eller linjen har ingen färg: ange `color`
+@msg	the active fill or stroke is hidden: give `color`	den aktiva fyllningen eller linjen är dold: ange `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	den aktiva fyllningen eller linjen ritas genom en opacitetsmask: ange `color`
 @msg	nothing selected is in a group	inget av det markerade ligger i en grupp
 @msg	nothing to align	inget att justera
 @msg	nothing to distort	inget att förvränga

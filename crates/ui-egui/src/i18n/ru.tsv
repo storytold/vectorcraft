@@ -1690,6 +1690,17 @@ file-filter	Templates	Шаблоны
 	Graphic Styles	Графические стили
 	Graphic Styles Options	Параметры графических стилей
 	Graphics	Графика
+	Show Contrast	Показать контраст
+	Contrast For	Контраст для
+	Normal Text	Обычный текст
+	Large Text	Крупный текст
+	Contrast Background	Фон контраста
+	Behind Selection	За выделением
+	Current Color	Текущий цвет
+	Pass	Соответствует
+	Fail	Не соответствует
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Минимальный контраст по WCAG 2.2: обычный текст AA 4.5:1 (1.4.3) и AAA 7:1 (1.4.6), крупный текст AA 3:1 и AAA 4.5:1, графика и элементы управления AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон определяется в центре выделения.
 	Graphics Processor	Графический процессор
 	Graphics: {adapter}	Графика: {adapter}
 	Gravity	Гравитация
@@ -5602,6 +5613,12 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	finish editing the pattern first	сначала завершите редактирование узора
 @msg	nothing encoded	ничего не закодировано
 @msg	nothing selected	ничего не выделено
+@msg	`{key}` must be a color or {_1}	`{key}` должен быть цветом или {_1}
+@msg	the selected objects' colors differ: give `color`	цвета выделенных объектов различаются: укажите `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	цвета выделенных объектов различаются: укажите `opacity` или `color`
+@msg	the active fill or stroke has no color: give `color`	у активной заливки или обводки нет цвета: укажите `color`
+@msg	the active fill or stroke is hidden: give `color`	активная заливка или обводка скрыта: укажите `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активная заливка или обводка рисуется через непрозрачную маску: укажите `color`
 @msg	nothing selected is in a group	ничего из выделенного не находится в группе
 @msg	nothing to align	нечего выравнивать
 @msg	nothing to distort	нечего искажать

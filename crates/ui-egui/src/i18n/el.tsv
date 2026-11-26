@@ -1587,6 +1587,17 @@ font-technology	Variable	Μεταβλητές
 	Graphic Styles	Στυλ γραφικών
 	Graphic Styles Options	Επιλογές στυλ γραφικών
 	Graphics	Γραφικά
+	Show Contrast	Εμφάνιση αντίθεσης
+	Contrast For	Αντίθεση για
+	Normal Text	Κανονικό κείμενο
+	Large Text	Μεγάλο κείμενο
+	Contrast Background	Φόντο αντίθεσης
+	Behind Selection	Πίσω από την επιλογή
+	Current Color	Τρέχον χρώμα
+	Pass	Επιτυχία
+	Fail	Αποτυχία
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Ελάχιστη αντίθεση κατά WCAG 2.2: κανονικό κείμενο AA 4.5:1 (1.4.3) και AAA 7:1 (1.4.6), μεγάλο κείμενο AA 3:1 και AAA 4.5:1, γραφικά και στοιχεία ελέγχου AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Το φόντο διαβάζεται στο κέντρο της επιλογής.
 	Graphics Processor	Επεξεργαστής γραφικών
 	Graphics: {adapter}	Γραφικά: {adapter}
 	Gravity	Βαρύτητα
@@ -5529,6 +5540,12 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	`{key}` must be a color or {_1}	το `{key}` πρέπει να είναι χρώμα ή {_1}
+@msg	the selected objects' colors differ: give `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `opacity` ή `color`
+@msg	the active fill or stroke has no color: give `color`	το ενεργό γέμισμα ή η πινελιά δεν έχει χρώμα: δώστε `color`
+@msg	the active fill or stroke is hidden: give `color`	το ενεργό γέμισμα ή η πινελιά είναι κρυφό: δώστε `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	το ενεργό γέμισμα ή η πινελιά σχεδιάζεται μέσα από μάσκα αδιαφάνειας: δώστε `color`
 @msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση

@@ -1933,6 +1933,17 @@ file-filter	Templates	Mẫu
 	Graphic Styles	Kiểu đồ họa
 	Graphic Styles Options	Tùy chọn kiểu đồ họa
 	Graphics	Đồ họa
+	Show Contrast	Hiện độ tương phản
+	Contrast For	Tương phản cho
+	Normal Text	Văn bản thường
+	Large Text	Văn bản lớn
+	Contrast Background	Nền tương phản
+	Behind Selection	Phía sau vùng chọn
+	Current Color	Màu hiện tại
+	Pass	Đạt
+	Fail	Không đạt
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Độ tương phản tối thiểu theo WCAG 2.2: văn bản thường AA 4.5:1 (1.4.3) và AAA 7:1 (1.4.6), văn bản lớn AA 3:1 và AAA 4.5:1, đồ họa và điều khiển AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Nền được đọc tại tâm vùng chọn.
 	Graphics Processor	Bộ xử lý đồ họa
 	Graphics: {adapter}	Đồ họa: {adapter}
 	Gravity	Trọng lực
@@ -5978,6 +5989,12 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	finish editing the pattern first	hãy hoàn tất chỉnh sửa họa tiết trước
 @msg	nothing encoded	không có gì được mã hóa
 @msg	nothing selected	chưa chọn gì
+@msg	`{key}` must be a color or {_1}	`{key}` phải là một màu hoặc {_1}
+@msg	the selected objects' colors differ: give `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `opacity` hoặc `color`
+@msg	the active fill or stroke has no color: give `color`	phần tô hoặc nét đang hoạt động không có màu: hãy cung cấp `color`
+@msg	the active fill or stroke is hidden: give `color`	phần tô hoặc nét đang hoạt động bị ẩn: hãy cung cấp `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	phần tô hoặc nét đang hoạt động được vẽ qua mặt nạ độ mờ: hãy cung cấp `color`
 @msg	nothing selected is in a group	không mục nào được chọn nằm trong nhóm
 @msg	nothing to align	không có gì để căn chỉnh
 @msg	nothing to distort	không có gì để làm méo

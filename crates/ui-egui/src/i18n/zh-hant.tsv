@@ -1669,6 +1669,17 @@ file-filter	Templates	範本
 	Graphic Styles	繪圖樣式
 	Graphic Styles Options	繪圖樣式選項
 	Graphics	圖形
+	Show Contrast	顯示對比度
+	Contrast For	對比度適用於
+	Normal Text	一般文字
+	Large Text	大型文字
+	Contrast Background	對比度背景
+	Behind Selection	選取範圍後方
+	Current Color	目前顏色
+	Pass	通過
+	Fail	未通過
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低對比度：一般文字 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大型文字 AA 3:1 和 AAA 4.5:1，圖形和控制項 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在選取範圍的中心讀取。
 	Graphics Processor	圖形處理器
 	Graphics: {adapter}	圖形：{adapter}
 	Gravity	重力
@@ -3062,6 +3073,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	無法貼上：要貼上的文件已關閉
 @msg	nothing selected	未選取任何物件
+@msg	`{key}` must be a color or {_1}	`{key}` 必須是顏色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所選物件的顏色不同：請提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所選物件的顏色不同：請提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	作用中的填色或筆畫沒有顏色：請提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	作用中的填色或筆畫已隱藏：請提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	作用中的填色或筆畫透過不透明度遮色片繪製：請提供 `color`
 @msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`

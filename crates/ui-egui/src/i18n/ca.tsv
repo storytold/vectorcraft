@@ -2144,6 +2144,17 @@ digits	Malayalam	Malaiàlam
 	Graphic Styles (4)	Estils gràfics (4)
 	Graphic Styles Options	Opcions d’estils gràfics
 	Graphics	Gràfics
+	Show Contrast	Mostra el contrast
+	Contrast For	Contrast per a
+	Normal Text	Text normal
+	Large Text	Text gran
+	Contrast Background	Fons del contrast
+	Behind Selection	Darrere la selecció
+	Current Color	Color actual
+	Pass	Supera
+	Fail	No supera
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contrast mínim de les WCAG 2.2: text normal AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), text gran AA 3:1 i AAA 4.5:1, gràfics i controls AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fons es llegeix al centre de la selecció.
 	Graphics Processor	Processador gràfic
 	Graphics: {adapter}	Gràfics: {adapter}
 	Gravity	Gravetat
@@ -7039,6 +7050,12 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
 @msg	no bound object reports a value (locked objects and embedded images report none)	cap objecte vinculat no informa d’un valor (els objectes bloquejats i les imatges incrustades no n’informen cap)
 @msg	nothing selected	no hi ha res seleccionat
+@msg	`{key}` must be a color or {_1}	`{key}` ha de ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	els colors dels objectes seleccionats són diferents: indiqueu `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	els colors dels objectes seleccionats són diferents: indiqueu `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	l’emplenament o el traç actiu no té color: indiqueu `color`
+@msg	the active fill or stroke is hidden: give `color`	l’emplenament o el traç actiu està ocult: indiqueu `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	l’emplenament o el traç actiu es dibuixa a través d’una màscara d’opacitat: indiqueu `color`
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	no hi ha res per exportar: el document no té art visible (o activeu Utilitza els taulers)

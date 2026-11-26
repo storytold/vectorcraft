@@ -697,10 +697,13 @@ with a slider and a percent field sets the opacity of the fill row (`paint.setFi
 (`paint.setStroke {opacity}`), the selected gradient stop or the selected freeform point (the first stop or point
 when none is selected), and `false` hides the row. The row is gray with nothing selected, for an object selected in
 a symbol instance, and when the fill or stroke row it would set is on type characters or missing.
+`{"contrast": true}` shows Show Contrast's row under the wheel or the box, `contrastFor` (`normalText`, `largeText` or
+`graphics`, which has AA only) picks the category its results are for, and `contrastBackground` (a color, or `null` for
+the color behind the selection) pins the background it measures against, as `color.contrast` below answers it.
 `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
 or the box. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity, vision, documentColors}`,
-and the settings are kept with the preferences.
+the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, opacity,
+contrast, contrastFor, contrastBackground, vision, documentColors}`, and the settings are kept with the preferences.
 
 `ui.colorWheel {"sliders": "oklch"}` shows the Color Wheel panel's OKLCH Sliders (L, C and H rows under the wheel or
 the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while the active document's RGB space is
@@ -1203,6 +1206,38 @@ or `"document"` for the document's swatches) every colour snaps to the library's
 panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo` takes the same values. A `limitTo`
 that is not a string, such as `5`, names no library and gets the same error as an unknown name; `null` or `""` sets no
 limit.
+
+`color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio
+([definition](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)) of a color against a background, from 1 to 21, and
+whether it meets AA and AAA for normal text (4.5:1 and 7:1), large text (3:1 and 4.5:1) and graphics (3:1, AA only):
+`{ratio, against, normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}`. The results compare the unrounded
+ratio. `color` defaults to the active Fill or Stroke proxy's color (its selected gradient stop or freeform point, or
+the first picked point of a gradient mesh; for a picked object of a dynamic symbol instance, its solid color mixed towards the fill that stains the instance), at
+the opacity it is drawn with (the object's opacity times that of its groups and layer, and for a picked object of a
+dynamic symbol instance also of the instance and the groups of the symbol's art around it, of its fill or stroke row,
+which type's character paint does not use, and of a stop or point; a translucent group or layer draws the art inside
+it, the art behind the object included, over what is outside it) and with the blend modes it is drawn with (its
+fill or stroke row's, the object's and those of its groups and layer, innermost first, each blending the result with
+the art below it inside the object, groups and layer around it, the object's rows below its row included, or with
+the background when `against` or `opacity` is given;
+inside an object, group or layer that isolates its blending, the modes blend only with the art it holds);
+`opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
+`against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
+selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
+images included; template layers and guides left out, as exports leave them out; the artboard's white where nothing
+is drawn); a picked object of a dynamic symbol instance hides only itself, and the color is read at its own center.
+These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
+selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
+`"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending, or
+with a translucent or blending row over different shown rows below it), where hidden objects do not count, and the
+error names `opacity` when giving it settles the difference; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
+proxy's object drawn through an opacity mask that is not disabled, its own or that of a group, layer or instance
+around it, since the mask sets how much of the color shows at each point. `against` in the
+answer is the background as a working RGB `#rrggbb`, the form `against` takes; the sampled background is rounded to 8
+bits, so giving it back answers the same ratio, except when `opacity` is omitted and a group or layer around the
+object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over
+rows below it: there `"below"` reads the art below each such level, and a given background stands for that art.
+Headless MCP answers it too.
 
 Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
 {colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a

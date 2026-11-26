@@ -1588,6 +1588,17 @@ font-technology	Variable	Değişken
 	Graphic Styles	Grafik Stilleri
 	Graphic Styles Options	Grafik Stilleri Seçenekleri
 	Graphics	Grafik
+	Show Contrast	Kontrastı Göster
+	Contrast For	Kontrast Hedefi
+	Normal Text	Normal Metin
+	Large Text	Büyük Metin
+	Contrast Background	Kontrast Arka Planı
+	Behind Selection	Seçimin Arkası
+	Current Color	Geçerli Renk
+	Pass	Geçti
+	Fail	Kaldı
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 en düşük kontrast: normal metin AA 4.5:1 (1.4.3) ve AAA 7:1 (1.4.6), büyük metin AA 3:1 ve AAA 4.5:1, grafikler ve denetimler AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Arka plan seçimin ortasında okunur.
 	Graphics Processor	Grafik İşlemcisi
 	Graphics: {adapter}	Grafik: {adapter}
 	Gravity	Yerçekimi
@@ -5303,6 +5314,12 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	finish editing the pattern first	önce deseni düzenlemeyi bitir
 @msg	nothing encoded	kodlanmış hiçbir şey yok
 @msg	nothing selected	hiçbir şey seçilmedi
+@msg	`{key}` must be a color or {_1}	`{key}` bir renk veya {_1} olmalıdır
+@msg	the selected objects' colors differ: give `color`	seçili nesnelerin renkleri farklı: `color` belirtin
+@msg	the selected objects' colors differ: give `opacity` or `color`	seçili nesnelerin renkleri farklı: `opacity` veya `color` belirtin
+@msg	the active fill or stroke has no color: give `color`	etkin dolgu veya konturun rengi yok: `color` belirtin
+@msg	the active fill or stroke is hidden: give `color`	etkin dolgu veya kontur gizli: `color` belirtin
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	etkin dolgu veya kontur bir opaklık maskesi üzerinden çiziliyor: `color` belirtin
 @msg	nothing selected is in a group	seçilenlerin hiçbiri bir grupta değil
 @msg	nothing to align	hizalanacak hiçbir şey yok
 @msg	nothing to distort	çarpıtılacak hiçbir şey yok

@@ -1741,6 +1741,17 @@ font-technology	Variable	Променливи
 	Graphic Styles	Графични стилове
 	Graphic Styles Options	Опции за графични стилове
 	Graphics	Графика
+	Show Contrast	Показване на контраста
+	Contrast For	Контраст за
+	Normal Text	Нормален текст
+	Large Text	Голям текст
+	Contrast Background	Фон за контраста
+	Behind Selection	Зад селекцията
+	Current Color	Текущ цвят
+	Pass	Покрива
+	Fail	Не покрива
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Минимален контраст по WCAG 2.2: нормален текст AA 4.5:1 (1.4.3) и AAA 7:1 (1.4.6), голям текст AA 3:1 и AAA 4.5:1, графики и контроли AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фонът се отчита в центъра на селекцията.
 	Graphics Processor	Графичен процесор
 	Graphics: {adapter}	Графика: {adapter}
 	Gravity	Гравитация
