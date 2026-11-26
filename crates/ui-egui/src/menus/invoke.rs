@@ -24,21 +24,6 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
 }
 
-/// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
-/// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
-/// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
-/// chosen with Shift add to the selection (`add: true`); Object › Expand… chosen with Alt (Option)
-/// expands at once with the choices its dialog last expanded with (`immediate: true`).
-pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
-    match target.0.as_str() {
-        "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
-        "ui.expandDialog" if held.alt => (target.0, json!({"immediate": true})),
-        // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
-        crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
-        _ => target,
-    }
-}
-
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
 /// are. Color Mask opens on the selected image's mask settings (the defaults without one).
@@ -52,107 +37,26 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     })
 }
 
-/// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
-pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
-    if let Some(found) = crate::addons::arrange::dialog(app, id) {
-        return Some(found);
+/// Opens the dialog the menu item of command `id` opens, as the reference app's does; `None` when `id`'s
+/// item opens none.
+pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    if crate::dialogs::object_dialogs::open_from_menu(app, id) {
+        return Some(Ok(Value::Null));
+    }
+    if let Some(opened) = crate::addons::dialogs::open_from_menu(app, id) {
+        return Some(opened);
+    }
+    if crate::dialogs::variables::opens(id) {
+        crate::dialogs::variables::open(app, id, None);
+        return Some(Ok(Value::Null));
     }
     Some(match id {
-        // Move opens on the offset moved last and the checkboxes it was last confirmed with.
-        "object.move" => ("move", crate::dialogs::transform::move_fields(app)),
-        "object.rotate" => ("rotate", json!({"angle": 0})),
-        "object.scale" => ("scale", json!({"sx": 100, "sy": 100, "uniform": true})),
-        // Transform Each opens on the values it was last confirmed with (#1732).
-        "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
-        "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
-        "path.average" => ("average", json!({"axis": "both"})),
-        // Average & Join opens on the joined anchor chosen last (Corner the first time).
-        "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
-        "path.averageJoin" => ("averageJoin", json!({"to": "corner"})),
-        // Offset Path opens on the values it was last confirmed with.
-        "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
-        "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
-        // Simplify opens its slider, or the dialog on the fields it was last confirmed with when
-        // "Open this dialog with these settings next time" was ticked.
-        "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
-        "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields(app)),
-        "object.path.smooth" => (crate::dialogs::smooth_slider::KIND, crate::dialogs::smooth_slider::fields()),
-        "object.path.splitIntoGrid" => {
-            // The grid starts at the size of the selection.
-            let size =
-                app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
-            ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
-        }
-        "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
-        crate::addons::pathtools::set_corners::COMMAND => {
-            (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
-        }
-        crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
-        crate::addons::pathtools::bridge::COMMAND => (crate::addons::pathtools::bridge::KIND, crate::addons::pathtools::bridge::fields()),
-        crate::addons::pathtools::tangent_circle::COMMAND => {
-            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
-        }
-        crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
-        crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
-        crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
-        crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
-        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
-        "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
-        // Smart Punctuation opens on the fields it was last confirmed with.
-        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
+        crate::dialogs::halftone::CMD => crate::dialogs::halftone::open(app),
+        crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
+        crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
+        crate::dialogs::smart_punctuation::COMMAND => crate::dialogs::smart_punctuation::open(app),
         _ => return None,
     })
-}
-
-/// The event a focused text field takes for Edit-menu command `id` (Select All, Cut, Copy,
-/// Paste), as the same keys would send it.
-pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
-    Some(match id {
-        "select.all" => egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
-        "edit.copy" => egui::Event::Copy,
-        "edit.cut" => egui::Event::Cut,
-        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.written_clipboard_text()?),
-        _ => return None,
-    })
-}
-
-/// Invoke an item clicked in the system menu bar (macOS; its key equivalents come back to egui as
-/// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
-/// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
-/// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`]. With text selected in a label (a Document
-/// Info value), Copy and Cut copy that text, as their keys do ([`crate::shortcuts::leave_to_labels`]).
-pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
-    let label_event = match id {
-        "edit.copy" => Some(("edit.copy", egui::Event::Copy)),
-        "edit.cut" => Some(("edit.cut", egui::Event::Cut)),
-        _ => None,
-    };
-    match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
-        Some((field, e)) => to_field(ctx, field, e),
-        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(app, ctx, id)) => {
-            if let Some((_, e)) = label_event {
-                ctx.input_mut(|i| i.events.push(e));
-            }
-            // The labels' text replaces the formats of an earlier Copy or Cut not written yet, even
-            // in a frame whose keys are not this window's.
-            app.drop_unwritten_formats();
-        }
-        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
-        None => invoke(app, id, p),
-    }
-}
-
-/// The text field that has the keyboard, if any.
-pub(super) fn focused_text_field(ctx: &egui::Context) -> Option<egui::Id> {
-    ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())
-}
-
-/// Give text field `field` the keyboard (back) and event `e`, a [`field_event`], this frame.
-pub(super) fn to_field(ctx: &egui::Context, field: egui::Id, e: egui::Event) {
-    ctx.memory_mut(|m| m.request_focus(field));
-    ctx.input_mut(|i| i.events.push(e));
 }
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
@@ -175,6 +79,12 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // (Recolor Artwork), opens on the art as the gesture left it.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
+    // So do the plug-ins the launch is still loading, for a command chosen meanwhile that the
+    // engine holds until they install (a plug-in's own command, one that may edit); view commands
+    // and queries go ahead.
+    if vectorcraft_engine::waits_for_plugin_loads(id) {
+        app.session.finish_plugin_loads();
+    }
     // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
     if id == "plugin.dialog" && !enabled(app, id) {
         return;
@@ -186,11 +96,21 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     {
         return;
     }
+    // The Artboard tool's Rearrange (its canvas menu) opens Rearrange for the artboards it lists,
+    // whose OK waits for a click on the canvas.
+    if id == "artboard.rearrange"
+        && let Some(indices) = crate::dialogs::rearrange_artboards::menu_indices(&p)
+    {
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+        return;
+    }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
     if p.as_object().is_none_or(|o| o.is_empty())
-        && let Some((kind, fields)) = menu_dialog(app, id)
+        && let Some(opened) = open_menu_dialog(app, id)
     {
-        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        if let Err(e) = opened {
+            app.status(e);
+        }
         return;
     }
     // A plug-in command with parameters asks for them, from its menu item or its shortcut.
@@ -371,7 +291,7 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     if id == "view.rotate" && p.as_object().is_none_or(|o| o.is_empty()) {
         match app.view_mut().map(|v| v.rotation) {
             Some(angle) => {
-                app.ui.dialog = Some(crate::state::Dialog::new("command", json!({"__command": id, "__label": "Rotate View", "angle": angle})));
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rotate View", "params": {"angle": angle}}));
             }
             None => app.status("no document"),
         }

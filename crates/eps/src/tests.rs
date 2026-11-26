@@ -448,6 +448,106 @@ fn spot_colours_are_separations_and_overprints_are_kept_or_dropped() {
     assert!(!page_of(&d, &EpsOptions { overprint: Overprint::Discard, ..opts(&d) }).contains("true op"));
 }
 
+/// Whether overprinting is on at each fill a page paints, by its `true op` and `false op` lines.
+fn overprint_at_fills(page: &str) -> Vec<bool> {
+    let mut on = false;
+    let mut fills = vec![];
+    for line in page.lines() {
+        match line {
+            "true op" => on = true,
+            "false op" => on = false,
+            l if l == "f" || l.ends_with(" f") || l.ends_with(" f*") || l == "f*" => fills.push(on),
+            _ => {}
+        }
+    }
+    fills
+}
+
+#[test]
+fn tiles_overprint_with_their_overprinting_pattern() {
+    // A rectangle filled with an overprinting pattern whose tile is a white square marked to
+    // overprint and then a cyan one that is not.
+    let mut d = doc_with(|_| vec![]);
+    let square = |d: &mut Document, paint: Paint, overprint: bool| {
+        let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), paint, Paint::None, 0.0);
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.overprint = overprint;
+        }
+        Arc::new(n)
+    };
+    let tile = vec![square(&mut d, Paint::solid(Color::WHITE), true), square(&mut d, Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), false)];
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", tile));
+    let mut n = red_rect(&mut d);
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY };
+        f.overprint = true;
+    }
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    // The whole pattern overprints, as in PDF export: the white square's own mark does not turn
+    // overprinting off for the cyan square after it, and Discard White Overprint applies to the
+    // pattern fill, not to its tiles.
+    let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+    assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{fills:?}");
+    // On a plate too.
+    let plate = crate::scene::Scene::new(&d, &opts(&d)).on_plate(true).run();
+    let fills = overprint_at_fills(&plate.body);
+    assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{fills:?}");
+}
+
+/// A white character fill, and a white fill of the type object itself, marked to overprint knock
+/// out with Discard White Overprint and overprint without it.
+#[test]
+fn white_type_fills_knock_out_with_discard_white_overprint() {
+    use vectorcraft_doc::{CharStyle, FillLayer, TextObject};
+    let white = Paint::solid(Color::WHITE);
+    let char_fill = CharStyle { size: 30.0, fill: white.clone(), overprint_fill: true, ..CharStyle::default() };
+    let object_fill = CharStyle { size: 30.0, fill: Paint::None, ..CharStyle::default() };
+    for (i, style) in [char_fill, object_fill].into_iter().enumerate() {
+        let mut d = doc_with(|d| {
+            let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), "AB", style))));
+            if i == 1 {
+                n.appearance.items = vec![AppearanceItem::Fill(FillLayer { overprint: true, ..FillLayer::new(white.clone()) })];
+            }
+            vec![n]
+        });
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert!(!fills.is_empty() && fills.iter().all(|&on| !on), "{i}: {fills:?}");
+        d.setup.discard_white_overprint = false;
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{i}: {fills:?}");
+    }
+}
+
+/// Discard White Overprint applies to paper white only: a white fill linked to a spot swatch
+/// still overprints, at 100% and 50%; one linked to a global process swatch, at a 0% tint of a
+/// spot swatch, or to a spot swatch without a color (written as process) knocks out.
+#[test]
+fn spot_white_fills_overprint_with_discard_white_overprint() {
+    let white = Paint::solid(Color::WHITE);
+    let cases = [
+        (true, white.clone(), 1.0, true),
+        (true, white.clone(), 0.5, true),
+        (false, white.clone(), 1.0, false),
+        (true, white.clone(), 0.0, false),
+        (true, Paint::None, 1.0, false),
+    ];
+    for (spot, swatch, tint, overprints) in cases {
+        let mut d = doc_with(|_| vec![]);
+        d.swatches.push(Swatch { name: "White Ink".into(), paint: swatch, global: true, spot });
+        let mut n = red_rect(&mut d);
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.paint = Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint };
+            f.overprint = true;
+        }
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, n).unwrap();
+        assert!(d.setup.discard_white_overprint);
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert_eq!(fills, vec![overprints], "spot: {spot}, tint: {tint}, expected to overprint: {overprints}");
+    }
+}
+
 const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
 const LEAF: Color = Color::Cmyk { c: 1.0, m: 0.0, y: 1.0, k: 0.0 };
 
@@ -1163,6 +1263,151 @@ fn continuous_colorized_coverage_without_clear_pixels_only_warns_for_midtones() 
     assert_eq!(&pixels[6..], &[255, 0, 255]);
 }
 
+/// A CMYK document holding [`colorized_doc`]'s image of `gray` colorized with `color`, its color
+/// overprinting or not.
+fn overprinting_colorized_doc(gray: Vec<u8>, color: Color, overprint: bool) -> Document {
+    let mut d = colorized_doc(gray, Some(Paint::solid(color)));
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+    d
+}
+
+/// At the page limit the Level 2 passes of an overprinting colorized image are left out
+/// together: the image is never written with some of its inks.
+#[test]
+fn an_overprinting_colorized_image_at_the_page_limit_keeps_all_its_inks_or_none() {
+    let gray: Vec<u8> = (0..2000u32).map(|i| (i * 37 % 251) as u8).collect();
+    let one = overprinting_colorized_doc(gray.clone(), Color::cmyk(0.0, 0.0, 0.0, 1.0), true);
+    let two = overprinting_colorized_doc(gray, Color::cmyk(0.4, 0.0, 0.0, 1.0), true);
+    let o = EpsOptions { level: Level::Two, ..opts(&two) };
+    let (one, all) = (crate::scene::Scene::new(&one, &o).run().body.len(), crate::scene::Scene::new(&two, &o).run().body.len());
+    assert!(all > one + 1000, "{one} {all}");
+    let page = crate::scene::Scene::new(&two, &o).with_max_body(one + (all - one) / 2).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert!(!page.body.contains("image") && !page.body.contains("VCdn"), "{}", page.body);
+}
+
+/// An overprinting colorized image in a CMYK color is written in only the process inks it puts
+/// down, so the plates it leaves at zero keep the inks below: one DeviceN image at Level 3, a
+/// Separation image for each ink at Level 2. Not overprinting, it stays one CMYK image.
+#[test]
+fn an_overprinting_colorized_image_writes_only_its_process_inks() {
+    let doc = overprinting_colorized_doc;
+    let ink = Color::cmyk(0.4, 0.0, 0.0, 1.0);
+    let d = doc(vec![0, 128, 255], ink, true);
+
+    let (ps, pixels, _) = colorized_samples(&d, Level::Three);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan /Black ] /DeviceCMYK") && ps.contains("VCdn0 setcolorspace"), "{ps}");
+    assert!(!ps.contains("/DeviceCMYK setcolorspace") && ps.contains("/MaskColor [0 0 0 0]"), "{ps}");
+    assert_eq!(pixels, vec![102, 255, 51, 127, 0, 0]);
+
+    let (ps, pixels, _) = colorized_samples(&d, Level::Two);
+    assert!(ps.contains("/VCdn0 [/Separation /Cyan /DeviceCMYK {0 0 0}] def"), "{ps}");
+    assert!(ps.contains("/VCdn1 [/Separation /Black /DeviceCMYK {0 0 0 4 -1 roll}] def"), "{ps}");
+    assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("VCdn1 setcolorspace") && !ps.contains("/DeviceN"), "{ps}");
+    assert_eq!(pixels, vec![102, 51, 0], "the cyan pass first");
+    assert_eq!(ps.matches("/ImageType 1").count(), 2, "one image per ink: {ps}");
+
+    // A gray color is black ink alone.
+    let gray = doc(vec![0, 128, 255], Color::Gray { k: 0.6 }, true);
+    for level in Level::ALL {
+        let (ps, ..) = colorized_samples(&gray, level);
+        assert!(ps.contains("/Black") && !ps.contains("/DeviceGray setcolorspace") && !ps.contains("/Cyan"), "{ps}");
+    }
+
+    // A stencil sets the pass's inks as its color.
+    let (ps, ..) = colorized_samples(&doc(vec![0, 255, 0], ink, true), Level::Three);
+    assert!(ps.contains("VCdn0 setcolorspace 0.4 1 setcolor") && ps.contains("imagemask"), "{ps}");
+
+    // Without overprinting, and with overprints discarded, one CMYK image as before.
+    let off = doc(vec![0, 128, 255], ink, false);
+    let discarded = |d: &Document, level| text(&export(d, &EpsOptions { level, overprint: Overprint::Discard, ..opts(d) }, None, None).unwrap());
+    for level in Level::ALL {
+        for ps in [colorized_samples(&off, level).0, discarded(&d, level)] {
+            assert!(ps.contains("/DeviceCMYK setcolorspace") && !ps.contains("VCdn"), "{ps}");
+        }
+    }
+
+    // Paper white that overprints (Discard White Overprint off) puts no ink down.
+    let mut white = doc(vec![0, 128, 255], Color::cmyk(0.0, 0.0, 0.0, 0.0), true);
+    white.setup.discard_white_overprint = false;
+    for level in Level::ALL {
+        let ps = page_of(&white, &EpsOptions { level, ..opts(&white) });
+        assert!(!ps.contains("image"), "{ps}");
+    }
+    // With Discard White Overprint on, it knocks out: one CMYK image, drawn without overprinting.
+    white.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&white, &EpsOptions { level, ..opts(&white) }, None, None).unwrap());
+        assert!(ps.contains("/DeviceCMYK setcolorspace") && !ps.contains("VCdn") && !ps.contains("true op"), "{ps}");
+    }
+
+    // The same image and color placed overprinting and not keeps two encodings.
+    let mut both = d.clone();
+    let mut n = (*both.layers[0].children().unwrap()[0]).clone();
+    n.id = both.alloc_id();
+    n.extras_mut().colorize_overprint = false;
+    both.insert(both.default_layer(), usize::MAX, n).unwrap();
+    let ps = text(&export(&both, &EpsOptions { level: Level::Three, ..opts(&both) }, None, None).unwrap());
+    assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("/DeviceCMYK setcolorspace"), "{ps}");
+}
+
+/// An overprinting colorized image in the tile of an overprinting pattern fill is written in only
+/// the process inks it puts down, as it is outside a pattern, so the inks below it stay.
+#[test]
+fn an_overprinting_colorized_image_in_an_overprinting_pattern_writes_only_its_process_inks() {
+    let mut d = overprinting_colorized_doc(vec![0, 128, 255], Color::cmyk(1.0, 0.0, 0.0, 0.0), true);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let image = d.remove(id).unwrap();
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", vec![image]));
+    let mut n = red_rect(&mut d);
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY };
+        f.overprint = true;
+    }
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    for level in Level::ALL {
+        let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+        assert!(ps.contains("true op") && ps.contains("VCdn0 setcolorspace") && !ps.contains("/DeviceCMYK setcolorspace"), "{level:?}: {ps}");
+    }
+}
+
+/// On a separation plate, an overprinting colorized image whose color puts none of the plate's ink
+/// down is drawn as nothing, so the ink below stays; one that knocks out, or whose overprint is
+/// discarded, is drawn as paper. (The plate's colors come from the separator, which has already
+/// applied Discard White Overprint.)
+#[test]
+fn a_plate_leaves_out_an_overprinting_image_without_its_ink() {
+    let body = |overprint: bool, preserve: bool| {
+        let mut d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::WHITE)));
+        d.setup.discard_white_overprint = false;
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        let o = EpsOptions { overprint: if preserve { Overprint::Preserve } else { Overprint::Discard }, ..opts(&d) };
+        crate::scene::Scene::new(&d, &o).on_plate(true).run().body
+    };
+    assert!(!body(true, true).contains("image"), "{}", body(true, true));
+    assert!(body(false, true).contains("image"), "{}", body(false, true));
+    assert!(body(true, false).contains("image"), "{}", body(true, false));
+}
+
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints: it is written as that ink, which is not paper white.
+#[test]
+fn a_white_spot_ink_colorized_image_overprints_with_discard_white_overprint() {
+    let mut d = overprinting_colorized_doc(vec![0, 128, 255], Color::WHITE, true);
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(Color::WHITE), global: true, spot: true });
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint: 0.5 }));
+    d.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert!(ps.contains("(White Ink) cvn") && ps.contains("true op"), "{ps}");
+    }
+}
+
 #[test]
 fn uncolorized_image_stays_on_original_eps_path() {
     let d = colorized_doc(vec![0, 128, 255], None);
@@ -1603,6 +1848,62 @@ fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
     assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
     assert_eq!(reuses(&page.body, 0, Level::Three), 2, "{}", page.body);
     assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
+}
+
+/// On a plate at Level 2, an overprinting field drawn again inside the clip of its inked cells
+/// is charged the reference to the image already kept against the page limit, not its samples a
+/// second time: a page with room for that reference keeps both placements.
+#[test]
+fn a_repeated_field_clipped_on_a_plate_is_charged_its_reference_at_the_page_limit() {
+    let square = |d: &mut Document| {
+        // Wide spreads of pure color: paper white around the left point.
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        let pure = |x: f64, c: Color| FreeformPoint { spread: 0.9, ..FreeformPoint::new(Point::new(x, 32.0), c) };
+        g.freeform = Some(Freeform { points: vec![pure(12.0, Color::gray(0.0)), pure(52.0, Color::gray(0.6))], ..Default::default() });
+        let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+        for it in &mut n.appearance.items {
+            *it.overprint_mut() = true;
+        }
+        n
+    };
+    let twice = doc_with(|d| vec![square(d), square(d)]);
+    let o = EpsOptions { level: Level::Two, ..opts(&twice) };
+    let full = crate::scene::Scene::new(&twice, &o).on_plate(true).run();
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
+    assert_eq!(reuses(&full.body, 0, Level::Two), 2, "{}", full.body);
+    assert!(full.body.contains("\nW\n"), "the inked cells clip the image: {}", full.body);
+    // The image's samples are in the setup and the body draws them twice. The limit leaves room
+    // for the body and the samples twice over (the clip is charged more than it writes), though
+    // not for the samples charged again at the second placement.
+    assert!(full.setup.len() > 2_000, "{}", full.setup.len());
+    let limit = full.body.len() + 2 * full.setup.len();
+    let page = crate::scene::Scene::new(&twice, &o).on_plate(true).with_max_body(limit).run();
+    assert!(page.warnings.is_empty(), "{:?}", page.warnings);
+    assert_eq!((&page.setup, &page.body), (&full.setup, &full.body));
+}
+
+/// On a plate, an overprinting freeform gradient whose cells are translucent enough that their
+/// opacity takes every sample to no ink (or to paper white in RGB) draws no image at either level.
+#[test]
+fn a_translucent_field_whose_samples_write_no_ink_on_a_plate_draws_no_image() {
+    let faint = [Color::cmyk(0.004, 0.0, 0.0, 0.0), Color::rgb(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0)];
+    for color in faint {
+        let d = doc_with(|d| {
+            let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+            let point = |x: f64| FreeformPoint { opacity: 0.25, ..FreeformPoint::new(Point::new(x, 32.0), color) };
+            g.freeform = Some(Freeform { points: vec![point(12.0), point(52.0)], ..Default::default() });
+            let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+            for it in &mut n.appearance.items {
+                *it.overprint_mut() = true;
+            }
+            vec![n]
+        });
+        for level in [Level::Three, Level::Two] {
+            let o = EpsOptions { level, ..opts(&d) };
+            let out = crate::scene::Scene::new(&d, &o).on_plate(true).run();
+            assert!(!out.body.contains("image"), "{color:?} at {level:?}: {}", out.body);
+        }
+    }
 }
 
 /// A 200 × 200 pt document holding 8 × 8 pixels of noise as image `pic` and a three-pixel gray ramp

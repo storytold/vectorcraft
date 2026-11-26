@@ -397,6 +397,105 @@ fn the_selection_column_selects_a_rows_art_and_shift_adds_or_removes_it() {
     assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c, a, g]);
 }
 
+/// The selection as a sorted list.
+fn sorted_sel(s: &Session) -> Vec<NodeId> {
+    let mut ids = s.doc().unwrap().selection.objects.clone();
+    ids.sort();
+    ids
+}
+
+/// The art the selection squares of `rows` select, each clicked alone, put together and sorted.
+/// Leaves nothing selected.
+fn each_rows_art(s: &mut Session, rows: &[NodeId]) -> Vec<NodeId> {
+    run(s, "select.none", json!({}));
+    let mut art = vec![];
+    for row in rows {
+        art.extend(ids_sel(&run(s, "layer.selectAll", json!({"id": row.0}))));
+    }
+    art.sort();
+    art.dedup();
+    run(s, "select.none", json!({}));
+    art
+}
+
+/// `layer.selectAll` with `range` (a Shift-click from the last selection square clicked) selects
+/// the art of every row in the range, across the sublayer and the group, as each row's square
+/// selects it; hidden and locked rows are left out, and `add` adds to the selection. The
+/// highlighted rows stay, and no undo step is recorded.
+#[test]
+fn the_selection_column_selects_the_art_of_a_range_of_rows() {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let undo = undos(&s);
+    // The rows top down: the layer, the sublayer, the group, its rectangle, then a and c.
+    let range = [g, b, a, c];
+    let want = each_rows_art(&mut s, &range);
+    let reply = run(&mut s, "layer.selectAll", json!({"range": range.map(|r| r.0)}));
+    assert_eq!(sorted_sel(&s), want, "the group, its member's row, the sublayer's rectangle and the top layer's rectangle");
+    assert!(want.contains(&a) && want.contains(&c), "{want:?}");
+    assert_eq!(ids_sel(&reply).len(), s.doc().unwrap().selection.objects.len());
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub], "the highlighted row stays");
+    assert_eq!(undos(&s), undo, "a selection change is not an undo step");
+    // A range given bottom up selects the same art.
+    run(&mut s, "layer.selectAll", json!({"range": [c.0, a.0, b.0, g.0]}));
+    assert_eq!(sorted_sel(&s), want);
+    // `add` keeps what was selected.
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    run(&mut s, "layer.selectAll", json!({"range": [a.0], "add": true}));
+    let got = sorted_sel(&s);
+    assert!(got.len() == 2 && got.contains(&a) && got.contains(&c), "{got:?}");
+    // A range holding a layer row takes that layer's art, its sublayer's too.
+    run(&mut s, "layer.selectAll", json!({"range": [layer.0, sub.0]}));
+    assert_eq!(sorted_sel(&s), each_rows_art(&mut s, &[layer]));
+    // Locked and hidden rows are left out.
+    run(&mut s, "layer.setProps", json!({"ids": [a.0], "locked": true}));
+    run(&mut s, "layer.setProps", json!({"ids": [c.0], "visible": false}));
+    run(&mut s, "layer.selectAll", json!({"range": range.map(|r| r.0)}));
+    let got = sorted_sel(&s);
+    assert!(!got.is_empty() && !got.contains(&a) && !got.contains(&c), "{got:?}");
+    // A range of only hidden and locked rows changes nothing and says why.
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(s.execute("layer.selectAll", &json!({"range": [a.0, c.0]})).is_err());
+    assert_eq!(sorted_sel(&s), vec![g]);
+}
+
+/// `layer.selectHighlighted` selects the art of the highlighted rows, as their selection squares
+/// do, leaving out hidden and locked rows; `add` adds it. The highlighted rows stay, no undo step is
+/// recorded, and with no row highlighted it is an error.
+#[test]
+fn select_highlighted_selects_the_art_of_the_highlighted_rows() {
+    let mut s = session();
+    let (_, _, a, g, _, c) = tree(&mut s);
+    let want = each_rows_art(&mut s, &[g, c]);
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    let rows = s.doc().unwrap().highlighted_rows();
+    let undo = undos(&s);
+    run(&mut s, "layer.selectHighlighted", json!({}));
+    assert_eq!(sorted_sel(&s), want);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), rows, "the highlighted rows stay");
+    assert_eq!(undos(&s), undo, "a selection change is not an undo step");
+    // `add` keeps what was selected.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    // Selecting art in another layer let go of the highlighted rows.
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    run(&mut s, "layer.selectHighlighted", json!({"add": true}));
+    let mut with_a = want.clone();
+    with_a.push(a);
+    with_a.sort();
+    assert_eq!(sorted_sel(&s), with_a);
+    // A hidden row is left out.
+    run(&mut s, "layer.setProps", json!({"ids": [c.0], "visible": false}));
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    run(&mut s, "layer.selectHighlighted", json!({}));
+    assert!(!sorted_sel(&s).contains(&c));
+    // With no row highlighted, nothing changes.
+    run(&mut s, "layer.highlight", json!({"ids": [], "mode": "set"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert!(s.execute("layer.selectHighlighted", &json!({})).is_err());
+    assert_eq!(sorted_sel(&s), vec![a]);
+}
+
 /// The rows of [`column_start`]: [`tree`]'s, plus a rectangle `o` on a second layer and an empty
 /// third layer `e`.
 #[derive(Clone, Copy)]
@@ -1333,11 +1432,11 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
     assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
-    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "the Layers panel reveals the located row");
-    s.doc_mut().unwrap().locate_reveal = None;
+    assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(sub)), "the Layers panel reveals the located row");
+    s.doc_mut().unwrap().layers_reveal = None;
     let undo = s.doc().unwrap().history.undo.len();
     run(&mut s, "layer.locate", json!({"layersOnly": true}));
-    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "again for a row already highlighted");
+    assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(sub)), "again for a row already highlighted");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
     assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
@@ -1349,10 +1448,58 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
         assert!(s.execute("layer.locate", &p).is_err(), "{p}");
         assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
-        assert_eq!(s.doc().unwrap().locate_reveal, Some(g), "{p}");
+        assert_eq!(s.doc().unwrap().layers_reveal, Some(crate::LayersReveal::Row(g)), "{p}");
     }
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");
+}
+
+/// The session asks the Layers panel to reveal what a top-level command changed: isolation, then
+/// the highlighted rows, the last selected object and the current layer. An open interaction asks
+/// for nothing, and a failed command changes nothing.
+#[test]
+fn the_layers_panel_is_asked_to_reveal_what_a_command_changed() {
+    use crate::LayersReveal::{Current, Row, Selected};
+    let mut s = session();
+    let (layer, sub, _, g, b, c) = tree(&mut s);
+    let take = |s: &mut Session| s.doc_mut().unwrap().layers_reveal.take();
+    take(&mut s);
+    run(&mut s, "layer.highlight", highlight_params([c], "set"));
+    take(&mut s);
+    run(&mut s, "layer.highlight", highlight_params([g], "set"));
+    assert_eq!(take(&mut s), Some(Row(g)), "a highlighted row");
+    // The current layer changes with the selection of art in another layer: the new selection asks
+    // for its object, and the panel falls back to the current layer when it does not locate it.
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    assert_eq!(take(&mut s), Some(Selected(c)), "a new selection wins over a new current layer");
+    // A new current layer alone asks for it: the highlighted row made current again.
+    run(&mut s, "layer.highlight", highlight_params([c], "set"));
+    take(&mut s);
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "layer.setCurrent", json!({"id": c.0}));
+    assert_eq!(take(&mut s), Some(Current(layer)), "a new current layer alone");
+    // Within the current layer only the last selected object changes.
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    take(&mut s);
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert_eq!(take(&mut s), Some(Selected(g)), "the last selected object");
+    // Isolation entered and left reveals the isolated row.
+    run(&mut s, "object.isolate", json!({"id": g.0}));
+    assert_eq!(take(&mut s), Some(Row(g)), "isolation entered");
+    run(&mut s, "object.exitIsolation", json!({}));
+    assert_eq!(take(&mut s), Some(Row(g)), "isolation left");
+    // A failed command asks for nothing.
+    assert!(s.execute("layer.locate", &json!({"id": 999_999})).is_err());
+    assert_eq!(take(&mut s), None);
+    // A command inside an open interaction asks for nothing either.
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    take(&mut s);
+    s.begin_interaction("Drag").unwrap();
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert_eq!(take(&mut s), None, "a preview");
+    s.cancel_interaction().unwrap();
 }
 
 #[test]

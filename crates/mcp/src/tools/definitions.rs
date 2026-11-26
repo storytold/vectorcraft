@@ -282,7 +282,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "set_paint",
             "Set paint",
-            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed.",
+            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed, and when only some of those commands painted no object, `unpainted` lists them with a `note`.",
             obj(
                 json!({
                     "fill": paint_schema("Fill"),
@@ -314,7 +314,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"choice\",value:\"dontSave\"}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
