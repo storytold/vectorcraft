@@ -1019,12 +1019,14 @@ impl GestureTool {
     }
 
     /// Add a stroke sample, with the pen's pressure, tilt, rotation and wheel of the event `ev`
-    /// there.
-    fn push(&mut self, p: Point, ev: &PointerEvent) {
+    /// there. `raw` is where the pointer was for it, before a snap or easing moved it to `p`:
+    /// `raw` holds one entry for each of `points`, so every sample is added here.
+    fn push(&mut self, raw: Point, p: Point, ev: &PointerEvent) {
         if let Some(last) = self.points.last() {
             self.length += last.distance(p);
         }
         self.points.push(p);
+        self.raw.push(raw);
         let modes = self.tip_modes();
         // The poses go out beside the pressures (`stroke_json`), so a stroke that keeps one keeps both.
         let posed = self.id == "paintbrush"
@@ -1040,6 +1042,13 @@ impl GestureTool {
             self.bearings.push(self.bearing);
             self.first_bearing = self.first_bearing.or(self.bearing);
         }
+    }
+
+    /// Drop every sample after the press, in `points` and in `raw` alike: a straight line and the
+    /// Eraser's marquee run from the press to the pointer, wherever the drag went.
+    fn keep_press(&mut self) {
+        self.points.truncate(1);
+        self.raw.truncate(1);
     }
 
     /// Give the Eraser's or the Blob Brush's last stroke sample the pen's tilt, rotation and wheel
@@ -1211,6 +1220,17 @@ impl GestureTool {
         ]
     }
 
+    /// A straight line released with the pointer at `p` and its end at `end`: it runs from the
+    /// press to `end`. Back at the press point there is no line; is one that was shown to go?
+    fn release_straight(&mut self, cx: &ToolContext, p: Point, end: Point, ev: &PointerEvent) -> bool {
+        self.keep_press();
+        if self.back_at_press(cx, ev.pos, end) {
+            return self.began;
+        }
+        self.push(p, end, ev);
+        false
+    }
+
     /// A freehand stroke released with the pointer at `p` and its end at `end`: its samples bend
     /// to snapped ends, and the end is added, or moves the last step when that was where the
     /// button went up.
@@ -1219,7 +1239,7 @@ impl GestureTool {
         let away = !self.points.is_empty() && self.last_raw.distance(p) >= cx.tol(1.0);
         self.bend_to_snapped_ends(cx, p, end);
         if away {
-            self.push(end, ev);
+            self.push(p, end, ev);
             return;
         }
         // A release within a pixel of the last step gives it the pen's pose there.
@@ -1285,8 +1305,9 @@ impl GestureTool {
             return None;
         }
         self.square = ev.mods.shift;
-        self.points.truncate(1);
+        self.keep_press();
         self.points.push(ev.pos);
+        self.raw.push(ev.pos);
         if !matches!(ev.kind, PointerKind::Up) {
             return Some(vec![]);
         }
@@ -1824,8 +1845,7 @@ impl Tool for GestureTool {
                 self.last_raw = p;
                 self.clear();
                 self.pressed = p;
-                self.push(start, ev);
-                self.raw.push(p);
+                self.push(p, start, ev);
                 vec![]
             }
             PointerKind::Drag => {
@@ -1858,12 +1878,10 @@ impl Tool for GestureTool {
                     // The line runs from the press point to the pointer, wherever the drag went.
                     if self.back_at_press(cx, ev.pos, p) {
                         // Back at the press point there is no line: the one shown goes.
-                        self.points.truncate(1);
-                        self.raw.truncate(1);
+                        self.keep_press();
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
                     }
-                    self.points.truncate(1);
-                    self.raw.truncate(1);
+                    self.keep_press();
                     // The line ends at `p`, where its end snaps.
                     end = p;
                 } else if (!self.points.is_empty() && self.last_raw.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
@@ -1880,9 +1898,8 @@ impl Tool for GestureTool {
                 }
                 let (from, shift) = self.start_shift;
                 self.last_raw = p;
-                self.raw.push(p);
                 // A straight line's end is the pointer: only a freehand stroke eases into its start.
-                self.push(if self.straight { p } else { ease(p, from, shift) }, ev);
+                self.push(p, if self.straight { p } else { ease(p, from, shift) }, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
                 self.connects = self.connects_at(cx, end).is_some();
                 if !self.draws_path() || self.smoothing {
@@ -1925,12 +1942,7 @@ impl Tool for GestureTool {
                 self.snap.clear();
                 let mut cancel = false;
                 if self.straight {
-                    self.points.truncate(1);
-                    if !self.back_at_press(cx, ev.pos, end) {
-                        self.push(end, ev);
-                    } else {
-                        cancel = self.began;
-                    }
+                    cancel = self.release_straight(cx, p, end, ev);
                 } else {
                     self.release_freehand(cx, p, end, ev);
                 }

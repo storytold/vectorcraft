@@ -4199,6 +4199,49 @@ fn a_stroke_whose_ends_snap_together_keeps_its_samples_without_overshoot() {
     }
 }
 
+/// #3013 review: `raw` holds where the pointer was for each of `points` on every path that adds
+/// or drops samples: the drag and the release of a freehand stroke, of a straight line and of the
+/// Eraser's marquee.
+#[test]
+fn raw_keeps_one_entry_for_each_point_on_every_path() {
+    let (mut d, _) = doc_with_rect();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 1 };
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let in_step = |t: &GestureTool, n: usize, what: &str| assert_eq!((t.points.len(), t.raw.len()), (n, n), "{what}");
+    let up = PointerEvent::new(PointerKind::Up, 320.0, 151.0);
+    let (at, end) = (Point::new(320.0, 151.0), Point::new(300.0, 200.0));
+
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 51.0, 151.0));
+    for x in [150.0, 250.0] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, 151.0));
+    }
+    in_step(&t, 3, "a freehand drag");
+    t.release_freehand(&cx, at, end, &up);
+    in_step(&t, 4, "a freehand release away from the last sample");
+    assert_eq!((t.points.last(), t.raw.last()), (Some(&end), Some(&at)), "the end snaps, from where the pointer was");
+
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 51.0, 151.0).with_mods(shift));
+    for x in [150.0, 250.0] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, 151.0).with_mods(shift));
+    }
+    in_step(&t, 2, "a straight line's drag");
+    assert!(!t.release_straight(&cx, at, end, &up));
+    in_step(&t, 2, "a straight line's release");
+
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = GestureTool::new("eraser");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    for x in [120.0, 250.0] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, 170.0).with_mods(alt));
+    }
+    in_step(&t, 2, "the Eraser's marquee");
+}
+
 /// A Shift line with Snap to Grid starts on the grid and stays a two-point line from there,
 /// however long the drag: the snapped ends' easing (#2958) is for freehand strokes only.
 #[test]
