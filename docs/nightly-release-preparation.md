@@ -39,21 +39,20 @@ branch, so nightly signer files never need a stable release sync. The policy's `
 names it, the signer's guard requires it and the dispatcher targets it. The branch only
 fast-forwards to reviewed main commits, through the settings script's `advance` (no queued signer
 run, a trust-closure scan, then the full diff of `.github/` and `packaging/`), and the existing
-`release` environment trusts it alongside `release`. Its trust closure is all of `.github/` and
-`packaging/`, including `packaging/env.sh`, which `packaging/macos/import-cert.sh` sources with
-the Apple keys. On that branch only the pinned `nightly-sign.yml` caller may reach an environment:
-no app workflow binds one, nothing else calls `nightly-release.yml`, and the only caller of the
-shared stable `release.yml` is `release.yml`, whose callee must carry the stable-only environment
-guard. The contract tests check the in-repo part on every main PR; the settings scan also resolves
-the callee. Stable releases still come only from `refs/heads/release`. History does not carry over
-a switch between `release` and `nightly-signer`, so the switch happens before the first
-publication.
+`release` environment must admit `nightly-signer` alongside `release` before the first dispatch (a
+repository settings change, not a workflow one). Its trust closure is all of `.github/` and
+`packaging/`, including `packaging/env.sh`, which `packaging/macos/import-cert.sh` sources with the
+Apple keys. On that branch only the pinned `nightly-sign.yml` caller may reach an environment: no
+app workflow binds one, nothing else calls `nightly-release.yml`, and the only caller of the shared
+stable `release.yml` is `release.yml`, whose callee must carry the stable-only environment guard.
+The contract tests check the in-repo part on every main PR; the settings scan also resolves the
+callee. Stable releases still come only from `refs/heads/release`. History does not carry over a
+switch between `release` and `nightly-signer`, so the switch happens before the first publication.
 
 **Registry admission.** The signer requires the protected policy's `platforms` map to equal the
 run app's admitted targets in craft-common-actions' `nightly-apps.json`, and it refuses rather
-than sign a subset. VectorCraft's row admits `linux-x86_64`; the matching `windows-x86_64` and
-`macos-aarch64` targets and entrypoints are a craft-common-actions follow-up, and the first
-signer run stops at admission until they merge.
+than sign a subset. VectorCraft's row admits `linux-x86_64`, `windows-x86_64` and `macos-aarch64`, with
+each target's entrypoint and asset pattern, since craft-common-actions #370 (in the pin).
 
 **Manual actors.** `bflatastic`, `dylanmtaylor`, `echelon`, `FredApps` and `skylartaylor`, in the
 producer's `manual-actors` and the policy's `manual_actors`. The list mirrors the release-managers
@@ -91,8 +90,8 @@ Read on 2026-11-24; re-read anything that may have moved before `nightly-signer`
   and only ever fast-forwards to reviewed main commits. It rejects wrong repository/event/actual branch,
   including same-name tags. Its constant whole-run concurrency (`vectorcraft-nightly-release`) is distinct
   from stable, cancellation is off and `queue: max` must be hosted-qualified. The caller itself passes no
-  credentials; only the shared callee's sign jobs bind the `release` environment, which trusts `release` and
-  `nightly-signer`.
+  credentials; only the shared callee's sign jobs bind the `release` environment, which must admit
+  `nightly-signer` alongside `release` before the first dispatch.
 - `.github/workflows/nightly-dispatch.yml`: transport only, never authorization. It is literally
   off (`false &&`) and forwards only a first-attempt scheduled producer to `nightly-sign.yml` on
   `nightly-signer`. No schedule is registered until activation is reviewed.

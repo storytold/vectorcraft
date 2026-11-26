@@ -243,15 +243,16 @@ the job fails and asks for a version bump (`cargo xtask version set`).
 ## Secrets
 
 The jobs that sign (macOS, Windows) and the draft-release job run in the `release` environment,
-which only the `release` branch can use and which holds the signing secrets. The other jobs get no
+which only the `release` branch can use today and which holds the signing secrets. The other jobs get no
 secrets. Every secret is optional: a missing one produces unsigned artifacts and a
 warning, never a failed build.
 
 The supervised nightly signer does not sign from `release`: it runs on `refs/heads/nightly-signer`,
-which only ever fast-forwards to reviewed main commits, and the `release` environment trusts both
-branches. Everything that can reach it is the trust closure: all of `.github/` and `packaging/`,
-including `packaging/env.sh`, which `packaging/macos/import-cert.sh` sources with the Apple keys.
-Stable releases still come only from `refs/heads/release`.
+which only ever fast-forwards to reviewed main commits, and the `release` environment must admit
+`nightly-signer` alongside `release` before the first dispatch. Everything that can reach it is the
+trust closure: all of `.github/` and `packaging/`, including `packaging/env.sh`, which
+`packaging/macos/import-cert.sh` sources with the Apple keys. Stable releases still come only from
+`refs/heads/release`.
 
 | Secret | Used for |
 |---|---|

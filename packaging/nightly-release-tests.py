@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local regression checks for VectorCraft nightly workflow and signing-policy contracts."""
 import copy
+from decimal import Decimal
 import json
 from pathlib import Path
 import re
@@ -8,6 +9,20 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLED_POLICY = ROOT / ".github/nightly-signing-policy.json"
+
+
+def security_bound_problem(maximum):
+    """None when an accepted security-rating maximum is the reviewed whole A..E rating.
+
+    Decimal, not float: "5.0000000000000001" rounds to 5.0 as a float, so the shared candidate
+    contract would refuse a bound this suite had already accepted.
+    """
+    value = Decimal(maximum)
+    if int(value) != value:
+        return "the A..E bound is a whole rating"
+    if not 1 <= value <= 5:
+        return "the security bound stays A..E"
+    return None
 
 APP_NAME = "vectorcraft"
 PRODUCER_WORKFLOW_NAME = "VectorCraft unsigned nightly"
@@ -464,16 +479,23 @@ class NightlyInstalledPolicy(unittest.TestCase):
                                   "an accepted failure must lie inside the reviewed issue scope")
                     self.assertEqual(condition["comparator"], "GT")
                     self.assertRegex(condition["maximum"], r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
-                    maximum = float(condition["maximum"])
+                    maximum = Decimal(condition["maximum"])
                     if condition["metric"] in ("security_rating", "new_security_rating"):
-                        self.assertEqual(int(maximum), maximum, "the A..E bound is a whole rating")
-                        self.assertTrue(1 <= maximum <= 5, "the security bound stays A..E")
+                        self.assertIsNone(security_bound_problem(condition["maximum"]),
+                                          "the security bound stays the reviewed whole A..E rating")
                         self.assertEqual(condition["error_threshold"], "1", "the reviewed A threshold stays")
                     else:
                         self.assertLessEqual(maximum, len(sonar["debt"]), "accepted failures exceed the reviewed debt")
         self.assertEqual({accepted[c["metric"]] for c in sonar["accepted_conditions"]}, set(sonar["issue_types"]),
                          "accepted conditions and reviewed issue types must cover the same scope")
         self.assertEqual(set(metrics), gate, "every live gate condition stays gated exactly once")
+
+    def test_security_bound_rejects_a_maximum_float_rounds_to_five(self):
+        """The shared candidate contract reads the bound as a decimal; float() would hide the widening."""
+        self.assertIsNone(security_bound_problem("5"))
+        self.assertIsNone(security_bound_problem("5.0"))
+        self.assertEqual(security_bound_problem("5.0000000000000001"), "the A..E bound is a whole rating")
+        self.assertEqual(security_bound_problem("6"), "the security bound stays A..E")
 
 
 SIGNER_BRANCH = "nightly-signer"
@@ -605,14 +627,15 @@ def workflow_entries(source):
             entries.append((number, key, _workflow_value(value),
                             is_block or ((value == "" or not is_block) and continues(index, indent))))
         if "{" in bare and bare != "{}":
-            flow = re.fullmatch(r"\{([^{}\[\]]*)\}", FLOW_QUOTED.sub("''", value.strip()))
+            masked = re.fullmatch(r"\{([^{}\[\]]*)\}", FLOW_QUOTED.sub("''", value.strip()))
+            flow = re.fullmatch(r"\{([^{}\[\]]*)\}", value.strip())
             if any(set(scalar[1:-1]) & set("#{}[],") for scalar in FLOW_QUOTED.findall(value)):
                 refused.append(f"line {number}: flow mapping quoted scalar with # or flow punctuation")
-            elif flow is None:
-                refused.append(f"line {number}: nested or multi-line flow mapping")
-            elif not re.fullmatch(r"\{([^{}\[\]]*)\}", value.strip()):
+            elif masked is None or flow is None:
                 refused.append(f"line {number}: nested or multi-line flow mapping")
             else:
+                # The masked text only proves the shape: a quoted key ("uses", 'environment') keeps
+                # its identity, so the entries are read from the original mapping text, never ''.
                 for item in flow.group(1).split(","):
                     entry = WORKFLOW_KEY.match(item.strip())
                     key = _workflow_key(entry.group(1)) if entry else None
@@ -709,6 +732,9 @@ class NightlySignerBranchTrustClosure(unittest.TestCase):
             "a bracket inside a quoted flow scalar": {**tree, "extra.yml": 'jobs:\n  x: {name: "[a]", runs-on: ubuntu-latest}\n'},
             "an unterminated quote": {**tree, "extra.yml": 'jobs:\n  x:\n    name: "a\n      b"\n    runs-on: ubuntu-latest\n'},
             "environment in any flow mapping": {**tree, "extra.yml": "jobs:\n  x:\n    runs-on: ubuntu-latest\n    with: {environment: release}\n"},
+            "a double-quoted environment key in a flow mapping": {**tree, "extra.yml": 'jobs:\n  x:\n    runs-on: ubuntu-latest\n    with: {"environment": release}\n'},
+            "a single-quoted environment key in a flow mapping": {**tree, "extra.yml": "jobs:\n  x:\n    runs-on: ubuntu-latest\n    with: {'environment': release}\n"},
+            "a double-quoted uses key in a flow mapping": {**tree, "extra.yml": 'jobs:\n  x: {"uses": ' + SHARED + "nightly-release.yml@" + "a" * 40 + "}\n"},
             "uses in any flow mapping": {**tree, "extra.yml": "jobs:\n  x:\n    steps:\n      - {uses: actions/checkout@v4}\n"},
             "another caller of the signer": {**tree, "extra.yml": "jobs:\n  x:\n    uses: " + SHARED + "nightly-release.yml@" + "a" * 40 + "\n"},
             "a mutable signer pin": {**tree, "nightly-sign.yml": re.sub(r"nightly-release\.yml@[0-9a-f]{40}", "nightly-release.yml@main", tree["nightly-sign.yml"])},
@@ -718,6 +744,14 @@ class NightlySignerBranchTrustClosure(unittest.TestCase):
         for label, workflows in bad.items():
             with self.subTest(case=label):
                 self.assertTrue(trust_closure_problems(workflows))
+
+    def test_quoted_keys_in_a_flow_mapping_are_read_not_masked(self):
+        entries, refused = workflow_entries('jobs:\n  x: {runs-on: ubuntu-latest, "name": build}\n')
+        self.assertEqual(refused, [])
+        self.assertIn((2, "name", "build", False), entries, "a quoted key keeps its identity")
+        self.assertIn((2, "runs-on", "ubuntu-latest", False), entries)
+        _, refused = workflow_entries("jobs:\n  x: {runs-on: ubuntu-latest, 'environment': release}\n")
+        self.assertEqual(refused, ["line 2: environment in a flow mapping (must be block style)"])
 
     def test_signer_dispatch_guard_and_policy_name_the_same_branch(self):
         sign = (ROOT / ".github/workflows/nightly-sign.yml").read_text()
