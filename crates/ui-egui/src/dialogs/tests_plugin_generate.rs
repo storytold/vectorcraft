@@ -95,6 +95,32 @@ fn object_plug_ins_draws_and_edits_generated_art() {
     assert_eq!(art(&app, id), ["Big"]);
 }
 
+#[test]
+fn generator_dialog_validates_supplied_parameters_and_runs_an_empty_object() {
+    for (id, with_parameters) in [("test.ui.generator.params", true), ("test.ui.generator.no_params", false)] {
+        let mut app = app(id);
+        if !with_parameters {
+            let wasm = wat::parse_str(tpl::returning(&tpl::generator(id, "{}"), SMALL)).unwrap();
+            app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "replace": true})).unwrap();
+        }
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let undo = steps(&app);
+        for params in [json!([]), json!("bad"), json!(false), json!(7), serde_json::Value::Null] {
+            assert!(app.run("plugin.dialog", json!({"id": id, "params": params})).is_err(), "{params}");
+            assert_eq!(app.session.doc().unwrap().doc, before);
+            assert_eq!(steps(&app), undo);
+            assert!(kind(&app).is_none());
+        }
+        app.run("plugin.dialog", json!({"id": id, "params": {}})).unwrap();
+        assert!(kind(&app).is_none());
+        assert_eq!(steps(&app), undo + 1);
+        let selected = app.session.doc().unwrap().selection.objects[0].0;
+        assert_eq!(art(&app, selected), ["Small"]);
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
 /// Edit Generated Art… is for one selected object: a generated art object selected with another
 /// object is not. OK in its dialog draws the object of the document it was opened in: after another
 /// document comes to the front, OK draws nothing there, closes the dialog and says why.

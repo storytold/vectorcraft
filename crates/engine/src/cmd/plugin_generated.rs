@@ -83,7 +83,7 @@ fn changed(g: &GeneratedArt) -> String {
 /// damaged, and those whose art doesn't match its file's hash. Opening runs no plug-in.
 pub fn open_notes(doc: &Document) -> Vec<String> {
     let mut notes: Vec<String> = vec![];
-    doc.walk(|n| {
+    let mut visit = |n: &Node| {
         let Some(g) = n.extras().generated.as_deref() else { return };
         let note = match g.state {
             State::Damaged => DAMAGED.to_string(),
@@ -97,7 +97,10 @@ pub fn open_notes(doc: &Document) -> Vec<String> {
         if !notes.contains(&note) {
             notes.push(note);
         }
-    });
+    };
+    for layer in &doc.layers {
+        vectorcraft_doc::swatches::walk_with_masks(layer, &mut visit);
+    }
     notes
 }
 

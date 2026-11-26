@@ -562,7 +562,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     match m.kind {
         Kind::Filter => {}
         Kind::Generator => {
-            let given = p.get("params").filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
+            let given = p.get("params");
+            if given.is_some_and(|value| !value.is_object()) {
+                return Err(vectorcraft_plugins::Error::Params("plug-in parameters must be a JSON object".into()).to_string());
+            }
             if m.params.is_empty() || given.is_some() {
                 return app.run(GENERATE, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
             }

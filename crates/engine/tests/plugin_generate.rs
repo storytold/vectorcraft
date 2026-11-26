@@ -273,6 +273,21 @@ fn a_missing_plug_in_keeps_the_art_and_is_named() {
     assert_eq!(art(&s, id), ["Big", "Line"]);
 }
 
+#[test]
+fn a_missing_generator_in_an_opacity_mask_is_named_on_open() {
+    let mut s = Session::new();
+    sizes(&mut s, "test.gen.mask.gone");
+    s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+    let target = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let mask = s.execute("plugin.generate", &json!({"id": "test.gen.mask.gone"})).unwrap()["id"].clone();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [target, mask]})).unwrap();
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, true);
+    s.execute("plugin.remove", &json!({"id": "test.gen.mask.gone"})).unwrap();
+    let warnings = reopen_bytes(&mut s, &bytes);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("test.gen.mask.gone") && warnings[0].contains("isn't installed"), "{warnings:?}");
+}
+
 /// The saved native text `bytes` with the generated art object's JSON changed by `f`.
 fn tampered(bytes: &[u8], f: impl FnOnce(&mut Value)) -> Vec<u8> {
     fn find(v: &mut Value) -> Option<&mut Value> {
