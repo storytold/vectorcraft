@@ -31,13 +31,32 @@ pub struct DocInfoView {
 }
 
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
-/// stays as it is.
-pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
-    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+/// stays as it is. Whether the value was clicked to copy it: a click with no key held, other than
+/// the second or third click of a double or triple click.
+pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
+    let mut clicked = false;
+    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
-        // The value can be selected and copied (#8432).
-        SelectableText::new(label.to_string(), &value).show(ui);
+        // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
+        // and a Shift-click extends the selection, so neither copies.
+        let shown = SelectableText::new(label.to_string(), value).show(ui);
+        // The click's own position and keys: a move or a key change after the release in the same
+        // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
+        // copies nothing, since the click flags below do not say which release they describe.
+        let area = shown.interact_rect.intersect(ui.clip_rect());
+        let primary = egui::PointerButton::Primary;
+        let release = ui.input(|i| {
+            let mut releases = i.events.iter().filter_map(|e| match e {
+                egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
+                _ => None,
+            });
+            let release = releases.next().filter(|_| releases.next().is_none());
+            let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
+            release.filter(|_| single)
+        });
+        clicked = release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
     });
+    clicked
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
@@ -64,6 +83,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let DocInfoView { selection_only: sel_only, category } = app.ui.doc_info.clone();
+    let mut copy = None;
     Stack::new().show(ui, |ui, _| {
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
@@ -92,11 +112,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
-                    row(ui, super::label_or_name(label, !named.contains(&k)), shown);
+                    if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
+                        copy = Some(shown);
+                    }
                 }
             }
         }
     });
+    if let Some(text) = copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
+    }
 }
 
 /// A Brushes row's value in the interface language: the brush's type (`Art Brush`), or that the

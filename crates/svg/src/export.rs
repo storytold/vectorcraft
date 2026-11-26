@@ -199,9 +199,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         if let Some(unit) = opts.units {
             let (width, height) = (unit.length(rect.width(), opts.decimals), unit.length(rect.height(), opts.decimals));
             root = root.attr("width", &width).attr("height", &height);
-        } else if let Some(suffix) = doc.units.svg_suffix() {
-            let w_val = physical_num(doc.units.from_pt(rect.width()));
-            let h_val = physical_num(doc.units.from_pt(rect.height()));
+        } else if let Some((unit, suffix)) = doc.units.svg_unit().and_then(|u| Some((u, u.svg_suffix()?))) {
+            let w_val = physical_num(unit.from_pt(rect.width()));
+            let h_val = physical_num(unit.from_pt(rect.height()));
             root = root.attr("width", format_args!("{w_val}{suffix}")).attr("height", format_args!("{h_val}{suffix}"));
         } else {
             root = root.attr("width", &ww).attr("height", &hh);
