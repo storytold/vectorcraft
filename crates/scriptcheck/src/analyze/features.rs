@@ -4,8 +4,30 @@ use super::{Analyzer, COMPOUND, FeatureId, NEWER, OutsideId, Pending, Sig, T, ca
 
 /// Words that start or continue a statement or an expression, never a variable's name.
 const RESERVED: [&str; 24] = [
-    "var", "function", "if", "else", "for", "while", "do", "return", "new", "typeof", "delete", "in", "instanceof", "this", "with", "switch", "case",
-    "try", "catch", "finally", "throw", "break", "continue", "void",
+    "var",
+    "function",
+    "if",
+    "else",
+    "for",
+    "while",
+    "do",
+    "return",
+    "new",
+    "typeof",
+    "delete",
+    "in",
+    "instanceof",
+    "this",
+    "with",
+    "switch",
+    "case",
+    "try",
+    "catch",
+    "finally",
+    "throw",
+    "break",
+    "continue",
+    "void",
 ];
 
 /// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
