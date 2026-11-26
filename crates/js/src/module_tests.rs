@@ -12,6 +12,31 @@ fn es() -> Realm {
 }
 
 #[test]
+fn a_namespace_exposes_its_own_immutable_symbol_tag() {
+    let out = run(
+        "import * as ns from './m.mjs'; \
+         var d = Object.getOwnPropertyDescriptor(ns, Symbol.toStringTag); \
+         out.push(ns[Symbol.toStringTag], Object.getOwnPropertySymbols(ns).length, \
+                  d && d.writable, d && d.enumerable, d && d.configurable);",
+        &[("./m.mjs", "export var value = 1;")],
+    );
+    assert_eq!(out, "Module|1|false|false|false");
+}
+
+#[test]
+fn modules_reject_await_identifiers_before_running_dependencies() {
+    for source in ["export const await = 1;", "var aw\\u0061it = 1;", "await;", "function await() {}"] {
+        assert!(parse_module(source, &Options::default()).is_err(), "{source}");
+    }
+    let mut realm = es();
+    let mut load = loader(&[("./effect.mjs", "out.push('dependency');")]);
+    let result = realm.run_module("main.mjs", "import './effect.mjs'; export const await = 1;", ModuleLimits::default(), &mut load);
+    assert!(result.is_err());
+    assert_eq!(realm.run("out.length").unwrap(), JsValue::Number(0.0));
+    assert!(realm.run("var await = 1; await").is_ok());
+}
+
+#[test]
 fn synchronous_and_sliced_modules_drain_promise_jobs() {
     let source = "out.push('body'); Promise.resolve().then(function () { out.push('resolved'); }); \
                   Promise.reject('rejected').catch(function (e) { out.push(e); });";

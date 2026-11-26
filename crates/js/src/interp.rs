@@ -3748,8 +3748,11 @@ impl Interp {
     /// order and distinct.
     pub(crate) fn module_namespace(&mut self, exports: Vec<(Key, Option<(EnvId, Key)>)>, fixed: &[(Key, Value)]) -> JsResult<ObjId> {
         let bytes = exports.iter().map(|(k, _)| binding_bytes(k.len()).saturating_mul(2)).sum::<usize>();
-        self.reserve_heap(OBJECT_BYTES.saturating_add(bytes))?;
+        self.reserve_heap(OBJECT_BYTES.saturating_add(bytes).saturating_add(PROP_BYTES))?;
         let mut object = Object::new(Class::ModuleNamespace(Box::default()), None);
+        if let Some(tag) = self.well_known(|symbols| &symbols.to_string_tag) {
+            object.syms.get_or_insert_with(Default::default).insert(tag, Prop::Data { value: Value::str("Module"), flags: 0 });
+        }
         object.extensible = false;
         for (name, _) in &exports {
             self.use_fuel()?;

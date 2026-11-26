@@ -283,6 +283,9 @@ impl<'s> Parser<'s> {
     /// Checks a name used as an identifier: not a reserved word written with escapes, and not a
     /// strict-mode reserved word in strict code.
     fn check_identifier(&self, token: &Token, name: &str) -> Result<()> {
+        if self.module && name == "await" {
+            return Err(self.error_at_token(token, "'await' is a reserved word in modules"));
+        }
         if token.escaped && Keyword::from_word(name).is_some() {
             return Err(self.error_at_token(token, format!("keyword '{name}' must not contain escaped characters")));
         }

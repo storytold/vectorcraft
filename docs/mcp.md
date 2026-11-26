@@ -2740,7 +2740,9 @@ https://ecma-international.org/publications-and-standards/standards/ecma-357/): 
 A `path` that ends in `.mjs` (in any case) runs as an ECMAScript 2015 module
 (https://262.ecma-international.org/6.0/#sec-modules): strict mode code with the forms above (optional chains and `??`
 included), and `import` and
-`export` declarations at its top level. `import` and `export` are syntax errors in a `.js` or `.jsx` script.
+`export` declarations at its top level. Module source reserves `await` as an identifier. A module namespace has an
+own `Symbol.toStringTag` property with value `"Module"` that is nonwritable, nonenumerable and nonconfigurable.
+`import` and `export` are syntax errors in a `.js` or `.jsx` script.
 `module` (true or false) chooses this for any `path` or `source`; it defaults to true for a `path` that ends in
 `.mjs` and false otherwise. The app passes `module: true` for a `.mjs` file picked on the web, where the script
 arrives as `source`. A `source` that runs as a module imports no files: each import ends the run with an error that
