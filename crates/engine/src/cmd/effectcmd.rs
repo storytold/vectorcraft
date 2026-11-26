@@ -453,12 +453,17 @@ pub fn pathfinder_effect_options(s: &Session) -> effects::PathfinderEffectOption
     }
 }
 
+/// The effect an apply request names, including the older `id` parameter.
+pub(crate) fn requested_effect(p: &Value) -> Option<&str> {
+    str_param(p, "effect").or_else(|| str_param(p, "id"))
+}
+
 /// `effect.apply`: adds effect `effect` (or `id`) with `params`, its defaults filled in, to the
-/// targets' active item as one undo step. A 3D effect must fit each target, which takes only one;
-/// a Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
+/// targets' active item as one undo step. A 3D effect must fit each target, which takes only one.
+/// A Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
-    let id = str_param(p, "effect").or_else(|| str_param(p, "id")).ok_or_else(|| bad(C, "missing `effect` id"))?;
+    let id = requested_effect(p).ok_or_else(|| bad(C, "missing `effect` id"))?;
     // An effect given as `id` names no objects: the targets are read with that `id` as null.
     let effect_as_id;
     let p = if str_param(p, "effect").is_none() {
