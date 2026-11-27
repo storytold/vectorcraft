@@ -1790,6 +1790,22 @@ fn compound_path_takes_its_last_paths_paint() {
 }
 
 #[test]
+fn a_compound_path_whose_last_path_has_the_gradient_is_one_gradient_filled_compound_path() {
+    // GUARDS: a gradient instance wraps only the last path of a compound path (a sunburst's rays), the paths before it
+    // keep the default fill. Read as a drawn look whose paths paint apart, each ray but the last became a plain black
+    // path and only the last one took the gradient.
+    let defs = "%AI5_BeginGradient: (Lin)\n(Lin) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let instance = "Bb\n1 (Lin) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 10 10 100 50 Xm\nf\n0 BB\n";
+    let rays: String = (0..3).map(|i| format!("0 g\n{}f\n", rect_path(f64::from(i) * 30.0, 0.0, f64::from(i) * 30.0 + 20.0, 20.0))).collect();
+    let art_ = format!("0 Ae\n*u\n0 Ae\nu\n{rays}{}{instance}U\n9 () XW\n*U\n", rect_path(100.0, 0.0, 120.0, 20.0));
+    let a = art(&read_ok(&format!("{defs}{}", layer(&art_))).doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let NodeKind::Compound { children, .. } = &a[0].kind else { panic!("{:#?}", a[0].kind) };
+    assert_eq!(children.len(), 4, "every ray is a subpath of the compound path");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(_)), "{:?}", fill(&a[0]));
+}
+
+#[test]
 fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
     // GUARDS: a group's own state block keeps the last `Xy`, as the PDF part draws it; a drawn look's group stays opaque.
     let art_ = format!(

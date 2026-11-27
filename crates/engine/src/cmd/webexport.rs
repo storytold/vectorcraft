@@ -21,7 +21,7 @@ use vectorcraft_render::encode::quantize::{self, Dither, Indexed, PaletteOptions
 use vectorcraft_render::encode::web::{self, ColorSort};
 use vectorcraft_render::encode::{gif, jpeg, png};
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, unique_name_from};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_or, has_doc, str_param, text_param, unique_name_from};
 
 const C: &str = "document.exportForWeb";
 
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save for Web",
             [],
             None,
-            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries, its transparent colors taking one slot together (the transparent pixels' slot when there are any), its shifted and then its locked colors kept first; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
+            "{path?, preset?: a webExport.presets name (its settings, then these keys), format?: gif (default)|jpg|png8|png24, reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray (gif/png8, as the next five), colors?: 128 (2–256), dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, webSnap?: 0 (0–100 %: colours that close to a web-safe one become it), lossy?: 0 (0–100, gif), colorTable?: {locked?: [\"#rrggbb\"…] (kept when reducing), transparent?: [\"#rrggbb\"…] (become transparent), webShift?: [\"#rrggbb\"…] (become web-safe), sort?: none|hue|luminance|popularity, deleted?: [\"#rrggbb\"…] (taken out of the table: their pixels take the nearest color left, and at least one color stays), customPalette?: [\"#rrggbb\"…] (a fixed palette used instead of the reduction's, at most `colors` entries, its transparent colors taking one slot together (the transparent pixels' slot when there are any), its shifted and then its locked colors kept first; a new reduction without colorTable clears it and deleted), shifted?: {\"#source\": \"#rrggbb\"…} (each source color is written as the color given, wherever it is in the image; kept when reducing as a locked color is, before the locked ones, while one palette slot is left for the reduction; at most 256; a source the table does not hold shifts nothing; a color shifted to itself is removed; a shifted color is not web-shifted, and a transparent one stays transparent; GIF lossy moves no pixel into or out of a shifted color)} (colours as the preview's colors[].source; #rrggbbaa and #rgba are refused here and in matte), transparency?: true (gif/png8/png24), transparencyDither?: none (default: pixels under half opacity become transparent)|diffusion|pattern|noise (gif/png8 with transparency: partly transparent pixels become transparent or keep their color in a dither, about as many keeping it as their opacity says with pattern, noise or diffusion at amount 100; fully transparent and opaque pixels do not change), transparencyDitherAmount?: 100 (0–100: the diffusion dither's strength, a lower amount closer to none, 0 as none), matte?: white (default)|black|none|\"#rrggbb\" (what edges blend into; jpg and opaque png24: the background), interlaced?: false (gif/png8/png24), quality?: 60 (jpg: 0–100), progressive?: false (jpg), optimized?: true (jpg), embedProfile?: false (jpg: sRGB profile), width?: px | height?: px | percent?: 100 (the image size, proportional; width wins over height, height over percent), antiAlias?: none|art (default)|type, clipToArtboard?: true (the artboard; false: the art and the slices), artboard?: 0 (0-based), convertToSrgb?: true (PNG files say they are sRGB), metadata?: none|copyright (default)|contact|all (File Info written as PNG text, a GIF or JPEG comment), slices?: all (default)|selected|none (one image per slice: images/<slice name>.<ext>), output?: images (default)|html (an HTML page placing the image or slices, <stem>.html)} → {path, files: [path…], bytes (total), width, height, warnings: [] or [a note that an image couldn't be decoded and is missing from the image]}; no path → {files: [{name, dataBase64}], bytes, width, height, warnings} (names such as page.html, images/page_01.gif). A single image without HTML is written at path itself",
             has_doc,
             export
         ),
@@ -44,6 +44,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{…the settings of document.exportForWeb (preset?, format?…), slice?: n (1-based, from slice.list; default the whole image), kbps?: 56.6 (connection speed for the download time), image?: false (also the optimised file as dataBase64)} what Save writes for the whole image (or one slice) → {format, width, height, bytes (exactly the file's size), seconds (to download at kbps), kbps, colors?: [{color: \"#rrggbb\", source: \"#rrggbb\" (the colour the reduction made, as colorTable lists it), transparent, locked, webShifted, shifted (by colorTable.shifted; also locked), webSafe}] (gif/png8: the colour table in file order), mappedToTransparent?: [\"#rrggbb\"…], slices: images an export writes, warnings (as document.exportForWeb's), dataBase64?}",
             has_doc,
             preview
+        ),
+        cmd!(
+            "document.exportForWeb.saveColorTable",
+            "Save Color Table",
+            [],
+            None,
+            "{path?: the .act file (.act is added to a name without an extension), …the settings of document.exportForWeb (preset?, format?: gif|png8…), slice?: n (1-based, from slice.list, among the slices `slices` names; default the whole image, whatever `slices` is)} write the GIF or PNG-8 color table the preview shows as a color table file: 772 bytes, the colors as written (red, green, blue) in file order, zero bytes up to 256 colors, then the number of colors and the transparent entry's index (65535 for none), two bytes each, most significant byte first → {path, colors (how many), transparentIndex (null for none), bytes, warnings}; no path → {dataBase64, colors, transparentIndex, bytes, warnings}. An empty path, jpg and png24 are an error; the document and the settings do not change",
+            has_doc,
+            save_color_table
+        ),
+        cmd!(
+            query "webExport.loadColorTable",
+            "Load Color Table",
+            [],
+            None,
+            "{path | dataBase64: a color table file (.act: 768 bytes of 256 colors, or 772 bytes with the number of colors used, 1–256, and the transparent entry's index), …the settings of document.exportForWeb (preset?, format?: gif|png8…)} the settings with the table loaded: its colors other than the transparent entry become colorTable.customPalette, colors becomes the number of colors it uses (at least 2), the table's other edits (locked, transparent, deleted, shifted, webShift and sort) are cleared and webSnap becomes 0 →{colors: [\"#rrggbb\"…] (the colors it uses, in file order), transparentIndex (null for none; an index past the colors used names none), settings}. Give exactly one of path and dataBase64; another file size, a count of 0 or above 256, jpg and png24 are errors; nothing is remembered",
+            always,
+            load_color_table
         ),
         cmd!(
             query "webExport.optimizeToFileSize",
@@ -340,10 +358,15 @@ pub struct ColorTable {
 type Shift = ([u8; 3], [u8; 3]);
 
 /// The most colours a colour table list holds.
-const MAX_TABLE: usize = 256;
+pub const MAX_TABLE: usize = 256;
 
 /// The error for a deletion that would leave the color table no color for the pixels.
 pub const KEEP_ONE: &str = "colorTable.deleted: at least one color has to stay in the color table";
+
+/// The error for a colour table list `what` (`colorTable.<what>`) with more than [`MAX_TABLE`] colours.
+pub fn too_many(what: &str) -> String {
+    format!("colorTable.{what}: at most {MAX_TABLE} colours")
+}
 
 impl ColorTable {
     /// Whether the table is a Custom one: a color was deleted or the palette is fixed.
@@ -353,7 +376,7 @@ impl ColorTable {
 
     fn colors(list: &[String], what: &str) -> std::result::Result<Vec<[u8; 3]>, String> {
         if list.len() > MAX_TABLE {
-            return Err(format!("colorTable.{what}: at most {MAX_TABLE} colours"));
+            return Err(too_many(what));
         }
         list.iter().map(|h| Self::rgb(h).ok_or_else(|| format!("colorTable.{what}: `{h}` is not a colour such as \"#ff8800\""))).collect()
     }
@@ -398,6 +421,12 @@ pub struct WebSettings {
     pub dither_amount: u8,
     /// Keep transparent pixels transparent (GIF, PNG-8, PNG-24).
     pub transparency: bool,
+    /// GIF and PNG-8 with `transparency`: how partly transparent pixels are split between the
+    /// transparent entry and their color (`none`: under half opacity is transparent).
+    #[serde(serialize_with = "ser_key", deserialize_with = "de_key")]
+    pub transparency_dither: Dither,
+    /// 0–100: the strength of the `diffusion` transparency dither.
+    pub transparency_dither_amount: u8,
     /// What partly transparent edges blend into (JPEG and opaque PNG-24: the background): `white`,
     /// `black`, `none` or `#rrggbb`.
     pub matte: String,
@@ -444,6 +473,8 @@ impl Default for WebSettings {
             dither: Dither::Diffusion,
             dither_amount: 100,
             transparency: true,
+            transparency_dither: Dither::None,
+            transparency_dither_amount: 100,
             matte: "white".into(),
             interlaced: false,
             web_snap: 0,
@@ -492,6 +523,10 @@ impl WebSettings {
     fn checked(mut self) -> std::result::Result<Self, String> {
         self.colors = self.colors.clamp(2, 256);
         self.dither_amount = self.dither_amount.min(100);
+        if self.transparency_dither_amount > 100 {
+            let key = "transparencyDitherAmount";
+            return Err(format!("`{key}` must be from 0 to 100"));
+        }
         self.web_snap = self.web_snap.min(100);
         self.lossy = self.lossy.min(100);
         self.quality = self.quality.min(100);
@@ -799,6 +834,8 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
         dither_amount: s.dither_amount,
         transparency: s.transparency,
         matte,
+        transparency_dither: s.transparency_dither,
+        transparency_dither_amount: s.transparency_dither_amount,
     };
     let (mut ix, dropped) = reduced(rgba, w, h, s, &o, &kept)?;
     // Map to transparent works on the colours the reduction made.
@@ -905,7 +942,7 @@ fn reduced(
         return Ok((quantize::quantize_to(rgba, w, h, o, &left), vec![]));
     }
     // A fixed palette holds at most `colors` entries, the transparent one included.
-    let has_clear = s.transparency && rgba.as_chunks::<4>().0.iter().any(|p| p[3] < 128);
+    let has_clear = quantize::clear_mask(rgba, w, o).contains(&true);
     let removed = custom.iter().any(|c| deleted.contains(c));
     let mut left: Vec<[u8; 3]> = vec![];
     for c in custom {
@@ -972,12 +1009,13 @@ fn clear_dropped(ix: &mut Indexed, rgba: &[u8], o: &PaletteOptions, kept: &[[u8;
         return vec![];
     }
     let all: Vec<[u8; 3]> = kept.iter().chain(&dropped).copied().collect();
+    let width = ix.width;
     let Indexed { palette, transparent, indices, .. } = ix;
     // The entry such pixels take, looked up at the first of them.
     let mut entry: Option<Option<u8>> = None;
     let mut taken = vec![false; dropped.len()];
     let mut pixel = 0;
-    quantize::nearest_entries(rgba, o, &all, |n| {
+    quantize::nearest_entries(rgba, width, o, &all, |n| {
         if let Some(d) = n.and_then(|n| n.checked_sub(kept.len())) {
             let e = *entry.get_or_insert_with(|| {
                 transparent.or_else(|| palette.iter().position(|c| to_clear.contains(c)).and_then(|i| u8::try_from(i).ok())).or_else(|| {
@@ -1233,24 +1271,7 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     if !(kbps.is_finite() && kbps > 0.0) {
         return Err(bad(P, format!("kbps must be a positive number, not {kbps}")));
     }
-    let st = s.doc()?;
-    let doc = &st.doc;
-    let failed = vectorcraft_render::decode_failures();
-    let r = render(doc, &settings).map_err(|e| bad(P, e))?;
-    let warnings = undecoded(failed);
-    let areas = doc.slice_layout();
-    let selected = super::slices::selected_slices(doc, &st.selection);
-    let cells = cells(&areas, &selected, &settings, &r).map_err(|e| bad(P, e))?;
-    let images = cells.iter().filter(|c| c.area.id.and_then(|id| doc.slice_options(id)).is_none_or(|o| o.kind == SliceKind::Image)).count().max(1);
-    let o = match p.get("slice").and_then(Value::as_u64) {
-        Some(n) => {
-            let c = cells.iter().find(|c| c.area.number as u64 == n).ok_or_else(|| bad(P, format!("no slice {n} in the image (see slice.list)")))?;
-            let [x0, y0, x1, y1] = c.px;
-            optimize(doc, &crop(&r, c.px), x1 - x0, y1 - y0, &settings)
-        }
-        None => optimize(doc, &r.rgba, r.width, r.height, &settings),
-    }
-    .map_err(|e| bad(P, e))?;
+    let Shown { o, images, warnings } = shown(s, &settings, p, P, true)?;
     let mut out = json!({
         "format": settings.format.id(), "width": o.width, "height": o.height, "bytes": o.bytes.len(),
         "seconds": download_seconds(o.bytes.len(), kbps), "kbps": kbps, "slices": images, "warnings": warnings,
@@ -1272,6 +1293,195 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
         out["dataBase64"] = json!(vectorcraft_format::base64_encode(&o.bytes));
     }
     Ok(out)
+}
+
+/// The file Save writes with some settings, as the preview shows it.
+struct Shown {
+    o: Optimized,
+    /// The images an export writes (0 when they were not counted).
+    images: usize,
+    /// The export's warnings.
+    warnings: Vec<&'static str>,
+}
+
+/// What Save writes with `settings` for the whole image, or for the slice `p.slice` names (1-based,
+/// from `slice.list`), for the command `cmd`. A `slice` that is not a whole number from 1 up is an
+/// error. With `count_images` false and no `slice`, the slices are not looked up: `images` is 0,
+/// and selected slices with none selected are not an error.
+fn shown(s: &mut Session, settings: &WebSettings, p: &Value, cmd: &str, count_images: bool) -> Result<Shown> {
+    let slice = match p.get("slice") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().filter(|n| *n >= 1).ok_or_else(|| bad(cmd, "`slice` is a slice number from `slice.list`"))?),
+    };
+    let st = s.doc()?;
+    let doc = &st.doc;
+    let failed = vectorcraft_render::decode_failures();
+    let r = render(doc, settings).map_err(|e| bad(cmd, e))?;
+    let warnings = undecoded(failed);
+    let areas = doc.slice_layout();
+    let cells = if count_images || slice.is_some() {
+        let selected = super::slices::selected_slices(doc, &st.selection);
+        cells(&areas, &selected, settings, &r).map_err(|e| bad(cmd, e))?
+    } else {
+        vec![]
+    };
+    let images = if count_images {
+        cells.iter().filter(|c| c.area.id.and_then(|id| doc.slice_options(id)).is_none_or(|o| o.kind == SliceKind::Image)).count().max(1)
+    } else {
+        0
+    };
+    let o = match slice {
+        Some(n) => {
+            let c =
+                cells.iter().find(|c| c.area.number as u64 == n).ok_or_else(|| bad(cmd, format!("no slice {n} in the image (see slice.list)")))?;
+            let [x0, y0, x1, y1] = c.px;
+            optimize(doc, &crop(&r, c.px), x1 - x0, y1 - y0, settings)
+        }
+        None => optimize(doc, &r.rgba, r.width, r.height, settings),
+    }
+    .map_err(|e| bad(cmd, e))?;
+    Ok(Shown { o, images, warnings })
+}
+
+// ---------- color table files ----------
+
+/// The extension of a color table file.
+pub const COLOR_TABLE_EXT: &str = "act";
+/// The size of a color table file with its color count and transparent entry: 256 RGB triples
+/// (768 bytes), then the two numbers, each two bytes, most significant byte first.
+pub const ACT_LEN: usize = 772;
+/// The size of a color table file of 256 RGB triples alone.
+const ACT_COLORS_LEN: usize = 768;
+/// The transparent entry of a color table file that has none.
+const ACT_NO_TRANSPARENT: u16 = 0xFFFF;
+
+/// The error for bytes that are not a color table file.
+const NOT_A_TABLE: &str = "not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors";
+
+/// A color table file (`.act`) of `colors`, a palette format's color table in file order: each
+/// color as written, red, green and blue, one byte each; zero bytes up to 256 colors; the number
+/// of colors and the index of the transparent entry (`0xFFFF` for none), two bytes each, most
+/// significant byte first. Colors past the 256th are left out.
+pub fn act_bytes(colors: &[TableColor]) -> Vec<u8> {
+    let colors = &colors[..colors.len().min(256)];
+    let mut out = vec![0u8; ACT_LEN];
+    for (slot, c) in out.as_chunks_mut::<3>().0.iter_mut().zip(colors) {
+        *slot = c.color;
+    }
+    // At most 256 colors: both numbers fit in two bytes.
+    let count = colors.len() as u16;
+    let transparent = colors.iter().position(|c| c.transparent).map_or(ACT_NO_TRANSPARENT, |i| i as u16);
+    out[ACT_COLORS_LEN..ACT_COLORS_LEN + 2].copy_from_slice(&count.to_be_bytes());
+    out[ACT_COLORS_LEN + 2..].copy_from_slice(&transparent.to_be_bytes());
+    out
+}
+
+/// The colors of a color table file and its transparent entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActTable {
+    /// The colors the file uses, in its order.
+    pub colors: Vec<[u8; 3]>,
+    /// The index of the transparent entry, when the file names one of `colors`.
+    pub transparent: Option<usize>,
+}
+
+/// Read a color table file: 768 bytes are 256 colors; 772 bytes add the number of colors used
+/// (1 to 256) and the transparent entry's index. A transparent index past the colors used names
+/// no entry. Any other size, or a count of 0 or above 256, is an error.
+pub fn read_act(bytes: &[u8]) -> std::result::Result<ActTable, String> {
+    let (count, transparent) = match bytes.len() {
+        ACT_COLORS_LEN => (256, None),
+        ACT_LEN => {
+            let at = |i: usize| usize::from(u16::from_be_bytes([bytes[i], bytes[i + 1]]));
+            (at(ACT_COLORS_LEN), Some(at(ACT_COLORS_LEN + 2)))
+        }
+        _ => return Err(NOT_A_TABLE.into()),
+    };
+    if !(1..=256).contains(&count) {
+        return Err(NOT_A_TABLE.into());
+    }
+    let colors: Vec<[u8; 3]> = bytes[..count * 3].as_chunks::<3>().0.to_vec();
+    Ok(ActTable { colors, transparent: transparent.filter(|i| *i < count) })
+}
+
+/// `settings` with the color table `t` loaded: its colors other than the transparent entry become
+/// the fixed palette (`colorTable.customPalette`), and `colors` becomes the number of colors the
+/// file uses (at least 2). The table's other edits (locked, transparent, deleted, shifted and
+/// web-shifted colors, and its sort) are cleared and Web Snap is set to 0, so every loaded color is
+/// written as it is, in the file's order. A table whose only color is its transparent entry loads
+/// that color.
+pub fn with_table(settings: &WebSettings, t: &ActTable) -> WebSettings {
+    let mut s = settings.clone();
+    let mut palette: Vec<String> = t.colors.iter().enumerate().filter(|(i, _)| Some(*i) != t.transparent).map(|(_, c)| hex(*c)).collect();
+    if palette.is_empty() {
+        palette = t.colors.iter().map(|c| hex(*c)).collect();
+    }
+    s.colors = (t.colors.len() as u16).clamp(2, 256);
+    s.web_snap = 0;
+    s.color_table = ColorTable { custom_palette: palette, ..ColorTable::default() };
+    s
+}
+
+/// `cmd`'s error for a format without a color table.
+fn no_table(cmd: &str, f: WebFormat) -> super::EngineError {
+    let format = f.id();
+    bad(cmd, format!("`{format}` has no color table: use gif or png8"))
+}
+
+fn save_color_table(s: &mut Session, p: &Value) -> Result<Value> {
+    const P: &str = "document.exportForWeb.saveColorTable";
+    let settings = s.web_settings(p).map_err(|e| bad(P, e))?;
+    if !settings.format.palette() {
+        return Err(no_table(P, settings.format));
+    }
+    let path = text_param(p, "path", P)?;
+    if path.is_some_and(|p| p.trim().is_empty()) {
+        return Err(bad(P, "`path` is empty: give a file path, or leave it out for `dataBase64`"));
+    }
+    let path = path.map(|p| if std::path::Path::new(p).extension().is_none() { format!("{p}.{COLOR_TABLE_EXT}") } else { p.to_string() });
+    let Shown { o, warnings, .. } = shown(s, &settings, p, P, false)?;
+    let bytes = act_bytes(&o.colors);
+    let mut out = json!({
+        "colors": o.colors.len().min(256),
+        "transparentIndex": o.colors.iter().position(|c| c.transparent),
+        "bytes": bytes.len(),
+        "warnings": warnings,
+    });
+    match path {
+        Some(path) => {
+            super::fileio::write_file(&path, &bytes)?;
+            out["path"] = json!(path);
+        }
+        None => out["dataBase64"] = json!(vectorcraft_format::base64_encode(&bytes)),
+    }
+    Ok(out)
+}
+
+fn load_color_table(s: &mut Session, p: &Value) -> Result<Value> {
+    const L: &str = "webExport.loadColorTable";
+    let settings = s.web_settings(p).map_err(|e| bad(L, e))?;
+    if !settings.format.palette() {
+        return Err(no_table(L, settings.format));
+    }
+    // One byte more than a color table shows a file that is too long.
+    let bytes = match (text_param(p, "path", L)?, text_param(p, "dataBase64", L)?) {
+        (Some(path), None) => super::fileio::read_file_head(path, ACT_LEN + 1)?,
+        (None, Some(b64)) => {
+            // Text past the base64 of the longest table makes the file too long.
+            if b64.bytes().filter(|b| !b.is_ascii_whitespace()).count() > ACT_LEN.div_ceil(3) * 4 {
+                return Err(bad(L, NOT_A_TABLE));
+            }
+            super::scripts::decode_head(b64, ACT_LEN + 1).ok_or_else(|| bad(L, "bad dataBase64"))?
+        }
+        _ => return Err(bad(L, "give exactly one of `path` and `dataBase64`")),
+    };
+    let t = read_act(&bytes).map_err(|e| bad(L, e))?;
+    let loaded = with_table(&settings, &t);
+    Ok(json!({
+        "colors": t.colors.iter().map(|c| hex(*c)).collect::<Vec<_>>(),
+        "transparentIndex": t.transparent,
+        "settings": loaded.to_json(),
+    }))
 }
 
 // ---------- Optimize to File Size ----------

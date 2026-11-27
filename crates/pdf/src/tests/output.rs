@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, SRGB};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
@@ -374,11 +374,12 @@ fn converting_to_rgb_turns_cmyk_into_rg() {
 fn an_unknown_destination_is_refused() {
     let d = doc(ColorMode::Rgb, &[Color::BLACK]);
     let set: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": "No Such Press"}})).unwrap();
-    assert!(matches!(set.check(), Err(PdfError::BadSetting(m)) if m.contains("No Such Press")));
+    let profiles = ActiveProfiles::default();
+    assert!(matches!(set.check(&profiles), Err(e) if e.message.contains("No Such Press")));
     assert!(export(&d, &PdfOptions { settings: set, ..Default::default() }).is_err());
     // Not converting, the destination doesn't matter.
     let set: PdfSettings = serde_json::from_value(json!({"output": {"destination": "No Such Press"}})).unwrap();
-    assert_eq!(set.check(), Ok(()));
+    assert!(set.check(&profiles).is_ok());
 }
 
 #[test]
@@ -525,7 +526,7 @@ fn the_output_intent_embeds_its_profile_and_trapped_is_written() {
         assert!(r.warnings.is_empty(), "{:?}", r.warnings);
         output_intent(&r.bytes, password, |oi| {
             assert_eq!(oi.get::<Name<'_>>(b"S").unwrap().as_ref(), b"GTS_PDFX");
-            let text = |k: &[u8]| oi.get::<craft_pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
+            let text = |k: &[u8]| oi.get::<craft::pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
             assert_eq!(text(b"OutputCondition").unwrap(), b"Coated (press)");
             assert_eq!(text(b"RegistryName").unwrap(), b"http://example.com");
             // Non-ASCII text is UTF-16 with its byte order mark.
@@ -704,4 +705,62 @@ fn colours_are_in_the_profiles_assigned_to_the_document() {
     let r = standard_pdf(&d, json!({"standard": "pdfX4"}));
     assert!(r.warnings.iter().any(|w| w.contains("No Such Press")), "{:?}", r.warnings);
     assert!(icc_streams(&r.bytes) == [cms::icc_bytes(&working).unwrap().to_vec()]);
+}
+
+/// A 4 × 4 greyscale PNG of one level.
+fn grey_png(level: u8) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![level; 16])
+        .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// The CMYK document warning says what happens to its RGB images (#1242): with No conversion
+/// they are written in RGB, and it names the settings that write them in CMYK; with a CMYK
+/// destination they are converted. Grey images stay grey either way and aren't counted.
+#[test]
+fn the_cmyk_document_warning_says_whether_rgb_images_are_converted() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        w.into_iter().next()
+    };
+    let mut d = image_doc(png([200, 30, 30]));
+    d.color_mode = ColorMode::Cmyk;
+
+    // No conversion: the image is written in RGB, and the warning doesn't say otherwise.
+    let kept = warning(&d, json!({})).unwrap();
+    assert!(kept.contains("1 RGB image") && kept.contains("written in RGB"), "{kept}");
+    assert!(!kept.contains("converted to CMYK"), "{kept}");
+    assert!(kept.contains("Convert to destination") && kept.contains("PDF/X-1a"), "{kept}");
+
+    // A CMYK destination converts it.
+    for settings in
+        [json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}}), json!({"standard": "pdfX1a", "compatibility": "1.3"})]
+    {
+        let converted = warning(&d, settings.clone()).unwrap();
+        assert!(converted.contains("1 RGB image") && converted.contains("converted to CMYK"), "{settings}: {converted}");
+        assert!(!converted.contains("written in RGB"), "{settings}: {converted}");
+    }
+
+    // A grey image is not an RGB image: nothing to warn about.
+    let mut grey = image_doc(grey_png(90));
+    grey.color_mode = ColorMode::Cmyk;
+    for settings in [json!({}), json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})] {
+        assert_eq!(warning(&grey, settings.clone()), None, "{settings}");
+    }
+
+    // RGB colours keep their wording beside images kept in RGB.
+    let mut both = image_doc(png([200, 30, 30]));
+    both.color_mode = ColorMode::Cmyk;
+    let l = both.layers[0].id;
+    let n = Node::path(
+        both.alloc_id(),
+        shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::Rgb { r: 0.1, g: 0.1, b: 0.1 }), Paint::None, 0.0),
+    );
+    both.insert(Some(l), 1, n).unwrap();
+    let w = warning(&both, json!({})).unwrap();
+    assert!(w.contains("1 RGB colour") && w.contains("converted to CMYK") && w.contains("rich blacks"), "{w}");
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
 }

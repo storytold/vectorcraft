@@ -99,11 +99,26 @@ fn shapes_that_are_no_glyph_list_no_font() {
     let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [rect]})).unwrap();
     let r = query(&mut s, json!({}), bundled());
-    assert_eq!(r, json!({"fonts": [], "shapes": 1, "more": false, "truncated": false}));
+    assert_eq!(r, json!({"fonts": [], "shapes": 1, "more": false, "truncated": false, "installed": {"read": 0, "skipped": 0}}));
     // Live type alone holds no shape to compare.
     let t = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "live"})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [t]})).unwrap();
     assert!(s.execute("type.retypeFonts", &json!({})).is_err());
+}
+
+#[test]
+fn a_font_that_matches_only_combining_marks_is_not_listed() {
+    let mut s = session();
+    // A lone combining mark (a drawn dot, bar or ring is the same shape): type.retype keeps it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = query(&mut s, json!({}), bundled());
+    assert_eq!(r, json!({"fonts": [], "shapes": 1, "more": false, "truncated": false, "installed": {"read": 0, "skipped": 0}}));
+    // After a base, the mark counts with it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "x\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = query(&mut s, json!({}), bundled());
+    assert!(names(&r).contains(&("Source Sans 3".into(), "Regular".into(), 2)), "{r}");
 }
 
 #[test]
@@ -144,6 +159,64 @@ fn of_two_versions_only_the_one_the_name_gives_is_listed() {
     s.execute("select.set", &json!({"ids": [source]})).unwrap();
     let r = query(&mut s, json!({"count": 96}), &db);
     assert_eq!(names(&r).iter().filter(|f| f.0 == FAMILY).count(), 1, "version 1 matches and is listed once: {r}");
+}
+
+#[test]
+fn installed_fonts_not_loaded_are_ranked_too_unless_left_out() {
+    use vectorcraft_text::test_fonts::named_copy;
+    let dir = vectorcraft_testkit::temp_dir("retype-fonts-installed");
+    let file = dir.join("RetypeListed-Regular.ttf");
+    std::fs::write(&file, named_copy(true, ("Retype Listed", "Regular", "Version 1.000", "RetypeListed-Regular")).unwrap()).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let mut s = session();
+    let inter = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Kgw", "size": 40, "font": "Inter", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [inter]})).unwrap();
+    // Left out: the installed copy is not read, and stays unloaded.
+    let r = query(&mut s, json!({"count": 96, "installed": false}), &db);
+    assert!(!names(&r).iter().any(|f| f.0 == "Retype Listed"), "{r}");
+    assert_eq!(r["installed"], json!({"read": 0, "skipped": 0}), "{r}");
+    assert!(db.unloaded_installed_faces().iter().any(|f| f.family == "Retype Listed"));
+    // Compared: the copy of Inter matches every shape, as Inter does, and is loaded.
+    let r = query(&mut s, json!({"count": 96}), &db);
+    let fonts = names(&r);
+    assert!(fonts.contains(&("Retype Listed".to_string(), "Regular".to_string(), 3)), "{r}");
+    assert!(fonts.contains(&("Inter".to_string(), "Regular".to_string(), 3)), "{r}");
+    assert_eq!(r["installed"], json!({"read": 1, "skipped": 0}), "{r}");
+    assert!(!db.unloaded_installed_faces().iter().any(|f| f.family == "Retype Listed"));
+}
+
+#[test]
+fn installed_fonts_fill_the_list_up_to_96_fonts_in_all() {
+    use vectorcraft_text::test_fonts::named_copy;
+    let copy = |family: &str| {
+        let postscript = format!("{}-Regular", family.replace(' ', ""));
+        (named_copy(false, (family, "Regular", "Version 1.000", &postscript)).unwrap(), postscript)
+    };
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Rg", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    // Loaded copies that match fill most of the list.
+    let loaded = FontDb::with_font_dirs(vec![]);
+    for i in 0..super::MAX_COUNT {
+        loaded.add_font(copy(&format!("Fullcopy {i:02}")).0);
+    }
+    let listed = names(&query(&mut s, json!({"count": 96, "installed": false}), &loaded)).len();
+    assert!(listed < super::MAX_COUNT, "{listed}");
+    // Installed copies, two more than the places left.
+    let dir = vectorcraft_testkit::temp_dir("retype-fonts-installed-full");
+    for i in 0..super::MAX_COUNT - listed + 2 {
+        let (data, postscript) = copy(&format!("Installed {i:02}"));
+        std::fs::write(dir.join(format!("{postscript}.ttf")), data).unwrap();
+    }
+    let db = FontDb::with_font_dirs(vec![dir]);
+    for i in 0..super::MAX_COUNT {
+        db.add_font(copy(&format!("Fullcopy {i:02}")).0);
+    }
+    let r = query(&mut s, json!({"count": 96}), &db);
+    assert_eq!(names(&r).len(), super::MAX_COUNT, "the installed copies fill the places left: {r}");
+    assert_eq!(r["more"], json!(false), "no font past the list is found: {r}");
+    assert_eq!(r["installed"]["skipped"], json!(2), "{r}");
+    assert_eq!(db.unloaded_installed_faces().len(), 2, "the two past the list stay unloaded");
 }
 
 #[test]

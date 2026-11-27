@@ -2,7 +2,7 @@
 //! visibility, print state and lock) and Advanced › Overprint (a graphics state that overprints
 //! for the overprinting fills and strokes).
 
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier};
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, LayerColor, Node, NodeKind, TextObject};
@@ -43,18 +43,18 @@ fn export(d: &Document, v: Value) -> ExportReport {
 }
 
 /// The groups of `refs` (an array of the catalog's optional content properties) by name.
-fn names(xref: &craft_pdf::syntax::xref::XRef, refs: Option<Array<'_>>) -> Vec<String> {
+fn names(xref: &craft::pdf::syntax::xref::XRef, refs: Option<Array<'_>>) -> Vec<String> {
     let ids = refs.map(|a| a.raw_iter().filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).collect::<Vec<_>>()).unwrap_or_default();
     ids.into_iter()
         .map(|id| {
             let g = xref.get::<Dict<'_>>(id).unwrap();
-            String::from_utf8(g.get::<craft_pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes().to_vec()).unwrap()
+            String::from_utf8(g.get::<craft::pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes().to_vec()).unwrap()
         })
         .collect()
 }
 
 /// The catalog's `/OCProperties` of `bytes` (opened with `password`), if any.
-fn oc_properties(bytes: &[u8], password: Option<&str>, f: impl FnOnce(Option<Dict<'_>>, &craft_pdf::syntax::xref::XRef)) {
+fn oc_properties(bytes: &[u8], password: Option<&str>, f: impl FnOnce(Option<Dict<'_>>, &craft::pdf::syntax::xref::XRef)) {
     let file = crate::pages::open(bytes, password).unwrap();
     let xref = file.xref();
     let catalog = xref.get::<Dict<'_>>(xref.root_id()).unwrap();
@@ -86,7 +86,7 @@ fn create_layers_writes_a_group_per_layer_with_its_states() {
         assert_eq!(names(xref, config.get(b"Order")), ["Notes", "Hidden", "Back"]);
         assert_eq!(names(xref, config.get(b"OFF")), ["Hidden"], "hidden layers are off");
         assert_eq!(names(xref, config.get(b"Locked")), ["Hidden"]);
-        assert!(config.get::<craft_pdf::syntax::object::String<'_>>(b"Name").is_some());
+        assert!(config.get::<craft::pdf::syntax::object::String<'_>>(b"Name").is_some());
         let auto = config.get::<Array<'_>>(b"AS").unwrap().iter::<Dict<'_>>().next().unwrap();
         assert_eq!(auto.get::<Name<'_>>(b"Event").unwrap().as_ref(), b"Print");
         let print_state = |name: &str| {
@@ -95,7 +95,7 @@ fn create_layers_writes_a_group_per_layer_with_its_states() {
             let g = ids
                 .into_iter()
                 .map(|id| xref.get::<Dict<'_>>(id).unwrap())
-                .find(|g| g.get::<craft_pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes() == name.as_bytes());
+                .find(|g| g.get::<craft::pdf::syntax::object::String<'_>>(b"Name").unwrap().as_bytes() == name.as_bytes());
             let usage = g.unwrap().get::<Dict<'_>>(b"Usage").unwrap();
             usage.get::<Dict<'_>>(b"Print").unwrap().get::<Name<'_>>(b"PrintState").unwrap().as_ref().to_vec()
         };
@@ -259,7 +259,7 @@ fn pdf_a_layers_have_no_automatic_states() {
     let r = export(&layered(), json!({"standard": "pdfA2b", "createLayers": true}));
     oc_properties(&r.bytes, None, |props, _| {
         let config = props.unwrap().get::<Dict<'_>>(b"D").unwrap();
-        assert!(config.get::<Array<'_>>(b"AS").is_none() && config.get::<craft_pdf::syntax::object::String<'_>>(b"Name").is_some());
+        assert!(config.get::<Array<'_>>(b"AS").is_none() && config.get::<craft::pdf::syntax::object::String<'_>>(b"Name").is_some());
     });
 }
 
@@ -350,6 +350,28 @@ fn white_overprint_is_discarded_as_the_document_setup_says() {
     assert_eq!(overprints(&d, json!({})).1, 2, "the white fill knocks out");
     d.setup.discard_white_overprint = false;
     assert_eq!(overprints(&d, json!({})).1, 3);
+}
+
+#[test]
+fn a_white_spot_ink_keeps_overprinting_under_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let mut d = overprinting(white);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+    let paint = |d: &mut Document, p: &Paint| {
+        for n in std::sync::Arc::make_mut(&mut d.layers[0]).children_mut().into_iter().flatten() {
+            let n = std::sync::Arc::make_mut(n);
+            if let Some(f) = n.appearance.fill_mut().filter(|f| f.overprint) {
+                f.paint = p.clone();
+            }
+            if let NodeKind::Text(t) = &mut n.kind {
+                t.runs.iter_mut().for_each(|r| r.style.fill = p.clone());
+            }
+        }
+    };
+    paint(&mut d, &Paint::solid(white));
+    assert_eq!(overprints(&d, json!({})).1, 1, "paper white fills and characters knock out");
+    paint(&mut d, &Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+    assert_eq!(overprints(&d, json!({})).1, 3, "a white spot ink overprints, characters too");
 }
 
 #[test]
