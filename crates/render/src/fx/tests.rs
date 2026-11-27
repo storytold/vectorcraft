@@ -1581,6 +1581,31 @@ fn a_drag_renders_raster_effects_within_the_drag_budget() {
     assert!(after == threaded().render(&scaled, 1600, 1000, view, &still).pixels, "the frame after the drag");
 }
 
+#[test]
+fn a_drag_glow_fallback_cannot_be_spliced_into_a_still_frame() {
+    let doc = doc_with(
+        Rect::new(20.0, 20.0, 40.0, 40.0),
+        Color::BLACK,
+        vec![
+            ("stylize.outerGlow", json!({"blur": 1.3, "color": "#ff0000", "opacity": 100, "mode": "normal"})),
+            ("stylize.outerGlow", json!({"blur": 1.0, "color": "#0000ff", "opacity": 100, "mode": "normal"})),
+        ],
+    );
+    let view = Affine::translate((600.0, 600.0)) * Affine::scale(40.0) * Affine::translate((-30.0, -30.0));
+    let mut still = Renderer::new();
+    still.threads = 2;
+    let still_pixels = still.render(&doc, 1200, 1200, view, &RenderOptions::default()).pixels;
+    assert_eq!(still.stats.view_sized, 0, "the still frame draws both whole rasters");
+
+    let mut drag = Renderer::new();
+    drag.threads = 2;
+    let opts = RenderOptions { interacting: true, dragging: true, ..Default::default() };
+    let drag_pixels = drag.render(&doc, 1200, 1200, view, &opts).pixels;
+    assert_eq!(drag.stats.previewed, 0, "the fallback filter fits the drag budget without downsampling");
+    assert!(drag_pixels != still_pixels, "a glow over the first glow differs from the fallback filter");
+    assert!(drag.stats.view_sized > 0, "the fallback must replace the whole frame");
+}
+
 /// While interacting, a group holding a symbol instance whose art lies outside the 20 × 20
 /// square around the origin draws its drop shadow from the raster of an earlier frame. The
 /// shadow is made from the instance's art, which the renderer measures the group's content by.

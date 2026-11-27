@@ -89,6 +89,8 @@ pub(crate) struct Question(StandardPrompt);
 struct Asked {
     command: String,
     params: Value,
+    /// The document that must still be active for a document-specific confirmation.
+    document: Option<u64>,
     /// The automation roots in force when asked: the command runs under them.
     scope: ScopeHandle,
     /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs as automation.
@@ -129,6 +131,17 @@ pub(crate) struct ReplaceFiles {
 /// Ask `message` (with an optional `detail` line), both in the UI language; OK runs `command`
 /// with `params`.
 pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
+    ask_for(app, None, message, detail, command, params);
+}
+
+/// Ask about the active document. OK is valid only while that document is active.
+pub(crate) fn ask_in_document(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
+    if let Some(document) = app.session.active().map(|st| st.uid) {
+        ask_for(app, Some(document), message, detail, command, params);
+    }
+}
+
+fn ask_for(app: &mut VectorcraftApp, document: Option<u64>, message: &str, detail: &str, command: &str, params: Value) {
     let Some(dialogs) = app.dialogs() else {
         app.status(format!("{message} (no window to ask in)"));
         return;
@@ -137,7 +150,7 @@ pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str,
     if !detail.is_empty() {
         prompt = prompt.paragraph(detail.to_string());
     }
-    let asked = Asked { command: command.to_string(), params, scope: ScopeHandle::capture(), automated: app.automation_asked() };
+    let asked = Asked { command: command.to_string(), params, document, scope: ScopeHandle::capture(), automated: app.automation_asked() };
     let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag(asked);
     dialogs.with(|host| host.open(Question(prompt)));
 }
@@ -263,10 +276,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     };
     if let Some(DialogResult::Ok(mut answer)) = dialogs.with(|host| host.take::<Question>())
         && answer.choice == PromptChoice::Proceed
-        && let Some(Asked { command, params, scope, automated }) = answer.take_tag::<Asked>()
-        && let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params)))
+        && let Some(Asked { command, params, document, scope, automated }) = answer.take_tag::<Asked>()
     {
-        app.status(e);
+        if document.is_some_and(|document| app.session.active().is_none_or(|st| st.uid != document)) {
+            app.status(tl!("This dialog was opened in a different document."));
+        } else if let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params))) {
+            app.status(e);
+        }
     }
     // The host opens queued messages in `enqueue` order, so the one closed is the oldest.
     while dialogs.with(|host| host.take::<Message>()).is_some() {

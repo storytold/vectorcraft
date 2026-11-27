@@ -27,7 +27,7 @@ use craft::host::{PickKind, PickRequest};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow, ThumbSize};
@@ -965,7 +965,11 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
                     if IconButton::new(IconId::new("folder-open")).label(tl!("Show in Folder")).enabled(can_reveal).show(ui).clicked() {
                         reveal = Some(id);
                     }
-                    if super::doc_info::copy_value(ui, tl!("Location"), l, false) {
+                    if IconButton::new(IconId::new("copy")).label(tl!("Copy Location")).enabled(!l.is_empty()).show(ui).clicked() {
+                        *copy = Some(l.to_string());
+                    }
+                    let shown = Text::new(l.to_string()).elide(Elide::Path).tooltip(l.to_string()).show(ui);
+                    if super::doc_info::copy_shown(ui, &shown, l) {
                         *copy = Some(l.to_string());
                     }
                 });

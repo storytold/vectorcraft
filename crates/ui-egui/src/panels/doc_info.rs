@@ -49,6 +49,12 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
 pub(crate) fn copy_value(ui: &mut Ui, label: &str, value: &str, mono: bool) -> bool {
     let text = SelectableText::new(label.to_string(), value);
     let shown = if mono { text.mono().show(ui) } else { text.show(ui) };
+    copy_shown(ui, &shown, value)
+}
+
+/// The same guarded full-value copy for an already shown readout. An elided path remains
+/// static text: selection indices must describe the text actually shown by the framework.
+pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bool {
     // The click's own position and keys: a move or a key change after the release in the same
     // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
     // copies nothing, since the click flags below do not say which release they describe.

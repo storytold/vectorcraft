@@ -479,3 +479,99 @@ fn review_8826_accesskit_takeover(same_target: bool) {
     painted(&still_shown, "H: 40 pt");
     assert_eq!(a.snapshot(), before, "accessible copy leaves document, selection and history intact");
 }
+
+fn location_node_rect(node: &egui::accesskit::Node) -> Rect {
+    let b = node.bounds().expect("the actual Location control has bounds");
+    Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
+}
+
+fn shortened_location(shape: &Shape, rect: Rect, full: &str) -> bool {
+    match shape {
+        Shape::Text(t) => {
+            let painted = t.galley.rect.translate(t.pos.to_vec2());
+            rect.contains(painted.center()) && t.galley.text().contains('…') && t.galley.text() != full
+        }
+        Shape::Vec(shapes) => shapes.iter().any(|s| shortened_location(s, rect, full)),
+        _ => false,
+    }
+}
+
+#[test]
+fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyboard() {
+    use egui::accesskit::{Action, ActionRequest, Role, TreeId};
+
+    // Original synthetic pixels and folder names; no external file or asset is used.
+    let folder = vectorcraft_testkit::TempDir::new("readout-location");
+    let subfolder = folder.join("Éléments-originaux".repeat(4));
+    std::fs::create_dir_all(&subfolder).unwrap();
+    let path = subfolder.join("Original.png");
+    let pixels = image::RgbaImage::from_pixel(8, 8, image::Rgba([17, 54, 128, 255]));
+    let mut bytes = Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(pixels).write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+    std::fs::write(&path, bytes.get_ref()).unwrap();
+
+    for locale in ["en", "fr", "de"] {
+        let mut a = App::new();
+        a.app.session.prefs.interface_language = locale.into();
+        a.app.services.reveal = Some(Box::new(|_| Ok(())));
+        let placed = a.app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap();
+        let info = a.app.run("links.info", json!({"id": placed["ids"][0]})).unwrap();
+        let location = info["location"].as_str().expect("the placed original image has a folder");
+        a.panel("links");
+        // 220 pt is the native panel minimum exercised by #9521, not a wide test-only layout.
+        a.app.run("window.panel.float", json!({"panel": "links", "x": 520, "y": 120, "width": 220, "height": 700})).unwrap();
+        a.app.run("window.panel.activate", json!({"panel": "links"})).unwrap();
+        let mut out = a.settle();
+        for _ in 0..4 {
+            out = a.frame(vec![]);
+        }
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("the floated Links tree").nodes;
+        let body = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::TabPanel)
+            .map(|(_, n)| location_node_rect(n))
+            .find(|r| (r.left() - 520.0).abs() < 1.0)
+            .expect("the actual minimum-width Links float");
+        assert!(body.width() <= 221.0, "{locale}: the new copy action must not widen the float: {body:?}");
+        let locations: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.label() == Some(location) && n.supports_action(Action::Click))
+            .collect();
+        assert_eq!(locations.len(), 1, "{locale}: one live full-path accessible copy target");
+        let (location_id, node) = locations[0];
+        let location_rect = location_node_rect(node);
+        assert!(body.contains_rect(location_rect), "{locale}: the fitted Location remains inside the panel");
+        assert!(out.shapes.iter().any(|s| shortened_location(&s.shape, location_rect, location)), "{locale}: the long path must actually be shortened on screen");
+        let buttons: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Copy Location")))
+            .collect();
+        assert_eq!(buttons.len(), 1, "{locale}: one named native Copy Location button");
+        let (copy_id, copy_node) = buttons[0];
+        assert!(copy_node.supports_action(Action::Focus), "the copy button takes real keyboard focus");
+        assert!(body.contains_rect(location_node_rect(copy_node)), "{locale}: Copy Location fits beside the path");
+        let reveal = nodes.iter().find(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show in Folder"))).unwrap();
+        assert!(body.contains_rect(location_node_rect(&reveal.1)), "{locale}: the incoming reveal action still fits");
+        let (location_id, copy_id) = (*location_id, *copy_id);
+        let before = a.snapshot();
+        let sets = a.app.ui.status_sets;
+        assert_eq!(copies(&a.tap(location_rect.center())), [location], "{locale}: a plain click copies the complete path, never its shortened paint");
+        assert_no_delayed_copy(&mut a, "Location primary copy");
+
+        let request = |action, target_node| Event::AccessKitActionRequest(ActionRequest { action, target_node, target_tree: TreeId::ROOT, data: None });
+        let activated = a.frame(vec![request(Action::Click, location_id)]);
+        assert_eq!(copies(&activated), [location], "{locale}: the full-path accessibility action copies once");
+        assert_no_delayed_copy(&mut a, "Location accessible copy");
+        let focused = a.frame(vec![request(Action::Focus, copy_id)]);
+        assert!(copies(&focused).is_empty(), "focusing the button does not copy");
+        assert_eq!(focused.platform_output.accesskit_update.as_ref().unwrap().focus, copy_id, "{locale}: focus reaches the actual native copy button");
+        let key = |pressed| Event::Key { key: egui::Key::Enter, physical_key: Some(egui::Key::Enter), pressed, repeat: false, modifiers: Modifiers::NONE };
+        let mut copied = copies(&a.frame(vec![key(true)]));
+        copied.extend(copies(&a.frame(vec![key(false)])));
+        assert_eq!(copied, [location], "{locale}: native keyboard activation copies the complete path once");
+        assert_no_delayed_copy(&mut a, "Location keyboard copy");
+        assert_eq!(a.app.ui.status_sets, sets + 3, "each real copy reports once; idle frames and focus report nothing");
+        assert_eq!(a.snapshot(), before, "{locale}: copying preserves the document, selection and history");
+    }
+    vectorcraft_ui_egui::i18n::set_current(vectorcraft_ui_egui::i18n::Lang::EN);
+}

@@ -61,11 +61,25 @@ pub(crate) struct Open {
     pub id: DialogId,
     /// Which of the three dialogs it is.
     pub kind: &'static str,
+    /// The drawing that supplied the selection and defaults at opening.
+    document: Option<u64>,
     /// The envelope the dialog previews.
     pub preview: LivePreview,
     // PLAN: ef.C11's `Open` has no `generation`; the same kind reopened has the same id, so the id cannot tell the held Cancel of the replaced dialog from the new one's.
     /// Which open this is ([`OPENED`]).
     pub generation: u64,
+}
+
+impl Open {
+    fn on_original_drawing(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().map(|st| st.uid) == self.document
+    }
+
+    fn cancel_preview(self, app: &mut VectorcraftApp) {
+        if self.on_original_drawing(app) {
+            self.preview.cancel(app);
+        }
+    }
 }
 
 /// The dialog's title.
@@ -172,10 +186,12 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
 /// Options dialog sets the defaults for new envelopes and has nothing to preview.
 fn open_dialog(app: &mut VectorcraftApp, kind: &'static str, values: Map<String, Value>, envelope: bool) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let document = app.session.active().map(|st| st.uid);
     if let Some(previous) = app.effect_dialogs.envelope.take() {
-        previous.preview.cancel(app);
+        let id = previous.id;
+        previous.cancel_preview(app);
         if let Some(dialogs) = app.dialogs() {
-            dialogs.with(|host| host.cancel_by_id(&ctx, previous.id));
+            dialogs.with(|host| host.cancel_by_id(&ctx, id));
         }
     }
     let fields = fields_of(&params(kind, &DialogFields::new()), &values);
@@ -188,28 +204,32 @@ fn open_dialog(app: &mut VectorcraftApp, kind: &'static str, values: Map<String,
         if app.effect_dialogs.envelope.as_ref().is_some_and(|open| open.generation == generation)
             && let Some(open) = app.effect_dialogs.envelope.take()
         {
-            open.preview.cancel(app);
+            open.cancel_preview(app);
         }
     });
-    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| accept(app, kind, result);
-    let id = open_held_with(app, dialog, ok, HeldOptions { cancel: Some(cancel), ..Default::default() }).ok_or("no window")?;
-    app.effect_dialogs.envelope = Some(Open { id, kind, preview: LivePreview::default(), generation });
+    let id = open_held_with(app, dialog, accept, HeldOptions { cancel: Some(cancel), ..Default::default() }).ok_or("no window")?;
+    app.effect_dialogs.envelope = Some(Open { id, kind, document, preview: LivePreview::default(), generation });
     Ok(Value::Null)
 }
 
 /// OK: keeps the preview as one undo step. A refused command keeps the dialog open.
-fn accept(app: &mut VectorcraftApp, kind: &'static str, result: &ParamResult) -> Result<(), String> {
-    let (cmd, p, _) = command(kind, &json_of(&params(kind, &result.fields), &result.fields));
-    let Some(Open { id, generation, preview, .. }) = app.effect_dialogs.envelope.take() else {
+fn accept(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
+    let Some(open) = app.effect_dialogs.envelope.as_ref().filter(|open| open.id == result.id) else {
         return Err("the envelope dialog is gone".into());
     };
+    if !open.on_original_drawing(app) {
+        return Err(tl!("Return to the original drawing to apply the envelope").into());
+    }
+    let kind = open.kind;
+    let (cmd, p, _) = command(kind, &json_of(&params(kind, &result.fields), &result.fields));
+    let Open { id, document, preview, generation, .. } = app.effect_dialogs.envelope.take().ok_or("the envelope dialog is gone")?;
     match preview.commit(app, cmd, p) {
         Ok(_) => Ok(()),
         Err(e) => {
             // The attempt ended the preview; the next pass starts a new one over the same values. Nothing to undo
             // when no interaction was open, so the answer is not needed.
             let _ = app.session.cancel_interaction();
-            app.effect_dialogs.envelope = Some(Open { id, kind, preview: LivePreview::default(), generation });
+            app.effect_dialogs.envelope = Some(Open { id, kind, document, preview: LivePreview::default(), generation });
             Err(e)
         }
     }
@@ -252,6 +272,10 @@ fn command(kind: &str, f: &Map<String, Value>) -> (&'static str, Value, &'static
 /// canvas shows them. The dialog's Cancel rolls the preview back through the held record's cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.effect_dialogs.envelope.take() else { return };
+    if !open.on_original_drawing(app) {
+        app.effect_dialogs.envelope = Some(open);
+        return;
+    }
     let shown = app
         .dialogs()
         .and_then(|dialogs| dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
@@ -463,6 +487,49 @@ mod tests {
             matches!(envelope(&app).1.kind, NodeKind::Envelope { ref kind, .. } if matches!(**kind, EnvelopeKind::Warp { .. })),
             "cancel rolls back"
         );
+    }
+
+    #[test]
+    fn envelope_warp_refuses_preview_and_ok_in_the_other_drawing() {
+        let (mut app, _) = app_with_rect();
+        open(&mut app, MAKE_WARP).unwrap();
+        let id = dialog(&app);
+        set(&app, id, "bend", json!(23));
+        pump(&mut app);
+        app.run("file.new", json!({"width": 300, "height": 150})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        set(&app, id, "bend", json!(31));
+        pump(&mut app);
+        assert!(matches!(envelope(&app).1.kind, NodeKind::Path { .. }), "the other drawing keeps the rectangle");
+        let ctx = app.ui_ctx.clone().unwrap();
+        host(&app, |h| h.confirm_by_id(&ctx, id));
+        pump(&mut app);
+        assert!(
+            matches!(host(&app, |h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("original drawing"))
+        );
+        assert_eq!(json_fields(&app, id)["bend"], 31.0);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        accept(&mut app, id);
+        let (_, node) = envelope(&app);
+        assert!(matches!(node.kind, NodeKind::Envelope { ref kind, .. } if matches!(**kind, EnvelopeKind::Warp { bend: 31.0, .. })));
+    }
+
+    #[test]
+    fn cancelling_an_envelope_dialog_keeps_the_other_drawings_active_edit() {
+        let (mut app, _) = app_with_rect();
+        open(&mut app, MAKE_WARP).unwrap();
+        let id = dialog(&app);
+        pump(&mut app);
+        app.run("file.new", json!({"width": 300, "height": 150})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.session.begin_interaction("Other drawing's edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        dismiss(&mut app, id);
+        assert!(app.session.in_interaction(), "the other drawing's edit stays active");
     }
 
     #[test]
