@@ -16,8 +16,8 @@ use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba, Srgba};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::ui::layout_components::Row;
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Scroll, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::PanelRow;
 use craft::ui::notices::Notice;
@@ -480,6 +480,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut d = draft(app);
+    // The label is translated around the theme's name, not looked up whole.
+    let save_label = match &d.editing {
+        Some(n) => crate::i18n::fmt(tl!("Save changes to {name}"), &[("name", n)]).to_string(),
+        None => tl!("Save theme to My Themes").to_string(),
+    };
+    let actions = [
+        FooterAction::new(icon("file-plus"), tl!("New theme from the current color")),
+        FooterAction::new(icon("dc-folder"), tl!("Add to Swatches")).enabled(enabled(app, ADD_TO_SWATCHES)),
+        FooterAction::new(icon("save"), save_label),
+    ];
+    let mut picked = None;
+    Stack::new()
+        .label(tl!("Create"))
+        .fill()
+        .scroll(Scroll::vertical())
+        .footer(|ui, _| {
+            let out = FooterBar::actions(actions.clone()).show_footer(ui);
+            if !ui.is_sizing_pass() {
+                picked = out.picked;
+            }
+        })
+        .show(ui, |ui, _| create_controls(app, ui, &mut d));
+    if let Some(id) = picked.and_then(|at| [NEW_THEME, ADD_TO_SWATCHES, SAVE].get(at).copied()) {
+        run(app, id, &Value::Null);
+    }
+}
+
+fn create_controls(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Draft) {
     let before = d.clone();
     let (mut mode, mut held) = (app.ui.color_themes_panel.mode, app.ui.color_themes_panel.held.clone());
     let labels: Vec<&str> = std::iter::once("Custom").chain(Harmony::ALL.into_iter().map(harmony::label)).collect();
@@ -518,7 +546,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(&i) = chosen.items.last() {
         d.sel = i;
     }
-    sliders(ui, &mut d, &mut mode, &mut held);
+    sliders(ui, d, &mut mode, &mut held);
     Row::new().show(ui, |ui, _| {
         let hex = d.colors.get(d.sel).map(hex_rgba).unwrap_or(Rgba::rgb(0, 0, 0));
         let mut edited = hex;
@@ -533,7 +561,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
         if IconButton::new(icon("paint-bucket")).label(tl!("Set the current fill or stroke to the selected color")).enabled(can_set).show(ui).clicks
             == 1
         {
-            set_active_color(app, &d);
+            set_active_color(app, d);
         }
         let current = active_paint(app).color();
         if IconButton::new(icon("pipette")).label(tl!("Set the selected color to the current color")).enabled(current.is_some()).show(ui).clicks == 1
@@ -546,16 +574,9 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = &mut app.ui.color_themes_panel;
     st.mode = mode;
     st.held = held;
-    if d != before {
+    if *d != before {
         set_draft(app, d.clone());
     }
-    // The label is translated around the theme's name, not looked up whole.
-    let save_label = match &d.editing {
-        Some(n) => crate::i18n::fmt(tl!("Save changes to {name}"), &[("name", n)]).to_string(),
-        None => tl!("Save theme to My Themes").to_string(),
-    };
-    let labels = vec![Label::from(tl!("New theme from the current color")), Label::from(tl!("Add to Swatches")), Label::from(save_label)];
-    footer(app, ui, &[NEW_THEME, ADD_TO_SWATCHES, SAVE], &["file-plus", "dc-folder", "save"], labels);
 }
 
 fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -631,6 +652,32 @@ mod tests {
 
     fn themes(app: &VectorcraftApp) -> &[ColorTheme] {
         &app.session.prefs.color_themes
+    }
+
+    #[test]
+    fn a_short_color_themes_panel_keeps_create_actions_in_view() {
+        use craft::ui::testing::pointer;
+
+        let app = Rc::new(RefCell::new(app()));
+        let mut fx = fixture(&app);
+        let room = vec2(340.0, 320.0);
+        fx.room(room).settle();
+        let names = ["New theme from the current color", "Add to Swatches", "Save theme to My Themes"];
+        for name in names {
+            let action = fx.by_label(name).unwrap_or_else(|| panic!("{name} is missing"));
+            assert!(action.rect.bottom() <= room.y, "{name} at {:?} is below the panel", action.rect);
+            assert!(fx.visible(&action).is_some(), "{name} is clipped");
+        }
+        let save_at = fx.by_label("Save theme to My Themes").unwrap().rect;
+        let name_at = fx.by_label("Name:").expect("the draft name").rect;
+        fx.frame(vec![pointer::moved(egui::pos2(20.0, room.y / 2.0)), pointer::wheel(-600.0)]).settle();
+        let name = fx.by_label("Name:").expect("the draft name").rect;
+        assert!(name.top() < name_at.top(), "the body scrolls");
+        assert!(name.top() >= 0.0 && name.bottom() <= save_at.top(), "the name {name:?} scrolls above the footer {save_at:?}");
+        let save = fx.by_label("Save theme to My Themes").unwrap();
+        assert_eq!(save.rect, save_at, "the footer stays put while the controls scroll");
+        fx.click(&save).settle();
+        assert_eq!(themes(&app.borrow()).len(), 1);
     }
 
     /// The panel over `app` in a fixture, settled; the app stays reachable through the `Rc`.

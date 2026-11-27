@@ -278,6 +278,40 @@ fn the_presets_manager_exports_to_a_file_named_after_the_preset() {
 }
 
 #[test]
+fn the_presets_manager_imports_browser_contents_and_desktop_paths() {
+    use super::perspective_presets::{self, Action};
+    use vectorcraft_engine::cmd::perspgrid::PRESET_FORMAT;
+
+    let mut app = app();
+    let picker = crate::tests_picks::scripted(&mut app);
+    let ctx = window(&app);
+    let fixture = |name: &str| json!({"format": PRESET_FORMAT, "presets": [{"name": name}]}).to_string();
+    app.run("ui.perspectivePresetsDialog", json!({})).unwrap();
+    let default = "[1P-Normal View]";
+
+    perspective_presets::run(&mut app, Action::Import, default).unwrap();
+    picker.answer_contents(&[("Browser.vcperspective", fixture("Browser").as_bytes())]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("Browser").is_some(), "the selected browser file adds its preset");
+    assert_eq!(field(&app, "selected"), json!("Browser"));
+
+    let dir = vectorcraft_testkit::TempDir::new("perspective-presets-picker");
+    let file = dir.join("Desktop.vcperspective");
+    std::fs::write(&file, fixture("Desktop")).unwrap();
+    perspective_presets::run(&mut app, Action::Import, "Browser").unwrap();
+    picker.answer(&[file.to_str().unwrap()]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("Desktop").is_some(), "the selected desktop file adds its preset");
+    assert_eq!(field(&app, "selected"), json!("Desktop"));
+
+    perspective_presets::run(&mut app, Action::Import, "Desktop").unwrap();
+    picker.cancel();
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert_eq!(app.session.prefs.perspective_presets.len(), 2);
+    assert_eq!(field(&app, "selected"), json!("Desktop"));
+}
+
+#[test]
 fn perspective_preset_menus_list_the_views_of_each_type() {
     let app = app();
     let entries = crate::menus::menu_entries(&app);

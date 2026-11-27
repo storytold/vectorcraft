@@ -689,7 +689,13 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
     (c.enabled)(&app.session)?;
     let name = app.session.active().map(|d| d.title()).unwrap_or_default();
     let message = crate::i18n::fmt(tl!("Revert to the saved version of “{name}”?"), &[("name", &name)]);
-    dialogs::confirm::ask(app, &message, tl!("Changes made since it was last saved will be lost."), "file.revert", json!({ "confirmed": true }));
+    dialogs::confirm::ask_in_document(
+        app,
+        &message,
+        tl!("Changes made since it was last saved will be lost."),
+        "file.revert",
+        json!({ "confirmed": true }),
+    );
     Ok(json!({ "pending": dialogs::confirm::KIND }))
 }
 
