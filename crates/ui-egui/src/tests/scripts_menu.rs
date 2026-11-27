@@ -25,10 +25,9 @@ fn ctx() -> egui::Context {
     CTX.with(Clone::clone)
 }
 
-/// A fresh folder for test `name`, holding an empty `Scripts` folder.
-fn folder(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vc-scripts-menu-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+/// A fresh folder for test `name`, holding an empty `Scripts` folder, removed when the test ends.
+fn folder(name: &str) -> vectorcraft_testkit::TempDir {
+    let dir = vectorcraft_testkit::TempDir::new(&format!("scripts-menu-{name}"));
     std::fs::create_dir_all(dir.join("Scripts")).unwrap();
     dir
 }
@@ -459,4 +458,301 @@ fn a_slow_first_read_says_so_until_its_listing_comes() {
     scripts_menu::finish();
     assert_eq!(shape(&scripts_menu::items_at(started + 10.0 * scripts_menu::SLOW_SECS)), format!("first, -, {FIXED}"));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The names of the runs the Script Console started, in order.
+fn started(app: &VectorcraftApp) -> Vec<String> {
+    let lines = app.session.script_console().to_json();
+    lines["lines"].as_array().unwrap().iter().filter(|l| l["kind"] == "start").map(|l| l["name"].as_str().unwrap().to_string()).collect()
+}
+
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding `a.jsx` that draws one rectangle.
+fn startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    std::fs::write(startup.join("a.jsx"), "vc.run('shape.rectangle', {x:40,y:0,width:10,height:10});").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn with_run_startup_scripts_on_a_listed_script_runs_after_the_startup_scripts() {
+    let dir = folder("startup");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    let draw = write(&dir, "Draw Two.jsx", DRAW);
+    read(&app);
+    // Off by default: the listed script runs alone.
+    menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(started(&app), ["Draw Two.jsx"]);
+    assert_eq!(objects(&app), 2);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap();
+    assert!(app.session.script_running());
+    finish(&mut app);
+    assert_eq!(started(&app), ["Draw Two.jsx", "a.jsx", "Draw Two.jsx"], "the startup script runs first");
+    assert_eq!(objects(&app), 5);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "an undo step for each run");
+    assert_eq!(app.ui.status, "Ran Draw Two.jsx");
+    // A script that left the folder runs neither itself nor the startup scripts.
+    std::fs::remove_file(&draw).unwrap();
+    let e = menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap_err();
+    assert_eq!(e, "the script is no longer in the Scripts folder");
+    assert!(!app.session.script_running());
+    assert_eq!(started(&app).len(), 3);
+    scripts_menu::finish();
+}
+
+#[test]
+fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scripts() {
+    let dir = folder("startup-other");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    script_runs::run_at_launch(&mut app);
+    assert!(!app.session.script_running(), "off by default, nothing runs at launch");
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    script_runs::run_at_launch(&mut app);
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx"]);
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "a.jsx", "chosen"]);
+    assert_eq!(objects(&app), 4);
+}
+
+#[test]
+fn with_run_startup_scripts_on_a_chosen_script_still_replies_as_script_run() {
+    let dir = folder("startup-reply");
+    let mut app = app(&dir);
+    app.session.prefs.show_external_script_warning = false;
+    let off = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(off, json!({"running": true, "name": "chosen"}));
+    let empty = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&empty).unwrap();
+    app.session.attach_startup_scripts_dir(empty);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    // An empty folder: the chosen script starts at once, named as its run is, by a #script line too.
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!((&r["running"], &r["name"], &r["startup"]["queued"]), (&json!(true), &json!("chosen"), &json!(1)), "{r}");
+    let named = format!("#script \"Named\"\n{DRAW}");
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": named })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(r["name"], "Named", "{r}");
+    // A chosen script that cannot start gives its error, as script.run does.
+    let alone = app.run("script.run", json!({"source": "vc.log(("})).unwrap_err();
+    let e = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "vc.log((" })).unwrap().unwrap_err();
+    assert_eq!(e, alone);
+    // A startup script runs first: the chosen script is queued after it.
+    startup_folder(&mut app, &dir);
+    let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!((&r["running"], &r["queued"], &r["startup"]["queued"]), (&json!(true), &json!(true), &json!(2)), "{r}");
+    assert_eq!(started(&app).last().map(String::as_str), Some("chosen"));
+}
+
+#[test]
+fn a_stopped_startup_script_says_it_was_stopped_and_the_chosen_script_still_runs() {
+    let dir = folder("startup-stop");
+    let mut app = app(&dir);
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    std::fs::write(startup.join("a.jsx"), "for (;;) {}").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.script_request_stop());
+    app.status("before");
+    for _ in 0..10_000 {
+        if app.ui.status != "before" {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    let stopped = "The script was stopped and its changes were undone".to_string();
+    assert_eq!(app.ui.status, stopped);
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "chosen"]);
+    // The stopped startup script stays in sight when the chosen script ends, with its message in the hover.
+    assert_eq!(app.ui.status, stopped);
+    assert_eq!(app.ui.status_notes, Some((stopped.clone(), vec![stopped, "Ran chosen".to_string()])));
+}
+
+#[test]
+fn a_last_startup_script_that_cannot_start_shows_in_the_status_bar_when_the_runs_end() {
+    let dir = folder("startup-last-fails");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    let mut big = "//".to_string();
+    big.push_str(&"x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES));
+    std::fs::write(dir.join("Startup Scripts").join("b.jsx"), big).unwrap();
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    script_runs::run_at_launch(&mut app);
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "b.jsx"]);
+    assert_eq!(app.ui.status, format!("b.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE));
+}
+
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding only `0.jsx`, too large to run.
+fn oversized_startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    let mut big = "//".to_string();
+    big.push_str(&"x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES));
+    std::fs::write(startup.join("0.jsx"), big).unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn a_launch_whose_only_startup_script_cannot_start_shows_it_in_the_status_bar() {
+    let dir = folder("startup-launch-too-large");
+    let mut app = app(&dir);
+    oversized_startup_folder(&mut app, &dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    let shown = format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE);
+    assert_eq!(app.ui.status, shown);
+    assert!(!app.session.script_running());
+    script_runs::poll(&mut app);
+    assert_eq!(app.ui.status, shown);
+    assert_eq!(objects(&app), 0);
+}
+
+#[test]
+fn a_menu_run_after_a_first_startup_script_that_cannot_start_shows_it_and_runs_the_chosen_script() {
+    let dir = folder("startup-menu-too-large");
+    let mut app = app(&dir);
+    oversized_startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    let reply = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    assert_eq!(reply["running"], true, "{reply}");
+    assert_eq!(reply["queued"], true, "{reply}");
+    let shown = format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE);
+    assert_eq!(app.ui.status, shown);
+    finish(&mut app);
+    assert_eq!(started(&app), ["0.jsx", "chosen"]);
+    assert_eq!(objects(&app), 2);
+    // The failure stays in sight when the chosen script ends, with its message in the hover.
+    assert_eq!(app.ui.status, shown);
+    assert_eq!(app.ui.status_notes, Some((shown.clone(), vec![shown, "Ran chosen".to_string()])));
+}
+
+#[test]
+fn with_run_startup_scripts_on_other_script_with_a_missing_file_fails_before_the_startup_scripts() {
+    let dir = folder("startup-missing");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let missing = dir.join("gone.jsx").to_string_lossy().into_owned();
+    let alone = app.run("script.run", json!({ "path": missing })).unwrap_err();
+    app.session.prefs.show_external_script_warning = false;
+    let e = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "path": missing })).unwrap().unwrap_err();
+    assert_eq!(e, alone, "the error script.run gives");
+    assert!(!app.session.script_running());
+    assert!(started(&app).is_empty(), "no startup script ran");
+    // The warning opens first; its Run button shows the error.
+    app.session.prefs.show_external_script_warning = true;
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "path": missing })).unwrap().unwrap();
+    assert!(super::script_dialogs::is_open::<crate::dialogs::script_run::RunQuestion>(&app));
+    assert!(super::script_dialogs::confirm(&mut app, crate::dialogs::script_run::KIND));
+    assert_eq!(app.ui.status, alone, "the error script.run gives, after the warning");
+    assert!(!app.session.script_running());
+    assert!(started(&app).is_empty(), "no startup script ran after the warning");
+}
+
+#[test]
+fn a_startup_scripts_folder_that_cannot_be_read_shows_in_the_status_bar_at_launch_and_a_missing_one_does_not() {
+    let dir = folder("startup-unreadable");
+    let mut app = app(&dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let startup = dir.join("Startup Scripts");
+    app.session.attach_startup_scripts_dir(startup.clone());
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    assert_eq!(app.ui.status, "before", "a missing folder runs nothing and says nothing");
+    // A file where the folder should be cannot be listed.
+    std::fs::write(&startup, "not a folder").unwrap();
+    script_runs::run_at_launch(&mut app);
+    assert!(!app.session.script_running());
+    // The message names the folder without its path, which automation replies would show.
+    assert_eq!(app.ui.status, "The Startup Scripts folder cannot be read");
+}
+
+#[test]
+fn a_menu_run_with_a_startup_scripts_folder_that_cannot_be_read_says_so_and_runs_the_chosen_script() {
+    let dir = folder("startup-menu-unreadable");
+    let mut app = app(&dir);
+    let startup = dir.join("Startup Scripts");
+    std::fs::write(&startup, "not a folder").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    let note = script_runs::STARTUP_UNREADABLE.to_string();
+    assert_eq!(app.ui.status, note);
+    finish(&mut app);
+    assert_eq!(started(&app), ["chosen"]);
+    assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
+    assert_eq!(app.ui.status_notes, Some((note.clone(), vec![note, "Ran chosen".to_string()])));
+}
+
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding one more entry than a listing reads
+/// and no script.
+fn overfull_startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    for n in 0..=vectorcraft_engine::script::folder::Limits::default().entries {
+        std::fs::write(startup.join(format!("{n}.txt")), "").unwrap();
+    }
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn a_startup_scripts_folder_not_read_in_full_shows_in_the_status_bar_at_launch_and_after_a_menu_run() {
+    let dir = folder("startup-truncated");
+    let mut app = app(&dir);
+    overfull_startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let note = "The Startup Scripts folder was not read in full";
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    assert_eq!(app.ui.status, note);
+    assert!(!app.session.script_running());
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    assert_eq!(app.ui.status, note);
+    finish(&mut app);
+    assert_eq!(started(&app), ["chosen"]);
+    assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
+    assert_eq!(app.ui.status_notes, Some((note.to_string(), vec![note.to_string(), "Ran chosen".to_string()])));
+}
+
+#[test]
+fn startup_scripts_that_cannot_start_and_a_folder_not_read_in_full_all_stay_in_the_status_bar() {
+    let dir = folder("startup-notes");
+    let mut app = app(&dir);
+    app.status("before");
+    let reply = json!({
+        "failed": [{"name": "0.jsx", "error": "too large"}, {"name": "1.jsx", "error": "cannot be read"}],
+        "truncated": true,
+        "unreadable": false,
+    });
+    script_runs::reply_notes(&mut app, &reply);
+    let notes = vec!["0.jsx: too large".to_string(), "1.jsx: cannot be read".to_string(), script_runs::STARTUP_TRUNCATED.to_string()];
+    assert_eq!(app.ui.status, "0.jsx: too large", "the first note shows");
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)), "the hover lists every note");
+    // A reply with nothing left out keeps the message.
+    script_runs::reply_notes(&mut app, &json!({"failed": [], "truncated": false, "unreadable": false}));
+    assert_eq!(app.ui.status, "0.jsx: too large");
 }
