@@ -348,6 +348,42 @@ fn tab_rows(app: &VectorcraftApp) -> Vec<Value> {
     fields(app)["tabs"].as_array().cloned().unwrap_or_default()
 }
 
+#[test]
+fn clear_all_tabs_can_be_clicked_in_a_narrow_viewport() {
+    use egui::accesskit::Role;
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+    for width in [800.0, 540.0] {
+        let mut app = app();
+        app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": [{"position": 36.0}, {"position": 72.0}]}})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 500.0));
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, events| {
+            time += 0.25;
+            crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+        };
+        frame(&mut app, vec![]);
+        open_tabs(&mut app, "Body");
+        for _ in 0..5 {
+            frame(&mut app, vec![]);
+        }
+        let out = frame(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+        let clear = nodes.iter().find(|(_, node)| node.role() == Role::Button && node.label() == Some("Clear All Tabs")).unwrap();
+        let bounds = clear.1.bounds().unwrap();
+        let at = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+
+        assert_eq!(tab_rows(&app).len(), 2);
+        frame(&mut app, vec![Event::PointerMoved(at)]);
+        for pressed in [true, false] {
+            frame(&mut app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        frame(&mut app, vec![]);
+        assert!(tab_rows(&app).is_empty(), "Clear All Tabs at {bounds:?} was not reachable in a {width}-point viewport");
+    }
+}
+
 /// Tabs shows a style's stops in the General unit with their alignment, leader and Align On
 /// character; a stop left as it was keeps its position exactly, a changed one is read in the unit,
 /// and the stops are stored sorted by position. Add puts a left stop half an inch past the furthest
