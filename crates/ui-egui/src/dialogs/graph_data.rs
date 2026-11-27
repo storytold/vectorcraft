@@ -922,6 +922,62 @@ mod tests {
         assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), expected);
     }
 
+    fn stale_sheet_after_file_revert(test: &str) -> (VectorcraftApp, u64, Value) {
+        struct SavedFile(std::path::PathBuf);
+        impl Drop for SavedFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        let (mut app, id) = app_with(",Original\nQ1,1", "column");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-graph-data-revert-{}-{test}.vectorcraft", std::process::id())));
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        let saved = data(&mut app, id);
+        app.run("graph.setData", json!({"id": id, "series": ["Unsaved"], "categories": ["Q2"], "rows": [[3.0]]})).unwrap();
+        assert_ne!(data(&mut app, id), saved);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app).unwrap();
+        set_field(&app, "grid", json!([["", "Draft"], ["Q2", "9"]])).unwrap();
+        let state = app.session.active().unwrap();
+        let (uid, reverts) = (state.uid, state.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(data(&mut app, id), saved, "the restored graph uses the same ID");
+        (app, id, saved)
+    }
+
+    #[test]
+    fn graph_data_after_file_revert_cannot_apply_the_old_draft() {
+        let (mut app, id, saved) = stale_sheet_after_file_revert("apply");
+        let undo = app.session.active().unwrap().history.undo.len();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(read(&app, GraphDataDialog::held_state), Some(HeldOk::Refused(_))));
+
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app).unwrap();
+        set_field(&app, "grid", json!([["", "Fresh"], ["Q3", "7"]])).unwrap();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id)["rows"], json!([[7.0]]));
+    }
+
+    #[test]
+    fn graph_data_after_file_revert_keeps_the_old_sheet_on_worksheet_revert() {
+        let (mut app, id, saved) = stale_sheet_after_file_revert("worksheet");
+        let draft = read(&app, |dialog| dialog.sheet.grid.clone());
+        edit(&app, |dialog| dialog.actions.push(Action::Revert));
+        pump(&mut app, &crate::testing::ui_context());
+        assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), draft);
+        assert_eq!(data(&mut app, id), saved);
+    }
+
     /// The app with the window drawn each frame as the shell draws it.
     // PLAN: the shell's own frame (hub-w2) replaces `host.run` here, and runs `file_asks::poll` (files-w7) itself.
     fn harness(app: VectorcraftApp) -> Harness {
