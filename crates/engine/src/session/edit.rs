@@ -149,6 +149,7 @@ impl Session {
                         st.active_layer = st.doc.default_layer();
                     }
                 }
+                st.leave_isolation_if_gone();
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -578,7 +579,8 @@ impl Session {
             if !Arc::ptr_eq(&st.doc, &it.doc) || selection_changed {
                 st.revision += 1;
             }
-            st.doc = it.doc.clone();
+            let undone = std::mem::replace(&mut st.doc, it.doc.clone());
+            let isolation = it.isolation;
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
             it.used_defaults_only |= cmd::asks_defaults_only(params);
@@ -601,6 +603,9 @@ impl Session {
             // Guides locked and slices locked or hidden during the interaction stay deselected,
             // even when the preview fails.
             deselect_hidden(&menu, &st.doc, &mut st.selection);
+            // The previous preview's end of isolation mode, when it removed the isolated object, is
+            // undone with it.
+            st.restore_isolation(isolation, &undone);
             cmd::globaledit::follow_history(st);
             (paint, restore_paint)
         };

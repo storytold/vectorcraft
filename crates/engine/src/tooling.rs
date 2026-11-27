@@ -1947,14 +1947,14 @@ impl Session {
     }
 
     fn measure_deferred_preview(&mut self, cmd: &str, p: &Value) -> Option<DeferredFeedback> {
-        let (snapshot, selection, revision, paint, interaction_fields) = {
+        let (snapshot, selection, isolation, revision, paint, interaction_fields) = {
             let st = self.active()?;
             let it = st.interaction.as_ref()?;
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
                 return None;
             }
             let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed);
-            (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
+            (st.doc.clone(), st.selection.clone(), st.isolation, st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
             let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection, cmd, p)).unwrap_or_default();
@@ -1970,6 +1970,8 @@ impl Session {
         if let Ok(st) = self.doc_mut() {
             st.doc = snapshot;
             st.selection = selection;
+            // A measured preview that removed the isolated object leaves isolation mode as it was.
+            st.isolation = isolation;
             st.revision = revision;
             if let Some(it) = &mut st.interaction {
                 it.preview = interaction_fields.0;
