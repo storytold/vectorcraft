@@ -535,8 +535,8 @@ pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Resu
 
 pub use glyph::glyph_art;
 pub use import::{
-    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT,
-    MAX_NODES,
+    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_DEPTH, MAX_FOREIGN_ELEMENT_BYTES, MAX_FOREIGN_ELEMENTS, MAX_FOREIGN_VALUE,
+    MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT, MAX_NODES,
 };
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.

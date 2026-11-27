@@ -270,6 +270,96 @@ impl Writer<'_> {
         }
     }
 
+    /// Element `e` of another application ([`vectorcraft_doc::ForeignElement`]) as markup on one
+    /// line, its namespaces declared on the root ([`Self::foreign_prefix`]); `None`, with a warning,
+    /// when a name or a character in it can't be written as XML. Text that holds markup characters
+    /// is written as a CDATA section, as such configuration usually is.
+    pub(super) fn foreign_element(&mut self, e: &vectorcraft_doc::ForeignElement) -> Option<String> {
+        let mut out = String::new();
+        if self.write_foreign_element(e, &mut out) {
+            return Some(out);
+        }
+        self.warn("Elements of other applications with invalid XML names or characters were left out of SVG");
+        None
+    }
+
+    fn write_foreign_element(&mut self, e: &vectorcraft_doc::ForeignElement, out: &mut String) -> bool {
+        const SVG_NS: &str = "http://www.w3.org/2000/svg";
+        const XLINK_NS: &str = "http://www.w3.org/1999/xlink";
+        const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
+        if !xml_ncname(&e.name) || !(e.prefix.is_empty() || xml_ncname(&e.prefix)) || !valid_xml_value(&e.ns) {
+            return false;
+        }
+        // SVG's elements are in the root's default namespace; one in no namespace says so.
+        let (tag, reset) = match e.ns.as_str() {
+            SVG_NS => (e.name.clone(), ""),
+            "" => (e.name.clone(), " xmlns=\"\""),
+            ns => {
+                let wanted = if e.prefix.is_empty() { "ns" } else { e.prefix.as_str() };
+                (format!("{}:{}", self.foreign_prefix(ns, wanted), e.name), "")
+            }
+        };
+        self.non_latin1_names |= tag.chars().any(|c| u32::from(c) > 0xff);
+        out.push_str(&format!("<{tag}{reset}"));
+        let mut seen = HashSet::new();
+        for a in &e.attrs {
+            if !xml_ncname(&a.name) || !(a.prefix.is_empty() || xml_ncname(&a.prefix)) || !valid_xml_value(&a.ns) || !valid_xml_value(&a.value) {
+                return false;
+            }
+            if !seen.insert((a.ns.as_str(), a.name.as_str())) {
+                continue;
+            }
+            let name = match a.ns.as_str() {
+                "" => a.name.clone(),
+                XLINK_NS => format!("xlink:{}", a.name),
+                XML_NS => format!("xml:{}", a.name),
+                ns => {
+                    let wanted = if a.prefix.is_empty() { "ns" } else { a.prefix.as_str() };
+                    format!("{}:{}", self.foreign_prefix(ns, wanted), a.name)
+                }
+            };
+            self.non_latin1_names |= name.chars().any(|c| u32::from(c) > 0xff);
+            out.push_str(&format!(" {name}=\"{}\"", xml_attr_escape(&a.value)));
+        }
+        if e.content.is_empty() {
+            out.push_str("/>");
+            return true;
+        }
+        out.push('>');
+        for c in &e.content {
+            match c {
+                vectorcraft_doc::ForeignContent::Text(t) => {
+                    if !valid_xml_value(t) {
+                        return false;
+                    }
+                    if t.contains(['<', '&']) && !t.contains("]]>") {
+                        out.push_str(&format!("<![CDATA[{t}]]>"));
+                    } else {
+                        out.push_str(&xml_escape(t));
+                    }
+                }
+                vectorcraft_doc::ForeignContent::Element(inner) => {
+                    if !self.write_foreign_element(inner, out) {
+                        return false;
+                    }
+                }
+            }
+        }
+        out.push_str(&format!("</{tag}>"));
+        true
+    }
+
+    /// Group `n`'s elements of other applications, each on a line of its own, first among the
+    /// group's children.
+    pub(super) fn foreign_children(&mut self, n: &Node) {
+        let Some(elements) = n.extras().attrs.as_deref().map(|a| a.foreign_elements.clone()).filter(|e| !e.is_empty()) else { return };
+        for e in &elements {
+            if let Some(line) = self.foreign_element(e) {
+                self.line(&line);
+            }
+        }
+    }
+
     /// The prefix namespace `ns` is written under: `wanted` (the file's), else `wanted2`,
     /// `wanted3`… when the export's own prefixes or another namespace already have it. XML keeps
     /// prefixes starting with `xml` for itself: those become `ns`, `ns2`…

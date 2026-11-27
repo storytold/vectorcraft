@@ -18,6 +18,7 @@ mod encoding_profile_fonts;
 mod focal;
 mod font_weights;
 mod foreign_attributes;
+mod foreign_elements;
 mod gradients;
 mod ids;
 mod image_orientation;

@@ -187,6 +187,8 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         svg.doctype_internal("svg", &entities, nl);
     }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
+    // The root's elements of other applications (#9241), before the root names their namespaces.
+    let root_foreign: Vec<String> = doc.svg_foreign_elements.iter().filter_map(|e| w.foreign_element(e)).collect();
     let mut root = svg.root().attr("xmlns:xlink", "http://www.w3.org/1999/xlink");
     for (ns, prefix) in &w.foreign_ns {
         root = root.attr(&format!("xmlns:{prefix}"), ns);
@@ -247,6 +249,11 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         }
         out.push_str(&w.indent(1));
         out.push_str(&format!("<script xlink:href=\"{}\"/>{nl}", xml_attr_escape(file)));
+    }
+    for line in &root_foreign {
+        out.push_str(&w.indent(1));
+        out.push_str(line);
+        out.push_str(nl);
     }
     out.push_str(&variables);
     let latin1 = encoding == Encoding::Latin1;

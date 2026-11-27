@@ -406,7 +406,7 @@ fn swatches_bytes(s: &[Swatch]) -> usize {
 }
 
 /// The heap an object's attributes own: their text, data, events, classes, foreign attributes and
-/// tags.
+/// elements, and tags.
 fn attrs_bytes(a: &crate::ObjectAttributes) -> usize {
     let pairs = |v: &Vec<(String, String)>| vec_bytes(v) + v.iter().map(|(k, v)| k.capacity() + v.capacity()).sum::<usize>();
     a.url.capacity()
@@ -417,6 +417,8 @@ fn attrs_bytes(a: &crate::ObjectAttributes) -> usize {
         + a.classes.iter().map(String::capacity).sum::<usize>()
         + vec_bytes(&a.foreign)
         + a.foreign.iter().map(|f| f.ns.capacity() + f.prefix.capacity() + f.name.capacity() + f.value.capacity()).sum::<usize>()
+        + vec_bytes(&a.foreign_elements)
+        + a.foreign_elements.iter().map(crate::ForeignElement::heap_bytes).sum::<usize>()
         + vec_bytes(&a.tags)
         + a.tags.iter().map(|t| t.name.capacity() + t.value.capacity()).sum::<usize>()
 }

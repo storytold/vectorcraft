@@ -116,7 +116,9 @@ pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
 pub use node::Scaling;
 pub use node::{Extras, ExtrasMut, ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeExtras, NodeId, NodeKind, OpacityMask};
-pub use node::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS};
+pub use node::{
+    ForeignAttribute, ForeignContent, ForeignElement, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS,
+};
 pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use perspective::PerspectiveAttachment;
@@ -346,6 +348,10 @@ pub struct Document {
     /// given) SVG export links with `<script>` elements, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub svg_scripts: Vec<String>,
+    /// Elements in other applications' XML namespaces that were children of an imported SVG's root
+    /// `<svg>`, in order (#9241): SVG export writes them back there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub svg_foreign_elements: Vec<ForeignElement>,
     /// Effect › SVG Filters: the SVG filters the document holds (at most [`SvgFilter::MAX`]), in
     /// the order the submenu lists them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
