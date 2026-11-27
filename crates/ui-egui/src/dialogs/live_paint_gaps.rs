@@ -52,15 +52,15 @@ pub(super) static SPEC: OptionSpec = OptionSpec {
 pub(crate) struct Open {
     /// The dialog the preview belongs to.
     pub id: DialogId,
-    /// The document that owns the preview interaction.
-    document: u64,
+    /// The drawing and loaded contents that own the preview interaction.
+    document: (u64, u64),
     /// The preview the options run as.
     pub preview: LivePreview,
 }
 
 impl Open {
     fn cancel(self, app: &mut VectorcraftApp) {
-        if app.session.active().is_some_and(|active| active.uid == self.document) {
+        if app.session.active().is_some_and(|active| (active.uid, active.reverts) == self.document) {
             self.preview.cancel(app);
         }
     }
@@ -69,7 +69,7 @@ impl Open {
 /// Open Gap Options on the selected Live Paint groups, filled in from the first one's options.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let active = app.session.active().ok_or("select a Live Paint group")?;
-    let document = active.uid;
+    let (document, reverts) = (active.uid, active.reverts);
     let groups: Vec<u64> = active
         .selection
         .objects
@@ -87,13 +87,13 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields =
         [("detect", o["detect"].clone()), ("size", json!(size)), ("custom", custom), ("color", o["color"].clone()), ("closeGaps", json!(false))];
     let values = Map::from_iter(fields.map(|(key, value)| (key.to_owned(), value)));
-    option_form::open(app, &SPEC, values, json!({ "ids": groups, "document": document })).ok_or("no window")?;
+    option_form::open(app, &SPEC, values, json!({ "ids": groups, "document": document, "reverts": reverts })).ok_or("no window")?;
     Ok(Value::Null)
 }
 
-fn original_document(app: &VectorcraftApp, extra: &Value) -> Option<u64> {
-    let document = extra["document"].as_u64()?;
-    app.session.active().filter(|active| active.uid == document).map(|_| document)
+fn original_document(app: &VectorcraftApp, extra: &Value) -> Option<(u64, u64)> {
+    let document = (extra["document"].as_u64()?, extra["reverts"].as_u64()?);
+    app.session.active().filter(|active| (active.uid, active.reverts) == document).map(|_| document)
 }
 
 /// `livePaint.gapOptions` parameters from the values and the groups in `extra`.
@@ -128,7 +128,13 @@ fn body(ui: &mut egui::Ui, rows: &mut Rows<'_>) {
 
 /// OK: keep the previewed options as one undo step; with no preview running they run as one.
 fn run(app: &mut VectorcraftApp, values: &Map<String, Value>, extra: &Value) -> Result<Value, String> {
-    let document = original_document(app, extra).ok_or_else(|| tl!(WRONG_DOCUMENT).to_owned())?;
+    let document = original_document(app, extra).ok_or_else(|| {
+        if app.session.active().is_some_and(|active| extra["document"].as_u64() == Some(active.uid)) {
+            tl!("The document was reverted. Reopen this dialog to continue.").to_owned()
+        } else {
+            tl!(WRONG_DOCUMENT).to_owned()
+        }
+    })?;
     let preview = app.object_dialogs.gaps.take().filter(|open| open.document == document).map_or_else(LivePreview::default, |open| open.preview);
     preview.commit(app, CMD, params(values, extra))
 }
@@ -336,6 +342,44 @@ mod tests {
         assert!(!overlays(&app).is_empty());
         cancel(&mut app);
         assert_eq!(options(&app, group), GapOptions::default());
+    }
+
+    #[test]
+    fn gap_preview_and_ok_do_not_edit_live_paint_restored_by_revert() {
+        let mut app = app();
+        let dir = vectorcraft_testkit::TempDir::new("live-paint-gap-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let group = gapped_group(&mut app);
+        let saved = options(&app, group);
+        app.run("file.saveAs", json!({"path": dir.join("Live Paint.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 140, "y": 140, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
+        assert!(options(&app, group).detect);
+
+        let source = app.session.active().unwrap();
+        let (uid, reverts) = (source.uid, source.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let current = app.session.active().unwrap();
+        assert_eq!((current.uid, current.reverts), (uid, reverts + 1));
+        let undo = current.history.undo.len();
+        pump_all(&mut app);
+        assert_eq!(options(&app, group), saved);
+        assert!(overlays(&app).is_empty());
+        assert!(!press_ok(&mut app));
+        assert_eq!(options(&app, group), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        cancel(&mut app);
+
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        assert!(press_ok(&mut app));
+        assert!(options(&app, group).detect);
     }
 
     #[test]

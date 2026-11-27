@@ -899,6 +899,48 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     assert!(outlined(&mut app), "OK brings ordinary outlines back on the applied dots");
 }
 
+#[test]
+fn halftone_waits_for_the_drawing_that_opened_the_preview() {
+    use crate::dialogs::{halftone, host};
+
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let draw = |app: &mut VectorcraftApp, x| {
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": x, "y": 40, "width": 60, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    };
+    draw(&mut app, 40);
+    let first = app.session.doc().unwrap().doc.clone();
+    draw(&mut app, 200);
+    let second = app.session.doc().unwrap().doc.clone();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("ui.menuDialog", json!({"command": halftone::CMD})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    let id = app.effect_dialogs.halftone.as_ref().unwrap().id;
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Other drawing's edit").unwrap();
+    let dialogs = app.dialogs().unwrap();
+    dialogs.with(|h| h.set_json_field(&ctx, id, "frequency", json!(25))).unwrap();
+    host::pump(&mut app, &ctx);
+    assert_eq!(app.session.doc().unwrap().doc, second);
+    assert_eq!(app.session.doc().unwrap().interaction.as_ref().unwrap().label, "Other drawing's edit");
+    dialogs.with(|h| h.confirm_by_id(&ctx, id));
+    host::pump(&mut app, &ctx);
+    assert!(app.any_dialog_open());
+    assert_eq!(app.session.doc().unwrap().doc, second);
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+    assert!(!app.any_dialog_open());
+    assert_ne!(app.session.doc().unwrap().doc, first);
+    assert_eq!(app.session.documents()[1].doc, second);
+}
+
 // One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.
 fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
     let (shapes, mut delta) = frame_output(app, ctx);
@@ -1028,6 +1070,78 @@ fn an_edit_over_art_drawn_for_the_frames_size() {
         let fresh = canvas(&app, delta).map(|(_, px)| px);
         assert!(fresh.as_ref() == Some(&edited), "what a fresh renderer draws, cropped {cropped}: {}", differing(&edited, fresh.as_deref()));
     }
+}
+
+#[test]
+fn web_partial_redraws_skip_unchanged_view_sensitive_art() {
+    keeping_color_settings(|| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300, "colorMode": "rgb"})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.canvas.worker_started = true;
+        app.canvas.waits_for_still = true;
+        app.canvas.renderer.threads = 0;
+        let glow = app.run("shape.rectangle", json!({"x": 55, "y": 70, "width": 55, "height": 55})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"ids": [glow], "effect": "stylize.innerGlow", "params": {"blur": 8}})).unwrap();
+        let large = app.run("shape.rectangle", json!({"x": -980, "y": -700, "width": 965, "height": 1010})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"ids": [large], "effect": "texture.texturizer", "params": {}})).unwrap();
+        let far = app.run("shape.rectangle", json!({"x": 300, "y": 200, "width": 12, "height": 12})).unwrap()["id"].clone();
+        let near = app.run("shape.rectangle", json!({"x": 60, "y": 80, "width": 12, "height": 12})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [near], "color": "#ffffff"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = crate::testing::ui_context();
+        shapes(&mut app, &ctx);
+        if let Some(vm) = app.view_mut() {
+            (vm.zoom, vm.center) = (1.2, Point::new(200.0, 150.0));
+        }
+        // Start from a full raster at the chosen view rather than waiting for the reprojected view to settle.
+        app.canvas.key = None;
+        let read = |app: &mut VectorcraftApp| {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let tex = app.canvas.texture.as_ref().unwrap().id();
+            delta.set.remove(&tex).and_then(|mut uploads| uploads.pop()).expect("the edit uploads canvas pixels")
+        };
+        let first = read(&mut app);
+        assert!(first.pos.is_none());
+        assert!(app.canvas.renderer.stats.view_sized > 0, "single-threaded filter layers depend on the frame size");
+        let egui::ImageData::Color(first) = first.image;
+        let mut composed = (*first).clone();
+        for color in ["#ff0000", "#00ff00"] {
+            app.run("paint.setFill", json!({"ids": [far], "color": color})).unwrap();
+            let delta = read(&mut app);
+            let [x, y] = delta.pos.expect("an edit away from the glow uploads only a patch");
+            let egui::ImageData::Color(patch) = delta.image;
+            for row in 0..patch.height() {
+                let start = (y + row) * composed.width() + x;
+                composed.pixels[start..start + patch.width()].copy_from_slice(&patch.pixels[row * patch.width()..(row + 1) * patch.width()]);
+            }
+        }
+        let key = app.canvas.key.as_ref().unwrap();
+        let view = app.canvas_view().unwrap();
+        let (w, h, view) = frame_view(key.pixel, (key.w, key.h), &view, key.ppp);
+        let (doc, still) = app.canvas.shown.as_ref().unwrap();
+        let drag = vectorcraft_render::RenderOptions { interacting: true, dragging: true, ..still.clone() };
+        let mut cold = vectorcraft_render::Renderer::new();
+        cold.threads = 0;
+        cold.render(doc, w, h, view, &drag);
+        assert!(cold.stats.previewed > 0, "a cold renderer draws the large effect at drag resolution");
+        app.canvas.renderer.render(doc, w, h, view, &drag);
+        assert_eq!(app.canvas.renderer.stats.previewed, 0, "distant canvas patches left the full-resolution effect available for the drag");
+
+        // The old glow's bounds survive successive partial renders, even though neither draws it.
+        app.run("paint.setFill", json!({"ids": [near], "color": "#0202ee"})).unwrap();
+        let overlap = read(&mut app);
+        assert!(overlap.pos.is_none(), "editing inside the old glow's bounds renders the whole frame");
+        app.run("paint.setFill", json!({"ids": [near], "color": "#ffffff"})).unwrap();
+        let restored = read(&mut app);
+        assert!(restored.pos.is_none());
+        let egui::ImageData::Color(restored) = restored.image;
+        assert_eq!(restored.size, composed.size);
+        assert!(restored.pixels == composed.pixels, "partial updates equal a full redraw: {}", differing(&composed.pixels, Some(&restored.pixels)));
+        app.run("effect.apply", json!({"ids": [far], "effect": "stylize.innerGlow", "params": {"blur": 8}})).unwrap();
+        assert!(read(&mut app).pos.is_none(), "the new glow in the part also requires a whole frame");
+    });
 }
 
 /// A canvas more device pixels across than the largest texture side the display supports renders

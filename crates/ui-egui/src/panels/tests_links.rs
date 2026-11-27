@@ -653,6 +653,61 @@ fn properties_shows_the_selected_image_and_its_link_actions() {
     assert!(text.contains("Linked File") && text.contains("Edit Original") && text.contains("Embed"), "{text}");
 }
 
+#[test]
+fn replace_image_uses_browser_picker_bytes_and_fits_them_in_one_undo_step() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_geom::Rect;
+
+    let dir = Folder::new("replace-browser-bytes");
+    let (mut app, linked, _) = app(&dir);
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let journal = app.session.journal.len();
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let bytes = png(10, 20);
+
+    super::links::replace(&mut app, vec![linked]);
+    assert_eq!(picker.requests().len(), 1);
+    picker.answer_contents(&[("replacement.png", &bytes)]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(linked)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert!(image.link.is_none(), "browser file contents are embedded");
+    assert_eq!(state.doc.images[&image.key].bytes.as_slice(), bytes);
+    let bounds = image.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 10.0, 20.0));
+    assert_eq!((bounds.width(), bounds.height()), (100.0, 200.0), "fit in the old 300 by 200 bounds");
+    assert_eq!(state.history.undo.len(), undo + 1);
+    assert_eq!(app.session.journal.get(journal).map(|(command, _)| command.as_str()), Some("links.replaceEmbedded"));
+
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
+fn replace_image_with_a_desktop_path_remains_linked() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+
+    let dir = Folder::new("replace-desktop-path");
+    let (mut app, _, embedded) = app(&dir);
+    let path = dir.file("replacement.png", &png(10, 20));
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+
+    super::links::replace(&mut app, vec![embedded]);
+    picker.answer(&[&path]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(embedded)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert_eq!(image.link.as_ref().unwrap().path, path);
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]
