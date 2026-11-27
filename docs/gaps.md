@@ -698,10 +698,13 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   deletes saved ones; `gradient.presets.*` commands.
 - **Improved (#6164):** Control bar › Snapping also exposes the existing Snap to Glyph and Alignment Guides
   toggles through their existing commands. Floating-panel parity remains unverified; the estimate is unchanged.
+- **Done (2026-11-21):** View › Snapping contains Smart Guides, Snap to Point, Snap to Grid,
+  Snap to Pixel and Snap to Glyph, followed by a separator and Pixel Snapping Options…. All reuse the
+  existing view commands, checkmarks and localized labels; top-level View toggles and shortcuts remain.
+  Headless menu tests cover the hierarchy, clicks and painted checkmarks. Public reference:
+  [snapping and alignment](https://www.adobe.com/learn/illustrator/web/snapping-for-perfect-alignment).
 - **Missing:** the rest of the snapping enhancements (29.8.1): forced snapping to the grid, showing guides while
-  snapping, and limiting snapping to the active artboard or to isolated objects; the Snapping panel is partial
-  (the Control bar's Snapping quick access exists, but there is no View › Snapping submenu and floating-panel
-  parity is unverified, see [ui-parity.md](ui-parity.md)). The Smart Guides snapping tolerance and 30.0's Snap to
+  snapping, and limiting snapping to the active artboard or to isolated objects; floating-panel parity is unverified (the Control bar's Snapping quick access and View › Snapping submenu are done, see [ui-parity.md](ui-parity.md)). The Smart Guides snapping tolerance and 30.0's Snap to
   Tangent and Snap to Perpendicular are done. Not yet checked: snapping to the endpoints, midpoints and centers of
   rotated objects, and the reworked Snap to Grid and Snap to Pixel feedback. Also missing: artboard colors in exports and print, and
   managing artboards from the canvas other than locking and unlocking them from the Artboard tool's right-click
@@ -1020,6 +1023,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 |---|---|---|
 | 2026-11-24 | minor | G12: History row context menus use shared Craft List and Menu controls after rebasing onto the panel migration. App-specific actions retain the chosen snapshot across pending edits and dismiss on document switches; keyboard context requests and focus restoration use the shared runtime. Regression cases retained (#8845); scores and estimates unchanged. |
 | 2026-11-23 | minor | Gradient stop editor: a compact Color-tab menu offers Grayscale Slider, RGB Sliders, HSB Sliders, CMYK Sliders and Web Color Sliders, sharing the Color panel mode and conversion behavior (#7918). Choosing a mode keeps the editor open; Escape closes the menu first. Scores and estimates unchanged. |
+| 2026-11-21 | minor | G13: View › Snapping groups five existing toggles and Pixel Snapping Options…; top-level commands and shortcuts remain; headless click/checkmark coverage added; scores and estimates unchanged. |
 | 2026-11-21 | minor | G12: Properties Quick Actions offer Ungroup when any selected object is a group, Isolate Group only for one group, and Unite only for selections of at least two objects, each a non-guide path or a compound path. Headless regressions: `panels::properties::tests::two_groups_offer_ungroup_without_isolate_group`, `one_group_offers_ungroup_and_isolate_group`, `several_paths_offer_group_clipping_mask_and_unite`. Scores and estimates unchanged. |
 | 2026-11-21 | minor | G12: Document Info › Selection Only (`ui.docInfo.selectionOnly`) counts objects in the selection through `document.info`; with no artwork selected it shows (No artwork selected) and artboards the Artboard tool has selected still show. Headless regressions: `panels::doc_info::tests::test_doc_info_counts_entire_document`, `test_doc_info_selection_only_toggles_and_filters_counts`, `test_doc_info_selection_only_keeps_selected_artboard`, `test_doc_info_panel_menu_toggles_state`. Scores and estimates unchanged. |
 | 2026-11-21 | minor | G12/M14: History row context menus retain the chosen snapshot while the menu is open and pending edits settle; jumps settle typing before counting undo/redo, and discarded states report that they are unavailable. Shift+F10 opens the focused row menu, Escape restores row focus, and switching documents dismisses the popup. History checklist, area and milestone evidence updated (#8845); scores and estimates unchanged. |
