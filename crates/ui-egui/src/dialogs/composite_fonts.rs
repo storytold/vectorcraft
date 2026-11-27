@@ -57,7 +57,7 @@ use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::{COMPOSITE_BASELINE, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX};
 use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CustomCharSet};
-use vectorcraft_engine::cmd::compositefonts::{EXTS, file_bytes};
+use vectorcraft_engine::cmd::compositefonts::{EXTS, MAX_FILE_BYTES, file_bytes};
 use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
@@ -899,6 +899,12 @@ fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest, owner: Arc<()>
 
 /// Reads the fonts of the file picked and gives them to the dialog (Load… or Replace…).
 fn load_file(app: &mut VectorcraftApp, request: &PresetFileRequest, replace: bool, picked: &Picked) -> Result<Value, String> {
+    // Refuse the browser's raw file before open_params allocates its base64 representation.
+    if let Picked::Contents(files) = picked
+        && files.first().is_some_and(|(_, bytes)| bytes.len() > MAX_FILE_BYTES)
+    {
+        return Err(vectorcraft_engine::EngineError::BadParams { cmd: IMPORT.into(), msg: "the file is larger than 4 MB".into() }.to_string());
+    }
     let Some(mut params) = open_params(picked) else { return Ok(Value::Null) };
     let browser_name = params.remove("name");
     let name = picked
