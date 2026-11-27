@@ -13974,6 +13974,8 @@ has, or an empty one, keeps the dialog open, and Cancel adds no style. A plain c
 once.
 
 `ui.charStyleOptions {name}` opens Character Style Options for an existing named style.
+The dialog previews and saves changes only in the document where it opened. If another edit is active in
+that document, preview pauses and OK reports an error until that edit ends. Cancel rolls back only the dialog's own preview.
 Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the name and complete sparse
 attribute map in one undo step. `to` is trimmed and must be unique. The command updates text using the style
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`

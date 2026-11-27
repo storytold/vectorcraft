@@ -211,6 +211,65 @@ fn switching_back_leaves_a_new_gesture_in_the_opening_document() {
     assert!(app.session.in_interaction());
 }
 
+fn options_with_a_newer_gesture() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    let resets = app.session.tool_resets();
+    app.session.cancel_interaction().unwrap();
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    assert_eq!(app.session.tool_resets(), resets);
+    app
+}
+
+#[test]
+fn cancelling_style_options_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_preview_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_confirmation_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn a_first_style_preview_preserves_an_existing_gesture() {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
 #[test]
 fn unchanged_basic_fields_preserve_original_keys() {
     for attrs in [

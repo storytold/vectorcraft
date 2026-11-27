@@ -1186,6 +1186,7 @@ style_dialog!(CharStyleOptions, KIND);
 pub(crate) struct Preview {
     live: LivePreview,
     activation: Option<(u64, u64)>,
+    interaction_selection: Option<Arc<vectorcraft_doc::Selection>>,
 }
 
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
@@ -1220,24 +1221,33 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
+    let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+    let owns_interaction = app.char_style_preview.activation == active
+        && app
+            .char_style_preview
+            .interaction_selection
+            .as_ref()
+            .zip(interaction_selection.as_ref())
+            .is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
     let Some((document, frame)) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(|d| (d.document, d.frame()))) else {
         if matches!(dialogs.with(|host| host.take::<CharStyleOptions>()), Some(DialogResult::Cancel)) {
             let preview = std::mem::take(&mut app.char_style_preview);
-            if preview.activation == active {
+            if owns_interaction {
                 preview.live.cancel(app);
             }
         }
         return;
     };
     let done = if let Some(activation) = active.filter(|(uid, _)| *uid == document) {
-        let previous = app.char_style_preview.activation;
-        if previous.is_some() && previous != Some(activation) && app.session.in_interaction() {
+        if interaction_selection.is_some() && !owns_interaction {
             frame.ok.then(|| Err("finish the active edit before applying Character Style Options".into()))
         } else {
             let preview = std::mem::take(&mut app.char_style_preview);
-            let live = if previous == Some(activation) { preview.live } else { LivePreview::default() };
+            let live = if owns_interaction { preview.live } else { LivePreview::default() };
             let (live, answer) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
-            app.char_style_preview = Preview { live, activation: Some(activation) };
+            let interaction_selection =
+                app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+            app.char_style_preview = Preview { live, activation: Some(activation), interaction_selection };
             answer
         }
     } else if frame.ok {
