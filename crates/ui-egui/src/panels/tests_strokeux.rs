@@ -191,3 +191,47 @@ fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
         }
     }
 }
+
+#[test]
+fn compact_stroke_miter_limit_uses_the_interface_language() {
+    use crate::i18n::{Lang, LangExt as _, tr};
+    use craft::ui::contract::Role;
+    use egui::{Key, Pos2, Rect};
+
+    for lang in ["en", "fr", "de", "el"] {
+        let name = if lang == "en" {
+            "Miter limit"
+        } else {
+            let name = tr(Lang::from_code(lang).unwrap(), "Miter Limit");
+            assert_ne!(name, "Miter Limit", "{lang} has a catalog entry");
+            name
+        };
+        for width in [crate::panel_docking::PANEL_MIN_WIDTH, 320.0] {
+            let mut app = app_with_rect();
+            app.session.prefs.interface_language = lang.into();
+            run(&mut app, "paint.setStroke", json!({"color": "#222222"}));
+            run(&mut app, "stroke.set", json!({"join": "miter", "miterLimit": 4}));
+            let original = current_stroke(&app).unwrap();
+            let baseline = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, stroke::show);
+            let room = egui::vec2(width, 500.0);
+            panel.room(room).frame();
+
+            let field = panel.rect_role(name, Role::SPIN_BUTTON);
+            assert!(Rect::from_min_size(Pos2::ZERO, room).contains_rect(field), "{lang} {width}: {field:?}");
+            let value = panel.app().host.i18n().unwrap().format().number(8.5, 1);
+            panel.click_at(field.center());
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(&value);
+            panel.key(Key::Enter, Modifiers::NONE);
+
+            let mut expected = original.clone();
+            expected.miter_limit = 8.5;
+            assert_eq!(current_stroke(&panel.app()).unwrap(), expected, "{lang} {width}: {name}");
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), baseline + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            panel.frame();
+            assert_eq!(current_stroke(&panel.app()).unwrap(), original);
+        }
+    }
+}
