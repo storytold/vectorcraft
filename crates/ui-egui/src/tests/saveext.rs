@@ -67,6 +67,40 @@ fn poll(app: &mut VectorcraftApp) {
     picks::poll(app, &crate::testing::ui_context());
 }
 
+#[test]
+fn export_selection_picker_refuses_changed_artwork_before_format_options() {
+    assert_selection_picker_keeps_its_opening_artwork(json!({}), true);
+}
+
+#[test]
+fn export_selection_picked_format_refuses_changed_artwork_before_writing() {
+    assert_selection_picker_keeps_its_opening_artwork(json!({"scale": 1}), false);
+}
+
+fn assert_selection_picker_keeps_its_opening_artwork(params: Value, opens_options: bool) {
+    let (mut app, picker, written) = saving_app();
+    let first = app.session.active().unwrap().selection.objects[0];
+    app.run("shape.rectangle", json!({"x": 45, "y": 40, "width": 10, "height": 15})).unwrap();
+    let second = app.session.active().unwrap().selection.objects[0];
+    assert_ne!(first, second);
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    app.run("document.exportSelection", params.clone()).unwrap();
+    app.run("select.set", json!({"ids": [second]})).unwrap();
+    picker.answer_saved("/tmp/stale.png", None);
+    poll(&mut app);
+    assert!(open_dialogs(&app).is_empty(), "the old picker must not open options for the new selection");
+    assert!(written.borrow().is_empty(), "the old picker must not write the new selection");
+    assert!(app.ui.status.contains("The selection changed"), "{}", app.ui.status);
+
+    app.run("document.exportSelection", params).unwrap();
+    picker.answer_saved("/tmp/fresh.png", None);
+    poll(&mut app);
+    if opens_options {
+        answer_top(&mut app, &[], true);
+    }
+    assert_eq!(written.borrow().as_slice(), ["/tmp/fresh.png"]);
+}
+
 /// The index of the file type with extension `ext` in the last save panel's list.
 fn type_index(picker: &Picker, ext: &str) -> Option<usize> {
     picker.requests().last()?.filters.iter().position(|f| f.extensions.iter().any(|e| e == ext))
