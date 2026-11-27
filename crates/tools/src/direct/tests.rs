@@ -1735,13 +1735,18 @@ fn the_centre_point_selects_and_moves_the_object_whole() {
     let moved = json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(Vec2::new(20.0, -10.0))), "copy": false});
     assert_eq!(a, vec![Action::Begin("Move".into()), Action::Preview("object.transform".into(), moved)]);
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 140.0)), vec![Action::Commit]);
-    // Unselected, the centre isn't shown and a press there starts a marquee.
+    // Unselected, the centre isn't shown and a press there starts a marquee (with Object Selection
+    // by Path Only, where the inside of the unfilled square takes no press).
     let none = Selection::default();
     let mut t = DirectSelectionTool::new(false);
-    let c = cx(&d, &none, &p);
+    let c = ToolContext { path_only: true, ..cx(&d, &none, &p) };
     assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
     t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 140.0));
     assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Marquee(_))));
+    // Without it, a press inside the unfilled square selects it (#9175).
+    let mut t = DirectSelectionTool::new(false);
+    let c = cx(&d, &none, &p);
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)), vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
 }
 
 /// Group Selection: E pressed during a marquee drag makes it select the objects entirely inside

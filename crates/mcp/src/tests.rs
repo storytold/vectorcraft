@@ -1940,6 +1940,32 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
 
+/// A Selection tool click inside a closed shape with no fill selects it (#9175), and with Object
+/// Selection by Path Only on it selects nothing.
+#[test]
+fn a_click_inside_an_unfilled_shape_selects_it_unless_by_path_only() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "draw_shape",
+        json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 100, "fill": "none", "stroke": "#000000"}),
+    );
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap();
+    let click = |s: &mut Server, n: u64| {
+        let r = call(s, n, "run_command", json!({"command": "select.none", "params": {}}));
+        assert_eq!(r["isError"], false, "{r}");
+        let events = json!([{"kind": "down", "x": 150, "y": 150}, {"kind": "up", "x": 150, "y": 150}]);
+        let r = call(s, n + 1, "pointer_gesture", json!({"tool": "selection", "events": events}));
+        assert_eq!(r["isError"], false, "{r}");
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"].clone()
+    };
+    assert_eq!(click(&mut s, 2), json!([id]));
+    let r = call(&mut s, 4, "run_command", json!({"command": "prefs.set", "params": {"key": "objectSelectionByPathOnly", "value": true}}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(click(&mut s, 5), json!([]), "path only");
+}
+
 #[test]
 fn pointer_gesture_forwards_backquote_on_each_event() {
     let mut s = server();
