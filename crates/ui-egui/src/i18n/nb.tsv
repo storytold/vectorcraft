@@ -20,6 +20,21 @@
 # (lag, utvalg, innstillinger, blandingsmodus ...), so the two apps read alike.
 #
 # AI-assisted; independent native proofreading remains follow-up work.
+	Low-Latency Drawing	Tegning med lav forsinkelse
+	Show all alternates in the Glyphs panel	Vis alle varianter i Tegn-panelet
+	Click to replace	Klikk for å erstatte
+	Show Character Alternates	Vis tegnvarianter
+	Detach Object from Path	Løsne objekt fra bane
+	Mountain	Fjell
+	Tree	Tre
+	Flower	Blomst
+	Nature Icons	Naturikoner
+	Load…	Last inn…
+	Simulate Black Ink	Simuler svart blekk
+	Simulate Paper Color	Simuler papirfarge
+	Preserve RGB Numbers	Behold RGB-tall
+	Device to Simulate:	Enhet å simulere:
+	Number of Recent URLs:	Antall nylige URL-er:
 @id	language.name	Norsk
 	 to exit editing	 for å avslutte redigering
 	 to finish	 for å fullføre
@@ -4364,6 +4379,9 @@ theme	Appearance	Utseende
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Lagret {path} med {n} merknad: {first}|Lagret {path} med {n} merknader: {first}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksportert {what} med {n} merknad: {first}|Eksportert {what} med {n} merknader: {first}
 @msgplural	Packaged {n} file|Packaged {n} files	Pakketert {n} fil|Pakketert {n} filer
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pakketert {n} fil ({note}) i {folder}|Pakketert {n} filer ({note}) i {folder}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pakketert {n} fil i {folder}|Pakketert {n} filer i {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pakketert {n} fil {note}|Pakketert {n} filer {note}
 @msg	variables that aren't text were left out: {kinds}	variabler som ikke er tekst ble utelatt: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	et nytt dokument leser ikke tilbake disse variablene med sin type: {names}
 @msg	fonts not copied: {fonts}	skrifter som ikke ble kopiert: {fonts}
@@ -5825,7 +5843,7 @@ swatch	[Registration]	[Passmärke]
 @msg	not JSON: {e}	ikke JSON: {e}
 @msg	not a PDF presets file (format `{_1}`)	ikke en fil med PDF-förinställningar (format `{_1}`)
 @msg	not a PDF presets file: {e}	ikke en fil med PDF-förinställningar: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ikke en WebAssembly-binärfil (huvudet \0asm mangler)
+@msg	not a WebAssembly binary (missing \\0asm header)	ikke en WebAssembly-binärfil (huvudet \\0asm mangler)
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	ikke ett Word-dokument: dess WordDocument-ström börjar ikke med ett filinformationsblock
 @msg	not a Word document: its compound file has no WordDocument stream	ikke ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	ikke ett Word-dokument: dess huvuddel er ikke ett WordprocessingML-dokument
@@ -5843,7 +5861,7 @@ swatch	[Registration]	[Passmärke]
 @msg	not a print presets file: {e}	ikke en fil med utskriftsförinställningar: {e}
 @msg	not a stored or deflated central record	ikke en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	ikke en giltig SVGZ-fil: {e}
-@msg	not an RTF file: it doesn't start with not an RTF file: it doesn't start with {\rtf	ikke en RTF-fil: den börjar ikke med ikke en RTF-fil: den börjar ikke med {\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	ikke en RTF-fil: den begynner ikke med {{\\rtf
 @msg	not an image VectorCraft reads (see document.formats)	ikke en bild som VectorCraft kan läsa (se document.formats)
 @msg	not area type (text in a frame) outside perspective	ikke områdestext (text i en ram) utenfor perspektivet
 @msg	not editing an opacity mask	redigerar ikke en opasitetsmaske
@@ -6367,7 +6385,7 @@ swatch	[Registration]	[Passmärke]
 @msg	{label} must be a number from -1296 to 1296	{label} må være ett tall fra -1296 til 1296
 @msg	{label} must be a number from 1 to 10000	{label} må være ett tall fra 1 til 10 000
 @msg	{name} is built in and can't be deleted	{name} er inbyggd og kan ikke tas bort
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} må være {lo}–{hi}{unit} (fikk {v})
+@msg	{name} must be {range} (got {v})	{name} må være {range} (fikk {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC eller størrelse stämmer ikke
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: endast den innebygde förhandsgranskningen i den här Affinity-filen kunde läsas; använd Arkiv › Öppna for å se den med dess varning, eller exportera SVG eller PDF fra Affinity innan du placerar den
 @msg	{native}; its embedded preview can't be read either ({e})	{native}; dess innebygde förhandsgranskning kan ikke heller läsas ({e})
