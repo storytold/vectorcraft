@@ -1,7 +1,7 @@
 use serde_json::json;
 use vectorcraft_doc::NodeId;
 
-use super::super::brush_delete::tests::{answer, app};
+use super::super::brush_delete::tests::{answer, app, save_for_revert};
 use super::*;
 
 fn rect(app: &mut VectorcraftApp, x: f64, y: f64, w: f64, h: f64) -> u64 {
@@ -94,4 +94,31 @@ fn a_button_changes_no_brush_after_another_document_became_active() {
     assert!(!asks(&app));
     app.run("document.activate", json!({"index": 0})).unwrap();
     assert!((art_height(&mut app, "Bar") - 8.0).abs() < 1e-6);
+}
+
+#[test]
+fn stale_replace_approval_keeps_the_saved_brush_art_after_revert() {
+    let mut app = app();
+    let (_, tall) = used_brush(&mut app);
+    let thick = rect(&mut app, 10.0, 65.0, 40.0, 30.0);
+    let file = save_for_revert(&mut app, "replace-revert");
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("brush.replaceArt", json!({"name": "Bar", "ids": [tall], "applyToStrokes": true})).unwrap();
+    assert!((art_height(&mut app, "Bar") - 20.0).abs() < 1e-6);
+    replace(&mut app, "Bar", &[thick]);
+    assert!(asks(&app));
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert!(st.doc.node(NodeId(thick)).is_some(), "the restored drawing shares the same local source ID");
+    assert!((art_height(&mut app, "Bar") - 8.0).abs() < 1e-6);
+
+    let undo = app.session.active().unwrap().history.undo.len();
+    answer::<ReplaceArtQuestion>(&mut app, Some("proceed"), pump);
+    assert!((art_height(&mut app, "Bar") - 8.0).abs() < 1e-6, "the stale answer leaves the restored brush intact");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 }
