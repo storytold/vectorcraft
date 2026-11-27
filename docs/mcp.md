@@ -2852,9 +2852,9 @@ other files through `$`:
   take a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
   `[Layer <name>]`, `[Application]` and `[PageItems]` (VectorCraft's own rule).
-  Documents are listed in tab order; the same page says `documents[0]` is always the active document, and
-  VectorCraft does not follow that yet. VectorCraft's own rules: page items are listed with the
-  objects inside groups and compound paths after their group and without layers and ruler guides. A document's
+  `documents[0]` is always the active document, as the same page says. VectorCraft's own rules: the other
+  documents follow from the one active most recently to the one active longest ago, and a change a script
+  makes to a document in the back does not move it in the list; page items are listed with the objects inside groups and compound paths after their group and without layers and ruler guides. A document's
   `selection`, and `app.selection` while a document is open, is an empty list when nothing is selected. Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
   `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`

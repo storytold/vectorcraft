@@ -69,6 +69,9 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// When the document last became the current one: a larger value is more recent
+    /// ([`Session::front_order`]). It is not saved.
+    pub(crate) activated: u64,
     /// How many times File → Revert replaced the document's content in its tab
     /// ([`Session::replace_document`]). Work started for the document (a file read for Place, a
     /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
@@ -421,6 +424,7 @@ impl DocState {
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            activated: 0,
             reverts: 0,
             history_restores: 0,
             opened_as_tab: true,
