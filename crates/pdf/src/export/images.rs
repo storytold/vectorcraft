@@ -165,8 +165,12 @@ impl Exporter<'_> {
         let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
-            if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
-                self.rgb_in_cmyk.images.insert(key.to_string());
+            // RGB images of a CMYK document go to CMYK only with a CMYK destination; grey ones stay
+            // grey ([`crate::images::recode`]).
+            if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && !crate::images::is_grey(&blob.bytes) {
+                let to_cmyk = matches!(out.pixels(), Some(crate::output::Pixels::Cmyk(_)));
+                let set = if to_cmyk { &mut self.rgb_in_cmyk.converted } else { &mut self.rgb_in_cmyk.kept };
+                set.insert(key.to_string());
             }
             let r = if cmyk_image {
                 let icc = out.cmyk_image_icc(blob);

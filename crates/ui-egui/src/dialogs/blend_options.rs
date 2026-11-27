@@ -130,7 +130,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let state = app
         .dialogs()
         .and_then(|d| d.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields())))));
-    if let Some((previewing, p)) = state {
+    if let Some((previewing, p)) = state
+        && (!previewing || app.session.has_selected_blend())
+    {
+        // With no blend selected, the command sets application defaults instead of previewing artwork.
         // The answer only reports the preview's status, which the preview itself shows.
         let _ = preview.run(app, previewing, PREVIEW_LABEL, CMD, &p);
     }
@@ -139,8 +142,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 
 /// OK: keeps the preview as one undo step on a blend; sets the defaults otherwise.
 fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
+    let on_blend = result.fields.text("__target") == Some("blend");
+    if on_blend != app.session.has_selected_blend() {
+        let reason = if on_blend {
+            tl!("Select a blend before applying these options.")
+        } else {
+            tl!("Deselect any selected blends before applying the options for new blends.")
+        };
+        return Err(reason.to_owned());
+    }
     let p = params(&result.fields);
-    if result.fields.text("__target") != Some("blend") {
+    if !on_blend {
         return app.run(CMD, p).map(|_| ());
     }
     let preview = app.object_dialogs.blend.take().unwrap_or_default();
@@ -210,6 +222,62 @@ mod tests {
             NodeKind::Blend { spec, .. } => (**spec).clone(),
             _ => panic!("not a blend"),
         }
+    }
+
+    fn app_with_smooth_blend() -> (VectorcraftApp, u64) {
+        let mut app = app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        for x in [0, 200] {
+            app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        let id = app.run("object.blend.make", json!({"smooth": true})).unwrap()["id"].as_u64().unwrap();
+        (app, id)
+    }
+
+    #[test]
+    fn opening_blend_defaults_does_not_edit_a_later_selected_blend() {
+        let (mut app, id) = app_with_smooth_blend();
+        app.run("select.none", json!({})).unwrap();
+        app.run("ui.blendOptions", json!({})).unwrap();
+        assert_eq!(fields(&app).text("__target"), Some("defaults"));
+        set(&app, "spacing", json!("steps"));
+        set(&app, "steps", json!(7));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+
+        let undo = app.session.active().unwrap().history.undo.len();
+        confirm(&mut app);
+        assert_eq!(spec(&app, id).spacing, BlendSpacing::SmoothColor, "a newly selected blend keeps its spacing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&app));
+
+        app.run("select.none", json!({})).unwrap();
+        confirm(&mut app);
+        assert!(!is_open(&app));
+        assert_eq!(app.session.prefs.blend_options.unwrap().spacing, BlendSpacing::Steps(7));
+    }
+
+    #[test]
+    fn opening_blend_options_for_a_selection_does_not_write_defaults() {
+        let (mut app, id) = app_with_smooth_blend();
+        let defaults = app.session.prefs.blend_options;
+        app.run("ui.blendOptions", json!({})).unwrap();
+        assert_eq!(fields(&app).text("__target"), Some("blend"));
+        set(&app, "spacing", json!("steps"));
+        set(&app, "steps", json!(7));
+        app.run("select.none", json!({})).unwrap();
+
+        frame(&mut app);
+        assert_eq!(app.session.prefs.blend_options, defaults, "the blend preview leaves new-blend defaults intact");
+        assert!(!app.session.in_interaction());
+        confirm(&mut app);
+        assert_eq!(app.session.prefs.blend_options, defaults);
+        assert!(is_open(&app));
+
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        confirm(&mut app);
+        assert!(!is_open(&app));
+        assert_eq!(spec(&app, id).spacing, BlendSpacing::Steps(7));
     }
 
     #[test]

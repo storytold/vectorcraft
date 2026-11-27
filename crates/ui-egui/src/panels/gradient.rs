@@ -266,8 +266,8 @@ pub(crate) fn reset_to_linear_white_black(app: &mut VectorcraftApp) {
 }
 
 /// Save the gradient as a swatch; its stops keep their color models.
-fn save_to_swatches(app: &mut VectorcraftApp, g: &GradientPaint) {
-    app.run("swatch.new", super::swatch_paint_params(&Paint::Gradient(Box::new(g.clone())))).ok();
+fn save_to_swatches(app: &mut VectorcraftApp, g: &GradientPaint) -> Result<(), String> {
+    app.run("swatch.new", super::swatch_paint_params(&Paint::Gradient(Box::new(g.clone())))).map(drop)
 }
 
 /// The document's gradient swatches (groups included): name and gradient.
@@ -658,10 +658,10 @@ fn fill_box(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: b
             }
         }
         Divider::horizontal().show(ui);
-        save = MenuItem::new(tl!("Save to Swatches")).enabled(is_grad).show(ui).ran;
+        save = MenuItem::new(tl!("Save to Swatches")).enabled(is_grad && crate::menus::enabled(app, "swatch.new")).show(ui).ran;
     });
-    if save {
-        save_to_swatches(app, g);
+    if save && let Err(error) = save_to_swatches(app, g) {
+        app.status(error);
     }
     if let Some(name) = chosen {
         super::apply_click(app, ui, json!({ "swatch": name }));
@@ -903,7 +903,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let has = current(app).is_some();
     let toggle = |key: &str, show: &str, hide: &str| CommandState::new().title(if part_hidden(app, key) { show } else { hide });
     states.set(MENU_OPTIONS, toggle(HIDE_OPTIONS, tl!("Show Options"), tl!("Hide Options")));
-    states.set(MENU_ADD_TO_SWATCHES, CommandState::new().title(tl!("Add to Swatches")).enabled(has));
+    states.set(MENU_ADD_TO_SWATCHES, CommandState::new().title(tl!("Add to Swatches")).enabled(has && crate::menus::enabled(app, "swatch.new")));
     states.set(MENU_REVERSE, CommandState::new().title(tl!("Reverse Gradient")).enabled(has));
     states.set(MENU_RESET, CommandState::new().title(tl!("Reset to White, Black")));
     states.set(MENU_PRESETS, toggle(HIDE_PRESETS, tl!("Show Presets"), tl!("Hide Presets")));
@@ -922,9 +922,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
             set_part_hidden(app, key, hide);
         }
         MENU_ADD_TO_SWATCHES => {
-            if let Some(g) = current(app) {
-                save_to_swatches(app, &g);
-            }
+            let outcome = current(app).ok_or_else(|| tl!("No gradient to save").to_owned()).and_then(|g| save_to_swatches(app, &g));
+            return Some(outcome.map(|()| Value::Null));
         }
         MENU_REVERSE => edit(app, json!({"reverse": true}), Live::Released),
         MENU_RESET => set_stops(app, &Gradient::default().stops, None, Live::Released),

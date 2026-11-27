@@ -777,7 +777,7 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
     // and New Color Group before it.
     let actions = [
-        FooterAction::new(icon("library"), SwatchLibraries::MENU).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
+        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU)).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
         FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
         edit,
         FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
