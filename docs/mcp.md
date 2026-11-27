@@ -10913,7 +10913,10 @@ the same rules as `patternObjects`, with the spot colors it uses; a process
 color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
 in the selection), `spotColorNames` and `spotColors` (the spot colors those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
-out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
+out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters),
+`pathArea` (pt²: the area the closed paths and compound paths enclose under their fill rules, holes subtracted, open
+paths and guides left out, which objects lists as Path Area in the document's units after Path Length when above 0;
+null for a request with a category other than `objects` or with `pathArea: false`, which skips that pass);
 `brushNames`, `brushes`, `spotObjects`, `patternObjects` and `gradientObjects` leave out hidden objects, objects at an
 opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0, their characters' paints and
 colorized images included, and so does `selectionOnly` for an object selected inside such a group or layer, while
