@@ -360,7 +360,9 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
                 filed.eyedropper |= DropperButton::new(tip, Bind::given(false)).show(ui).edit.value() == Some(&true);
             }
             if *tab == Tab::Color {
-                outside |= mode_menu(ui, &feed.shown, panel.mode);
+                let (closed_outside, picked) = mode_menu(ui, &feed.shown, panel.mode);
+                outside |= closed_outside;
+                filed.mode = picked.or(filed.mode);
             }
         });
         match *tab {
@@ -390,7 +392,9 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
 
 /// The Color panel's existing five mode commands. Native menu ownership keeps its parent popover
 /// open on a pick and gives the child the first Escape, including rows outside the parent bounds.
-fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> bool {
+/// Returns whether an outside press closed the menu, and the mode picked: the popover files it as
+/// its own edit, so the conversion the pick makes doesn't read as the gradient changing under it.
+fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> (bool, Option<ColorPanelMode>) {
     let words = Env::of(ui).words::<ColorPanelWords>();
     let label = match shown {
         ColorPanelShown::Mode(mode) => mode.label(&words),
@@ -398,13 +402,16 @@ fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> 
         _ => fallback.label(&words),
     };
     let button = Button::new(label).popup(PopupKind::Menu).show(ui);
+    let mut picked = None;
     let menu = Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
         for mode in ColorPanelMode::FILL_STROKE {
-            MenuItem::command(mode.command()).show(ui);
+            if MenuItem::command(mode.command()).show(ui).ran {
+                picked = Some(mode);
+            }
         }
     });
     // The child absorbs an outside press before its parent sees it. Close both for that event only.
-    menu.output.closed == Some(CloseReason::Outside)
+    (menu.output.closed == Some(CloseReason::Outside), picked)
 }
 
 /// Document swatches as tiles: a pick gives the stop (or point) that colour.
@@ -541,11 +548,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut owner) = dialogs.with(|host| host.get_by_id::<GradientStopPopover>(id).map(|popover| popover.target.clone())) else {
         return;
     };
-    let Some(target) = selected(app).filter(|target| owner.matches(app, target)) else {
+    let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
+    // A mode picked in the popover's menu runs the Color panel's command, which can convert the stop before this
+    // pass: that change is the popover's own, so only the slot has to be the one it opened on.
+    let own = |target: &Target| if filed.mode.is_some() { owner.key.matches(app, target) } else { owner.matches(app, target) };
+    let Some(target) = selected(app).filter(own) else {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
-    let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
     }

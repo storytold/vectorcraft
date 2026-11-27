@@ -342,6 +342,10 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
         scene.app.run("edit.undo", json!({})).unwrap();
         assert_eq!(serde_json::to_value(scene.app.session.active().unwrap().doc.as_ref()).unwrap(), before["doc"]);
         assert_eq!(scene.gradient(), original);
+        // Undo changes the gradient under the editor, which closes it; the next steps open it again.
+        scene.idle(3);
+        assert!(!scene.editor_open(), "an undo from outside the editor closes it");
+        scene.open_stop();
         if !tint {
             // Hide Options is the existing compact mixer; its child menu can outgrow the editor.
             scene.app.run("ui.colorPanel", json!({"options": false})).unwrap();
@@ -362,6 +366,9 @@ fn gradient_stop_mode_converts_only_selected_stop_and_unlinks_tint_with_one_undo
             scene.app.run("edit.undo", json!({})).unwrap();
             assert_eq!(serde_json::to_value(scene.app.session.active().unwrap().doc.as_ref()).unwrap(), before["doc"]);
             assert_eq!(scene.gradient(), original, "one Undo restores the pre-conversion paint");
+            scene.idle(3);
+            assert!(!scene.editor_open(), "an undo from outside the editor closes it");
+            scene.open_stop();
         }
         // A real outside click closes both editor and child, without another edit.
         scene.idle(3);
@@ -407,7 +414,10 @@ fn gradient_stop_mode_freeform_point_uses_the_same_real_menu() {
     scene.app.run("edit.undo", json!({})).unwrap();
     assert_eq!(serde_json::to_value(scene.app.session.active().unwrap().doc.as_ref()).unwrap(), before["doc"]);
     assert_eq!(scene.gradient(), original, "one Undo restores the complete point paint");
+    // Undo changes the gradient under the editor, which closes it; the next steps open it again.
     scene.idle(3);
+    assert!(!scene.editor_open(), "an undo from outside the editor closes it");
+    scene.open_stop();
     let boundary = scene.snapshot();
     scene.open_mode("RGB Sliders");
     scene.escape();
