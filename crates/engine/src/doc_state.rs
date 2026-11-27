@@ -74,6 +74,9 @@ pub struct DocState {
     /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
     /// change it, and a batch that fails puts it back with the document.
     pub reverts: u64,
+    /// Advances when Undo or Redo restores an older document snapshot. The same node ID can name different objects
+    /// across that boundary.
+    pub history_restores: u64,
     /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
     /// the UI opens it in a floating window of its own.
     pub opened_as_tab: bool,
@@ -419,6 +422,7 @@ impl DocState {
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             reverts: 0,
+            history_restores: 0,
             opened_as_tab: true,
             mask_view: None,
             spelling_ignored: Default::default(),

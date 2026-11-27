@@ -55,7 +55,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         );
         return Ok(Value::Null);
     };
-    let document = st.uid;
+    let document = (st.uid, st.reverts);
     let p = std::path::Path::new(&path);
     let stem = p.file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let folder = p.parent().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
@@ -107,9 +107,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
 }
 
-fn require_package_document(app: &VectorcraftApp, document: u64) -> Result<(), String> {
-    if app.session.active().is_none_or(|st| st.uid != document) {
+fn require_package_document(app: &VectorcraftApp, (document, reverts): (u64, u64)) -> Result<(), String> {
+    let Some(active) = app.session.active().filter(|st| st.uid == document) else {
         return Err(tl!("Package can only save and collect the document where it was opened.").to_owned());
+    };
+    if active.reverts != reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
     }
     Ok(())
 }
@@ -160,7 +163,7 @@ pub(super) fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result
             return r;
         }
     }
-    // A completed background job may have changed the active document while Package waited.
+    // A completed background job may have changed the active document or its loaded contents while Package waited.
     require_package_document(app, document)?;
     let package = app.session.prepare_package(&params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
     let label = format!("Packaging {}", text("name"));

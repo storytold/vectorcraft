@@ -347,9 +347,10 @@ fn temp_path(target: &Path) -> io::Result<PathBuf> {
 /// mode bits mean other people when the group differs, and an ACL can narrow who reads the file.
 /// When the group or the ACL can't be kept, the replacement is readable by its owner alone rather
 /// than by people the old file didn't let in. (Unix; Windows files have none to keep beyond
-/// read-only, which makes the save fail as writing in place would.)
+/// read-only, which makes the save fail as writing in place would.) `tmp` is the file that is about
+/// to replace `target`.
 #[cfg(unix)]
-fn keep_permissions(target: &Path, tmp: &Path) -> io::Result<()> {
+pub fn keep_permissions(target: &Path, tmp: &Path) -> io::Result<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     // A new file: the default permissions.
     let Ok(m) = std::fs::metadata(target) else { return Ok(()) };
@@ -385,8 +386,9 @@ fn keep_acl(_: &Path, _: &Path) -> bool {
     true
 }
 
+/// Windows files have no permissions to keep beyond read-only (see the Unix version).
 #[cfg(not(unix))]
-fn keep_permissions(_: &Path, _: &Path) -> io::Result<()> {
+pub fn keep_permissions(_: &Path, _: &Path) -> io::Result<()> {
     Ok(())
 }
 

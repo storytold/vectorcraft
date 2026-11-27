@@ -377,6 +377,54 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
 }
 
+#[test]
+fn delete_confirmation_keeps_matching_swatches_in_another_drawing() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let source = app.session.active().unwrap().uid;
+    delete(&mut app, vec!["Red".into()], false);
+    assert!(dialog_open(&app, key));
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert_ne!(app.session.active().unwrap().uid, source);
+    let undo = app.session.active().unwrap().history.undo.len();
+    assert!(doc(&app).swatch("Red").is_some());
+
+    confirm(&mut app, key);
+    assert!(doc(&app).swatch("Red").is_some(), "the other tab keeps its identically named swatch");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+    assert!(app.session.set_active(0));
+    assert!(doc(&app).swatch("Red").is_some(), "the source swatch still needs a fresh confirmation");
+}
+
+#[test]
+fn delete_confirmation_keeps_the_swatch_restored_by_revert() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let file = std::env::temp_dir().join(format!("vectorcraft-swatch-delete-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let saved_color = doc(&app).swatch("Red").unwrap().paint.color();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("swatch.edit", json!({"name": "Red", "color": "#00ff00"})).unwrap();
+    assert_ne!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    delete(&mut app, vec!["Red".into()], false);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    let undo = st.history.undo.len();
+
+    confirm(&mut app, key);
+    assert_eq!(doc(&app).swatch("Red").expect("the restored swatch stays").paint.color(), saved_color);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+}
+
 /// Only None and Registration are reserved: a user swatch or color group whose name starts with
 /// `[` can be deleted, the swatch can be edited, and names the document does not hold are left out.
 #[test]

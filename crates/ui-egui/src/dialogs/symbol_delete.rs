@@ -2,10 +2,10 @@
 //! selected symbol?" with Yes and No ([`KIND`]); a symbol with placed instances gets Expand
 //! Instances, Delete Instances and Cancel ([`USED`]).
 //!
-//! The question carries the [`vectorcraft_engine::DocState::uid`] of the document it was asked in and
-//! the symbol names. Yes or either Instances button deletes the symbol only while that document is
-//! the active one and still has the symbol; an unused symbol that has gained instances since asks
-//! the in-use question instead.
+//! The question carries the opening document, its revert generation, and the symbol names. Yes or
+//! either Instances button deletes the symbol only while that document is active, has not been
+//! reverted, and still has the symbol. An unused symbol that has gained instances asks the in-use
+//! question instead.
 
 use craft::ui::dialog::{PromptChoice, StandardPrompt};
 use serde_json::{Value, json};
@@ -28,6 +28,7 @@ enum Target {
 /// whether it is the in-use question.
 struct Ask {
     doc: u64,
+    reverts: u64,
     target: Target,
     used: bool,
 }
@@ -42,7 +43,7 @@ crate::dialogs::confirm::wrapped_dialog!(SymbolQuestion, StandardPrompt, KIND);
 /// what becomes of them; an unused one is deleted at once with `now` (Alt-click on the panel's
 /// button) and asked about otherwise.
 pub(crate) fn ask(app: &mut VectorcraftApp, name: &str, now: bool) {
-    let Some(uid) = app.session.active().map(|st| st.uid) else { return };
+    let Some((uid, reverts)) = app.session.active().map(|st| (st.uid, st.reverts)) else { return };
     match instances(app, uid, name) {
         None => {}
         Some(0) if now => {
@@ -50,7 +51,7 @@ pub(crate) fn ask(app: &mut VectorcraftApp, name: &str, now: bool) {
                 app.status(e);
             }
         }
-        Some(n) => open(app, Ask { doc: uid, target: Target::One(name.to_string()), used: n > 0 }),
+        Some(n) => open(app, Ask { doc: uid, reverts, target: Target::One(name.to_string()), used: n > 0 }),
     }
 }
 
@@ -58,12 +59,12 @@ pub(crate) fn ask(app: &mut VectorcraftApp, name: &str, now: bool) {
 /// ("Delete the selected symbols?", or the singular for one), or at once with `now`. Only those still
 /// unused then (`symbol.unused`: brush art, patterns and nested instances count) go, in one undo step.
 pub(crate) fn ask_many(app: &mut VectorcraftApp, names: &[String], now: bool) {
-    let Some(uid) = app.session.active().map(|st| st.uid) else { return };
+    let Some((uid, reverts)) = app.session.active().map(|st| (st.uid, st.reverts)) else { return };
     if now {
         // An error already went to the status bar.
         let _ = delete_unused(app, uid, names);
     } else {
-        open(app, Ask { doc: uid, target: Target::Many(names.to_vec()), used: false });
+        open(app, Ask { doc: uid, reverts, target: Target::Many(names.to_vec()), used: false });
     }
 }
 
@@ -109,11 +110,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     // The host lock is released before any command runs.
     let Some(mut answer) = dialogs.with(|host| host.take::<SymbolQuestion>()).and_then(|result| result.ok()) else { return };
     let Some(ask) = answer.take_tag::<Ask>() else { return };
-    let r = match (ask.used, answer.choice) {
-        (false, PromptChoice::Proceed) => confirm_unused(app, ask),
-        (true, PromptChoice::Proceed) => confirm_used(app, ask, true),
-        (true, PromptChoice::Alternate) => confirm_used(app, ask, false),
+    let expand_instances = match (ask.used, answer.choice) {
+        (false, PromptChoice::Proceed) => None,
+        (true, PromptChoice::Proceed) => Some(true),
+        (true, PromptChoice::Alternate) => Some(false),
         _ => return,
+    };
+    if app.session.active().is_some_and(|st| st.uid == ask.doc && st.reverts != ask.reverts) {
+        app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+        return;
+    }
+    let r = match expand_instances {
+        Some(expand) => confirm_used(app, ask, expand),
+        None => confirm_unused(app, ask),
     };
     if let Err(e) = r {
         app.status(e);
@@ -132,14 +141,14 @@ fn instances(app: &mut VectorcraftApp, uid: u64, name: &str) -> Option<u64> {
 
 /// Yes: deletes the symbol, or asks the in-use question when it has gained instances.
 fn confirm_unused(app: &mut VectorcraftApp, ask: Ask) -> Result<Value, String> {
-    let Ask { doc, target, .. } = ask;
+    let Ask { doc, reverts, target, .. } = ask;
     match target {
         Target::Many(names) => delete_unused(app, doc, &names),
         Target::One(name) => match instances(app, doc, &name) {
             None => Ok(Value::Null),
             Some(0) => app.run("symbol.delete", json!({ "name": name })),
             Some(_) => {
-                open(app, Ask { doc, target: Target::One(name), used: true });
+                open(app, Ask { doc, reverts, target: Target::One(name), used: true });
                 Ok(Value::Null)
             }
         },
