@@ -8,7 +8,6 @@ use super::{
     width_point,
 };
 use crate::VectorcraftApp;
-use crate::dialogs::preview::LivePreview;
 
 /// What the object dialogs keep between frames. Held OK records are `app.held`, not here.
 #[derive(Default)]
@@ -27,8 +26,8 @@ pub(crate) struct ObjectDialogs {
     pub flare: Option<flare_options::Open>,
     /// The open shape dialog's Constrain state, shared with its link control.
     pub shape_link: bool,
-    /// The open Blend Options dialog's live preview.
-    pub blend: Option<LivePreview>,
+    /// The open Blend Options dialog's drawing and live preview.
+    pub blend: Option<blend_options::Open>,
     /// The open Indexed Color dialog's live preview.
     pub indexed: Option<indexed_color::Open>,
     /// The open Gap Options dialog's live preview.
