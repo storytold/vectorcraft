@@ -378,6 +378,28 @@ fn export_as_waits_for_the_drawing_that_opened_it() {
     assert_eq!(&written.borrow()[0].1[16..20], 60u32.to_be_bytes());
 }
 
+#[test]
+fn png_options_wait_for_the_drawing_that_opened_them() {
+    let (mut app, written) = app(1);
+    app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    let draft = fields(&app);
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = try_confirm(&mut app).expect_err("PNG Options must refuse the other drawing");
+    assert!(error.contains("original drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    assert_eq!(fields(&app)["path"], draft["path"]);
+    assert!(written.borrow().is_empty());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    confirm(&mut app);
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(&w[0].1[16..20], 60u32.to_be_bytes());
+}
+
 /// Each format's Export As continues in its options dialog, writes nothing before that dialog's OK, and then
 /// writes its files: (case, artboards, Export As params, the options' key, the files, the pages of a PDF, the
 /// page size of a PDF of the art's bounds).
