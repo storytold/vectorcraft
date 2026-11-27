@@ -74,21 +74,15 @@ fn answer(app: &mut VectorcraftApp, ctx: &egui::Context, ok: bool) {
     crate::dialogs::host::pump(app, ctx);
 }
 
-/// The target-mark rule: each of the four looks (neither, targeted, an appearance, both) differs,
-/// and the dot sits clear of the inner ring, drawn in the theme's thin stroke, when both show.
+/// The four target/appearance combinations remain distinct, with the appearance diamond clear of
+/// the inner target ring in the theme's thin stroke.
 #[test]
 fn target_circle_marks_follow_targeted_and_styled() {
-    use rows::{TARGET_DOT, TARGET_DOT_IN_RING, TARGET_RING, target_marks};
+    use rows::{APPEARANCE_MARK, APPEARANCE_MARK_IN_RING, TARGET_RING, target_marks};
     assert_eq!(target_marks(false, false), (None, None));
     assert_eq!(target_marks(true, false), (Some(TARGET_RING), None));
-    assert_eq!(target_marks(false, true), (None, Some(TARGET_DOT)));
-    let (ring, dot) = target_marks(true, true);
-    assert_eq!((ring, dot), (Some(TARGET_RING), Some(TARGET_DOT_IN_RING)));
-    let thin = std::rc::Rc::new(std::cell::Cell::new(f32::INFINITY));
-    let seen = std::rc::Rc::clone(&thin);
-    let mut fixture = craft::ui::testing::Fixture::new(move |ui| seen.set(craft::ui::runtime::env::Env::of(ui).tokens.stroke.thin));
-    fixture.root(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0, None)).frame(vec![]);
-    assert!(TARGET_DOT_IN_RING + 0.5 < TARGET_RING - thin.get() / 2.0, "the dot covers the ring");
+    assert_eq!(target_marks(false, true), (None, Some(APPEARANCE_MARK)));
+    assert_eq!(target_marks(true, true), (Some(TARGET_RING), Some(APPEARANCE_MARK_IN_RING)));
 }
 
 /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
@@ -868,4 +862,154 @@ fn full_layers_are_the_layers_with_all_their_art_selected() {
             .collect();
         assert_eq!(rows::full_layers(&doc, &sel), want, "selection {bits:b}");
     }
+}
+
+/// The cardinal four-point outline actually painted by the native cell, independently of its constants.
+fn appearance_diamond(shape: &egui::Shape) -> Option<(egui::Pos2, f32, f32)> {
+    let egui::Shape::Path(path) = shape else { return None };
+    if !path.closed || path.fill != egui::Color32::TRANSPARENT || path.points.len() != 4 {
+        return None;
+    }
+    let c = egui::pos2((path.points[0].x + path.points[2].x) / 2.0, (path.points[0].y + path.points[2].y) / 2.0);
+    let r = path.points[0].distance(c);
+    if ![2.5, 1.0].iter().any(|expected| (r - expected).abs() < 1e-4) {
+        return None;
+    }
+    let expected = [c - egui::vec2(0.0, r), c + egui::vec2(r, 0.0), c + egui::vec2(0.0, r), c - egui::vec2(r, 0.0)];
+    path.points.iter().zip(expected).all(|(a, b)| a.distance(b) < 1e-4).then_some((c, r, path.stroke.width))
+}
+
+/// The actual native cell's marks at `name`, read from the fixture's paint output: radius, diamond, width.
+fn target_marks_painted(panel: &mut crate::tests::panel_harness::Panel, name: &str) -> Vec<(f32, bool, f32)> {
+    let center = panel.rect(name).center();
+    let (shapes, _) = panel.paint_at(1.0);
+    let ink = shapes
+        .iter()
+        .find_map(|shape| match shape {
+            egui::Shape::Circle(circle) if circle.center.distance(center) < 0.01 && (circle.radius - 5.0).abs() < 1e-4 => Some(circle.stroke.color),
+            _ => None,
+        })
+        .expect("the cell's outer target ring");
+    for shape in &shapes {
+        if appearance_diamond(shape).is_some_and(|(at, _, _)| at.distance(center) < 0.01)
+            && let egui::Shape::Path(path) = shape
+        {
+            assert_eq!(path.stroke.color, egui::epaint::ColorMode::Solid(ink), "the native marker keeps the target ring's themed ink");
+            assert_eq!(path.stroke.kind, egui::StrokeKind::Middle, "the diamond's stroke is centered on its outline");
+        }
+    }
+    let mut marks: Vec<_> = shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            egui::Shape::Circle(circle)
+                if circle.center.distance(center) < 0.01 && circle.radius < 5.0 && circle.fill == egui::Color32::TRANSPARENT =>
+            {
+                Some((circle.radius, false, circle.stroke.width))
+            }
+            shape => appearance_diamond(shape).filter(|(at, _, _)| at.distance(center) < 0.01).map(|(_, r, width)| (r, true, width)),
+        })
+        .collect();
+    marks.sort_by(|a, b| a.0.total_cmp(&b.0));
+    marks
+}
+
+/// Retain #8757's historical regression name: the own-appearance diamond leaves the actual inner
+/// ring visible, and neither, targeted, styled and both paint four different looks.
+#[test]
+fn a_targeted_circle_with_an_appearance_shows_both_ring_and_dot() {
+    use crate::tests::panel_harness::Panel;
+    let (mut app, _, [a, _]) = two_rects();
+    name_row(&mut app, a, "A");
+    let mut panel = Panel::new(app, show);
+    let neither = target_marks_painted(&mut panel, "Target A");
+    panel.click("Target A");
+    let targeted = target_marks_painted(&mut panel, "Target A");
+    panel.app().session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    panel.frame();
+    let both = target_marks_painted(&mut panel, "Target A");
+    panel.app().session.execute("select.none", &json!({})).unwrap();
+    panel.frame();
+    let styled = target_marks_painted(&mut panel, "Target A");
+    let ring = both.iter().find(|m| (m.0 - 2.8).abs() < 1e-4 && !m.1).expect("the actual inner ring");
+    let mark = both.iter().find(|m| m.1).expect("the actual hollow diamond");
+    let outer_extent = mark.0 + mark.2 * std::f32::consts::FRAC_1_SQRT_2;
+    assert!(outer_extent < ring.0 - ring.2 / 2.0 - 0.5, "the diamond {mark:?} covers the ring {ring:?}");
+    assert!((mark.0 - 1.0).abs() < 1e-4);
+    assert_eq!(mark.2, ring.2, "the marker retains the theme's thin stroke");
+    let alone = styled.iter().find(|m| m.1).expect("the standalone diamond");
+    assert!((alone.0 - 2.5).abs() < 1e-4);
+    let looks = [&neither, &targeted, &styled, &both];
+    for (i, x) in looks.iter().enumerate() {
+        for y in &looks[i + 1..] {
+            assert_ne!(x, y, "all four actual cell looks differ");
+        }
+    }
+}
+
+/// Hover and accessibility explain the mark without replacing the contextual row name; the same
+/// native cell still targets its art, while selecting other art leaves its own appearance intact.
+#[test]
+fn appearance_marker_names_its_state_and_keeps_targeting_actions() {
+    use crate::tests::panel_harness::Panel;
+    struct RestoreLanguage(crate::i18n::Lang);
+    impl Drop for RestoreLanguage {
+        fn drop(&mut self) {
+            crate::i18n::set_current(self.0);
+        }
+    }
+    let _language = RestoreLanguage(crate::i18n::current());
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let mut panel = Panel::new(app, show);
+    let idle = "Target appearance: not targeted, additional appearance or transparency";
+    let active = "Target appearance: targeted, additional appearance or transparency";
+    assert_eq!(panel.description("Target A").as_deref(), Some(idle));
+    assert_eq!(panel.description("Target B").as_deref(), Some("Target appearance: not targeted, basic appearance"));
+    assert_eq!(panel.toggled("Target A"), Some(craft::behavior::Mixed::Same(false)));
+    let before = {
+        let app = panel.app();
+        (app.session.active().unwrap().selection.clone(), undo_len(&app))
+    };
+    panel.hover("Target A");
+    panel.advance(2.0);
+    panel.frame();
+    let (shapes, _) = panel.paint_at(1.0);
+    assert!(shapes.iter().any(|s| matches!(s, egui::Shape::Text(t) if t.galley.text() == idle)), "the native tooltip explains the mark");
+    {
+        let app = panel.app();
+        assert_eq!((app.session.active().unwrap().selection.clone(), undo_len(&app)), before, "hover changes no selection or history");
+    }
+    panel.click("Target A");
+    assert_eq!(targeted(&panel.app()), (Some(a), vec![a]));
+    assert_eq!(panel.description("Target A").as_deref(), Some(active));
+    assert_eq!(panel.toggled("Target A"), Some(craft::behavior::Mixed::Same(true)));
+    panel.click("Target B");
+    assert_eq!(panel.description("Target A").as_deref(), Some(idle));
+    assert_eq!(panel.description("Target B").as_deref(), Some("Target appearance: targeted, basic appearance"));
+    assert_eq!(panel.toggled("Target B"), Some(craft::behavior::Mixed::Same(true)));
+    assert!(target_marks_painted(&mut panel, "Target A").iter().any(|m| m.1), "the appearance stays after targeting other art");
+}
+
+/// The marker's native cell retains appearance move and Alt-copy admission and payloads.
+#[test]
+fn dragging_a_target_circle_moves_or_copies_the_appearance() {
+    use crate::tests::panel_harness::Panel;
+    let (mut app, layer, [a, b]) = two_rects();
+    name_row(&mut app, layer, "Layer");
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let mut panel = Panel::new(app, show);
+    let opacity = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().opacity;
+    panel.drag("Target A", "Target B", egui::Modifiers::ALT);
+    {
+        let app = panel.app();
+        assert!((opacity(&app, a) - 0.3).abs() < 1e-6 && (opacity(&app, b) - 0.3).abs() < 1e-6);
+    }
+    panel.drag("Target B", "Target Layer", egui::Modifiers::NONE);
+    let app = panel.app();
+    assert!((opacity(&app, layer) - 0.3).abs() < 1e-6 && opacity(&app, b) == 1.0);
 }

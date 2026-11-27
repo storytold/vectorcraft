@@ -102,6 +102,12 @@ impl Panel {
         self.look(name)
     }
 
+    /// Moves the pointer over `name` without pressing a button.
+    pub(crate) fn hover(&mut self, name: &str) {
+        let at = self.find(name).center();
+        self.frame_with(vec![Event::PointerMoved(at)]);
+    }
+
     /// Clicks the control named `name`.
     pub(crate) fn click(&mut self, name: &str) {
         let target = self.find(name);

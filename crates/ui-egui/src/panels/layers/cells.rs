@@ -87,7 +87,7 @@ impl Outcome for CellOutput {
     }
 }
 
-/// A row's target circle: a ring, doubled while the row is targeted, with a dot when it has an
+/// A row's target circle: a ring, doubled while the row is targeted, with a diamond when it has an
 /// appearance or transparency of its own ([`target_marks`]).
 #[derive(Component, Props)]
 #[component(sample = TargetCircle::sample)]
@@ -104,7 +104,13 @@ pub(super) struct TargetCircle {
 
 impl TargetCircle {
     fn new(id: NodeId, targeted: bool, styled: bool) -> Self {
-        Self { common: Common::new(), id, targeted, styled, held: false, pick: None }
+        let state = match (targeted, styled) {
+            (true, true) => tl!("Target appearance: targeted, additional appearance or transparency"),
+            (true, false) => tl!("Target appearance: targeted, basic appearance"),
+            (false, true) => tl!("Target appearance: not targeted, additional appearance or transparency"),
+            (false, false) => tl!("Target appearance: not targeted, basic appearance"),
+        };
+        Self { common: Common::new(), id, targeted, styled, held: false, pick: None }.tooltip(state).description(state).selected(targeted)
     }
 
     /// A targeted circle with an appearance, for the suite.
@@ -183,12 +189,13 @@ impl Component for TargetCircle {
         let draw = ui.draw();
         let (ring, width) = if self.held { (cx.style.accent, StrokeWidth::Medium) } else { (cx.style.ink, StrokeWidth::Thin) };
         draw.stroke(&PaintShape::Circle(center, TARGET_RADIUS), width, ring);
-        let (inner, dot) = target_marks(self.targeted, self.styled);
+        let (inner, mark) = target_marks(self.targeted, self.styled);
         if let Some(radius) = inner {
             draw.stroke(&PaintShape::Circle(center, radius), StrokeWidth::Thin, cx.style.ink);
         }
-        if let Some(radius) = dot {
-            draw.fill(&PaintShape::Circle(center, radius), cx.style.ink);
+        if let Some(radius) = mark {
+            let points = vec![center - vec2(0.0, radius), center + vec2(radius, 0.0), center + vec2(0.0, radius), center - vec2(radius, 0.0)];
+            draw.stroke(&PaintShape::Polygon(points), StrokeWidth::Thin, cx.style.ink);
         }
     }
 

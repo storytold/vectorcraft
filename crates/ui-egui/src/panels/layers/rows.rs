@@ -215,23 +215,20 @@ fn listed_nodes(tree: &DocLayers<'_>, filter: &LayerFilter) -> Vec<NodeId> {
 pub(super) const TARGET_RADIUS: f32 = 5.0;
 /// The radius of the inner ring of a targeted item's target circle (the double ring).
 pub(super) const TARGET_RING: f32 = 2.8;
-// PLAN: the sheet keeps `TARGET_STROKE`; the circle's rings take the theme's thin stroke (`StrokeWidth::Thin`), so it is gone.
-/// The radius of the dot filling the circle of an item that has an appearance of its own and is
-/// not targeted.
-pub(super) const TARGET_DOT: f32 = 3.2;
-/// The radius of that dot inside a targeted item's inner ring: clear of the ring, so a targeted
-/// item with an appearance of its own shows both (#8711).
-pub(super) const TARGET_DOT_IN_RING: f32 = 1.5;
+/// The radius of the outlined diamond marking an item's own appearance or transparency.
+pub(super) const APPEARANCE_MARK: f32 = 2.5;
+/// A mitered thin stroke extends a diamond's corner by width / sqrt(2). Radius 1 keeps
+/// the diamond clear of the targeted ring's inner edge (#8711).
+pub(super) const APPEARANCE_MARK_IN_RING: f32 = 1.0;
 
-/// The marks inside a target circle's outer ring: the inner ring's radius when the item is
-/// `targeted`, and the appearance dot's radius when it is `styled` (has an appearance of its own).
-/// Each of the four combinations looks different, as the Layers panel's target icons do.
+/// The inner target ring's radius and the own-appearance diamond's radius. Each of the four
+/// combinations differs, and the diamond inside a targeted ring leaves that ring visible.
 pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
-    let dot = if targeted { TARGET_DOT_IN_RING } else { TARGET_DOT };
-    (targeted.then_some(TARGET_RING), styled.then_some(dot))
+    let mark = if targeted { APPEARANCE_MARK_IN_RING } else { APPEARANCE_MARK };
+    (targeted.then_some(TARGET_RING), styled.then_some(mark))
 }
 
-/// Whether an object's target circle is filled: its appearance is not basic (a group or layer:
+/// Whether an object's target circle shows its appearance mark: its appearance is not basic (a group or layer:
 /// it has fills, strokes or effects of its own) or its transparency (opacity, blend mode,
 /// isolation, knockout or an opacity mask) is not the default.
 pub(super) fn has_styled_target(n: &Node) -> bool {
