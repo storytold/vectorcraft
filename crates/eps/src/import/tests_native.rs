@@ -5622,6 +5622,35 @@ fn type_the_page_doesnt_draw_along_a_line_takes_none_of_the_piece() {
     }
 }
 
+/// Where a text object's type isn't made, the page's line goes into its slot as the page draws it:
+/// the text objects along the line don't take it too (it would be drawn twice), and are weighed
+/// against the page as before.
+#[test]
+fn a_line_given_to_a_text_object_without_made_type_isnt_also_the_text_objects_along_it() {
+    // Three text objects; the third names a story the text document doesn't have.
+    let doc = text_document(&[("20\r", 0, (8161.5, 8180.0), (0.0, 0.0), 0.0), ("24\r", 0, (8216.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1) + &text_object(2))), &doc);
+    let page = "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 61.5 moveto (20          24) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["20          24"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("text objects that the file keeps but its page doesn't draw")), "{:?}", r.warnings);
+}
+
+/// A line the page draws turned a quarter isn't the type of text objects set level over its words:
+/// the file opens as its page, as before.
+#[test]
+fn a_line_the_page_draws_turned_isnt_the_type_of_level_text_objects_over_its_words() {
+    // The page's line runs up from (24, 20); "20" and "24" lie level over where its two words are.
+    let doc = text_document(&[("20\r", 0, (8150.5, 8219.5), (0.0, 0.0), 0.0), ("24\r", 0, (8150.5, 8165.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page =
+        "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont gsave 24 20 translate 90 rotate 0 0 moveto (20          24) show grestore";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_ne!(names(&r.document), ["Art"], "{:?}", r.warnings);
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.
