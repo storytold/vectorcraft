@@ -7,6 +7,8 @@
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
 > Blend redraw update (#5179; previously: Keyboard Shortcuts: user-bindable Switch Selection Tools (#7645), with no default key; scores and estimates unchanged): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
+> Outline Stroke is available in the canvas context menu when the selection has an outlinable stroke (#5267). Scores and estimates unchanged.
+
 
 > **File-font hardening status (2026-11-12, #4569):** G8 implementation and synthetic regressions added; compilation and runtime proof pending. Scores and estimates unchanged.
 
@@ -1058,6 +1060,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
 | 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
 | 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
+| 2026-11-03 | minor | The canvas context menu offers Outline Stroke for a stroked selection (#5267); no entry closed, estimates unchanged. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | Ordinary Save to a location refusing writes offers Save As (#6146); cancellation preserves the original path and modified state; automation receives READ_ONLY_LOCATION. Scores and estimates unchanged. Validation pending. |
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
