@@ -125,6 +125,22 @@ fn file_names_are_uri_encoded_and_current_relative() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `localizedName` of a file and a folder is the name they show, decoded, as `displayName` is,
+/// not the encoded `name`.
+#[test]
+fn file_and_folder_give_their_localized_name() {
+    let base = folder("localized");
+    let log = logged(
+        &base,
+        "var f = new File('caf%C3%A9 x.txt'), d = new Folder('n%C3%A9w');\n\
+         f.localizedName = 'other';\n\
+         vc.log([f.localizedName === f.displayName, f.localizedName === f.name, d.localizedName === d.displayName,\n\
+         d.localizedName === d.name, f.localizedName, 'localizedName' in Folder.prototype]);",
+    );
+    assert_eq!(log, json!([[true, false, true, false, "caf\u{e9} x.txt", true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn script_file_without_scope_cannot_probe_home() {
     let base = folder("home");
@@ -636,8 +652,65 @@ fn a_grants_change_without_its_lock_changes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `script.grants.revoke` removes a grant by the path `script.grants` lists for it, also when a
+/// link has since taken that path's place and leads elsewhere.
+#[cfg(unix)]
+#[test]
+fn a_grant_whose_path_is_now_a_link_is_revoked_by_its_listed_path() {
+    let base = folder("grants-relinked");
+    let real = std::fs::canonicalize(&base).unwrap();
+    let (kept, other) = (real.join("kept.txt"), real.join("other.txt"));
+    write(&other, b"other");
+    let kept_path = kept.to_string_lossy().into_owned();
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": kept_path, "write": false, "folder": false});
+    write(&base.join("settings/Script Grants.json"), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    std::os::unix::fs::symlink(&other, &kept).unwrap();
+    let mut s = with_data(&base);
+    let listed = s.execute("script.grants", &json!({})).unwrap();
+    assert_eq!(listed["grants"][0]["path"], json!(kept_path));
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A grant kept for a path that is now a link to another granted path is revoked alone: the grant of
+/// the link's target stays.
+#[cfg(unix)]
+#[test]
+fn revoking_a_grant_whose_path_now_links_to_another_grant_keeps_the_other() {
+    let base = folder("grants-relinked-both");
+    let real = std::fs::canonicalize(&base).unwrap();
+    let (kept, other) = (real.join("kept.txt"), real.join("other.txt"));
+    write(&other, b"other");
+    let (kept_path, other_path) = (kept.to_string_lossy().into_owned(), other.to_string_lossy().into_owned());
+    let grant = |path: &str| json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": path, "write": false, "folder": false});
+    let stored = json!({"version": 1, "grants": [grant(&kept_path), grant(&other_path)]});
+    write(&base.join("settings/Script Grants.json"), stored.to_string().as_bytes());
+    std::os::unix::fs::symlink(&other, &kept).unwrap();
+    let mut s = with_data(&base);
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    let left = s.execute("script.grants", &json!({})).unwrap();
+    let paths: Vec<Value> = left["grants"].as_array().into_iter().flatten().map(|g| g["path"].clone()).collect();
+    assert_eq!(paths, [json!(other_path)], "{left}");
+    // Another script's grant of the path as given does not keep this script's grant of the link's
+    // target from being removed.
+    let stored = json!({"version": 1, "grants": [
+        {"script": "/t.jsx", "sha256": "0", "code": [], "path": kept_path, "write": false, "folder": false},
+        grant(&other_path)
+    ]});
+    write(&base.join("settings/Script Grants.json"), stored.to_string().as_bytes());
+    let r = s.execute("script.grants.revoke", &json!({"script": "/s.jsx", "path": kept_path})).unwrap();
+    assert_eq!(r["removed"], 1, "{r}");
+    let left = s.execute("script.grants", &json!({})).unwrap();
+    let scripts: Vec<Value> = left["grants"].as_array().into_iter().flatten().map(|g| g["script"].clone()).collect();
+    assert_eq!(scripts, [json!("/t.jsx")], "{left}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Reading and changing the grants file wait for a lock another handle holds only for a bounded
-/// number of tries: then a read gives no grants and a change fails with the file unchanged. A lock
+/// number of tries: then a listing and a change fail, with the file unchanged. A lock
 /// released while it waits is taken.
 #[test]
 fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
@@ -652,7 +725,8 @@ fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
     let waits = std::rc::Rc::new(std::cell::Cell::new(0));
     let counted = waits.clone();
     WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
-    assert_eq!(stored_grants(&data), Vec::<Value>::new(), "grants are not read without the lock");
+    let listed = stored_grants(&data);
+    assert_eq!(listed.map_err(|e| e.kind()), Err(std::io::ErrorKind::TimedOut), "grants are not listed without the lock");
     assert_eq!(waits.get(), LOCK_TRIES - 1);
     waits.set(0);
     let refused = revoke_grants(&data, None, None);
@@ -1301,6 +1375,55 @@ fn script_file_grants_file_that_cannot_be_read_is_left_as_it_is() {
         assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: a revoke leaves it too");
         let _ = std::fs::remove_dir_all(base);
     }
+}
+
+/// `script.grants` fails on a grants file that is there but cannot be read (another version, not
+/// JSON, no list of grants, over the size limit, not a file, or on Unix a link to a missing file),
+/// lists none when it is missing, and
+/// lists the well-formed grants of one that holds a grant that is not.
+#[test]
+fn script_grants_fails_on_a_grants_file_that_cannot_be_read() {
+    let mut big = b"{\"version\": 1, \"grants\": []}".to_vec();
+    big.resize((4 << 20) + 1, b' ');
+    let cases = [
+        ("list-newer", br#"{"version": 2, "grants": []}"#.to_vec()),
+        ("list-broken", b"{ not json".to_vec()),
+        ("list-nolist", br#"{"version": 1, "grants": {}}"#.to_vec()),
+        ("list-big", big),
+    ];
+    for (name, held) in cases {
+        let base = folder(name);
+        write(&base.join("settings/Script Grants.json"), &held);
+        let mut s = with_data(&base);
+        let e = s.execute("script.grants", &json!({})).unwrap_err().to_string();
+        assert!(e.contains("the script file permissions could not be read"), "{name}: {e}");
+        let _ = std::fs::remove_dir_all(base);
+    }
+    let base = folder("list-folder");
+    std::fs::create_dir_all(base.join("settings/Script Grants.json")).unwrap();
+    let mut s = with_data(&base);
+    assert!(s.execute("script.grants", &json!({})).is_err(), "a folder in the grants file's place");
+    let _ = std::fs::remove_dir_all(base);
+    #[cfg(unix)]
+    {
+        let base = folder("list-dangling");
+        std::fs::create_dir_all(base.join("settings")).unwrap();
+        std::os::unix::fs::symlink(base.join("gone.json"), base.join("settings/Script Grants.json")).unwrap();
+        let mut s = with_data(&base);
+        assert!(s.execute("script.grants", &json!({})).is_err(), "a link to a missing file in the grants file's place");
+        let _ = std::fs::remove_dir_all(base);
+    }
+    let base = folder("list-missing");
+    let mut s = with_data(&base);
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]), "a missing grants file lists none");
+    let _ = std::fs::remove_dir_all(base);
+    let base = folder("list-mixed");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    let text = json!({"version": 1, "grants": [grant, {"script": "x"}]}).to_string();
+    write(&base.join("settings/Script Grants.json"), text.as_bytes());
+    let mut s = with_data(&base);
+    assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"].as_array().unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(base);
 }
 
 /// `copy` of a file over 8 MiB is refused, as opening one is.

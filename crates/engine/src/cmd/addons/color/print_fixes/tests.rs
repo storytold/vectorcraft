@@ -102,6 +102,20 @@ fn white_overprint_goes_and_black_overprint_comes_at_the_threshold() {
 }
 
 #[test]
+fn a_white_spot_ink_keeps_its_overprint() {
+    let white = cmyk(0.0, 0.0, 0.0, 0.0);
+    let (mut s, ids) = doc(&[(white.clone(), true), (white.clone(), true)]);
+    s.execute("swatch.new", &json!({"name": "Opaque White", "color": white, "spot": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [ids[1].0]})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Opaque White"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(fill(&s, ids[1]).1, "the swatch keeps the overprint");
+    let v = s.execute(C, &json!({"removeWhiteOverprint": true})).unwrap();
+    assert_eq!(v["whiteOverprintRemoved"], 1, "{v}");
+    assert_eq!([fill(&s, ids[0]).1, fill(&s, ids[1]).1], [false, true], "paper white stops; the spot white is an ink");
+}
+
+#[test]
 fn bad_requests_and_rgb_documents_are_refused() {
     let (mut s, ids) = doc(&[(cmyk(100.0, 100.0, 100.0, 100.0), true)]);
     for p in [

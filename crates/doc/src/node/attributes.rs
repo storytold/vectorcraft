@@ -38,6 +38,141 @@ pub struct ObjectAttributes {
     /// with it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign: Vec<ForeignAttribute>,
+    /// The object's tags, in order: name and value pairs that scripts read and write
+    /// (`object.tag.add`). Names may be empty or repeated. At most [`MAX_TAGS`], each name and
+    /// value at most [`MAX_TAG_TEXT`] bytes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<ObjectTag>,
+}
+
+/// The most tags one object has.
+pub const MAX_TAGS: usize = 64;
+
+/// The longest name or value a tag has, in bytes.
+pub const MAX_TAG_TEXT: usize = 64 * 1024;
+
+/// A tag on an object: a name and a value, with an id that tells it apart from the object's other
+/// tags while its name and value change.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObjectTag {
+    /// Distinct among the object's tags: a new tag takes an id from
+    /// [`crate::Document::alloc_tag_id`], and deleting a tag raises the next node id above its id,
+    /// so a deleted tag's id is not given out again.
+    #[serde(default, deserialize_with = "lenient_tag_id")]
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub value: String,
+}
+
+/// Reading a native file never fails over a tag id that is not a whole number from 0 to
+/// `u64::MAX` (a negative one, a fraction, text): it reads as 0, and
+/// [`crate::Document::tidy_tags`] gives the tag a new id.
+fn lenient_tag_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_u64().unwrap_or(0))
+}
+
+impl ObjectAttributes {
+    /// Keeps the tags within the limits: the first [`MAX_TAGS`] whose name and value are at most
+    /// [`MAX_TAG_TEXT`] bytes. → whether any was dropped.
+    pub fn tidy_tags(&mut self) -> bool {
+        let before = self.tags.len();
+        self.tags.retain(|t| t.name.len() <= MAX_TAG_TEXT && t.value.len() <= MAX_TAG_TEXT);
+        self.tags.truncate(MAX_TAGS);
+        self.tags.len() != before
+    }
+}
+
+impl crate::Document {
+    /// Keeps every object's tags within the limits ([`ObjectAttributes::tidy_tags`]) in the art of
+    /// the layers, symbols, graph designs and pattern swatches (opacity-mask art included). A tag
+    /// keeps its id when the id is from 1 to below [`crate::limits::MAX_NEXT_ID`] and no earlier
+    /// tag of the object has it. Every other tag gets a new id: from the next node id on, above
+    /// every kept id, when those ids stay below that limit; otherwise the smallest id the object's
+    /// other tags do not have. The next node id is then raised past every tag id below the limit.
+    /// It recurses through the art: call it on a document no deeper than
+    /// [`crate::depth::MAX_DEPTH`].
+    pub fn tidy_tags(&mut self) {
+        fn keeps(t: &ObjectTag, earlier: &[ObjectTag]) -> bool {
+            (1..crate::limits::MAX_NEXT_ID).contains(&t.id) && !earlier.iter().any(|o| o.id == t.id)
+        }
+        // The limits, the largest kept id and the number of new ids first, so that a new id never
+        // meets a kept one.
+        let mut next = self.peek_next_id();
+        let mut fresh = 0u64;
+        self.each_tagged(&mut |a| {
+            a.tidy_tags();
+            for (i, t) in a.tags.iter().enumerate() {
+                if keeps(t, &a.tags[..i]) {
+                    next = next.max(t.id.saturating_add(1));
+                } else {
+                    fresh = fresh.saturating_add(1);
+                }
+            }
+        });
+        if fresh == 0 {
+            self.raise_next_id(next);
+            return;
+        }
+        let in_range = next.saturating_add(fresh) <= crate::limits::MAX_NEXT_ID;
+        self.each_tagged(&mut |a| {
+            let kept: Vec<bool> = (0..a.tags.len()).map(|i| keeps(&a.tags[i], &a.tags[..i])).collect();
+            let mut used: Vec<u64> = a.tags.iter().zip(&kept).filter(|(_, k)| **k).map(|(t, _)| t.id).collect();
+            for (i, k) in kept.iter().enumerate() {
+                if *k {
+                    continue;
+                }
+                let id = if in_range {
+                    next = next.saturating_add(1);
+                    next - 1
+                } else {
+                    (1..).find(|c| !used.contains(c)).unwrap_or(1)
+                };
+                a.tags[i].id = id;
+                used.push(id);
+            }
+        });
+        self.raise_next_id(next);
+    }
+
+    /// A new tag id for object `id`, which none of its tags has: the next node id. `None` once the
+    /// next node id has reached [`crate::limits::MAX_NEXT_ID`] (a file with ids at the top of the
+    /// range), since an id from there would be outside the range [`Self::tidy_tags`] keeps and an
+    /// id below it could be a deleted tag's.
+    pub fn alloc_tag_id(&mut self, id: crate::NodeId) -> Option<u64> {
+        let used: Vec<u64> =
+            self.node(id).map(|n| n.extras().attrs.as_deref().map_or(Vec::new(), |a| a.tags.iter().map(|t| t.id).collect())).unwrap_or_default();
+        for _ in 0..=used.len() {
+            if self.peek_next_id() >= crate::limits::MAX_NEXT_ID {
+                return None;
+            }
+            let tag = self.alloc_id().0;
+            if !used.contains(&tag) {
+                return Some(tag);
+            }
+        }
+        None
+    }
+
+    /// Calls `f` with the attributes of every object with tags in the art [`Self::tidy_tags`] reads.
+    fn each_tagged(&mut self, f: &mut impl FnMut(&mut ObjectAttributes)) {
+        let mut fix = |n: &mut Node| {
+            if n.extras().attrs.as_deref().is_some_and(|a| !a.tags.is_empty()) {
+                n.edit_attrs(&mut *f);
+            }
+        };
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
+        for root in roots {
+            crate::placed_document::each_mut(std::sync::Arc::make_mut(root), &mut fix);
+        }
+    }
 }
 
 /// An attribute in another application's XML namespace: `plotter:pen="2"` with `xmlns:plotter=

@@ -401,6 +401,11 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"tsume": 100.1}),
         json!({"diacriticHorizontal": -1000.1}),
         json!({"diacriticVertical": 1000.1}),
+        json!({"tracking": -1000.1}),
+        json!({"kerning": 10000.1}),
+        json!({"rotation": 360.1}),
+        json!({"stroke_miter_limit": 0.9}),
+        json!({"small_caps": 200.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -425,7 +430,9 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
             "akiLeft": 0.0, "akiRight": 1000.0,
             "tsume": 100.0,
-            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0
+            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0,
+            "tracking": 10000.0, "kerning": -1000.0, "rotation": -360.0,
+            "stroke_miter_limit": 500.0, "small_caps": 200.0
         }}),
     )
     .unwrap();
@@ -830,8 +837,8 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
-/// A loaded character style whose size, scale, leading, shift, warichu Line Gap or stroke width is
-/// out of the range `charStyle.new` takes is skipped.
+/// A loaded character style whose size, scale, leading, shift, warichu Line Gap, stroke width or
+/// miter limit, tracking, kerning or rotation is out of the range `charStyle.new` takes is skipped.
 #[test]
 fn loaded_styles_out_of_range_are_skipped() {
     let (mut s, _) = session_with_text("Title");
@@ -841,11 +848,17 @@ fn loaded_styles_out_of_range_are_skipped() {
         ("Shifted", json!({"baseline_shift": 5000.0})),
         ("Thick", json!({"stroke_width": -2.0})),
         ("Gapped", json!({"warichuGap": 500.0})),
+        ("Spun", json!({"rotation": 720.0})),
+        ("Tracked", json!({"tracking": 50000.0})),
+        ("Kerned", json!({"kerning": -5000.0})),
+        ("Before", json!({"kerningBefore": 50000.0})),
+        ("Mitered", json!({"stroke_miter_limit": 0.5})),
         ("Fine", json!({"size": 12.0, "h_scale": 50.0})),
     ];
     let data = styles_file(&file, &[]);
     let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
-    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick", "Gapped"]}));
+    let skipped = ["Huge", "Flat", "Shifted", "Thick", "Gapped", "Spun", "Tracked", "Kerned", "Before", "Mitered"];
+    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": skipped}));
     assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Fine"]);
 }
 

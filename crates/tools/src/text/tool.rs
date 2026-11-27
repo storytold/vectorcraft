@@ -1,11 +1,8 @@
-use super::plain::{
-    char_range_to_bytes, ime_surrounding_window, plain_ceil_boundary, plain_chars_after, plain_chars_before, plain_floor_boundary, plain_is_boundary,
-    plain_len,
-};
+use super::plain::{char_range_to_bytes, plain_ceil_boundary, plain_chars_after, plain_chars_before, plain_floor_boundary, plain_len};
 use super::ports::{ported, ports, ports_shown};
 use super::{
-    Action, BezPath, Cursor, ImeSurrounding, Mode, Mods, NodeId, Overlay, Point, PointerEvent, PointerKind, Preedit, Range, Rect, Shape,
-    SurroundingUnit, TextKind, TextRun, Tool, ToolContext, ToolKey, TypeTool, Value, edit, json,
+    Action, BezPath, Cursor, Mode, Mods, NodeId, Overlay, Point, PointerEvent, PointerKind, Preedit, Range, Rect, Shape, SurroundingUnit, TextKind,
+    TextRun, Tool, ToolContext, ToolKey, TypeTool, Value, edit, json,
 };
 
 impl Tool for TypeTool {
@@ -153,42 +150,6 @@ impl Tool for TypeTool {
             out.extend(self.start_typed_list(cx));
         }
         out
-    }
-    /// Would [`Tool::text_input`] change `s` before inserting it? Control characters are dropped,
-    /// `\r` becomes `\n`, Typographer's Quotes rewrites a straight quote, and copied text keeps
-    /// its run styles. An IME commit the application rewrites is an application edit, not an
-    /// accepted IME insertion (its receipt must stay `Other`).
-    fn text_input_is_verbatim(&self, cx: &ToolContext, s: &str) -> bool {
-        if self.editing.is_none() {
-            return true;
-        }
-        if s.is_empty() {
-            return true;
-        }
-        // A straight quote's direction depends on the character before the insertion. During a
-        // commit this check still sees the pre-edit at the caret, while `text_input` replaces it
-        // from its start; with a custom pair whose opening quote is straight, that can look
-        // verbatim here and then be rewritten. Never claim verbatim for one.
-        if cx.doc.setup.typographers_quotes && (matches!(s, "\"" | "'") || (cx.typed_from_keyboard && is_one_typed_curly_quote(s))) {
-            return false;
-        }
-        let Some(normalized) = self.input_text(cx, s) else { return false };
-        if normalized != s {
-            return false;
-        }
-        let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        self.preedit.is_some() || normalized.is_empty() || normalized != clip || cx.paste_plain_text
-    }
-    /// Whether the typing session still describes the edited document; a session ended by an outside
-    /// command reports false until a replacement commit starts a new one.
-    fn ime_session_matches_document(&self, cx: &ToolContext) -> bool {
-        match (self.editing, &self.typing) {
-            (Some(id), Some(ty)) => Self::text(cx, id).is_none_or(|t| ty.cur == t.runs),
-            // An outside command settled the session: the document may have changed under it, and
-            // the commit that starts a new session cannot claim the IME made that change.
-            (Some(_), None) => !self.typing_ended,
-            _ => true,
-        }
     }
     /// Handle an editing key: ignore keys while an IME composes, remap arrows in vertical text, step
     /// type attributes with Alt, and otherwise edit, navigate or end the session.
@@ -416,48 +377,6 @@ impl Tool for TypeTool {
         Self::text(cx, id)?;
         Some((cx.revision.0, id.0, self.edit_session))
     }
-    /// Return a bounded logical text window around the caret, anchor and optional pre-edit; a stale
-    /// typing session publishes the document's current text, and unusable or non-boundary offsets
-    /// return `Unavailable` rather than stale data.
-    fn ime_surrounding(&self, cx: &ToolContext, max_bytes: usize) -> ImeSurrounding {
-        let Some(id) = self.editing else {
-            return ImeSurrounding::Unavailable("no text object is being edited");
-        };
-        let Some(current) = Self::text(cx, id) else {
-            return ImeSurrounding::Unavailable("the edited text object is gone");
-        };
-        // The document changed under the typing session (undo, a panel or control edit): the
-        // session's runs, marked-text range and caret offsets no longer describe the document.
-        // Publish the document's own text (never the stale session's, which the IME cannot see);
-        // the marked text has no range in it, so it is excluded from the logical view. The
-        // commit-time check (`ime_session_matches_document`) reports the reset as application
-        // origin instead of letting a receipt describe the wrong text.
-        let stale = self.typing.as_ref().is_some_and(|ty| ty.cur != current.runs);
-        if self.preedit.is_some() && self.typing.is_none() {
-            return ImeSurrounding::Unavailable("the IME pre-edit has no typing session");
-        }
-        let Some(segments) = self.plain_segments(cx) else {
-            return ImeSurrounding::Unavailable("the edited text object is gone");
-        };
-        let len = plain_len(&segments);
-        let caret = self.caret.min(len);
-        let anchor = self.anchor.min(len);
-        if !plain_is_boundary(&segments, caret) || !plain_is_boundary(&segments, anchor) {
-            return ImeSurrounding::Unavailable("the caret or selection anchor is not a UTF-8 boundary");
-        }
-        let preedit = match self.preedit.as_ref().filter(|_| !stale) {
-            Some(p) => {
-                let start = p.range.start.min(len);
-                let end = p.range.end.min(len);
-                if start > end || !plain_is_boundary(&segments, start) || !plain_is_boundary(&segments, end) {
-                    return ImeSurrounding::Unavailable("the IME pre-edit is not on UTF-8 boundaries");
-                }
-                Some(start..end)
-            }
-            None => None,
-        };
-        ime_surrounding_window(&segments, preedit, len, caret, anchor, max_bytes)
-    }
     /// Whether an IME pre-edit is currently shown for this Type-tool session.
     fn composing(&self) -> bool {
         self.preedit.is_some()
@@ -583,7 +502,6 @@ impl Tool for TypeTool {
             "commitTyping" | "endTyping" => {
                 self.typing = None;
                 self.preedit = None;
-                self.typing_ended = true;
             }
             // `{story: [id…], editing?: id}`: the frames of the threaded story being edited, in
             // thread order. The tool edits frame `editing` of them (default: the first), and the
@@ -762,11 +680,4 @@ impl Tool for TypeTool {
             (None, true) => Cursor::TypeVertical,
         }
     }
-}
-
-/// Is `s` one curly quote that Typographer's Quotes may set like a straight one
-/// ([`vectorcraft_doc::Quotes::typed_as_straight`]: a lone `”`)?
-fn is_one_typed_curly_quote(s: &str) -> bool {
-    let mut chars = s.chars();
-    matches!((chars.next(), chars.next()), (Some(c), None) if vectorcraft_doc::Quotes::typed_as_straight(c).is_some())
 }

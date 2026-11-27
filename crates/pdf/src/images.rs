@@ -29,7 +29,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
@@ -528,6 +528,22 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
     }
 }
 
+/// Are samples of type `t` grey (with or without alpha)? [`recode`] keeps such pixels grey.
+fn grey_type(t: ExtendedColorType) -> bool {
+    use ExtendedColorType as T;
+    matches!(t, T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16)
+}
+
+/// Does the image in `bytes` hold grey samples, which [`recode`] keeps grey whatever the Output
+/// settings? Reads only its header; `false` for one that can't be read.
+pub(crate) fn is_grey(bytes: &[u8]) -> bool {
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|r| r.into_decoder().ok())
+        .is_some_and(|d| grey_type(d.original_color_type()))
+}
+
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
@@ -554,8 +570,7 @@ pub(crate) fn recode(
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
     let Ok(mut decoder) = reader.into_decoder() else { return keep };
     let dims = decoder.dimensions();
-    use ExtendedColorType as T;
-    let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
+    let grey = grey_type(decoder.original_color_type());
     // Pixels in a profile they are converted from are decoded, whatever the Compression settings.
     // Grey pixels keep their profile unless the destination is sRGB ([`ToSrgb::grey`]).
     let then = to_srgb.and_then(|t| t.then);

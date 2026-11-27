@@ -37,7 +37,7 @@ mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
-mod importer;
+pub(crate) mod importer;
 pub mod jxlread;
 mod legacy_ai;
 mod load;
@@ -79,10 +79,10 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
 pub use export::{export_doc, export_source, selection_doc, unused_option_notes};
+pub(crate) use load::decode_native_file;
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
-pub(crate) use load::native_file;
 pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{
@@ -167,8 +167,8 @@ use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
     export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
-    open_filters, opens_as_other, opens_with_importer, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name,
-    titled_for_export, writable_format,
+    open_filters, opens_as_other, opens_with_importer, place_dialog_filters, place_filters, places_with_importer, plugin_formats, read_extensions,
+    readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]
