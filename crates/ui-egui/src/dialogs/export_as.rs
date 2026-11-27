@@ -112,7 +112,7 @@ pub fn open(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) {
 fn open_dialog(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) -> Result<(), String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let source = app.session.active();
-    let document = source.map(|source| source.uid);
+    let document = source.map(|source| (source.uid, source.reverts));
     let n = source.map_or(0, |source| source.doc.artboards.len());
     let missing = format.and_then(|f| UNAVAILABLE.iter().find(|u| u.0.eq_ignore_ascii_case(f.trim_start_matches('.'))));
     let format = match missing {
@@ -138,17 +138,19 @@ fn open_dialog(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) -> Res
     export_host::open(app, Export::As { document }, false, dialog).map(|_| ()).ok_or_else(|| "no window".into())
 }
 
-fn require_source(app: &VectorcraftApp, document: Option<u64>) -> Result<(), String> {
-    let document = document.ok_or_else(|| tl!("Open Export As from the drawing you want to export").to_owned())?;
-    if app.session.active().is_none_or(|source| source.uid != document) {
-        return Err(tl!("Return to the original drawing to export it").into());
+fn require_source(app: &VectorcraftApp, document: Option<(u64, u64)>) -> Result<(), String> {
+    let (uid, reverts) = document.ok_or_else(|| tl!("Open Export As from the drawing you want to export").to_owned())?;
+    let source =
+        app.session.active().filter(|source| source.uid == uid).ok_or_else(|| tl!("Return to the original drawing to export it").to_owned())?;
+    if source.reverts != reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
     }
     Ok(())
 }
 
 /// Check the artboard range and that there is something to export; the save panel and the format's options or
 /// the file follow once the dialog has closed.
-pub(super) fn confirm(app: &mut VectorcraftApp, document: Option<u64>, fields: &DialogFields) -> Result<After, String> {
+pub(super) fn confirm(app: &mut VectorcraftApp, document: Option<(u64, u64)>, fields: &DialogFields) -> Result<After, String> {
     require_source(app, document)?;
     if let Some((_, hint)) = unavailable(fields) {
         return Err(hint.into());
@@ -175,7 +177,10 @@ pub(super) fn confirm(app: &mut VectorcraftApp, document: Option<u64>, fields: &
     let pages = Pages { use_artboards, all, range, selection: false };
     Ok(Some(Box::new(move |app| {
         require_source(app, document)?;
-        io::export_path(app, None, f, move |app, path| options_or_write(app, f, plugin, path, pages))
+        io::export_path(app, None, f, move |app, path| {
+            require_source(app, document)?;
+            options_or_write(app, f, plugin, path, pages)
+        })
     })))
 }
 

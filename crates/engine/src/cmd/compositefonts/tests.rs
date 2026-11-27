@@ -27,6 +27,27 @@ fn steps(s: &Session) -> usize {
     s.doc().unwrap().history.undo.len()
 }
 
+/// Inline and encoded files share the same raw byte limit; rejection changes no fonts or history.
+#[test]
+fn import_file_byte_boundaries_preserve_the_document_on_refusal() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("Existing")]})).unwrap();
+    let before = steps(&s);
+    let large = " ".repeat(super::MAX_FILE_BYTES + 1);
+    for params in [json!({"data": large}), json!({"dataBase64": vectorcraft_format::base64_encode(large.as_bytes())})] {
+        let error = s.execute("type.compositeFonts.import", &params).unwrap_err();
+        assert!(error.to_string().contains("the file is larger than 4 MB"), "{error}");
+        assert_eq!(names(&s), ["Existing"]);
+        assert_eq!(steps(&s), before);
+    }
+    let mut exact = json!({"compositeFonts": [font("Imported")]}).to_string();
+    exact.extend(std::iter::repeat_n(' ', super::MAX_FILE_BYTES - exact.len()));
+    let imported = s.execute("type.compositeFonts.import", &json!({"data": exact, "apply": false})).unwrap();
+    assert_eq!(imported["fonts"][0]["name"], "Imported");
+    assert_eq!(names(&s), ["Existing"]);
+    assert_eq!(steps(&s), before);
+}
+
 fn text(s: &Session, id: u64) -> vectorcraft_doc::TextObject {
     match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
         NodeKind::Text(t) => (**t).clone(),

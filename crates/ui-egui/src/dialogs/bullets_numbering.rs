@@ -135,7 +135,7 @@ pub(crate) struct BulletsDialog {
 
 /// The preview from the opening drawing and the interaction that owns its undo snapshot.
 pub(crate) struct Preview {
-    document: u64,
+    document: (u64, u64),
     live: LivePreview,
     selection: Option<Weak<ArtworkSelection>>,
 }
@@ -144,13 +144,13 @@ impl Preview {
     fn owns_interaction(&self, app: &VectorcraftApp) -> bool {
         let Some(selection) = &self.selection else { return false };
         app.session.active().is_some_and(|state| {
-            state.uid == self.document
+            (state.uid, state.reverts) == self.document
                 && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
         })
     }
 
     fn update(&mut self, app: &mut VectorcraftApp, fields: Map<String, Value>) {
-        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else { return };
+        let Some(state) = app.session.active().filter(|state| (state.uid, state.reverts) == self.document) else { return };
         if !self.owns_interaction(app) {
             self.live = LivePreview::default();
             self.selection = None;
@@ -175,8 +175,11 @@ impl Preview {
             }
             return Ok(());
         }
-        if app.session.active().is_none_or(|state| state.uid != self.document) {
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document.0) else {
             return Err(tl!("Bullets and Numbering can only change the document where it was opened.").to_owned());
+        };
+        if state.reverts != self.document.1 {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         if app.session.in_interaction() && !self.owns_interaction(app) {
             return Err(tl!("Finish the active edit before applying Bullets and Numbering.").to_owned());
@@ -211,7 +214,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Some(v) => Some(v.as_str().and_then(ListTab::of).ok_or_else(|| format!("`{key}` must be one of {}", TABS.join(", ")))?),
     };
     crate::panels::character::text_style(app).ok_or("select some type first")?;
-    let document = app.session.active().ok_or("no document")?.uid;
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
     // A dialog this one replaces leaves its preview on the type: end it, so the values read below are the document's own.
     if let Some(old) = app.bullets_preview.take() {
         old.cancel(app);
@@ -617,7 +621,7 @@ impl StackDialog for BulletsDialog {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(host) = app.dialogs() else { return };
     let Some(mut preview) = app.bullets_preview.take() else { return };
-    let active_document = app.session.active().is_some_and(|state| state.uid == preview.document);
+    let active_document = app.session.active().is_some_and(|state| (state.uid, state.reverts) == preview.document);
     let lengths = crate::canvas::general_lengths(app);
     let Some((fields, answer)) = host.with(|h| {
         h.get_mut::<BulletsDialog>().map(|d| {
@@ -802,6 +806,36 @@ mod tests {
         assert!(with_dialog(&app, |d| d.held.state().is_none()));
         ok(&mut app);
         assert_eq!(first(&app, id).0, Some(ParaList::numbered(NumberStyle::Arabic)));
+    }
+
+    #[test]
+    fn bullets_preview_and_ok_leave_restored_paragraphs_unchanged() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("bullets-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let saved = paras(&app, id);
+        app.run("file.saveAs", json!({"path": dir.join("Paragraphs.vectorcraft")})).unwrap();
+        app.run("text.setFormat", json!({"ids": [id], "leftIndent": 19})).unwrap();
+        let drawing = app.session.active().unwrap();
+        let (uid, reverts) = (drawing.uid, drawing.reverts);
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        frame(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let restored = app.session.active().unwrap();
+        assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+        let undo = restored.history.undo.len();
+        frame(&mut app);
+        assert_eq!(paras(&app, id), saved);
+        assert!(!app.session.in_interaction());
+        press_ok(&mut app);
+        assert!(with_dialog(&app, |dialog| matches!(dialog.held.state(), Some(HeldOk::Refused(_)))));
+        assert_eq!(paras(&app, id), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     }
 
     #[test]

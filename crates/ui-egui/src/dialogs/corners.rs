@@ -9,6 +9,7 @@
 
 use std::collections::BTreeSet;
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
@@ -65,7 +66,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = general_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| dialog(fields.text("radii") == Some("relative"), lengths));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        dialog(fields.text("radii") == Some("relative"), lengths).values(Bind::bound(fields))
+    });
     open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
 }
@@ -340,5 +343,41 @@ mod tests {
         assert_eq!(steps(&app), n + 1);
         app.run("edit.undo", json!({})).unwrap();
         assert!(!lc(&app).0, "undo brings back absolute radii");
+    }
+
+    #[test]
+    fn a_live_radius_edit_applies_to_the_corners_that_opened_the_dialog() {
+        use craft::ui::testing::Fixture;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let (app, id) = app();
+        let app = Rc::new(RefCell::new(app));
+        let shown = app.clone();
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| host.run(ui));
+            super::super::host::pump(&mut app, ui.ctx());
+        });
+        fixture.room(egui::vec2(880.0, 720.0));
+        let undo = {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(fixture.ctx().clone());
+            app.run("ui.corners", json!({"id": id, "corners": [1, 3]})).unwrap();
+            app.session.active().unwrap().history.undo.len()
+        };
+        fixture.settle();
+        let radius = fixture.by_label("Radius:").or_else(|| fixture.by_label("Radius")).expect("the Corners radius field");
+        fixture.click(&radius).key(egui::Key::A, egui::Modifiers::COMMAND).type_text("12").key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+        let ok = fixture.by_label("OK").expect("the Corners confirmation button");
+        fixture.click(&ok).settle();
+
+        let mut app = app.borrow_mut();
+        assert_eq!(corners(&app, id).0, [0.0, 12.0, 0.0, 12.0], "OK applies the typed radius only to the opening corners");
+        assert!(!is_open(&app));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(corners(&app, id).0, [0.0; 4]);
     }
 }

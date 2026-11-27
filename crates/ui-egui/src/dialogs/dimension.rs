@@ -150,8 +150,8 @@ pub(crate) struct Pick {
     pub id: DialogId,
     /// The key of the swatch that asked.
     pub key: String,
-    /// The document that contains the dimension.
-    pub document: u64,
+    /// The document and loaded contents that contain the dimension.
+    pub document: (u64, u64),
     /// The dimension the colour goes to.
     pub target: NodeId,
 }
@@ -343,8 +343,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
     let Some(finished) = dialogs.with(|host| host.take_by_id::<ColorPickerDialog>(pick.id)) else { return };
     app.object_dialogs.dimension = None;
     let Some(ColorPickerResult { picked, .. }) = finished.ok() else { return };
-    if app.session.active().map(|st| st.uid) != Some(pick.document) {
+    let Some(source) = app.session.active().filter(|st| st.uid == pick.document.0) else {
         app.status("The active document changed while the Color Picker was open");
+        return;
+    };
+    if source.reverts != pick.document.1 {
+        app.status(tl!("The document was reverted. Reopen this dialog to continue."));
         return;
     }
     if let Some(mut o) = options_of(app, pick.target)
@@ -721,7 +725,7 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     if let Some(request) = edited.pick
-        && let Some(document) = app.session.active().map(|st| st.uid)
+        && let Some(document) = app.session.active().map(|st| (st.uid, st.reverts))
         && let Some(dialogs) = app.dialogs()
     {
         let key = request.key.clone();
@@ -820,6 +824,51 @@ mod tests {
         assert_eq!(options_of(&panel.app(), source).unwrap().line_color, [18, 52, 86]);
         panel.app().run("edit.undo", json!({})).unwrap();
         assert_eq!(options_of(&panel.app(), source).unwrap().line_color, [17, 34, 51]);
+    }
+
+    #[test]
+    fn dimension_properties_picker_cannot_edit_a_dimension_restored_by_file_revert() {
+        use crate::tests::panel_harness::Panel;
+
+        let dir = vectorcraft_testkit::TempDir::new("dimension-color-revert");
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let made = app.run("dimension.create", json!({"a": [0, 0], "b": [72, 0], "options": {"lineColor": [17, 34, 51]}})).unwrap();
+        let dimension = NodeId(made["id"].as_u64().unwrap());
+        app.run("file.saveAs", json!({"path": dir.join("Dimension.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [dimension.0]})).unwrap();
+        let state = app.session.active().unwrap();
+        let opening = (state.uid, state.reverts);
+        let mut panel = Panel::new(app, properties_section);
+        let ctx = panel.ctx().clone();
+        let host = WindowDialogs::of(&ctx, &WindowKey::main());
+        let choose = |panel: &mut Panel| {
+            panel.click("Line Color");
+            let id = panel.app().object_dialogs.dimension.as_ref().unwrap().id;
+            host.with(|h| h.set_json_field(&ctx, id, "color", json!("#123456"))).unwrap();
+            id
+        };
+        let stale = choose(&mut panel);
+        panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+        let (drawing, undo) = {
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            ((state.uid, state.reverts), state.history.undo.len())
+        };
+        assert_eq!(drawing, (opening.0, opening.1 + 1));
+        assert!(host.with(|h| h.confirm_by_id(&ctx, stale)));
+        pump(&mut panel.app(), &ctx);
+        assert_eq!(options_of(&panel.app(), dimension).unwrap().line_color, [17, 34, 51]);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+        panel.app().run("select.set", json!({"ids": [dimension.0]})).unwrap();
+        let fresh = choose(&mut panel);
+        assert!(host.with(|h| h.confirm_by_id(&ctx, fresh)));
+        pump(&mut panel.app(), &ctx);
+        assert_eq!(options_of(&panel.app(), dimension).unwrap().line_color, [18, 52, 86]);
     }
 
     /// The Arrow Style rule of `ui.dialog.set` and the saved style: a head clears with `arrowStyle`, a built-in head
