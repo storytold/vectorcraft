@@ -113,7 +113,10 @@ impl PathOp {
 pub(crate) struct Open {
     op: PathOp,
     id: DialogId,
+    document: u64,
     preview: LivePreview,
+    /// A distinct selection snapshot identifies the interaction that ran this preview.
+    preview_selection: Option<Weak<Selection>>,
     /// The params the preview last answered for.
     last: Value,
     /// Simplify: the paths the preview ran on.
@@ -358,6 +361,36 @@ fn take_open(app: &mut VectorcraftApp, op: PathOp) -> Option<Open> {
     Some(app.object_dialogs.path.remove(i))
 }
 
+impl Open {
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        let Some(selection) = &self.preview_selection else { return false };
+        app.session.active().is_some_and(|state| {
+            state.uid == self.document
+                && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
+        })
+    }
+
+    fn cancel(self, app: &mut VectorcraftApp) {
+        if self.owns_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
+
+    fn commit(&mut self, app: &mut VectorcraftApp, cmd: &str, params: Value) -> Result<(), String> {
+        if app.session.active().is_none_or(|state| state.uid != self.document) {
+            return Err(tl!("Return to the document where this dialog opened.").to_owned());
+        }
+        if app.session.in_interaction() && !self.owns_preview(app) {
+            return Err(tl!("Finish the active edit before confirming.").to_owned());
+        }
+        self.preview_selection = None;
+        self.last = Value::Null;
+        self.original.clear();
+        self.shown = false;
+        std::mem::take(&mut self.preview).commit(app, cmd, params).map(drop)
+    }
+}
+
 /// Whether Object › Path › Simplify opens its dialog (the user kept its settings) instead of the slider.
 pub(crate) fn retained_simplify(app: &VectorcraftApp) -> bool {
     let Some(ctx) = app.ui_ctx.as_ref() else { return false };
@@ -393,6 +426,11 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
         app.status("There is no window to show the dialog in.");
         return;
     };
+    let document = app.session.active().map(|state| state.uid);
+    if op.previews() && document.is_none() {
+        app.status("Open a document before editing paths.");
+        return;
+    }
     let lengths = crate::canvas::general_lengths(app);
     let opening = op.opening();
     let key = op.key();
@@ -408,17 +446,11 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
     });
     let ok = move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         let (cmd, params) = command(op, &result.fields);
-        match take_open(app, op) {
-            Some(record) => {
-                let id = record.id;
-                record.preview.commit(app, cmd, params).map(drop).inspect_err(|_| {
-                    // The dialog stays open on the refusal, so it keeps previewing.
-                    app.object_dialogs.path.push(Open { op, id, preview: LivePreview::default(), last: Value::Null, original: vec![], shown: false });
-                })?;
-            }
-            None => {
-                app.run(cmd, params).map(drop)?;
-            }
+        if op.previews() {
+            let Some(mut record) = take_open(app, op) else { return Err(tl!("The path dialog is closed.").to_owned()) };
+            record.commit(app, cmd, params).inspect_err(|_| app.object_dialogs.path.push(record))?;
+        } else {
+            app.run(cmd, params).map(drop)?;
         }
         match op {
             PathOp::Simplify => {
@@ -432,24 +464,40 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
         Ok(())
     };
     if let Some(old) = take_open(app, op) {
-        old.preview.cancel(app);
+        old.cancel(app);
     }
     let id = if op.previews() {
         let cancel = Box::new(move |app: &mut VectorcraftApp| {
+            // A cancelled opening can leave a replacement with the same dialog ID.
+            let id = app.object_dialogs.path.iter().find(|record| record.op == op).map(|record| record.id);
+            if let Some(id) = id
+                && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get_by_id::<HostedParamDialog>(id).is_some()))
+            {
+                return;
+            }
             if let Some(record) = take_open(app, op) {
-                record.preview.cancel(app);
+                record.cancel(app);
             }
         });
         open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) })
     } else {
         open_held(app, dialog, ok)
     };
-    match id {
-        Some(id) if op.previews() => {
-            app.object_dialogs.path.push(Open { op, id, preview: LivePreview::default(), last: Value::Null, original: vec![], shown: false })
+    match (id, document) {
+        (Some(id), Some(document)) if op.previews() => {
+            app.object_dialogs.path.push(Open {
+                op,
+                id,
+                document,
+                preview: LivePreview::default(),
+                preview_selection: None,
+                last: Value::Null,
+                original: vec![],
+                shown: false,
+            });
         }
-        Some(_) => {}
-        None => app.status("There is no window to show the dialog in."),
+        (Some(_), _) => {}
+        (None, _) => app.status("There is no window to show the dialog in."),
     }
 }
 
@@ -508,6 +556,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 
 fn step(app: &mut VectorcraftApp, r: &mut Open) {
     let Some((on, fields)) = dialog_state(app, r.id) else { return };
+    let Some(state) = app.session.active().filter(|state| state.uid == r.document) else { return };
+    if !r.owns_preview(app) {
+        r.preview = LivePreview::default();
+        r.preview_selection = None;
+        r.last = Value::Null;
+        r.original.clear();
+        r.shown = false;
+        if state.interaction.is_some() {
+            return;
+        }
+    }
     let (cmd, params) = command(r.op, &fields);
     let stale = !on || r.last != params;
     if stale {
@@ -515,13 +574,17 @@ fn step(app: &mut VectorcraftApp, r: &mut Open) {
     }
     if !on {
         r.last = Value::Null;
+        r.preview_selection = None;
     }
     let mut counts = stale.then_some(None);
-    if let Some(Ok(answer)) = r.preview.run(app, on, r.op.title(), cmd, &params) {
-        r.last = params;
-        if r.op == PathOp::Simplify {
-            r.original = answer["ids"].as_array().into_iter().flatten().filter_map(|id| id.as_u64().map(NodeId)).collect();
-            counts = Some(Some(json!({"before": answer["before"], "after": answer["after"]})));
+    if let Some(answer) = r.preview.run(app, on, r.op.title(), cmd, &params) {
+        r.preview_selection = app.session.active().and_then(|state| state.interaction.as_ref()).map(|it| Arc::downgrade(&it.selection));
+        if let Ok(answer) = answer {
+            r.last = params;
+            if r.op == PathOp::Simplify {
+                r.original = answer["ids"].as_array().into_iter().flatten().filter_map(|id| id.as_u64().map(NodeId)).collect();
+                counts = Some(Some(json!({"before": answer["before"], "after": answer["after"]})));
+            }
         }
     }
     r.shown = on && fields.bool("showOriginal").unwrap_or(false);
@@ -542,7 +605,7 @@ fn step(app: &mut VectorcraftApp, r: &mut Open) {
 /// on, with its id, as it was before the preview (from the interaction's snapshot). Empty
 /// otherwise.
 pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
-    let Some(r) = app.object_dialogs.path.iter().find(|r| r.op == PathOp::Simplify && r.shown) else { return vec![] };
+    let Some(r) = app.object_dialogs.path.iter().find(|r| r.op == PathOp::Simplify && r.shown && r.owns_preview(app)) else { return vec![] };
     let Some(it) = app.session.active().and_then(|st| st.interaction.as_ref()) else { return vec![] };
     r.original
         .iter()
@@ -662,5 +725,101 @@ mod split_tests {
 
         assert!(app.session.in_interaction());
         assert_eq!(app.session.doc().unwrap().doc, editing);
+    }
+}
+
+#[cfg(test)]
+mod preview_document_tests {
+    use super::*;
+    use crate::dialogs::tests::{app, cancel, confirm, frame, set};
+
+    fn dense_path(app: &mut VectorcraftApp, top: f64) -> u64 {
+        let anchors: Vec<_> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": top + (i % 2) as f64 * 0.1})).collect();
+        let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 19]]})).unwrap();
+        id
+    }
+
+    fn drawings() -> (VectorcraftApp, NodeId) {
+        let mut app = app();
+        let id = dense_path(&mut app, 50.0);
+        app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+        let other = dense_path(&mut app, 180.0);
+        assert_eq!(id, other, "the two drawings use the same path ID");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        (app, NodeId(id))
+    }
+
+    fn more_options(app: &mut VectorcraftApp) {
+        crate::menus::invoke(app, "object.path.simplify", json!({}));
+        crate::dialogs::simplify_slider::more_options(app).unwrap();
+    }
+
+    #[test]
+    fn simplify_options_skip_the_other_drawings_artwork() {
+        for from_slider in [false, true] {
+            let (mut app, _) = drawings();
+            if from_slider {
+                more_options(&mut app);
+            } else {
+                let ctx = app.ui_ctx.clone().unwrap();
+                set_saved_value(&ctx, &SIMPLIFY_KEY, Some(simplify_dialog(DEFAULT_TOLERANCE)));
+                crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+            }
+            set(&mut app, "preview", json!(true));
+            app.run("document.activate", json!({"index": 1})).unwrap();
+            let other = app.session.doc().unwrap().doc.clone();
+            let undo = app.session.doc().unwrap().history.undo.len();
+
+            frame(&mut app, vec![]);
+
+            assert!(app.session.doc().unwrap().doc == other, "Simplify preview leaves the other drawing unchanged");
+            assert!(!app.session.in_interaction());
+            assert!(!confirm(&mut app), "the draft stays with the opening drawing");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, vec![]);
+            assert!(app.session.in_interaction());
+            assert!(confirm(&mut app));
+        }
+    }
+
+    #[test]
+    fn simplify_options_never_outline_another_drawings_same_id() {
+        let (mut app, id) = drawings();
+        more_options(&mut app);
+        set(&mut app, "showOriginal", json!(true));
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert_eq!(original_paths(&app).iter().map(|(path, _)| *path).collect::<Vec<_>>(), [id]);
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other edit").unwrap();
+
+        assert!(original_paths(&app).is_empty(), "Show Original leaves the other drawing's canvas alone");
+        assert!(cancel(&mut app));
+        assert!(app.session.in_interaction(), "Cancel leaves the other drawing's edit in progress");
+    }
+
+    #[test]
+    fn offset_path_skips_the_other_drawings_artwork() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 60})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+        set(&mut app, "offset", json!(12.0));
+        set(&mut app, "preview", json!(true));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 140, "y": 30, "width": 80, "height": 100})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        frame(&mut app, vec![]);
+
+        assert!(app.session.doc().unwrap().doc == other, "Offset Path preview leaves the other drawing unchanged");
+        assert!(!confirm(&mut app));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
     }
 }
