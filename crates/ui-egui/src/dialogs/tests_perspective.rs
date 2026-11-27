@@ -138,6 +138,39 @@ fn define_grid_applies_only_to_the_document_where_it_opened() {
 }
 
 #[test]
+fn define_grid_requires_a_fresh_opening_after_native_revert() {
+    let mut app = app();
+    let dir = vectorcraft_testkit::TempDir::new("define-grid-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("perspective.grid.define", json!({"rightColor": "#123456"})).unwrap();
+    app.run("file.saveAs", json!({"path": dir.join("Grid.vectorcraft")})).unwrap();
+    app.run("perspective.grid.define", json!({"rightColor": "#765432"})).unwrap();
+    let source = app.session.active().unwrap();
+    let (uid, reverts) = (source.uid, source.reverts);
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "rightColor", json!("#abcdef")).unwrap();
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    let undo = restored.history.undo.len();
+    ok(&mut app);
+    assert_eq!(grid(&app).right_color.hex(), "#123456");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    let id = dialog_id(super::perspective_grid::KIND);
+    assert!(matches!(host(&app, |h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+    let ctx = window(&app);
+    assert!(host(&app, |h| h.cancel_by_id(&ctx, id)));
+    frame(&mut app);
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "rightColor", json!("#abcdef")).unwrap();
+    ok(&mut app);
+    assert_eq!(grid(&app).right_color.hex(), "#abcdef");
+}
+
+#[test]
 fn define_grid_loads_and_saves_presets() {
     let mut app = app();
     app.run("ui.perspectiveGridDialog", json!({})).unwrap();
