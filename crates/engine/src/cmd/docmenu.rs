@@ -14,8 +14,8 @@ use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
-    CommandSpec, EngineError, Point, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok,
-    str_param, switch_or, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok, str_param,
+    switch_or, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -284,7 +284,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Metadata Template…",
             [],
             None,
-            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text (exactly one of the three; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
+            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text, dataBase64?: XMP bytes (exactly one source; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
             has_doc,
             super::fileinfo::apply_template
         ),
@@ -730,13 +730,10 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Find each ruler guide's line and its parent: the guide's layer, else where new art goes.
     let st = s.doc()?;
-    let artboards = st.doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b));
     let mut lines = Vec::with_capacity(rulers.len());
     for &i in &rulers {
         let Some(g) = st.doc.ruler_guide(i) else { continue };
-        let span = st.doc.guide_span(&g).or_else(|| artboards.map(|r| if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) }));
-        let Some((a, b)) = span else { continue };
-        let (a, b) = if g.vertical { (Point::new(g.pos, a), Point::new(g.pos, b)) } else { (Point::new(a, g.pos), Point::new(b, g.pos)) };
+        let Some((a, b)) = st.doc.guide_line(&g) else { continue };
         let parent = match g.layer.filter(|l| st.doc.node(*l).is_some_and(Node::is_layer)) {
             Some(l) => Some(l),
             None => st.target_parent()?,

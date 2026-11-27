@@ -5,6 +5,15 @@ use super::node::{held_guides, map_held, strip_held};
 use super::{Affine, Arc, Document, Node, NodeId, NodeKind, PatternDef, Point, Rect, Selection, SymbolBoxes, Vec2, artboard_holds};
 use std::collections::{BTreeMap, HashSet};
 
+/// What a transform makes of a ruler guide ([`Document::transformed_guide`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GuideTransform {
+    /// It stays a ruler guide: vertical at x `pos`, or horizontal at y `pos`.
+    Ruler { vertical: bool, pos: f64 },
+    /// It becomes a guide path along the line between the two points.
+    Path(Point, Point),
+}
+
 impl Document {
     /// Union of the geometric bounds of `ids` (their visual bounds when `visual`), with symbol
     /// instances measured by their art ([`Node::geometric_bounds_with`]).
@@ -48,6 +57,37 @@ impl Document {
         pick(&|r| r.contains(p)).or_else(|| pick(&|r| artboard_holds(r, p)))
     }
 
+    /// Which artboard in the document owns object bounds `b`: the artboard that holds its center,
+    /// or the one it has the greatest overlap area with if its center lies outside all artboards.
+    /// Bounds with no width or no height (a straight horizontal or vertical line) have no area, so
+    /// for them the overlap is the length of the line on the artboard.
+    pub fn artboard_for_bounds(&self, b: Rect) -> Option<usize> {
+        let c = b.center();
+        if let Some(i) = self.artboard_holding(c, false) {
+            return Some(i);
+        }
+        let (flat_x, flat_y) = (b.x1 - b.x0 <= 1e-9, b.y1 - b.y0 <= 1e-9);
+        let mut best: Option<(usize, f64)> = None;
+        for (i, a) in self.artboards.iter().enumerate() {
+            let r = a.rect;
+            let w = b.x1.min(r.x1) - b.x0.max(r.x0);
+            let h = b.y1.min(r.y1) - b.y0.max(r.y0);
+            if w < 0.0 || h < 0.0 {
+                continue;
+            }
+            let overlap = match (flat_x, flat_y) {
+                (true, true) => 0.0,
+                (true, false) => h,
+                (false, true) => w,
+                (false, false) => w * h,
+            };
+            if overlap > 1e-9 && best.is_none_or(|(_, max)| overlap > max + 1e-9) {
+                best = Some((i, overlap));
+            }
+        }
+        best.map(|(i, _)| i)
+    }
+
     /// The art that moves with an artboard at `rect`: top-level objects (children of layers and
     /// sublayers) lying entirely inside it, with symbol instances measured by their art. Locked and
     /// hidden objects and layers stay put unless `locked_and_hidden` (Selection & Anchor Display ›
@@ -76,6 +116,54 @@ impl Document {
         let mut art = vec![];
         for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
             collect(l, &symbols, rect, locked_and_hidden, &mut art);
+        }
+        art
+    }
+
+    /// The art that is copied when artboard `index` is duplicated or copied: objects wholly inside
+    /// the artboard (with rounding tolerance), objects within its bleed rectangle, and artwork
+    /// placed on/overlapping this artboard that belongs to it by center or primary overlap
+    /// ([`Document::artboard_for_bounds`]).
+    pub fn art_for_artboard_copy(&self, index: usize, locked_and_hidden: bool) -> Vec<NodeId> {
+        let Some(rect) = self.artboards.get(index).map(|a| a.rect) else { return vec![] };
+        let r = rect.inflate(1e-6, 1e-6);
+        let on_copy = |b: Rect| -> bool {
+            // 1. Wholly inside the artboard (edges included, with tolerance).
+            if b.x0 >= r.x0 && b.y0 >= r.y0 && b.x1 <= r.x1 && b.y1 <= r.y1 {
+                return true;
+            }
+            // 2. Within the artboard's bleed rectangle (if document setup specifies bleed).
+            if self.setup.has_bleed() {
+                let br = self.setup.bleed_rect(rect).inflate(1e-6, 1e-6);
+                if b.x0 >= br.x0 && b.y0 >= br.y0 && b.x1 <= br.x1 && b.y1 <= br.y1 {
+                    return self.artboard_for_bounds(b).is_none_or(|owner| owner == index);
+                }
+            }
+            // 3. Artwork that intersects this artboard and belongs to it (#4479).
+            let inter_x0 = b.x0.max(r.x0);
+            let inter_y0 = b.y0.max(r.y0);
+            let inter_x1 = b.x1.min(r.x1);
+            let inter_y1 = b.y1.min(r.y1);
+            if inter_x1 < inter_x0 || inter_y1 < inter_y0 {
+                return false;
+            }
+            self.artboard_for_bounds(b) == Some(index)
+        };
+        fn collect(n: &Node, s: &SymbolBoxes, on: &dyn Fn(Rect) -> bool, all: bool, out: &mut Vec<NodeId>) {
+            for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
+                if c.is_layer() {
+                    collect(c, s, on, all, out);
+                } else if let Some(b) = c.geometric_bounds_with(s)
+                    && on(b)
+                {
+                    out.push(c.id);
+                }
+            }
+        }
+        let symbols = self.symbol_boxes();
+        let mut art = vec![];
+        for l in self.layers.iter().filter(|l| l.rides_with_artboard(locked_and_hidden)) {
+            collect(l, &symbols, &on_copy, locked_and_hidden, &mut art);
         }
         art
     }
@@ -367,6 +455,66 @@ impl Document {
     pub fn guide_span(&self, g: &Guide) -> Option<(f64, f64)> {
         let r = self.artboards.iter().find(|a| Some(a.id) == g.artboard)?.rect;
         Some(if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) })
+    }
+
+    /// The line ruler guide `g` stands for as a path: across its artboard for an artboard guide,
+    /// and across the bounds of all the artboards for a canvas guide. None when there is no
+    /// artboard to measure a canvas guide by.
+    pub fn guide_line(&self, g: &Guide) -> Option<(Point, Point)> {
+        let artboards = || self.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b));
+        let (a, b) = self.guide_span(g).or_else(|| artboards().map(|r| if g.vertical { (r.y0, r.y1) } else { (r.x0, r.x1) }))?;
+        Some(if g.vertical { (Point::new(g.pos, a), Point::new(g.pos, b)) } else { (Point::new(a, g.pos), Point::new(b, g.pos)) })
+    }
+
+    /// What `xf` makes of ruler guide `g` ([`Self::transform_ruler_guides`]), or None when the
+    /// document has no line for it ([`Self::guide_line`]).
+    pub fn transformed_guide(&self, g: &Guide, xf: Affine) -> Option<GuideTransform> {
+        let (a, b) = self.guide_line(g)?;
+        let (a, b) = (xf * a, xf * b);
+        let tol = 1e-9 * a.distance(b).max(1.0);
+        Some(if (a.x - b.x).abs() <= tol {
+            GuideTransform::Ruler { vertical: true, pos: (a.x + b.x) / 2.0 }
+        } else if (a.y - b.y).abs() <= tol {
+            GuideTransform::Ruler { vertical: false, pos: (a.y + b.y) / 2.0 }
+        } else {
+            GuideTransform::Path(a, b)
+        })
+    }
+
+    /// Apply `xf` to the ruler guides selected in `sel`, each as the line [`Self::guide_line`]
+    /// gives it. A line that stays vertical or horizontal stays a ruler guide, at its new place. A
+    /// line at any other angle becomes a guide path with that line, on the guide's layer, named
+    /// as the guide was; `sel` then holds the path as a selected object instead of the guide.
+    /// Guides that cannot be edited ([`Self::guide_editable`]) stay as they are. Returns the ids
+    /// of the guide paths it adds, in the order it adds them.
+    pub fn transform_ruler_guides(&mut self, sel: &mut Selection, xf: Affine) -> Vec<NodeId> {
+        let mut paths = vec![];
+        for id in sel.guides.clone() {
+            let Some(g) = self.ruler_guide(id).filter(|g| self.guide_editable(g)) else { continue };
+            let (a, b) = match self.transformed_guide(&g, xf) {
+                Some(GuideTransform::Ruler { vertical, pos }) => {
+                    self.edit_ruler_guide(id, |g| (g.vertical, g.pos) = (vertical, pos));
+                    continue;
+                }
+                Some(GuideTransform::Path(a, b)) => (a, b),
+                None => continue,
+            };
+            let Some(layer) = self.parent_of(id) else { continue };
+            let path = self.alloc_id();
+            let look = crate::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0);
+            let mut n = Node::path(path, vectorcraft_geom::shapes::line(a, b), look);
+            if let NodeKind::Path { guide, .. } = &mut n.kind {
+                *guide = true;
+            }
+            n.name = g.name.clone();
+            if self.insert(Some(layer), usize::MAX, n).is_err() {
+                continue;
+            }
+            self.retain_guides(sel, |g| g.id != Some(id));
+            sel.objects.push(path);
+            paths.push(path);
+        }
+        paths
     }
 
     /// The ruler guide node `g` names, if this document has it.
