@@ -395,9 +395,10 @@ fn graph_grid(app: &mut VectorcraftApp, graph: Option<u64>) -> Result<Grid, Stri
     Ok(grid_from_data(&v))
 }
 
-/// Whether Import Data can ask for a file here: the host has a picker and the app can read files.
+/// Browser picks carry their contents; native picks need a path reader.
 fn can_import(app: &VectorcraftApp) -> bool {
-    file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()
+    file_asks::can(app, craft::host::PickKind::Open)
+        && (app.host.files().browser_saves() || app.services.read_head.is_some() || app.services.read.is_some())
 }
 
 /// Import Data's answer: a tab-separated text file's rows into the sheet that asked for it.
@@ -1051,6 +1052,27 @@ mod tests {
         assert_eq!(at(&h, 0, 1), "b");
         import(&mut h, Picked::Contents(vec![("small.txt".into(), b"\tc\n".to_vec())]));
         assert_eq!(at(&h, 0, 1), "c");
+    }
+
+    #[test]
+    fn browser_graph_data_import_reads_picked_bytes_without_a_path_reader() {
+        let (mut app, _) = app_with(",original\nQ1,1", "column");
+        app.services.read = None;
+        app.services.read_head = None;
+        let files = Arc::new(ScriptedFiles::held().in_browser());
+        app.host.with_files(files.clone()).install(app.ui_ctx.as_ref().unwrap());
+        app.host = Arc::new(app.host.with_files(files.clone()));
+        open(&mut app).unwrap();
+        let mut h = harness(app);
+        h.run_steps(4);
+        h.get_by_label("Import Data…").click();
+        h.run_steps(3);
+        assert_eq!(files.open(), 1, "the browser can open the Import Data picker");
+        files.answer(Picked::Contents(vec![("data.txt".into(), b"\timported\nQ2\t8".to_vec())]));
+        h.run_steps(4);
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 0, 1)), "imported");
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 1, 0)), "Q2");
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 1, 1)), "8");
     }
 
     #[test]
