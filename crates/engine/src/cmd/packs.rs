@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Language Packs",
             [],
             None,
-            "{refresh?: bool (fetch the pinned pack index again; needs downloading on; in the desktop app it runs in the background: see refreshing)} the Language packs that spell-check and hyphenate languages other than English, shared by the Craft apps → {packs: [{locale, name, size: bytes, licence: SPDX, class, spelling: bool, hyphenation: bool, installed: bool}…] (the index fetched last; empty before the first fetch), installed: [{locale, name, licence}…] (the packs spelling and hyphenation use), installing: [{locale, done, total}…] (bytes), refreshing: bool, errors: {locale: message} (the last failure of each install or removal; \"\": of the index fetch), downloads: bool (the person allowed downloading), indexOverride: string|null (a test index used instead of the pinned one), available: bool (there is a font store folder to install into)}",
+            "{refresh?: bool (fetch the pinned pack index again; needs downloading on; refused under automation roots; in the desktop app it runs in the background: see refreshing)} the Language packs that spell-check and hyphenate languages other than English, shared by the Craft apps → {packs: [{locale, name, size: bytes, licence: SPDX, class, spelling: bool, hyphenation: bool, installed: bool}…] (the index fetched last; empty before the first fetch), installed: [{locale, name, licence}…] (the packs spelling and hyphenation use), installing: [{locale, done, total}…] (bytes), refreshing: bool, errors: {locale: message} (the last failure of each install or removal; \"\": of the index fetch), downloads: bool (the person allowed downloading), indexOverride: string|null (a test index used instead of the pinned one), available: bool (there is a font store folder to install into)}",
             always,
             list
         ),
@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Language Pack",
             [],
             None,
-            "{locale: language tag (a pack's locale from proof.packs, like nl or pt-br)} downloads the pack, checks its sha256 and installs it; spelling and hyphenation in that language use it at once, in every open document. Needs downloading on, which only the person using a Craft app can turn on. Opens nothing. In the desktop app it runs in the background → {locale, started: true}: follow it with proof.packs (installing, then installed or errors); elsewhere it returns once installed → {locale, installed: true}",
+            "{locale: language tag (a pack's locale from proof.packs, like nl or pt-br)} downloads the pack, checks its sha256 and installs it; spelling and hyphenation in that language use it at once, in every open document. Needs downloading on, which only the person using a Craft app can turn on. Refused under automation roots (the store is outside them). Opens nothing. In the desktop app it runs in the background → {locale, started: true}: follow it with proof.packs (installing, then installed or errors); elsewhere it returns once installed → {locale, installed: true}",
             always,
             install
         ),
@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Language Pack",
             [],
             None,
-            "{locale} removes the installed pack (not while it installs); that language is no longer checked with it → {locale, installed: false}",
+            "{locale} removes the installed pack (not while it installs; refused under automation roots); that language is no longer checked with it → {locale, installed: false}",
             always,
             remove
         ),
@@ -51,10 +51,14 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     match p.get("refresh") {
         None | Some(Value::Null) | Some(Value::Bool(false)) => {}
         Some(Value::Bool(true)) => {
+            not_confined(C)?;
             packs::refresh().map_err(EngineError::Other)?;
         }
         Some(_) => return Err(bad(C, "`refresh` must be true or false")),
     }
+    // The jobs before the installed packs: an install makes craft-proof read its pack before it
+    // leaves the jobs, so one that ends between the two reads is in one list or the other.
+    let packs::Status { installing, refreshing, errors } = packs::status();
     let installed = craft_proof::packs::installed();
     let backend = packs::backend();
     let rows: Vec<Value> = packs::available()
@@ -67,7 +71,6 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
             })
         })
         .collect();
-    let packs::Status { installing, refreshing, errors } = packs::status();
     // An install that ended since the last frame shows in every document's layout.
     s.poll_language_packs();
     Ok(json!({
@@ -82,8 +85,20 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
+/// Refuses `command` for a caller confined to automation roots: the packs are written into the font
+/// store the Craft apps share, which is outside them.
+fn not_confined(command: &str) -> Result<()> {
+    if crate::file_access::current().is_some() {
+        return Err(EngineError::Other(format!(
+            "automation path rejected: {command} writes the Language packs into the font store the Craft apps share, outside the automation roots"
+        )));
+    }
+    Ok(())
+}
+
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     let locale = locale_param(p, "proof.installPack")?;
+    not_confined("proof.installPack")?;
     match packs::install(&locale).map_err(EngineError::Other)? {
         Outcome::Started => Ok(json!({"locale": locale, "started": true})),
         Outcome::Done => {
@@ -95,6 +110,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let locale = locale_param(p, "proof.removePack")?;
+    not_confined("proof.removePack")?;
     packs::remove(&locale).map_err(EngineError::Other)?;
     s.poll_language_packs();
     Ok(json!({"locale": locale, "installed": false}))

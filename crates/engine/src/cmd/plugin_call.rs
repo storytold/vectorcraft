@@ -70,6 +70,8 @@ const DENIED_PREFIXES: &[&str] = &[
     "text.rescanFonts",
     "text.fontList",
     "text.spelling.",
+    // Language packs: downloads into, and removals from, the font store the Craft apps share.
+    "proof.",
     "colorTheme.",
     "magicWand.",
     "eyedropper.",

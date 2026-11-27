@@ -335,7 +335,7 @@ impl Session {
     /// [`Session::refresh_text_bounds`] walks them), as a change that is not an edit: a saved
     /// document stays saved, and its undo history keeps its documents as they are. The document is
     /// left as it is when `stale` picks nothing.
-    fn refresh_document_text_bounds(&mut self, index: usize, mut stale: impl FnMut(&TextObject) -> bool) {
+    pub(crate) fn refresh_document_text_bounds(&mut self, index: usize, mut stale: impl FnMut(&TextObject) -> bool) {
         let Some(st) = self.docs.get_mut(index) else { return };
         if !text_trees(&st.doc).any(|n| has_text_where(n, &mut stale)) {
             return;

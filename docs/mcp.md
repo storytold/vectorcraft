@@ -12685,7 +12685,9 @@ installed packs; the web app has none, and no `proof.*` commands.
 
 Installs and index fetches need downloading on. Only the person using a Craft app turns it on, with their own click
 (the setting is the font store's, shared by the apps): no command turns it on, and until then an install is an error
-that says so. In the desktop app installs and fetches run in the background: `proof.installPack` returns
+that says so. A caller with automation roots (`--automation-read-root`, `--automation-write-root`) can list packs
+but not fetch, install or remove them, since the store is outside its roots. In the desktop app installs and fetches
+run in the background: `proof.installPack` returns
 `{locale, started: true}` and `proof.packs` shows the install in `installing`, then in `installed` or `errors`. In
 `vectorcraft-cli` they return once done.
 

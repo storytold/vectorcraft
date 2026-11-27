@@ -981,14 +981,22 @@ impl Session {
     pub fn poll_language_packs(&mut self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // Busy first: an install moves the generation on before it ends, so when none is
+            // running any more its change is read below.
+            let busy = crate::packs::busy();
             let now = crate::packs::generation();
             if now != self.packs_seen {
                 self.packs_seen = now;
-                for st in &mut self.docs {
-                    st.revision += 1;
+                for index in 0..self.docs.len() {
+                    // Type in a language of its own may break its lines elsewhere now: it is
+                    // measured again (not an edit), so its selection box and hits follow.
+                    self.refresh_document_text_bounds(index, |t| t.runs.iter().any(|r| r.style.language.is_some()));
+                    if let Some(st) = self.docs.get_mut(index) {
+                        st.revision += 1;
+                    }
                 }
             }
-            crate::packs::busy()
+            busy
         }
         // The web build has no packs.
         #[cfg(target_arch = "wasm32")]

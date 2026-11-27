@@ -183,17 +183,23 @@ pub enum Outcome {
     Started,
 }
 
-/// Runs `f` on a thread of its own in the background, else here.
-fn run(f: impl FnOnce() + Send + 'static) -> Result<Outcome, String> {
+/// Runs `job` on a thread of its own in the background, else here and gives its own result (never
+/// another call's, which the shared errors also hold). `undo` takes the job's entry back when its
+/// thread can't start.
+fn run(job: impl FnOnce() -> Result<(), String> + Send + 'static, undo: impl FnOnce()) -> Result<Outcome, String> {
     if !BACKGROUND.load(Ordering::Relaxed) {
-        f();
-        return Ok(Outcome::Done);
+        return job().map(|()| Outcome::Done);
     }
-    std::thread::Builder::new()
-        .name("language-pack".into())
-        .spawn(f)
-        .map(|_| Outcome::Started)
-        .map_err(|e| format!("couldn't start the download: {e}"))
+    match std::thread::Builder::new().name("language-pack".into()).spawn(move || {
+        // The result is kept in the shared errors for `proof.packs`.
+        let _ = job();
+    }) {
+        Ok(_) => Ok(Outcome::Started),
+        Err(e) => {
+            undo();
+            Err(format!("couldn't start the download: {e}"))
+        }
+    }
 }
 
 /// Fetches the pinned pack index again. Needs downloads on.
@@ -212,22 +218,18 @@ pub fn refresh() -> Result<Outcome, String> {
         j.errors.remove("");
         cancel
     };
-    let outcome = run(move || {
-        let r = b.fetch_index(&cancel);
-        let mut j = jobs();
-        j.refreshing = None;
-        if let Err(e) = r {
-            j.errors.insert(String::new(), e);
-        }
-    });
-    if outcome.is_err() {
-        jobs().refreshing = None;
-    }
-    let outcome = outcome?;
-    match jobs().errors.get("") {
-        Some(e) if outcome == Outcome::Done => Err(e.clone()),
-        _ => Ok(outcome),
-    }
+    run(
+        move || {
+            let r = b.fetch_index(&cancel).map(|_| ());
+            let mut j = jobs();
+            j.refreshing = None;
+            if let Err(e) = &r {
+                j.errors.insert(String::new(), e.clone());
+            }
+            r
+        },
+        || jobs().refreshing = None,
+    )
 }
 
 /// Installs the pack for `locale` (fetching the index first when it doesn't list it). Needs
@@ -249,25 +251,25 @@ pub fn install(locale: &str) -> Result<Outcome, String> {
         cancel
     };
     let l = locale.clone();
-    let outcome = run(move || {
-        let r = install_now(&*b, &l, &cancel);
-        if r.is_ok() {
-            changed();
-        }
-        let mut j = jobs();
-        j.installing.remove(&l);
-        if let Err(e) = r {
-            j.errors.insert(l, e);
-        }
-    });
-    if outcome.is_err() {
-        jobs().installing.remove(&locale);
-    }
-    let outcome = outcome?;
-    match jobs().errors.get(&locale) {
-        Some(e) if outcome == Outcome::Done => Err(e.clone()),
-        _ => Ok(outcome),
-    }
+    run(
+        move || {
+            let r = install_now(&*b, &l, &cancel);
+            // craft-proof reads the new pack before the job ends, so a caller that sees no
+            // install running sees the pack installed (`proof.packs`, `busy`).
+            if r.is_ok() {
+                changed();
+            }
+            let mut j = jobs();
+            j.installing.remove(&l);
+            if let Err(e) = &r {
+                j.errors.insert(l, e.clone());
+            }
+            r
+        },
+        || {
+            jobs().installing.remove(&locale);
+        },
+    )
 }
 
 fn install_now(b: &dyn Backend, locale: &str, cancel: &Cancel) -> Result<(), String> {

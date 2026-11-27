@@ -18,11 +18,19 @@ fn packs_lock() -> MutexGuard<'static, ()> {
 }
 
 /// Puts the process back to no packs and no background installs when dropped, also when the test
-/// panicked, and deletes the test's folder.
+/// panicked: the jobs still running are cancelled and waited for, so none outlives its test. Then
+/// it deletes the test's folder.
 struct Reset(PathBuf);
 
 impl Drop for Reset {
     fn drop(&mut self) {
+        while packs::busy() {
+            for (locale, _, _) in packs::status().installing {
+                packs::cancel(&locale);
+            }
+            packs::cancel("");
+            std::thread::yield_now();
+        }
         packs::run_in_background(false);
         packs::set_backend(None);
         let _ = std::fs::remove_dir_all(&self.0);
@@ -216,4 +224,29 @@ fn a_cancelled_background_install_installs_nothing() {
     }
     assert!(installed_locales(&mut s).is_empty());
     assert!(s.execute("proof.packs", &json!({})).unwrap()["errors"]["nl"].as_str().unwrap_or_default().contains("cancelled"));
+}
+
+/// A caller confined to automation roots lists the packs but can't fetch, install or remove them:
+/// the store they are written into is outside its roots.
+#[test]
+fn a_confined_caller_lists_packs_but_cannot_change_them() {
+    let _turn = packs_lock();
+    let root = folder("confined");
+    let _reset = Reset(root.clone());
+    let roots_dir = folder("confined-roots");
+    std::fs::create_dir_all(&roots_dir).unwrap();
+    let mut s = dutch_session();
+    write_dutch_pack(&root);
+    packs::set_backend(Some(Arc::new(Fake { dir: root.clone(), downloads: true, hold: AtomicBool::new(false) })));
+    let roots = crate::file_access::AutomationRoots::new(&[roots_dir.as_path()], &[roots_dir.as_path()]).unwrap();
+    let mut confined = |cmd: &str, p: Value| crate::file_access::confine(roots.as_ref(), || s.execute(cmd, &p)).map_err(|e| e.to_string());
+    for (cmd, p) in
+        [("proof.installPack", json!({"locale": "nl"})), ("proof.removePack", json!({"locale": "nl"})), ("proof.packs", json!({"refresh": true}))]
+    {
+        let e = confined(cmd, p).unwrap_err();
+        assert!(e.contains("automation path rejected"), "{cmd}: {e}");
+    }
+    assert_eq!(confined("proof.packs", json!({})).unwrap()["installed"][0]["locale"], "nl", "listing is allowed");
+    assert!(root.join("nl").join("pack.toml").exists(), "the pack is still there");
+    let _ = std::fs::remove_dir_all(&roots_dir);
 }
