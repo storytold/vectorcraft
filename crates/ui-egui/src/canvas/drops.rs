@@ -279,8 +279,9 @@ pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, 
 /// to the drag session. Moves of anchors or segments stay reshapes. `covered`: another window is over the canvas at the
 /// pointer. → whether a carry runs.
 pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer, covered: bool) -> bool {
+    let Some(reverts) = app.session.active().map(|st| st.reverts) else { return false };
     let Some(art) = carried(app, cx, pointer, covered) else { return false };
-    let panel = PanelDrag::Art { document: art.document, ids: art.ids.clone() };
+    let panel = PanelDrag::Art { document: art.document, reverts, ids: art.ids.clone() };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
     true
 }

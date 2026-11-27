@@ -174,11 +174,11 @@ fn body(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &D
 fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
     Text::new(tl!("Graphics")).show(ui);
     let mut action = None;
-    let (Some(doc), Some(uid)) = (data.doc.clone(), data.document_uid) else { return action };
+    let (Some(doc), Some((uid, reverts))) = (data.doc.clone(), data.document) else { return action };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let keys = crate::panels::symbols::document_symbols(&doc, data.revision);
     let source = keyed(&names[..], |name: &String| name.clone()).with_text(|name| Cow::Borrowed(name.as_str()));
-    let drop_art = DropAction::<PanelDrag>::new(move |drag| matches!(drag, PanelDrag::Art { document, .. } if *document == uid));
+    let drop_art = DropAction::<PanelDrag>::new(move |drag| drag.artwork_for(uid, reverts).is_some());
     let mut dropped = drop_art.show(ui, |ui, _| {
         TileGrid::new(tl!("Graphics")).activate(ActivateOn::Click).show_items(ui, &source, &mut |name, _| {
             let tip = if apply { name.clone() } else { format!("{name}: {}", tl!("Select a 3D object to map the graphic onto it.")) };
@@ -199,7 +199,7 @@ fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
             action = Some(Action::Map(name));
         }
     }
-    if let Some(PanelDrag::Art { ids, .. }) = dropped.output.dropped {
+    if let Some(ids) = dropped.output.dropped.as_ref().and_then(|drag| drag.artwork_for(uid, reverts)) {
         action = Some(Action::Add(Some(ids.iter().map(|id| id.0).collect())));
     }
     if clicked(&Button::new(tl!("Add as Single Graphic")).enabled(data.selected).show(ui)) {

@@ -467,7 +467,7 @@ const AT_START: usize = 2;
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The document is shared (an `Arc`): holding it while drawing copies nothing.
-    let Some((uid, doc)) = app.session.active().map(|d| (d.uid, d.doc.clone())) else {
+    let Some((uid, reverts, doc)) = app.session.active().map(|d| (d.uid, d.reverts, d.doc.clone())) else {
         super::empty_state(ui, "dc-graphic-styles", tl!("No document"), tl!("Open a document to see its graphic styles."));
         return;
     };
@@ -484,7 +484,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The browser's own state (an open rename field, the scroll position) is kept per document.
     let browser_id = ui.make_persistent_id(("graphic-styles-browser", uid));
     let list = PresetBrowser::<StyleKey>::list_id(browser_id);
-    let takes_object = move |drag: &PanelDrag, _: &DropAt<StyleKey>| dropped_object(drag, uid).is_some();
+    let takes_object = move |drag: &PanelDrag, _: &DropAt<StyleKey>| dropped_object(drag, uid, reverts).is_some();
     // A style dragged from this panel's list.
     let ours = move |drag: &ListDrag<StyleKey>| drag.list == list;
     let svg = |name: &'static str| IconSpec::svg(IconId::new(name));
@@ -610,9 +610,9 @@ fn reorder(app: &mut VectorcraftApp, edit: EditEvent<ReorderMove<StyleKey>>) {
 
 /// The object whose look a dropped payload carries: the first of the art dragged from this document, or the
 /// Appearance panel's object.
-fn dropped_object(drag: &PanelDrag, uid: u64) -> Option<NodeId> {
+fn dropped_object(drag: &PanelDrag, uid: u64, reverts: u64) -> Option<NodeId> {
     match drag {
-        PanelDrag::Art { document, ids } if *document == uid => ids.first().copied(),
+        PanelDrag::Art { .. } => drag.artwork_for(uid, reverts)?.first().copied(),
         PanelDrag::Appearance(id) => Some(*id),
         _ => None,
     }
@@ -624,7 +624,7 @@ fn dropped(app: &mut VectorcraftApp, at: &DropAt<StyleKey>, payload: &DropPayloa
         DropAt::Onto(name) => Some(name.as_str()),
         _ => None,
     };
-    let object = app.session.active().and_then(|st| dropped_object(payload.get::<PanelDrag>()?, st.uid));
+    let object = app.session.active().and_then(|st| dropped_object(payload.get::<PanelDrag>()?, st.uid, st.reverts));
     let style = payload.get::<ListDrag<StyleKey>>().map(|drag| drag.grabbed.as_str());
     drop_on(app, onto, object, style, alt);
 }
@@ -1347,9 +1347,10 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
         let (red, green) = (doc(&app).graphic_style("Red").unwrap().appearance.fill_paint(), doc(&app).node(oval).unwrap().appearance.fill_paint());
         let n = names(&app);
-        let document = app.session.active().unwrap().uid;
-        for payload in [PanelDrag::Art { document, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
-            drop_on(&mut app, Some("Red"), dropped_object(&payload, document), None, true);
+        let st = app.session.active().unwrap();
+        let (document, reverts) = (st.uid, st.reverts);
+        for payload in [PanelDrag::Art { document, reverts, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
+            drop_on(&mut app, Some("Red"), dropped_object(&payload, document, reverts), None, true);
             let d = doc(&app);
             assert_eq!(d.graphic_style("Red").unwrap().appearance.fill_paint(), green);
             assert_eq!(d.node(oval).unwrap().extras().graphic_style, d.graphic_style("Red").map(|g| g.id));
@@ -1375,7 +1376,7 @@ mod tests {
 
         fn with_artwork(app: &mut VectorcraftApp, ui: &mut Ui) {
             let st = app.session.active().unwrap();
-            let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+            let payload = PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
             ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
                 let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
                 List::<usize>::new("Artwork")
