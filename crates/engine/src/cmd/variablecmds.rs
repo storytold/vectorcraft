@@ -1090,7 +1090,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import…",
             ["Window", "Variables"],
             None,
-            "{path? | name?, dataBase64?} import a data source from a path or from a file name with its bytes, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes)} import a data source chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
             has_doc,
             variable_import
         ),
