@@ -629,6 +629,7 @@ pub const SWITCHING_LABELS: &[&str] = &[
     "Lock Guides",
     "Hide Slices",
     "Show Print Tiling",
+    "Show Missing Links",
     "Lock Grid",
     "Edit Envelope",
     "Edit Contents",
