@@ -1684,8 +1684,12 @@ fn millis(t: Option<std::time::SystemTime>) -> Data {
 
 /// One host function of `__vcFiles`, counted and charged as a host call of the run `link` holds.
 fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
+    HostItem::Function(call_function(link, f))
+}
+
+fn call_function(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> vectorcraft_js::HostFunction {
     let l = link.clone();
-    HostItem::Function(Rc::new(move |a| {
+    Rc::new(move |a| {
         let h = super::current(&l)?;
         bump(&h.counts.file_calls);
         let r = f(&h, &a);
@@ -1693,7 +1697,7 @@ fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) ->
         let r = r?;
         h.charge_call(super::data_size(&r).saturating_add(a.iter().map(super::data_size).sum()))?;
         Ok(r)
-    }))
+    })
 }
 
 /// `Ok(true)`, or `{error}` for a failure.
@@ -1950,15 +1954,33 @@ fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     ]))
 }
 
+fn xmp_utf8_packet(text: &str) -> Result<Vec<u8>, &'static str> {
+    let body = text.strip_prefix('\u{feff}').unwrap_or(text);
+    if body.starts_with("<?xml") && body.as_bytes().get(5).is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+        let options = craft_xml::Options { pis: true, comments: true, drop_blank_text: false, ..craft_xml::Options::default() }.strict();
+        let mut events = options.events(body.as_bytes());
+        match events.next() {
+            Ok(Some(_)) => Ok(body.as_bytes()[events.span().start..].to_vec()),
+            _ => Err(UNDECODABLE),
+        }
+    } else {
+        Ok(text.as_bytes().to_vec())
+    }
+}
+
 /// `xmpWrite(path, packet, safely)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under
 /// the rules for writing. The packet goes to a temporary file in the same folder that then takes the
 /// file's name, when the run may write there; otherwise to the file itself, unless `safely`, which
 /// fails and leaves the file as it is. Open objects of the file hold the new bytes.
+/// The writer omits a leading XML declaration.
 /// On Unix, the destination folder is flushed after writing. A folder flush failure returns an
 /// error after the written path is recorded and open readers receive the replacement packet.
 fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let path = arg_text(a, 0);
-    let packet = arg_text(a, 1).into_bytes();
+    let packet = match xmp_utf8_packet(&arg_text(a, 1)) {
+        Ok(packet) => packet,
+        Err(message) => return Ok(error(message)),
+    };
     let safely = matches!(a.get(2), Some(Data::Bool(true)));
     if !is_sidecar(&path) {
         return Ok(error(ACCESS_DENIED));
@@ -2685,7 +2707,16 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("createAlias".into(), call(link, create_alias)),
         ("pick".into(), call(link, pick)),
         ("xmpOpen".into(), call(link, xmp_open)),
-        ("xmpWrite".into(), call(link, xmp_write)),
+        (
+            "xmpWrite".into(),
+            HostItem::FunctionWithLimits {
+                limits: vectorcraft_js::DataLimits {
+                    bytes: 3 * vectorcraft_js::XMP_MAX_BYTES + (128 << 10),
+                    ..vectorcraft_js::DataLimits::default()
+                },
+                function: call_function(link, xmp_write),
+            },
+        ),
     ];
     realm.define_file_classes(items)?;
     realm.define_external_object()

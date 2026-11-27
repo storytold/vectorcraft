@@ -20,7 +20,9 @@
 //! elements nest at most 64 deep, and each holds at most 1,024 attributes and has at most 1,024
 //! namespace declarations in scope, both as read and as written; a
 //! child of `rdf:RDF` other than `rdf:Description` and text beside the descriptions or their
-//! properties make the packet malformed, a property given twice keeps its first value, and
+//! properties make the packet malformed, and a property given twice keeps its first value.
+//! Explicit `rdf:about` values must agree, including empty values. Qualified names have valid prefix and local parts;
+//! only spaces, tabs, carriage returns and line feeds count as indentation.
 //! [`find_packet`] finds only a UTF-8 packet. A realm registers at most [`MAX_NAMESPACES`] namespaces holding at most
 //! [`MAX_REGISTRY_BYTES`] bytes, each URI at most [`MAX_URI_BYTES`] bytes and each prefix at most
 //! [`MAX_PREFIX_BYTES`] bytes.
@@ -29,6 +31,12 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use craft_xml::{Doctype, El, Limits, Names, Node, Options, UnknownEntity, XML_NS};
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static ACCOUNTING_ITEM_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static ITEM_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// The RDF namespace.
 pub(crate) const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
@@ -148,10 +156,18 @@ impl Form {
 }
 
 /// An item of an array of simple values.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Item {
     pub(crate) text: String,
     pub(crate) lang: Option<String>,
+}
+
+impl Clone for Item {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        ITEM_COPIES.with(|copies| copies.set(copies.get() + 1));
+        Self { text: self.text.clone(), lang: self.lang.clone() }
+    }
 }
 
 impl Item {
@@ -234,7 +250,11 @@ impl Prop {
     pub(crate) fn heap_bytes(&self) -> usize {
         let value = match &self.value {
             Value::Simple { text, .. } => text.len(),
-            Value::Array { items, .. } => items.iter().map(|i| 48 + i.text.len() + i.lang.as_ref().map_or(0, String::len)).sum(),
+            Value::Array { items, .. } => {
+                #[cfg(test)]
+                ACCOUNTING_ITEM_VISITS.with(|visits| visits.set(visits.get() + items.len()));
+                items.iter().map(|i| 48 + i.text.len() + i.lang.as_ref().map_or(0, String::len)).sum()
+            }
             Value::Other { expanded_bytes, text, .. } => expanded_bytes + text.as_ref().map_or(0, String::len),
         };
         96 + self.ns.len() + self.name.len() + value
@@ -422,10 +442,27 @@ fn is_decl(name: &str) -> bool {
     name == "xmlns" || name.starts_with("xmlns:")
 }
 
+fn valid_qualified_name(name: &str) -> bool {
+    name.split_once(':').map_or_else(|| is_ncname(name), |(prefix, local)| is_ncname(prefix) && is_ncname(local))
+}
+
+fn valid_packet_names(element: &El) -> bool {
+    valid_qualified_name(&element.name)
+        && element.attrs.iter().all(|(name, _)| valid_qualified_name(name))
+        && element.elements().all(valid_packet_names)
+}
+
 /// The namespace and local name of the qualified name `name`: an unprefixed element is in the
 /// default namespace, an unprefixed attribute (`element` false) in none. `None` for a prefix
 /// nothing declares.
 fn resolve<'n>(name: &'n str, scope: &Scope, element: bool) -> Option<(String, &'n str)> {
+    if let Some((prefix, local)) = name.split_once(':') {
+        if !is_ncname(prefix) || !is_ncname(local) {
+            return None;
+        }
+    } else if !is_ncname(name) {
+        return None;
+    }
     let (prefix, local) = match name.split_once(':') {
         Some((p, l)) => (p, l),
         None if element => ("", name),
@@ -554,14 +591,18 @@ fn parse_into(text: &str, registry: &mut Registry, budget: usize, retain_fragmen
         names: Names::AsWritten,
         doctype: Doctype::Reject,
         unknown_entity: UnknownEntity::Error,
-        drop_blank_text: true,
+        drop_blank_text: false,
         limits,
         ..Options::default()
     }
     .strict();
     let root = opts.parse(text.as_bytes()).map_err(|e| if e.is_limit() { XmpError::TooLarge } else { XmpError::Malformed })?;
+    if !valid_packet_names(&root) {
+        return Err(XmpError::Malformed);
+    }
     let mut scope = Scope::new();
     let rdf = find_rdf(&root, &mut scope).ok_or(XmpError::Malformed)?;
+    let mut explicit_subject = None;
     // Text beside the descriptions or their properties is not RDF.
     if rdf.children.iter().any(is_stray_text) {
         return Err(XmpError::Malformed);
@@ -576,6 +617,12 @@ fn parse_into(text: &str, registry: &mut Registry, budget: usize, retain_fragmen
         for (k, v) in attrs(d) {
             let Some((ns, local)) = resolve(k, &scope, false) else { return Err(XmpError::Malformed) };
             if ns == RDF {
+                if local == "about" {
+                    if explicit_subject.is_some_and(|subject| subject != v) {
+                        return Err(XmpError::Malformed);
+                    }
+                    explicit_subject = Some(v);
+                }
                 if local == "about" && reading.meta.about.is_empty() {
                     reading.meta.about = v.to_string();
                     reading.bytes = reading.bytes.saturating_add(v.len());
@@ -619,10 +666,10 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry, reading: &m
         Value::Simple { text: text_of(p), uri: false }
     } else if let ([], [(k, v)]) = (children.as_slice(), own.as_slice())
         && is_named(k, scope, false, RDF, "resource")
-        && text_of(p).trim().is_empty()
+        && text_of(p).trim_matches([' ', '\t', '\r', '\n']).is_empty()
     {
         Value::Simple { text: (*v).to_string(), uri: true }
-    } else if let (Some(array), true) = (array_of(&children, scope), own.is_empty() && text_of(p).trim().is_empty()) {
+    } else if let (Some(array), true) = (array_of(&children, scope), own.is_empty() && text_of(p).trim_matches([' ', '\t', '\r', '\n']).is_empty()) {
         array
     } else {
         // A written packet puts a property 3 elements deep (`x:xmpmeta`, `rdf:RDF`,
@@ -680,7 +727,7 @@ fn array_of(children: &[&El], scope: &mut Scope) -> Option<Value> {
     push_decls(container, scope);
     let form = [Form::Bag, Form::Seq, Form::Alt].into_iter().find(|f| is_named(&container.name, scope, true, RDF, &f.element()[4..]));
     let mut items = Vec::new();
-    let ok = form.is_some() && attrs(container).is_empty() && text_of(container).trim().is_empty() && {
+    let ok = form.is_some() && attrs(container).is_empty() && text_of(container).trim_matches([' ', '\t', '\r', '\n']).is_empty() && {
         container.elements().all(|li| {
             let inner = scope.len();
             push_decls(li, scope);
@@ -1058,10 +1105,37 @@ pub struct PacketSpan {
 /// The characters of whitespace padding just before the `<?xpacket end=` trailer of `packet` (XMP
 /// Specification Part 1, 7.3), or 0 when it has no trailer.
 pub(crate) fn pad_size(packet: &str) -> usize {
-    packet.rfind("<?xpacket end=").map_or(0, |end| {
-        let before = packet.get(..end).unwrap_or_default();
-        before.len() - before.trim_end_matches([' ', '\t', '\r', '\n']).len()
-    })
+    let options = Options { names: Names::AsWritten, doctype: Doctype::Reject, unknown_entity: UnknownEntity::Error, ..Options::default() }.strict();
+    let mut events = options.events(packet.as_bytes());
+    let (mut depth, mut rooted, mut begun) = (0usize, false, false);
+    loop {
+        let event = match events.next() {
+            Ok(Some(event)) => Ok(event),
+            Ok(None) => break,
+            Err(error) => Err(error),
+        };
+        match event {
+            Ok(craft_xml::Event::Start { .. }) => depth += 1,
+            Ok(craft_xml::Event::End { .. }) => {
+                depth = depth.saturating_sub(1);
+                rooted |= depth == 0;
+            }
+            Ok(craft_xml::Event::Pi { target, data }) if depth == 0 && target == "xpacket" => {
+                if !rooted && data.starts_with("begin=") {
+                    begun = [format!("id=\"{WRAPPER_ID}\""), format!("id='{WRAPPER_ID}'")].iter().any(|id| data.contains(id));
+                } else if rooted
+                    && begun
+                    && matches!(data.trim_end_matches([' ', '\t', '\r', '\n']), "end=\"r\"" | "end=\"w\"" | "end='r'" | "end='w'")
+                {
+                    let before = &packet[..events.span().start];
+                    return before.len() - before.trim_end_matches([' ', '\t', '\r', '\n']).len();
+                }
+            }
+            Err(_) => return 0,
+            _ => {}
+        }
+    }
+    0
 }
 
 /// The first UTF-8 packet in `bytes` that has both ends of its wrapper (XMP Specification Part 1,
@@ -1093,11 +1167,41 @@ pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
     let mut closes = Later::new(b"?>");
     let mut section_ends = SECTIONS.map(|(_, close)| Later::new(close));
     let mut start = None;
+    let mut skipped_headers = Vec::new();
+    let mut ignored_sections = std::collections::BTreeMap::new();
+    let mut xml_trailer = None;
     let mut pos = 0;
     while let Some(at) = rest(pos).iter().position(|&b| b == b'<').map(|i| i + pos) {
         pos = at + 1;
+        let here = rest(at);
+        if here.starts_with(b"<?") && !here.starts_with(BEGIN) && !here.starts_with(END) {
+            let close = closes.find(bytes, at + 2);
+            if start.is_some() || close.is_some_and(|close| start_after(at + 2).is_none_or(|begin| begin > close)) {
+                if start.is_some()
+                    && let Some(close) = close
+                {
+                    let first = starts.partition_point(|&begin| begin < at + 2);
+                    let end = starts.partition_point(|&begin| begin < close);
+                    skipped_headers.extend_from_slice(&starts[first..end]);
+                }
+                pos = close.map_or(len, |close| close + 2);
+                continue;
+            }
+        }
         if starts.binary_search(&at).is_ok() {
+            if let Some(from) = start {
+                if xml_trailer.as_ref().is_none_or(|(checked, _)| *checked != from) {
+                    xml_trailer = Some((from, packet_trailer(&bytes[from..])));
+                }
+                if let Some((_, Ok((_, end, _)))) = xml_trailer
+                    && at < from + end
+                {
+                    pos = at + BEGIN.len();
+                    continue;
+                }
+            }
             start = Some(at);
+            skipped_headers.clear();
             pos = at + BEGIN.len();
             continue;
         }
@@ -1106,7 +1210,6 @@ pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
             pos = start_after(pos)?;
             continue;
         };
-        let here = rest(at);
         if let Some(kind) = SECTIONS.iter().position(|(open, _)| here.starts_with(open)) {
             let (open, close) = SECTIONS[kind];
             let inside = at + open.len();
@@ -1115,6 +1218,7 @@ pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
             let hides_packet = end.is_some_and(|end| ends.find(bytes, inside).is_some_and(|e| e < end && start_after(e).is_some_and(|s| s < end)));
             if let (Some(end), false) = (end, hides_packet) {
                 pos = end + close.len();
+                ignored_sections.insert(at, pos);
             }
             continue;
         }
@@ -1125,15 +1229,145 @@ pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
         let close = closes.find(bytes, after)?;
         if let Some(next) = start_after(after).filter(|&next| next < close) {
             start = Some(next);
+            skipped_headers.clear();
             pos = next + BEGIN.len();
             continue;
         }
+        let trailer_value = std::str::from_utf8(&bytes[after..close]).ok().map(|value| value.trim_end_matches([' ', '\t', '\r', '\n']));
+        if !matches!(trailer_value, Some("\"r\"" | "\"w\"" | "'r'" | "'w'")) {
+            pos = close + 2;
+            continue;
+        }
+        if xml_trailer.as_ref().is_none_or(|(checked, _)| *checked != from) {
+            xml_trailer = Some((from, packet_trailer(&bytes[from..])));
+        }
+        if let Some((_, Err(Some(next)))) = xml_trailer {
+            start = Some(from + next);
+            skipped_headers.clear();
+            pos = from + next + BEGIN.len();
+            continue;
+        }
+        if let Some((_, Ok((trailer, _, _)))) = xml_trailer
+            && from + trailer > at
+        {
+            pos = from + trailer;
+            continue;
+        }
         let span = PacketSpan { start: from, end: close + 2, writeable: bytes.get(after + 1) == Some(&b'w') };
-        if bytes.get(span.start..span.end).is_some_and(|p| std::str::from_utf8(p).is_ok()) {
-            return Some(span);
+        let packet = bytes.get(span.start..span.end)?;
+        if std::str::from_utf8(packet).is_ok() {
+            let mut selected = span.start;
+            if !skipped_headers.is_empty() {
+                while let Some(restart) = packet_xml_restart(&bytes[selected..span.end]) {
+                    let threshold = selected.saturating_add(restart);
+                    let index = skipped_headers.partition_point(|&header| header <= selected || header < threshold);
+                    let Some(next) = skipped_headers.get(index).copied().filter(|&header| header < span.end) else { break };
+                    selected = next;
+                }
+            }
+            let trailer = if selected == from { xml_trailer.map_or(Err(None), |(_, trailer)| trailer) } else { packet_trailer(&bytes[selected..]) };
+            if let Ok((_, end, writeable)) = trailer {
+                return Some(PacketSpan { start: selected, end: selected + end, writeable });
+            }
+            if let Err(Some(next)) = trailer {
+                start = Some(selected + next);
+                skipped_headers.clear();
+                pos = selected + next + BEGIN.len();
+                continue;
+            }
+            return Some(PacketSpan { start: selected, ..span });
+        }
+        let mut checked = span.start;
+        let mut last_invalid = span.start;
+        while let Err(error) = std::str::from_utf8(&bytes[checked..span.end]) {
+            checked += error.valid_up_to() + error.error_len().unwrap_or(1);
+            last_invalid = checked;
+        }
+        let next = starts[starts.partition_point(|&header| header < last_invalid)..]
+            .iter()
+            .copied()
+            .take_while(|&header| header < span.end)
+            .find(|&header| ignored_sections.range(..=header).next_back().is_none_or(|(_, &end)| header >= end));
+        if let Some(next) = next {
+            start = Some(next);
+            skipped_headers.clear();
+            pos = next + BEGIN.len();
+            continue;
         }
         start = None;
         pos = span.end;
+    }
+    None
+}
+
+fn packet_trailer(packet: &[u8]) -> Result<(usize, usize, bool), Option<usize>> {
+    let options = Options { names: Names::AsWritten, doctype: Doctype::Reject, unknown_entity: UnknownEntity::Literal, ..Options::default() };
+    let mut events = options.events(packet);
+    let mut depth = 0usize;
+    let ids = [format!("id=\"{WRAPPER_ID}\""), format!("id='{WRAPPER_ID}'")];
+    while let Some(event) = events.next().map_err(|_| None)? {
+        let span = events.span();
+        #[cfg(test)]
+        PACKET_XML_READ_BYTES.with(|bytes| bytes.set(bytes.get() + span.len()));
+        match event {
+            craft_xml::Event::Start { .. } => depth += 1,
+            craft_xml::Event::End { .. } => {
+                depth = depth.saturating_sub(1);
+            }
+            craft_xml::Event::Pi { target, data } if depth == 0 && target == "xpacket" => {
+                if span.start != 0 && span.len() <= MAX_HEADER && data.starts_with("begin=") && ids.iter().any(|id| data.contains(id)) {
+                    return Err(Some(span.start));
+                }
+                match data.trim_end_matches([' ', '\t', '\r', '\n']) {
+                    "end=\"r\"" | "end='r'" => return Ok((span.start, span.end, false)),
+                    "end=\"w\"" | "end='w'" => return Ok((span.start, span.end, true)),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    Err(None)
+}
+
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static PACKET_XML_READ_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn packet_xml_restart(packet: &[u8]) -> Option<usize> {
+    let options = Options { names: Names::AsWritten, doctype: Doctype::Reject, unknown_entity: UnknownEntity::Error, ..Options::default() }.strict();
+    let mut events = options.events(packet);
+    let mut open = Vec::new();
+    let mut complete = None;
+    loop {
+        let event = match events.next() {
+            Ok(Some(event)) => Ok(event),
+            Ok(None) => break,
+            Err(error) => Err(error),
+        };
+        let span = events.span();
+        #[cfg(test)]
+        PACKET_XML_READ_BYTES.with(|bytes| bytes.set(bytes.get() + span.len()));
+        match event {
+            Ok(craft_xml::Event::Start { .. }) => open.push(span.start),
+            Ok(craft_xml::Event::End { .. }) => {
+                open.pop();
+                if open.is_empty() {
+                    complete = Some(span.end);
+                }
+            }
+            Err(_) => {
+                return Some(if span.start == packet.len() {
+                    open.last().map_or(span.end, |start| start + 1)
+                } else if open.is_empty() {
+                    complete.unwrap_or(span.end)
+                } else {
+                    span.end
+                });
+            }
+            _ => {}
+        }
     }
     None
 }

@@ -47,6 +47,189 @@ const PACKET: &str = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 </x:xmpmeta>
 <?xpacket end="w"?>"#;
 
+#[test]
+fn rdf_qualified_names_validate_both_parts() {
+    let packet = PACKET.replace("ex:a>", "ex:a:b>");
+    assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
+    assert!(xmp::parse(PACKET, &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn rdf_non_xml_whitespace_is_not_indentation() {
+    let packet = PACKET.replace("<dc:format>", "\u{a0}<dc:format>");
+    assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
+    assert!(xmp::parse(&PACKET.replace("<dc:format>", " \t\r\n<dc:format>"), &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn rdf_descriptions_reject_conflicting_nonempty_subjects() {
+    let packet = PACKET
+        .replace("rdf:about=\"\"", "rdf:about=\"urn:a\"")
+        .replace("</rdf:Description>", "</rdf:Description><rdf:Description rdf:about=\"urn:b\"/>");
+    assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
+    assert!(xmp::parse(&packet.replace("urn:b", "urn:a"), &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn explicit_empty_and_named_rdf_subjects_cannot_be_merged() {
+    for (first, second) in [("", "urn:a"), ("urn:a", "")] {
+        let packet = PACKET
+            .replace("rdf:about=\"\"", &format!("rdf:about=\"{first}\""))
+            .replace("</rdf:Description>", &format!("</rdf:Description><rdf:Description rdf:about=\"{second}\"/>"));
+        assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
+    }
+}
+
+#[test]
+fn packet_padding_requires_an_actual_wrapper_trailer() {
+    let packet = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:a="urn:test"><a:value><![CDATA[   <?xpacket end=]]></a:value></rdf:Description></rdf:RDF>"#;
+    assert_eq!(xmp::pad_size(packet), 0);
+    assert!(xmp::pad_size(PACKET) > 0);
+    let prefixed = format!("<?xml version=\"1.0\"?>\n<!-- prolog -->\n{PACKET}");
+    assert_eq!(xmp::pad_size(&prefixed), xmp::pad_size(PACKET));
+    assert_eq!(xmp::pad_size(&format!("<?xpacket-note example?>{PACKET}")), xmp::pad_size(PACKET));
+    assert_eq!(xmp::pad_size(&format!("<!-- {PACKET} -->{PACKET}")), xmp::pad_size(PACKET));
+    let comment = "<!--   <?xpacket end='w'?> <?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?> -->";
+    assert_eq!(xmp::pad_size(&PACKET.replace("<dc:format>", &format!("{comment}<dc:format>"))), xmp::pad_size(PACKET));
+}
+
+#[test]
+fn packet_padding_ignores_invalid_trailer_values() {
+    for value in ["note", "", "ww", "W"] {
+        let packet = PACKET.replace("<?xpacket end=\"w\"?>", &format!("  <?xpacket end=\"{value}\"?>\n     <?xpacket end=\"w\"?>"));
+        assert_eq!(xmp::pad_size(&packet), 6, "{value:?}");
+    }
+}
+
+#[test]
+fn packet_scans_ignore_trailers_inside_the_xml_root() {
+    let packet = PACKET.replace("<dc:format>", "<?xpacket end=\"w\"?><dc:format>");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, packet.len()));
+    let packet = PACKET.replace("<?xpacket end=\"w\"?>", "<?xpacket end=\"note\"?><?xpacket end=\"w\"?>");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, packet.len()));
+}
+
+#[test]
+fn malformed_wrapped_xml_is_not_reported_as_absent() {
+    let packet = PACKET.replace("image/svg+xml", "&undefined;");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, packet.len()));
+    assert!(xmp::parse(&packet[span.start..span.end], &mut Registry::default()).is_err());
+}
+
+#[test]
+fn wrapper_lookahead_stops_before_unrelated_later_packets() {
+    let header = "<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>";
+    let incomplete = format!("{header}<?xpacket end='w'?>");
+    let packet = format!("{}{PACKET}", incomplete.repeat(1000));
+    xmp::PACKET_XML_READ_BYTES.with(|bytes| bytes.set(0));
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, incomplete.len()));
+    let read = xmp::PACKET_XML_READ_BYTES.with(|bytes| bytes.get());
+    assert!(read <= incomplete.len() * 4, "lookahead read {read} bytes for {} byte candidate", incomplete.len());
+}
+
+#[test]
+fn an_inner_trailer_does_not_pair_an_orphan_with_the_next_packet() {
+    let orphan = PACKET.replace("<dc:format>", "<?xpacket end='w'?><dc:format>").replace("<?xpacket end=\"w\"?>", "");
+    let packet = format!("{orphan}{PACKET}");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (orphan.len(), packet.len()));
+}
+
+#[test]
+fn packet_headers_inside_application_instructions_are_text() {
+    let packet = PACKET.replace("<dc:format>", "<?application <?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><dc:format>");
+    assert_eq!(xmp::find_packet(packet.as_bytes()).map(|span| (span.start, span.end)), Some((0, packet.len())));
+    assert!(xmp::parse(&packet, &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn packet_headers_inside_the_xml_root_are_instructions() {
+    let header = "<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>";
+    let packet = PACKET.replace("<dc:format>", &format!("{header}<dc:format>"));
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, packet.len()));
+    assert!(xmp::parse(&packet, &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn binary_prefix_with_an_unclosed_instruction_does_not_hide_a_packet() {
+    let packet = format!("binary\0<?stray {PACKET}");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!(&packet[span.start..span.end], PACKET);
+}
+
+#[test]
+fn a_header_inside_a_prolog_instruction_is_not_a_new_packet() {
+    let orphan = "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><?application ";
+    let packet = format!("{orphan}{PACKET}");
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (0, packet.len()));
+    assert!(xmp::parse(&packet, &mut Registry::default()).is_ok());
+}
+
+#[test]
+fn an_invalid_utf8_wrapper_cannot_hide_a_later_valid_packet() {
+    let mut packet = b"<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\xff<?application ".to_vec();
+    let offset = packet.len();
+    packet.extend_from_slice(PACKET.as_bytes());
+    let span = xmp::find_packet(&packet).unwrap();
+    assert_eq!((span.start, span.end), (offset, packet.len()));
+}
+
+#[test]
+fn invalid_utf8_recovery_ignores_closed_xml_sections() {
+    for (open, close) in [("<!--", "-->"), ("<![CDATA[", "]]>")] {
+        let mut packet = b"<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\xff".to_vec();
+        packet.extend_from_slice(open.as_bytes());
+        packet.extend_from_slice(PACKET.as_bytes());
+        packet.extend_from_slice(close.as_bytes());
+        packet.extend_from_slice(b"<?xpacket end=\"w\"?>");
+        let offset = packet.len();
+        packet.extend_from_slice(PACKET.as_bytes());
+        let span = xmp::find_packet(&packet).unwrap();
+        assert_eq!((span.start, span.end), (offset, packet.len()), "{open}");
+    }
+}
+
+#[test]
+fn an_abandoned_xml_root_does_not_hide_the_next_packet() {
+    let header = "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>";
+    for root in ["<unrelated/>", "<unrelated>", "<unrelated bogus>"] {
+        let prefix = format!("{header}{root}<?application ");
+        let packet = format!("{prefix}{PACKET}");
+        let span = xmp::find_packet(packet.as_bytes()).unwrap();
+        assert_eq!((span.start, span.end), (prefix.len(), packet.len()), "{root}");
+    }
+    let instruction = format!("<?application {header}");
+    let prefix = format!("{header}<unrelated>{}</unrelated><?application ", instruction.repeat(1000));
+    let packet = format!("{prefix}{PACKET}");
+    xmp::PACKET_XML_READ_BYTES.with(|bytes| bytes.set(0));
+    let span = xmp::find_packet(packet.as_bytes()).unwrap();
+    assert_eq!((span.start, span.end), (prefix.len(), packet.len()));
+    let read = xmp::PACKET_XML_READ_BYTES.with(|bytes| bytes.get());
+    assert!(read <= packet.len() * 4, "XML recovery read {read} bytes for {} input bytes", packet.len());
+}
+
+#[test]
+fn retained_structures_reject_invalid_namespace_prefixes() {
+    let packet = PACKET
+        .replace("<dc:format>", "<dc:format xmlns:bad:prefix=\"urn:bad\" rdf:parseType=\"Resource\"><dc:value>")
+        .replace("</dc:format>", "</dc:value></dc:format>");
+    assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
+}
+
+#[test]
+fn non_xml_whitespace_before_an_array_is_preserved() {
+    let packet = PACKET.replace("<dc:format>image/svg+xml</dc:format>", "<dc:format>\u{a0}<rdf:Bag><rdf:li>value</rdf:li></rdf:Bag></dc:format>");
+    let mut registry = Registry::default();
+    let meta = xmp::parse(&packet, &mut registry).unwrap();
+    assert!(xmp::serialize(&meta, &registry, true).unwrap().contains('\u{a0}'));
+}
+
 fn with_packet(src: &str) -> String {
     format!("var m = new XMPMeta({:?});\n{src}", PACKET)
 }
@@ -531,6 +714,33 @@ fn an_external_object_install_can_retry_after_a_heap_limit() {
         }
     }
     assert!(failures > 0 && successes > 0, "failures {failures}, successes {successes}");
+}
+
+#[test]
+fn es5_external_install_reserves_every_published_member() {
+    let mut successes = 0;
+    let mut failures = 0;
+    for kib in 0..=128 {
+        let mut realm = Realm::with_options(crate::Options { es2015: false, ..crate::Options::default() }, Limits::default());
+        realm.run("0").unwrap();
+        let baseline = realm.interp().settled_heap_bytes();
+        let limit = baseline + (kib << 10);
+        realm.set_limits(Limits { heap_bytes: limit, ..Limits::default() });
+        match realm.define_external_object() {
+            Ok(()) => {
+                successes += 1;
+                let retained = realm.interp().settled_heap_bytes();
+                assert!(retained <= limit, "installation retained {retained} bytes with a {limit}-byte limit");
+            }
+            Err(error) => {
+                failures += 1;
+                assert_eq!(error.kind, RunErrorKind::Limit(LimitKind::Heap));
+                realm.set_limits(Limits::default());
+                realm.define_external_object().unwrap();
+            }
+        }
+    }
+    assert!(successes > 0 && failures > 0);
 }
 
 #[test]

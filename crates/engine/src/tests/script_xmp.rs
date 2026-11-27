@@ -15,6 +15,26 @@ const PACKET: &str = "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\
 <dc:format>image/svg+xml</dc:format><dc:subject><rdf:Bag><rdf:li>a</rdf:li><rdf:li>b</rdf:li></rdf:Bag></dc:subject>\
 </rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>";
 
+#[test]
+fn a_large_supported_packet_crosses_the_sidecar_write_transport() {
+    let base = folder("large-write-transport");
+    let payload = "x".repeat(6 << 20);
+    let packet = PACKET.replace("image/svg+xml", &payload);
+    let mut session = with_data(&base);
+    let setup = logged(&mut session, &base, "vc.log(Folder.userData.fsName + '/large.xmp');");
+    let path = PathBuf::from(setup[0].as_str().unwrap());
+    write(&path, packet.as_bytes());
+    let log = logged(
+        &mut session,
+        &base,
+        "var p = Folder.userData.fsName + '/large.xmp'; var x = new XMPFile(p, XMPConst.FILE_XML, XMPConst.OPEN_FOR_UPDATE); var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'title', 'changed-for-write'); x.putXMP(m); x.closeFile(); vc.log(true);",
+    );
+    assert_eq!(log, json!([true]));
+    let written = std::fs::read_to_string(path).unwrap();
+    assert!(written.contains(&payload));
+    assert!(written.contains("changed-for-write"));
+}
+
 struct Folder {
     _guard: vectorcraft_testkit::TempDir,
     path: PathBuf,
@@ -489,6 +509,27 @@ fn an_open_utf16_file_reads_the_written_packet() {
          var t = f.read(), e = f.encoding; f.close(); out.push(e, t.slice(0, 9), t.indexOf('<dc:format>changed</dc:format>') > 0); vc.log(out);",
     );
     assert_eq!(log[0], json!(["UTF-16LE", "<?xpa", "UTF-8", "<?xpacket", true]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn writing_a_utf16_declared_packet_keeps_its_body_in_utf8() {
+    let base = folder("utf16declaredwrite");
+    let mut session = with_data(&base);
+    let data = logged(&mut session, &base, "vc.log(Folder.userData.fsName);");
+    let data = PathBuf::from(data[0].as_str().unwrap());
+    let body = format!("<!-- retained prolog -->\n{PACKET}\n<!-- retained epilog -->");
+    let packet = format!("<?xml version='1.0' encoding='UTF-16'?>{body}");
+    let mut bytes = vec![0xFF, 0xFE];
+    bytes.extend(packet.encode_utf16().flat_map(u16::to_le_bytes));
+    write(&data.join("declared.xmp"), &bytes);
+    logged(
+        &mut session,
+        &base,
+        "var x = new XMPFile(Folder.userData.fsName + '/declared.xmp', XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE); var packet = x.getPacketInfo().packet; x.putXMP(packet); x.closeFile();",
+    );
+    let written = std::fs::read_to_string(data.join("declared.xmp")).unwrap();
+    assert_eq!(written, body);
     let _ = std::fs::remove_dir_all(base);
 }
 

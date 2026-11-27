@@ -18,6 +18,7 @@
 //! `getProperty` gives its text, when it has one, and its options.
 //! `insertArrayItem` inserts before the last existing item when its index is `ARRAY_LAST_ITEM`.
 //! `insertArrayItem` and `setArrayItem` store `null` as an empty item value.
+//! Metadata edits charge fuel for size accounting.
 //!
 //! `XMPFile` reads a file through the host functions `xmpOpen` and `xmpWrite` of `File` and
 //! `Folder` ([`crate::Realm::define_file_classes`]), so it reads and writes only where they may. A
@@ -33,7 +34,7 @@
 //! reference lists that is not built yet, and a flag, format or option not handled yet, throws an
 //! error that says so.
 
-use crate::builtins::{arg, data, method, native};
+use crate::builtins::arg;
 use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, PropMap, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
@@ -216,10 +217,20 @@ fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
 }
 
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
+    set_slot_with_charge(i, o, name, value, true)
+}
+
+fn set_slot_with_charge(i: &mut Interp, o: ObjId, name: &str, value: Value, charged: bool) -> JsResult<()> {
     if let Some(Class::XmpFile(fields)) = i.heap.object(o).map(|object| &object.class) {
         let name = key(name);
         let added = if fields.contains(&name) { 0 } else { PROP_BYTES + string_bytes(name.len()) };
-        let strings = if let Value::String(s) = &value { string_bytes(s.len()) } else { 0 };
+        let strings = if charged {
+            0
+        } else if let Value::String(s) = &value {
+            string_bytes(s.len())
+        } else {
+            0
+        };
         return i.rooted(&[Value::Object(o), value.clone()], |i| {
             i.reserve_heap(added + strings)?;
             if let Some(Class::XmpFile(fields)) = i.heap.object_mut(o).map(|object| &mut object.class) {
@@ -255,7 +266,8 @@ fn string(i: &mut Interp, s: &str) -> JsResult<Value> {
 /// A new ordinary object with the prototype `proto` and the read-only data properties `fields`.
 fn record(i: &mut Interp, proto: Option<ObjId>, fields: Vec<(&'static str, Value)>) -> JsResult<Value> {
     i.rooted(&fields.iter().map(|(_, v)| v.clone()).collect::<Vec<_>>(), |i| {
-        i.reserve_heap(OBJECT_BYTES + PROP_BYTES * fields.len())?;
+        let keys: usize = fields.iter().map(|(name, _)| string_bytes(name.encode_utf16().count())).sum();
+        i.reserve_heap(OBJECT_BYTES + PROP_BYTES * fields.len() + keys)?;
         let o = i.heap.alloc_object(Object::new(Class::Ordinary, proto.or(Some(i.intrinsics.object_proto))));
         for (name, value) in &fields {
             i.define(o, key(name), Prop::Data { value: value.clone(), flags: ENUMERABLE })?;
@@ -275,12 +287,24 @@ fn external_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<
     }
     let ids = ids(i)?;
     let global = i.global;
-    data(i, global, "XMPMeta", Value::Object(ids.meta), HIDDEN)?;
-    data(i, global, "XMPFile", Value::Object(ids.file), HIDDEN)?;
-    data(i, global, "XMPConst", Value::Object(ids.constants), HIDDEN)?;
     i.reserve_heap(OBJECT_BYTES + PROP_BYTES)?;
     let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(ids.external_proto)));
-    i.rooted(&[Value::Object(o)], |i| set_slot(i, o, LIBRARY_SLOT, Value::str(LIBRARY)))?;
+    i.rooted(&[Value::Object(o)], |i| {
+        let library = string(i, LIBRARY)?;
+        data(i, o, LIBRARY_SLOT, library, 0)?;
+        let members = [("XMPMeta", ids.meta), ("XMPFile", ids.file), ("XMPConst", ids.constants)];
+        let mut added = 0;
+        for (name, _) in members {
+            if i.get_own_property(global, &key(name))?.is_none() {
+                added += PROP_BYTES + string_bytes(name.len());
+            }
+        }
+        i.reserve_heap(added)?;
+        for (name, value) in members {
+            crate::builtins::data(i, global, name, Value::Object(value), HIDDEN)?;
+        }
+        Ok(())
+    })?;
     Ok(Value::Object(o))
 }
 
@@ -318,14 +342,20 @@ fn meta_of(i: &Interp, o: ObjId) -> JsResult<&Meta> {
 /// Changes the metadata of `o` with `f`, given `grow`, the most bytes the change adds, and charges
 /// the heap for what it added or frees what it took out.
 fn change<T>(i: &mut Interp, o: ObjId, grow: usize, f: impl FnOnce(&mut Meta, &Registry) -> T) -> JsResult<T> {
+    let accounting = meta_of(i, o)?.heap_bytes().saturating_mul(3).saturating_add(grow);
+    spend(i, accounting)?;
+    change_counted(i, o, grow, None, f)
+}
+
+fn change_counted<T>(i: &mut Interp, o: ObjId, grow: usize, delta: Option<(usize, usize)>, f: impl FnOnce(&mut Meta, &Registry) -> T) -> JsResult<T> {
     i.reserve_heap(grow)?;
     let Some(c) = i.xmp.as_ref() else { return Err(Abrupt::Internal("ExternalObject is not installed".into())) };
     let Some(Class::Xmp(m)) = i.heap.object_mut(o).map(|ob| &mut ob.class) else {
         return Err(Abrupt::Internal("an XMPMeta lost its metadata".into()));
     };
-    let before = m.heap_bytes();
+    let before = delta.map_or_else(|| m.heap_bytes(), |(removed, _)| removed);
     let r = f(m, &c.registry);
-    let after = m.heap_bytes();
+    let after = delta.map_or_else(|| m.heap_bytes(), |(_, added)| added);
     i.heap.bytes = if after >= before { i.heap.bytes.saturating_add(after - before) } else { i.heap.bytes.saturating_sub(before - after) };
     Ok(r)
 }
@@ -450,19 +480,22 @@ fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
     }
     let found = {
         let m = meta_of(i, o)?;
-        m.find(&ns, &name).map(|at| m.props[at].value.clone())
-    };
-    let Some(value) = found else { return Ok(Value::Undefined) };
-    match step {
-        Step::Whole => property(i, &ns, &path, value.text(), value.options(), ""),
-        Step::Item(index) => match value {
-            xmp::Value::Array { items, .. } => match position(index, items.len()).and_then(|p| items.get(p)) {
-                Some(item) => property(i, &ns, &path, Some(&item.text), item.options(), item.lang.as_deref().unwrap_or("")),
-                None => Ok(Value::Undefined),
+        match m.find(&ns, &name).map(|at| &m.props[at].value) {
+            None => Ok(None),
+            Some(value) => match step {
+                Step::Whole => Ok(Some((value.text().map(str::to_string), value.options(), String::new()))),
+                Step::Item(index) => match value {
+                    xmp::Value::Array { items, .. } => Ok(position(index, items.len())
+                        .and_then(|p| items.get(p))
+                        .map(|item| (Some(item.text.clone()), item.options(), item.lang.clone().unwrap_or_default()))),
+                    _ => Err(()),
+                },
             },
-            _ => Err(not_array(i, what, &name)),
-        },
-    }
+        }
+    };
+    let found = found.map_err(|()| not_array(i, what, &name))?;
+    let Some((text, options, locale)) = found else { return Ok(Value::Undefined) };
+    property(i, &ns, &path, text.as_deref(), options, &locale)
 }
 
 fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -638,8 +671,9 @@ fn insert_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: Option<i64
         },
     };
     let grow = 48 + value.len();
+    spend(i, len.saturating_sub(p).saturating_mul(std::mem::size_of::<Item>()))?;
     match found {
-        Some((at, _, _)) => change(i, o, grow, |m, _| {
+        Some((at, _, _)) => change_counted(i, o, grow, Some((0, grow)), |m, _| {
             if let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|pr| &mut pr.value) {
                 items.insert(p.min(items.len()), Item { text: value, lang: None });
             }
@@ -909,12 +943,22 @@ fn set_lang(items: &mut Vec<Item>, generic: &str, specific: &str, value: String)
 fn serialized(i: &mut Interp, o: ObjId, v: &Value, what: &str) -> JsResult<String> {
     let options = flags(i, v, what)?;
     only(i, options, SERIALIZE_OMIT_PACKET_WRAPPER, what)?;
+    let work = {
+        let Some(classes) = i.xmp.as_ref() else { return Err(Abrupt::Internal("ExternalObject is not installed".into())) };
+        let meta = meta_of(i, o)?;
+        let prefixes = meta
+            .props
+            .iter()
+            .filter(|property| !matches!(property.value, xmp::Value::Other { .. }))
+            .fold(0usize, |bytes, property| bytes.saturating_add(classes.registry.prefix_of(&property.ns).map_or(0, str::len)));
+        meta.heap_bytes().saturating_mul(6).saturating_add(prefixes.saturating_mul(3))
+    };
+    spend(i, work)?;
     let r = {
         let Some(c) = i.xmp.as_ref() else { return Err(Abrupt::Internal("ExternalObject is not installed".into())) };
         xmp::serialize(meta_of(i, o)?, &c.registry, options & SERIALIZE_OMIT_PACKET_WRAPPER == 0)
     };
     let s = r.map_err(|e| xmp_error(i, what, e, ""))?;
-    spend(i, s.len())?;
     Ok(s)
 }
 
@@ -1090,7 +1134,7 @@ fn get_xmp(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value>
         return Ok(Value::Null);
     }
     let text = text(i, &packet)?;
-    let meta = if text.trim().is_empty() { Meta::default() } else { parse_packet(i, what, &text)? };
+    let meta = if text.trim_matches([' ', '\t', '\r', '\n']).is_empty() { Meta::default() } else { parse_packet(i, what, &text)? };
     new_meta(i, meta)
 }
 
@@ -1104,7 +1148,9 @@ fn get_packet_info(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResul
     let char_form = slot(i, o, CHAR_FORM)?;
     // The padding is counted in bytes: two for each character of a UTF-16 packet.
     let unit = if matches!(char_form, Value::Number(n) if n == 2.0 || n == 3.0) { 2 } else { 1 };
-    let pad = crate::xmp::pad_size(&text(i, &packet)?) * unit;
+    let packet_text = text(i, &packet)?;
+    spend(i, packet_text.len())?;
+    let pad = crate::xmp::pad_size(&packet_text) * unit;
     let fields = vec![
         ("charForm", char_form),
         ("length", slot(i, o, LENGTH)?),
@@ -1191,7 +1237,7 @@ fn put_xmp(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Val
         return Err(i.throw(ErrorType::Error, &format!("{what}: the file cannot be updated")));
     }
     let v = string(i, &packet)?;
-    i.rooted(std::slice::from_ref(&v), |i| set_slot(i, o, PENDING, v.clone()))?;
+    i.rooted(std::slice::from_ref(&v), |i| set_slot_with_charge(i, o, PENDING, v.clone(), true))?;
     Ok(Value::Undefined)
 }
 
@@ -1222,12 +1268,33 @@ fn close_file(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
 
 // ---- install ----
 
+fn native(i: &mut Interp, name: &'static str, f: crate::heap::NativeFn, length: u32, kind: NativeKind, constructor: bool) -> JsResult<ObjId> {
+    i.reserve_heap(OBJECT_BYTES + PROP_BYTES + string_bytes("length".len()))?;
+    crate::builtins::native(i, name, f, length, kind, constructor)
+}
+
+fn data(i: &mut Interp, on: ObjId, name: &str, value: Value, flags: u8) -> JsResult<()> {
+    let added = if i.get_own_property(on, &key(name))?.is_some() { 0 } else { PROP_BYTES + string_bytes(name.encode_utf16().count()) };
+    i.rooted(&[Value::Object(on), value.clone()], |i| {
+        i.reserve_heap(added)?;
+        crate::builtins::data(i, on, name, value, flags)
+    })
+}
+
+fn method(i: &mut Interp, on: ObjId, name: &'static str, f: crate::heap::NativeFn, length: u32) -> JsResult<()> {
+    i.rooted(&[Value::Object(on)], |i| {
+        let method = native(i, name, f, length, NativeKind::Plain, false)?;
+        data(i, on, name, Value::Object(method), HIDDEN)
+    })
+}
+
 /// A data property of `XMPConst`: read-only, enumerable.
 fn constant(i: &mut Interp, on: ObjId, name: &str, value: Value) -> JsResult<()> {
     data(i, on, name, value, ENUMERABLE)
 }
 
 fn constants(i: &mut Interp) -> JsResult<ObjId> {
+    i.reserve_heap(OBJECT_BYTES)?;
     let o = i.new_object();
     i.rooted(&[Value::Object(o)], |i| {
         let namespaces = [
@@ -1240,7 +1307,8 @@ fn constants(i: &mut Interp) -> JsResult<ObjId> {
             ("NS_PHOTOSHOP", xmp::PHOTOSHOP), // brand-ok: the constant's name in the reference
         ];
         for (name, uri) in namespaces {
-            constant(i, o, name, Value::str(uri))?;
+            let value = string(i, uri)?;
+            constant(i, o, name, value)?;
         }
         let numbers: [(&str, f64); 14] = [
             ("FILE_UNKNOWN", f64::from(FILE_UNKNOWN)),
@@ -1353,7 +1421,8 @@ pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
                 i.rooted(&[Value::Object(external)], |i| {
                     method(i, external, "search", external_search, 1)?;
                     method(i, external_proto, "terminate", external_terminate, 0)?;
-                    crate::builtins::constructor(i, "ExternalObject", external, external_proto)
+                    link(i, external, external_proto)?;
+                    data(i, i.global, "ExternalObject", Value::Object(external), HIDDEN)
                 })
             })
         })
@@ -1367,6 +1436,324 @@ pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
 #[cfg(test)]
 mod namespace_heap_tests {
     use super::*;
+
+    #[test]
+    fn non_xml_whitespace_sidecars_are_not_empty_metadata() {
+        for text in ["\u{a0}", "\u{2003}", "\u{85}", " \t\r\n"] {
+            let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+            crate::file_classes::install(
+                &mut interp,
+                vec![("current".into(), crate::HostItem::Function(std::rc::Rc::new(|_| Ok(crate::Data::String(String::new())))))],
+            )
+            .unwrap();
+            install(&mut interp).unwrap();
+            let mut fields = PropMap::default();
+            fields.insert(key(PATH), Value::str("packet.xmp"));
+            fields.insert(key(OPEN), Value::Bool(true));
+            fields.insert(key(RUN), Value::Number(crate::file_classes::run_count(&interp).unwrap()));
+            fields.insert(key(PACKET), Value::str(text));
+            let object = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), Some(ids(&interp).unwrap().file_proto)));
+            let value = Value::Object(object);
+            interp
+                .rooted(std::slice::from_ref(&value), |interp| {
+                    let result = get_xmp(interp, value.clone(), &[], false);
+                    if text == " \t\r\n" {
+                        assert!(result.is_ok());
+                    } else {
+                        assert!(matches!(result, Err(Abrupt::Throw(_))), "{text:?}: {result:?}");
+                    }
+                    Ok(())
+                })
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn inserting_array_items_charges_for_shifted_items() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let meta = Meta {
+            props: vec![xmp::Prop {
+                ns: xmp::DC.into(),
+                name: "items".into(),
+                value: xmp::Value::Array { form: Form::Bag, items: vec![Item { text: "text".into(), lang: None }; 1000] },
+            }],
+            ..Meta::default()
+        };
+        let value = new_meta(&mut interp, meta).unwrap();
+        let object = value.as_object().unwrap();
+        interp
+            .rooted(&[value], |interp| {
+                interp.fuel = 100;
+                let result = insert_item(interp, object, xmp::DC, "items", Some(1), "insert".into(), None, "insert");
+                assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))), "{result:?}");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn result_records_reserve_their_retained_property_keys() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        interp.collect_garbage();
+        let name = "a_property_name_with_retained_key_storage";
+        interp.limits.heap_bytes = interp.heap.bytes + OBJECT_BYTES + PROP_BYTES + string_bytes(name.len()) - 1;
+        let result = record(&mut interp, None, vec![(name, Value::Number(1.0))]);
+        assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Heap))), "{result:?}");
+    }
+
+    #[test]
+    fn replacing_array_items_charges_metadata_accounting_work() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let meta = Meta {
+            props: vec![xmp::Prop {
+                ns: xmp::DC.into(),
+                name: "items".into(),
+                value: xmp::Value::Array { form: Form::Bag, items: vec![Item { text: "text".into(), lang: None }; 1000] },
+            }],
+            ..Meta::default()
+        };
+        let value = new_meta(&mut interp, meta).unwrap();
+        interp
+            .rooted(std::slice::from_ref(&value), |interp| {
+                interp.fuel = 100;
+                let result =
+                    set_array_item(interp, value.clone(), &[Value::str(xmp::DC), Value::str("items"), Value::Number(1.0), Value::str("edit")], false);
+                assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))), "{result:?}");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn unrelated_namespaces_do_not_spend_serialization_fuel() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        for index in 0..400 {
+            registry(&mut interp).unwrap().register(&format!("urn:unused:{index}:{}", "x".repeat(990)), &format!("unused_{index}")).unwrap();
+        }
+        let value = new_meta(&mut interp, Meta::default()).unwrap();
+        let object = value.as_object().unwrap();
+        interp
+            .rooted(&[value], |interp| {
+                interp.fuel = 10_000;
+                assert!(serialized(interp, object, &Value::Undefined, "serialize").is_ok());
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn repeated_library_handles_fit_their_retained_size() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        external_ctor(&mut interp, Value::Undefined, &[Value::str(LIBRARY)], true).unwrap();
+        for room in 0..2048 {
+            interp.collect_garbage();
+            let baseline = interp.heap.bytes;
+            interp.limits.heap_bytes = baseline + room;
+            if let Ok(value) = external_ctor(&mut interp, Value::Undefined, &[Value::str(LIBRARY)], true) {
+                interp
+                    .rooted(&[value], |interp| {
+                        interp.collect_garbage();
+                        assert_eq!(room, interp.heap.bytes - baseline, "extra heap reservation for a retained handle");
+                        Ok(())
+                    })
+                    .unwrap();
+                return;
+            }
+        }
+        panic!("no library handle fit");
+    }
+
+    #[test]
+    fn a_failed_external_constructor_publishes_no_partial_globals() {
+        let mut failures = 0;
+        let mut successes = 0;
+        for room in (0..4096).step_by(16) {
+            let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+            install(&mut interp).unwrap();
+            interp.collect_garbage();
+            interp.limits.heap_bytes = interp.heap.bytes + room;
+            let result = external_ctor(&mut interp, Value::Undefined, &[Value::str(LIBRARY)], true);
+            if result.is_err() {
+                failures += 1;
+                for name in ["XMPMeta", "XMPFile", "XMPConst"] {
+                    assert!(interp.get_own_property(interp.global, &key(name)).unwrap().is_none(), "partial global {name}, room={room}");
+                }
+            } else if let Ok(value) = result {
+                successes += 1;
+                interp
+                    .rooted(&[value], |interp| {
+                        interp.collect_garbage();
+                        assert!(
+                            interp.heap.bytes <= interp.limits.heap_bytes,
+                            "constructor retained {} bytes with limit {}",
+                            interp.heap.bytes,
+                            interp.limits.heap_bytes
+                        );
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
+        assert!(failures > 0 && successes > 0);
+    }
+
+    #[test]
+    fn packet_info_charges_fuel_for_scanning_the_packet() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        crate::file_classes::install(
+            &mut interp,
+            vec![("current".into(), crate::HostItem::Function(std::rc::Rc::new(|_| Ok(crate::Data::String(String::new())))))],
+        )
+        .unwrap();
+        install(&mut interp).unwrap();
+        let mut fields = PropMap::default();
+        fields.insert(key(PATH), Value::str("packet.xmp"));
+        fields.insert(key(OPEN), Value::Bool(true));
+        fields.insert(key(RUN), Value::Number(crate::file_classes::run_count(&interp).unwrap()));
+        fields.insert(key(PACKET), Value::str(&" ".repeat(4096)));
+        let object = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), Some(ids(&interp).unwrap().file_proto)));
+        let this = Value::Object(object);
+        interp
+            .rooted(std::slice::from_ref(&this), |interp| {
+                interp.fuel = 1000;
+                get_packet_info(interp, this.clone(), &[], false)?;
+                assert!(interp.fuel <= 983, "packet scan used only {} fuel", 1000 - interp.fuel);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn staging_a_packet_charges_its_string_only_once() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        crate::file_classes::install(
+            &mut interp,
+            vec![("current".into(), crate::HostItem::Function(std::rc::Rc::new(|_| Ok(crate::Data::String(String::new())))))],
+        )
+        .unwrap();
+        install(&mut interp).unwrap();
+        let mut fields = PropMap::default();
+        for (name, value) in [
+            (PATH, Value::str("packet.xmp")),
+            (RUN, Value::Number(crate::file_classes::run_count(&interp).unwrap())),
+            (OPEN, Value::Bool(true)),
+            (FLAGS, Value::Number(f64::from(OPEN_FOR_UPDATE))),
+            (SIDECAR, Value::Bool(true)),
+            (PENDING, Value::Undefined),
+        ] {
+            fields.insert(key(name), value);
+        }
+        let object = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), Some(ids(&interp).unwrap().file_proto)));
+        let this = Value::Object(object);
+        interp
+            .rooted(std::slice::from_ref(&this), |interp| {
+                let packet = format!(
+                    "<rdf:RDF xmlns:rdf=\"{}\"><rdf:Description xmlns:a=\"urn:test\"><a:value>{}</a:value></rdf:Description></rdf:RDF>",
+                    xmp::RDF,
+                    "x".repeat(4096)
+                );
+                let argument = string(interp, &packet)?;
+                interp.rooted(std::slice::from_ref(&argument), |interp| {
+                    interp.collect_garbage();
+                    interp.limits.heap_bytes = interp.heap.bytes + string_bytes(packet.encode_utf16().count()) + 512;
+                    let result = put_xmp(interp, this.clone(), std::slice::from_ref(&argument), false);
+                    assert!(result.is_ok(), "a single pending packet charge fits: {result:?}");
+                    Ok(())
+                })
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn storing_an_open_packet_reuses_its_charged_string() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let packet = string(&mut interp, &"x".repeat(4096)).unwrap();
+        interp
+            .rooted(std::slice::from_ref(&packet), |interp| {
+                let object = interp.heap.alloc_object(Object::new(Class::XmpFile(Box::default()), Some(ids(interp)?.file_proto)));
+                interp.rooted(&[Value::Object(object)], |interp| {
+                    interp.collect_garbage();
+                    interp.limits.heap_bytes = interp.heap.bytes + 512;
+                    set_slot(interp, object, PACKET, packet.clone())
+                })
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn a_failed_serialization_charges_its_escaping_work() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let meta = Meta {
+            props: vec![xmp::Prop {
+                ns: xmp::DC.into(),
+                name: "value".into(),
+                value: xmp::Value::Simple { text: "&".repeat(xmp::MAX_BYTES / 4), uri: false },
+            }],
+            ..Meta::default()
+        };
+        let value = new_meta(&mut interp, meta).unwrap();
+        let object = value.as_object().unwrap();
+        interp
+            .rooted(&[value], |interp| {
+                interp.fuel = 100_000;
+                let result = serialized(interp, object, &Value::Undefined, "serialize");
+                assert!(matches!(result, Err(Abrupt::Throw(_))), "{result:?}");
+                assert!(interp.fuel < 100_000, "failed escaping left its work unpaid");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn indexed_property_reads_copy_only_the_selected_item() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let meta = Meta {
+            props: vec![xmp::Prop {
+                ns: xmp::DC.into(),
+                name: "items".into(),
+                value: xmp::Value::Array { form: Form::Bag, items: vec![Item { text: "text".into(), lang: None }; 1000] },
+            }],
+            ..Meta::default()
+        };
+        let value = new_meta(&mut interp, meta).unwrap();
+        interp
+            .rooted(std::slice::from_ref(&value), |interp| {
+                xmp::ITEM_COPIES.with(|copies| copies.set(0));
+                for index in 1..=1000 {
+                    get_property(interp, value.clone(), &[Value::str(xmp::DC), Value::str(&format!("items[{index}]"))], false).unwrap();
+                }
+                let copies = xmp::ITEM_COPIES.with(|copies| copies.get());
+                assert!(copies <= 1000, "copied {copies} items for 1000 indexed reads");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn appending_array_items_has_linear_accounting_work() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let value = new_meta(&mut interp, Meta::default()).unwrap();
+        let object = value.as_object().unwrap();
+        interp
+            .rooted(&[value], |interp| {
+                xmp::ACCOUNTING_ITEM_VISITS.with(|visits| visits.set(0));
+                for _ in 0..1000 {
+                    insert_item(interp, object, xmp::DC, "items", None, "text".into(), Some(Form::Bag), "append").unwrap();
+                }
+                let visits = xmp::ACCOUNTING_ITEM_VISITS.with(|visits| visits.get());
+                assert!(visits <= 2000, "accounting visited {visits} items for 1000 appends");
+                Ok(())
+            })
+            .unwrap();
+    }
 
     #[test]
     fn parsed_namespaces_fit_with_the_metadata_before_registration() {

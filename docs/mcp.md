@@ -3432,7 +3432,8 @@ rules for these objects:
   the script may not write throws `Script file access denied`; other files open read only with that flag.
   After `putXMP`, `closeFile()` writes the packet in
   UTF-8 through a temporary file in the same folder when the script may write there, otherwise straight to the file;
-  when no temporary name is free, nothing is written. On Unix the replacement keeps the file's permission bits, group
+  when no temporary name is free, nothing is written. The written packet omits a leading XML declaration and retains
+  the following packet bytes. On Unix the replacement keeps the file's permission bits, group
   and (on Linux) access ACL, as a saved document does, and is readable by its owner alone where the group or the ACL
   cannot be kept; on a volume that refuses Unix permissions (SMB, FAT) the update still goes through. The packet is flushed to the disk before the temporary file takes the file's
   name. With `XMPConst.CLOSE_UPDATE_SAFELY`, `closeFile()` writes only
@@ -3449,9 +3450,15 @@ rules for these objects:
   Open readers use that packet, `written` names the file, and the `XMPFile` keeps its pending packet for retry.
 - Registered namespace storage and expanded XML values count toward the script's heap limit.
   `canPutXMP` checks string packets without retaining their expanded XML values.
+  Pending packets count once toward that limit. Library installation checks its members before
+  publishing `ExternalObject`, in both ES5 and ES2015 realms. Serialization consumes fuel even
+  when its escaped output exceeds the packet limit. Packet-info scans and metadata size accounting during edits also consume fuel.
+  The sidecar-write host binding accepts packets up to VectorCraft's 8 MiB packet limit.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
   one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
-  throws; a value is counted as deep as `serialize()` would write it, under `x:xmpmeta`, `rdf:RDF` and
+  throws. Only spaces, tabs, carriage returns and line feeds count as indentation. A qualified name's prefix
+  and local name must each be valid XML names without a colon. Explicit `rdf:about` values must agree, including empty values.
+  A value is counted as deep as `serialize()` would write it, under `x:xmpmeta`, `rdf:RDF` and
   `rdf:Description`. A packet that would be written with more than 1,024 attributes on one element, or more than
   1,024 namespace declarations in scope at one element, throws
   `… the XMP data is too large`, both from `serialize()` and when a packet with such a value is read. Members of the help page that are not built yet (iterators,
