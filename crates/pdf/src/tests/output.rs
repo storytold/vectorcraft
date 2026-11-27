@@ -706,3 +706,61 @@ fn colours_are_in_the_profiles_assigned_to_the_document() {
     assert!(r.warnings.iter().any(|w| w.contains("No Such Press")), "{:?}", r.warnings);
     assert!(icc_streams(&r.bytes) == [cms::icc_bytes(&working).unwrap().to_vec()]);
 }
+
+/// A 4 × 4 greyscale PNG of one level.
+fn grey_png(level: u8) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![level; 16])
+        .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// The CMYK document warning says what happens to its RGB images (#1242): with No conversion
+/// they are written in RGB, and it names the settings that write them in CMYK; with a CMYK
+/// destination they are converted. Grey images stay grey either way and aren't counted.
+#[test]
+fn the_cmyk_document_warning_says_whether_rgb_images_are_converted() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        w.into_iter().next()
+    };
+    let mut d = image_doc(png([200, 30, 30]));
+    d.color_mode = ColorMode::Cmyk;
+
+    // No conversion: the image is written in RGB, and the warning doesn't say otherwise.
+    let kept = warning(&d, json!({})).unwrap();
+    assert!(kept.contains("1 RGB image") && kept.contains("written in RGB"), "{kept}");
+    assert!(!kept.contains("converted to CMYK"), "{kept}");
+    assert!(kept.contains("Convert to destination") && kept.contains("PDF/X-1a"), "{kept}");
+
+    // A CMYK destination converts it.
+    for settings in
+        [json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}}), json!({"standard": "pdfX1a", "compatibility": "1.3"})]
+    {
+        let converted = warning(&d, settings.clone()).unwrap();
+        assert!(converted.contains("1 RGB image") && converted.contains("converted to CMYK"), "{settings}: {converted}");
+        assert!(!converted.contains("written in RGB"), "{settings}: {converted}");
+    }
+
+    // A grey image is not an RGB image: nothing to warn about.
+    let mut grey = image_doc(grey_png(90));
+    grey.color_mode = ColorMode::Cmyk;
+    for settings in [json!({}), json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})] {
+        assert_eq!(warning(&grey, settings.clone()), None, "{settings}");
+    }
+
+    // RGB colours keep their wording beside images kept in RGB.
+    let mut both = image_doc(png([200, 30, 30]));
+    both.color_mode = ColorMode::Cmyk;
+    let l = both.layers[0].id;
+    let n = Node::path(
+        both.alloc_id(),
+        shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::Rgb { r: 0.1, g: 0.1, b: 0.1 }), Paint::None, 0.0),
+    );
+    both.insert(Some(l), 1, n).unwrap();
+    let w = warning(&both, json!({})).unwrap();
+    assert!(w.contains("1 RGB colour") && w.contains("converted to CMYK") && w.contains("rich blacks"), "{w}");
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+}

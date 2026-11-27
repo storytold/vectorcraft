@@ -48,7 +48,7 @@ fn params(boards: &Boards, fields: &DialogFields) -> Vec<Param> {
     let ppi = number(fields, "ppi").unwrap_or(RESOLUTIONS[1]);
     let at = RESOLUTIONS.iter().position(|r| *r == ppi).unwrap_or(1);
     let board = (number(fields, "artboard").unwrap_or(0.0).max(0.0) as usize).min(boards.names.len().saturating_sub(1));
-    let resolutions = RESOLUTIONS.iter().zip(RESOLUTION_LABELS.iter()).map(|(r, label)| (r.to_string(), Label::from(*label))).collect();
+    let resolutions = RESOLUTIONS.iter().zip(RESOLUTION_LABELS.iter()).map(|(r, label)| (r.to_string(), Label::from(tl!(*label)))).collect();
     let mut rows = vec![Param::new("ppi", tl!("Resolution:"), ParamKind::choice(resolutions, Some(RESOLUTIONS[1].to_string())))];
     if boards.names.len() > 1 {
         let names = boards.names.iter().enumerate().map(|(i, name)| (i.to_string(), Label::from(name.clone()))).collect();
@@ -68,7 +68,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.set("transparent", false);
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
         let rows = params(&boards, fields);
-        ParamDialog::new(KIND, tl!("Save for Office Documents"), rows).values(Bind::bound(fields)).ok_label(Label::from("Save…"))
+        ParamDialog::new(KIND, tl!("Save for Office Documents"), rows).values(Bind::bound(fields)).ok_label(Label::from(tl!("Save…")))
     });
     export_host::open(app, Export::Office, false, dialog).ok_or("no window")?;
     Ok(Value::Null)

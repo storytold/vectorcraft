@@ -77,6 +77,15 @@ pub fn specs() -> Vec<CommandSpec> {
             relink
         ),
         cmd!(
+            "links.replaceEmbedded",
+            "Replace Image",
+            [],
+            None,
+            "{ids: [canvas image ids], dataBase64: raster file bytes} replace the images with embedded pixels, keeping their ids and fitting their new aspect ratio inside their old bounds. Distorted images keep their corners. One undo step → {replaced: [ids]}",
+            has_doc,
+            replace_embedded
+        ),
+        cmd!(
             query "links.list",
             "Links",
             [],
@@ -1248,6 +1257,28 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
+/// The browser's Replace Image uses embedded bytes and the same Fit installer as a path-based replacement.
+fn replace_embedded(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "links.replaceEmbedded";
+    let ids = ids_param(p, "ids", C)?.filter(|ids| !ids.is_empty()).ok_or_else(|| bad(C, "give the image ids to replace"))?;
+    let doc = &s.doc()?.doc;
+    let mut seen = BTreeSet::new();
+    for id in &ids {
+        if !seen.insert(*id) {
+            return Err(bad(C, format!("image {} is listed twice", id.0)));
+        }
+        if !doc.node(*id).is_some_and(|node| matches!(node.kind, NodeKind::Image(_))) {
+            return Err(bad(C, format!("object {} is not an image", id.0)));
+        }
+    }
+    let data = text_param(p, "dataBase64", C)?.ok_or_else(|| bad(C, "give dataBase64"))?;
+    let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(C, "bad dataBase64"))?;
+    let mut img = fileio::raster_image(&bytes)?;
+    img.blob = readable_and_kept(img.blob, kept_unread(&bytes), false)?;
+    s.edit("Replace Image", |d, _| install_with(d, &ids, None, img, Some(Preserve::Fit), None, false))?;
+    Ok(json!({ "replaced": ids_json(&ids) }))
+}
+
 /// Distorted image `n` shows the file read for `link` (`img`) and keeps its corners: the new pixels
 /// fill them. Its transform is scaled to the new pixel size, so a reader that places it by the
 /// transform still gives it its old size. Its Placement Options do not apply. The result is what
@@ -1256,13 +1287,19 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
 /// new file (`img.clip`, else the path kept in its stored PNG or TIFF, as Unembed writes it:
 /// [`file_clip`]) are mapped to the page through its corners, anchors and handles alike, as a
 /// distort maps a path's.
-fn refill_distorted(n: &mut Node, old_clip: Option<&FileClip>, link: &LinkInfo, img: &RasterImage, held: Option<(&PathData, FillRule)>) -> ClipTo {
+fn refill_distorted(
+    n: &mut Node,
+    old_clip: Option<&FileClip>,
+    link: Option<&LinkInfo>,
+    img: &RasterImage,
+    held: Option<(&PathData, FillRule)>,
+) -> ClipTo {
     let old = old_clip.filter(|_| held.is_some()).and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
     if let NodeKind::Image(im) = &mut n.kind {
         if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
             im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
         }
-        (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+        (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, link.cloned());
     }
     let file = img.clip.clone().or_else(|| file_clip(&img.blob)).and_then(|(path, rule)| Some((warped(&path, &n.image_map()?)?, rule)));
     placed_clip_to(old.as_ref(), None, file, held)
@@ -1292,8 +1329,8 @@ fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
 /// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
 /// show that content.
-fn install(d: &mut Document, ids: &[NodeId], read: FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
-    install_with(d, ids, read, force, also, false)
+fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
+    install_with(d, ids, Some(&link), img, force, also, false)
 }
 
 /// What Unembed (`unembed`) does with the clip `to` of an image whose clip group holding just it
@@ -1307,11 +1344,13 @@ fn unembed_clip(to: ClipTo, held: bool) -> ClipTo {
     }
 }
 
-/// As [`install`]; with `unembed`, each clip goes through [`unembed_clip`].
+/// Installs raster pixels with their filesystem link, if any. With `unembed`, each clip goes
+/// through [`unembed_clip`].
 fn install_with(
     d: &mut Document,
     ids: &[NodeId],
-    (link, img): FileRead,
+    link: Option<&LinkInfo>,
+    img: RasterImage,
     force: Option<Preserve>,
     also: Option<(&str, &str)>,
     unembed: bool,
@@ -1341,7 +1380,7 @@ fn install_with(
                     NodeKind::Image(im) => old.get(&im.key).and_then(|(_, clip)| clip.clone()),
                     _ => None,
                 };
-                let clip = refill_distorted(&mut n, old_clip.as_ref(), &link, &img, held);
+                let clip = refill_distorted(&mut n, old_clip.as_ref(), link, &img, held);
                 return (n, keep(clip, held.is_some()));
             }
             if let NodeKind::Image(im) = &mut n.kind {
@@ -1353,7 +1392,7 @@ fn install_with(
                 };
                 let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
                 clip = keep(clip_to(im.xf, old_clip, c, &img, xf, held), held.is_some());
-                (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
+                (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, link.cloned());
             }
             (n, clip)
         };
@@ -1367,7 +1406,7 @@ fn install_with(
             };
             let held = clip_path_of(d, *id).map(|(path, rule)| (path.clone(), rule));
             if let Some(n) = d.node_mut(*id) {
-                let clip = refill_distorted(n, old_clip.as_ref(), &link, &img, held.as_ref().map(|(path, rule)| (path, *rule)));
+                let clip = refill_distorted(n, old_clip.as_ref(), link, &img, held.as_ref().map(|(path, rule)| (path, *rule)));
                 clips.push((*id, keep(clip, held.is_some())));
             }
             continue;
@@ -1384,12 +1423,12 @@ fn install_with(
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::Image(im) = &mut n.kind
         {
-            (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
+            (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, link.cloned());
         }
     }
     // A DCS file's spot plates print on spot swatches of their inks.
     super::place::dcs::add_spot_swatches(d, &img.blob.spot_plates());
-    store_image(d, &img.key, img.blob, true);
+    store_image(d, &img.key, img.blob, link.is_some());
     clips.into_iter().try_for_each(|(id, clip)| match clip {
         ClipTo::Keep => Ok(()),
         ClipTo::Path(path) => clip_image_to(d, id, path),
@@ -2881,9 +2920,9 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     // Read before writing: pixels that can't be read leave no file behind.
     let img = linked_image(&bytes, Some(&path))?;
     write_file(&path, &bytes)?;
-    let read = (link_info(&path, &bytes), img);
+    let link = link_info(&path, &bytes);
     drop(doc);
-    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install_with(d, &[id], read, Some(Preserve::Bounds), None, true)))?;
+    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install_with(d, &[id], Some(&link), img, Some(Preserve::Bounds), None, true)))?;
     Ok(json!({ "id": id.0, "path": path }))
 }
 
@@ -2950,7 +2989,9 @@ fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Re
     drop(doc);
     let done: Vec<Value> = reads.iter().map(|(id, (l, _))| json!({ "id": id.0, "path": l.path })).collect();
     let edited = s.edit("Unembed", |d, _| {
-        editing_brush_art(d, |d| reads.into_iter().try_for_each(|(id, read)| install_with(d, &[id], read, Some(Preserve::Bounds), None, true)))
+        editing_brush_art(d, |d| {
+            reads.into_iter().try_for_each(|(id, (link, img))| install_with(d, &[id], Some(&link), img, Some(Preserve::Bounds), None, true))
+        })
     });
     if let Err(e) = edited {
         remove_written(&written);

@@ -308,9 +308,23 @@ fn export_preferences(app: &mut VectorcraftApp) {
 fn import_preferences(app: &mut VectorcraftApp) {
     let request = PickRequest::open("preferences").filter("Preferences", &["json"]);
     file_asks::ask(app, request, Owner::Free, |app, picked| {
-        let Picked::Paths(paths) = picked else { return Ok(Value::Null) };
-        let Some(path) = paths.first() else { return Ok(Value::Null) };
-        match app.run("prefs.import", json!({ "path": path.to_string_lossy() })) {
+        let params = match picked {
+            Picked::Paths(paths) => {
+                let Some(path) = paths.first() else { return Ok(Value::Null) };
+                json!({ "path": path.to_string_lossy() })
+            }
+            Picked::Contents(files) => {
+                let Some((_, bytes)) = files.into_iter().next() else { return Ok(Value::Null) };
+                // Match prefs.import's file cap before allocating its JSON text parameter.
+                if bytes.len() > 1 << 20 {
+                    return Err("The preferences file is larger than 1 MB".into());
+                }
+                let data = String::from_utf8(bytes).map_err(|_| "The preferences file is not valid UTF-8")?;
+                json!({ "data": data })
+            }
+            _ => return Ok(Value::Null),
+        };
+        match app.run("prefs.import", params) {
             Ok(_) => app.status("Preferences imported."),
             Err(e) => app.status(e),
         }
