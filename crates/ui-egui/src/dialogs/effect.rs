@@ -360,25 +360,30 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
         if warp_new { dialog.remember(WARP_KEY).remember_for(Lifetime::Run) } else { dialog }
     });
     let cancelled = Arc::clone(&open.opening);
+    let confirmed = Arc::clone(&open.opening);
     let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(move |app| {
-        if app.effect_dialogs.effect.as_ref().is_some_and(|open| Arc::ptr_eq(&cancelled, &open.opening))
-            && let Some(open) = app.effect_dialogs.effect.take()
-        {
+        if let Some(open) = take_opening(app, &cancelled) {
             open.cancel_preview(app);
         }
     });
     let options = HeldOptions { cancel: Some(cancel), ..Default::default() };
-    let dialog_id = open_held_with(app, dialog, move |app, result| finish(app, &ctx, result), options).ok_or("no window")?;
+    let dialog_id = open_held_with(app, dialog, move |app, result| finish(app, &ctx, &confirmed, result), options).ok_or("no window")?;
     open.id = dialog_id;
     open.asking = false;
     app.effect_dialogs.effect = Some(open);
     Ok(Value::Null)
 }
 
+/// Take the current effect only when it is the opening that registered the callback.
+fn take_opening(app: &mut VectorcraftApp, opening: &Arc<()>) -> Option<Open> {
+    app.effect_dialogs.effect.as_ref().filter(|open| Arc::ptr_eq(opening, &open.opening))?;
+    app.effect_dialogs.effect.take()
+}
+
 /// What OK runs: the command keeps the preview as one undo step. An `Err` keeps the dialog open
 /// with the reason, and the record with a fresh preview.
-fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
-    let Some(mut open) = app.effect_dialogs.effect.take() else { return Ok(()) };
+fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, opening: &Arc<()>, result: &ParamResult) -> Result<(), String> {
+    let Some(mut open) = take_opening(app, opening) else { return Ok(()) };
     if let Err(why) = open.check_source(app) {
         app.effect_dialogs.effect = Some(open);
         return Err(why);
@@ -1030,6 +1035,50 @@ mod tests {
     fn effect_frame(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().unwrap();
         super::super::host::pump(app, &ctx);
+    }
+
+    #[test]
+    fn old_effect_approval_does_not_answer_a_new_edit_or_add_question() {
+        let mut app = app();
+        let first = rect(&mut app, 10);
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let second = rect(&mut app, 80);
+        app.run("effect.apply", json!({"ids": [second], "effect": "distort.roughen", "params": {"size": 19, "detail": 8}})).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+
+        app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+        set(&mut app, "size", json!(16.0));
+        let old_id = id(&app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, old_id)));
+        assert_eq!(host.with(|h| h.held_state(old_id)), Some(craft::ui::dialog::HeldOk::Waiting));
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let undo = steps(&app);
+        assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
+        let question = id(&app);
+        assert_ne!(question, old_id);
+        effect_frame(&mut app);
+        assert_eq!(app.session.active().unwrap().doc, before, "old approval leaves the second drawing intact");
+        assert_eq!(steps(&app), undo);
+        let current = app.effect_dialogs.effect.as_ref().expect("the new question still has its opening");
+        assert_eq!(current.id, question);
+        assert!(current.asking);
+
+        host.with(|h| {
+            h.set_json_field(&ctx, question, "choice", json!("proceed")).unwrap();
+            assert!(h.confirm_by_id(&ctx, question));
+        });
+        effect_frame(&mut app);
+        set(&mut app, "size", json!(28.0));
+        ok(&mut app);
+        assert_eq!(params(&app, second)["size"], 28.0);
+        assert_eq!(steps(&app), undo + 1);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(first)).unwrap().appearance.effects.is_empty());
     }
 
     #[test]
