@@ -14119,6 +14119,8 @@ the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the 
 `paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
 name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field
 changed records no undo step, and Preview updates the paragraphs while the dialog is open (Cancel restores them).
+The dialog previews and saves changes only in the document where it opened. If another edit is active in
+that document, preview pauses and OK reports an error until that edit ends. Cancel rolls back only the dialog's own preview.
 The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `tabs`, `composition`, `hyphenation`,
 `justification` or `eastAsian`) and `preview`, and these fields:
 
