@@ -488,9 +488,9 @@ impl Renderer {
         // A placed document whose effects make no art of their own (raster effects and color
         // adjustments, which Outline mode does not draw) shows its box crossed as without effects
         // ([`Self::draw_placed`]). Effects that change geometry (plug-in effects among them,
-        // [`effects::is_geometry`]), 3D and Pathfinder make art from
-        // the file's art, which is drawn; Crop Marks and Vector Halftone draw the placed document
-        // itself among their art.
+        // [`effects::is_geometry`]), 3D and Pathfinder make art from the crossed box, which the
+        // frame gives as the placed document's art ([`Self::cross_placed`]), and that art is drawn;
+        // Crop Marks and Vector Halftone draw the placed document itself among their art.
         if let NodeKind::PlacedDocument(p) = &a.kind
             && self.crosses_placed(f)
             && !effects::has_geometry(&a.appearance.effects)
