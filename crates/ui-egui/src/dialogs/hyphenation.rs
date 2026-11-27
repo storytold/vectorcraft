@@ -43,7 +43,29 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 
 /// Open Hyphenation on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    crate::panels::character::text_style(app).ok_or("select some type first")?;
+    use crate::panels::character;
+
+    character::text_style(app).ok_or("select some type first")?;
+    let source = app.session.active().ok_or("no document open")?;
+    let document = source.uid;
+    let mut target = Map::new();
+    let mut story_focus = None;
+    let ids = if let Some((id, start, end)) = character::text_editing(app) {
+        if let Some(story) = character::text_story(app) {
+            story_focus = Some(id);
+            story
+        } else {
+            target.insert("start".into(), json!(start));
+            target.insert("end".into(), json!(end));
+            vec![id]
+        }
+    } else {
+        character::selected_stories(app)
+    };
+    if ids.is_empty() || source.selection.symbol_part.is_some() {
+        return Err("select some type first".into());
+    }
+    target.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
     let mut fields = DialogFields::new();
     set_shared(&mut fields, FLAGS[0], crate::panels::paragraph::shared_hyphenate(app));
     set_shared(&mut fields, FLAGS[1], crate::panels::paragraph::shared_hyphenation_field(app, |h| h.capitalized));
@@ -57,11 +79,20 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let lengths = crate::canvas::rulers::general_lengths(app);
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Hyphenation"), rows(lengths)));
     super::host::open_held(app, dialog, move |app, result| {
-        let p = params(&result.fields, &initial);
+        let mut p = params(&result.fields, &initial);
         if p.is_empty() {
             return Ok(());
         }
-        crate::panels::paragraph::run_on_paragraphs(app, "text.setFormat", Value::Object(p)).map(|_| ())
+        if app.session.active().is_none_or(|st| st.uid != document) {
+            return Err(tl!("This dialog was opened in a different document.").to_owned());
+        }
+        character::text_editing_kept(app)?;
+        p.extend(target.clone());
+        if let Some(id) = story_focus {
+            let story = app.session.active().ok_or("no document open")?.doc.story_of(id);
+            p.insert("ids".into(), json!(story.iter().map(|id| id.0).collect::<Vec<_>>()));
+        }
+        app.run("text.setFormat", Value::Object(p)).map(|_| ())
     })
     .ok_or("no window")?;
     Ok(Value::Null)
@@ -155,5 +186,53 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.hyphenation", json!({})).is_err());
         assert!(!driver::is_open(&app));
+    }
+
+    #[test]
+    fn hyphenation_confirm_keeps_the_opening_selection() {
+        let (mut app, first) = app();
+        let second = app.run("text.create", json!({"x": 10, "y": 150, "text": "Other text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        driver::ok(&mut app);
+        assert_eq!((paras(&app, first).0.hyphenate, paras(&app, second).0.hyphenate), (true, false));
+    }
+
+    #[test]
+    fn hyphenation_confirm_keeps_the_opening_caret_paragraph() {
+        let (mut app, id) = app();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let caret = |at| json!({"editing": id, "anchor": at, "caret": at});
+        app.session.set_tool_option("textSelection", &caret(0));
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.session.set_tool_option("textSelection", &caret(5));
+        driver::ok(&mut app);
+        let (first, second) = paras(&app, id);
+        assert_eq!((first.hyphenate, second.hyphenate), (true, false));
+    }
+
+    #[test]
+    fn hyphenation_confirm_leaves_the_other_drawing_unchanged() {
+        let (mut app, id) = app();
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let second = app.run("text.create", json!({"x": 10, "y": 10, "text": "Other drawing"})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(id, second, "local text IDs may match between drawings");
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        driver::ok(&mut app);
+        assert!(!paras(&app, second).0.hyphenate);
+        assert!(driver::is_open(&app));
+        assert_eq!(driver::fields(&app).bool("hyphenate"), Some(true));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        driver::ok(&mut app);
+        assert!(!driver::is_open(&app));
+        assert!(paras(&app, id).0.hyphenate);
     }
 }
