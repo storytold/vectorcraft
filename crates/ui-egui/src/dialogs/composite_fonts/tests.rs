@@ -575,3 +575,33 @@ fn custom_character_sets_draw_their_characters_and_the_buttons() {
         assert!(p.shows(name), "{name} is drawn");
     }
 }
+
+#[test]
+fn composite_fonts_approval_does_not_replace_definitions_restored_by_revert() {
+    let mut app = app();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Saved Font".into()));
+    ok(&mut app).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("composite-fonts-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Unsaved Font".into()));
+    ok(&mut app).unwrap();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Stale Draft Font".into()));
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored_step = steps(&app);
+    assert_eq!(names(&app), ["Saved Font"]);
+    assert_eq!(ok(&mut app), Err("The document was reverted. Reopen this dialog to continue.".into()));
+    assert_eq!(names(&app), ["Saved Font"]);
+    assert_eq!(steps(&app), restored_step);
+
+    cancel(&mut app);
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Fresh Font".into()));
+    ok(&mut app).unwrap();
+    assert_eq!(names(&app), ["Saved Font", "Fresh Font"]);
+}
