@@ -773,8 +773,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units, &mut info_copy);
                 }
                 let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
-                let actions = std::iter::once(info)
-                    .chain(FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))));
+                let actions = std::iter::once(info).chain(
+                    FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))),
+                );
                 footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
             });
         })
