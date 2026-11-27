@@ -32,7 +32,7 @@ use std::sync::Arc;
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_doc::live::{
     EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
-    envelope_content_boxes_with, envelope_stroke_margin,
+    envelope_content_boxes_with, envelope_margin_lengths, envelope_stroke_margin,
 };
 use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
@@ -133,7 +133,7 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
 /// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
 /// nearer them than its geometric bounds. The saved size is in art space, and `scale` takes it to the
 /// contents' space (a Large Canvas copy read at its declared scale). None without that size, or for
-/// contents with no width or no height.
+/// contents with neither a width nor a height.
 fn saved_margin(o: &Obj, content: &[Arc<Node>], scale: f64) -> Option<[f32; 4]> {
     let saved = |key: &str| match o.nums(key).as_slice() {
         [v] if v.is_finite() => Some(*v * scale).filter(|v| v.is_finite()),
@@ -268,7 +268,7 @@ fn painted_margin(painted: Rect, plain: Rect) -> Option<[f32; 4]> {
 /// Do bounds margins `a` and `b` give contents with geometric box `plain` the same box, each side
 /// within [`PAINTED_SLACK`]?
 fn same_box(a: [f32; 4], b: [f32; 4], plain: Rect) -> bool {
-    let sizes = [plain.height(), plain.height(), plain.width(), plain.width()];
+    let Some(sizes) = envelope_margin_lengths(plain) else { return a == b };
     a.iter().zip(b).zip(sizes).all(|((a, b), size)| (f64::from(*a) - f64::from(b)).abs() * size <= PAINTED_SLACK)
 }
 
