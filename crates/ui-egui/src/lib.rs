@@ -319,7 +319,7 @@ pub struct VectorcraftApp {
     /// The Justification dialog, while it is open.
     pub(crate) justification: Option<dialogs::justification::Open>,
     /// The Bullets and Numbering dialog's live preview.
-    pub(crate) bullets_preview: dialogs::preview::LivePreview,
+    pub(crate) bullets_preview: Option<dialogs::bullets_numbering::Preview>,
     /// The paste that waits for the answer to its colour profile question.
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.
