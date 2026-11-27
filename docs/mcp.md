@@ -3458,6 +3458,8 @@ rules for these objects:
   one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
   throws. Only spaces, tabs, carriage returns and line feeds count as indentation. A qualified name's prefix
   and local name must each be valid XML names without a colon. Explicit `rdf:about` values must agree, including empty values.
+  A nonempty `xml:lang` on an `rdf:Description` or inherited from its ancestors is not available yet and throws instead of discarding the language.
+  An empty `xml:lang` on that description clears an inherited language. Explicit property-level language qualifiers are retained.
   A value is counted as deep as `serialize()` would write it, under `x:xmpmeta`, `rdf:RDF` and
   `rdf:Description`. A packet that would be written with more than 1,024 attributes on one element, or more than
   1,024 namespace declarations in scope at one element, throws

@@ -48,6 +48,20 @@ const PACKET: &str = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <?xpacket end="w"?>"#;
 
 #[test]
+fn inherited_description_language_is_not_silently_discarded() {
+    let packet = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xml:lang="en" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Hello</dc:title></rdf:Description></rdf:RDF>"#;
+    assert!(matches!(xmp::parse(packet, &mut Registry::default()), Err(XmpError::NotYet)));
+    let outer = packet.replace("xml:lang=\"en\"", "").replace("<rdf:RDF ", "<rdf:RDF xml:lang=\"en\" ");
+    assert!(matches!(xmp::parse(&outer, &mut Registry::default()), Err(XmpError::NotYet)));
+    let reset = outer.replace("<rdf:Description ", "<rdf:Description xml:lang=\"\" ");
+    assert!(xmp::parse(&reset, &mut Registry::default()).is_ok());
+    let explicit = packet.replace("xml:lang=\"en\"", "").replace("<dc:title>", "<dc:title xml:lang=\"en\">");
+    let mut registry = Registry::default();
+    let meta = xmp::parse(&explicit, &mut registry).unwrap();
+    assert!(xmp::serialize(&meta, &registry, false).unwrap().contains("xml:lang=\"en\""));
+}
+
+#[test]
 fn rdf_qualified_names_validate_both_parts() {
     let packet = PACKET.replace("ex:a>", "ex:a:b>");
     assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));

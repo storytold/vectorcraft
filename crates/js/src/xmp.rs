@@ -110,7 +110,7 @@ pub(crate) enum XmpError {
     BadName,
     /// Text with a character XML does not allow.
     BadText,
-    /// A path form not read yet: a structure field, a qualifier or a selector.
+    /// An unsupported packet language, structure field, qualifier or selector form.
     NotYet,
     /// The metadata a packet gives is larger than the budget [`parse_within`] was given.
     Heap,
@@ -500,19 +500,24 @@ fn attrs(el: &El) -> Vec<(&str, &str)> {
 }
 
 /// The `rdf:RDF` element at or below `el`, with `scope` holding the bindings in scope there.
-fn find_rdf<'a>(el: &'a El, scope: &mut Scope) -> Option<&'a El> {
+fn find_rdf<'a>(el: &'a El, scope: &mut Scope, language: Option<&'a str>) -> Option<(&'a El, Option<&'a str>)> {
     let mark = scope.len();
     push_decls(el, scope);
+    let language = inherited_language(el, scope, language);
     if is_named(&el.name, scope, true, RDF, "RDF") {
-        return Some(el);
+        return Some((el, language));
     }
     for c in el.elements() {
-        if let Some(found) = find_rdf(c, scope) {
+        if let Some(found) = find_rdf(c, scope, language) {
             return Some(found);
         }
     }
     scope.truncate(mark);
     None
+}
+
+fn inherited_language<'a>(el: &'a El, scope: &Scope, language: Option<&'a str>) -> Option<&'a str> {
+    attrs(el).into_iter().find(|(name, _)| is_named(name, scope, false, XML, "lang")).map(|(_, value)| value).or(language)
 }
 
 /// Tests: reads the packet `text` with no budget ([`parse_within`]).
@@ -601,7 +606,7 @@ fn parse_into(text: &str, registry: &mut Registry, budget: usize, retain_fragmen
         return Err(XmpError::Malformed);
     }
     let mut scope = Scope::new();
-    let rdf = find_rdf(&root, &mut scope).ok_or(XmpError::Malformed)?;
+    let (rdf, language) = find_rdf(&root, &mut scope, None).ok_or(XmpError::Malformed)?;
     let mut explicit_subject = None;
     // Text beside the descriptions or their properties is not RDF.
     if rdf.children.iter().any(is_stray_text) {
@@ -613,6 +618,9 @@ fn parse_into(text: &str, registry: &mut Registry, budget: usize, retain_fragmen
         push_decls(d, &mut scope);
         if !is_named(&d.name, &scope, true, RDF, "Description") || d.children.iter().any(is_stray_text) {
             return Err(XmpError::Malformed);
+        }
+        if inherited_language(d, &scope, language).is_some_and(|language| !language.is_empty()) {
+            return Err(XmpError::NotYet);
         }
         for (k, v) in attrs(d) {
             let Some((ns, local)) = resolve(k, &scope, false) else { return Err(XmpError::Malformed) };
