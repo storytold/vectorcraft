@@ -166,24 +166,29 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
             _ => spans.push((run, start, end)),
         }
     };
-    // Per run: is its family missing, and the face its glyphs should come from.
+    // Per run: is its family missing, and the face its glyphs should come from. A run drawn in a
+    // font its file carried isn't substituted: its glyphs come from that font.
+    let file = db.file_faces(t);
     let faces: Vec<(bool, Option<u32>)> = t
         .runs
         .iter()
-        .map(|r| match db.resolve(&r.style.font_family, &r.style.font_style) {
+        .enumerate()
+        .map(|(i, r)| match (file.get(i).and_then(Option::as_ref), db.resolve(&r.style.font_family, &r.style.font_style)) {
+            (Some(f), _) => (false, Some(f.id())),
             // The version the type names, when it's installed (see `FontDb::face_version`), at its
             // Variable Font settings (see `FontDb::style_face`).
-            Some((f, m)) => {
+            (None, Some((f, m))) => {
                 let face = db.style_face(&r.style).unwrap_or(f);
                 (m == vectorcraft_text::FontMatch::Missing, Some(face.id()))
             }
-            None => (true, None),
+            (None, None) => (true, None),
         })
         .collect();
     let (mut substituted_fonts, mut substituted_glyphs, mut alternate_candidates) = (BezPath::new(), BezPath::new(), vec![]);
     let plain = t.plain_text();
     let (mut images, mut colours) = (vec![], vec![]);
-    for g in &layout.glyphs {
+    // Glyphs before the start of an open path draw nothing and have no highlight cells.
+    for g in layout.glyphs.iter().filter(|g| !g.off_path) {
         push(&mut all, g.run, &g.outline);
         if let Some((image, xf)) = g.placed_image() {
             images.push((g.run, image.clone(), xf));
@@ -191,7 +196,14 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
         if let Some(art) = g.placed_colour(Affine::IDENTITY) {
             colours.push((g.run, Arc::new(art)));
         }
-        let Some(&(missing, face)) = faces.get(g.run) else { continue };
+        let Some(&(mut missing, mut face)) = faces.get(g.run) else { continue };
+        // Type in a composite font: each character's face is its class's part's.
+        if let Some(r) = t.runs.get(g.run)
+            && let Some(c) = plain.get(g.byte..).and_then(|s| s.chars().next())
+            && let Some((m, f)) = db.composite_face(&r.style.font_family, c)
+        {
+            (missing, face) = (m, Some(f));
+        }
         let Some(line) = layout.lines.get(g.line) else { continue };
         let mut cell = Rect::new(g.origin.x, g.origin.y - line.ascent, g.origin.x + g.advance, g.origin.y + line.descent).to_path(0.1);
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));

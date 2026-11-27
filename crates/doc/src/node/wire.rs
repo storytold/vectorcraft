@@ -45,15 +45,22 @@ impl Serialize for Node {
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
             e.dimension.is_none(),
+            e.flare.is_none(),
             e.intertwine.is_none(),
             e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
             e.objects_on_path.is_none(),
             e.colorize.is_none(),
+            is_default(&e.colorize_overprint),
             is_default(&e.compound_shape),
             is_default(&e.shape_mode),
             e.symbol_overrides.is_empty(),
             e.envelope_edit_margin.is_none(),
+            is_default(&e.pixel_aligned),
+            e.color_mask.is_none(),
+            is_default(&e.warp_piece),
+            is_default(&e.clip_pieces),
+            e.image_quad.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -87,15 +94,22 @@ impl Serialize for Node {
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
+        field!("flare", &e.flare);
         field!("intertwine", &e.intertwine);
         field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
         field!("objects_on_path", &e.objects_on_path);
         field!("colorize", &e.colorize);
+        field!("colorize_overprint", &e.colorize_overprint);
         field!("compound_shape", &e.compound_shape);
         field!("shape_mode", &e.shape_mode);
         field!("symbol_overrides", &e.symbol_overrides);
         field!("envelope_edit_margin", &e.envelope_edit_margin);
+        field!("pixel_aligned", &e.pixel_aligned);
+        field!("color_mask", &e.color_mask);
+        field!("warp_piece", &e.warp_piece);
+        field!("clip_pieces", &e.clip_pieces);
+        field!("image_quad", &e.image_quad);
         st.end()
     }
 }
@@ -143,9 +157,10 @@ fn count_one<E: serde::de::Error>() -> Result<(), E> {
 }
 
 /// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
-/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
-/// file of repeated empty items stays small while they take memory once read.
-fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+/// overrides, a document's saved ruler guides), each item counting against [`with_node_budget`]
+/// as an object does: a compressed file of repeated empty items stays small while they take
+/// memory once read.
+pub(crate) fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
     struct Items<T>(std::marker::PhantomData<T>);
     impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
         type Value = Vec<T>;
@@ -219,6 +234,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
+    flare: Option<Box<crate::flare::FlareSpec>>,
+    #[serde(default)]
     intertwine: Option<Box<PathData>>,
     #[serde(default, deserialize_with = "counted_list")]
     intertwine_tiers: Vec<PathData>,
@@ -229,6 +246,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     colorize: Option<Box<vectorcraft_color::Paint>>,
     #[serde(default)]
+    colorize_overprint: bool,
+    #[serde(default)]
     compound_shape: bool,
     #[serde(default)]
     shape_mode: crate::ShapeMode,
@@ -236,10 +255,212 @@ pub(super) struct NodeWire {
     symbol_overrides: Vec<crate::SymbolOverride>,
     #[serde(default)]
     envelope_edit_margin: Option<[f32; 4]>,
+    #[serde(default)]
+    pixel_aligned: bool,
+    #[serde(default)]
+    color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    #[serde(default)]
+    warp_piece: bool,
+    #[serde(default)]
+    clip_pieces: bool,
+    #[serde(default, deserialize_with = "image_corners")]
+    image_quad: Option<Box<[vectorcraft_geom::Point; 4]>>,
+}
+
+/// A distorted image's corners as a file holds them: a list of exactly four points, else none (the
+/// image is then placed by its transform). A point is `[x, y]` or `{"x": x, "y": y}`. A value that
+/// is not a list, or a list with an entry that is not a point, is none too. Values that are not
+/// taken are skipped as they are read, without being kept in memory, and at most four entries of a
+/// longer list are decoded.
+fn image_corners<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Box<[vectorcraft_geom::Point; 4]>>, D::Error> {
+    use serde::de::{Deserializer, Error, IgnoredAny, MapAccess, SeqAccess, Visitor};
+    use std::fmt::{Formatter, Result as FmtResult};
+    use vectorcraft_geom::Point;
+
+    /// Skips the rest of a list; true when it held another entry.
+    fn rest_of_list<'de, A: SeqAccess<'de>>(mut seq: A) -> Result<bool, A::Error> {
+        let mut more = false;
+        while seq.next_element::<IgnoredAny>()?.is_some() {
+            more = true;
+        }
+        Ok(more)
+    }
+    fn rest_of_map<'de, A: MapAccess<'de>>(mut map: A) -> Result<(), A::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(())
+    }
+    // The visitors below give none for a value of a kind they do not take.
+    macro_rules! none_for {
+        (scalars) => {
+            fn visit_bool<E: Error>(self, _: bool) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_str<E: Error>(self, _: &str) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+        };
+        (numbers) => {
+            fn visit_i64<E: Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_u64<E: Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+            fn visit_f64<E: Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(None)
+            }
+        };
+        (maps $de:lifetime) => {
+            fn visit_map<A: MapAccess<$de>>(self, map: A) -> Result<Self::Value, A::Error> {
+                rest_of_map(map)?;
+                Ok(None)
+            }
+        };
+    }
+
+    /// A coordinate: a number, else none.
+    struct Coord(Option<f64>);
+    impl<'de> serde::Deserialize<'de> for Coord {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> Visitor<'de> for V {
+                type Value = Option<f64>;
+                fn expecting(&self, f: &mut Formatter) -> FmtResult {
+                    f.write_str("a number")
+                }
+                fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
+                    Ok(Some(v as f64))
+                }
+                fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
+                    Ok(Some(v as f64))
+                }
+                fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
+                    Ok(Some(v))
+                }
+                fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Self::Value, A::Error> {
+                    rest_of_list(seq)?;
+                    Ok(None)
+                }
+                none_for!(scalars);
+                none_for!(maps 'de);
+            }
+            d.deserialize_any(V).map(Coord)
+        }
+    }
+
+    /// The name of a point's field.
+    enum Key {
+        X,
+        Y,
+        Other,
+    }
+    impl<'de> serde::Deserialize<'de> for Key {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            struct V;
+            impl Visitor<'_> for V {
+                type Value = Key;
+                fn expecting(&self, f: &mut Formatter) -> FmtResult {
+                    f.write_str("a field name")
+                }
+                fn visit_str<E: Error>(self, v: &str) -> Result<Key, E> {
+                    Ok(match v {
+                        "x" => Key::X,
+                        "y" => Key::Y,
+                        _ => Key::Other,
+                    })
+                }
+            }
+            d.deserialize_identifier(V)
+        }
+    }
+
+    /// One entry of the list: a point, else none.
+    struct Corner(Option<Point>);
+    impl<'de> serde::Deserialize<'de> for Corner {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> Visitor<'de> for V {
+                type Value = Option<Point>;
+                fn expecting(&self, f: &mut Formatter) -> FmtResult {
+                    f.write_str("a point")
+                }
+                fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                    let x = seq.next_element::<Coord>()?.and_then(|c| c.0);
+                    let y = match x {
+                        Some(_) => seq.next_element::<Coord>()?.and_then(|c| c.0),
+                        None => None,
+                    };
+                    let more = rest_of_list(seq)?;
+                    Ok(x.zip(y).filter(|_| !more).map(|(x, y)| Point::new(x, y)))
+                }
+                fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                    let (mut x, mut y, mut bad) = (None, None, false);
+                    while let Some(key) = map.next_key::<Key>()? {
+                        let slot = match key {
+                            Key::X => &mut x,
+                            Key::Y => &mut y,
+                            Key::Other => {
+                                map.next_value::<IgnoredAny>()?;
+                                continue;
+                            }
+                        };
+                        let v = map.next_value::<Coord>()?.0;
+                        // A repeated or non-numeric coordinate makes the entry no point.
+                        bad |= slot.is_some() || v.is_none();
+                        *slot = slot.or(v);
+                    }
+                    Ok(x.zip(y).filter(|_| !bad).map(|(x, y)| Point::new(x, y)))
+                }
+                none_for!(scalars);
+                none_for!(numbers);
+            }
+            d.deserialize_any(V).map(Corner)
+        }
+    }
+
+    struct Corners;
+    impl<'de> Visitor<'de> for Corners {
+        type Value = Option<Box<[Point; 4]>>;
+        fn expecting(&self, f: &mut Formatter) -> FmtResult {
+            f.write_str("a list of points")
+        }
+        fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            d.deserialize_any(Corners)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut points = Vec::with_capacity(4);
+            let mut malformed = false;
+            while points.len() < 4 && !malformed {
+                match seq.next_element::<Corner>()? {
+                    Some(Corner(Some(p))) => points.push(p),
+                    Some(Corner(None)) => malformed = true,
+                    None => break,
+                }
+            }
+            // A malformed or fifth entry drops the field, so the rest is skipped without decoding it.
+            let extra = rest_of_list(seq)?;
+            Ok(if extra || malformed { None } else { <[Point; 4]>::try_from(points).ok().map(Box::new) })
+        }
+        none_for!(scalars);
+        none_for!(numbers);
+        none_for!(maps 'de);
+    }
+    d.deserialize_option(Corners)
 }
 
 impl From<NodeWire> for Node {
     fn from(w: NodeWire) -> Self {
+        // Corners an image cannot take are dropped, so a later transform cannot make them its own.
+        let image_quad = match &w.kind {
+            NodeKind::Image(im) => w.image_quad.filter(|q| crate::image_quad::check_for(im, q).is_ok()),
+            _ => None,
+        };
         let extras = NodeExtras {
             mask: w.mask,
             trace: w.trace,
@@ -254,15 +475,22 @@ impl From<NodeWire> for Node {
             slice: w.slice,
             perspective: w.perspective,
             dimension: w.dimension,
+            flare: w.flare,
             intertwine: w.intertwine,
             intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
             objects_on_path: w.objects_on_path,
             colorize: w.colorize,
+            colorize_overprint: w.colorize_overprint,
             compound_shape: w.compound_shape,
             shape_mode: w.shape_mode,
             symbol_overrides: w.symbol_overrides,
             envelope_edit_margin: w.envelope_edit_margin,
+            pixel_aligned: w.pixel_aligned,
+            color_mask: w.color_mask,
+            warp_piece: w.warp_piece,
+            clip_pieces: w.clip_pieces,
+            image_quad,
         };
         Node {
             id: w.id,

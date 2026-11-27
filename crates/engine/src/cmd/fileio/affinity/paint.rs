@@ -188,17 +188,24 @@ impl Builder {
                 let kind = match g.kind {
                     AfKind::Linear => GradientKind::Linear,
                     AfKind::Radial => GradientKind::Radial,
-                    AfKind::Conical => {
-                        self.warn("conical gradients import as radial gradients");
-                        GradientKind::Radial
-                    }
+                    AfKind::Conical => GradientKind::Conic,
                 };
                 let (u, v): (Vec2, Vec2) = (x - o, y - o);
-                if kind == GradientKind::Radial && u.hypot() > 0.0 && (u.dot(v) / (u.hypot() * v.hypot().max(1e-12))).abs() > 0.01 {
+                if kind.is_centered() && u.hypot() > 0.0 && (u.dot(v) / (u.hypot() * v.hypot().max(1e-12))).abs() > 0.01 {
                     self.warn("skewed elliptical gradients import as upright ellipses");
                 }
                 let aspect = if u.hypot() > 0.0 { (v.hypot() / u.hypot()).clamp(0.01, 100.0) } else { 1.0 };
-                let geom = GradientGeom { start: o, end: x, aspect: if kind == GradientKind::Radial { aspect } else { 1.0 }, focal: None };
+                let geom = match kind {
+                    // A conic sweeps from unit +x towards unit +y: its unit frame carried onto the
+                    // page as a transform carries it (mirrored when the transform is a reflection).
+                    GradientKind::Conic => {
+                        let mut geom = GradientGeom { start: Point::ZERO, end: Point::new(1.0, 0.0), aspect: 1.0, focal: None };
+                        geom.transform(m, GradientKind::Conic);
+                        geom
+                    }
+                    GradientKind::Radial => GradientGeom { start: o, end: x, aspect, focal: None },
+                    _ => GradientGeom { start: o, end: x, aspect: 1.0, focal: None },
+                };
                 let mut gp = GradientPaint::new(Gradient::new(kind, stops));
                 gp.angle = (-(u.y)).atan2(u.x).to_degrees();
                 gp.geom = Some(geom);

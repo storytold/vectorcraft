@@ -147,3 +147,37 @@ fn show_all_hidden_attributes() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(node(&s, id).appearance.has_hidden());
 }
+
+/// A Warp applied now takes its style's Bézier net (`version` 1) unless a map is given, an edit
+/// keeps the map the effect has (one saved before the version existed keeps the earlier map), and
+/// a map this build doesn't draw is refused.
+#[test]
+fn warps_keep_the_map_their_version_names() {
+    let (mut s, id) = session_with_rect();
+    let version = |s: &Session| node(s, id).appearance.effects[0].params.get("version").cloned();
+    run(&mut s, "effect.apply", json!({"effect": "warp.flag", "params": {"bend": 40}}));
+    assert_eq!(version(&s), Some(json!(vectorcraft_doc::live::WARP_NET)));
+    run(&mut s, "effect.setParams", json!({"index": 0, "params": {"bend": 20}, "warpStyle": "arc"}));
+    assert_eq!(version(&s), Some(json!(vectorcraft_doc::live::WARP_NET)));
+    // As a file saved before the version existed gives it.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(Value::Object(p)) = doc.node_mut(id).and_then(|n| n.appearance.effects.first_mut()).map(|e| &mut e.params) {
+        p.remove("version");
+    }
+    run(&mut s, "effect.setParams", json!({"index": 0, "params": {"bend": 10, "horizontal": 20}}));
+    assert_eq!(version(&s), None);
+    run(&mut s, "effect.setParams", json!({"index": 0, "params": {"version": 1}}));
+    assert_eq!(version(&s), Some(json!(1)));
+    run(&mut s, "effect.apply", json!({"effect": "warp.arc", "params": {"version": 0}}));
+    assert_eq!(node(&s, id).appearance.effects[1].params["version"], json!(0));
+    // A whole number given as a float is that version.
+    run(&mut s, "effect.setParams", json!({"index": 1, "params": {"version": 1.0}}));
+    assert_eq!(node(&s, id).appearance.effects[1].params["version"], json!(1));
+    run(&mut s, "effect.setParams", json!({"index": 1, "params": {"version": 0.0}}));
+    assert_eq!(node(&s, id).appearance.effects[1].params["version"], json!(0));
+    for bad in [json!(2), json!(-1), json!(0.5), json!("1")] {
+        assert!(s.execute("effect.apply", &json!({"effect": "warp.arc", "params": {"version": bad}})).is_err(), "{bad}");
+        assert!(s.execute("effect.setParams", &json!({"index": 0, "params": {"version": bad}})).is_err(), "{bad}");
+    }
+    assert_eq!(node(&s, id).appearance.effects.len(), 2);
+}

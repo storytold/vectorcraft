@@ -1,32 +1,45 @@
 //! VectorCraft desktop app.
 //!
 //! Usage: `vectorcraft [--control <port> [--automation-read-root <dir>]... [--automation-write-root <dir>]...]
-//! [--in-window-menus] [--new-instance] [files…]`, `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//! [--in-window-menus] [--new-instance] [--safe-mode] [--present-mode <mode>] [--frame-latency <frames>] [--] [files…]`,
+//! `vectorcraft --version`, `vectorcraft --help` (or `-h`)
+//!
+//! Any other argument starting with '-' (not `-` alone) is an error; after `--`, every argument is
+//! a file.
 //!
 //! Files given while VectorCraft already runs open in that window, unless `--new-instance` is given
 //! (Windows and Linux; `single_instance`).
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
-//! macOS instead of the macOS menu bar (`mac_menu`).
+//! macOS instead of the macOS menu bar.
 //!
-//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 1 to 65535, or the app doesn't
-//! start) starts a localhost JSON-lines control server:
+//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 0 to 65535, 0 picking a free
+//! one, or the app doesn't start) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
+//! `--control-token <token>` (or `VECTORCRAFT_CONTROL_TOKEN`) or `--control-token-file <file>`
+//! (or `VECTORCRAFT_CONTROL_TOKEN_FILE`) sets the token each connection sends first.
 //! See `vectorcraft_ui_egui::control` for the methods. `--automation-read-root` and
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
 //! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
 //! keyboard isn't confined.
+//!
+//! `--present-mode` and `--frame-latency` (or `VECTORCRAFT_PRESENT_MODE` / `_FRAME_LATENCY`) change
+//! how the window's frames reach the display (`presentation`).
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
-mod caps_lock;
+#[cfg(test)]
+mod build_channel;
+mod build_flavor;
 mod clipboard;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
-mod control_server;
 mod cursor_theme;
+mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
+mod hang_watch;
+mod launch_profile;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
@@ -34,69 +47,154 @@ mod logging;
 mod mac_color_space;
 #[cfg(target_os = "macos")]
 mod mac_fonts;
-#[cfg(target_os = "macos")]
-mod mac_menu;
-#[cfg(target_os = "macos")]
-mod mac_save_format;
-#[cfg(target_os = "macos")]
-mod mac_screen_color;
 mod mac_tablet;
 #[cfg(target_os = "macos")]
 mod mac_window;
+mod nightly_session;
 #[cfg(target_os = "macos")]
 mod open_documents;
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
-mod portal_save;
 mod prefs_dir;
+mod presentation;
 mod printing;
+mod process_identity;
+mod profile_root;
+#[cfg(not(any(target_os = "macos", windows)))]
+mod quit_windows;
+mod screen_density;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
 mod system_fonts;
 mod tablet;
-mod window;
 mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+#[cfg(windows)]
+mod windows_display_size;
 mod windows_stylus;
+mod windows_symbol_chars;
+mod windows_wintab;
 mod xwayland;
 
+use std::sync::{Arc, Mutex};
+
+use craft::automation::args::{ControlOptions, EnvNames};
+use craft::automation::server::{self, Listening};
+use craft::dialogs::service::{FilePanels, FileService};
+use craft::host::target::{Backend, ShellInfo};
+use craft::host::{AppInfo, Wake};
+use craft::settings::SharedSettings;
+use craft::ui::InstallSpec;
+use craft::ui::shell::embed;
+use craft::window::Prefix;
+use craft::window::policy::{TitleBarPref, decide_for};
+use craft::window::restore::Store;
+use craft::window::system::SystemWindows;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
+use vectorcraft_ui_egui::dialogs::safe_mode;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
-use vectorcraft_ui_egui::picks::PickRequest;
-use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
+use vectorcraft_ui_egui::{AppSettings, Services, VectorcraftApp};
 
 mod app;
 mod host_services;
 mod prefs;
-mod titlebar;
 
 #[cfg(all(test, feature = "wgpu"))]
 use app::bring_window_forward;
-use app::native_input_hook;
-use app::open_files;
-use host_services::services;
-#[cfg(all(test, feature = "wgpu"))]
-use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
-use prefs::{load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
-#[cfg(all(test, feature = "wgpu", any(target_os = "macos", target_os = "windows")))]
-use titlebar::CUSTOM_TITLEBAR;
-#[cfg(feature = "wgpu")]
-use titlebar::adapter_summary;
-#[cfg(all(test, feature = "wgpu"))]
-use titlebar::custom_titlebar_from;
-#[cfg(all(test, feature = "wgpu"))]
-use titlebar::opted_into_system_title_bar;
+use app::open_or_hold;
+use host_services::{file_service, services, start_pen};
+use prefs::{load_prefs, log_dir, open_store, prefs_enabled};
+
+/// The window's size when no saved placement overrides it, and the smallest it may be, in points.
+const DEFAULT_SIZE: [f32; 2] = [1440.0, 900.0];
+const MIN_SIZE: [f32; 2] = [800.0, 500.0];
+
+/// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets
+/// the version with Apple's transparent margin; elsewhere the full-bleed tile. The app ID matches
+/// `packaging/linux/ai.storyteller.vectorcraft.desktop` so Wayland docks find the launcher icon.
+fn app_icon() -> egui::IconData {
+    #[cfg(target_os = "macos")]
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/vectorcraft-macos-512.png");
+    #[cfg(not(target_os = "macos"))]
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.vectorcraft.png");
+    eframe::icon_data::from_png_bytes(png).unwrap_or_default()
+}
+
+/// Windows shows a window's big icon (`ICON_BIG`) in the taskbar and Alt+Tab; eframe sets only the
+/// small one (the title bar's), so the taskbar showed a generic icon. Set the big one too.
 #[cfg(windows)]
-use titlebar::set_taskbar_icon;
-use titlebar::{custom_titlebar, native_options};
+fn set_taskbar_icon(w: &winit::window::Window) {
+    use winit::platform::windows::WindowExtWindows as _;
+    let icon = app_icon();
+    // An icon that can't be made leaves the generic one: nothing else depends on it.
+    if let Ok(i) = winit::window::Icon::from_rgba(icon.rgba, icon.width, icon.height) {
+        w.set_taskbar_icon(Some(i));
+    }
+}
+
+/// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
+#[cfg(feature = "wgpu")]
+fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
+    format!("{} ({:?}, {:?})", info.name.trim(), info.backend, info.device_type)
+}
+
+/// The window's options: the app draws the title bar when `custom_titlebar`, else the desktop does.
+fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title(vectorcraft_ui_egui::os_window::name())
+            .with_inner_size(DEFAULT_SIZE)
+            .with_min_inner_size(MIN_SIZE)
+            .with_drag_and_drop(true)
+            .with_decorations(!custom_titlebar)
+            .with_fullsize_content_view(true)
+            .with_titlebar_shown(false)
+            .with_title_shown(false)
+            .with_icon(app_icon())
+            .with_app_id(vectorcraft_ui_egui::os_window::app_id()),
+        // A nightly keeps its own window state in its private profile; a stable build lets eframe
+        // keep it where it always did.
+        persistence_path: nightly_window_state(),
+        ..Default::default()
+    }
+}
+
+/// Where eframe keeps its own saved state, if its persistence feature is ever on: a folder of its
+/// own inside the nightly profile ([`nightly_root`]), never the file craft's window placement is in
+/// (`<profile>/window.json`, which eframe would treat as a folder) and never the stable app's.
+fn nightly_window_state() -> Option<std::path::PathBuf> {
+    nightly_root().map(|root| root.join("eframe"))
+}
+
+/// The saved window placement (the framework's `window.json`): beside the preferences, as it always
+/// was, or inside a nightly's private profile so the two channels never move each other's windows.
+fn placement_store() -> Store {
+    match nightly_root() {
+        Some(root) => Store::at(&root.join(craft::window::restore::FILE_NAME)),
+        None => Store::open("vectorcraft"),
+    }
+}
+
+/// This launch's private Nightly profile, when it is one.
+fn nightly_root() -> Option<&'static std::path::Path> {
+    launch_profile::current().root()
+}
 
 struct App {
     app: VectorcraftApp,
-    host_caps_lock: caps_lock::HostCapsLock,
+    /// The preferences, written through [`prefs::save_tick`] and on exit.
+    settings: SharedSettings<AppSettings>,
+    /// The file service the host's `Files` is, kept for the folders its picks chose.
+    files: Arc<FileService>,
+    /// Shows the native dialogs the file service was asked for.
+    file_panels: FilePanels,
+    /// The interface language the Replace question of [`Self::file_panels`] is worded in.
+    replace_lang: Option<vectorcraft_ui_egui::i18n::Lang>,
+    /// Keeps the control server running while the app does.
+    _control_server: Option<Listening>,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
@@ -105,14 +203,23 @@ struct App {
     frames: u64,
     /// Keeps the custom title bar's window borderless (Windows, #1758).
     window_frame: Option<window_frame::WindowFrameFn>,
-    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635).
+    /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
+    /// and to take the window off screen on quit before the clipboard handles let go (`quit_windows`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
-    /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
-    pending_maximize: bool,
-    /// Frames left to retry [`window::apply_pending_maximize`].
-    maximize_tries: u8,
-    /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
-    monitors_listed: Option<(f64, f32)>,
+    /// The command line's files, held back until the choice about a stopped plug-in is made.
+    held_files: Vec<String>,
+    /// Reads the profile of the display that shows the main window, for the canvas.
+    display_profile: display_profile::Reader,
+    /// Measures the density of the display that shows the main window, for Display Print Size at
+    /// 100% Zoom.
+    screen_density: screen_density::Tracker,
+    /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
+    frame_start: Option<std::time::Instant>,
+    /// The shortest time between the starts of two frames, while the window presents without vsync
+    /// ([`presentation::min_frame_interval`]).
+    min_frame: Option<std::time::Duration>,
+    /// When the last frame started, after its wait for [`Self::min_frame`].
+    last_frame_began: Option<std::time::Instant>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -124,6 +231,10 @@ Opens the VectorCraft desktop app with the given files.
 Options:
   --control <port>               Start the localhost JSON-lines control server on <port>
                                  (or VECTORCRAFT_CONTROL_PORT)
+  --control-token <token>        The token control connections send first
+                                 (or VECTORCRAFT_CONTROL_TOKEN)
+  --control-token-file <file>    Read that token from <file>
+                                 (or VECTORCRAFT_CONTROL_TOKEN_FILE)
   --automation-read-root <dir>   Confine the files control requests read to <dir>
                                  (may be given more than once)
   --automation-write-root <dir>  Confine the files control requests write to <dir>
@@ -132,19 +243,289 @@ Options:
                                  (or VECTORCRAFT_IN_WINDOW_MENUS=1)
   --new-instance                 Open the files in a new window even when VectorCraft
                                  already runs (Windows and Linux)
+  --safe-mode                    Start without plug-ins: none loads or runs until
+                                 VectorCraft starts normally (Help › Safe Mode); the
+                                 files open in a new window, as with --new-instance
+  --present-mode <mode>          How frames reach the display: fifo (vsync),
+                                 autovsync (the default; relaxed vsync where the
+                                 driver offers it) or novsync
+                                 (or VECTORCRAFT_PRESENT_MODE)
+  --frame-latency <frames>       Frames the display may queue, 1 to 3 (the default
+                                 is 1) (or VECTORCRAFT_FRAME_LATENCY); with either
+                                 one set, the files open in a new window, as with
+                                 --new-instance
   --version                     Print the version and exit
   -h, --help                     Print this help and exit
+  --                             Treat every argument after it as a file
+
+Any other argument starting with '-' is an error.
 
 Without a window (converting, scripting, the MCP server), use vectorcraft-cli:
   vectorcraft-cli --help
 ";
 
-fn main() -> std::process::ExitCode {
-    // Windows: the update helper is a copy of this program started with `--finish-update`.
-    #[cfg(windows)]
-    if let Some(result) = craft_update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
+/// The command line's options other than the automation roots and the control port.
+struct CommandLine {
+    files: Vec<String>,
+    in_window_menus: bool,
+    new_instance: bool,
+    /// `--safe-mode`: no plug-in loads or runs in this launch.
+    safe_mode: bool,
+}
+
+/// Reads the arguments after the program name. The automation roots, the control port and the
+/// presentation overrides (with `VECTORCRAFT_PRESENT_MODE` and `VECTORCRAFT_FRAME_LATENCY` filling
+/// what the flags leave unset) go into `roots_args`, `control` and `presentation`. `Err` is the exit code
+/// when the process ends here: `--version` and `--help` print and succeed; a bad automation or
+/// presentation option or an unknown option prints an error and fails.
+fn read_command_line(
+    mut args: impl Iterator<Item = String>,
+    control: &mut automation_args::ControlArg,
+    roots_args: &mut automation_args::AutomationArgs,
+    presentation: &mut presentation::Overrides,
+) -> Result<CommandLine, std::process::ExitCode> {
+    let mut files = Vec::new();
+    let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
+    let mut new_instance = false;
+    let mut safe_mode = false;
+    let mut unknown = None;
+    while let Some(a) = args.next() {
+        // After `--`, every argument is a file, even one whose name starts with '-'.
+        if a == "--" {
+            files.extend(args.by_ref());
+            break;
+        }
+        match roots_args
+            .consume(&a, &mut args)
+            .and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) })
+            .and_then(|taken| if taken { Ok(true) } else { presentation.consume(&a, &mut args) })
+        {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("vectorcraft: {e}");
+                return Err(std::process::ExitCode::FAILURE);
+            }
+        }
+        match a.as_str() {
+            "--in-window-menus" => in_window_menus = true,
+            "--new-instance" => new_instance = true,
+            "--safe-mode" => safe_mode = true,
+            "--version" => {
+                // A nightly says what it is, like the early answer; a stable build's line is unchanged.
+                let line = match build_flavor::COMPILED {
+                    build_flavor::BuildFlavor::Stable => format!("vectorcraft {}\n", vectorcraft_ui_egui::os_window::version()),
+                    build_flavor::BuildFlavor::NightlyV1 => {
+                        format!("VectorCraft {}\n", build_flavor::version(build_flavor::COMPILED, vectorcraft_ui_egui::os_window::version()))
+                    }
+                };
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), line.as_bytes());
+                return Err(std::process::ExitCode::SUCCESS);
+            }
+            // Before anything starts, like `--version`: from a terminal or an agent's shell the app
+            // used to open (or hang without a display) instead (#2110).
+            "--help" | "-h" => {
+                // Not `print!`, which panics when standard output is closed (`| head -0`):
+                // there is nothing left to tell then.
+                let _ = std::io::Write::write_all(&mut std::io::stdout(), USAGE.as_bytes());
+                return Err(std::process::ExitCode::SUCCESS);
+            }
+            // The process serial number older macOS versions pass to an app the Finder starts.
+            #[cfg(target_os = "macos")]
+            _ if a.starts_with("-psn_") => {}
+            // An option this version doesn't know (a typo such as `--safe-mod`) is an error, not a
+            // file to open. Reported after the loop, so a later `--help` or `--version` still wins.
+            _ if a.starts_with('-') && a != "-" => {
+                unknown.get_or_insert(a);
+            }
+            _ => files.push(a),
+        }
+    }
+    if let Some(a) = unknown {
+        eprintln!("vectorcraft: unknown option {a}; see vectorcraft --help, or put -- before a file whose name starts with '-'");
+        return Err(std::process::ExitCode::FAILURE);
+    }
+    // After the arguments: the flags, `--version` and `--help` win over a bad environment value.
+    match presentation.with_env(std::env::var_os("VECTORCRAFT_PRESENT_MODE"), std::env::var_os("VECTORCRAFT_FRAME_LATENCY")) {
+        Ok(overrides) => *presentation = overrides,
+        Err(e) => {
+            eprintln!("vectorcraft: {e}");
+            return Err(std::process::ExitCode::FAILURE);
+        }
+    }
+    Ok(CommandLine { files, in_window_menus, new_instance, safe_mode })
+}
+
+/// Whether the window opens through XWayland, for Linux Display Server `pref` (`main`).
+#[cfg(target_os = "linux")]
+fn opens_through_xwayland(pref: Option<&str>) -> bool {
+    if !xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
+        return false;
+    }
+    if !xwayland::x11_libraries_found() {
+        log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
+        return false;
+    }
+    if pref != Some("x11") {
+        log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
+    } else {
+        log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+    }
+    true
+}
+
+/// The nightly channel this build is, as a string for the log.
+fn channel_name() -> &'static str {
+    match build_flavor::COMPILED {
+        build_flavor::BuildFlavor::Stable => "stable",
+        build_flavor::BuildFlavor::NightlyV1 => launch_profile::VERSION,
+    }
+}
+
+/// Says why a nightly launch was refused, then exits 2. A window could not have shown it yet: this
+/// app has no message box of its own before eframe starts (its dialogs are egui windows), so the
+/// text goes to standard error, which a Launcher launch records. The desktop-session test still
+/// decides whether a daily user would have seen it, for the message's wording.
+fn report_launch_profile_error(error: &str) {
+    eprintln!("VectorCraft launch profile: {error}");
+    let desktop_session = cfg!(windows)
+        || cfg!(target_os = "macos")
+        || (cfg!(target_os = "linux") && ["DISPLAY", "WAYLAND_DISPLAY"].into_iter().any(|key| std::env::var_os(key).is_some_and(|v| !v.is_empty())));
+    if build_flavor::needs_native_error(build_flavor::COMPILED, desktop_session) {
+        eprintln!("VectorCraft Nightly: open it from ArtCraft Launcher, which starts it in its own profile");
+    }
+}
+
+/// Selects the immutable launch profile before any startup service or side effect, and returns the
+/// arguments the rest of `main` reads. `None` means the process ends here (`--version` answered).
+fn prepare_launch() -> Option<Vec<std::ffi::OsString>> {
+    // The trusted Launcher protocol is decided before the logger, updates, fonts or any saved state.
+    let argv: Vec<_> = std::env::args_os().skip(1).collect();
+    // A nightly answers its version before root validation, process identity, IPC or any window:
+    // plain `--version`/`-V`, or the Launcher's `--launch-profile nightly-v1 --profile-root <dir>
+    // --version`. A stable build leaves the answer to `read_command_line`, exactly as before.
+    if build_flavor::COMPILED == build_flavor::BuildFlavor::NightlyV1 && (build_flavor::version_query(&argv) || launch_profile::version_query(&argv))
+    {
+        use std::io::Write as _;
+        let line = format!("VectorCraft {}\n", build_flavor::version(build_flavor::COMPILED, env!("VECTORCRAFT_BUILT_VERSION")));
+        let _ = std::io::stdout().write_all(line.as_bytes());
+        return None;
+    }
+    let early = launch_profile::parse(argv)
+        .and_then(|launch| {
+            build_flavor::require_profile(build_flavor::COMPILED, &launch.profile)?;
+            Ok(launch)
+        })
+        .and_then(|launch| {
+            launch_profile::prepare(launch, |root| {
+                launch_profile::validate_root(root, |key| std::env::var_os(key), std::env::current_exe().ok().as_deref())
+            })
+        })
+        .unwrap_or_else(|error| {
+            report_launch_profile_error(&error);
+            std::process::exit(2)
+        });
+    let nightly = early.profile.is_nightly();
+    let identity =
+        if nightly { vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1 } else { vectorcraft_ui_egui::os_window::LaunchIdentity::Stable };
+    let install = launch_profile::install(early.profile).and_then(|()| {
+        // Every data path follows the selected profile from here on: settings, logs, recovery, the
+        // user's libraries, plug-ins, caches and the single-instance record.
+        if let Some(root) = launch_profile::current().root() {
+            prefs_dir::profile::install_data_root(root.to_path_buf())?;
+        }
+        vectorcraft_ui_egui::os_window::select_identity(identity)
+    });
+    if let Err(error) = install {
+        report_launch_profile_error(&error);
+        std::process::exit(2);
+    }
+    if let Err(error) = vectorcraft_ui_egui::os_window::set_version(env!("VECTORCRAFT_BUILT_VERSION")) {
+        report_launch_profile_error(&error);
+        std::process::exit(2);
+    }
+    // A nightly's taskbar identity, before the first window: otherwise Windows groups it with the
+    // stable app and the Launcher's own entry.
+    if let Err(error) =
+        process_identity::initialize(nightly, vectorcraft_ui_egui::os_window::id_for(vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1))
+    {
+        report_launch_profile_error(&error.to_string());
+        // The window's identity, not the profile, failed: main's own failure status (1).
+        std::process::exit(1);
+    }
+    Some(early.args)
+}
+
+/// The arguments the rest of `main` reads: a nightly's profile tokens were consumed by
+/// `prepare_launch`, so what is left is `--` and the files to open. A stable launch reads its
+/// arguments exactly as it always did.
+fn launch_arguments(nightly: bool, arguments: &[std::ffi::OsString]) -> Vec<String> {
+    if nightly { arguments.iter().map(|a| a.to_string_lossy().into_owned()).collect() } else { std::env::args().skip(1).collect() }
+}
+
+/// The control channel's port, and the token's notice with the token itself.
+type ControlChannel = (Option<u16>, Option<(String, String)>);
+
+/// Port and token of the control channel, or the message to print. A nightly is started by the
+/// Launcher, never by an agent, so the channel and its inherited environment stay off: no token
+/// file is read and nothing listens.
+fn control_channel(control: &automation_args::ControlArg, nightly: bool) -> Result<ControlChannel, String> {
+    if nightly {
+        if control.options().port.is_some() || std::env::var_os("VECTORCRAFT_CONTROL_PORT").is_some() {
+            eprintln!("vectorcraft: the control channel is off in a nightly build");
+        }
+        return Ok((None, None));
+    }
+    let options = ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")).map_err(|e| e.to_string())?;
+    let port = options.port;
+    // Read before the window opens: a token file that can't be read keeps the app from starting
+    // rather than leaving the channel open without one.
+    let token = port.map(|_| options.server_token()).transpose().map_err(|e| e.to_string())?;
+    Ok((port, token.map(|token| (options.token_notice(&token), token))))
+}
+
+/// A nightly's own session record: whether the previous session did not finish normally, to be
+/// reported once the window is up. This session is cleared only on a controlled return (`on_exit`,
+/// or the code after the event loop). Stable keeps no record.
+fn previous_nightly_session_was_unclean(nightly: bool) -> bool {
+    if !nightly {
+        return false;
+    }
+    match nightly_session::begin(nightly_root(), vectorcraft_ui_egui::os_window::version(), None) {
+        Ok(unclean) => unclean,
+        Err(e) => {
+            log::warn!("Nightly session health is unavailable: {e}");
+            false
+        }
+    }
+}
+
+/// The first log lines: the version and channel, then a nightly's profile root.
+fn log_startup(nightly: bool) {
+    log::info!("VectorCraft {} ({})", vectorcraft_ui_egui::os_window::version(), channel_name());
+    if nightly {
+        log::info!("nightly profile: {}", nightly_root().map(|root| root.display().to_string()).unwrap_or_default());
+    }
+}
+
+/// Windows: the update helper is a copy of this program started with `--finish-update`. Nightly is
+/// updated by the Launcher, so it never starts one (`build_flavor` keeps its updater off).
+#[cfg(windows)]
+fn finish_pending_update(nightly: bool) {
+    if !nightly
+        && let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>())
+    {
         std::process::exit(i32::from(result.is_err()));
     }
+}
+
+fn main() -> std::process::ExitCode {
+    // The launch profile first: a nightly build without one is refused here, before the update
+    // helper, the logger, fonts or any saved state, and `--version` is answered here too.
+    let Some(arguments) = prepare_launch() else { return std::process::ExitCode::SUCCESS };
+    let nightly = launch_profile::current().is_nightly();
+    #[cfg(windows)]
+    finish_pending_update(nightly);
     // Before any thread starts: the pointer must find a cursor theme on Wayland (#2450).
     #[cfg(target_os = "linux")]
     cursor_theme::apply();
@@ -154,61 +535,32 @@ fn main() -> std::process::ExitCode {
     let root_env = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
-    let mut files = Vec::new();
-    let mut in_window_menus = std::env::var_os("VECTORCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
-    let mut new_instance = false;
-    let mut args = std::env::args().skip(1);
-    while let Some(a) = args.next() {
-        match roots_args.consume(&a, &mut args).and_then(|root| if root { Ok(true) } else { control.consume(&a, &mut args) }) {
-            Ok(true) => continue,
-            Ok(false) => {}
-            Err(e) => {
-                eprintln!("vectorcraft: {e}");
-                return std::process::ExitCode::FAILURE;
-            }
-        }
-        match a.as_str() {
-            "--in-window-menus" => in_window_menus = true,
-            "--new-instance" => new_instance = true,
-            "--version" => {
-                println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
-                return std::process::ExitCode::SUCCESS;
-            }
-            // Before anything starts, like `--version`: from a terminal or an agent's shell the app
-            // used to open (or hang without a display) instead (#2110).
-            "--help" | "-h" => {
-                // Not `print!`, which panics when standard output is closed (`| head -0`):
-                // there is nothing left to tell then.
-                let _ = std::io::Write::write_all(&mut std::io::stdout(), USAGE.as_bytes());
-                return std::process::ExitCode::SUCCESS;
-            }
-            _ => files.push(a),
-        }
-    }
+    let mut presentation = presentation::Overrides::default();
+    let given = launch_arguments(nightly, &arguments);
+    let CommandLine { files: command_line_files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
+        match read_command_line(given.into_iter(), &mut control, &mut roots_args, &mut presentation) {
+            Ok(command_line) => command_line,
+            Err(code) => return code,
+        };
     let automation_args::AutomationArgs { read_roots, write_roots, .. } = roots_args;
-    // After the arguments: `--control` and `--version` win over a bad environment value.
-    let control_port = match control.port {
-        Some(port) => Some(port),
-        None => match automation_args::env_control_port(std::env::var_os("VECTORCRAFT_CONTROL_PORT")) {
-            Ok(port) => port,
-            Err(e) => {
-                eprintln!("vectorcraft: {e}");
-                return std::process::ExitCode::FAILURE;
-            }
-        },
-    };
+    // After the arguments: the flags and `--version` win over a bad environment value.
+    let (control_port, control_token) = control_channel(&control, nightly).unwrap_or_else(|message| {
+        eprintln!("vectorcraft: {message}");
+        std::process::exit(1)
+    });
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
+    log_startup(nightly);
     // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
-    let instance = match single_instance::start(control_port.is_some(), new_instance, &files) {
+    // A launch that sets the presentation runs as its own app: a running app keeps its own surface.
+    match single_instance::start(control_port.is_some(), new_instance || presentation.is_set(), safe_mode_flag, &command_line_files) {
         single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
-        single_instance::Start::Running(primary) => primary,
-    };
+        single_instance::Start::Running(primary) => single_instance::hold(primary),
+    }
     #[cfg(target_os = "macos")]
     let _ = new_instance;
-    vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
     // Before the first render: the cores the process may run on.
     #[cfg(windows)]
     windows_cores::install();
@@ -226,12 +578,18 @@ fn main() -> std::process::ExitCode {
     if let Some(logger) = logger {
         match log_dir().filter(|_| prefs_enabled()) {
             Some(dir) => match logger.attach_dir(&dir) {
-                Ok(path) => log::info!("VectorCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+                Ok(path) => log::info!("VectorCraft {}, log file {}", vectorcraft_ui_egui::os_window::version(), path.display()),
                 // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
                 Err(e) => log::warn!("no log file: {e}"),
             },
             None => logger.no_file(),
         }
+    }
+    let previous_nightly_unclean = previous_nightly_session_was_unclean(nightly);
+    // The report a session left when it was closed while it did not answer (`hang_watch`).
+    let previous_hang = log_dir().filter(|_| prefs_enabled()).and_then(|dir| hang_watch::take_previous(&dir));
+    if let Some(report) = &previous_hang {
+        log::warn!("the last session was closed while it did not answer; its report:\n{}", report.trim_end());
     }
     // The roots confine the control channel: a bad one keeps the app from starting rather than
     // leaving agents unconfined. Without a control port there is nothing to confine.
@@ -252,10 +610,19 @@ fn main() -> std::process::ExitCode {
             }
         }
     };
-    let saved = read_prefs();
-    let saved_window = saved.as_ref().and_then(|ui| ui.window);
+    let (settings, settings_report) = open_store();
+    if settings_report.has_problems() {
+        log::warn!("the preferences were not read as saved: {settings_report:?}");
+    }
+    // An engine preference the window's start reads before the app exists.
+    let engine_pref = |key: &str| settings.lock().get().ui.engine_prefs.get(key).cloned();
     #[cfg(feature = "wgpu")]
-    let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
+    let gpu_pref_value = engine_pref("gpuPreference");
+    #[cfg(feature = "wgpu")]
+    let gpu_pref = gpu_pref_value.as_ref().and_then(serde_json::Value::as_str);
+    // Preferences › Performance › Low-Latency Drawing; anything but `true` in the file is off.
+    #[cfg(feature = "wgpu")]
+    let low_latency_drawing = engine_pref("lowLatencyDrawing").and_then(|v| v.as_bool()).unwrap_or(false);
     #[cfg(feature = "wgpu")]
     let power_env = eframe::wgpu::PowerPreference::from_env();
     #[cfg(feature = "wgpu")]
@@ -289,29 +656,30 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
-    let custom_titlebar = custom_titlebar(saved.as_ref());
-    let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
+    let forced_to_x11 = opens_through_xwayland(engine_pref("linuxDisplayServer").as_ref().and_then(serde_json::Value::as_str));
+    #[cfg(not(target_os = "linux"))]
+    let forced_to_x11 = false;
+    // A window forced onto XWayland runs on X11, whose window manager draws the frame: the
+    // framework decides the frame for that backend, from the platform, `VECTORCRAFT_TITLEBAR` and
+    // Preferences › User Interface › System Title Bar.
+    let shell_info = if forced_to_x11 { ShellInfo::current().backend(Backend::X11) } else { ShellInfo::current() };
+    let titlebar_pref =
+        if engine_pref("systemTitleBar").and_then(|v| v.as_bool()).unwrap_or(false) { TitleBarPref::System } else { TitleBarPref::Integrated };
+    let decision = decide_for(Prefix::new("VECTORCRAFT"), shell_info.backend, titlebar_pref);
+    let custom_titlebar = matches!(decision.frame, craft::window::policy::Frame::Integrated(_));
+    let options = native_options(custom_titlebar);
+    #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
-        let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
-        if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
-            if xwayland::x11_libraries_found() {
-                if pref != Some("x11") {
-                    log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
-                } else {
-                    log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
-                }
-                use winit::platform::x11::EventLoopBuilderExtX11 as _;
-                options.event_loop_builder = Some(Box::new(|builder| {
-                    builder.with_x11();
-                }));
-            } else {
-                log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
-            }
+        if forced_to_x11 {
+            use winit::platform::x11::EventLoopBuilderExtX11 as _;
+            options.event_loop_builder = Some(Box::new(|builder| {
+                builder.with_x11();
+            }));
         }
         options
     };
@@ -332,12 +700,20 @@ fn main() -> std::process::ExitCode {
         }));
         options
     };
+    // Quitting takes the X11 windows of floating panels and documents off screen with the main
+    // window, so eframe's windows are recorded as it makes and drops them (`quit_windows`).
+    #[cfg(target_os = "linux")]
+    let options = eframe::NativeOptions { viewport_hooks: Some(std::sync::Arc::new(quit_windows::Hooks)), ..options };
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
         // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
         // composites it, so the window answers the pointer a frame sooner (#444).
-        options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
+        // `--present-mode` and `--frame-latency` change it for a launch, and Low-Latency Drawing
+        // asks for no vsync when neither sets the mode (`presentation`).
+        options.wgpu_options.surface = presentation.apply(eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY, low_latency_drawing);
+        // What the app asks for: the driver picks novsync's mode and may clamp the latency.
+        log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation, low_latency_drawing));
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
@@ -368,6 +744,10 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(feature = "wgpu"))]
+    if presentation != presentation::Overrides::default() {
+        log::warn!("--present-mode and --frame-latency set the wgpu renderer's window surface: ignored without it");
+    }
     #[cfg(feature = "wgpu")]
     gpu::watch_panics();
     #[cfg(feature = "wgpu")]
@@ -377,64 +757,120 @@ fn main() -> std::process::ExitCode {
     open_documents::install();
     #[cfg(feature = "wgpu")]
     let created = startup.clone();
+    // For the hang report (`hang_watch`).
+    #[cfg(feature = "wgpu")]
+    let requested_surface = options.wgpu_options.surface;
+    // Without vsync, frames start at most 240 times a second (`presentation`).
+    #[cfg(feature = "wgpu")]
+    let min_frame = presentation::min_frame_interval(&requested_surface);
+    #[cfg(not(feature = "wgpu"))]
+    let min_frame = None;
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
     let run = |options: eframe::NativeOptions, app_creator: eframe::AppCreator<'_>| {
         #[cfg(target_os = "linux")]
         {
-            linux_stylus::run_native("VectorCraft", options, app_creator)
+            linux_stylus::run_native(vectorcraft_ui_egui::os_window::name(), options, app_creator)
         }
         #[cfg(not(target_os = "linux"))]
         {
-            eframe::run_native("VectorCraft", options, app_creator)
+            eframe::run_native(vectorcraft_ui_egui::os_window::name(), options, app_creator)
         }
     };
     let outcome = vectorcraft_engine::guard::catch_panic(|| {
         run(
             options,
             Box::new(move |cc| {
-                VectorcraftApp::install_ime_reset_hooks(&cc.egui_ctx);
+                let ctx = &cc.egui_ctx;
+                let winit_window = cc.winit_window().cloned();
+                let spec = InstallSpec::new(shell_info, Arc::new(SystemWindows))
+                    .app_id(vectorcraft_ui_egui::os_window::app_id())
+                    .placement(Arc::new(Mutex::new(placement_store())))
+                    .frame(decision);
+                let spec = match start_pen(&winit_window) {
+                    Some(pen) => spec.pen(pen),
+                    None => spec,
+                };
+                embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
+                egui_extras::install_image_loaders(ctx);
+                let folders = settings.lock().get().ui.last_folders.clone();
+                let wake = {
+                    let ctx = ctx.clone();
+                    Wake::new(move || ctx.request_repaint())
+                };
+                let (files, file_panels) = file_service(wake, folders);
+                let files = Arc::new(files);
+                craft::host::Host::builder(AppInfo {
+                    id: vectorcraft_ui_egui::os_window::SETTINGS_APP_ID,
+                    name: vectorcraft_ui_egui::os_window::name(),
+                    version: vectorcraft_ui_egui::os_window::version(),
+                })
+                .i18n(vectorcraft_ui_egui::i18n::shared())
+                .settings(Arc::new(settings.clone()))
+                .files(files.clone())
+                .install(ctx);
                 let mut session = Session::new();
                 // The profiles loaded before come back before the preferences name any of them.
                 prefs_dir::attach_profile_store(&mut session);
+                // Then Edit › Color Settings, which may name one of those profiles.
+                prefs_dir::attach_color_settings(&mut session);
+                // Before any plug-in loads: this launch's marker in the Launch folder next to the
+                // preferences (none for runs without preferences), and Safe Mode.
+                let launch_dir = prefs_dir::prefs_dir().filter(|_| prefs_enabled()).map(|d| d.join("Launch"));
+                let folder = |name: &str| prefs_dir::prefs_dir().map(|d| d.join(name).to_string_lossy().to_string());
+                let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
+                // The launch's loads of the stored plug-ins and the plug-ins folder go on on worker
+                // threads while the window shows; the frames install them as they finish.
+                session.load_plugins_in_background(true);
                 prefs_dir::attach_plugin_store(&mut session);
-                let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
-                app.set_startup_update_check(true);
-                load_prefs(&mut app, saved);
+                // File › Scripts lists the scripts of the Scripts folder next to the preferences.
+                prefs_dir::attach_scripts_dir(&mut session);
+                // The startup scripts are in the Startup Scripts folder next to the preferences.
+                prefs_dir::attach_startup_scripts_dir(&mut session);
+                // File Info's metadata templates live in their own folder next to the preferences.
+                prefs_dir::attach_metadata_templates_dir(&mut session);
+                prefs_dir::attach_new_doc_profiles(&mut session);
+                prefs_dir::attach_proof_setups(&mut session);
+                prefs_dir::attach_script_data(&mut session);
+                let mut app = VectorcraftApp::new(session, services(winit_window.clone()));
+                app.adopt_context(&cc.egui_ctx);
+                // A nightly is updated by the Launcher: it never checks for a stable release, which
+                // would install this program's own updater over the nightly build.
+                app.set_startup_update_check(!nightly);
+                load_prefs(&mut app, &settings);
+                safe_mode::after_start(&mut app, stopped);
+                // Loads started later (a preference change, the end of Safe Mode) are waited for,
+                // after the launch's own.
+                app.session.load_plugins_in_background(false);
                 // The saved PDF presets live in their own folder (also read by vectorcraft-cli),
                 // which takes over from the copy the preferences file used to hold.
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
-                // Fit the window to its monitor, or put it back where it was (still hidden).
-                let winit_window = cc.winit_window().cloned();
+                // The custom dictionary's words, kept in their own file next to the preferences.
+                prefs_dir::attach_custom_dictionary(&mut app.session);
+                // The custom arrowheads, kept in their own file next to the preferences.
+                prefs_dir::attach_arrowheads(&mut app.session);
+                // The custom bevels, kept in their own file next to the preferences.
+                prefs_dir::attach_bevels(&mut app.session);
+                // The window's placement comes back through the framework's placement store.
+                #[cfg(windows)]
                 if let Some(w) = &winit_window {
-                    let g = window::restore(w, saved_window);
-                    app.ui.window = Some(g);
-                    #[cfg(windows)]
                     set_taskbar_icon(w);
                 }
-                // Linux may not map the window before the first frames, so a saved maximize is retried then (#3635).
-                let pending_maximize = cfg!(target_os = "linux") && app.ui.window.as_ref().is_some_and(|g| g.maximized);
                 // User Defined swatch, graphic style, symbol and brush libraries live next to the preferences.
-                let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
-                app.session.swatch_libraries.set_user_dir(swatches);
-                let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
-                app.session.style_libraries.set_user_dir(styles);
-                let symbols = prefs_path().and_then(|p| Some(p.parent()?.join("Symbols").to_string_lossy().to_string()));
-                app.session.symbol_libraries.set_user_dir(symbols);
-                let brushes = prefs_path().and_then(|p| Some(p.parent()?.join("Brushes").to_string_lossy().to_string()));
-                app.session.brush_libraries.set_user_dir(brushes);
+                app.session.swatch_libraries.set_user_dir(folder("Swatches"));
+                app.session.style_libraries.set_user_dir(folder("Graphic Styles"));
+                app.session.symbol_libraries.set_user_dir(folder("Symbols"));
+                app.session.brush_libraries.set_user_dir(folder("Brushes"));
                 // With the User Defined libraries listed, the persistent library panels reopen.
                 vectorcraft_ui_egui::panels::library_panel::restore(&mut app);
                 // So do the Libraries panel's libraries; runs without preferences (agents' test
                 // runs) keep theirs for the session only, never touching the user's.
                 if prefs_enabled() {
-                    let libraries = prefs_path().and_then(|p| Some(p.parent()?.join("Libraries").to_string_lossy().to_string()));
-                    app.session.libraries.set_dir(libraries);
+                    app.session.libraries.set_dir(folder("Libraries"));
                 }
                 // Data Recovery copies live next to the preferences too (none for runs without
                 // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
                 if std::env::var_os("VECTORCRAFT_NO_PREFS").is_none() {
-                    let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
-                    app.session.recovery.set_default_folder(recovery);
+                    app.session.recovery.set_default_folder(folder("Data Recovery"));
                 }
                 let graphics_loss = GraphicsLoss::default();
                 #[cfg(feature = "wgpu")]
@@ -444,14 +880,15 @@ fn main() -> std::process::ExitCode {
                     created.created(&cc.egui_ctx);
                     if !gpu::skipped().is_empty() {
                         // A processor chosen in Settings can be the one that can't show the window.
-                        let hint = if chosen_gpu {
-                            " (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"
+                        if chosen_gpu {
+                            app.status(format!(
+                                "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"
+                            ));
                         } else {
-                            ""
-                        };
-                        app.status(format!(
-                            "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}{hint}"
-                        ));
+                            app.status(format!(
+                                "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}"
+                            ));
+                        }
                     } else if let Some(crash) = &crash {
                         app.status(match crash {
                             gpu::Crash::Adapter { name, .. } => format!(
@@ -466,15 +903,66 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
-                app.custom_titlebar = custom_titlebar;
-                if let Some(port) = control_port {
-                    let rx = control_server::start(port, cc.egui_ctx.clone());
-                    app = app.with_control(rx).with_automation_roots(roots.clone());
-                    if let Some(roots) = &roots {
-                        // Everywhere the app doesn't say whose work it is (worker threads), the
-                        // roots hold: unconfined is only what the person at the keyboard does.
-                        file_access::confine_process(roots.clone());
-                        log::info!("control channel confined to the automation roots: {}", roots.describe());
+                // The hang report and Help › Copy Troubleshooting Info (`hang_watch`).
+                // The surface settings the options asked for; the driver resolves the present mode.
+                #[cfg(feature = "wgpu")]
+                let surface = cc
+                    .wgpu_render_state
+                    .as_ref()
+                    .map(|_| (format!("{:?}", requested_surface.present_mode), requested_surface.desired_maximum_frame_latency));
+                #[cfg(not(feature = "wgpu"))]
+                let surface = None;
+                let hang = std::sync::Arc::new(hang_watch::Shared {
+                    facts: hang_watch::Facts::new(
+                        |name| std::env::var(name).ok(),
+                        std::path::Path::new("/.flatpak-info").exists(),
+                        hang_watch::window_system(winit_window.as_deref()),
+                        app.graphics_adapter.clone(),
+                        hang_watch::surface(surface),
+                    ),
+                    started: std::time::Instant::now(),
+                    last: std::sync::Mutex::new(None),
+                    previous: previous_hang.clone(),
+                });
+                vectorcraft_ui_egui::hang_beacon::watch_input(&vectorcraft_ui_egui::hang_beacon::BEACON, &cc.egui_ctx);
+                hang_watch::start(log_dir().filter(|_| prefs_enabled()), hang.clone());
+                app.services.troubleshooting = Some(Box::new(move || {
+                    hang_watch::troubleshooting(&hang, &vectorcraft_ui_egui::hang_beacon::BEACON, std::time::SystemTime::now())
+                }));
+                // A message about the graphics processor, or a stopped plug-in, comes first.
+                if previous_hang.is_some() && app.ui.status.is_empty() {
+                    vectorcraft_ui_egui::troubleshooting::last_session_stopped(&mut app);
+                }
+                // The previous nightly session did not finish normally: say so once, in the window
+                // that is now up, and only then let a clean exit clear the record.
+                if previous_nightly_unclean {
+                    // A graphics, plug-in or hang message may be up already: keep it, as above.
+                    if app.ui.status.is_empty() {
+                        app.status(
+                            "The previous VectorCraft Nightly session did not finish normally. Nothing has been sent anywhere; Help › About has this build's version for a bug report",
+                        );
+                    }
+                    nightly_session::mark_notice_shown();
+                }
+                let mut control_server = None;
+                if let (Some(port), Some((notice, token))) = (control_port, control_token) {
+                    match server::listen(port, token, craft::ui::runtime::windows::WindowHost::of(&cc.egui_ctx)) {
+                        Ok((rx, listening)) => {
+                            eprintln!("{notice}");
+                            log::info!("control channel: {listening:?}");
+                            control_server = Some(listening);
+                            app = app.with_control(rx).with_automation_roots(roots.clone());
+                            if let Some(roots) = &roots {
+                                // Everywhere the app doesn't say whose work it is (worker threads), the
+                                // roots hold: unconfined is only what the person at the keyboard does.
+                                file_access::confine_process(roots.clone());
+                                log::info!("control channel confined to the automation roots: {}", roots.describe());
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("no control channel on port {port}: {e}");
+                            eprintln!("vectorcraft: can't listen on port {port}: {e}");
+                        }
                     }
                 }
                 #[cfg(target_os = "macos")]
@@ -482,7 +970,7 @@ fn main() -> std::process::ExitCode {
                     open_documents::set_ui(&cc.egui_ctx);
                     // The macOS menu bar, installed now so winit's default menu doesn't stay up.
                     if !in_window_menus {
-                        app.services.native_menu = mac_menu::install(&cc.egui_ctx, &app);
+                        app.services.native_menu = vectorcraft_ui_egui::menus::native::install(&cc.egui_ctx, &mut app);
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
@@ -490,32 +978,49 @@ fn main() -> std::process::ExitCode {
                     let _ = in_window_menus;
                     single_instance::set_ui(&cc.egui_ctx);
                 }
-                app.services.native_input_hook = native_input_hook(&app);
-                file_access::unconfined(|| open_files(&mut app, files));
+                let held_files = file_access::unconfined(|| open_or_hold(&mut app, command_line_files));
+                // With General › Run Startup Scripts on and Safe Mode off, the startup scripts run
+                // now, as the person's own; in Safe Mode they wait for the choice that ends it.
+                file_access::unconfined(|| vectorcraft_ui_egui::script_runs::run_at_launch(&mut app));
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
                 // The content and the pointer stay aligned on Windows (#1758).
                 let window_frame = window_frame::service(cc, custom_titlebar);
                 Ok(Box::new(App {
-                    host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
                     app,
+                    settings,
+                    files,
+                    file_panels,
+                    replace_lang: None,
+                    _control_server: control_server,
                     graphics_loss,
                     graphics_lost: false,
                     frames: 0,
                     window_frame,
                     winit_window,
-                    pending_maximize,
-                    maximize_tries: 8,
-                    monitors_listed: None,
+                    held_files,
+                    display_profile: Default::default(),
+                    screen_density: Default::default(),
+                    frame_start: None,
+                    min_frame,
+                    last_frame_began: None,
                 }))
             }),
         )
     });
     // The window is gone: later launches start their own app, including the one a graphics
-    // failure starts again below.
+    // failure starts again below. A nightly's session record is finished here, by the controlled
+    // return, before a successor can take the profile; on macOS the window's own `on_exit` already
+    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op. A run that
+    // reports a startup error has still returned in a controlled way (that error is logged and
+    // exits FAILURE below), so only a caught panic keeps the record for the next launch to report;
+    // it then also frees the lease for the successor this run may still start.
+    nightly_session::finish_after(outcome.is_ok());
     #[cfg(not(target_os = "macos"))]
-    drop(instance);
+    single_instance::resign();
+    // The process ends normally from here: this launch didn't stop while a plug-in was loading.
+    safe_mode::end_launch();
     #[cfg(feature = "wgpu")]
     let outcome = gpu::finish(outcome, &startup);
     #[cfg(not(feature = "wgpu"))]
@@ -533,18 +1038,9 @@ fn main() -> std::process::ExitCode {
 /// this process has open, until it runs that program. A file lock held through such a copy outlives
 /// its own handle, so a GPU start test that released the start file and opened it again found it
 /// still locked, as if another copy of the app were running, and failed. A test that starts a
-/// program holds [`spawning`]; a test that depends on the start file's lock holds [`no_spawns`].
-#[cfg(all(
-    test,
-    any(feature = "wgpu", any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))
-))]
+/// program holds its write side; a test that depends on the start file's lock holds [`no_spawns`].
+#[cfg(all(test, feature = "wgpu"))]
 static CHILD_SPAWN: std::sync::RwLock<()> = std::sync::RwLock::new(());
-
-/// Held while a test starts another program (see [`CHILD_SPAWN`]).
-#[cfg(all(test, any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
-fn spawning() -> std::sync::RwLockWriteGuard<'static, ()> {
-    CHILD_SPAWN.write().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
 
 /// Held by a test that releases a locked file and opens it again (see [`CHILD_SPAWN`]).
 #[cfg(all(test, feature = "wgpu"))]

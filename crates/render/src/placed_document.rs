@@ -16,7 +16,8 @@
 //! ([`crate::placed_area`]). Bitmaps drawn since a frame began are not dropped to make room for
 //! the ones it asks for, up to [`MAX_BYTES`], and a bitmap that can't be made is not asked for
 //! again. Past [`MAX_SIDE`] pixels, past [`MAX_BYTES`], and in outline, proofing and ink frames,
-//! it is drawn exactly.
+//! it is drawn exactly. An outline frame draws only its box, crossed from corner to corner, unless
+//! Document Setup → Show Images in Outline Mode is on.
 //!
 //! A document opened with only its placed documents' previews ([`ImageBlob::is_proxy`]) shows them
 //! up to their resolution; past it the file is read again in the background
@@ -390,28 +391,37 @@ fn schedule(job: Job) {
     run(&mut Renderer::new(), job);
 }
 
+/// The file `p` shows (its bytes `blob`) read as art, and kept for
+/// [`vectorcraft_doc::placed_document::read_cached`]: from its bytes stored, read again already,
+/// or (inside another placed document, while not too deep) read again now.
+fn read_placed(p: &PlacedDocument, blob: &ImageBlob) -> Option<Arc<vectorcraft_doc::placed_document::ReadDocument>> {
+    let full = match depth() {
+        0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
+        d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
+        _ => None,
+    };
+    full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes))
+}
+
 /// The mean scale of `a`.
 fn mean_scale(a: Affine) -> f64 {
     a.determinant().abs().sqrt()
 }
 
 impl Renderer {
-    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly.
+    /// Draw placed document `p` in frame `f`: from a cached bitmap on screen, else exactly; in
+    /// Outline mode without Document Setup → Show Images in Outline Mode, its box crossed from
+    /// corner to corner ([`Self::draw_crossed_box`]) and none of its art.
     pub(crate) fn draw_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if self.crosses_placed(f) {
+            return self.draw_crossed_placed(ctx, f, p);
+        }
         let plain = f.ink == Ink::Display && !f.opts.outline && f.opts.proof.is_none() && !f.opts.overprint_preview;
         if f.opts.progressive_placed && plain && depth() == 0 && self.draw_placed_bitmap(ctx, f, p) {
             return;
         }
         let Some(blob) = f.doc.images.get(&p.key) else { return };
-        // The file's bytes: stored, read again already, or (inside another placed document, while
-        // not too deep) read again now.
-        let full = match depth() {
-            0 => vectorcraft_doc::placed_document::full_bytes_cached(p, blob),
-            d if d < MAX_DEPTH => vectorcraft_doc::placed_document::full_bytes(p, blob),
-            _ => None,
-        };
-        let read = full.and_then(|bytes| vectorcraft_doc::placed_document::read(p, &bytes));
-        let Some(e) = read else {
+        let Some(e) = read_placed(p, blob) else {
             // Only the preview: drawn scaled into the box.
             if blob.is_proxy()
                 && let Some(im) = p.preview_image(&blob.bytes)
@@ -425,12 +435,33 @@ impl Renderer {
         if !k.is_finite() || k <= 1e-12 {
             return;
         }
-        // The art in its own coordinates, with its own resources.
+        // The art in its own coordinates, with its own resources (its composite fonts included, and
+        // none of the host document's).
+        let _lent = vectorcraft_text::FontDb::global().lend_document_composite_fonts(&e.doc.composite_fonts);
         let symbols = e.doc.symbol_boxes().quick();
         let visible = m.inverse().transform_rect_bbox(f.visible);
-        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, ..*f };
+        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, output: f.output * m, ..*f };
         let _inside = Inside::enter();
+        // Its art follows this document's Show Images in Outline Mode, not the file's.
+        let host = self.host_outline_images.replace(self.shows_outline_images(f));
         self.draw_arc(ctx, &inner, &e.art);
+        self.host_outline_images = host;
+    }
+
+    /// Draw placed document `p` as its box crossed from corner to corner ([`Self::crosses_placed`]).
+    /// Its file is still read, as when its art is drawn: the art its effects and its group's effects
+    /// make comes from the read kept.
+    pub(crate) fn draw_crossed_placed(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) {
+        if let Some(blob) = f.doc.images.get(&p.key) {
+            let _ = read_placed(p, blob);
+        }
+        self.draw_crossed_box(ctx, f, p.corners());
+    }
+
+    /// Whether `f` draws a placed document as its box crossed from corner to corner and none of
+    /// its art: in Outline mode without Show Images in Outline Mode ([`Self::shows_outline_images`]).
+    pub(crate) fn crosses_placed(&self, f: &Frame) -> bool {
+        f.opts.outline && !self.shows_outline_images(f)
     }
 
     /// Draw `p` from its bitmap at this zoom step, or (while that is made, or when it can't be)

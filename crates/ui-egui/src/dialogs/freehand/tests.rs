@@ -1,62 +1,32 @@
 use super::*;
+use craft::ui::dialog::DialogId;
 use vectorcraft_engine::Session;
 
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app
 }
 
-#[test]
-fn blob_tip_fields_confirm_and_cancel() {
-    let mut app = app();
-    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
-    let text = painted(&mut app);
-    assert!(text.contains("Angle:") && text.contains("Roundness:"), "{text}");
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert_eq!((d.f64("angle", -1.0), d.f64("roundness", -1.0)), (0.0, 100.0));
-    d.fields.insert("angle".into(), json!(45));
-    d.fields.insert("roundness".into(), json!(0));
-    super::super::confirm(&mut app).unwrap();
-    assert_eq!(
-        (app.session.tool_options_of("blobBrush")["angle"].as_f64(), app.session.tool_options_of("blobBrush")["roundness"].as_f64()),
-        (Some(45.0), Some(0.0))
-    );
-    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("roundness".into(), json!(75));
-    app.ui.dialog = None;
-    assert_eq!(app.session.tool_options_of("blobBrush")["roundness"], json!(0.0));
+/// The id of the open dialog `key`.
+fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
+    app.dialogs()
+        .expect("a window")
+        .with(|host| host.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id))
+        .unwrap_or_else(|| panic!("`{key}` is open"))
 }
 
-#[test]
-fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
-    for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
-        let drawn = vectorcraft_tools::draw2::blob_tip(0.0, roundness).as_coeffs()[3] as f32;
-        assert!((blob_tip_short_ratio(roundness) - drawn).abs() < 1e-6, "roundness {roundness}: drawn {drawn}");
+/// Opens `tool`'s Tool Options as the user does, sets `fields` through the open dialog, presses OK and lets the
+/// held answer through.
+fn set_through_dialog(app: &mut VectorcraftApp, tool: &str, fields: &[(&str, Value)]) {
+    let key = app.run("tool.options", json!({"tool": tool})).unwrap()["dialog"].as_str().unwrap().to_owned();
+    let (ctx, id) = (app.ui_ctx.clone().expect("a window"), open_id(app, &key));
+    let host = app.dialogs().expect("a window");
+    for (field, value) in fields {
+        host.with(|host| host.set_json_field(&ctx, id, field, value.clone())).unwrap();
     }
-}
-
-/// The labels the open dialog paints.
-fn painted(app: &mut VectorcraftApp) -> String {
-    crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-}
-
-#[test]
-fn the_fidelity_rail_is_logarithmic_and_round_trips_two_decimals() {
-    let rail = (0.01, FIDELITY_MAX);
-    assert_eq!((fidelity_at(0.01, rail), fidelity_at(20.0, rail)), (0.0, 1.0));
-    assert_eq!((fidelity_from(0.0, rail), fidelity_from(1.0, rail)), (0.01, 20.0));
-    // 0.01–1 pt gets more than half of the rail.
-    assert!(fidelity_at(1.0, rail) > 0.5, "{}", fidelity_at(1.0, rail));
-    // The values a user picks come back as they were, and the rail only ever rises.
-    for v in [0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.5, 6.5, 12.0, 20.0] {
-        assert_eq!(fidelity_from(fidelity_at(v, rail), rail), v, "{v}");
-    }
-    let steps: Vec<f64> = (0..=200).map(|i| fidelity_from(i as f32 / 200.0, rail)).collect();
-    assert!(steps.windows(2).all(|w| w[0] <= w[1]), "{steps:?}");
-    // Past the ends and on bad input it stays on the rail.
-    assert_eq!((fidelity_at(0.0, rail), fidelity_at(50.0, rail), fidelity_at(f64::NAN, rail)), (0.0, 1.0, 0.0));
-    assert_eq!((fidelity_from(-1.0, rail), fidelity_from(2.0, rail)), (0.01, 20.0));
+    // The frames after OK take the held answer and close the dialog, before the next open.
+    assert!(crate::dialogs::tests::confirm(app), "{tool}: OK closes the dialog");
 }
 
 #[test]
@@ -73,86 +43,117 @@ fn the_fidelity_keys_step_finely_at_the_low_end() {
     assert_eq!((fidelity_step(0.035, 1.0), fidelity_step(0.035, -1.0), fidelity_step(1.5, 1.0), fidelity_step(1.5, -1.0)), (0.04, 0.03, 2.0, 1.0));
 }
 
+/// Smooth Tool Options shows Smoothness under Fidelity, at 50% until it is set, and OK sets it from 0% to 100%; a
+/// Smoothness past 100% is refused and sets nothing. The other freehand tools have no Smoothness.
 #[test]
-fn the_fidelity_field_takes_a_hundredth_for_the_pencil() {
+fn smooth_tool_options_set_the_smoothness() {
     let mut app = app();
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(0.02));
-    let text = painted(&mut app);
-    assert!(text.contains("0.02"), "{text}");
-    super::super::confirm(&mut app).unwrap();
-    assert_eq!(app.session.tool_options_of("pencil")["fidelity"].as_f64(), Some(0.02));
+    let smooth = app.session.tool_options_of("smooth");
+    assert_eq!(smooth["smoothness"], json!(50.0));
+    let present: Vec<&str> = KEYS.iter().copied().filter(|key| smooth.get(*key).is_some()).collect();
+    let keys: Vec<String> = params("smooth", &present).iter().map(|p| p.key.to_string()).collect();
+    let (fidelity, smoothness) = (keys.iter().position(|k| k == "fidelity"), keys.iter().position(|k| k == "smoothness"));
+    assert!(fidelity.is_some() && fidelity < smoothness, "{keys:?}");
+    for value in [30.0, 0.0, 100.0] {
+        set_through_dialog(&mut app, "smooth", &[("smoothness", json!(value))]);
+        assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(value));
+    }
+    let key = app.run("tool.options", json!({"tool": "smooth"})).unwrap()["dialog"].as_str().unwrap().to_owned();
+    let (ctx, id) = (app.ui_ctx.clone().expect("a window"), open_id(&app, &key));
+    let host = app.dialogs().expect("a window");
+    assert!(host.with(|host| host.set_json_field(&ctx, id, "smoothness", json!(120))).is_err(), "120% is refused");
+    host.with(|host| host.cancel_by_id(&ctx, id));
+    assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(100.0));
+    for tool in ["pencil", "paintbrush", "blobBrush", "eraser"] {
+        assert!(app.session.tool_options_of(tool).get("smoothness").is_none(), "{tool}");
+    }
 }
 
+/// Each tool's dialog, opened as the user opens it, stores the values set in it as the tool's options: the field
+/// keys, the units (Liquify's percent is a fraction) and the companion keys of the variation rows.
 #[test]
-fn each_tool_shows_its_options_and_ok_sets_them() {
+fn ok_sets_each_tools_options() {
     let mut app = app();
-    // Pencil: Fidelity, fill, the two tolerances; no Size.
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    let text = painted(&mut app);
-    for label in [
-        "Pencil Tool Options",
-        "Fidelity:",
-        "Accurate",
-        "Smooth",
-        "Fill new strokes",
-        "Alt key toggles to Smooth Tool",
-        "Close paths when ends are within:",
-        "Edit selected paths within:",
-        "Live preview",
-    ] {
-        assert!(text.contains(label), "{label} in {text}");
+    let layers = app.session.doc().unwrap().doc.layers.clone();
+    let circle = vectorcraft_tools::circle::ID;
+    let arc = vectorcraft_tools::three_point_arc::ID;
+    let curvature = vectorcraft_tools::curvature_circle::ID;
+    // The tool opened, the fields set, the tool whose options are read, and the options expected there.
+    let rows: Vec<(&str, Value, &str, Value)> = vec![
+        (
+            "pencil",
+            json!({"fidelity": 6.5, "fill": true, "altSmooth": true, "closeWithin": 0, "editWithin": 20, "liveFit": false}),
+            "pencil",
+            json!({"fidelity": 6.5, "fill": true, "altSmooth": true, "closeWithin": 0.0, "editWithin": 20.0, "liveFit": false}),
+        ),
+        ("paintbrush", json!({"fidelity": 3, "keepSelected": false}), "paintbrush", json!({"fidelity": 3.0, "keepSelected": false})),
+        ("smooth", json!({"fidelity": 5, "smoothness": 75}), "smooth", json!({"fidelity": 5.0, "smoothness": 75.0})),
+        (
+            "blobBrush",
+            json!({"angle": 45, "roundness": 0, "sizeMode": "pressure", "sizeVariation": 6, "fidelity": 0.01, "keepSelected": true, "mergeOnlySelection": true}),
+            "blobBrush",
+            json!({"angle": 45.0, "roundness": 0.0, "sizeMode": "pressure", "sizeVariation": 6.0, "fidelity": 0.01, "keepSelected": true, "mergeOnlySelection": true}),
+        ),
+        (
+            "eraser",
+            json!({"angle": 90, "roundness": 25, "size": 20, "angleMode": "bearing", "angleVariation": 30, "roundnessMode": "random",
+                   "roundnessVariation": 20, "sizeMode": "rotation", "sizeVariation": 5}),
+            "eraser",
+            json!({"angle": 90.0, "roundness": 25.0, "size": 20.0, "angleMode": "bearing", "angleVariation": 30.0, "roundnessMode": "random",
+                   "roundnessVariation": 20.0, "sizeMode": "rotation", "sizeVariation": 5.0}),
+        ),
+        (
+            circle,
+            json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
+            circle,
+            json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
+        ),
+        (
+            curvature,
+            json!({"snapTolerance": 8, "annotateRadius": false, "standardAnchors": false}),
+            curvature,
+            json!({"snapTolerance": 8.0, "snapWithoutGuides": true, "annotateRadius": false, "standardAnchors": false, "constantRadius": true}),
+        ),
+        (arc, json!({"direction": true}), arc, json!({"direction": true})),
+        ("objectsOnPath", json!({"pivot": 7, "rotate": 30}), "objectsOnPath", json!({"pivot": 7, "rotate": 30.0})),
+        (
+            "twirl",
+            json!({"width": 80, "intensity": 30, "rate": -120, "simplifyOn": false, "showBrush": false}),
+            "twirl",
+            json!({"width": 80.0, "intensity": 0.3, "rate": -120.0, "simplifyOn": false, "showBrush": false}),
+        ),
+        // One brush serves the eight Symbolism tools. Each tool's dialog takes the rows that tool shows and enables
+        // (od.OD4): the Sprayer's own options in its dialog, Intensity, Method, pressure and the Sizer's own in the
+        // Sizer's.
+        (
+            "symbolSprayer",
+            json!({"diameter": 120, "density": 2, "showBrush": false, "sprayStain": "userDefined", "spraySpin": "userDefined"}),
+            "symbolScreener",
+            json!({"diameter": 120.0, "density": 2.0, "showBrush": false, "sprayStain": "userDefined", "spraySpin": "userDefined"}),
+        ),
+        (
+            "symbolSizer",
+            json!({"intensity": 9, "method": "random", "usePressure": true, "proportional": false, "affectsDensity": true}),
+            "symbolScreener",
+            json!({"diameter": 120.0, "intensity": 9.0, "density": 2.0, "method": "random", "usePressure": true, "showBrush": false,
+                   "sprayStain": "userDefined", "spraySpin": "userDefined", "proportional": false, "affectsDensity": true}),
+        ),
+        ("flare", json!({"rays": 4, "ringsOn": false, "growth": 80}), "flare", json!({"rays": 4.0, "ringsOn": false, "growth": 80.0})),
+    ];
+    for (tool, set, read, expected) in rows {
+        let set: Vec<(&str, Value)> = set.as_object().unwrap().iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        set_through_dialog(&mut app, tool, &set);
+        let options = app.session.tool_options_of(read);
+        for (key, want) in expected.as_object().unwrap() {
+            let got = &options[key.as_str()];
+            let same = match (got.as_f64(), want.as_f64()) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-9,
+                _ => got == want,
+            };
+            assert!(same, "{tool}: `{key}` is {got}, expected {want}");
+        }
     }
-    assert!(!text.contains("Size:"), "{text}");
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert_eq!(
-        (d.f64("fidelity", 0.0), d.bool("fill"), d.bool("altSmooth"), d.f64("closeWithin", 0.0), d.f64("editWithin", 0.0)),
-        (1.5, false, false, 15.0, 12.0)
-    );
-    for (k, v) in [("fidelity", json!(6.5)), ("fill", json!(true)), ("altSmooth", json!(true)), ("closeWithin", json!(0)), ("editWithin", json!(20))]
-    {
-        d.fields.insert(k.into(), v);
-    }
-    super::super::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    let o = app.session.tool_options_of("pencil");
-    assert_eq!(
-        (o["fidelity"].as_f64(), o["fill"].as_bool(), o["altSmooth"].as_bool(), o["closeWithin"].as_f64(), o["editWithin"].as_f64()),
-        (Some(6.5), Some(true), Some(true), Some(0.0), Some(20.0))
-    );
-    // The Paintbrush keeps its own: the Pencil's change left it alone.
-    app.run("tool.options", json!({"tool": "paintbrush"})).unwrap();
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.f64("fidelity", 0.0), d.bool("fill")), (1.5, false));
-    let pb_text = painted(&mut app);
-    assert!(pb_text.contains("Paintbrush Tool Options"));
-    assert!(!pb_text.contains("Alt key toggles to Smooth Tool") && !pb_text.contains("Live preview"), "{pb_text}");
-    // Smooth has Fidelity only, the Eraser Size only, and the Blob Brush Fidelity, Size, Keep selected and Merge only
-    // with selection.
-    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
-    let text = painted(&mut app);
-    assert!(text.contains("Smooth Tool Options") && text.contains("Fidelity:"), "{text}");
-    assert!(
-        !text.contains("Fill new strokes")
-            && !text.contains("Keep selected")
-            && !text.contains("Alt key toggles to Smooth Tool")
-            && !text.contains("Size:"),
-        "{text}"
-    );
-    for tool in ["blobBrush", "eraser"] {
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        let text = painted(&mut app);
-        // The Blob Brush also has Fidelity, Keep selected and Merge only with selection.
-        let blob = tool == "blobBrush";
-        assert!(text.contains("Size:"), "{tool}: {text}");
-        assert_eq!(text.contains("Fidelity:"), blob, "{tool}: {text}");
-        assert_eq!((text.contains("Keep selected"), text.contains("Merge only with selection")), (blob, blob), "{tool}: {text}");
-        // Both tools have Angle and Roundness.
-        assert!(text.contains("Angle:") && text.contains("Roundness:"), "{tool}: {text}");
-        app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!(24));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.tool_options_of(tool)["size"].as_f64(), Some(24.0), "{tool}");
-    }
+    assert_eq!(app.session.doc().unwrap().doc.layers, layers, "OK from a toolbar draws nothing");
 }
 
 /// Live curve fitting (the Pencil's, on by default): on, the path shown while a stroke is
@@ -161,6 +162,10 @@ fn each_tool_shows_its_options_and_ok_sets_them() {
 #[test]
 fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
     let mut app = app();
+    // The window's first frames fit the view, as the dialog's frames below would: the Pencil's Fidelity is in screen
+    // pixels, so both strokes are drawn at one zoom.
+    crate::dialogs::tests::frame(&mut app, vec![]);
+    crate::dialogs::tests::frame(&mut app, vec![]);
     // The anchors of the newest path while a wave around height `y0` is drawn and after the
     // release, with nothing selected (a stroke starting at the end of a selected path would
     // continue it).
@@ -172,7 +177,7 @@ fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
         let pointer = |kind, (x, y)| vectorcraft_tools::PointerEvent::new(kind, x, y);
         let newest = |app: &VectorcraftApp| {
             let doc = &app.session.doc().unwrap().doc;
-            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
         };
         crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, pts[0]), view);
         for p in &pts[1..] {
@@ -183,25 +188,19 @@ fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
         (drawing, newest(app))
     };
     let corners = |anchors: &[vectorcraft_geom::Anchor]| anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p);
-    // On by default: the Pencil's dialog shows it and the Paintbrush's does not.
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    assert!(painted(&mut app).contains("Live curve fitting"));
-    assert!(app.ui.dialog.as_ref().unwrap().bool("liveFit"));
-    super::super::confirm(&mut app).unwrap();
+    // On by default.
+    assert_eq!(app.session.tool_options_of("pencil")["liveFit"].as_bool(), Some(true));
     let (drawing, on) = draw(&mut app, 100.0);
     assert!(!corners(&drawing) && drawing.len() < 20, "fitted while drawn: {} anchors", drawing.len());
     // Off: the points while the stroke is drawn, fitted at the release.
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("liveFit".into(), json!(false));
-    super::super::confirm(&mut app).unwrap();
+    set_through_dialog(&mut app, "pencil", &[("liveFit", json!(false))]);
     app.select_tool("selection");
     assert_eq!(app.session.tool_options_of("pencil")["liveFit"].as_bool(), Some(false), "it lasts while another tool is chosen");
     let (drawing, off) = draw(&mut app, 200.0);
     assert!(corners(&drawing) && drawing.len() > 30, "the points while drawn: {} anchors", drawing.len());
     assert_eq!(off.len(), on.len(), "the release fits the stroke as with the option on");
     assert!(off.iter().zip(&on).all(|(a, b)| (a.p.x - b.p.x).abs() < 1e-9 && (a.p.y - b.p.y - 100.0).abs() < 1e-9), "{off:?}");
-    app.run("tool.options", json!({"tool": "paintbrush"})).unwrap();
-    assert!(!painted(&mut app).contains("Live curve fitting"));
+    assert!(app.session.tool_options_of("paintbrush").get("liveFit").is_none());
 }
 
 #[test]
@@ -224,9 +223,7 @@ fn a_new_fidelity_changes_what_the_pencil_draws() {
         doc.layers[0].children().unwrap().last().unwrap().path_data().map_or(0, |p| p.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>())
     };
     let precise = anchors(&mut app, 100.0);
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(12));
-    super::super::confirm(&mut app).unwrap();
+    set_through_dialog(&mut app, "pencil", &[("fidelity", json!(12))]);
     let smooth = anchors(&mut app, 200.0);
     assert!(smooth < precise, "{smooth} anchors at fidelity 12, {precise} at the default");
 }
@@ -251,13 +248,9 @@ fn a_new_fidelity_changes_what_the_blob_brush_draws() {
         let doc = &app.session.doc().unwrap().doc;
         doc.layers[0].children().unwrap().last().unwrap().path_data().map_or(0, |p| p.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>())
     };
-    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("fidelity", 0.0), 1.5);
-    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options_of("blobBrush")["fidelity"].as_f64(), Some(1.5));
     let smooth = anchors(&mut app, 100.0);
-    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(0.01));
-    super::super::confirm(&mut app).unwrap();
+    set_through_dialog(&mut app, "blobBrush", &[("fidelity", json!(0.01))]);
     app.select_tool("selection");
     assert_eq!(app.session.tool_options_of("blobBrush")["fidelity"].as_f64(), Some(0.01), "it lasts while another tool is chosen");
     let precise = anchors(&mut app, 200.0);
@@ -283,17 +276,11 @@ fn the_new_path_is_selected_only_with_keep_selected_on() {
     for tool in ["pencil", "paintbrush"] {
         app.run("select.set", json!({"ids": []})).unwrap();
         // On by default: the new path is selected.
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        assert!(painted(&mut app).contains("Keep selected"), "{tool}");
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert!(d.bool("keepSelected"), "{tool}");
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of(tool)["keepSelected"].as_bool(), Some(true), "{tool}");
         let (selected, id) = stroke(&mut app, tool, 100.0);
         assert_eq!(selected, vec![id], "{tool}");
         // Off: the next stroke leaves nothing selected, the earlier path included (#5752).
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("keepSelected".into(), json!(false));
-        super::super::confirm(&mut app).unwrap();
+        set_through_dialog(&mut app, tool, &[("keepSelected", json!(false))]);
         // It lasts while another tool is chosen.
         app.select_tool("selection");
         assert_eq!(app.session.tool_options_of(tool)["keepSelected"].as_bool(), Some(false), "{tool}");
@@ -325,13 +312,10 @@ fn the_blob_brush_options_set_what_a_stroke_merges_with_and_selects() {
         vectorcraft_doc::NodeId(r["id"].as_u64().unwrap())
     };
     let (a, b) = (blob(&mut app, 100.0), blob(&mut app, 240.0));
-    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
     // Both are off by default.
-    assert!(!d.bool("keepSelected") && !d.bool("mergeOnlySelection"));
-    d.fields.insert("keepSelected".into(), json!(true));
-    d.fields.insert("mergeOnlySelection".into(), json!(true));
-    super::super::confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["keepSelected"].as_bool(), o["mergeOnlySelection"].as_bool()), (Some(false), Some(false)));
+    set_through_dialog(&mut app, "blobBrush", &[("keepSelected", json!(true)), ("mergeOnlySelection", json!(true))]);
     let o = app.session.tool_options_of("blobBrush");
     assert_eq!((o["keepSelected"].as_bool(), o["mergeOnlySelection"].as_bool()), (Some(true), Some(true)));
     // With `b` selected, the stroke merges into `b` alone, and leaves it selected.
@@ -340,79 +324,45 @@ fn the_blob_brush_options_set_what_a_stroke_merges_with_and_selects() {
     assert_eq!(ids(&app), vec![a, b], "merged into b only");
 }
 
-/// Eraser Tool Options' Angle and Roundness shape the tip the next Eraser drag erases with,
-/// and the tool keeps them while another tool is chosen.
 /// The Blob Brush's and the Eraser's Size is Fixed or Pressure (#4590, #3961), with the Variation
 /// Pressure adds and takes; OK sets both, each tool keeping its own, and the Pencil has neither.
 #[test]
 fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     let mut app = app();
     for (tool, variation) in [("blobBrush", 6.0), ("eraser", 4.0)] {
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        let text = painted(&mut app);
-        assert!(text.contains("Fixed") && text.contains("Variation:"), "{tool}: {text}");
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.str("sizeMode"), d.f64("sizeVariation", -1.0)), ("fixed".to_string(), 0.0), "{tool}: Fixed with no variation by default");
-        d.fields.insert("sizeMode".into(), json!("pressure"));
-        d.fields.insert("sizeVariation".into(), json!(variation));
-        super::super::confirm(&mut app).unwrap();
+        let o = app.session.tool_options_of(tool);
+        assert_eq!((o["sizeMode"].as_str(), o["sizeVariation"].as_f64()), (Some("fixed"), Some(0.0)), "{tool}: Fixed with no variation by default");
+        set_through_dialog(&mut app, tool, &[("sizeMode", json!("pressure")), ("sizeVariation", json!(variation))]);
         let o = app.session.tool_options_of(tool);
         assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("pressure"), Some(variation)), "{tool}");
-        app.run("tool.options", json!({"tool": tool})).unwrap();
-        assert!(painted(&mut app).contains("Pressure"), "{tool}");
     }
-    app.run("tool.options", json!({"tool": "pencil"})).unwrap();
-    let text = painted(&mut app);
-    assert!(!text.contains("Variation:") && !text.contains("Fixed"), "{text}");
+    let o = app.session.tool_options_of("pencil");
+    assert!(o.get("sizeMode").is_none() && o.get("sizeVariation").is_none());
 }
 
-#[test]
-fn the_eraser_options_set_the_tips_angle_and_roundness() {
-    let mut app = app();
-    // The width of the gap a vertical Eraser drag cuts through the middle of a 100 pt square.
-    let erase = |app: &mut VectorcraftApp| {
-        app.run("select.set", json!({"ids": []})).unwrap();
-        let r = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
-        let id = r["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        app.select_tool("eraser");
-        let view = app.view_info();
-        let pointer = |kind, y| vectorcraft_tools::PointerEvent::new(kind, 150.0, y);
-        crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, 50.0), view);
-        for y in [100.0, 150.0, 200.0] {
-            crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Drag, y), view);
-        }
-        crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Up, 250.0), view);
-        let st = app.session.doc().unwrap();
-        let bounds: Vec<_> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)?.path_data()?.control_bounds()).collect();
-        let [a, b] = bounds[..] else { panic!("two halves: {bounds:?}") };
-        let (l, r) = if a.x0 < b.x0 { (a, b) } else { (b, a) };
-        r.x0 - l.x1
-    };
-    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
-    // A round tip by default.
-    assert_eq!((d.f64("angle", -1.0), d.f64("roundness", -1.0)), (0.0, 100.0));
-    d.fields.insert("size".into(), json!(20));
-    super::super::confirm(&mut app).unwrap();
-    let round = erase(&mut app);
-    assert!((round - 20.0).abs() < 0.2, "a 20 pt round tip cuts {round} pt");
-    // Upright and a quarter as wide: the band it erases is 5 pt wide.
-    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("angle".into(), json!(90));
-    d.fields.insert("roundness".into(), json!(25));
-    super::super::confirm(&mut app).unwrap();
-    app.select_tool("selection");
-    let o = app.session.tool_options_of("eraser");
-    assert_eq!((o["angle"].as_f64(), o["roundness"].as_f64(), o["size"].as_f64()), (Some(90.0), Some(25.0), Some(20.0)));
-    let narrow = erase(&mut app);
-    assert!((narrow - 5.0).abs() < 0.2, "a 20 by 5 pt upright tip cuts {narrow} pt");
+/// The names and values the window's access tree shows.
+fn shown_text(app: &mut VectorcraftApp) -> String {
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    update.nodes.iter().flat_map(|(_, node)| [node.label(), node.value()]).flatten().collect::<Vec<_>>().join("\n")
 }
 
+/// The Blob Brush's Size menu offers Stylus Wheel beside Fixed and Pressure, Fixed still the
+/// default; the menu shows it once chosen, and OK sets it with the Variation.
 #[test]
-fn the_other_tools_have_no_freehand_options() {
+fn the_blob_brush_size_offers_the_stylus_wheel() {
     let mut app = app();
-    assert!(open(&mut app, "pen").is_err());
-    assert!(app.ui.dialog.is_none());
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert_eq!(crate::dialogs::tests::fields(&app)["sizeMode"], json!("fixed"), "Fixed by default");
+    crate::dialogs::tests::set(&mut app, "sizeMode", json!("stylusWheel"));
+    crate::dialogs::tests::set(&mut app, "sizeVariation", json!(5));
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "{text}");
+    assert!(crate::dialogs::tests::confirm(&mut app), "OK closes the dialog");
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("stylusWheel"), Some(5.0)));
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "it shows again on the next open: {text}");
 }

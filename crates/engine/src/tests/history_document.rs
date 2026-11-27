@@ -1,5 +1,6 @@
 //! History panel › New Document from State (`edit.newDocumentFromState`).
 
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -78,18 +79,29 @@ fn the_source_stays_as_it_is() {
     assert!(s.doc().unwrap().is_dirty(), "the new document is unsaved");
 }
 
-/// An index that names no state, or is not a whole number, is an error and changes nothing: no
-/// document, no step and no Untitled number is used up.
+/// An index that names no state (`no history state N`), or is not a whole number ("`index` must be
+/// a whole number"), is an error and changes nothing: no document, no step and no Untitled number
+/// is used up.
 #[test]
 fn a_bad_index_is_an_error_and_changes_nothing() {
     let mut s = three_rectangles_one_undone();
     let source = s.doc().unwrap().doc.clone();
     let untitled = s.peek_untitled();
-    let bad: [Value; 8] = [json!(4), json!(99), json!(-1), json!(1.5), json!("1"), json!(true), json!([1]), json!(u64::MAX)];
-    for index in bad {
+    let bad: [(Value, bool); 8] = [
+        (json!(4), true),
+        (json!(99), true),
+        (json!(u64::MAX), true),
+        (json!(-1), false),
+        (json!(1.5), false),
+        (json!("1"), false),
+        (json!(true), false),
+        (json!([1]), false),
+    ];
+    for (index, whole) in bad {
         let e = s.execute(CMD, &json!({ "index": index })).unwrap_err();
         assert!(matches!(e, EngineError::BadParams { .. }), "{index}: {e}");
-        assert!(e.to_string().contains(&format!("no history state {index}")), "{e}");
+        let want = if whole { format!("no history state {index}") } else { "`index` must be a whole number".to_string() };
+        assert_eq!(e.to_string(), format!("invalid parameters for `{CMD}`: {want}"), "{index}");
         assert_eq!(s.documents().len(), 1, "{index}");
         assert_eq!(steps(&s), (2, 1), "{index}");
         assert!(Arc::ptr_eq(&s.doc().unwrap().doc, &source), "{index}");
@@ -262,7 +274,72 @@ fn a_file_the_source_finds_in_its_folder_is_found_from_the_new_document() {
     s.execute(CMD, &json!({})).unwrap();
     assert_eq!(s.active_index(), Some(1), "the new document");
     let c = check(&mut s);
-    assert_eq!((&c["links"][0]["status"], &c["links"][0]["path"]), (&json!("ok"), &json!(moved)), "{c}");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&moved))), "{c}");
+}
+
+/// A linked file missing from the moved source keeps the place its relative path names from the
+/// source's folder: the new document, saved beside the source, writes the same relative path.
+#[test]
+fn a_missing_file_keeps_its_relative_path_in_the_new_document() {
+    let a = Folder::new("history-document-missing-a");
+    let b = Folder::new("history-document-missing-b");
+    let away = Folder::new("history-document-missing-away");
+    write(&a.file("art/photo.png"), &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    s.execute("document.save", &json!({"path": a.file("poster.vectorcraft")})).unwrap();
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    let r = s.execute("document.open", &json!({"path": b.file("poster.vectorcraft")})).unwrap();
+    assert_eq!(r["missingLinks"][0]["name"], "photo.png", "{r}");
+    s.execute(CMD, &json!({})).unwrap();
+    let copy = b.file("copy.vectorcraft");
+    s.execute("document.save", &json!({"path": copy})).unwrap();
+    let saved: Value = serde_json::from_slice(&std::fs::read(&copy).unwrap()).unwrap();
+    let link = &saved["document"]["layers"][0]["kind"]["children"][0]["kind"]["link"];
+    assert_eq!(link["relative"].as_str(), Some("art/photo.png"), "{link}");
+}
+
+/// A linked file that comes back beside the document the source was read from, after the source
+/// was saved in another folder, is found from the new document.
+#[test]
+fn a_file_back_beside_the_source_it_was_read_from_is_found_from_the_new_document() {
+    let a = Folder::new("history-document-back-a");
+    let b = Folder::new("history-document-back-b");
+    let away = Folder::new("history-document-back-away");
+    write(&a.file("art/photo.png"), &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    s.execute("document.save", &json!({"path": a.file("poster.vectorcraft")})).unwrap();
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    s.execute("document.open", &json!({"path": b.file("poster.vectorcraft")})).unwrap();
+    std::fs::create_dir_all(b.0.join("saved")).unwrap();
+    s.execute("document.save", &json!({"path": b.file("saved/poster.vectorcraft")})).unwrap();
+    std::fs::rename(away.0.join("art"), b.0.join("art")).unwrap();
+    let source = s.active_index().unwrap();
+    s.execute(CMD, &json!({})).unwrap();
+    let c = s.execute("links.check", &json!({})).unwrap();
+    let moved = b.file("art/photo.png");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&moved))), "{c}");
+    // A file beside the folder the source was last saved in is found too.
+    std::fs::create_dir_all(b.0.join("saved/art")).unwrap();
+    std::fs::rename(&moved, b.file("saved/art/photo.png")).unwrap();
+    s.execute("document.activate", &json!({"index": source})).unwrap();
+    s.execute(CMD, &json!({})).unwrap();
+    let c = s.execute("links.check", &json!({})).unwrap();
+    let saved = b.file("saved/art/photo.png");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&saved))), "{c}");
+    // Missing again when the new document is saved, the file keeps the place it was found.
+    std::fs::rename(&saved, away.file("photo.png")).unwrap();
+    std::fs::create_dir_all(b.0.join("new")).unwrap();
+    let copy = b.file("new/copy.vectorcraft");
+    s.execute("document.save", &json!({"path": copy})).unwrap();
+    let file: Value = serde_json::from_slice(&std::fs::read(&copy).unwrap()).unwrap();
+    let link = &file["document"]["layers"][0]["kind"]["children"][0]["kind"]["link"];
+    assert_eq!(link["relative"].as_str(), Some("../saved/art/photo.png"), "{link}");
 }
 
 /// The same holds for a linked image only a symbol shows.

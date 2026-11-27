@@ -4,15 +4,35 @@
 //! selected and what was left out. Everything goes through `addon.select.byLinkStatus`; the dialog
 //! lists what `links.list` reports.
 
-use egui::{Ui, vec2};
+use craft::behavior::{ColumnKey, ColumnWidth, EditEvent, keyed};
+use craft::i18n::Folder;
+use craft::i18n::matcher::Matcher;
+use craft::keymap::Mods;
+use craft::menu::Node;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{
+    Bind, CollectionEvent, ColumnSpec, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, ToggleColumn, ToggleEdit,
+};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id, serde_fields, set_serde_field};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::list::{ListRow, ToggleCell, ToggleState};
+use craft::ui::menu::{Alternate, PanelRow};
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::table::Table;
+use craft::ui::text::TextField;
+use egui::Ui;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use super::{finished, label};
 use crate::VectorcraftApp;
-use crate::dialogs::{DialogSpec, form};
-use crate::menus::Item;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets;
+use crate::menus::cp;
 
 /// Select by Link Status, and its dialog's kind.
 pub const COMMAND: &str = "addon.select.byLinkStatus";
@@ -26,21 +46,46 @@ pub const STATUSES: [(&str, &str, &str); 4] = [
 ];
 /// The dialog's Show choices: (value, label).
 const SHOW: [(&str, &str); 5] = [("all", "All"), ("linked", "Linked"), ("embedded", "Embedded"), ("missing", "Missing"), ("modified", "Modified")];
+/// The rows the image table shows before it scrolls.
+const LIST_ROWS: u16 = 9;
 /// How often the statuses are looked at again while the document stays as it is (s): files
 /// change on disk without the document knowing.
 const RECHECK: f64 = 2.0;
 /// The least time between two looks while the document keeps changing (s).
 const SETTLE: f64 = 0.5;
-const ROW_H: f32 = 22.0;
-const LIST_H: f32 = 240.0;
-const STATUS_W: f32 = 80.0;
-const FORMAT_W: f32 = 70.0;
+/// The table's columns.
+const CHECK: ColumnKey = ColumnKey::new("check");
+const NAME: ColumnKey = ColumnKey::new("name");
+const STATUS: ColumnKey = ColumnKey::new("status");
+const FORMAT: ColumnKey = ColumnKey::new("format");
 
 /// The menu items: one per status, then the dialog.
-pub fn menu() -> Vec<Item> {
-    let mut v: Vec<Item> = STATUSES.iter().map(|&(status, label, _)| Item::Cmd(label, COMMAND, json!({ "status": status }))).collect();
-    v.push(Item::Cmd("Select by Link Status…", COMMAND, Value::Null));
+pub fn menu() -> Vec<Node> {
+    let mut v: Vec<Node> = STATUSES.iter().map(|&(status, label, _)| cp(label, COMMAND, json!({ "status": status }))).collect();
+    v.push(cp("Select by Link Status…", COMMAND, Value::Null));
     v
+}
+
+/// The Links panel's four Select rows: each runs its status, and with Shift adds to the selection
+/// ([`with_shift`]).
+pub(crate) fn rows() -> Vec<PanelRow> {
+    STATUSES
+        .iter()
+        .map(|&(status, ..)| {
+            let params = json!({ "status": status });
+            let shifted = CommandRef::with_params(COMMAND, with_shift(params.clone()));
+            PanelRow::Alternated(CommandRef::with_params(COMMAND, params), Alternate::new(Mods::SHIFT, shifted))
+        })
+        .collect()
+}
+
+/// Dims the Select row of each status no image or placed document has ([`enabled`]), in the states of
+/// the commands the Links panel's menu shows.
+pub(crate) fn states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for &(status, ..) in &STATUSES {
+        let params = json!({ "status": status });
+        states.set(CommandRef::with_params(COMMAND, params.clone()), CommandState::new().enabled(enabled(app, &params)));
+    }
 }
 
 /// Which statuses ([`STATUSES`] order) the active document's images and placed documents have,
@@ -52,10 +97,17 @@ pub struct Present {
     pub has: [bool; 4],
 }
 
-/// The statuses the `links.list` result `list` holds, in [`STATUSES`] order.
+/// The statuses the rows of the `links.list` result `list` that can be selected hold, in
+/// [`STATUSES`] order.
 pub(crate) fn statuses_in(list: &Value) -> [bool; 4] {
-    let rows = list["links"].as_array().map_or(&[][..], Vec::as_slice);
+    let rows = canvas_rows(list);
     STATUSES.map(|(status, ..)| rows.iter().any(|r| command_status(r) == status))
+}
+
+/// The rows of the `links.list` result `list` of objects in the layer tree, which can be
+/// selected (a row with an `owner` is in a symbol, graph design, pattern or opacity mask).
+fn canvas_rows(list: &Value) -> Vec<Value> {
+    list["links"].as_array().into_iter().flatten().filter(|r| r["owner"].is_null()).cloned().collect()
 }
 
 /// The status of a `links.list` row as the command names it (`ok` is `linked`).
@@ -104,12 +156,7 @@ pub(crate) fn with_shift(mut p: Value) -> Value {
 /// it opens the dialog instead.
 pub(crate) fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if p.as_object().is_none_or(serde_json::Map::is_empty) {
-        if app.session.active().is_none() {
-            return Err("no document".into());
-        }
-        let fields = fields(app);
-        app.ui.dialog = Some(Dialog::new(KIND, fields));
-        return Ok(json!({ "dialog": KIND }));
+        return open(app);
     }
     let r = app.session.execute(COMMAND, p).map_err(|e| e.to_string())?;
     let count = r["count"].as_u64().unwrap_or(0);
@@ -154,38 +201,48 @@ pub(crate) fn message(statuses: &[&str], count: u64, reasons: &[&str]) -> String
     crate::i18n::msg_n(reasons.len() as u64, one, other, &[("selected", &selected)])
 }
 
-/// The dialog's fields to start with: every image and placed document (`__rows`, as `links.list`
-/// lists them, read once), those selected chosen, All shown, Zoom to Selection on.
-pub(crate) fn fields(app: &mut VectorcraftApp) -> Value {
+/// What the dialog's controls edit; its serde names are the field names automation sets.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Fields {
+    /// The ids of the rows chosen.
+    pub(crate) ids: Vec<u64>,
+    /// The Show choice: `all` or a status.
+    pub(crate) show: String,
+    /// The name search.
+    pub(crate) search: String,
+    /// Zoom to Selection.
+    pub(crate) zoom: bool,
+}
+
+/// Select by Link Status: every image and placed document of the layer tree with its status.
+pub(crate) struct LinkStatusDialog {
+    pub(crate) fields: Fields,
+    /// The rows as `links.list` lists them, read once when the dialog opened.
+    pub(crate) rows: Vec<Value>,
+}
+
+/// Opens the dialog on every image and placed document in the layer tree, those selected chosen, All
+/// shown, Zoom to Selection on.
+pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    if app.session.active().is_none() {
+        return Err("no document".into());
+    }
     let list = app.session.execute("links.list", &json!({})).unwrap_or_default();
-    let rows: Vec<Value> = list["links"].as_array().cloned().unwrap_or_default();
+    let rows = canvas_rows(&list);
     let selected: Vec<u64> = app.session.active().map(|st| st.selection.objects.iter().map(|id| id.0).collect()).unwrap_or_default();
-    let chosen: Vec<u64> = rows.iter().filter_map(|r| r["id"].as_u64()).filter(|id| selected.contains(id)).collect();
-    json!({ "__rows": rows, "ids": chosen, "show": "all", "zoom": true })
+    let ids = rows.iter().filter_map(|r| r["id"].as_u64()).filter(|id| selected.contains(id)).collect();
+    let fields = Fields { ids, show: "all".into(), search: String::new(), zoom: true };
+    app.dialogs().ok_or("no window")?.with(|host| host.open(LinkStatusDialog { fields, rows }));
+    Ok(json!({ "dialog": KIND }))
 }
 
-pub(crate) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Select by Link Status").to_string(),
-    body,
-    confirm,
-    ok: Some("Select"),
-    min_width: 420.0,
-    max_width: Some(480.0),
-    ok_enabled: Some(|_, d| !chosen(d).is_empty()),
-    ..DialogSpec::FORM
-};
-
-/// The ids chosen in dialog `d`.
-pub(crate) fn chosen(d: &Dialog) -> Vec<u64> {
-    d.fields.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).collect()
-}
-
-/// The rows of `rows` the name search `query` (ignoring case) and the Show choice `show` let through.
-pub(crate) fn shown<'a>(rows: &'a [Value], query: &str, show: &str) -> Vec<&'a Value> {
-    let q = query.trim().to_lowercase();
+/// The rows of `rows` the name search `query` and the Show choice `show` let through, the search
+/// folded for the language of `folder`.
+pub(crate) fn shown<'a>(rows: &'a [Value], query: &str, show: &str, folder: &Folder) -> Vec<&'a Value> {
+    let matcher = Matcher::new(folder, query);
     rows.iter()
         .filter(|r| show == "all" || command_status(r) == show)
-        .filter(|r| q.is_empty() || r["name"].as_str().unwrap_or_default().to_lowercase().contains(&q))
+        .filter(|r| matcher.score(r["name"].as_str().unwrap_or_default()).is_some())
         .collect()
 }
 
@@ -203,86 +260,140 @@ pub(crate) fn choose_shown(chosen: &mut Vec<u64>, shown: &[u64], on: bool) {
     }
 }
 
-/// Tick or untick row `id`.
-pub(crate) fn toggle(chosen: &mut Vec<u64>, id: u64) {
-    match chosen.iter().position(|c| *c == id) {
-        Some(i) => {
-            chosen.remove(i);
-        }
-        None => chosen.push(id),
-    }
-}
-
 /// A status's label in the list.
 fn status_label(status: &str) -> &'static str {
     STATUSES.iter().find(|(s, ..)| *s == status).map_or("", |&(.., label)| tl!(label))
 }
 
-/// The dialog: the search, the Show filter, a checkbox row per image shown (name, status, format),
-/// All / None with the count chosen, and Zoom to Selection. Returns false: nothing to preview.
-fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let rows: Vec<Value> = d.fields.get("__rows").and_then(Value::as_array).cloned().unwrap_or_default();
-    let query = widgets::search_field(ui, ui.scope_id().with("select-by-link-status-search"), tl!("Search images"));
-    d.fields.insert("__search".into(), json!(query));
-    ui.add_space(4.0);
-    form::choice(ui, d, "show", tl!("Show:"), (60.0, 140.0), &SHOW);
-    let show = d.str("show");
-    let visible = shown(&rows, &query, &show);
-    let mut picked = chosen(d);
-    ui.add_space(4.0);
-    egui::ScrollArea::vertical().max_height(LIST_H).auto_shrink([false, true]).show(ui, |ui| {
-        if visible.is_empty() {
-            ui.label(egui::RichText::new(tl!("No images match.")).color(t.text_dim));
-        }
-        for r in &visible {
-            let Some(id) = r["id"].as_u64() else { continue };
-            let name = r["name"].as_str().unwrap_or_default();
-            let status = status_label(command_status(r));
-            let format = r["format"].as_str().unwrap_or_default();
-            ui.horizontal(|ui| {
-                ui.set_min_height(ROW_H);
-                let on = picked.contains(&id);
-                let name_w = (ui.available_width() - STATUS_W - FORMAT_W - 40.0).max(60.0);
-                let check = ui.scope(|ui| {
-                    ui.set_width(name_w + 24.0);
-                    widgets::check_name(ui, name, on)
-                });
-                if check.inner {
-                    toggle(&mut picked, id);
-                }
-                ui.add_sized(vec2(STATUS_W, ROW_H), egui::Label::new(egui::RichText::new(status).color(t.text_dim)).truncate());
-                ui.add_sized(vec2(FORMAT_W, ROW_H), egui::Label::new(egui::RichText::new(format).color(t.text_dim)).truncate());
-            });
-        }
-    });
-    ui.add_space(4.0);
-    let ids: Vec<u64> = visible.iter().filter_map(|r| r["id"].as_u64()).collect();
-    ui.horizontal(|ui| {
-        if widgets::flat_button_fit(ui, "All", 50.0).clicked() {
-            choose_shown(&mut picked, &ids, true);
-        }
-        if widgets::flat_button_fit(ui, "None", 50.0).clicked() {
-            choose_shown(&mut picked, &ids, false);
-        }
-        let count = crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &picked.len().to_string()), ("total", &rows.len().to_string())]);
-        ui.label(egui::RichText::new(count).color(t.text_dim));
-    });
-    d.fields.insert("ids".into(), json!(picked));
-    ui.add_space(6.0);
-    form::check(ui, d, "zoom", tl!("Zoom to Selection"));
-    false
+/// One row of the dialog's table.
+struct Line {
+    id: u64,
+    name: String,
+    status: &'static str,
+    format: String,
 }
 
-/// The command's params for dialog `d`: the rows chosen, whatever their status.
-pub(crate) fn params(d: &Dialog) -> Value {
-    json!({ "status": STATUSES.map(|(s, ..)| s), "ids": chosen(d), "zoom": d.bool("zoom") })
+/// The tick that flips a row in a toggle edit of the table's check column: `Update`, `Set` and
+/// `Commit` all carry the cell's new state, so a sweep and a press read alike.
+fn ticked(edit: &EditEvent<ToggleEdit<u64>>) -> Option<&ToggleEdit<u64>> {
+    match edit {
+        EditEvent::Update { value, .. } | EditEvent::Set { after: value, .. } | EditEvent::Commit { after: value, .. } if value.column == CHECK => {
+            Some(value)
+        }
+        _ => None,
+    }
 }
 
-/// Select: select the rows chosen (and zoom to them) and close.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    app.ui.dialog = None;
-    app.run(COMMAND, params(d))
+/// The dialog's rows: the search, the Show filter, a table of the images shown (a check, name,
+/// status, format), All / None with the count chosen, and Zoom to Selection.
+fn body(ui: &mut Ui, fields: &mut Fields, rows: &[Value]) {
+    TextField::search(label(tl!("Search images")), Bind::bound(&mut fields.search)).show(ui);
+    let shows: Vec<Entry<String>> = SHOW.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
+    Field::new(label(tl!("Show:"))).show(ui, |ui, _| {
+        let picked = Select::new(label(tl!("Show:")), Bind::given(fields.show.clone()), &shows).show(ui).value().cloned();
+        if let Some(show) = picked {
+            fields.show = show;
+        }
+    });
+    let visible = shown(rows, &fields.search, &fields.show, &Env::of(ui).folder());
+    let lines: Vec<Line> = visible
+        .iter()
+        .filter_map(|r| {
+            Some(Line {
+                id: r["id"].as_u64()?,
+                name: r["name"].as_str().unwrap_or_default().to_owned(),
+                status: status_label(command_status(r)),
+                format: r["format"].as_str().unwrap_or_default().to_owned(),
+            })
+        })
+        .collect();
+    let ids: Vec<u64> = lines.iter().map(|line| line.id).collect();
+    let on = fields.ids.clone();
+    let columns = vec![
+        ColumnSpec::toggle(CHECK, Label::Empty, ToggleColumn::sweepable()),
+        ColumnSpec::new(NAME, label(tl!("Name")), ColumnWidth::fill(1.0)),
+        ColumnSpec::new(STATUS, label(tl!("Status")), ColumnWidth::Content),
+        ColumnSpec::new(FORMAT, label(tl!("Format")), ColumnWidth::Content),
+    ];
+    let source = keyed(&ids, |id| *id).with_toggled(|id, column| *column == CHECK && on.contains(id));
+    let out = Table::<u64>::new(label(tl!("Select by Link Status")), columns)
+        .select(SelectMode::None)
+        .empty(label(tl!("No images match.")))
+        .max_rows(LIST_ROWS)
+        .show_items(ui, &source, &mut |id, item| match lines.iter().find(|line| line.id == *id) {
+            Some(line) => ListRow::new(line.name.clone())
+                .cells(item.cells())
+                .toggle(ToggleCell::check(CHECK, ToggleState::of(on.contains(id)), "{row}"))
+                .cell(STATUS, line.status)
+                .cell(FORMAT, line.format.clone()),
+            None => ListRow::new(""),
+        });
+    for event in out.events {
+        if let CollectionEvent::Toggle(edit) = event
+            && let Some(tick) = ticked(&edit)
+        {
+            choose_shown(&mut fields.ids, &[tick.key], tick.on);
+        }
+    }
+    Row::new().show(ui, |ui, _| {
+        if Button::new(label(tl!("All"))).show(ui).clicked() {
+            choose_shown(&mut fields.ids, &ids, true);
+        }
+        if Button::new(label(tl!("None"))).show(ui).clicked() {
+            choose_shown(&mut fields.ids, &ids, false);
+        }
+        let count = crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &fields.ids.len().to_string()), ("total", &rows.len().to_string())]);
+        Text::new(Label::from(count.to_string())).shade(Shade::Muted).show(ui);
+    });
+    Checkbox::new(Bind::bound(&mut fields.zoom)).label(label(tl!("Zoom to Selection"))).show(ui);
+}
+
+impl StackDialog for LinkStatusDialog {
+    type Result = Fields;
+
+    fn id(&self) -> DialogId {
+        dialog_id(KIND)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Fields>> {
+        let LinkStatusDialog { fields, rows } = self;
+        let can = !fields.ids.is_empty();
+        let shown = FormDialog::new(label(tl!("Select by Link Status")), Bind::bound(fields)).ok_label(label(tl!("Select"))).ok_enabled(can).show(
+            ui,
+            |ui, _, fields| {
+                body(ui, fields, rows);
+                !fields.ids.is_empty()
+            },
+        );
+        finished(shown)
+    }
+
+    fn confirm(&mut self, _: &egui::Context) -> Option<Fields> {
+        (!self.fields.ids.is_empty()).then(|| self.fields.clone())
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        serde_fields(&self.fields)
+    }
+
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        set_serde_field(&mut self.fields, field, value)
+    }
+}
+
+/// The command's params for the dialog's `fields`: the rows chosen, whatever their status.
+pub(crate) fn params(fields: &Fields) -> Value {
+    json!({ "status": STATUSES.map(|(s, ..)| s), "ids": fields.ids, "zoom": fields.zoom })
+}
+
+/// Each frame: OK selects the rows chosen (and zooms to them), after the dialog closed.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    if let Some(DialogResult::Ok(fields)) = dialogs.with(|host| host.take_by_id::<LinkStatusDialog>(dialog_id(KIND)))
+        && let Err(e) = run(app, &params(&fields))
+    {
+        app.status(e);
+    }
 }
 
 #[cfg(test)]

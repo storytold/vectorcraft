@@ -1,5 +1,5 @@
-//! Placed documents: another VectorCraft file, or a page of a PDF or `.ai` file, placed linked
-//! ([`PlacedDocument`]).
+//! Placed documents: another VectorCraft file, a page of a PDF or `.ai` file, or an EPS file,
+//! placed linked ([`PlacedDocument`]).
 //!
 //! The object keeps the link to the file and the file's bytes, stored like image data in
 //! [`Document::images`] (with a small preview a save writes instead, as for linked images), so the
@@ -7,9 +7,9 @@
 //! joins the object tree, so editing can't reach it: it is locked by design. Drawing and exporting
 //! expand it like a live object ([`crate::live::expanded`]).
 //!
-//! The file is read by the engine's loader (native documents, PDF and `.ai` pages), which lives
-//! above this crate and registers itself ([`set_loader`]); the art read is kept in a small cache
-//! by content. Before exporting,
+//! The file is read by the engine's loader (native documents, PDF and `.ai` pages, EPS files),
+//! which lives above this crate and registers itself ([`set_loader`]); the art read is kept in a
+//! small cache by content. Before exporting,
 //! every exporter calls [`Document::with_placed_art`], which adds the resources the art uses
 //! (images, symbols, patterns) under names of their own ([`RESOURCE_PREFIX`]) to a temporary copy
 //! of the document, so they never meet the user's or show in panels. Placed documents inside a
@@ -27,8 +27,8 @@ use vectorcraft_color::Paint;
 
 use crate::{AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
 
-/// A placed document: an artboard of another VectorCraft file, or a page of a PDF or `.ai` file,
-/// shown as one locked object.
+/// A placed document: an artboard of another VectorCraft file, a page of a PDF or `.ai` file, or
+/// an EPS file's art, shown as one locked object.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlacedDocument {
     /// The file (its `page` is the artboard or page shown, 1-based).
@@ -166,13 +166,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     }
 }
 
-/// The roots of `d`'s art: layers, symbol definitions and pattern swatches.
+/// The roots of `d`'s art: layers, symbol definitions, pattern swatches and
+/// [`Document::mounted_art`].
 fn roots(d: &Document) -> impl Iterator<Item = &Arc<Node>> {
     d.layers
         .iter()
         .chain(d.symbols.iter().map(|s| &s.art))
         .chain(d.graph_designs.iter().map(|g| &g.art))
         .chain(d.patterns.iter().flat_map(|p| &p.art))
+        .chain(d.mounted_art.iter().map(|(n, _)| n))
 }
 
 fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
@@ -181,6 +183,7 @@ fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
         .chain(d.symbols.iter_mut().map(|s| &mut s.art))
         .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
         .chain(d.patterns.iter_mut().flat_map(|p| &mut p.art))
+        .chain(d.mounted_art.iter_mut().map(|(n, _)| n))
 }
 
 impl Document {
@@ -458,7 +461,7 @@ fn read_preview(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocu
     doc.layers.clear();
     doc.swatches.clear();
     let mime = if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { "image/png" };
-    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None });
+    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None, file_font: Default::default() });
     let xf = Affine::scale_non_uniform(frame.width() / w as f64, frame.height() / h as f64);
     let im = ImageObject { key: "preview".into(), width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
     let art = Node::new(art_id(), NodeKind::Group { children: vec![Arc::new(Node::new(art_id(), NodeKind::Image(Box::new(im))))], clip: false });
@@ -516,8 +519,16 @@ fn rename(n: &mut Node, prefix: &str) {
                     paint(&mut r.style.fill);
                     paint(&mut r.style.stroke);
                 }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| *key = format!("{prefix}{key}"));
+                }
             }
-            NodeKind::Image(im) => im.key = format!("{prefix}{}", im.key),
+            NodeKind::Image(im) => {
+                im.key = format!("{prefix}{}", im.key);
+                if let Some(m) = n.extras.0.as_deref_mut().and_then(|e| e.color_mask.as_deref_mut()) {
+                    (m.key, m.from) = (format!("{prefix}{}", m.key), format!("{prefix}{}", m.from));
+                }
+            }
             NodeKind::PlacedDocument(p) => p.key = format!("{prefix}{}", p.key),
             NodeKind::SymbolInstance { symbol, .. } => *symbol = format!("{prefix}{symbol}"),
             _ => {}
@@ -679,6 +690,30 @@ mod tests {
             children.push(Arc::new(Node::new(NodeId(52), NodeKind::PlacedDocument(Box::new(inner)))));
         }
         Some((d, Node::new(NodeId(0), NodeKind::Group { children, clip: false }), Rect::new(0.0, 0.0, 40.0, 20.0)))
+    }
+
+    /// A color-masked image in a placed document's art keeps its masked pixels under the prefixed
+    /// names its resources get.
+    #[test]
+    fn a_color_mask_takes_the_prefixed_image_names() {
+        let im =
+            ImageObject { key: "own".into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        let mut n = Node::new(NodeId(7), NodeKind::Image(Box::new(im)));
+        n.extras_mut().color_mask = Some(Box::new(crate::color_mask::ColorMask {
+            key: "masked".into(),
+            from: "own".into(),
+            background: Default::default(),
+            colors: vec![],
+            contiguous: true,
+            measure: Default::default(),
+            tolerance: 10.0,
+            softness: 10.0,
+        }));
+        rename(&mut n, "p:");
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        let m = Document::color_mask_of(&n).unwrap();
+        assert_eq!((im.key.as_str(), m.key.as_str(), m.from.as_str()), ("p:own", "p:masked", "p:own"));
+        assert!(m.made_for(im));
     }
 
     #[test]

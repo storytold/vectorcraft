@@ -377,7 +377,7 @@ fn splice(sp: &SubPath, st: Stretch, chain: &[CubicBez]) -> Option<SubPath> {
     let own = backward(chain);
     let chain = if st.reversed { own.as_slice() } else { chain };
     let (first, last) = (chain.first()?, chain.last()?);
-    let mut out = sp.anchors.clone();
+    let mut out = sp.anchors.to_vec();
     let start = st.start.min(out.len());
     out.rotate_left(start);
     let settle = |a: &mut Anchor| {

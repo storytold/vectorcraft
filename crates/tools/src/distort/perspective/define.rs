@@ -385,6 +385,7 @@ impl PerspectiveGrid {
             let x = g.station().x;
             g.vp_vertical = [x + def.third_vp[0] * r, g.horizon - def.third_vp[1] * r];
         }
+        g.keep_positioning_valid();
         g.validate()?;
         Ok(g)
     }

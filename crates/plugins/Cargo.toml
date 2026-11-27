@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-plugins"
-description = "Sandboxed WebAssembly plug-ins for VectorCraft: a resource-limited wasmi host for object filters and live effects"
+description = "Sandboxed plug-ins for VectorCraft: a resource-limited wasmi host for object filters and live effects, and JavaScript object filters"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,10 +15,25 @@ vectorcraft-doc = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# The pixels of a small image a filter asks to read, as RGBA in base64.
+craft-image-codecs = { workspace = true }
+craft-vectorcraft-format = { workspace = true }
 # The SHA-256 of a module, which the install prompt shows and a grant records.
 sha2 = { version = "0.10", default-features = false }
 thiserror = { workspace = true }
+# The interpreter of JavaScript plug-ins (`js.rs`).
+vectorcraft-js = { workspace = true }
 wasmi = { workspace = true }
+wasmparser = { workspace = true }
+# The monotonic clock of run deadlines and the first-view budget: `std::time::Instant` on the
+# desktop, the page's `performance.now()` in the web build. It is MIT OR Apache-2.0 and already in
+# the build through eframe.
+web-time = "1"
+
+# Opens a `.wasm` in the plug-ins folder without waiting when it is a named pipe (`registry.rs`).
+# Already in Cargo.lock, so this adds no new crate.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["std", "fs"] }
 
 [dev-dependencies]
 wat = { workspace = true }

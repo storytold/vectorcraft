@@ -131,7 +131,7 @@ impl Tool for ExtendPathTool {
                 // Back where it started: nothing to keep.
                 if length == 0.0 { vec![Action::Cancel] } else { vec![preview, Action::Commit] }
             }
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
 
@@ -178,10 +178,10 @@ impl Tool for ExtendPathTool {
             let (k, n) = (end.sp.anchors.len(), ext.anchors.len());
             // From the old end on; a stretched last curve (no anchor added) shows whole.
             let from = if n > k { k - 1 } else { n.saturating_sub(2) };
-            let tail = if end.start { ext.anchors.get(..n - from) } else { ext.anchors.get(from..) };
+            let tail = if end.start { ext.anchors.get_range(..n - from) } else { ext.anchors.get_range(from..) };
             if let Some(tail) = tail {
                 let mut bp = vectorcraft_geom::BezPath::new();
-                SubPath::new(tail.to_vec(), false).to_bezpath_into(&mut bp);
+                SubPath::new(tail, false).to_bezpath_into(&mut bp);
                 out.push(Overlay::Path { path: bp, color: GREY, width: 1.0, dashed: true });
             }
         }
@@ -202,6 +202,14 @@ impl Tool for ExtendPathTool {
         {
             self.mode = Mode(m);
         }
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key != "mode" {
+            return Err(crate::option_check::unknown(key));
+        }
+        let ids: Vec<&str> = ExtendMode::ALL.iter().map(|m| m.id()).collect();
+        crate::option_check::one_of(key, v, &ids)
     }
 }
 

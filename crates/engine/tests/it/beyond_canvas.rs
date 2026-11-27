@@ -51,7 +51,7 @@ fn an_artboard_a_guide_or_a_ruler_origin_beyond_the_canvas_no_longer_blocks_edit
     v["document"]["ruler_origin"] = json!([1e17, 0.0]);
     let (s, warnings) = open_and_move(&v, "setup");
     let d = &s.doc().unwrap().doc;
-    assert_eq!((d.artboards.len(), d.guides.len(), d.ruler_origin.x), (1, 1, 0.0));
+    assert_eq!((d.artboards.len(), d.ruler_guides().len(), d.ruler_origin.x), (1, 1, 0.0));
     assert!(warnings.to_string().contains("1 artboard, 1 guide beyond the canvas"), "{warnings}");
     assert!(warnings.to_string().contains("ruler origin"), "{warnings}");
 }

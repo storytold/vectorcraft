@@ -13,13 +13,15 @@
 
 use std::collections::{HashMap, HashSet};
 
+use siphasher::sip128::{Hasher128, SipHasher13};
+
 use crate::import_color::items;
-use craft_pdf::interpret::CacheKey;
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::content::TypedIter;
-use craft_pdf::syntax::content::ops::TypedInstruction;
-use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
-use craft_pdf::syntax::page::{Page, Resources};
+use craft::pdf::interpret::CacheKey;
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::content::TypedIter;
+use craft::pdf::syntax::content::ops::TypedInstruction;
+use craft::pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft::pdf::syntax::page::{Page, Resources};
 
 use crate::PdfError;
 use crate::import_color::ink_names;
@@ -125,7 +127,7 @@ impl Ocgs {
     /// lists that array's groups as its sublayers; an array starting with a label lists its
     /// groups under the label, which isn't a group (they go under `parent`). A group listed twice
     /// stays where it is first listed. `seen`: the entries read so far.
-    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft_pdf::syntax::xref::XRef, seen: &mut usize) {
+    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft::pdf::syntax::xref::XRef, seen: &mut usize) {
         let mut prev = None;
         for item in items(order) {
             *seen += 1;
@@ -168,7 +170,7 @@ impl Ocgs {
         if let Some(i) = self.index.get(&id) {
             return *i;
         }
-        let name = d.get::<craft_pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
+        let name = d.get::<craft::pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
         let print = usage(d, b"Print", b"PrintState") != Some(false);
         // A view state applies when the configuration says so on opening; an off one hides the
         // group all the same (it says how the group is meant to be seen).
@@ -191,7 +193,7 @@ impl Ocgs {
 
     /// The group content marked with `/OC` (`d`: the group or membership dictionary, `id` its
     /// object) belongs to: a membership dictionary's first group.
-    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft_pdf::syntax::xref::XRef) -> Option<usize> {
+    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft::pdf::syntax::xref::XRef) -> Option<usize> {
         if d.get::<Name<'_>>(b"Type").is_some_and(|t| t.as_ref() == b"OCMD") {
             let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| items(&a).find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
             let id = ObjectIdentifier::from(first);
@@ -250,6 +252,13 @@ fn pdf_doc_char(c: u8) -> char {
     mapped.copied().unwrap_or(char::from(c))
 }
 
+/// Calculate a 128-bit siphash of a value, matching hayro-interpret's `hash128`.
+pub(crate) fn hash128<T: std::hash::Hash + ?Sized>(value: &T) -> u128 {
+    let mut state = SipHasher13::new();
+    value.hash(&mut state);
+    state.finish128().as_u128()
+}
+
 /// One page as the interpreter walks it.
 #[derive(Default)]
 pub(crate) struct Scan {
@@ -271,6 +280,10 @@ pub(crate) struct Scan {
     /// Something overprints with overprint mode 0, where a `DeviceCMYK` colour's zero components
     /// knock out; the document's overprint is the nonzero one (mode 1).
     pub zero_mode: bool,
+    /// The images the page draws (image XObjects by object, inline images as `None`), each with
+    /// whether it is drawn where a `/DefaultCMYK` is in scope, which replaces DeviceCMYK there
+    /// (ISO 32000-2 §8.6.5.6). An image drawn both ways is `true`.
+    pub cmyk_defaults: HashMap<Option<ObjectIdentifier>, bool>,
     /// The colorant names of the Separation and DeviceN spaces the page sets (`cs`, `CS`), and of
     /// those of the shading patterns it sets (`scn`, `SCN`) and of the shadings it draws (`sh`),
     /// each once (none when the page uses more than [`MAX_INKS`] inks or changes ink more than
@@ -282,6 +295,8 @@ pub(crate) struct Scan {
     /// fills and of its strokes (indices into [`Self::inks`]), where all of its text shown in an
     /// ink is shown in the same one.
     text_inks: Changes<[Option<u32>; 2]>,
+    /// Type 3 glyph cache key -> (font cache key, whether font has /ToUnicode).
+    pub type3_cache_map: HashMap<u128, (u128, bool)>,
 }
 
 impl Scan {
@@ -455,12 +470,15 @@ fn blank_tail(mut bytes: &[u8]) -> bool {
     }
 }
 
-struct Walker<'w, 'p> {
+pub(crate) struct Walker<'w, 'p> {
     ocgs: &'w mut Ocgs,
     /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
     off: HashSet<ObjectIdentifier>,
-    xref: &'p craft_pdf::syntax::xref::XRef,
-    fonts: &'w mut FontNames,
+    xref: &'p craft::pdf::syntax::xref::XRef,
+    pub(crate) fonts: &'w mut FontNames,
+    /// The font dictionaries ([`Dict::cache_key`]) whose fonts were noted: a form drawn again with
+    /// the same resources isn't read for its fonts again.
+    pub(crate) font_dicts: HashSet<u128>,
     visible: Vec<bool>,
     ops: usize,
     max_ops: usize,
@@ -632,16 +650,38 @@ impl Walker<'_, '_> {
     }
 
     fn note_fonts(&mut self, res: &Resources<'_>) {
+        if !self.font_dicts.insert(res.fonts.cache_key()) {
+            return;
+        }
         for key in res.fonts.keys() {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
                 && let Some(name) = font_name(&f)
             {
-                self.fonts.entry(f.cache_key()).or_insert_with(|| {
+                let is_type3 = f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3");
+                let to_unicode = f.get::<Object<'_>>(b"ToUnicode").is_some();
+                let f_key = f.cache_key();
+                const MAX_TYPE3_CACHE_MAP: usize = 1 << 20;
+                if is_type3 && self.out.type3_cache_map.len().saturating_add(257) <= MAX_TYPE3_CACHE_MAP {
+                    for gid in 0..=256u32 {
+                        let hash = hash128(&(f_key, skrifa::GlyphId::new(gid)));
+                        self.out.type3_cache_map.insert(hash, (f_key, to_unicode));
+                    }
+                }
+                // A font is noted once for the document, so its glyph procedures are read only the
+                // first time any page or form lists it.
+                self.fonts.entry(f_key).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
-                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded) }
+                    let is_colour = is_type3 && sets_glyph_colors(&f);
+                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded), is_type3, to_unicode, is_colour }
                 });
             }
         }
+    }
+
+    /// An image drawn with `res` in scope, as the interpreter looks up its `/DefaultCMYK`.
+    fn drawn_image(&mut self, id: Option<ObjectIdentifier>, res: &Resources<'_>) {
+        let default = res.get_color_space(&Name::new_unescaped(b"DefaultCMYK")).is_some();
+        *self.out.cmyk_defaults.entry(id).or_default() |= default;
     }
 
     fn walk(&mut self, data: &[u8], res: &Resources<'_>, depth: u32) {
@@ -808,12 +848,17 @@ impl Walker<'_, '_> {
                 | TypedInstruction::ShowTexts(_)
                 | TypedInstruction::NextLineAndShowText(_)
                 | TypedInstruction::ShowTextWithParameters(_) => self.shown(),
+                TypedInstruction::InlineImage(_) => self.drawn_image(None, res),
                 TypedInstruction::XObject(x) => {
                     if !self.is_visible() {
                         continue;
                     }
                     let Some(s) = res.get_x_object(x.0) else { continue };
                     let d = s.dict();
+                    if d.get::<Name<'_>>(b"Subtype").as_deref() == Some(b"Image") {
+                        self.drawn_image(d.obj_id(), res);
+                        continue;
+                    }
                     if d.get::<Name<'_>>(b"Subtype").as_deref() != Some(b"Form") || d.get::<[f32; 4]>(b"BBox").is_none() {
                         continue;
                     }
@@ -873,6 +918,12 @@ pub(crate) struct FontNote {
     pub embedded: bool,
     /// A composite font written vertically: its descendant's metrics.
     pub vertical: Option<Vertical>,
+    /// Whether this is a Type 3 font.
+    pub is_type3: bool,
+    /// Whether this font specifies a /ToUnicode map.
+    pub to_unicode: bool,
+    /// Whether this Type 3 font contains coloured glyph descriptions (d0/ColorGlyph).
+    pub is_colour: bool,
 }
 
 /// The most CIDs a vertical font's widths are read for (the most a CID-keyed font has).
@@ -1014,6 +1065,15 @@ fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
 /// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
 /// the `BaseFont` without the CMap's name on its end.
 fn font_name(f: &Dict<'_>) -> Option<String> {
+    if f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3") {
+        if let Some(base) = f.get::<Name<'_>>(b"BaseFont") {
+            return Some(String::from_utf8_lossy(base.as_ref()).into_owned());
+        }
+        if let Some(name) = f.get::<Name<'_>>(b"Name") {
+            return Some(String::from_utf8_lossy(name.as_ref()).into_owned());
+        }
+        return Some("Type3".to_string());
+    }
     let base = String::from_utf8_lossy(f.get::<Name<'_>>(b"BaseFont")?.as_ref()).into_owned();
     if f.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Type0") {
         return Some(base);
@@ -1025,6 +1085,48 @@ fn font_name(f: &Dict<'_>) -> Option<String> {
     let cmap = f.get::<Name<'_>>(b"Encoding").map(|n| String::from_utf8_lossy(n.as_ref()).into_owned());
     let stripped = cmap.and_then(|c| base.strip_suffix(c.as_str())?.strip_suffix('-').filter(|b| !b.is_empty()).map(str::to_string));
     Some(stripped.unwrap_or(base))
+}
+
+/// The most bytes of a Type 3 font's glyph procedures decoded to look for colored glyphs.
+const MAX_CHARPROC_BYTES: usize = 16 << 20;
+
+// The glyph procedures decoded by `sets_glyph_colors` on this thread.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_CHARPROC_DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether Type 3 font `f` has a glyph procedure that sets its own color (`d0`, ISO 32000-1
+/// §9.6.5): its procedures are read until one starts with `d0`, each up to its `d0` or `d1`. Past
+/// [`MAX_CHARPROC_BYTES`] of them the font is taken to have one.
+fn sets_glyph_colors(f: &Dict<'_>) -> bool {
+    let Some(char_procs) = f.get::<Dict<'_>>(b"CharProcs") else { return false };
+    let mut seen_streams = HashSet::new();
+    let mut decoded_bytes = 0usize;
+    for key in char_procs.keys() {
+        if let Some(stream) = char_procs.get::<Stream<'_>>(key.as_ref()) {
+            if !seen_streams.insert(stream.cache_key()) {
+                continue;
+            }
+            if decoded_bytes >= MAX_CHARPROC_BYTES {
+                return true;
+            }
+            #[cfg(test)]
+            TEST_CHARPROC_DECODES.with(|n| n.set(n.get() + 1));
+            if let Ok(data) = stream.decoded_within(MAX_CHARPROC_BYTES.saturating_sub(decoded_bytes)) {
+                decoded_bytes = decoded_bytes.saturating_add(data.len());
+                let mut iter = TypedIter::new(data.as_ref());
+                while let Some(op) = iter.next() {
+                    match op {
+                        TypedInstruction::ColorGlyph(_) => return true,
+                        TypedInstruction::ShapeGlyph(_) => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in
@@ -1049,13 +1151,20 @@ pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &
     if scan.cut { Err(incomplete_content()) } else { Ok(scan) }
 }
 
-fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut FontNames, max_form_bytes: usize) -> Walker<'w, 'p> {
+pub(crate) fn walk_page<'w, 'p>(
+    page: &Page<'p>,
+    ocgs: &'w mut Ocgs,
+    all_on: bool,
+    fonts: &'w mut FontNames,
+    max_form_bytes: usize,
+) -> Walker<'w, 'p> {
     let off = if all_on { HashSet::new() } else { ocgs.off.clone() };
     let mut w = Walker {
         ocgs,
         off,
         xref: page.xref(),
         fonts,
+        font_dicts: HashSet::new(),
         visible: vec![],
         ops: 0,
         max_ops: max_ops(),

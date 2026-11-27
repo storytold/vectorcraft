@@ -109,6 +109,43 @@ fn a_journal_with_a_key_no_longer_read_still_replays() {
     assert!(s.execute("object.move", &json!({"dx": 5, "dyy": 5})).is_err());
 }
 
+/// `Session::replay` still runs an export with an option that is no longer read, and a preset
+/// file that holds one still loads and exports. `Session::execute` refuses the same options.
+#[test]
+fn an_export_step_or_preset_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let old = json!({"format": "pdf", "noSuchOption": true, "marks": {"useDocumentBleed": true}});
+    assert!(check_params("document.export", &old).is_err());
+    assert!(s.execute("document.export", &old).is_err());
+    s.replay("document.export", &old).unwrap();
+    let file = json!({"format": "vcpdfpresets", "presets": [{"name": "Old", "settings": {"standard": "none", "noLongerRead": 1, "marks": {"retired": true}}}]});
+    s.execute("pdf.preset.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+    s.execute("document.export", &json!({"format": "pdf", "preset": "Old"})).unwrap();
+}
+
+/// So does a save, or an Export for Screens, with a key that is no longer read, and an Export for
+/// Screens preset file that holds one in a row still loads and exports. `Session::execute`
+/// refuses the same options.
+#[test]
+fn a_save_or_screens_step_with_a_key_no_longer_read_still_runs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let save = json!({"format": "pdf", "noSuchOption": true, "options": {"retired": 1, "marks": {"useDocumentBleed": true}}});
+    assert!(check_params("file.saveCopy", &save).is_err());
+    assert!(s.execute("file.saveCopy", &save).is_err());
+    s.replay("file.saveCopy", &save).unwrap();
+    let screens = json!({"noSuchOption": true, "formats": [{"format": "png", "retired": 1}], "settings": {"pdf": {"marks": {"retired": true}}}});
+    assert!(check_params("document.exportForScreens", &screens).is_err());
+    assert!(s.execute("document.exportForScreens", &screens).is_err());
+    s.replay("document.exportForScreens", &screens).unwrap();
+    let file = json!({"format": "vcexportpresets", "presets": [{"name": "Old", "settings": {"formats": [{"format": "png", "noLongerRead": 1}]}}]});
+    s.execute("document.exportPresets.import", &json!({"data": file.to_string()})).unwrap();
+    check_params("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
+    s.execute("document.exportForScreens", &json!({"exportPreset": "Old"})).unwrap();
+}
+
 /// So do an effect's own parameters (#1592): a journal or a file with a key the effect doesn't
 /// take, or a value of another type, replays and opens; the effect reads what it knows, clamped.
 #[test]
@@ -224,6 +261,56 @@ fn a_tone_curve_channel_it_does_not_have_is_refused() {
     doc.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["channel"] = json!("alpha");
     let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
     assert_eq!(back.layers[0].children().unwrap()[0].appearance.effects[0].params["channel"], json!("alpha"));
+}
+
+/// A Drop Shadow's or glow's `mode` that names no blend mode (which it drew as Normal) is refused
+/// in new calls to `effect.apply`, `appearance.addEffect` and `effect.setParams`, with the modes it
+/// takes, and the document and its undo history stay as they were. Blend-mode names in any
+/// spelling pass, an omitted `mode` keeps the default, and an older saved step still plays.
+#[test]
+fn a_shadow_or_glow_mode_that_is_no_blend_mode_is_refused() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "params": {"opacity": 50}})).unwrap();
+    let state = |s: &Session| {
+        let st = s.active().unwrap();
+        (st.doc.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let why = "`mode` must be one of normal, darken, multiply, colorBurn";
+    for bad in [json!("multipy"), json!(""), json!("passThrough"), json!(null), json!(["multiply"]), json!(1), json!(false)] {
+        for (cmd, params) in [
+            ("effect.setParams", json!({"index": 0, "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": "stylize.innerGlow", "params": {"mode": bad}})),
+            ("effect.apply", json!({"effect": null, "id": "stylize.dropShadow", "ids": [id], "params": {"mode": bad}})),
+            ("appearance.addEffect", json!({"effect": "stylize.outerGlow", "params": {"mode": bad}})),
+        ] {
+            let e = s.execute(cmd, &params).unwrap_err().to_string();
+            assert!(e.contains(why), "{cmd} {params}: {e}");
+            let checked = s.check_params(cmd, &params).unwrap_err().to_string();
+            assert!(checked.contains(why), "{cmd} {params}: {checked}");
+            assert!(state(&s) == before, "{cmd} {params} changed the document or its undo history");
+        }
+    }
+    let effect = |s: &Session| s.active().unwrap().doc.layers[0].children().unwrap()[0].appearance.effects[0].clone();
+    let shadow = effect(&s);
+    let drawn = vectorcraft_render::effects::merged_params(&shadow.id, &shadow.params);
+    assert_eq!(drawn["mode"], json!("multiply"), "an omitted mode keeps the default");
+    for good in ["screen", "Color Burn", "color-burn", "COlor!!Burn#", "softLight", "LUMINOSITY"] {
+        let params = json!({"index": 0, "params": {"mode": good}});
+        s.check_params("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        s.execute("effect.setParams", &params).unwrap_or_else(|e| panic!("{good}: {e}"));
+        assert_eq!(effect(&s).params["mode"], json!(good));
+    }
+    s.replay("effect.setParams", &json!({"index": 0, "params": {"mode": "multipy"}})).unwrap();
+    assert_eq!(effect(&s).params["mode"], json!("multipy"));
+    assert_eq!(vectorcraft_render::effects::blend_mode("multipy"), vectorcraft_color::BlendMode::Normal);
+    for mode in vectorcraft_color::BlendMode::ALL {
+        let id = vectorcraft_render::effects::blend_mode_id(mode);
+        assert_eq!(vectorcraft_render::effects::parse_blend_mode(&id), Some(mode));
+        assert_eq!(vectorcraft_render::effects::blend_mode(&id), mode);
+    }
 }
 
 /// What a command adds to its own journal entry passes the check, so a recorded journal can be

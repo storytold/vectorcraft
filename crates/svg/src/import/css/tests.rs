@@ -333,3 +333,31 @@ fn not_selectors() {
         },
     );
 }
+
+/// The `:not()` rules filed under classes an element lacks are not tested against it, so
+/// [`Styles::set_by_not_rules`] tests no more rules than [`Styles::matched_bytes`] counts.
+#[test]
+fn not_rules_test_only_the_indexed_candidates() {
+    const N: usize = 2_000;
+    let rules: String = (0..N).map(|i| format!(".c{i}:not(.skip) {{ fill: #{i:06x} }}\n")).collect();
+    let rects: String = (0..N).map(|i| format!(r#"<rect id="r{i}" class="c{i}"/>"#)).collect();
+    let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{rules}</style>{rects}<rect id="skip" class="c0 skip"/></svg>"#);
+    with_doc(&svg, |doc, st| {
+        let before = selector_tests();
+        for i in 0..N {
+            assert_eq!(st.set_by_not_rules(by_id(doc, &format!("r{i}"))), [("fill".to_string(), format!("#{i:06x}"))]);
+        }
+        assert!(st.set_by_not_rules(by_id(doc, "skip")).is_empty());
+        // Testing every `:not()` rule against every element would test N × N selectors.
+        let tests = selector_tests() - before;
+        assert!(tests <= 3 * N as u64, "finding the :not() rules of {N} elements tested {tests} selectors");
+    });
+}
+
+#[test]
+fn decl_comments_are_stripped() {
+    let d = |k: &str, v: &str| (k.to_string(), v.to_string(), false);
+    assert_eq!(parse_decls("fill:red /* note */; stroke:blue"), [d("fill", "red"), d("stroke", "blue")]);
+    assert_eq!(parse_decls("fill:red /* a;b */ ; stroke:blue"), [d("fill", "red"), d("stroke", "blue")]);
+    assert_eq!(parse_decls("font-family:'A /* x */ B'"), [d("font-family", "'A /* x */ B'")]);
+}

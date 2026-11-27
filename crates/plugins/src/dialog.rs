@@ -1,5 +1,6 @@
 //! How the host's generated dialogs show a plug-in's parameters: the optional `label`, `unit`,
-//! `group`, `help`, `helpUrl` and `visibleWhen` keys of each one (docs/plugins.md › Parameters).
+//! `group`, `help`, `helpUrl`, `visibleWhen` and `widget` keys of each one
+//! (docs/plugins.md › Parameters).
 //!
 //! These keys are presentation only. A host from before them ignores them, so a plug-in that
 //! declares them still installs there, and a plug-in is given every parameter whether its dialog
@@ -58,6 +59,48 @@ pub struct ParamUi {
     /// Shown only while each parameter named here has one of the values listed for it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub visible_when: BTreeMap<String, Vec<Value>>,
+    /// The control that shows a number: [`Widget::Slider`] adds a slider beside its field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub widget: Option<Widget>,
+}
+
+/// The control a `number` or `int` parameter's row shows besides its number field (`widget`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Widget {
+    /// A slider over `min..max`, beside the number field.
+    Slider,
+}
+
+/// The largest whole number an `f64` holds exactly, which bounds an `int` slider's range.
+const EXACT_INT: i64 = 1 << 53;
+
+impl ParamUi {
+    /// The range a slider shows `spec`'s value over, when the parameter asks for one
+    /// ([`Widget::Slider`]) and `spec` is a `number` or `int` the manifest checks allow it on.
+    pub fn slider_range(&self, spec: &ParamSpec) -> Option<std::ops::RangeInclusive<f64>> {
+        if self.widget != Some(Widget::Slider) {
+            return None;
+        }
+        match spec {
+            ParamSpec::Number { min, max, .. } if min < max => Some(*min..=*max),
+            ParamSpec::Int { min, max, .. } if min < max && -EXACT_INT <= *min && *max <= EXACT_INT => Some(*min as f64..=*max as f64),
+            _ => None,
+        }
+    }
+
+    /// Checks `widget` against parameter `spec`; `bad` builds the error.
+    fn validate_slider(&self, spec: &ParamSpec, bad: impl Fn(&str) -> Result<()>) -> Result<()> {
+        if self.widget.is_none() || self.slider_range(spec).is_some() {
+            return Ok(());
+        }
+        match spec {
+            ParamSpec::Number { .. } | ParamSpec::Int { .. } => {
+                bad(&format!("a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}"))
+            }
+            _ => bad("a slider is only for `number` and `int` parameters"),
+        }
+    }
 }
 
 /// Is `s` 1 to `max` characters, not all spaces, without control characters (`\n` too, unless
@@ -85,6 +128,9 @@ impl ParamUi {
             if rest.is_empty() || url.len() > MAX_HELP_URL || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
                 return bad(&format!("`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes"));
             }
+        }
+        if let Some((_, p)) = m.params.get(index) {
+            self.validate_slider(&p.spec, bad)?;
         }
         if self.visible_when.len() > MAX_CONDITIONS {
             return bad(&format!("`visibleWhen` names at most {MAX_CONDITIONS} parameters"));
@@ -302,6 +348,48 @@ mod tests {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
         }
         let fine = with("help", r#""Two\nlines.""#);
+        assert!(Manifest::parse(fine.as_bytes()).is_ok());
+    }
+
+    /// A `number` or `int` parameter with a range may ask for a slider; the key reads back as
+    /// written, and a parameter without it asks for none.
+    #[test]
+    fn slider_key_parses_and_round_trips() {
+        let m = Manifest::parse(
+            br#"{"id":"a","name":"x","kind":"filter","params":{
+                "area":{"type":"number","min":0,"max":100,"default":10,"widget":"slider"},
+                "count":{"type":"int","min":1,"max":20,"default":4,"widget":"slider"},
+                "plain":{"type":"number","min":0,"max":100,"default":10}}}"#,
+        )
+        .unwrap();
+        let (area, count, plain) = (m.param("area").unwrap(), m.param("count").unwrap(), m.param("plain").unwrap());
+        assert_eq!(area.ui.slider_range(&area.spec), Some(0.0..=100.0));
+        assert_eq!(count.ui.slider_range(&count.spec), Some(1.0..=20.0));
+        assert_eq!(plain.ui.slider_range(&plain.spec), None);
+        assert_eq!(Manifest::parse(&serde_json::to_vec(&m).unwrap()).unwrap(), m);
+        assert_eq!(serde_json::to_value(&m).unwrap()["params"]["count"]["widget"], json!("slider"));
+    }
+
+    #[test]
+    fn slider_keys_that_cannot_apply_are_refused() {
+        let param = |p: &str| format!(r#"{{"id":"a","name":"x","kind":"filter","params":{{"p":{p}}}}}"#);
+        for bad in [
+            // Only numbers have a slider, over a range that has room to move.
+            r#"{"type":"bool","widget":"slider"}"#,
+            r#"{"type":"choice","options":["a","b"],"widget":"slider"}"#,
+            r#"{"type":"numberList","min":0,"max":1,"widget":"slider"}"#,
+            r#"{"type":"number","min":5,"max":5,"default":5,"widget":"slider"}"#,
+            r#"{"type":"int","min":0,"max":9007199254740993,"widget":"slider"}"#,
+            // A control the host doesn't have.
+            r#"{"type":"number","min":0,"max":1,"default":0,"widget":"knob"}"#,
+        ] {
+            assert!(Manifest::parse(param(bad).as_bytes()).is_err(), "{bad}");
+        }
+        // A command's parameters are checked the same way.
+        let command = |p: &str| format!(r#"{{"id":"a","name":"x","kind":"filter","commands":[{{"id":"go","label":"Go","params":{{"p":{p}}}}}]}}"#);
+        assert!(Manifest::parse(command(r#"{"type":"number","min":0,"max":1,"default":0,"widget":"slider"}"#).as_bytes()).is_ok());
+        assert!(Manifest::parse(command(r#"{"type":"bool","widget":"slider"}"#).as_bytes()).is_err());
+        let fine = param(r#"{"type":"int","min":0,"max":10,"widget":"slider"}"#);
         assert!(Manifest::parse(fine.as_bytes()).is_ok());
     }
 }

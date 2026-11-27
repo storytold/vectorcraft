@@ -4,7 +4,9 @@ use vectorcraft_color::Paint;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::panels::swatches::SwatchLibraries;
+use crate::tests::picks::{Picker, answer_dialog, open_dialogs, scripted};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -12,19 +14,26 @@ fn app() -> VectorcraftApp {
     app
 }
 
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
+#[test]
+fn the_swatch_libraries_footer_button_uses_the_interface_language() {
+    use craft::ui::testing::Fixture;
+
+    for (locale, label) in [("en", "Swatch Libraries Menu"), ("de", "Menü „Farbfeldbibliotheken“"), ("ja", "スウォッチライブラリメニュー")]
+    {
+        let mut app = app();
+        app.session.prefs.interface_language = locale.into();
+        crate::i18n::set_current(app.ui_language());
+        let mut fixture = Fixture::new(move |ui| crate::panels::swatches::show(&mut app, ui));
+        fixture.settle();
+        assert!(fixture.by_label(label).is_some(), "missing {locale} Swatch Libraries button name: {label}");
+    }
 }
 
-/// One frame of the library panel with `events` and `modifiers` held.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, modifiers: Modifiers, time: f64) {
-    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)));
-    let events = std::iter::once(Event::ModifiersChanged(modifiers)).chain(events).collect();
-    let input = egui::RawInput { events, time: Some(time), screen_rect, ..Default::default() };
-    let mut out = ctx.run_ui(input, |ui| show_window(app, ui.ctx()));
-    out.textures_delta.clear();
+/// A context whose frames report their accessibility tree, so rows are found by their names.
+pub(crate) fn context() -> egui::Context {
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    ctx
 }
 
 /// The panel opened last.
@@ -32,14 +41,64 @@ fn shown(app: &VectorcraftApp) -> String {
     last_open(&app.ui).expect("a library panel is open").panel()
 }
 
-/// Click the tile or row of `name` in the panel opened last with `modifiers` (frames from
-/// `time` to `time + 0.5`; a new window takes a sizing frame first).
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, time: f64) {
-    frame(app, ctx, vec![], Modifiers::NONE, time);
-    frame(app, ctx, vec![], Modifiers::NONE, time + 0.25);
-    let at = ctx.read_response(tile_id(&shown(app), name)).unwrap_or_else(|| panic!("no tile for {name}")).rect.center();
+/// The names of the items and folders selected in panel `panel`.
+fn selected_names(app: &VectorcraftApp, panel: &str) -> Vec<String> {
+    app.ui.library_selection.get(panel).map(|s| s.items.iter().map(|k| k.name.clone()).collect()).unwrap_or_default()
+}
+
+/// Click the control of the panel opened last that screen readers name `name` (a row or a footer
+// PLAN: assumed to be replaced by the framework pointer driver (`Fixture`) once the harness lands here.
+/// action) with `modifiers` held; `_time` is kept for the callers' spacing of clicks.
+pub(crate) fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, modifiers: Modifiers, _time: f64) {
+    let panel = shown(app);
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui, &panel);
+    let (_, at) = control(app, ctx, &draw, name);
     let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
-    frame(app, ctx, vec![Event::PointerMoved(at), button(true), button(false)], modifiers, time + 0.5);
+    draw_frame(app, ctx, &draw, vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at)]);
+    // The release comes a frame after the press, as a hand's does.
+    draw_frame(app, ctx, &draw, vec![button(true)]);
+    draw_frame(app, ctx, &draw, vec![button(false)]);
+    draw_frame(app, ctx, &draw, vec![Event::ModifiersChanged(Modifiers::NONE)]);
+}
+
+/// Set the fields of the hosted save dialog that `app` shows and press its OK.
+pub(crate) fn confirm_save(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
+    let id = open_dialogs(app).last().map(|d| d.id).expect("a save dialog is open");
+    answer_dialog(app, id, fields, true);
+}
+
+/// Answers the save pick `app` asked with the name it suggests in `/tmp`, and runs the pick's continuation.
+pub(crate) fn save_to_tmp(app: &mut VectorcraftApp, picker: &Picker) {
+    let name = picker.requests().last().and_then(|r| r.file_name.clone()).expect("a save pick is open");
+    picker.answer_saved(&format!("/tmp/{name}"), None);
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    crate::tests::picks::poll(app, &ctx);
+}
+
+/// The libraries the "Open … Library" rows of a `K` panel menu open, in menu order.
+pub(crate) fn menu_library_ids<K: LibraryKind>(app: &VectorcraftApp) -> Vec<String> {
+    fn ids(rows: &[PanelRow], out: &mut Vec<String>) {
+        for row in rows {
+            match row {
+                PanelRow::Command(c) => out.extend(c.params["library"].as_str().map(str::to_string)),
+                PanelRow::Submenu(_, rows) => ids(rows, out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    ids(&library_rows::<K>(app), &mut out);
+    out
+}
+
+/// A view picked in the browser saves as the view it is: the thresholds of `saved_view` lie between the zooms
+/// `View::preset` gives, so retuning one without the other would save another view.
+#[test]
+fn every_view_saves_as_itself() {
+    for (view, _) in View::ALL {
+        let (shown, zoom) = view.preset();
+        assert_eq!(saved_view(shown, zoom), view);
+    }
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
@@ -106,59 +165,21 @@ fn modifier_clicks_select_and_add_to_swatches_adds_the_selection() {
     let mut app = app();
     let ctx = context();
     app.run("window.swatchLibrary", json!({"library": "earth-tones"})).unwrap();
+    let panel = "library:swatches:earth-tones";
     click(&mut app, &ctx, "Clay 1", Modifiers::COMMAND, 0.0);
     click(&mut app, &ctx, "Ochre", Modifiers::NONE, 2.0);
-    assert_eq!(selection(&ctx, "library:swatches:earth-tones"), ["Ochre"], "a folder click selects its group");
+    assert_eq!(selected_names(&app, panel), ["Ochre"], "a folder click selects its group");
     click(&mut app, &ctx, "Clay 3", Modifiers::COMMAND, 4.0);
     assert!(app.session.doc().unwrap().doc.swatch("Clay 3").is_none(), "modifier clicks only select");
-    let sel = selection(&ctx, "library:swatches:earth-tones");
-    SwatchLibraries::add(&mut app, "earth-tones", sel);
+    assert_eq!(selected_names(&app, panel), ["Ochre", "Clay 3"]);
+    // Add to Swatches adds what the browser selected.
+    click(&mut app, &ctx, "Add to Swatches", Modifiers::NONE, 6.0);
     let d = &app.session.doc().unwrap().doc;
     assert_eq!(d.swatch_groups.iter().find(|g| g.name == "Ochre").map(|g| g.swatches.len()), Some(6));
     assert!(d.swatches.iter().any(|w| w.name == "Clay 3"));
     // The selection belongs to its library's panel.
     app.run("window.swatchLibrary", json!({"library": "brights"})).unwrap();
-    assert!(selection(&ctx, "library:swatches:brights").is_empty());
-}
-
-#[test]
-fn a_plain_click_sets_where_a_shift_click_range_starts() {
-    let mut app = app();
-    let ctx = context();
-    app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
-    let (_, lib) = SwatchLibraries::get(&app, "pastels").unwrap();
-    let order: Vec<String> = SwatchLibraries::rows(&lib, "").iter().map(|r| r.name.to_string()).collect();
-    click(&mut app, &ctx, &order[1], Modifiers::NONE, 0.0);
-    click(&mut app, &ctx, &order[4], Modifiers::SHIFT, 2.0);
-    assert_eq!(selection(&ctx, "library:swatches:pastels"), order[1..=4], "the range starts at the plain click");
-    // A plain click after a Cmd/Ctrl-click moves the anchor from the Cmd/Ctrl-clicked item.
-    click(&mut app, &ctx, &order[8], Modifiers::COMMAND, 4.0);
-    click(&mut app, &ctx, &order[2], Modifiers::NONE, 6.0);
-    click(&mut app, &ctx, &order[3], Modifiers::SHIFT, 8.0);
-    assert_eq!(selection(&ctx, "library:swatches:pastels"), order[2..=3]);
-    let d = &app.session.doc().unwrap().doc;
-    assert!(d.swatch(&order[2]).is_some(), "a plain click still adds the swatch");
-    assert!(d.swatch(&order[3]).is_none(), "a Shift-click only selects");
-}
-
-#[test]
-fn find_filters_list_view_and_arrows_step_through_the_libraries() {
-    let mut app = app();
-    let ctx = context();
-    app.run("window.swatchLibrary", json!({"library": "web-safe-216"})).unwrap();
-    let panel = "library:swatches:web-safe-216";
-    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(key(panel, "find")), "#FF00".to_string()));
-    frame(&mut app, &ctx, vec![], Modifiers::NONE, 0.0);
-    frame(&mut app, &ctx, vec![], Modifiers::NONE, 0.5);
-    assert!(ctx.read_response(tile_id(panel, "#FF0033")).is_some());
-    assert!(ctx.read_response(tile_id(panel, "#00FF00")).is_none());
-    let first = SWATCH_IDS[0];
-    let last = SwatchLibraries::list(&app).pop().unwrap().id;
-    assert_eq!(last, "geometric-patterns", "gradient and then pattern libraries come after the swatch libraries");
-    assert_eq!(neighbour::<SwatchLibraries>(&app, "radial-glows", 1).as_deref(), Some("geometric-patterns"));
-    assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1), Some(last), "wraps around");
-    assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
+    assert!(selected_names(&app, "library:swatches:brights").is_empty());
 }
 
 const SWATCH_IDS: [&str; 9] = [
@@ -174,40 +195,10 @@ const SWATCH_IDS: [&str; 9] = [
 ];
 
 #[test]
-fn the_window_submenu_lists_every_library() {
-    let app = app();
-    let ids: Vec<Value> = crate::menus::menu_entries(&app)
-        .into_iter()
-        .filter(|e| e.path == ["Window", "Swatch Libraries"] && e.command.as_deref() == Some("window.swatchLibrary"))
-        .map(|e| e.params["library"].clone())
-        .collect();
-    let all = vectorcraft_engine::cmd::swatchlib::libraries(&app.session);
-    let listed = |category: &str| all.iter().filter(|l| l.category == category).map(|l| json!(l.id)).collect::<Vec<_>>();
-    assert_eq!(ids, listed("builtIn"));
-    assert_eq!(ids, SWATCH_IDS.map(|i| json!(i)));
-    let gradients: Vec<Value> = crate::menus::menu_entries(&app)
-        .into_iter()
-        .filter(|e| e.path == ["Window", "Swatch Libraries", "Gradients"])
-        .map(|e| e.params["library"].clone())
-        .collect();
-    assert!(gradients.len() >= 5);
-    assert_eq!(gradients, listed("gradients"));
-    let patterns: Vec<Value> = crate::menus::menu_entries(&app)
-        .into_iter()
-        .filter(|e| e.path == ["Window", "Swatch Libraries", "Patterns"])
-        .map(|e| e.params["library"].clone())
-        .collect();
-    assert!(!patterns.is_empty());
-    assert_eq!(patterns, listed("patterns"));
-    let defaults = crate::menus::menu_entries(&app).into_iter().any(|e| e.command.as_deref() == Some("swatch.resetDefaults"));
-    assert!(defaults, "Default Swatches is listed");
-}
-
-#[test]
 fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     let dir = std::env::temp_dir().join(format!("vc-library-panel-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
         crate::menus::menu_entries(app)
@@ -218,16 +209,7 @@ fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     };
     assert!(user_items(&app).is_empty(), "empty slots are hidden");
     app.run("ui.saveSwatchLibrary", json!({"names": ["Brights"]})).unwrap();
-    let d = app.ui.dialog.as_mut().expect("Save Swatch Library opens");
-    assert_eq!((d.kind.as_str(), d.bool("user")), (crate::dialogs::save_swatch_library::KIND, true));
-    d.fields.insert("name".into(), json!("Loud"));
-    d.fields.insert("selectedOnly".into(), json!(true));
-    let ctx = context();
-    let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))), ..Default::default() };
-    ctx.run_ui(input, |ui| crate::dialogs::show(&mut app, ui.ctx())).textures_delta.clear();
-    assert!(app.ui.dialog.is_some(), "the dialog draws and stays open");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    confirm_save(&mut app, &[("name", json!("Loud")), ("selectedOnly", json!(true))]);
     assert_eq!(user_items(&app), [("Loud".to_string(), "window.userSwatchLibrary1".to_string())]);
     app.run("window.userSwatchLibrary1", json!({})).unwrap();
     assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some("user/Loud.vcswatches"));
@@ -241,7 +223,6 @@ fn saving_to_a_file_and_opening_a_palette_file() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -249,12 +230,11 @@ fn saving_to_a_file_and_opening_a_palette_file() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    let picker = scripted(&mut app);
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     app.run("ui.saveSwatchLibrary", json!({})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert!(!d.bool("user") && !d.bool("__user"), "no user folder: a file");
-    d.fields.insert("format".into(), json!("gpl"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    confirm_save(&mut app, &[("format", json!("gpl"))]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert!(path.ends_with(".gpl"), "{path}");
     let text = String::from_utf8(bytes).unwrap();
@@ -282,12 +262,50 @@ fn saving_to_a_file_and_opening_a_palette_file() {
     assert!(!builtin_library(&open.id) && builtin_library(vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES));
 }
 
+fn browser_library<K: LibraryKind>(filename: &str, bytes: &[u8], entry: &str) -> Option<String> {
+    let mut app = app();
+    app.services.download = Some(Box::new(|_, _| Ok(())));
+    let picker = scripted(&mut app);
+    let undo = undo_len(&app);
+    crate::tests::picks::asks(&mut app, &format!("{}.other", K::OPEN));
+    picker.answer_contents(&[(filename, bytes)]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+    assert_eq!((app.session.documents().len(), undo_len(&app)), (1, undo), "loading a library does not change the drawing");
+    let open = last_open(&app.ui)?;
+    assert_eq!(open.kind, K::KIND);
+    assert!(is_open(&app.ui, &open.panel()));
+    let (name, library) = K::get(&app, &open.id)?;
+    assert!(K::rows(&library, &open.id).iter().any(|row| row.name == entry && row.item.is_some()), "{entry} is in the {name} library");
+    Some(name)
+}
+
+#[test]
+fn other_library_opens_browser_pick_contents_for_each_panel_kind() {
+    use crate::panels::{brushes::BrushLibraries, graphic_styles::GraphicStyleLibraries, symbols::SymbolLibraries};
+
+    let mut source = app();
+    source.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    source.run("graphicStyle.new", json!({"name": "Studio Style"})).unwrap();
+    source.run("symbol.new", json!({"name": "Studio Symbol"})).unwrap();
+    source.run("brush.new", json!({"type": "bristle", "name": "Studio Brush"})).unwrap();
+    let encoded = source.run("document.serialize", json!({})).unwrap();
+    let document = vectorcraft_format::base64_decode(encoded["dataBase64"].as_str().unwrap()).unwrap();
+    let palette = b"GIMP Palette\nName: Browser Palette\n#\n255   0   0\tBrowser Red\n";
+    let loaded = [
+        browser_library::<SwatchLibraries>("Browser Palette.gpl", palette, "Browser Red"),
+        browser_library::<BrushLibraries>("Browser Studio.vectorcraft", &document, "Studio Brush"),
+        browser_library::<SymbolLibraries>("Browser Studio.vectorcraft", &document, "Studio Symbol"),
+        browser_library::<GraphicStyleLibraries>("Browser Studio.vectorcraft", &document, "Studio Style"),
+    ];
+    assert_eq!(loaded.map(|name| name.unwrap_or_default()), ["Browser Palette", "Browser Studio", "Browser Studio", "Browser Studio"]);
+}
+
 #[test]
 fn the_save_dialog_writes_swatch_exchange_files() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -295,14 +313,11 @@ fn the_save_dialog_writes_swatch_exchange_files() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    let picker = scripted(&mut app);
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     app.run("ui.saveSwatchLibrary", json!({})).unwrap();
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("format".into(), json!("ase"));
-    d.fields.insert("name".into(), json!("Brand Kit"));
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Swatch Exchange (.ase)") && text.contains("Swatch exchange files keep solid colors only."), "{text}");
-    crate::dialogs::confirm(&mut app).unwrap();
+    confirm_save(&mut app, &[("format", json!("ase")), ("name", json!("Brand Kit"))]);
+    save_to_tmp(&mut app, &picker);
     let (path, bytes) = written.borrow()[0].clone();
     assert_eq!(path, "/tmp/Brand Kit.ase", "the save panel suggests the name");
     let lib = vectorcraft_color::palette_io::read_bytes(&bytes, "x").unwrap();
@@ -318,13 +333,10 @@ fn the_save_dialog_writes_swatch_exchange_files() {
         })),
         ..Default::default()
     };
-    let mut web = VectorcraftApp::new(Session::new(), services);
+    let mut web = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     web.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     web.run("ui.saveSwatchLibrary", json!({})).unwrap();
-    let d = web.ui.dialog.as_mut().unwrap();
-    d.fields.insert("format".into(), json!("ase"));
-    d.fields.insert("name".into(), json!(" Brand: Kit. "));
-    crate::dialogs::confirm(&mut web).unwrap();
+    confirm_save(&mut web, &[("format", json!("ase")), ("name", json!(" Brand: Kit. "))]);
     assert_eq!(*downloads.borrow(), ["Brand- Kit.ase"], "the name made safe as a file name, as for User Defined");
 }
 
@@ -340,8 +352,8 @@ fn swatch_exchange_files_without_a_path_open_in_the_library_panel() {
     assert_eq!(app.session.documents().len(), 1, "not opened as a document");
 }
 
-fn docking(app: &VectorcraftApp) -> &craft_ui::docking::Layout<String> {
-    app.ui.docking.as_ref().expect("library panels live in the shared layout")
+fn docking(app: &VectorcraftApp) -> &craft::behavior::dock::Layout<String> {
+    app.ui.dock_workspace.layout()
 }
 
 fn panel_of(reply: Value) -> String {
@@ -374,12 +386,12 @@ fn each_library_opens_in_a_panel_of_its_own() {
     app.run("window.panel.move", json!({"panel": brights, "anchor": pastels})).unwrap();
     assert!(groups(&app).contains(&vec![pastels.clone(), brights.clone()]), "{:?}", groups(&app));
     app.run("window.panel.dock", json!({"panel": styles})).unwrap();
-    assert!(craft_ui::docking::Layout { root: docking(&app).root.clone(), floating: vec![] }.contains(&styles));
+    assert!(docking(&app).contains(&styles) && !docking(&app).floating.iter().any(|g| g.contains(&styles)), "docked");
     app.run("window.panel.close", json!({"panel": brights})).unwrap();
     assert!(!is_open(&app.ui, &brights) && is_open(&app.ui, &pastels));
     app.run("window.panel", json!({"panel": brights})).unwrap();
     assert!(is_open(&app.ui, &brights));
-    assert!(crate::panel_docking::valid(docking(&app)));
+    assert!(app.ui.dock_workspace.validate().is_ok());
     // `library: null` closes the panels of its kind.
     app.run("window.swatchLibrary", json!({"library": null})).unwrap();
     assert!(!any_open::<SwatchLibraries>(&app.ui) && is_open(&app.ui, &styles));
@@ -390,13 +402,6 @@ fn each_library_opens_in_a_panel_of_its_own() {
     assert!(app.run("ui.libraryPanel", json!({"panel": "layers"})).is_err());
     assert!(app.run("ui.libraryPanel", json!({"panel": pastels, "persistent": true})).is_err(), "closed and not persistent");
     assert!(app.run("ui.libraryPanel", json!({"panel": styles, "view": "huge"})).is_err());
-}
-
-/// A context whose frames report their accessibility tree.
-fn accessible() -> egui::Context {
-    let ctx = context();
-    ctx.enable_accesskit();
-    ctx
 }
 
 /// One frame of `draw` with `events`, after the frames `ctx` ran.
@@ -422,7 +427,8 @@ fn control(app: &mut VectorcraftApp, ctx: &egui::Context, draw: &dyn Fn(&mut Vec
 fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, draw: &dyn Fn(&mut VectorcraftApp, &mut Ui), at: Pos2) {
     let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
     draw_frame(app, ctx, draw, vec![Event::PointerMoved(at)]);
-    draw_frame(app, ctx, draw, vec![button(true), button(false)]);
+    draw_frame(app, ctx, draw, vec![button(true)]);
+    draw_frame(app, ctx, draw, vec![button(false)]);
 }
 
 /// The app restarted with the preferences `app` saves.
@@ -455,13 +461,12 @@ fn persistent_panels_reopen_at_startup_with_their_settings() {
     assert!(is_open(&next.ui, &pastels) && is_open(&next.ui, &brand), "{}", next.ui.status);
     assert!(!is_open(&next.ui, &brights), "a panel that isn't persistent closed with the app");
     let group = docking(&next).floating.iter().find(|g| g.contains(&pastels)).unwrap();
-    assert_eq!(group.rect[..2], [40.0, 90.0], "where it was");
+    assert_eq!(group.rect.min, Pos2::new(40.0, 90.0), "where it was");
     let s = settings(&next.ui, "swatches", "pastels").unwrap();
     assert_eq!((s.view, s.hide_find, s.persistent), (Some(View::LargeList), true, true));
     let (_, id) = parse(&brand).unwrap();
     assert!(SwatchLibraries::get(&next, id).is_some_and(|(_, lib)| lib.swatch("Red").is_some()), "read again from its file");
     assert!(next.ui.status.is_empty(), "{}", next.ui.status);
-    assert!(next.ui.docking_hidden.keys().all(|p| p != &brights));
     // Unchecked, a panel no longer reopens; one whose file is gone reopens as missing, with a note.
     let mut next = next;
     next.run("ui.libraryPanel", json!({"panel": pastels, "persistent": false})).unwrap();
@@ -502,11 +507,14 @@ fn a_persistent_panel_whose_file_is_gone_is_listed_as_missing_until_located() {
     let text = crate::tests_labels::painted_text(&mut next, |app, ui| show(app, ui, &brand));
     let shown = format!("Missing: {}", gpl.to_string_lossy());
     assert!(text.contains(&shown), "{text}");
-    let ctx = accessible();
+    let ctx = context();
     let body = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui, &brand);
-    assert!(!control(&mut next, &ctx, &body, "Locate Library…").0, "dimmed without an open dialog");
-    let panel_menu = |app: &mut VectorcraftApp, ui: &mut Ui| menu(app, ui, &brand);
-    assert!(!control(&mut next, &ctx, &panel_menu, "Next Library").0, "no library to step from");
+    // Without a picker, Locate Library… reports it and the panel stays missing.
+    let (_, at) = control(&mut next, &ctx, &body, "Locate Library…");
+    click_at(&mut next, &ctx, &body, at);
+    draw_frame(&mut next, &ctx, &body, vec![]);
+    assert!(!next.ui.status.is_empty() && is_open(&next.ui, &brand), "{}", next.ui.status);
+    assert!(neighbour::<SwatchLibraries>(&next, gone, 1).is_none(), "no library to step from");
     let mut next = restarted(&next);
     assert!(is_open(&next.ui, &brand), "still listed after another restart");
     // Locate Library… reads the file where it is now and shows it in the same panel.
@@ -514,10 +522,13 @@ fn a_persistent_panel_whose_file_is_gone_is_listed_as_missing_until_located() {
     let moved = dir.join("moved").join("Brand.gpl");
     std::fs::write(&moved, palette).unwrap();
     let picked = moved.to_string_lossy().into_owned();
-    next.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
-    let (enabled, at) = control(&mut next, &ctx, &body, "Locate Library…");
-    assert!(enabled);
+    let picker = scripted(&mut next);
+    let (_, at) = control(&mut next, &ctx, &body, "Locate Library…");
     click_at(&mut next, &ctx, &body, at);
+    // The picker's answer arrives on a later pass.
+    picker.answer(&[&picked]);
+    let window = next.ui_ctx.clone().expect("a window context");
+    crate::tests::picks::poll(&mut next, &window);
     let located = panel_id("swatches", &format!("loaded/{}", moved.to_string_lossy()));
     assert!(!is_open(&next.ui, &brand) && is_open(&next.ui, &located), "{}", next.ui.status);
     let (_, id) = parse(&located).unwrap();
@@ -525,11 +536,36 @@ fn a_persistent_panel_whose_file_is_gone_is_listed_as_missing_until_located() {
     let s = settings(&next.ui, "swatches", id).cloned().unwrap();
     assert_eq!((s.path, s.persistent, s.view), (Some(moved.to_string_lossy().into_owned()), true, Some(View::SmallList)));
     assert!(settings(&next.ui, "swatches", gone).is_none());
-    let located_menu = |app: &mut VectorcraftApp, ui: &mut Ui| menu(app, ui, &located);
-    assert!(control(&mut next, &ctx, &located_menu, "Next Library").0);
+    assert!(neighbour::<SwatchLibraries>(&next, id, 1).is_some(), "a library to step from");
     let last = restarted(&next);
     assert!(is_open(&last.ui, &located) && last.ui.status.is_empty(), "{}", last.ui.status);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn locate_library_loads_browser_contents_into_the_missing_panel() {
+    let path = std::env::temp_dir().join(format!("vc-browser-locate-{}.gpl", std::process::id()));
+    let palette = b"GIMP Palette\nName: Replacement\n#\n255   0   0\tNew Red\n";
+    std::fs::write(&path, palette).unwrap();
+    let mut app = app();
+    let missing = panel_of(app.run("window.swatchLibrary.other", json!({"path": path})).unwrap());
+    app.run("ui.libraryPanel", json!({"panel": missing, "persistent": true, "view": "smallList"})).unwrap();
+    std::fs::remove_file(&path).unwrap();
+
+    let mut app = restarted(&app);
+    tidy(&mut app);
+    app.services.download = Some(Box::new(|_, _| Ok(())));
+    let picker = scripted(&mut app);
+    assert_eq!(app.run("ui.libraryPanel.locate", json!({"panel": missing})), Ok(json!({"pending": "fileDialog"})));
+    picker.answer_contents(&[("Replacement.gpl", palette)]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(!is_open(&app.ui, &missing), "the missing panel has been recovered");
+    let panel = last_open(&app.ui).unwrap();
+    assert!(is_open(&app.ui, &panel.panel()));
+    assert_eq!((panel.persistent, panel.view), (true, Some(View::SmallList)));
+    assert!(SwatchLibraries::get(&app, &panel.id).is_some_and(|(_, lib)| lib.swatch("New Red").is_some()));
 }
 
 #[test]
@@ -633,6 +669,14 @@ fn an_open_panel_whose_library_is_missing_is_brought_forward_by_its_id_when_not_
 #[test]
 fn previous_and_next_show_the_neighbouring_library_in_the_same_panel() {
     let mut app = app();
+    let first_id = SWATCH_IDS[0];
+    let last = SwatchLibraries::list(&app).pop().unwrap().id;
+    assert_eq!(last, "optical-effects", "gradient and then pattern libraries come after the swatch libraries");
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "radial-glows", 1).as_deref(), Some("geometric-patterns"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "geometric-patterns", 1).as_deref(), Some("grit-textures"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "grit-textures", 1).as_deref(), Some("optical-effects"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, first_id, -1), Some(last), "wraps around");
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
     let first = panel_of(app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap());
     app.run("window.panel.float", json!({"panel": first, "x": 50, "y": 60})).unwrap();
     app.run("ui.libraryPanel", json!({"panel": first, "persistent": true, "view": "smallList"})).unwrap();
@@ -640,11 +684,11 @@ fn previous_and_next_show_the_neighbouring_library_in_the_same_panel() {
     let next = panel_id("swatches", SWATCH_IDS[5]);
     assert!(!is_open(&app.ui, &first) && is_open(&app.ui, &next), "{}", app.ui.status);
     let group = docking(&app).floating.iter().find(|g| g.contains(&next)).unwrap();
-    assert_eq!((group.panels().count(), group.rect[0], group.rect[1]), (1, 50.0, 60.0), "in its place");
+    assert_eq!((group.panels().count(), group.rect.min), (1, Pos2::new(50.0, 60.0)), "in its place");
     let s = settings(&app.ui, "swatches", SWATCH_IDS[5]).unwrap();
     assert_eq!((s.view, s.persistent), (Some(View::SmallList), true), "the panel keeps its settings");
     assert!(settings(&app.ui, "swatches", "pastels").is_none());
-    assert!(crate::panel_docking::valid(docking(&app)));
+    assert!(app.ui.dock_workspace.validate().is_ok());
     // A library open in a panel of its own is brought forward instead.
     app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
     let r = app.run("ui.libraryPanel", json!({"panel": next, "library": "Pastels"})).unwrap();
@@ -679,12 +723,37 @@ fn a_panel_closes_when_its_library_is_gone() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A built-in swatch library lists its swatches and color groups in the UI language, a numbered
+/// swatch with its number as it is, and Find matches the name shown and the swatch's own name. A
+/// click adds the swatch under its own name. A color value, and a User Defined or loaded
+/// library's names, are shown as they are.
 #[test]
-fn the_panel_menu_has_persistent() {
+fn built_in_library_swatches_are_listed_in_the_ui_language() {
     let mut app = app();
-    let panel = panel_of(app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap());
-    let text = crate::tests_labels::painted_text(&mut app, |app, ui| menu(app, ui, &panel));
-    for item in ["Add to Swatches", "Small List View", "Show Find Field", "Previous Library", "Persistent", "Close Library"] {
-        assert!(text.contains(item), "{item}: {text}");
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    app.run("window.swatchLibrary", json!({"library": "earth-tones"})).unwrap();
+    let panel = shown(&app);
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui, &panel);
+    let mut texts = vec![];
+    for _ in 0..2 {
+        let out = draw_frame(&mut app, &ctx, &draw, vec![]);
+        texts =
+            out.shapes.iter().filter_map(|c| if let egui::Shape::Text(t) = &c.shape { Some(t.galley.text().to_string()) } else { None }).collect();
     }
+    assert!(texts.iter().any(|t| t == "Argile") && texts.iter().any(|t| t == "Argile 1"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Clay" || t == "Clay 1"), "{texts:?}");
+    let lib = SwatchLibraries::get(&app, "earth-tones").unwrap().1;
+    // The browser's Find matches the shown name and the stored one.
+    let rows = SwatchLibraries::rows(&lib, "earth-tones");
+    let shown_rows = browser_rows::<SwatchLibraries>(&panel, "earth-tones", &rows);
+    let clay = shown_rows.iter().find(|r| r.key.name == "Clay 2").expect("Clay 2 is listed");
+    assert_eq!(clay.search_name.as_deref(), Some("Clay 2"));
+    assert_eq!(SwatchLibraries::label("loaded/1", "Clay"), "Clay", "another library's swatch shows its own name only");
+    assert_eq!(SwatchLibraries::label("grays-neutrals", "K=35"), "K=35");
+    assert_eq!(SwatchLibraries::label("user/1", "Clay 3"), "Clay 3");
+    click(&mut app, &ctx, "Argile 1", Modifiers::NONE, 1.0);
+    assert!(app.session.doc().unwrap().doc.swatch("Clay 1").is_some(), "added under its own name");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
 }

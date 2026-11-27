@@ -11,6 +11,7 @@ use vectorcraft_doc::{NodeId, Unit};
 use vectorcraft_geom::{Point, Vec2};
 use vectorcraft_pathops::addons::pathtools::{Inspection, inspect};
 
+use crate::guides::DrawSnap;
 use crate::xform::measure;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -27,6 +28,8 @@ pub struct MeasureInspectTool {
     before: Option<(Point, Point)>,
     /// The path under the pointer and what it reads there.
     hover: Option<(NodeId, Inspection)>,
+    /// Snapping for both ends of a measurement.
+    snap: DrawSnap,
 }
 
 /// An area of `pt2` square points in `unit` (`12.5 mm²`).
@@ -87,7 +90,7 @@ impl Tool for MeasureInspectTool {
         match ev.kind {
             PointerKind::Move => self.hover = Self::inspect_at(cx, ev.pos),
             PointerKind::Down => {
-                let (p, _) = crate::guides::snap_draw(cx, ev.pos, &[]);
+                let p = self.snap.measure(cx, ev.pos, None);
                 self.before = self.line;
                 self.line = Some((p, p));
                 self.dragging = true;
@@ -95,7 +98,7 @@ impl Tool for MeasureInspectTool {
             }
             PointerKind::Drag | PointerKind::Up if self.dragging => {
                 if let Some((a, _)) = self.line {
-                    self.line = Some((a, crate::xform::measure_end_point(cx, a, ev.pos, ev.mods.shift)));
+                    self.line = Some((a, crate::xform::measure_end_point(cx, &mut self.snap, a, ev.pos, ev.mods.shift)));
                 }
                 self.dragging = ev.kind == PointerKind::Drag;
             }
@@ -138,6 +141,7 @@ impl Tool for MeasureInspectTool {
             out.push(Overlay::Anchor { p: at, color: ORANGE, filled: i.anchor.is_some(), size: 6.0 });
             out.push(Overlay::Measure { p: at + off, text: readout(cx, i) });
         }
+        out.extend(self.snap.guides().iter().filter(|_| self.dragging).cloned());
         out
     }
 
@@ -161,7 +165,8 @@ impl Tool for MeasureInspectTool {
 mod tests {
     use super::*;
     use crate::testutil::*;
-    use vectorcraft_doc::Selection;
+    use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, Selection, TextObject};
+    use vectorcraft_text::{FontDb, layout as layout_text};
 
     #[test]
     fn a_drag_measures_and_hovering_a_path_reads_it() {
@@ -226,5 +231,56 @@ mod tests {
         let o = t.options();
         assert!((o["distance"].as_f64().unwrap() - 36.0).abs() < 1e-9, "on the 9 pt grid: {o}");
         assert!(o["dy"].as_f64().unwrap().abs() < 1e-9, "kept horizontal: {o}");
+    }
+
+    /// With Snap to Glyph on, both ends and a Shift-drag's end land on the guides of live type.
+    #[test]
+    fn its_ends_land_on_glyph_guides_with_snap_to_glyph() {
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let text = TextObject::point(Point::new(100.0, 300.0), "Hg", CharStyle { size: 60.0, ..Default::default() });
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+        let lay = layout_text(FontDb::global(), &text);
+        let base = (text.xf * lay.line_xf * Point::new(lay.lines[0].x0, lay.lines[0].baseline)).y;
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let run = |c: &ToolContext, from: Point, to: Point, shift: bool| {
+            let mods = Mods { shift, ..Mods::default() };
+            let mut t = MeasureInspectTool::default();
+            t.pointer(c, &PointerEvent::new(PointerKind::Down, from.x, from.y));
+            t.pointer(c, &PointerEvent::new(PointerKind::Up, to.x, to.y).with_mods(mods));
+            let o = t.options();
+            let a = Point::new(o["x"].as_f64().unwrap(), o["y"].as_f64().unwrap());
+            (a, a + Vec2::new(o["dx"].as_f64().unwrap(), o["dy"].as_f64().unwrap()))
+        };
+        let (from, to) = (Point::new(400.0, base + 2.0), Point::new(450.0, base - 40.0));
+        assert_eq!(run(&on, from, to, false).0, Point::new(400.0, base));
+        let (from, to) = (Point::new(300.0, base - 100.0), Point::new(401.0, base + 1.0));
+        let landed = run(&on, from, to, true).1;
+        assert!(landed.distance(Point::new(400.0, base)) < 1e-9, "{landed:?}");
+        let off = ToolContext { snap_to_glyph: false, ..on };
+        let stayed = run(&off, from, to, true).1;
+        assert!(stayed.distance(to) < 1e-9, "{stayed:?}");
+    }
+
+    /// The guide an end lands on shows while the drag lasts.
+    #[test]
+    fn a_drag_shows_the_glyph_guide_it_lands_on() {
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let text = TextObject::point(Point::new(100.0, 300.0), "Hg", CharStyle { size: 60.0, ..Default::default() });
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+        let lay = layout_text(FontDb::global(), &text);
+        let base = (text.xf * lay.line_xf * Point::new(lay.lines[0].x0, lay.lines[0].baseline)).y;
+        let (s, p) = (Selection::default(), paint());
+        let on = ToolContext { snap_to_glyph: true, ..cx(&d, &s, &p) };
+        let mut t = MeasureInspectTool::default();
+        t.pointer(&on, &PointerEvent::new(PointerKind::Down, 400.0, 50.0));
+        let (drag, up) = (PointerKind::Drag, PointerKind::Up);
+        let count = |t: &MeasureInspectTool| t.overlays(&on).iter().filter(|o| !matches!(o, Overlay::Measure { .. })).count();
+        t.pointer(&on, &PointerEvent::new(drag, 450.0, base + 2.0));
+        assert!(count(&t) > 1, "the measured line and the guide");
+        t.pointer(&on, &PointerEvent::new(up, 450.0, base + 2.0));
+        assert_eq!(count(&t), 1, "the measured line alone");
     }
 }

@@ -16,6 +16,8 @@ pub(crate) const DOLLAR_EVAL_FILE: &str = "evalFile";
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/user-notification-dialogs/
 pub(crate) const NOTIFY: &[&str] = &["alert", "confirm", "prompt"];
 
+// The global function. `$.localize` is a property of `$` (the Dollar object page above), so it is
+// a `$` member:
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/
 pub(crate) const LOCALIZE: &str = "localize";
 
@@ -30,11 +32,18 @@ pub(crate) const FOLDER: &str = "Folder";
 pub(crate) const FILE_READS: &[&str] = &["read", "readch", "readln"];
 pub(crate) const FOLDER_READS: &[&str] = &["getFiles"];
 pub(crate) const FILE_WRITES: &[&str] = &["write", "writeln", "remove", "rename", "copy", "createAlias", "create"];
+/// The properties of a File object whose setting changes the file: its length, and its hidden and
+/// read-only flags.
+pub(crate) const FILE_SETTERS: &[&str] = &["length", "hidden", "readonly"];
 pub(crate) const FILE_DIALOGS: &[&str] = &["openDialog", "saveDialog"];
 pub(crate) const FOLDER_DIALOGS: &[&str] = &["selectDialog"];
 pub(crate) const INSTANCE_DIALOGS: &[&str] = &["openDlg", "saveDlg", "selectDlg"];
+/// The functions of a File object that a Folder object does not have.
+pub(crate) const FILE_ONLY: &[&str] = &["open", "read", "readch", "readln", "write", "writeln", "copy", "createAlias", "openDlg", "saveDlg"];
 pub(crate) const FOLDER_PLACES: &[&str] =
     &["appData", "appPackage", "commonFiles", "current", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
+/// The `Folder` place a script can assign.
+pub(crate) const FOLDER_CURRENT: &str = "current";
 pub(crate) const EXECUTE: &str = "execute";
 pub(crate) const OPEN: &str = "open";
 /// The open modes that write: write, append and edit.
@@ -150,12 +159,12 @@ features! {
     DirectiveInclude "directive.include" Language,
     DirectiveOther "directive.other" Language,
     DirectiveTarget "directive.target" Language,
-    DirectiveTargetengine "directive.targetengine" HostOnly,
+    DirectiveTargetengine "directive.targetengine" Language,
     Dollar "dollar" Language,
     DollarEnv "dollar.env" Files,
     DollarEvalFile "dollar.evalFile" Files,
     DynamicCode "dynamicCode" Language,
-    E4x "e4x" HostOnly,
+    E4x "e4x" Language,
     ExternalObject "externalObject" HostOnly,
     FileDialog "file.dialog" Files,
     FileExecute "file.execute" Files,
@@ -177,6 +186,6 @@ features! {
     SelectTool "selectTool" HostOnly,
     Socket "socket" HostOnly,
     UnitValue "unitValue" Language,
-    Xml "xml" HostOnly,
+    Xml "xml" Language,
     Xmp "xmp" HostOnly,
 }

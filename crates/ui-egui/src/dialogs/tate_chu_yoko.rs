@@ -5,24 +5,21 @@
 //! `text.setFormat` (`text.setRangeStyle` while the Type tool edits text) with the values that
 //! changed, as one undo step; characters that differ keep a value left blank.
 //!
-//! Fields: `tcyUpDown` and `tcyLeftRight` (pt, -1296..1296), as `text.setFormat` takes them, and
-//! `__initial` (the values it opened with).
+//! Fields: `tcyUpDown` and `tcyLeftRight` (pt, -1296..1296), as `text.setFormat` takes them.
 //!
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>.
 
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
+// PLAN: assumed path of `LengthUnits`
+use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Map, Value, json};
 
-use super::swatch_options::{grid, label};
-use super::{DialogSpec, form};
+use super::warichu::set_shared;
 use crate::VectorcraftApp;
-use crate::state::Dialog;
 
 /// The dialog kind of Tate-chu-yoko Settings.
 pub const KIND: &str = "tateChuYokoSettings";
-
-/// The field holding the values the dialog opened with.
-const INITIAL: &str = "__initial";
 
 /// The fields, as `text.setFormat` names them.
 const KEYS: [&str; 2] = ["tcyUpDown", "tcyLeftRight"];
@@ -30,84 +27,64 @@ const KEYS: [&str; 2] = ["tcyUpDown", "tcyLeftRight"];
 /// The range of both fields, in points.
 const RANGE: std::ops::RangeInclusive<f64> = -1296.0..=1296.0;
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Tate-chu-yoko Settings").into(),
-    body,
-    confirm,
-    min_width: 280.0,
-    // A value the characters don't share opens blank, without its field.
-    inputs: |_| &KEYS,
-    ..DialogSpec::FORM
-};
+/// The rows of the dialog, shown in `lengths`.
+fn rows(lengths: LengthUnits) -> Vec<Param> {
+    KEYS.into_iter()
+        .zip([tl!("Up/Down:"), tl!("Left/Right:")])
+        .map(|(key, label)| Param::number(key, label, 0.0, 1.0, 2).length(lengths).bounds(Some(*RANGE.start()), Some(*RANGE.end())))
+        .collect()
+}
 
 /// Open Tate-chu-yoko Settings on the characters the Character panel acts on.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let document = app.session.active().ok_or("no document")?.uid;
     let (up, right) = crate::panels::character::shared_tcy_offsets(app);
-    let mut values = Map::new();
+    let mut fields = DialogFields::new();
     for (key, v) in KEYS.into_iter().zip([up, right]) {
-        if let Some(v) = v {
-            values.insert(key.into(), json!(v));
-        }
+        set_shared(&mut fields, key, v);
     }
-    let mut fields = Value::Object(values.clone());
-    fields[INITIAL] = Value::Object(values);
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let initial = fields.clone();
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let lengths = crate::canvas::rulers::type_lengths(app);
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Tate-chu-yoko Settings"), rows(lengths)));
+    super::host::open_held(app, dialog, move |app, result| {
+        let p = params(&result.fields, &initial);
+        if p.is_empty() {
+            return Ok(());
+        }
+        if !app.session.active().is_some_and(|active| active.uid == document) {
+            return Err(tl!("Tate-chu-yoko Settings can only change the document where it was opened.").to_owned());
+        }
+        crate::panels::character::run_format(app, Value::Object(p)).map(|_| ())
+    })
+    .ok_or("no window")?;
     Ok(Value::Null)
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.type_unit();
-    grid(ui, |ui| {
-        for (key, text) in KEYS.into_iter().zip([tl!("Up/Down:"), tl!("Left/Right:")]) {
-            label(ui, text);
-            form::length_within(ui, d, key, unit, 90.0, Some(RANGE));
-            ui.end_row();
-        }
-    });
-    false
-}
-
 /// `text.setFormat` parameters: the fields that differ from the values the dialog opened with,
-/// in points (a length typed with its unit, "1 mm", is converted) and kept within -1296..1296.
-/// A blank field is left alone; a field that is not a length is an error.
-fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
-    let initial = d.fields.get(INITIAL).and_then(Value::as_object);
+/// in points and kept within -1296..1296. A mixed field is left alone.
+fn params(fields: &DialogFields, initial: &DialogFields) -> Map<String, Value> {
     let mut p = Map::new();
-    for (key, label) in KEYS.into_iter().zip(["Up/Down", "Left/Right"]) {
-        let v = match d.fields.get(key) {
-            None | Some(Value::Null) => continue,
-            Some(Value::String(s)) if s.trim().is_empty() => continue,
-            Some(Value::Number(n)) => n.as_f64(),
-            Some(Value::String(s)) => vectorcraft_doc::Unit::Points.parse(s),
-            Some(_) => None,
-        };
-        let v = v.filter(|v| v.is_finite()).ok_or_else(|| format!("{label} must be a number"))?.clamp(*RANGE.start(), *RANGE.end());
-        if initial.and_then(|m| m.get(key)).and_then(Value::as_f64) != Some(v) {
+    for key in KEYS {
+        let Some(v) = fields.number(key).map(|v| v.clamp(*RANGE.start(), *RANGE.end())) else { continue };
+        if initial.number(key) != Some(v) {
             p.insert(key.into(), json!(v));
         }
     }
-    Ok(p)
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let p = params(d)?;
-    app.ui.dialog = None;
-    if p.is_empty() {
-        return Ok(Value::Null);
-    }
-    crate::panels::character::run_format(app, Value::Object(p))
+    p
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::warichu::driver;
     use super::*;
     use vectorcraft_engine::Session;
     use vectorcraft_engine::doc::{NodeId, NodeKind};
 
-    /// A selected point type object with three characters.
+    /// A selected point type object with four characters.
     fn app() -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("text.create", json!({"x": 10, "y": 50, "text": "2026"})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -122,91 +99,81 @@ mod tests {
         }
     }
 
-    /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step,
-    /// and a length typed with its unit is converted to points.
+    /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step.
+    /// Automation sets the offsets in points, as a number row takes them.
     #[test]
     fn tate_chu_yoko_settings_dialog_sets_up_down_and_left_right() {
         let (mut app, id) = app();
         app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        let d = app.ui.dialog.clone().expect("Tate-chu-yoko Settings opened");
-        assert_eq!(d.kind, KIND);
-        assert_eq!((d.f64("tcyUpDown", -1.0), d.f64("tcyLeftRight", -1.0)), (0.0, 0.0));
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("tcyUpDown".into(), json!(3));
-        d.fields.insert("tcyLeftRight".into(), json!("-1 in"));
+        let f = driver::fields(&app);
+        assert_eq!((f.number("tcyUpDown"), f.number("tcyLeftRight")), (Some(0.0), Some(0.0)));
+        driver::set(&mut app, "tcyUpDown", json!(3));
+        driver::set(&mut app, "tcyLeftRight", json!(-72));
         let undo = app.session.active().unwrap().history.undo.len();
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        driver::ok(&mut app);
+        assert!(!driver::is_open(&app));
         assert_eq!(offsets(&app, id), [(3.0, -72.0)]);
-        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
-        // It opens on the values set, and OK with nothing changed adds no undo step.
-        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        let d = app.ui.dialog.clone().unwrap();
-        assert_eq!((d.f64("tcyUpDown", 0.0), d.f64("tcyLeftRight", 0.0)), (3.0, -72.0));
-        super::super::confirm(&mut app).unwrap();
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
         // Cancel changes nothing.
         app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("tcyUpDown".into(), json!(9));
-        app.ui.dialog = None;
+        driver::set(&mut app, "tcyUpDown", json!(9));
+        driver::cancel(&mut app);
         assert_eq!(offsets(&app, id), [(3.0, -72.0)]);
         // With no type selected the dialog does not open.
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.tateChuYokoSettings", json!({})).is_err());
-        assert!(app.ui.dialog.is_none());
+        assert!(!driver::is_open(&app));
     }
 
-    /// Characters that differ open a blank field; OK leaves that value alone and sets the other.
-    #[test]
-    fn tate_chu_yoko_settings_dialog_leaves_mixed_values_blank() {
-        let (mut app, id) = app();
-        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 2, "tcyUpDown": 4})).unwrap();
-        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        let d = app.ui.dialog.clone().unwrap();
-        assert!(!d.fields.contains_key("tcyUpDown"));
-        assert_eq!(d.f64("tcyLeftRight", -1.0), 0.0);
-        app.ui.dialog.as_mut().unwrap().fields.insert("tcyLeftRight".into(), json!(2));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(offsets(&app, id), [(4.0, 2.0), (0.0, 2.0)]);
-    }
-
-    /// OK returns the error of a command that is refused, and the characters keep their values.
+    /// A command the engine refuses keeps the dialog open and the characters unchanged.
     #[test]
     fn tate_chu_yoko_settings_dialog_returns_a_refused_command_error() {
         let (mut app, id) = app();
         app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("tcyUpDown".into(), json!(5));
+        driver::set(&mut app, "tcyUpDown", json!(5));
         app.run("select.set", json!({"ids": []})).unwrap();
-        assert!(super::super::confirm(&mut app).is_err());
-        assert!(app.ui.dialog.is_none());
+        driver::ok(&mut app);
+        assert!(driver::is_open(&app));
         assert_eq!(offsets(&app, id), [(0.0, 0.0)]);
     }
 
-    /// OK with a value that is not a length returns an error, keeps the dialog open and leaves
-    /// the characters alone; a blank field leaves its value alone.
     #[test]
-    fn tate_chu_yoko_settings_dialog_rejects_a_value_that_is_not_a_length() {
-        let (mut app, id) = app();
-        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 4, "tcyUpDown": 4, "tcyLeftRight": 2})).unwrap();
-        for (key, bad, message) in
-            [("tcyUpDown", json!("invalid"), "Up/Down must be a number"), ("tcyLeftRight", json!(true), "Left/Right must be a number")]
-        {
-            app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-            app.ui.dialog.as_mut().unwrap().fields.insert(key.into(), bad);
-            assert_eq!(super::super::confirm(&mut app), Err(message.to_string()));
-            assert!(app.ui.dialog.is_some());
-            assert_eq!(offsets(&app, id), [(4.0, 2.0)]);
-            app.ui.dialog = None;
-        }
+    fn tate_chu_yoko_settings_refuses_confirmation_in_another_drawing() {
+        use craft::ui::dialog::{HeldOk, dialog_id};
+
+        let (mut app, source_id) = app();
+        let source_before = offsets(&app, source_id);
+        let source_undo = app.session.active().unwrap().history.undo.len();
         app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("tcyUpDown".into(), json!(" "));
-        d.fields.insert("tcyLeftRight".into(), json!(7));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(offsets(&app, id), [(4.0, 7.0)]);
+        driver::set(&mut app, "tcyUpDown", json!(7));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, id)), "the edit waits for the app");
+
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let target_id = app.run("text.create", json!({"x": 10, "y": 50, "text": "other"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [target_id]})).unwrap();
+        let target_before = offsets(&app, target_id);
+        let target_undo = app.session.active().unwrap().history.undo.len();
+        driver::pump(&mut app);
+        assert_eq!(
+            (offsets(&app, target_id), app.session.active().unwrap().history.undo.len()),
+            (target_before, target_undo),
+            "the other drawing's text and undo history stay untouched"
+        );
+        assert!(matches!(host.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(driver::fields(&app).number("tcyUpDown"), Some(7.0));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("select.set", json!({"ids": [source_id]})).unwrap();
+        assert_eq!(offsets(&app, source_id), source_before);
+        assert!(crate::dialogs::tests::confirm(&mut app), "confirm the retained edit on its original drawing");
+        assert_eq!(offsets(&app, source_id), [(7.0, 0.0)]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), source_undo + 1);
     }
 
-    /// While the Type tool edits text, OK sets the selected characters and returns the result.
+    /// While the Type tool edits text, OK sets the selected characters.
     #[test]
     fn tate_chu_yoko_settings_dialog_sets_the_range_the_type_tool_selects() {
         let (mut app, id) = app();
@@ -214,8 +181,8 @@ mod tests {
         app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 0, "caret": 2}));
         assert_eq!(crate::panels::character::text_editing(&app), Some((NodeId(id), 0, 2)));
         app.run("ui.tateChuYokoSettings", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("tcyLeftRight".into(), json!(6));
-        assert!(super::super::confirm(&mut app).is_ok());
+        driver::set(&mut app, "tcyLeftRight", json!(6));
+        driver::ok(&mut app);
         assert_eq!(offsets(&app, id), [(0.0, 6.0), (0.0, 0.0)]);
     }
 }

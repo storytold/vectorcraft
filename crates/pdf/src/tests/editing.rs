@@ -118,15 +118,9 @@ fn the_legacy_name_is_read_and_plain_pdfs_have_no_editing_data() {
     assert_eq!(editing(&plain), None);
     assert_eq!(import_with_report(&plain, &ImportOptions::default()).unwrap().native, None);
     let r = pdf_with(None, true);
-    assert!(r.warnings.len() == 1 && r.warnings[0].contains("Preserve editing"), "{:?}", r.warnings);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.setting_notes.len() == 1 && r.setting_notes[0].contains("Preserve editing"), "{:?}", r.setting_notes);
     assert_eq!(editing(&r.bytes), None);
-}
-
-#[test]
-fn pdf_a_carries_no_editing_data() {
-    let s: PdfSettings = serde_json::from_value(json!({"standard": "pdfA2b", "preserveEditing": true})).unwrap();
-    assert!(matches!(s.check(), Err(PdfError::BadSetting(m)) if m.contains("editing")));
-    assert!(matches!(s.check_values(), Err(PdfError::BadSetting(_))));
 }
 
 /// A tiny PDF made of the given objects (numbered from 1), with the cross-reference table written.
@@ -235,4 +229,105 @@ fn a_file_name_written_as_utf16_is_found() {
         let e = editing(&raw_pdf(&objects)).unwrap_or_else(|| panic!("/{key}: not found"));
         assert_eq!(e.data, b"hello", "/{key}");
     }
+}
+
+#[test]
+fn an_editing_file_whose_data_cannot_be_resolved_is_still_listed() {
+    // No `EF` dictionary, an `EF` without `F` or `UF`, and an `F` naming no object.
+    for ef in ["", "/EF << >>", "/EF << /F 9 0 R >>"] {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+            "<< /Type /Pages /Kids [5 0 R] /Count 1 >>".to_string(),
+            "<< /Names [(a) 4 0 R] >>".to_string(),
+            format!("<< /Type /Filespec /UF ({EDITING_FILE}) {ef} >>"),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+        ];
+        let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+        assert_eq!(opened.editing(), None, "{ef:?}");
+        assert!(opened.has_editing_file(), "{ef:?}");
+    }
+    // A name tree key naming it, with a file specification that names no object or isn't one.
+    for spec in ["9 0 R", "(not a file specification)"] {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+            "<< /Type /Pages /Kids [4 0 R] /Count 1 >>".to_string(),
+            format!("<< /Names [(a) 9 0 R ({EDITING_FILE}) {spec}] >>"),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+        ];
+        let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+        assert_eq!(opened.editing(), None, "{spec}");
+        assert!(opened.has_editing_file(), "{spec}");
+    }
+    // The key written as an indirect string.
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        "<< /Type /Pages /Kids [4 0 R] /Count 1 >>".to_string(),
+        "<< /Names [5 0 R 9 0 R] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+        format!("({EDITING_FILE})"),
+    ];
+    assert!(open_pdf(&raw_pdf(&objects), None).unwrap().has_editing_file());
+    // A PDF without the editing file, and one with it.
+    assert!(!open_pdf(&export(&doc(), &PdfOptions::default()).unwrap(), None).unwrap().has_editing_file());
+    let opened = open_pdf(&pdf_with(Some(b"native"), false).bytes, None).unwrap();
+    assert!(opened.editing().is_some() && opened.has_editing_file());
+}
+
+#[test]
+fn an_editing_file_deep_in_the_name_tree_is_found() {
+    // Objects 4..=203 are a chain of 200 name tree nodes, each listing the next one; the editing
+    // file sits in the leaf (object 204), with its data or naming data that can't be resolved.
+    for ef in ["/EF << /F 206 0 R >>", "/EF << /F 999 0 R >>"] {
+        let mut objects = vec![
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+            "<< /Type /Pages /Kids [207 0 R] /Count 1 >>".to_string(),
+            "<< /Kids [4 0 R] >>".to_string(),
+        ];
+        for node in 4..=203 {
+            objects.push(format!("<< /Kids [{} 0 R] >>", node + 1));
+        }
+        objects.push("<< /Names [(a) 205 0 R] >>".to_string());
+        objects.push(format!("<< /Type /Filespec /UF ({EDITING_FILE}) {ef} >>"));
+        objects.push("<< /Length 5 >>\nstream\nhello\nendstream".to_string());
+        objects.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string());
+        let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+        assert!(opened.has_editing_file(), "{ef}");
+        let data = opened.editing().map(|e| e.data);
+        assert_eq!(data.as_deref(), ef.contains("206").then_some(&b"hello"[..]), "{ef}");
+    }
+    // A name tree with more nodes than are searched may list it.
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        "<< /Type /Pages /Kids [4 0 R] /Count 1 >>".to_string(),
+        format!("<< /Kids [{}] >>", "<< /Names [] >> ".repeat(70_000)),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+    ];
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing(), None);
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // One that lists a readable editing file before the nodes left unsearched and another after
+    // them: the first is read, and the search reads as cut short.
+    let leaf = |stream: u32| format!("<< /Names [({EDITING_FILE}) << /Type /Filespec /UF ({EDITING_FILE}) /EF << /F {stream} 0 R >> >>] >>");
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_string(),
+        "<< /Type /Pages /Kids [8 0 R] /Count 1 >>".to_string(),
+        format!("<< /Kids [4 0 R {}5 0 R] >>", "<< /Names [] >> ".repeat(70_000)),
+        leaf(6),
+        leaf(7),
+        "<< /Length 5 >>\nstream\nfirst\nendstream".to_string(),
+        "<< /Length 6 >>\nstream\nsecond\nendstream".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>".to_string(),
+    ];
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing().map(|e| e.data).as_deref(), Some(&b"first"[..]));
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // The same, with the nodes past the limit in a subtree after the one holding the first.
+    let mut objects = objects;
+    objects[2] = format!("<< /Kids [4 0 R << /Kids [{}5 0 R] >>] >>", "<< /Names [] >> ".repeat(70_000));
+    let opened = open_pdf(&raw_pdf(&objects), None).unwrap();
+    assert_eq!(opened.editing().map(|e| e.data).as_deref(), Some(&b"first"[..]));
+    assert!(opened.has_editing_file() && opened.editing_search_cut());
+    // A tree searched to its end.
+    let opened = open_pdf(&pdf_with(Some(b"native"), false).bytes, None).unwrap();
+    assert!(opened.editing().is_some() && !opened.editing_search_cut());
 }

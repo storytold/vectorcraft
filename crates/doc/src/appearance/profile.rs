@@ -26,11 +26,15 @@ impl WidthProfile {
     pub fn at(&self, t: f64) -> (f64, f64) {
         Self::at_points(&self.points, t)
     }
-    /// [`Self::at`] of a profile's points (a preset's or a saved profile's). Each side runs through
-    /// its points on a monotone cubic curve (Fritsch–Carlson): it flows through a width point
-    /// without a kink, turns flat at a point wider or narrower than both neighbours, and never
-    /// goes past either point of the span it is in (#5714). Points on one straight line stay on
-    /// it. A step (two points at one position, [`Self::around`]) ends the curve on each side of it.
+    /// [`Self::at`] of a profile's points (a preset's or a saved profile's).
+    ///
+    /// Each side runs through its points on a cubic Hermite curve, its slope at each one the
+    /// weighted harmonic mean of the secants either side (Fritsch–Carlson). That is C1 continuous
+    /// and monotone between points, so it never overshoots them, a point eases into its neighbours
+    /// instead of making a corner, and moving one reshapes the curve as far as its neighbours'
+    /// neighbours (their slopes depend on it). The ends of a run take the span's own slope, so a
+    /// two-point profile stays a straight taper. Two points at one `t` are still a step: each run
+    /// either side ends independently at it.
     pub fn at_points(p: &[(f64, f64, f64)], t: f64) -> (f64, f64) {
         if p.is_empty() {
             return (1.0, 1.0);
@@ -71,9 +75,10 @@ impl WidthProfile {
         // Two swells between narrow necks.
         ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
-    /// The widest the stroke gets, as a multiple of its weight, 1 for a profile without points. Each
-    /// side stays between the widths of the two points of each span ([`Self::at_points`]), but the
-    /// two sides needn't peak together, so a span counts its wider left and its wider right.
+    /// The widest the stroke gets, as a multiple of its weight, 1 for a profile without points.
+    /// Each side's smooth curve stays between the widths of the two points of each span
+    /// ([`Self::at_points`]), but the two sides needn't peak together, so a span counts its wider
+    /// left and its wider right.
     pub fn widest(&self) -> f64 {
         let p = &self.points;
         if p.is_empty() {
@@ -124,8 +129,9 @@ impl WidthProfile {
 
 /// Pen pressure recorded along a stroke (the Paintbrush with a graphics tablet): (position 0..1
 /// along the path, pressure 0..1) samples in order, positions measured as a [`WidthProfile`]'s
-/// are. The pen's tilt is kept the same way ([`StrokeLayer::tilt`]). Calligraphic and Scatter
-/// brushes with Pressure or Tilt variation read them; everything else ignores them.
+/// are. The pen's tilt and an airbrush pen's finger wheel are kept the same way
+/// ([`StrokeLayer::tilt`], [`StrokeLayer::wheel`]). Brushes with Pressure, Tilt or Stylus Wheel
+/// variation read them; everything else ignores them.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PressureProfile {
     pub points: Vec<(f64, f64)>,
@@ -196,6 +202,13 @@ impl AngleProfile {
         if v.is_finite() { vectorcraft_geom::normalize_deg(v) } else { 0.0 }
     }
 
+    /// The angle at `t` (0..1) as [`Self::at`] reads it, but in the samples' own running degrees,
+    /// so the whole turns the curve makes along the stroke are kept; 0 without any samples.
+    pub fn unwrapped_at(&self, t: f64) -> f64 {
+        let v = interpolated(&self.points, t).unwrap_or(0.0);
+        if v.is_finite() { v } else { 0.0 }
+    }
+
     /// A profile from (position, degrees) samples in order along the stroke: non-finite ones are
     /// dropped, each sample is joined to the one before it the shorter way round, and the curve is
     /// simplified to within 1° and kept to [`PressureProfile::MAX_POINTS`]. `None` without a sample.
@@ -251,9 +264,10 @@ const STEP: f64 = 1e-7;
 
 /// The slope of one side (`v` reads it from a point) of width profile `p` at its point `j`, in
 /// width per unit of position: Fritsch–Carlson's choice for a monotone cubic curve. It is 0 where
-/// the point is wider or narrower than both neighbours, the weighted harmonic mean of the slopes
-/// of the spans on either side elsewhere (never more than three times either, so no span
-/// overshoots its points), and the span's own slope at an end of the profile or beside a step.
+/// the point is wider or narrower than both neighbours, and the weighted harmonic mean of the
+/// slopes of the spans on either side elsewhere (never more than three times either, so no span
+/// overshoots its points). The ends of a run take their secant; a step ends the run on each
+/// side, so the points either side of it do not see across it.
 fn tangent(p: &[(f64, f64, f64)], j: usize, v: fn(&(f64, f64, f64)) -> f64) -> f64 {
     let Some(q) = p.get(j) else { return 0.0 };
     let before = j.checked_sub(1).and_then(|k| p.get(k)).filter(|a| q.0 - a.0 > STEP);

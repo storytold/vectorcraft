@@ -62,6 +62,38 @@ pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
     true
 }
 
+/// Area type whose source lays out `lines` lines in its frame, more than fit here: a font that isn't
+/// available shows in the fallback font, whose lines may reach lower, and the source may set a last
+/// line whose descent passes the frame's bottom, which isn't drawn here. For importers: the frame is
+/// made taller, from its bottom, by its lines' deepest descent plus 0.05 pt, when that lays out
+/// more of the source's lines and no more than it has. Horizontal type only. Whether it was.
+pub fn fit_source_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
+    let TextKind::Area { frame } = &t.kind else { return false };
+    if t.vertical {
+        return false;
+    }
+    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    let laid = layout(db, t);
+    let have = laid.lines.len();
+    if !laid.overflow || have == 0 || have >= lines {
+        return false;
+    }
+    // The deepest descent of its lines (a little more, for the rounding of the layout).
+    let Some(descent) = laid.lines.iter().map(|l| l.descent).reduce(f64::max).filter(|d| d.is_finite() && *d > 0.0) else { return false };
+    let by = (b.height() + descent + 0.05) / b.height();
+    if !(by.is_finite() && by > 1.0) {
+        return false;
+    }
+    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
+    let now = layout(db, t).lines.len();
+    if now > have && now <= lines {
+        return true;
+    }
+    t.kind = short;
+    false
+}
+
 /// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
 /// bar from the stretch's first glyph to its last one's advance, placed and sized by the font's
 /// own underline and strikeout metrics through the glyph's transform (so the size, baseline shift
@@ -159,12 +191,13 @@ pub fn envelope_ink(t: &TextObject, m: Affine, projection: Option<(vectorcraft_g
 /// Make envelopes map type from [`envelope_ink`], measured again when the fonts or the hyphenation
 /// exceptions change (the first registration stays, see `vectorcraft_doc::live::set_type_ink`).
 pub fn register_envelope_ink() {
-    vectorcraft_doc::live::set_type_ink(envelope_ink, envelope_ink_inputs);
+    vectorcraft_doc::live::set_type_ink(envelope_ink, layout_inputs);
 }
 
-/// A number that changes whenever what [`envelope_ink`] reads besides the type changes: the
-/// installed fonts and the hyphenation exceptions.
-pub(crate) fn envelope_ink_inputs() -> u64 {
+/// A number that changes when the fonts ([`FontDb::generation`]) or the hyphenation exceptions
+/// (Preferences › Hyphenation › Exceptions) change. Caches of layouts made with the global font
+/// database, and of art made from them, key on it.
+pub fn layout_inputs() -> u64 {
     FontDb::global().generation().rotate_left(32) ^ crate::hyphen::exceptions_generation()
 }
 
@@ -177,24 +210,108 @@ const SHRINK_PASSES: usize = 11;
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     #[cfg(any(test, feature = "test-fonts"))]
     crate::test_fonts::count_layout();
+    // The sizes the fits step and limit are the ones the Character panel shows (`shown`), whatever
+    // em size a font height reference sets them at.
+    let shown = t;
+    // Keep the verified faces alive throughout fitting and resolve their height references too.
+    let file = in_file_fonts(db, t);
+    let t = file.as_ref().map_or(t, |(text, _)| text);
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);
     match (opts.fit.min_scale(), &t.kind) {
-        (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
+        (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, shown, opts, min).unwrap_or(first),
+        (_, TextKind::OnPath { .. }) if t.dynamic_text => fill_path(db, t, shown, opts, &first).unwrap_or(first),
         _ => first,
     }
+}
+
+/// The document size of the first character of `t` (its run's size; an empty run before it draws
+/// nothing), in tenths of a point. None when it is not a usable size.
+fn first_size_tenths(t: &TextObject) -> Option<f64> {
+    let points = t.style_scale()?.points;
+    let run = t.runs.iter().find(|r| !r.text.is_empty()).or(t.runs.first());
+    run.map(|r| r.style.size * points * 10.0).filter(|s| s.is_finite() && *s > 0.0)
+}
+
+/// Most layout passes Dynamic Text runs past the first (a guess, a search out from it, bisection).
+const DYNAMIC_PASSES: usize = 11;
+
+/// The sizes, in tenths of a document point, Dynamic Text keeps the first run's size within: 0.1
+/// to 1,296 pt, the Character panel's range.
+const DYNAMIC_TENTHS: (f64, f64) = (1.0, 12_960.0);
+
+/// Dynamic Text for type on a path: the largest scale at which the text does not run past its end
+/// bracket, so that it fills the span between its brackets. The first run's document size moves in
+/// steps of 0.1 pt within 0.1 to 1,296 pt; at either limit the text keeps that size, and at the
+/// smallest it may still overflow. Each guess is the size tried last times the span's length over
+/// the length the text took there, which is exact for a straight span with no Spacing; a guess
+/// outside the sizes still open gives way to a step out from the last one (doubling) or to
+/// bisection. At most [`DYNAMIC_PASSES`] passes. `t` is laid out; the sizes are those of `shown`,
+/// `t` before its font height references were resolved. None (keep `first`) when the text takes no
+/// length, the span has none, or the text has no usable size.
+fn fill_path(db: &FontDb, t: &TextObject, shown: &TextObject, opts: &LayoutOptions, first: &TextLayout) -> Option<TextLayout> {
+    let tenths = first_size_tenths(shown)?;
+    let (min, max) = DYNAMIC_TENTHS;
+    // The size in tenths that would fill the span, from a layout at `k` tenths.
+    let guess = |k: f64, l: &TextLayout| -> Option<f64> {
+        let (used, room) = l.path_fill?;
+        let g = (k * room / used).floor();
+        (used.is_finite() && used > 1e-9 && room.is_finite() && room > 1e-9 && g.is_finite()).then(|| g.clamp(min, max))
+    };
+    let mut next = guess(tenths, first)?;
+    let at = |k: f64| -> TextLayout {
+        #[cfg(test)]
+        FIT_PASSES.set(FIT_PASSES.get() + 1);
+        let f = k / tenths;
+        let mut l = layout_once(db, &scaled(t, f), opts);
+        l.fit_scale = f;
+        l
+    };
+    // The largest size tried that fits, and the smallest that overflows, each with its layout.
+    let mut fits: Option<(f64, TextLayout)> = None;
+    let mut over: Option<(f64, TextLayout)> = None;
+    let mut step = 1.0;
+    for _ in 0..DYNAMIC_PASSES {
+        let l = at(next);
+        let guessed = guess(next, &l);
+        if l.overflow {
+            if over.as_ref().is_none_or(|(o, _)| next < *o) {
+                over = Some((next, l));
+            }
+        } else if fits.as_ref().is_none_or(|(f, _)| next > *f) {
+            fits = Some((next, l));
+        }
+        // The sizes still open lie strictly between the largest that fits and the smallest that
+        // overflows, within the limits.
+        let lo = fits.as_ref().map_or(min - 1.0, |f| f.0);
+        let hi = over.as_ref().map_or(max + 1.0, |o| o.0);
+        if hi - lo <= 1.0 {
+            break;
+        }
+        next = match guessed.filter(|g| *g > lo && *g < hi) {
+            Some(g) => g,
+            None if fits.is_some() && over.is_some() => (lo + (hi - lo) * 0.5).floor(),
+            // Everything tried fits: try larger. Everything tried overflows: try smaller.
+            None if fits.is_some() => (lo + step).min(hi - 1.0),
+            None => (hi - step).max(lo + 1.0),
+        };
+        step *= 2.0;
+    }
+    // The largest that fits, or at the smallest size (or at the pass limit) the smallest tried.
+    fits.or(over).map(|(_, l)| l)
 }
 
 /// Shrink Text to Fit for text that overflows at full size: the largest scale in `min..1` at which
 /// it fits, searched by bisection over the first run's document size in steps of 0.1 pt (so its scaled size
 /// is a whole number of tenths of a point, the same every time). Down at `min` it lays out there,
-/// still overflowing. None (keep the full-size layout) when the text has no usable size.
-fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
+/// still overflowing. `t` is laid out; the sizes are those of `shown`, `t` before its font height
+/// references were resolved. None (keep the full-size layout) when the text has no usable size.
+fn shrink_to_fit(db: &FontDb, t: &TextObject, shown: &TextObject, opts: &LayoutOptions, min: f64) -> Option<TextLayout> {
     // Exact size edits after object scaling may store a local size below 0.1. Fit in the
     // same document points as the Character controls, independent of that representation.
-    let points = t.style_scale()?.points;
-    let size = t.runs.first().map(|r| r.style.size * points).filter(|s| s.is_finite() && *s >= 0.1)?;
+    let points = shown.style_scale()?.points;
+    let size = shown.runs.first().map(|r| r.style.size * points).filter(|s| s.is_finite() && *s >= 0.1)?;
     if !(min.is_finite() && min < 1.0) {
         return None;
     }
@@ -241,8 +358,8 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading, baseline shift and tate-chu-yoko offsets scaled by `f`, inline art's own
-/// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
+/// `t` with every run's size, explicit leading, baseline shift, tate-chu-yoko offsets and warichu Line Gap scaled by `f`,
+/// inline art's own shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 /// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
 /// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
 pub fn scaled(t: &TextObject, f: f64) -> TextObject {
@@ -253,11 +370,55 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         r.style.baseline_shift *= f;
         r.style.tcy_up_down *= f;
         r.style.tcy_left_right *= f;
+        r.style.warichu_gap *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }
     }
     s
+}
+
+/// `t` with the runs a font its file carried draws ([`FontDb::file_faces`]) set in that font;
+/// `None` when none is.
+fn in_file_fonts(db: &FontDb, t: &TextObject) -> Option<(TextObject, Vec<Option<std::sync::Arc<crate::FontFace>>>)> {
+    let faces = db.file_faces(t);
+    if faces.is_empty() {
+        return None;
+    }
+    let mut out = t.clone();
+    for (r, face) in out.runs.iter_mut().zip(&faces) {
+        let Some(face) = face else { continue };
+        r.style.file_font_id = Some(face.id());
+        r.style.font_style = face.style.clone();
+        r.style.font_version = None;
+        r.style.font_axes.clear();
+    }
+    Some((out, faces))
+}
+
+/// `t` in the styles its layout draws it in: [`scaled`] by the layout's
+/// [`TextLayout::fit_scale`] when Shrink Text to Fit (area type) or Dynamic Text (type on a path)
+/// scales it, `t` itself otherwise. Text with neither setting is not laid out.
+pub fn drawn(t: &TextObject) -> std::borrow::Cow<'_, TextObject> {
+    let fits = match &t.kind {
+        TextKind::Area { .. } => t.area.fit.min_scale().is_some(),
+        TextKind::OnPath { .. } => t.dynamic_text,
+        TextKind::Point => false,
+    };
+    let f = if fits { layout(FontDb::global(), t).fit_scale } else { 1.0 };
+    if f != 1.0 { std::borrow::Cow::Owned(scaled(t, f)) } else { std::borrow::Cow::Borrowed(t) }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many layouts Dynamic Text ran past the first on this thread ([`fit_passes`]).
+    static FIT_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many layouts Dynamic Text ran past the first on this thread.
+#[cfg(test)]
+pub(crate) fn fit_passes() -> usize {
+    FIT_PASSES.get()
 }
 
 #[cfg(test)]
@@ -276,8 +437,30 @@ pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
     l
 }
 
-/// One layout pass, without fitting.
+/// One layout pass, without fitting. Warichu runs are set at their Warichu Settings Scale of
+/// their size ([`super::warichu::warichu_sizes`]). Runs set in a composite font are laid out as
+/// the runs of one class each that [`FontDb::composite_split`] makes of them; the glyphs, ruby and
+/// inline graphics still name the runs of `t`.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let sized = super::warichu::warichu_sizes(t);
+    let t = &*sized;
+    let Some((split, from)) = db.composite_split(t) else { return layout_runs(db, t, opts, None) };
+    let mut l = layout_runs(db, &split, opts, Some(t));
+    let original = |run: &mut usize| *run = from.get(*run).copied().unwrap_or(*run);
+    l.glyphs.iter_mut().chain(l.ruby.iter_mut()).for_each(|g| original(&mut g.run));
+    l.inlines.iter_mut().for_each(|i| original(&mut i.run));
+    l
+}
+
+/// [`layout_once`] for text set in no composite font: `t` itself, or with `set`, the pieces a
+/// composite font splits `set` into (ruby readings take their style from `set`'s runs).
+fn layout_runs(db: &FontDb, t: &TextObject, opts: &LayoutOptions, set: Option<&TextObject>) -> TextLayout {
+    let mut set_runs = Vec::new();
+    let mut off = 0;
+    for r in set.map(|s| s.runs.as_slice()).unwrap_or_default() {
+        set_runs.push((off..off + r.text.len(), &r.style));
+        off += r.text.len();
+    }
     let text = t.plain_text();
     let mut runs = Vec::with_capacity(t.runs.len());
     let mut inlines = Vec::with_capacity(t.runs.len());
@@ -315,6 +498,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         text: &text,
         faces,
         runs,
+        set_runs,
         inlines,
         default: CharStyle::default(),
         opts,
@@ -322,6 +506,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
         upright_cluster: None,
+        tcy_block: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next
@@ -333,7 +518,9 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         TextKind::Point => {
             let first = cx.style_at(0);
             let centre = cx.face_at(0).map_or(EM_CENTER, |f| f.ideographic_centre());
-            Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
+            // A warichu first character keeps the size of its line ([`super::warichu::warichu_sizes`]).
+            let size = if super::warichu::stacked(first, true) { super::warichu::WariStyle::of(first).parent_size() } else { first.size };
+            Affine::translate((-centre * size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,
     };

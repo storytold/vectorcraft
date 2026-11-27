@@ -349,6 +349,11 @@ pub struct PrintSettings {
     pub overlap: f64,
     /// 1-based tiles to print (`"1-3, 5"`, numbered across then down); empty: every tile.
     pub tile_range: String,
+    /// Print as many copies of the artboard as fit the imageable area on each sheet, in a grid
+    /// (not when tiling).
+    pub copies_per_sheet: bool,
+    /// The space between copies on a sheet (pt).
+    pub gutter: f64,
     /// The device's unprintable margin around the paper (pt): the imageable area is inside it.
     pub margin: f64,
     // Marks and Bleed.
@@ -384,6 +389,8 @@ impl Default for PrintSettings {
             scale: PrintScale::default(),
             overlap: 0.0,
             tile_range: String::new(),
+            copies_per_sheet: false,
+            gutter: 0.0,
             margin: 0.0,
             marks: MarkSettings::default(),
             // The document's bleed (Document Setup) unless other values are given.
@@ -413,11 +420,15 @@ pub struct Placement {
 pub struct PrintScale {
     pub width: f64,
     pub height: f64,
+    /// The link between the width and the height: on, both are the same percentage. On for new
+    /// settings; a saved scale without it reads as off, so its width and height stay as saved.
+    #[serde(default)]
+    pub linked: bool,
 }
 
 impl Default for PrintScale {
     fn default() -> Self {
-        Self { width: 100.0, height: 100.0 }
+        Self { width: 100.0, height: 100.0, linked: true }
     }
 }
 
@@ -430,6 +441,9 @@ pub struct PrintOutput {
     pub image: PrintImage,
     /// Separate spot colours into process inks: no spot plates.
     pub spots_to_process: bool,
+    /// Separations: solid 100% black fills and strokes overprint, the characters' too, in the
+    /// printed copy only ([`super::printed_document`]). Composite output leaves it unused.
+    pub overprint_black: bool,
     /// Per-ink options, by ink name; inks not listed print with their defaults.
     pub inks: Vec<InkSettings>,
 }
@@ -448,15 +462,21 @@ pub struct InkSettings {
     /// Halftone screen angle (degrees); `None`: the ink's default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub angle: Option<f64>,
+    /// A spot ink prints as process inks: no plate of its own, its color on the process plates.
+    /// Off by default. [`PrintOutput::spots_to_process`] converts every spot ink whatever this
+    /// says; process inks and Registration ignore it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub convert_to_process: bool,
 }
 
 impl Default for InkSettings {
     fn default() -> Self {
-        Self { name: String::new(), print: true, frequency: None, angle: None }
+        Self { name: String::new(), print: true, frequency: None, angle: None, convert_to_process: false }
     }
 }
 
-/// An ink of a separation, with its options resolved ([`super::inks`]).
+/// An ink of a separation, with its options resolved ([`super::print_inks`],
+/// [`super::document_inks`]).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrintInk {
@@ -465,6 +485,10 @@ pub struct PrintInk {
     pub print: bool,
     pub frequency: f64,
     pub angle: f64,
+    /// A spot ink printing as process inks (its own option or Convert All Spot Colors to
+    /// Process): it has no plate.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub convert_to_process: bool,
 }
 
 /// The default halftone screen ruling (lpi).
@@ -575,7 +599,14 @@ impl PrintSettings {
         within("placement.y", self.placement.y, -14_400.0, 14_400.0, " pt")?;
         within("scale.width", self.scale.width, 1.0, 1000.0, "%")?;
         within("scale.height", self.scale.height, 1.0, 1000.0, "%")?;
+        if self.scale.linked && self.scale.width != self.scale.height {
+            return Err(PdfError::BadSetting(format!(
+                "scale: width ({}%) and height ({}%) must be equal while scale.linked is on",
+                self.scale.width, self.scale.height
+            )));
+        }
         within("overlap", self.overlap, 0.0, 720.0, " pt")?;
+        within("gutter", self.gutter, 0.0, 720.0, " pt")?;
         within("margin", self.margin, 0.0, 144.0, " pt")?;
         within("tileOrigin.x", self.tile_origin.x, -14_400.0, 14_400.0, " pt")?;
         within("tileOrigin.y", self.tile_origin.y, -14_400.0, 14_400.0, " pt")?;

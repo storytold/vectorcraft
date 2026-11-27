@@ -2,18 +2,17 @@
 //! dialog, which picks an attribute, its start and end values and a shape, previews on the canvas
 //! and runs `addon.type.textTweaker` on OK.
 
-use egui::Ui;
+use craft::menu::Node;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::dialogs::{DialogSpec, form};
-use crate::menus::Item;
-use crate::state::Dialog;
-use crate::widgets;
+use crate::addons::dialogs::{self, Spec};
+use crate::menus::{c, cp};
 
-/// The command the dialog runs, and its kind.
+/// The command the dialog runs.
 pub const COMMAND: &str = "addon.type.textTweaker";
-pub const KIND: &str = "textTweaker";
 /// An attribute: (param, label, unit, decimals, values taken, default start and end), as the
 /// command takes it.
 type Attribute = (&'static str, &'static str, &'static str, usize, (f64, f64), (f64, f64));
@@ -31,8 +30,6 @@ const ATTRIBUTES: [Attribute; 8] = [
 const SHAPES: [(&str, &str); 5] = [("straight", "Straight"), ("ease", "Ease In Out"), ("bow", "Bow"), ("spike", "Spike"), ("random", "Random")];
 /// The seeds the dialog offers.
 const SEEDS: u64 = 1_000_000;
-const LABEL_W: f32 = 90.0;
-const FIELD_W: f32 = 90.0;
 
 /// Release Type on a Path's command. Its menu item opens the generic command dialog
 /// (`ui.paramDialog`) on these options, with a Preview (`dialogs::command`).
@@ -41,11 +38,8 @@ pub const RELEASE: &str = "addon.type.releasePath";
 pub const RELEASE_MODES: &[(&str, &str)] = &[("Text and Path", "both"), ("Path Only", "path"), ("Text Only", "text")];
 
 /// Object › Plug-ins › Type Tools.
-pub fn menu() -> Vec<Item> {
-    vec![
-        Item::Cmd("Text Tweaker…", COMMAND, Value::Null),
-        Item::Cmd("Release Type on a Path…", RELEASE, json!({"mode": "both", "keepOriginal": false})),
-    ]
+pub fn menu() -> Vec<Node> {
+    vec![c("Text Tweaker…", COMMAND), cp("Release Type on a Path…", RELEASE, json!({"mode": "both", "keepOriginal": false}))]
 }
 
 /// The attribute row of param `key` (the first, Font Size, for an unknown one).
@@ -53,52 +47,77 @@ fn attribute(key: &str) -> &'static Attribute {
     ATTRIBUTES.iter().find(|a| a.0 == key).unwrap_or(&ATTRIBUTES[0])
 }
 
-/// The dialog's fields to start with: Font Size from 12 to 36 pt in a straight ramp, and a new
-/// seed each time the document has changed, so running it again varies a random result.
-pub(crate) fn fields(app: &VectorcraftApp) -> Value {
-    let seed = app.session.active().map_or(0, |st| st.revision % SEEDS);
+/// How the dialog's values reach the command.
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
+
+/// The command's parameters from the dialog's fields; an end of the ramp not set yet is the attribute's own.
+pub(crate) fn params(fields: &DialogFields) -> Value {
+    let &(key, _, _, _, _, (from, to)) = attribute(fields.text("attribute").unwrap_or("size"));
     json!({
-        "attribute": "size", "__shown": "size", "from": 12, "to": 36, "shape": "straight", "seed": seed, "skipSpaces": true,
+        "attribute": key,
+        "from": fields.number("from").unwrap_or(from),
+        "to": fields.number("to").unwrap_or(to),
+        "shape": fields.text("shape").unwrap_or("straight"),
+        "seed": fields.int("seed").unwrap_or(0),
+        "skipSpaces": fields.bool("skipSpaces").unwrap_or(true),
     })
 }
 
-pub(crate) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Text Tweaker").to_string(), body, confirm, preview: true, min_width: 320.0, ..DialogSpec::FORM };
-
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    let widths = (LABEL_W, 170.0);
-    let options: Vec<(&str, &str)> = ATTRIBUTES.iter().map(|a| (a.0, a.1)).collect();
-    form::choice(ui, d, "attribute", tl!("Attribute:"), widths, &options);
-    let &(key, _, unit, decimals, (lo, hi), (from, to)) = attribute(&d.str("attribute"));
-    // Another attribute starts from its own values.
-    if d.str("__shown") != key {
-        d.fields.insert("__shown".into(), json!(key));
-        d.fields.insert("from".into(), json!(from));
-        d.fields.insert("to".into(), json!(to));
+/// The unit an attribute's values are shown in.
+fn unit_kind(unit: &str) -> Option<UnitKind> {
+    match unit {
+        "pt" => Some(UnitKind::Points),
+        "°" => Some(UnitKind::Degrees),
+        "%" => Some(UnitKind::Percent),
+        _ => None,
     }
-    for (field, label) in [("from", tl!("From:")), ("to", tl!("To:"))] {
-        widgets::label_row(ui, label, LABEL_W, |ui| {
-            if let Some(v) = widgets::range_field(ui, ("text-tweaker", field), d.f64(field, lo), lo..=hi, unit, decimals, FIELD_W) {
-                d.fields.insert(field.into(), json!(v));
-            }
-        });
-    }
-    form::choice(ui, d, "shape", tl!("Shape:"), widths, &SHAPES);
-    ui.add_enabled_ui(d.str("shape") == "random", |ui| {
-        widgets::label_row(ui, tl!("Seed:"), LABEL_W, |ui| {
-            if let Some(v) = widgets::range_field(ui, ("text-tweaker", "seed"), d.f64("seed", 0.0), 0.0..=(SEEDS - 1) as f64, "", 0, FIELD_W) {
-                d.fields.insert("seed".into(), json!(v as u64));
-            }
-        });
-    });
-    form::check(ui, d, "skipSpaces", tl!("Skip Spaces"));
-    form::preview(app, ui, d, "Text Tweaker", COMMAND, form::params(d));
-    false
 }
 
-/// OK: run the command (keep its preview) and close.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, COMMAND, form::params(d))
+/// The choice over `list`'s `(id, label)` pairs, on its first.
+fn choice(list: &[(&str, &'static str)]) -> ParamKind {
+    ParamKind::choice(list.iter().map(|&(id, label)| (id.to_string(), tl!(label).into())).collect(), list.first().map(|(id, _)| id.to_string()))
+}
+
+/// Opens Text Tweaker's dialog on Font Size from 12 to 36 pt in a straight ramp, and a new seed each time the
+/// document has changed, so running it again varies a random result.
+pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let seed = app.session.active().map_or(0, |st| st.revision % SEEDS);
+    let fields = DialogFields::from_pairs([
+        ("attribute", FieldValue::Text("size".into())),
+        ("from", FieldValue::Number(12.0)),
+        ("to", FieldValue::Number(36.0)),
+        ("shape", FieldValue::Text("straight".into())),
+        ("seed", FieldValue::Int(i64::try_from(seed).unwrap_or(0))),
+        ("skipSpaces", FieldValue::Bool(true)),
+    ]);
+    dialogs::open(app, &SPEC, fields, move |fields| {
+        let &(_, _, unit, decimals, (lo, hi), (from, to)) = attribute(fields.text("attribute").unwrap_or("size"));
+        // Another attribute starts from its own values: changing the attribute removes the ends it resets.
+        for (field, start) in [("from", from), ("to", to)] {
+            if !fields.contains(field) {
+                fields.set(field, FieldValue::Number(start));
+            }
+        }
+        let places = u32::try_from(decimals).unwrap_or(0);
+        let step = if places == 0 { 1.0 } else { 0.1 };
+        let ends = [("from", from, tl!("From:")), ("to", to, tl!("To:"))].map(|(field, start, label)| {
+            let row = Param::number(field, label, start, step, places).bounds(Some(lo), Some(hi));
+            match unit_kind(unit) {
+                Some(kind) => row.unit(kind),
+                None => row,
+            }
+        });
+        let attributes: Vec<(&str, &str)> = ATTRIBUTES.iter().map(|a| (a.0, a.1)).collect();
+        let mut rows = vec![Param::new("attribute", tl!("Attribute:"), choice(&attributes)).resets(["from", "to"])];
+        rows.extend(ends);
+        rows.extend([
+            Param::new("shape", tl!("Shape:"), choice(&SHAPES)),
+            Param::new("seed", tl!("Seed:"), ParamKind::int(Some(0), Some(i64::try_from(SEEDS - 1).unwrap_or(i64::MAX)), 0))
+                .enabled_when("shape", FieldValue::Text("random".into())),
+            Param::new("skipSpaces", tl!("Skip Spaces"), ParamKind::bool(true)),
+        ]);
+        ParamDialog::new(COMMAND, tl!("Text Tweaker"), rows).previews(true)
+    })
 }
 
 #[cfg(test)]

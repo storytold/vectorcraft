@@ -1,448 +1,272 @@
-/// The script filter: Thai lists families with Thai; Latin, those with neither Thai nor
-/// Japanese.
-#[test]
-fn the_thai_filter_lists_fonts_with_thai() {
-    use vectorcraft_text::FontTraits;
-    let (thai, japanese, latin) =
-        (FontTraits { thai: true, ..Default::default() }, FontTraits { japanese: true, ..Default::default() }, FontTraits::default());
-    let passing = |t: FontTraits| (0..super::SCRIPTS).filter(|s| super::script_matches(*s, t)).collect::<Vec<_>>();
-    assert_eq!(passing(thai), [0, 3]);
-    assert_eq!(passing(japanese), [0, 1]);
-    assert_eq!(passing(latin), [0, 2]);
-    assert_eq!(super::script_label(3), "Thai");
-    let zh = crate::i18n::Lang::from_code("zh-hans").unwrap();
-    crate::i18n::set_current(zh);
-    assert_eq!(super::script_label(1), crate::i18n::tr_ctx(zh, "font-script", "Japanese"));
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    assert_eq!(super::script_label(1), "Japanese");
-}
+use std::sync::Arc;
+use std::time::SystemTime;
 
-/// #2277: the list's scroll bar has a column of its own, so the stars at the rows' right ends
-/// stay clear of it.
-#[test]
-fn the_scroll_bar_leaves_the_stars_clear() {
-    // Every family starred, so each row draws its star.
-    let all = vectorcraft_text::FontDb::global().families();
-    let families = all.len();
-    let ctx = egui::Context::default();
-    let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
-    let mut st = super::MenuState::default();
-    let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
-    let mut stars = vec![];
-    for _ in 0..3 {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(area), ..Default::default() }, |ui| {
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
-            super::list(&mut child, egui::Id::unique("fonts"), &mut st, "", None, look);
-        });
-        out.textures_delta.clear();
-        stars = out
-            .shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                // The rows' stars, not the ★ filter button at the top left.
-                egui::Shape::Text(t) if t.galley.text() == "★" && t.pos.x > area.center().x => Some(t.visual_bounding_rect().right()),
-                _ => None,
-            })
-            .collect();
+use craft::behavior::{EditEvent, Mixed, Preview};
+
+use crate::VectorcraftApp;
+
+/// An app with a new document holding type set in each of `fonts`, one text object each.
+fn app_with_type(fonts: &[&str]) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", serde_json::json!({})).unwrap();
+    for (i, font) in fonts.iter().enumerate() {
+        app.run("text.create", serde_json::json!({"x": 20, "y": 40 + 30 * i, "text": "Type", "font": font})).unwrap();
     }
-    assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
-    // The rows don't fill the list without enough families to scroll, and then there is no bar.
-    if families as f32 * look.row > area.height() {
-        let bar = super::widgets::list_scroll_style();
-        let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
-        for right in stars {
-            assert!(right <= area.right() - column + 0.5, "a star at {right} runs under the scroll bar");
-        }
-    }
+    app
 }
 
-use super::{Row, remap_highlight};
-
-fn family(name: &str) -> Row {
-    Row::Family(name.to_string())
+/// The Document set's families, sorted.
+fn used(app: &mut VectorcraftApp) -> Vec<String> {
+    let mut names = super::document_family_set(app).to_vec();
+    names.sort();
+    names
 }
 
+/// A pick of `after` over `before`, as the picker raises it.
+fn set(before: &str, after: &str) -> EditEvent<String> {
+    EditEvent::set(Mixed::Same(before.to_string()), after.to_string(), "Font Family".into(), None)
+}
+
+/// The Document set agrees with the families the document's type uses (hidden and locked type included, a missing
+/// family left out of nothing: it is named as it is), and gives the same set again when nothing changed.
 #[test]
-fn recent_fonts_are_first_available_unique_and_expandable() {
-    let names: Vec<_> = ["Alpha", "Bravo", "Charlie"].map(str::to_string).into();
-    let recent: Vec<_> = ["Charlie", "Missing", "BRAVO", "charlie"].map(str::to_string).into();
-    let rows = super::grouped_rows(&names, &recent, &["bravo".into()], |_| vec!["Bold".into()]);
-    assert_eq!(
-        rows,
-        [
-            Row::Heading("Recent Fonts"),
-            family("Charlie"),
-            family("Bravo"),
-            Row::Style("Bravo".into(), "Bold".into()),
-            Row::Heading("Fonts"),
-            family("Alpha")
-        ]
-    );
-    // A filter removing a recent family also removes it from the recent section.
-    let filtered = super::grouped_rows(&names[..1], &recent, &[], |_| vec![]);
-    assert_eq!(filtered, [family("Alpha")]);
-    assert!(super::grouped_rows(&[], &recent, &[], |_| vec![]).is_empty());
-}
-
-#[test]
-fn recent_section_rebuilds_and_arrows_skip_its_headings() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
-    if names.len() < 3 {
-        return;
-    }
-    let recent = vec![names[2].clone(), names[1].clone()];
-    let ctx = egui::Context::default();
-    let mut st = super::MenuState::default();
-    let mut frame = |events, recent: &[String]| {
-        let mut picked = None;
-        let input =
-            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| {
-            picked = super::list(
-                ui,
-                egui::Id::unique("recent-test"),
-                &mut st,
-                &names[2],
-                None,
-                super::MenuLook { samples: false, recent, ..Default::default() },
-            );
-        });
-        out.textures_delta.clear();
-        (picked, st.rows.to_vec())
-    };
-    for _ in 0..3 {
-        frame(vec![], &recent);
-    }
-    let key = |key| {
-        [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() }).to_vec()
-    };
-    assert_eq!(frame(key(egui::Key::ArrowDown), &recent).0, Some(super::FontPick::Preview(names[1].clone(), None)));
-    // Other tests add fonts to the process-wide database while this one runs, so the first
-    // family under the Fonts heading need not be the one this test's earlier snapshot named.
-    // Read it from the rows this frame built: the highlight must skip the heading and land on
-    // that family, not on a heading or a row from the recent section.
-    let (picked, rows) = frame(key(egui::Key::ArrowDown), &recent);
-    assert_eq!(rows.get(3), Some(&Row::Heading("Fonts")), "{rows:?}");
-    let (first, style) = rows.get(4).and_then(Row::pick).expect("a family below the Fonts heading");
-    assert_eq!(picked, Some(super::FontPick::Preview(first, style)), "skip Fonts heading");
-    assert_eq!(frame(key(egui::Key::ArrowUp), &recent).0, Some(super::FontPick::Preview(names[1].clone(), None)));
-    // Updating recent history while the menu is open must not retarget the highlight.
-    let updated = vec![names[1].clone()];
-    let (_, rows) = frame(vec![], &updated);
-    assert_eq!(rows[1], family(&names[1]));
-    assert_eq!(frame(key(egui::Key::Enter), &updated).0, Some(super::FontPick::Chosen(names[1].clone(), None)));
-}
-
-#[test]
-fn recent_fonts_obey_search_and_favorite_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
-    if names.len() < 3 {
-        return;
-    }
-    let recent = vec![names[1].clone(), names[0].clone()];
-    let favorites = vec![names[0].clone()];
-    let ctx = egui::Context::default();
-    let mut st = super::MenuState { favorites_only: true, ..Default::default() };
-    let mut frame = |events| {
-        let mut pick = None;
-        let mut out = ctx.run_ui(
-            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() },
-            |ui| {
-                pick = super::list(
-                    ui,
-                    egui::Id::unique("filtered-recent"),
-                    &mut st,
-                    &names[2],
-                    None,
-                    super::MenuLook { samples: false, recent: &recent, favorites: &favorites, ..Default::default() },
-                );
-            },
-        );
-        out.textures_delta.clear();
-        (pick, st.rows.to_vec())
-    };
-    for _ in 0..3 {
-        frame(vec![]);
-    }
-    assert_eq!(frame(vec![]).1, [Row::Heading("Recent Fonts"), family(&names[0])]);
-    let key = [true, false]
-        .map(|pressed| egui::Event::Key { key: egui::Key::ArrowDown, physical_key: None, pressed, repeat: false, modifiers: Default::default() })
-        .to_vec();
-    assert_eq!(frame(key).0, Some(super::FontPick::Preview(names[0].clone(), None)), "skip Recent Fonts heading");
-    let (pick, rows) = frame(vec![egui::Event::Text("NoSuchFontFor3515".into())]);
-    assert!(rows.is_empty(), "search must filter the recent section too: {rows:?}");
-    assert_eq!(pick, Some(super::FontPick::EndPreview));
-}
-
-#[test]
-fn opening_on_another_font_keeps_the_recent_section_visible() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
-    let Some(current) = names.last() else { return };
-    let recent = vec![names[0].clone()];
-    let ctx = egui::Context::default();
-    let mut st = super::MenuState::default();
-    let mut visible = false;
-    for _ in 0..3 {
-        let mut out = ctx.run_ui(
-            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0))), ..Default::default() },
-            |ui| {
-                super::list(
-                    ui,
-                    egui::Id::unique("recent-at-top"),
-                    &mut st,
-                    current,
-                    None,
-                    super::MenuLook { samples: false, recent: &recent, ..Default::default() },
-                );
-            },
-        );
-        out.textures_delta.clear();
-        visible = out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.text() == "Recent Fonts"));
-    }
-    assert!(visible, "opening the picker must show its recent section");
-}
-
-#[test]
-fn keeps_the_same_family_when_other_rows_are_inserted_or_removed() {
-    let before = [family("Alpha"), family("Bravo"), family("Charlie")];
-    assert_eq!(remap_highlight(&before, Some(2), &[family("Bravo"), family("Charlie")]), Some(1));
-    assert_eq!(remap_highlight(&before, Some(2), &[family("Alpha"), family("New"), family("Bravo"), family("Charlie")]), Some(3));
-}
-
-#[test]
-fn clears_the_highlight_when_its_family_is_filtered_out() {
-    let before = [family("Alpha"), family("Bravo"), family("Charlie")];
-    assert_eq!(remap_highlight(&before, Some(1), &[family("Alpha"), family("Charlie")]), None);
-    assert_eq!(remap_highlight(&before, Some(10), &before), None);
-    assert_eq!(remap_highlight(&before, None, &before), None);
-}
-
-#[test]
-fn expanded_style_rows_do_not_retarget_the_highlight() {
-    let before = [family("Alpha"), family("Bravo")];
-    let after = [family("Alpha"), Row::Style("Alpha".into(), "Bold".into()), family("Bravo")];
-    assert_eq!(remap_highlight(&before, Some(1), &after), Some(2));
-    assert_eq!(remap_highlight(&after, Some(1), &before), None);
-}
-
-/// #5253: each wheel notch over the closed field steps one family, down the menu or up it, and the
-/// steps stop at its first and last family without going round.
-#[test]
-fn the_wheel_steps_one_family_per_notch_and_stops_at_the_ends() {
-    let order: Vec<String> = ["Alpha", "Bravo", "Charlie", "Delta"].map(str::to_string).into();
-    let steps = |current, notches| super::wheel_steps(&order, current, notches);
-    assert_eq!(steps("Bravo", 1), ["Charlie"]);
-    assert_eq!(steps("bravo", -1), ["Alpha"], "any case");
-    assert_eq!(steps("Alpha", 2), ["Bravo", "Charlie"], "a step for each notch");
-    assert_eq!(steps("Bravo", 5), ["Charlie", "Delta"], "stops at the last family");
-    assert_eq!(steps("Charlie", -5), ["Bravo", "Alpha"], "stops at the first family");
-    assert!(steps("Delta", 1).is_empty() && steps("Alpha", -1).is_empty(), "no wrapping");
-    assert!(steps("Missing", 1).is_empty() && steps("Bravo", 0).is_empty());
-}
-
-/// #5253: the wheel follows the open menu's order and filters: the recent families first, then the
-/// others in the database's order, under the favourites (and other) filters.
-#[test]
-fn the_wheel_follows_the_menus_order_and_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
-    if names.len() < 3 {
-        return;
-    }
-    let recent = vec![names[2].clone()];
-    let look = super::MenuLook { samples: false, recent: &recent, ..Default::default() };
-    let order = super::wheel_order(&super::MenuState::default(), look);
-    assert_eq!(order.first(), Some(&names[2]), "the recent family first");
-    // Other tests add fonts to the process-wide database meanwhile: compare places, not neighbours.
-    let at = |f: &String| order.iter().position(|x| x == f);
-    assert!(matches!((at(&names[0]), at(&names[1])), (Some(a), Some(b)) if 0 < a && a < b), "then the others in the menu's order");
-    assert_eq!(order.iter().filter(|f| **f == names[2]).count(), 1, "once each");
-    let favorites = vec![names[0].clone(), names[1].clone()];
-    let st = super::MenuState { favorites_only: true, ..Default::default() };
-    let order = super::wheel_order(&st, super::MenuLook { favorites: &favorites, ..look });
-    assert_eq!(order, favorites, "the favourites filter");
-}
-
-/// A field removed by a later layout pass must not intercept the next wheel event.
-#[test]
-fn a_family_field_omitted_from_the_last_pass_leaves_the_wheel_to_its_owner() {
-    let ctx = egui::Context::default();
-    let mut point = egui::Pos2::ZERO;
-    for _ in 0..3 {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            let resp = ui.button("Family");
-            point = resp.rect.center();
-            super::remember_wheel_field(ui, &resp, true);
-        });
-        out.textures_delta.clear();
-    }
-    let mut pass = 0;
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        if pass == 0 {
-            let resp = ui.button("Family");
-            point = resp.rect.center();
-            super::remember_wheel_field(ui, &resp, true);
-            ui.ctx().request_discard("the next pass removes the field");
-        }
-        pass += 1;
-    });
-    out.textures_delta.clear();
-    assert!(pass > 1);
-    let mut raw = egui::RawInput {
-        events: vec![
-            egui::Event::PointerMoved(point),
-            egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Line,
-                delta: egui::vec2(0.0, -1.0),
-                phase: egui::TouchPhase::Move,
-                modifiers: Default::default(),
-                source: egui::MouseWheelSource::Unknown,
-            },
-        ],
-        ..Default::default()
-    };
-    super::take_raw_wheel(&ctx, &mut raw);
-    assert!(raw.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
-}
-
-/// Activation leaves later wheel input to the popup; an earlier turn still belongs to the field.
-#[test]
-fn activating_the_family_popup_leaves_its_wheel_input_available() {
-    let activations = [None, Some((egui::Key::Enter, egui::Modifiers::NONE)), Some((egui::Key::Space, egui::Modifiers::SHIFT))];
-    for activation in activations {
-        let ctx = egui::Context::default();
-        let frame = |events| {
-            let mut raw = egui::RawInput { events, ..Default::default() };
-            super::take_raw_wheel(&ctx, &mut raw);
-            let mut point = egui::Pos2::ZERO;
-            let mut out = ctx.run_ui(raw, |ui| {
-                let resp = ui.button("Family");
-                point = resp.rect.center();
-                if activation.is_some() {
-                    resp.request_focus();
-                }
-                super::remember_wheel_field(ui, &resp, true);
-            });
-            out.textures_delta.clear();
-            point
-        };
-        let mut point = egui::Pos2::ZERO;
-        for _ in 0..3 {
-            point = frame(vec![]);
-        }
-        let button =
-            |pressed| egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        let opener = if let Some((key, modifiers)) = activation {
-            egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
-        } else {
-            frame(vec![egui::Event::PointerMoved(point), button(true)]);
-            button(false)
-        };
-        let turn = || egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Line,
-            delta: egui::vec2(0.0, -1.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: Default::default(),
-            source: egui::MouseWheelSource::Unknown,
-        };
-        let mut events = vec![egui::Event::PointerMoved(point)];
-        if activation.is_some() {
-            events.push(turn());
-        }
-        events.extend([opener, turn()]);
-        let mut raw = egui::RawInput { events, ..Default::default() };
-        super::take_raw_wheel(&ctx, &mut raw);
-        assert_eq!(raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count(), 1);
-    }
-}
-
-/// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
-#[test]
-fn the_variable_filter_is_named_as_fonts_are() {
-    use crate::i18n::{Lang, tr, tr_ctx};
-    let (ja, zh) = (Lang::from_code("ja").unwrap(), Lang::from_code("zh-hans").unwrap());
-    assert_eq!((tr_ctx(ja, "font-technology", "Variable"), tr(ja, "Variable")), ("バリアブル", "変数"));
-    assert_eq!((tr_ctx(zh, "font-technology", "Variable"), tr(zh, "Variable")), ("可变", "变量"));
-    assert_eq!(tr(ja, "Font Technology"), "フォントテクノロジー");
-    assert_eq!(super::variable_label(), "Variable");
-}
-
-/// Font Technology › Variable lists only variable font families, together with the other
-/// filters; clicked again, every family is back.
-#[test]
-fn the_variable_filter_lists_only_variable_families() {
-    use vectorcraft_text::FontClass;
-    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+fn the_document_filter_lists_the_families_the_documents_type_uses() {
+    let mut app = app_with_type(&["Source Serif 4", "Inter"]);
+    app.run("object.hide", serde_json::json!({})).unwrap();
+    app.run("text.create", serde_json::json!({"x": 20, "y": 120, "text": "Locked", "font": "Source Sans 3"})).unwrap();
+    app.run("object.lock", serde_json::json!({})).unwrap();
+    app.run("text.create", serde_json::json!({"x": 20, "y": 150, "text": "Missing", "font": "Missing Family 7059"})).unwrap();
     let db = vectorcraft_text::FontDb::global();
-    db.add_font(two_axis_font().unwrap());
-    let ctx = egui::Context::default();
-    let mut st = super::MenuState::default();
-    let mut favorites: Vec<String> = vec![];
-    let frame = |st: &mut super::MenuState, events, favorites: &[String]| {
-        let mut out = ctx.run_ui(
-            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() },
-            |ui| {
-                super::list(
-                    ui,
-                    egui::Id::unique("variable-filter"),
-                    st,
-                    "Source Sans 3",
-                    None,
-                    super::MenuLook { samples: false, favorites, ..Default::default() },
-                );
-            },
-        );
-        out.textures_delta.clear();
-        let button = out.shapes.iter().find_map(|c| match &c.shape {
-            egui::Shape::Text(t) if t.galley.text() == "Variable" => Some(t.visual_bounding_rect().center()),
-            _ => None,
-        });
-        let families: Vec<String> = st
-            .rows
-            .iter()
-            .filter_map(|r| match r {
-                Row::Family(f) => Some(f.clone()),
-                _ => None,
-            })
-            .collect();
-        (families, button)
+    // Tests running alongside register composite fonts and load fonts in the process-wide database;
+    // their changes wait until this test ends, so both listings of every family are the same.
+    let _steady = vectorcraft_text::test_fonts::steady_fonts(db);
+    let used_by_doc = super::document_families(db, &app.session.active().unwrap().doc);
+    let mut names: Vec<_> = used_by_doc.iter().cloned().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "missing family 7059", "source sans 3", "source serif 4"], "each run's family, as named");
+    assert_eq!(used(&mut app), names, "the set the picker reads is the document's");
+    assert_eq!(used(&mut app), names, "the same set back when nothing changed");
+}
+
+/// Type kept in a graph design counts as the document's type, as type in a symbol does.
+#[test]
+fn the_document_filter_counts_type_in_graph_designs() {
+    let mut app = app_with_type(&["Inter"]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Bar", "font": "JetBrains Mono"})).unwrap()["id"].as_u64().unwrap();
+    let art = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    let db = vectorcraft_text::FontDb::global();
+    assert!(!super::document_families(db, &doc).contains("jetbrains mono"));
+    doc.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Bars".into(), art: std::sync::Arc::new(art) });
+    let mut names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "jetbrains mono"]);
+}
+
+/// Type in the art of a stored scatter brush counts as the document's type, as a scatter stroke
+/// draws it, after a malformed library entry too. Type in an art or pattern brush's art does not,
+/// as those brushes leave type out when they bend their art.
+#[test]
+fn the_document_filter_counts_type_in_scatter_brushes() {
+    let mut app = app_with_type(&["Inter"]);
+    let mut art = |font: &str| {
+        let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Dot", "font": font})).unwrap()["id"].as_u64().unwrap();
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+        app.run("edit.undo", serde_json::json!({})).unwrap();
+        node
     };
-    let has = |list: &[String], f: &str| list.iter().any(|x| x == f);
-    let click = |st: &mut super::MenuState, favorites: &[String]| {
-        let (_, at) = frame(st, vec![], favorites);
-        let at = at.expect("the Variable filter is drawn");
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(st, vec![egui::Event::PointerMoved(at), button(true)], favorites);
-        frame(st, vec![button(false)], favorites);
-        frame(st, vec![], favorites).0
-    };
-    for _ in 0..3 {
-        frame(&mut st, vec![], &favorites);
+    let (scatter, bent, tiled) = (art("JetBrains Mono"), art("Source Serif 4"), art("Source Sans 3"));
+    let brush = |name: &str, kind| serde_json::to_value(vectorcraft_brush::Brush { name: name.into(), kind }).unwrap();
+    let library = serde_json::json!([
+        {"name": "Broken", "type": "scatter", "art": 7},
+        brush("Art", vectorcraft_brush::BrushKind::Art(vectorcraft_brush::ArtBrush { art: bent, ..Default::default() })),
+        brush("Pattern", vectorcraft_brush::BrushKind::Pattern(vectorcraft_brush::PatternBrush { side: tiled, ..Default::default() })),
+        brush("Dots", vectorcraft_brush::BrushKind::Scatter(vectorcraft_brush::Scatter { art: scatter, ..Default::default() })),
+    ]);
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    doc.unknown.insert(vectorcraft_brush::DOC_KEY.into(), library);
+    let db = vectorcraft_text::FontDb::global();
+    let mut names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "jetbrains mono"]);
+}
+
+/// A scatter brush made of type keeps its family in the Document filter after the type is deleted;
+/// deleting the brush takes the family out, and undoing the deletion brings it back.
+#[test]
+fn the_document_filter_follows_a_scatter_brushs_edits_and_undo() {
+    let mut app = app_with_type(&["Inter"]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Dot", "font": "JetBrains Mono"})).unwrap()["id"].clone();
+    let name = app.run("brush.new", serde_json::json!({"type": "scatter", "name": "Type Dots"})).unwrap()["name"].clone();
+    app.run("edit.clear", serde_json::json!({"ids": [id]})).unwrap();
+    // The set is cached in `app.canvas.document_families`, so each edit has to get past what the cache keeps.
+    assert_eq!(used(&mut app), ["inter", "jetbrains mono"], "the brush's type");
+    app.run("brush.delete", serde_json::json!({"name": name})).unwrap();
+    assert_eq!(used(&mut app), ["inter"], "the brush deleted");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    assert_eq!(used(&mut app), ["inter", "jetbrains mono"], "the deletion undone");
+}
+
+/// A run whose family and style were split from a PostScript name (as an importer without the font
+/// splits one) counts under the family of the installed font of that name, found with its style.
+#[test]
+fn the_document_filter_finds_a_postscript_name_split_into_family_and_style() {
+    let mut app = app_with_type(&[]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Split", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    let mut art = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &mut art.kind else { panic!("type") };
+    for r in &mut t.runs {
+        // SourceSans3-Semibold, split after "Semi".
+        r.style.font_family = "SourceSans3Semi".into();
+        r.style.font_style = "bold".into();
     }
-    let all = frame(&mut st, vec![], &favorites).0;
-    assert!(has(&all, TWO_AXIS_FAMILY) && has(&all, "Source Sans 3") && has(&all, "JetBrains Mono"), "{all:?}");
-    let variable = click(&mut st, &favorites);
-    assert!(st.variable_only, "the click turns the filter on");
-    assert!(has(&variable, TWO_AXIS_FAMILY), "{variable:?}");
-    assert!(!has(&variable, "Source Sans 3") && !has(&variable, "Inter") && !has(&variable, "JetBrains Mono"), "static families: {variable:?}");
-    assert!(variable.iter().all(|f| db.family_traits(f).variable), "{variable:?}");
-    // With the kind, script and favourites filters: each must pass.
-    st.class = Some(FontClass::Sans);
-    assert!(has(&frame(&mut st, vec![], &favorites).0, TWO_AXIS_FAMILY));
-    st.class = Some(FontClass::Monospaced);
-    assert!(!has(&frame(&mut st, vec![], &favorites).0, TWO_AXIS_FAMILY), "a sans serif family under Monospaced");
-    st.class = None;
-    st.script = 3;
-    assert!(!has(&frame(&mut st, vec![], &favorites).0, TWO_AXIS_FAMILY), "a family without Thai under Thai");
-    st.script = 0;
-    st.favorites_only = true;
-    favorites.push("Source Sans 3".into());
-    assert!(frame(&mut st, vec![], &favorites).0.is_empty(), "the one favourite is static");
-    favorites.push(TWO_AXIS_FAMILY.into());
-    assert_eq!(frame(&mut st, vec![], &favorites).0, [TWO_AXIS_FAMILY]);
-    st.favorites_only = false;
-    // Off again: every family is listed.
-    let again = click(&mut st, &favorites);
-    assert!(!st.variable_only);
-    assert_eq!(again, frame(&mut st, vec![], &[]).0);
-    assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    doc.graph_designs.push(vectorcraft_doc::GraphDesign { name: "Split".into(), art: std::sync::Arc::new(art) });
+    let db = vectorcraft_text::FontDb::global();
+    let names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    assert_eq!(names, ["source sans 3"]);
+}
+
+/// The one filter store: a filter set through one picker is on in the next one, and `store` keeps it in
+/// `app.ui.font_filters`, where every picker's binding reads it.
+#[test]
+fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
+    let mut app = app_with_type(&[]);
+    let before = super::picker_settings(&app);
+    let mut first = super::hold(&mut app);
+    assert!(!first.filters.favorites && !first.filters.variable, "off by default");
+    first.filters.favorites = true;
+    first.filters.variable = true;
+    first.store(&mut app, &before);
+    assert!(app.ui.font_filters.favorites && app.ui.font_filters.variable, "kept in the shared store");
+    let second = super::hold(&mut app);
+    assert!(second.filters.favorites && second.filters.variable, "on in the next picker");
+    let mut third = super::hold(&mut app);
+    third.filters.clear();
+    third.store(&mut app, &before);
+    assert!(!super::hold(&mut app).filters.any(), "cleared everywhere");
+}
+
+/// A font previewed from the picker does not change what the Document set lists: the family the previewed text had
+/// stays listed, though no other type uses it. A pick follows the document, and so does undo.
+#[test]
+fn a_preview_keeps_the_document_filters_families() {
+    let owner = egui::Id::unique("font-test");
+    let mut app = app_with_type(&["Source Serif 4", "Inter"]);
+    assert_eq!(used(&mut app), ["inter", "source serif 4"]);
+    // The selected text, the only type in Inter, previewed in Source Serif 4.
+    super::apply_preview(&mut app, owner, Preview::Shows("Source Serif 4".into()));
+    assert!(app.session.active().unwrap().interaction.is_some(), "the preview is open");
+    assert_eq!(used(&mut app), ["inter", "source serif 4"], "the preview leaves the set as it was");
+    super::apply_preview(&mut app, owner, Preview::Shows("Inter".into()));
+    assert_eq!(used(&mut app), ["inter", "source serif 4"], "previewing back changes nothing");
+    super::apply_family(&mut app, set("Inter", "Source Serif 4"), None);
+    assert_eq!(used(&mut app), ["source serif 4"], "the pick is an edit: Inter is no longer used");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    assert_eq!(used(&mut app), ["inter", "source serif 4"], "undo lists it again");
+}
+
+/// A document without type has an empty Document set.
+#[test]
+fn the_document_filter_on_an_empty_document_or_none() {
+    let mut app = app_with_type(&[]);
+    assert!(used(&mut app).is_empty());
+}
+
+/// A fixed time the Recently Added tests count from.
+fn clock() -> SystemTime {
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_800_000_000)
+}
+
+const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Runs `run` until the process-wide font database held still through it: tests running alongside add fonts to it,
+/// and the cache under test is keyed by its generation.
+fn while_fonts_hold_still<T>(mut run: impl FnMut() -> T) -> T {
+    let db = vectorcraft_text::FontDb::global();
+    for _ in 0..20 {
+        // The font folders' first scan changes the generation: it runs before the generation is read.
+        db.family_list();
+        let generation = db.generation();
+        let out = run();
+        if db.generation() == generation {
+            return out;
+        }
+    }
+    panic!("the fonts kept changing");
+}
+
+/// Seeds the Recently Added cache with `seeded`, found at `found_at` and good until `recheck_at`.
+fn seed_recently_added(app: &mut VectorcraftApp, found_at: SystemTime, recheck_at: Option<SystemTime>) {
+    let generation = vectorcraft_text::FontDb::global().generation();
+    app.canvas.recently_added = Some((generation, found_at, Arc::from(vec!["Seeded".to_string()]), recheck_at));
+}
+
+/// The cached list is kept until its recheck time and the database is read again from then on.
+#[test]
+fn the_recently_added_filter_drops_families_as_their_30_days_end() {
+    let (cached, later) = while_fonts_hold_still(|| {
+        let mut app = app_with_type(&[]);
+        seed_recently_added(&mut app, clock(), Some(clock() + DAY));
+        (super::recently_added_set(&mut app, clock()).to_vec(), super::recently_added_set(&mut app, clock() + DAY).to_vec())
+    });
+    assert_eq!(cached, ["Seeded"], "kept before its recheck time");
+    assert!(!later.contains(&"Seeded".to_string()), "read again at its recheck time: {later:?}");
+}
+
+/// When the clock goes back before the time the list was found for (the system clock is set back), the
+/// families are found again rather than the list kept.
+#[test]
+fn the_recently_added_filter_finds_its_families_again_when_the_clock_goes_back() {
+    let (cached, earlier) = while_fonts_hold_still(|| {
+        let mut app = app_with_type(&[]);
+        seed_recently_added(&mut app, clock(), None);
+        (super::recently_added_set(&mut app, clock()).to_vec(), super::recently_added_set(&mut app, clock() - DAY).to_vec())
+    });
+    assert_eq!(cached, ["Seeded"]);
+    assert!(!earlier.contains(&"Seeded".to_string()), "found again a day earlier: {earlier:?}");
+}
+
+/// The size a picker writes becomes Font Preview Size, which sizes every picker's rows, and the host is asked to
+/// write the preferences file. The document is left as it was: a font previewed on the selected type stays
+/// previewed, and the change adds no undo step.
+#[test]
+fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
+    // PLAN: assumed `craft::font_manager::FontPreviewSize` is the picker's size enum
+    use craft::font_manager::picker::FontPreviewSize;
+    let owner = egui::Id::unique("font-test");
+    let mut app = app_with_type(&[]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Size", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", serde_json::json!({"ids": [id]})).unwrap();
+    let font = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.first_style().font_family,
+        _ => String::new(),
+    };
+    super::apply_preview(&mut app, owner, Preview::Shows("Source Serif 4".into()));
+    assert_eq!(font(&app), "Source Serif 4");
+    assert!(!app.take_prefs_changed(), "nothing to write yet");
+    let undo_depth = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let depth = undo_depth(&app);
+    // The size the rows have: nothing changes.
+    let before = super::picker_settings(&app);
+    super::store_picker_settings(&mut app, &before, before.clone());
+    assert!(!app.take_prefs_changed(), "nothing to write for the size the rows have");
+    let mut after = before.clone();
+    after.preview = FontPreviewSize::Large;
+    super::store_picker_settings(&mut app, &before, after);
+    assert_eq!(app.session.prefs.font_preview_size, "large");
+    assert_eq!(undo_depth(&app), depth, "the size is not an undo step");
+    assert!(app.take_prefs_changed(), "the host is asked to write the preferences file");
+    assert_eq!(app.ui.engine_prefs["fontPreviewSize"], "large");
+    assert!(app.session.in_interaction(), "the preview is still open");
+    assert_eq!(font(&app), "Source Serif 4", "the preview stays on the type");
+    super::apply_preview(&mut app, owner, Preview::Ended);
+    assert_eq!(font(&app), "Inter");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    assert!(
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).is_none(),
+        "undo takes the type away: no step was added for the size"
+    );
 }

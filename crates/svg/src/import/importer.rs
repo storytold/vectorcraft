@@ -4,10 +4,12 @@ use super::prepass::link;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, Dash, FillLayer, FillRule, Gradient, GradientGeom, GradientKind, GradientPaint,
     GradientStop, ImageBlob, ImageObject, Importer, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, PathData, PatternDef, Point, Rect, Reuse,
-    StrokeLayer, Vec2, fnv1a, fx, shapes, spread, text, vector_effect,
+    StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
+use craft_svg::tree::usvg;
 use kurbo::BezPath;
+use vectorcraft_color::GradientSpread;
 
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
@@ -87,11 +89,15 @@ impl Importer {
         Some(out)
     }
 
-    /// Give `n` the `data-*` attributes of element `id`, unless it has data already (what an
+    /// Give `n` the `data-*` attributes and classes of element `id`, unless it has data already (what an
     /// inner element made of it keeps).
     pub(super) fn keep_data(&self, id: &str, n: &mut Node) {
-        if let Some(data) = self.data.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty())) {
+        let Some((data, classes)) = self.data.get(id) else { return };
+        if n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty()) {
             n.edit_attrs(|a| a.data = data.clone());
+        }
+        if n.extras().attrs.as_ref().is_none_or(|a| a.classes.is_empty()) {
+            n.edit_attrs(|a| a.classes = classes.clone());
         }
     }
 
@@ -135,12 +141,16 @@ impl Importer {
         Some(self.doc.alloc_id())
     }
 
-    /// A new object named after element `id` (unless it has none or a made-up one).
+    /// A new object named after element `id` (unless it has none or a made-up one), noted as
+    /// found when [`Importer::wanted`] lists `id`.
     fn named(&mut self, id: &str, kind: NodeKind) -> Option<Node> {
         let nid = self.alloc_id()?;
         let mut n = Node::new(nid, kind);
         if !id.is_empty() && !made_up(id) {
             n.name = Some(self.name_of(id).to_string());
+            if self.wanted.contains(id) {
+                self.found.entry(id.to_string()).or_insert(nid);
+            }
         }
         Some(n)
     }
@@ -190,16 +200,18 @@ impl Importer {
             _ => self.named("", NodeKind::Group { children: kids, clip: false })?,
         };
         // usvg clips a `<use>` of a symbol to its viewport: that only counts when it cuts the art.
-        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf));
+        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf, &|p, m| self.clip_text(p, m)));
         let name = match self.symbols.get(&sym) {
             Some(made) if whole && made.art == without_ids(&art) && made.reuse.allows(xf) => made.name.clone(),
             Some(_) => return None,
             None => {
                 let base = self.name_of(&sym).to_string();
                 let names = &self.symbol_names;
-                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
-                self.symbol_names.insert(name.clone());
-                let reuse = Reuse::of(&self.doc, &art);
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains_key(n));
+                let doc = &self.doc;
+                let find = |n: &str| names.get(n).and_then(|&i| doc.symbols.get(i)).filter(|s| s.name == n);
+                let reuse = Reuse::of(doc, &find, &art);
+                self.symbol_names.insert(name.clone(), self.doc.symbols.len());
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
@@ -234,51 +246,59 @@ impl Importer {
         if !matches!(kids.get(main), Some(usvg::Node::Path(p)) if p.is_visible()) {
             return Some(vec![]);
         }
-        let text::PendingText { name, mut obj, servers, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
-        // The scale the type draws at becomes its size (last, below): text space grows by `grow`.
-        let xf = ts * obj.xf;
-        let grow = text::size_scale(&obj, xf);
-        // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
-        // space; runs paint in text space.
-        let to_text = Affine::scale(grow) * obj.xf.inverse();
+        let text::PendingText { name, obj, servers, rest, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
         let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
-            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
-                let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
-                im.paint(f.paint(), m, Some(area))
-            }),
+            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| im.paint(f.paint(), m)),
             _ => Paint::None,
         };
-        let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
-        let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
-        for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
-            if let Some(k) = fill {
-                run.style.fill = server(k);
+        // A text split into several objects becomes a group of them, named after the element.
+        let whole = rest.is_empty();
+        let mut skewed = false;
+        let mut nodes = Vec::with_capacity(rest.len() + 1);
+        for (mut obj, servers) in std::iter::once((obj, servers)).chain(rest) {
+            // The scale the type draws at becomes its size (last, below): text space grows by `grow`.
+            let xf = ts * obj.xf;
+            let grow = text::size_scale(&obj, xf);
+            // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
+            // space; runs paint in text space.
+            let to_text = Affine::scale(grow) * obj.xf.inverse();
+            let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
+            let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
+            for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
+                if let Some(k) = fill {
+                    run.style.fill = server(k);
+                }
+                if let Some(k) = stroke {
+                    run.style.stroke = server(k);
+                }
             }
-            if let Some(k) = stroke {
-                run.style.stroke = server(k);
+            obj.xf = xf;
+            skewed |= non_scaling && !vector_effect::unscale_text(&mut obj, self.screen);
+            // A stroke under the characters is the object's own: it paints in the document.
+            let under = under.clone().map(|(mut sl, k)| {
+                if let Some(k) = k {
+                    sl.paint = slot_paint(self, k, ts);
+                }
+                let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
+                ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
+                ap.set_contents_at(1);
+                ap
+            });
+            text::fold_scale(&mut obj, grow);
+            let mut n = self.named(if whole { &name } else { "" }, NodeKind::Text(Box::new(obj)))?;
+            if let Some(ap) = under {
+                n.appearance = ap.into();
             }
+            nodes.push(Arc::new(n));
         }
-        obj.xf = xf;
-        if non_scaling && !vector_effect::unscale_text(&mut obj, self.screen) {
+        if skewed {
             let label = if name.is_empty() || made_up(&name) { "a text".to_string() } else { format!("text '{name}'") };
             self.warn(format!("non-scaling stroke on {label} approximated: the text is stretched or skewed"));
         }
-        // A stroke under the characters is the object's own: it paints in the document.
-        let under = under.map(|(mut sl, k)| {
-            if let Some(k) = k {
-                sl.paint = slot_paint(self, k, ts);
-            }
-            let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
-            ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
-            ap.set_contents_at(1);
-            ap
-        });
-        text::fold_scale(&mut obj, grow);
-        let mut n = self.named(&name, NodeKind::Text(Box::new(obj)))?;
-        if let Some(ap) = under {
-            n.appearance = ap.into();
+        if whole {
+            return Some(nodes);
         }
-        Some(vec![Arc::new(n)])
+        Some(vec![Arc::new(self.named(&name, NodeKind::Group { children: nodes, clip: false })?)])
     }
 
     fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
@@ -297,10 +317,11 @@ impl Importer {
             (None, id) => format!("'{id}'"),
         };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
-        // Blurs, shadows and glows become live effects (see [`fx`]).
+        // Blurs, shadows and glows become live effects (see [`fx`]); other filters, and blurs that
+        // differ by direction in the document, become Effect › SVG Filters effects that keep their XML.
         let effects = match g.filters() {
             [] => vec![],
-            filters => fx::effects(filters, ts, &self.blends).unwrap_or_else(|| {
+            filters => fx::imported(filters, ts, &self.blends, &self.filter_sources).map(|(fx, _)| fx).unwrap_or_else(|| {
                 // usvg wraps a filtered element in a group of its own: name the element then.
                 let on = match g.children() {
                     [usvg::Node::Group(_)] | [] => label.clone(),
@@ -376,7 +397,7 @@ impl Importer {
     /// (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>) cuts a filter's result at
     /// its region. A filter that didn't import (drawn without it) clips nothing.
     fn filter_regions(&mut self, g: &usvg::Group, ts: Affine, mut n: Node) -> Option<Node> {
-        if g.filters().is_empty() || fx::effects(g.filters(), ts, &self.blends).is_none() {
+        if g.filters().is_empty() || !fx::imported(g.filters(), ts, &self.blends, &self.filter_sources).is_some_and(|(_, live)| live) {
             return Some(n);
         }
         for f in g.filters() {
@@ -495,26 +516,32 @@ impl Importer {
     }
 
     /// Put `art` in layer `l` at `index` (at most its end) unclipped: a clipping mask on the layer
-    /// becomes a clip group in it, holding the art it clipped.
+    /// becomes a clip group in it, holding the art it clipped. The layer's ruler guides stay last,
+    /// outside the clip group.
     pub(super) fn add_unclipped(&mut self, l: &mut Node, index: usize, art: Vec<Arc<Node>>) {
         if art.is_empty() {
             return;
         }
         if let NodeKind::Layer { children, clip: clip @ true, .. } = &mut l.kind {
             *clip = false;
-            let clipped = std::mem::take(children);
+            let mut clipped = std::mem::take(children);
+            let guides = clipped.split_off(Node::guide_run_start(&clipped));
             if let Some(group) = self.named("", NodeKind::Group { children: clipped, clip: true }) {
                 children.push(Arc::new(group));
             }
+            children.extend(guides);
         }
         if let Some(ch) = l.children_mut() {
-            let i = index.min(ch.len());
+            let i = index.min(Node::guide_run_start(ch));
             ch.splice(i..i, art);
         }
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
-        let mut shapes = clip_shapes(cp, ts);
+        if let Some(n) = self.clip_type(cp, ts) {
+            return Some(n);
+        }
+        let mut shapes = clip_shapes(cp, ts, &|p, m| self.clip_text(p, m));
         let id = cp.id().to_string();
         if shapes.len() == 1 {
             let (bp, r) = shapes.pop()?;
@@ -535,6 +562,54 @@ impl Importer {
         self.named(&id, NodeKind::Group { children, clip: false })
     }
 
+    /// The glyph outlines, in the document, of the text a clip placeholder path `p` stands for (see
+    /// [`text`]), whose user space `m` maps to the document; nothing when the text is hidden. `None`
+    /// when `p` isn't a placeholder: in a clip path only its id tells (usvg paints clip path content
+    /// black).
+    fn clip_text(&self, p: &usvg::Path, m: Affine) -> Option<Vec<(BezPath, FillRule)>> {
+        if p.id().is_empty() {
+            return None;
+        }
+        let i = self.slots.find(p)?;
+        let t = self.slots.texts.get(i)?;
+        if !p.is_visible() {
+            return Some(vec![]);
+        }
+        let mut bp = BezPath::clone(&*self.slots.outlines(i)?);
+        bp.apply_affine(m * self.slots.inner(p) * t.obj.xf);
+        let r = p.fill().map(|f| rule(f.rule())).unwrap_or_default();
+        Some(if bp.elements().is_empty() { vec![] } else { vec![(bp, r)] })
+    }
+
+    /// Clip path `cp` (on an element whose user space `ts` maps to the document) as live type, when
+    /// all it holds is one visible text that clips by the non-zero rule and has no clip path of its
+    /// own: the text object with no fill or stroke, the same structure Make Clipping Mask produces
+    /// for type.
+    fn clip_type(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
+        let mut m = ts * aff(cp.transform());
+        let mut kids = cp.root().children();
+        while let [usvg::Node::Group(g)] = kids
+            && g.clip_path().is_none()
+        {
+            m *= aff(g.transform());
+            kids = g.children();
+        }
+        let [usvg::Node::Path(p)] = kids else { return None };
+        if p.id().is_empty() || !p.is_visible() || p.fill().is_some_and(|f| f.rule() == usvg::FillRule::EvenOdd) {
+            return None;
+        }
+        // A text split into several objects clips by its outlines.
+        let mut obj = self.slots.texts.get(self.slots.find(p)?).filter(|t| t.rest.is_empty())?.obj.clone();
+        obj.xf = m * self.slots.inner(p) * obj.xf;
+        let grow = text::size_scale(&obj, obj.xf);
+        for run in &mut obj.runs {
+            run.style.fill = Paint::None;
+            run.style.stroke = Paint::None;
+        }
+        text::fold_scale(&mut obj, grow);
+        self.named(cp.id(), NodeKind::Text(Box::new(obj)))
+    }
+
     /// One clip path child: a path, or a compound path of its subpaths when it has several.
     fn clip_shape(&mut self, bp: &BezPath, r: FillRule, clipping: bool) -> Option<NodeKind> {
         let subs = PathData::from_bezpath(bp).subpaths;
@@ -550,9 +625,8 @@ impl Importer {
         Some(NodeKind::Compound { children, rule: r })
     }
 
-    /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or
-    /// repeated gradient has to reach).
-    fn paint(&mut self, p: &usvg::Paint, m: Affine, area: Option<Rect>) -> Paint {
+    /// A usvg paint mapped by `m`.
+    fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
         let (kind, base, mut geom) = match p {
             usvg::Paint::Color(c) => return Paint::solid(Color::rgb8(c.red, c.green, c.blue)),
             usvg::Paint::Pattern(pt) => return self.pattern(pt, m),
@@ -579,28 +653,14 @@ impl Importer {
             }
         };
         geom.transform(m * aff(base.transform()), kind);
-        let mut stops = self.stops(base);
-        let reflect = match base.spread_method() {
-            usvg::SpreadMethod::Pad => None,
-            usvg::SpreadMethod::Reflect => Some(true),
-            usvg::SpreadMethod::Repeat => Some(false),
+        let mut gradient = Gradient::new(kind, self.stops(base));
+        // `spreadMethod` is the gradient's spread; its stops run once along the vector.
+        gradient.spread = match base.spread_method() {
+            usvg::SpreadMethod::Pad => GradientSpread::Pad,
+            usvg::SpreadMethod::Reflect => GradientSpread::Reflect,
+            usvg::SpreadMethod::Repeat => GradientSpread::Repeat,
         };
-        if let Some(reflect) = reflect {
-            match area.map(|a| spread::expand(kind, &mut geom, &mut stops, reflect, a)) {
-                Some(spread::Expanded::Whole) => {}
-                Some(spread::Expanded::Capped) => {
-                    self.warn(format!("gradient '{}': spreadMethod repeats more than {} times; it pads after that", base.id(), spread::MAX_PERIODS))
-                }
-                None => self.warn(format!("gradient '{}': spreadMethod approximated as pad", base.id())),
-            }
-        }
-        Paint::Gradient(Box::new(GradientPaint {
-            gradient: Gradient::new(kind, stops),
-            geom: Some(geom),
-            angle: geom.angle_deg(),
-            swatch: None,
-            freeform: None,
-        }))
+        Paint::Gradient(Box::new(GradientPaint { gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, freeform: None }))
     }
 
     /// `<pattern>` → a pattern swatch painted with the pattern's tile placement. The swatch art is
@@ -634,12 +694,12 @@ impl Importer {
         Paint::Pattern { pattern: name, xf }
     }
 
-    /// The fill and stroke of `p` mapped by `m`; `area`: the bounds of the path after `m`.
-    fn appearance(&mut self, p: &usvg::Path, m: Affine, area: Option<Rect>) -> (Appearance, FillRule) {
+    /// The fill and stroke of `p` mapped by `m`.
+    fn appearance(&mut self, p: &usvg::Path, m: Affine) -> (Appearance, FillRule) {
         let mut fill = None;
         let mut r = FillRule::NonZero;
         if let Some(f) = p.fill() {
-            let paint = self.paint(f.paint(), m, area);
+            let paint = self.paint(f.paint(), m);
             let mut fl = FillLayer::new(paint);
             fl.opacity = f.opacity().get();
             r = rule(f.rule());
@@ -650,9 +710,7 @@ impl Importer {
             // A non-scaling stroke is as wide on screen whatever `m` does: the path takes `m`, so a
             // stroke of that width in the document is exact.
             let scale = if self.non_scaling.contains(p.id()) { self.screen } else { m.determinant().abs().sqrt() };
-            // The stroke reaches past the path (miters further: a generous margin).
-            let reach = s.width().get() as f64 * scale * (s.miterlimit().get() as f64).max(1.0);
-            let paint = self.paint(s.paint(), m, area.map(|a| a.inflate(reach, reach)));
+            let paint = self.paint(s.paint(), m);
             let mut sl = StrokeLayer::new(paint, s.width().get() as f64 * scale);
             sl.opacity = s.opacity().get();
             sl.cap = match s.linecap() {
@@ -691,7 +749,7 @@ impl Importer {
         if path.is_empty() {
             return None;
         }
-        let (appearance, r) = self.appearance(p, acc, path.bounds());
+        let (appearance, r) = self.appearance(p, acc);
         // Shared, so a compound path's subpaths don't each copy a gradient's stops.
         let appearance: vectorcraft_doc::Shared<Appearance> = appearance.into();
         let mut n = if path.subpaths.len() > 1 {
@@ -722,22 +780,22 @@ impl Importer {
             usvg::ImageKind::WEBP(d) => (d, "image/webp"),
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
+        let source = bytes;
         let size = i.size();
-        let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        let (pw, ph) = vectorcraft_doc::header_size(bytes).unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
+        let cmyk = self.files.stored(i.kind());
+        let (bytes, mime) = match &cmyk {
+            Some(tiff) => (tiff, "image/tiff"),
+            None => (bytes, mime),
+        };
         // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);
         let link = linked.map(|l| l.link.clone());
-        let key = match &link {
-            Some(l) => linked_key(bytes, &l.path),
-            None => format!("img-{:016x}", fnv1a(bytes)),
-        };
+        let key = self.image_key(source, bytes, link.as_ref().map(|l| l.path.as_str()));
         self.doc.images.entry(key.clone()).or_insert_with(|| {
-            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()) };
+            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()), file_font: Default::default() };
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
         });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
@@ -751,6 +809,29 @@ impl Importer {
         }
 
         Some(node)
+    }
+
+    /// The image key of the raster image usvg got as `source`, stored as `bytes` (the CMYK TIFF
+    /// that replaces a turned CMYK image, else `source`), linked to `path` when it is linked. The
+    /// bytes are hashed for the first image that shows `source`; the images after it that show
+    /// the same bytes get the key kept for it.
+    fn image_key(&mut self, source: &Arc<Vec<u8>>, bytes: &[u8], path: Option<&str>) -> String {
+        let at = Arc::as_ptr(source) as usize;
+        #[cfg(test)]
+        let kept = !tests::UNKEPT.get();
+        #[cfg(not(test))]
+        let kept = true;
+        if kept && let Some((_, key)) = self.image_keys.get(&at) {
+            return key.clone();
+        }
+        #[cfg(test)]
+        tests::IMAGE_HASHES.set(tests::IMAGE_HASHES.get() + 1);
+        let key = match path {
+            Some(path) => linked_key(bytes, path),
+            None => format!("img-{:016x}", fnv1a(bytes)),
+        };
+        self.image_keys.insert(at, (source.clone(), key.clone()));
+        key
     }
 
     /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.
@@ -773,9 +854,10 @@ impl Importer {
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
             std::mem::take(&mut self.ellipses),
+            std::mem::take(&mut self.filter_sources),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses, self.filter_sources) = outer;
         art
     }
 }
@@ -803,11 +885,13 @@ mod tests {
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
-            symbol_names: HashSet::new(),
+            symbol_names: HashMap::new(),
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
+            filter_sources: HashMap::new(),
             files: Files::default(),
+            image_keys: HashMap::new(),
             non_scaling: HashSet::new(),
             data: HashMap::new(),
             events: HashMap::new(),
@@ -820,11 +904,251 @@ mod tests {
             max_nodes: 1000,
             error: None,
             nested_svg_images: crate::MAX_NESTED_SVG_IMAGES,
+            wanted: HashSet::new(),
+            found: HashMap::new(),
         };
         let tree = usvg::Tree::from_str(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#, &usvg::Options::default()).unwrap();
         let res = im.svg_image(&tree, Affine::IDENTITY);
         assert!(res.is_none());
         assert!(matches!(im.error, Some(SvgError::TooManyImages(crate::MAX_NESTED_SVG_IMAGES))));
         assert_eq!(im.error.unwrap().to_string(), "the SVG expands to more than 256 nested SVG images");
+    }
+
+    thread_local! {
+        /// How many times this thread's imports hashed an image's bytes for its key.
+        pub(super) static IMAGE_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// When set, this thread's imports hash the bytes of every image for its key, without
+        /// the keys kept for earlier images.
+        pub(super) static UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// `svg` imported on this thread with `opts`, with image keys kept or not, and how many times
+    /// image bytes were hashed for keys.
+    fn import_counting(svg: &str, opts: &crate::ImportOptions, kept: bool) -> (Document, Vec<String>, usize) {
+        UNKEPT.set(!kept);
+        IMAGE_HASHES.set(0);
+        let imported = crate::import::import(svg, opts, crate::MAX_NODES);
+        UNKEPT.set(false);
+        let (doc, warnings) = imported.unwrap();
+        (doc, warnings, IMAGE_HASHES.get())
+    }
+
+    /// The image objects of `doc` in paint order.
+    fn image_objects(doc: &Document) -> Vec<ImageObject> {
+        let mut out = vec![];
+        doc.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((**im).clone());
+            }
+        });
+        out
+    }
+
+    fn svg_of(body: &str) -> String {
+        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">{body}</svg>"#)
+    }
+
+    /// A `w` × `h` PNG of pixels made from `seed`.
+    fn png(w: u32, h: u32, seed: u32) -> Vec<u8> {
+        let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+        let img = image::RgbaImage::from_fn(w, h, |_, _| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let [r, g, b, _] = state.to_le_bytes();
+            image::Rgba([r, g, b, 255])
+        });
+        let mut out = vec![];
+        img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    fn data_url(mime: &str, bytes: &[u8]) -> String {
+        format!("data:{mime};base64,{}", crate::base64_encode(bytes))
+    }
+
+    /// A little-endian, uncompressed 1 × 1 CMYK TIFF of the inks `cmyk`.
+    fn cmyk_tiff(cmyk: [u8; 4]) -> Vec<u8> {
+        let entry = |tag: u16, kind: u16, count: u32, value: u32| {
+            [&tag.to_le_bytes()[..], &kind.to_le_bytes(), &count.to_le_bytes(), &value.to_le_bytes()].concat()
+        };
+        let entries = 11u16;
+        let bits_at = 8 + 2 + u32::from(entries) * 12 + 4;
+        let data_at = bits_at + 8;
+        let mut out = [b"II".as_slice(), &[0x2a, 0], &8u32.to_le_bytes(), &entries.to_le_bytes()].concat();
+        for e in [
+            entry(256, 4, 1, 1),
+            entry(257, 4, 1, 1),
+            entry(258, 3, 4, bits_at),
+            entry(259, 3, 1, 1),
+            entry(262, 3, 1, 5),
+            entry(273, 4, 1, data_at),
+            entry(274, 3, 1, 1),
+            entry(277, 3, 1, 4),
+            entry(278, 4, 1, 1),
+            entry(279, 4, 1, 4),
+            entry(284, 3, 1, 1),
+        ] {
+            out.extend(e);
+        }
+        out.extend(0u32.to_le_bytes());
+        for _ in 0..4 {
+            out.extend(8u16.to_le_bytes());
+        }
+        assert_eq!(out.len(), data_at as usize);
+        out.extend(cmyk);
+        out
+    }
+
+    /// `svg` imported with `opts` hashes image bytes `hashes` times for keys, and once for each
+    /// image without kept keys; both imports give the same document and warnings.
+    fn same_as_hashing_every_image(svg: &str, opts: &crate::ImportOptions, hashes: usize) -> (Document, Vec<String>) {
+        let (doc, warnings, n) = import_counting(svg, opts, true);
+        let (every, every_warnings, every_n) = import_counting(svg, opts, false);
+        assert_eq!(every_n, image_objects(&every).len(), "without kept keys, each image is hashed");
+        assert_eq!(n, hashes, "image bytes hashed for keys");
+        assert_eq!(warnings, every_warnings);
+        assert_eq!(image_objects(&doc), image_objects(&every), "the same image objects");
+        assert_eq!(doc.images, every.images, "the same stored images");
+        assert!(doc == every, "the same document");
+        (doc, warnings)
+    }
+
+    /// Every `<use>` of one image, and every `<image>` with the same data URL, shows bytes usvg
+    /// got once: they are hashed once, and every image has the key of the image's bytes.
+    #[test]
+    fn an_image_shown_many_times_is_hashed_once() {
+        let png = png(3, 2, 1);
+        let href = data_url("image/png", &png);
+        let uses: String = (0..6).map(|i| format!(r##"<use href="#p" x="{}"/>"##, i * 10)).collect();
+        let inline: String = (0..6).map(|i| format!(r#"<image href="{href}" x="{}" width="3" height="2"/>"#, i * 10)).collect();
+        for body in [format!(r#"<defs><image id="p" href="{href}" width="3" height="2"/></defs>{uses}"#), inline] {
+            let (doc, warnings) = same_as_hashing_every_image(&svg_of(&body), &crate::ImportOptions::default(), 1);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            let objects = image_objects(&doc);
+            assert_eq!(objects.len(), 6);
+            let key = format!("img-{:016x}", fnv1a(&png));
+            assert!(objects.iter().all(|o| o.key == key && o.link.is_none() && (o.width, o.height) == (3, 2)), "{objects:?}");
+            assert_eq!(doc.images.keys().collect::<Vec<_>>(), [&key]);
+            assert_eq!((doc.images[&key].mime.as_str(), &**doc.images[&key].bytes, doc.images[&key].proxy.is_none()), ("image/png", &png[..], true));
+        }
+    }
+
+    /// One image is hashed once; two images of different bytes twice, with keys of their own; two
+    /// data URLs written differently that hold the same bytes are hashed once each, and share the
+    /// key and the stored image of those bytes.
+    #[test]
+    fn each_buffer_of_image_bytes_is_hashed_once() {
+        let (a, b) = (png(2, 2, 1), png(2, 2, 2));
+        let image = |href: &str| format!(r#"<image href="{href}" width="2" height="2"/>"#);
+        let opts = crate::ImportOptions::default();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&image(&data_url("image/png", &a))), &opts, 1);
+        assert_eq!(image_objects(&doc)[0].key, format!("img-{:016x}", fnv1a(&a)));
+        let two = [image(&data_url("image/png", &a)), image(&data_url("image/png", &b)), image(&data_url("image/png", &a))].concat();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&two), &opts, 2);
+        let keys: Vec<String> = image_objects(&doc).into_iter().map(|o| o.key).collect();
+        assert_eq!(keys, [format!("img-{:016x}", fnv1a(&a)), format!("img-{:016x}", fnv1a(&b)), format!("img-{:016x}", fnv1a(&a))]);
+        assert_eq!(doc.images.len(), 2);
+        let spelled = [image(&data_url("image/png", &a)), image(&data_url("image/png;x=y", &a))].concat();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&spelled), &opts, 2);
+        let keys: Vec<String> = image_objects(&doc).into_iter().map(|o| o.key).collect();
+        assert_eq!(keys, [format!("img-{:016x}", fnv1a(&a)), format!("img-{:016x}", fnv1a(&a))]);
+        assert_eq!(doc.images.len(), 1);
+    }
+
+    /// Every image of one linked file, or of one missing file, is hashed once: the file is read
+    /// once, and every image has the key of its bytes and its path, with its link.
+    #[test]
+    fn a_linked_or_missing_file_shown_many_times_is_hashed_once() {
+        let png = png(4, 2, 3);
+        let reads = std::sync::atomic::AtomicUsize::new(0);
+        let read = |path: &str| {
+            reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            path.ends_with("a.png").then(|| (png.clone(), vectorcraft_doc::LinkInfo::new(path)))
+        };
+        let opts = crate::ImportOptions { folder: Some("/f"), read: Some(&read) };
+        for (name, missing) in [("a.png", false), ("gone.png", true)] {
+            let body: String = (0..5).map(|i| format!(r#"<image href="{name}" x="{}" width="4" height="2"/>"#, i * 10)).collect();
+            reads.store(0, std::sync::atomic::Ordering::Relaxed);
+            let (doc, warnings) = same_as_hashing_every_image(&svg_of(&body), &opts, 1);
+            assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2, "{name}: one read for each of the two imports");
+            assert_eq!(warnings.iter().any(|w| w.contains(name)), missing, "{name}: {warnings:?}");
+            let objects = image_objects(&doc);
+            assert_eq!(objects.len(), 5);
+            let path = objects[0].link.as_ref().expect("linked").path.clone();
+            assert!(path.ends_with(name), "{path}");
+            let stored = doc.images[&objects[0].key].clone();
+            assert_eq!(objects[0].key, linked_key(&stored.bytes, &path), "{name}");
+            assert!(objects.iter().all(|o| o.key == objects[0].key && o.link.as_ref().is_some_and(|l| l.path == path)), "{name}");
+            assert_eq!(doc.images.len(), 1);
+            assert_eq!(*stored.bytes == png, !missing, "{name}: the file's bytes, or a placeholder");
+            assert_eq!(stored.is_proxy(), missing, "{name}");
+        }
+    }
+
+    /// A CMYK TIFF shown many times is stored as a CMYK TIFF and hashed once, its key that of the
+    /// stored TIFF.
+    #[test]
+    fn a_cmyk_image_shown_many_times_is_hashed_once() {
+        let tif = cmyk_tiff([255, 0, 0, 0]);
+        let href = data_url("image/tiff", &tif);
+        let uses: String = (0..4).map(|i| format!(r##"<use href="#p" x="{}"/>"##, i * 10)).collect();
+        let body = format!(r#"<defs><image id="p" href="{href}" width="10" height="10"/></defs>{uses}"#);
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&body), &crate::ImportOptions::default(), 1);
+        let objects = image_objects(&doc);
+        assert_eq!(objects.len(), 4);
+        let blob = &doc.images[&objects[0].key];
+        assert_eq!(blob.mime, "image/tiff");
+        assert!(blob.cmyk().is_some(), "stored with its inks");
+        assert_eq!(objects[0].key, format!("img-{:016x}", fnv1a(&blob.bytes)));
+        assert!(objects.iter().all(|o| o.key == objects[0].key));
+    }
+
+    /// This thread's CPU time in seconds where the system reports it, else the time since a first
+    /// call.
+    fn cpu_seconds() -> f64 {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let schedstat = std::fs::read_to_string("/proc/thread-self/schedstat").ok();
+        match schedstat.as_deref().and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok()) {
+            Some(ns) => ns / 1e9,
+            None => START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64(),
+        }
+    }
+
+    /// The import's time for one PNG data URL shown by many `<use>` elements, hashing every image
+    /// and keeping keys alternating in one process: `cargo test --release -p vectorcraft-svg --lib
+    /// importer::tests::image_key_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "timing, run by hand"]
+    fn image_key_timing() {
+        for (side, uses) in [(512, 100), (1024, 500)] {
+            let png = png(side, side, 7);
+            let refs: String = (0..uses).map(|i| format!(r##"<use href="#p" transform="translate({} {})"/>"##, i % 20, i / 20)).collect();
+            let svg = svg_of(&format!(r#"<defs><image id="p" href="{}" width="10" height="10"/></defs>{refs}"#, data_url("image/png", &png)));
+            let run = |kept: bool| {
+                let t = cpu_seconds();
+                let (doc, _, _) = import_counting(&svg, &crate::ImportOptions::default(), kept);
+                let spent = cpu_seconds() - t;
+                assert_eq!(image_objects(&doc).len(), uses);
+                spent
+            };
+            run(false);
+            run(true);
+            let (mut every, mut kept) = (vec![], vec![]);
+            for round in 0..7 {
+                if round % 2 == 0 {
+                    every.push(run(false));
+                    kept.push(run(true));
+                } else {
+                    kept.push(run(true));
+                    every.push(run(false));
+                }
+            }
+            let median = |v: &mut Vec<f64>| {
+                v.sort_by(f64::total_cmp);
+                v[v.len() / 2]
+            };
+            let ms = |v: &[f64]| v.iter().map(|s| format!("{:.1}", s * 1e3)).collect::<Vec<_>>().join(" ");
+            println!("{uses} uses of a {} byte PNG: every image {} ms, kept {} ms", png.len(), ms(&every), ms(&kept));
+            println!("{uses} uses: median every image {:.1} ms, kept {:.1} ms", median(&mut every) * 1e3, median(&mut kept) * 1e3);
+        }
     }
 }

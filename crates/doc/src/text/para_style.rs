@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use super::char_style::CharStyle;
+use super::kinsoku_set::KinsokuSet;
 use super::tabs_lists::{ParaList, TabStop};
 use super::{Deserialize, Serialize};
 
@@ -17,21 +20,51 @@ pub enum Justify {
     JustifyAll,
 }
 
-/// Paragraph composer (Paragraph panel menu): how lines are broken.
+/// Paragraph composer (Paragraph panel menu): how lines are broken, and whether complex scripts
+/// (Indic, Arabic, Hebrew) are shaped. `SingleLine` and `EveryLine` are the Middle Eastern & South
+/// Asian composers: they shape complex scripts with the font's layout tables, as all type is set
+/// here, and are what documents saved before the four composers existed use. The `Standard`
+/// composers break lines the same way but set a complex script glyph by glyph as the font maps its
+/// characters, with no conjuncts, marks placed or joining forms: what fonts that keep a script's
+/// glyphs on Latin character codes (legacy ANSI Indic fonts) need.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Composer {
-    /// Break each line as soon as it is full.
+    /// Middle Eastern & South Asian Single-line Composer: break each line as soon as it is full.
     SingleLine,
-    /// Total fit over the whole paragraph (Illustrator's default): justified lines get even word
-    /// spacing, ragged lines an even rag.
+    /// Middle Eastern & South Asian Every-line Composer: total fit over the whole paragraph
+    /// (Illustrator's default): justified lines get even word spacing, ragged lines an even rag.
     #[default]
     EveryLine,
+    /// Standard Single-line Composer: [`Composer::SingleLine`]'s breaks, complex scripts not shaped.
+    StandardSingleLine,
+    /// Standard Every-line Composer: [`Composer::EveryLine`]'s breaks, complex scripts not shaped.
+    StandardEveryLine,
 }
 
 impl Composer {
     fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Does this composer break lines one at a time (as opposed to a total fit)?
+    pub fn is_single_line(self) -> bool {
+        matches!(self, Self::SingleLine | Self::StandardSingleLine)
+    }
+
+    /// Does this composer shape complex scripts ([`Composer::SingleLine`], [`Composer::EveryLine`])?
+    pub fn shapes_complex_scripts(self) -> bool {
+        matches!(self, Self::SingleLine | Self::EveryLine)
+    }
+
+    /// The same shaping with the other line breaking (`single_line`: one line at a time).
+    pub fn with_breaking(self, single_line: bool) -> Self {
+        match (single_line, self.shapes_complex_scripts()) {
+            (true, true) => Self::SingleLine,
+            (true, false) => Self::StandardSingleLine,
+            (false, true) => Self::EveryLine,
+            (false, false) => Self::StandardEveryLine,
+        }
     }
 }
 
@@ -226,14 +259,28 @@ pub struct ParaStyle {
     /// How leading is measured (Paragraph panel menu): from baseline to baseline, or from the top
     /// of one line's ideographic em box to the next.
     pub leading_model: LeadingModel,
-    /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
-    /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
+    /// Hanging punctuation (Paragraph panel menu › Burasagari): the Kinsoku Set's hanging
+    /// punctuation ending a line may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
     /// it and imported text keep [`Burasagari::None`], except legacy `.ai` type with binding
     /// punctuation on, which opens with [`Burasagari::Forced`].
     pub burasagari: Burasagari,
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.
     pub kinsoku: Kinsoku,
+    /// A custom Kinsoku Shori set (Type › Kinsoku Shori Settings…) chosen in Kinsoku Set: a copy of
+    /// the document's set of that name, which takes the place of [`Self::kinsoku`]. A paragraph
+    /// with one keeps [`Kinsoku::Hard`] in `kinsoku`, which builds without custom sets read.
+    pub kinsoku_set: Option<Arc<KinsokuSet>>,
+    /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
+    /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
+    pub kinsoku_type: KinsokuShoriType,
+    /// Bunri-Kinshi (Paragraph panel menu): a line never breaks inside an inseparable pair (two em
+    /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
+    /// with kinsoku None, where it has no effect. Off by default.
+    pub bunri_kinshi: bool,
+    /// Kurikaeshi Moji Shori (Paragraph panel menu): a repeat mark (々, ゝ, ゞ, ヽ or ヾ) that starts
+    /// a line is drawn as the character it repeats, and the text keeps the mark. Off by default.
+    pub kurikaeshi_moji_shori: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -241,9 +288,21 @@ pub struct ParaStyle {
     /// Insert Kashidas (Paragraph panel): justified lines lengthen their Arabic words with
     /// kashidas before they widen their word spaces.
     pub kashida: Kashida,
+    /// Korean Line Break Anywhere (Paragraph panel menu): a line may break between any two Hangul
+    /// syllables. Off, a Korean word (the characters between spaces, when any of them is Hangul)
+    /// breaks only at its spaces and punctuation, or where it is wider than the line. New type and
+    /// imported text have it off; paragraphs saved before it existed open with it on, the line
+    /// breaks they were laid out with.
+    pub korean_line_break_anywhere: bool,
 }
 
 impl ParaStyle {
+    /// The attributes a text object saved without `para` reads with: the defaults, with Korean
+    /// Line Break Anywhere on, as a saved paragraph without that field reads.
+    pub(crate) fn omitted() -> Self {
+        Self { korean_line_break_anywhere: true, ..Self::default() }
+    }
+
     /// Keeps the indents and the space before and after to -[`crate::MAX_COORD`] to
     /// [`crate::MAX_COORD`], and the tab stop positions to 0 to 100,000 pt, the range
     /// `text.tabs.set` takes. A value outside its range becomes the nearer end, and one that is
@@ -256,6 +315,27 @@ impl ParaStyle {
         for t in &mut self.tabs {
             t.position = within(t.position, 0.0, 100_000.0);
         }
+    }
+
+    /// Does kinsoku apply: a custom set, or a Kinsoku Set other than None?
+    pub fn kinsoku_on(&self) -> bool {
+        self.kinsoku_set.is_some() || self.kinsoku != Kinsoku::None
+    }
+
+    /// The name Kinsoku Set shows: the custom set's, or None, Hard or Soft.
+    pub fn kinsoku_name(&self) -> &str {
+        match (&self.kinsoku_set, self.kinsoku) {
+            (Some(set), _) => &set.name,
+            (None, Kinsoku::None) => "None",
+            (None, Kinsoku::Hard) => "Hard",
+            (None, Kinsoku::Soft) => "Soft",
+        }
+    }
+
+    /// The left indent the layout sets the paragraph at: its left indent, and for a paragraph in a
+    /// list at a level past the first, [`ParaList::level_indent`] more.
+    pub fn laid_out_left_indent(&self) -> f64 {
+        self.left_indent + self.list.map_or(0.0, |l| l.level_indent())
     }
 
     /// The leading of characters styled `st` in this paragraph, as the layout sets it: their own
@@ -315,10 +395,22 @@ struct ParaStyleFile {
     burasagari: Burasagari,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku: Kinsoku,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kinsoku_set: Option<Arc<KinsokuSet>>,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kinsoku_type: KinsokuShoriType,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    bunri_kinshi: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    kurikaeshi_moji_shori: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
+    /// Written only when off: a paragraph saved without it was laid out breaking between Hangul
+    /// syllables.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    korean_line_break_anywhere: bool,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -347,8 +439,13 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
+            kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = p;
         Self {
@@ -371,8 +468,13 @@ impl From<ParaStyle> for ParaStyleFile {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
+            kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }
@@ -399,10 +501,20 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
+            kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = f;
+        // A set whose saved name can't name a custom set (None, Hard or Soft, say) is read as no set:
+        // the paragraph keeps its Kinsoku Set. A paragraph with a custom set keeps Hard, so one read
+        // with None or Soft (a paragraph style written before custom sets, applied over one) has no
+        // custom set.
+        let kinsoku_set = kinsoku_set.filter(|s| !s.name.is_empty() && kinsoku == Kinsoku::Hard);
         Self {
             justify,
             left_indent,
@@ -422,8 +534,13 @@ impl From<ParaStyleFile> for ParaStyle {
             leading_model,
             burasagari,
             kinsoku,
+            kinsoku_set,
+            kinsoku_type,
+            bunri_kinshi,
+            kurikaeshi_moji_shori,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }
@@ -463,6 +580,21 @@ pub enum Mojikumi {
     /// Consecutive punctuation shares one half-em space (JLREQ 3.1.4), and a closing bracket,
     /// comma or full stop ending a line is set half width.
     LineEndHalf,
+    /// YakumonoHankaku: every opening and closing bracket, comma and full stop is set half width,
+    /// a middle dot loses a quarter em on each side, and a quarter em separates Japanese and Latin
+    /// letters or digits.
+    YakumonoHankaku,
+    /// GyomatsuYakumonoHankaku: punctuation keeps its full width, except that an opening bracket
+    /// starting a line is set flush with the line's start, a closing bracket, comma or full stop
+    /// ending a line is set half width and a middle dot ending a line loses the quarter em after
+    /// it; a quarter em separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoHankaku,
+    /// GyomatsuYakumonoZenkaku: punctuation keeps its full width at a line's end too; a quarter em
+    /// separates Japanese and Latin letters or digits.
+    GyomatsuYakumonoZenkaku,
+    /// YakumonoZenkaku: punctuation keeps its full width, with no added space between Japanese and
+    /// Latin text.
+    YakumonoZenkaku,
 }
 
 impl Mojikumi {
@@ -486,19 +618,40 @@ pub enum Kinsoku {
     Soft,
 }
 
-/// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)
-/// stands outside the line's measure, in the space its punctuation spacing gives it (half width
-/// with Line-end Punctuation Half Width). Closing brackets and Latin punctuation don't hang. Shown
-/// as None / Regular / Force.
+/// How a line keeps the characters [`Kinsoku`] rules out of its start and end (Kinsoku Shori
+/// Type). Pushing in sets the characters that would start the next line (or that an opening
+/// bracket ending this line would pull with it) on this line, with the line's gaps next to CJK
+/// characters closed to make room, each by the same share of the em of the character before it
+/// and by at most a tenth of that em; pushing out moves the character before them to the next
+/// line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KinsokuShoriType {
+    /// Push in when the line can close up enough, else push out.
+    PushInFirst,
+    /// Push out, unless that would leave the line more than an em short (of the character before
+    /// the break): then push in when the line can close up enough.
+    PushOutFirst,
+    /// Always push out; never push in.
+    #[default]
+    PushOutOnly,
+}
+
+/// Hanging punctuation (burasagari): hanging punctuation ending a line stands outside the line's
+/// measure, in the space its punctuation spacing gives it (half width with Line-end Punctuation
+/// Half Width). With the built-in Kinsoku Sets that is an East Asian comma or full stop
+/// (、。，．､｡), and closing brackets and Latin punctuation don't hang; a custom Kinsoku Set hangs
+/// the characters in its hanging category. Shown as None / Regular / Force.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Burasagari {
     /// A comma or full stop that doesn't fit goes to the next line with the character before it.
     #[default]
     None,
-    /// A comma or full stop that doesn't fit hangs outside the line; one that fits stays inside.
+    /// Hanging punctuation that doesn't fit hangs outside the line; punctuation that fits stays
+    /// inside.
     Standard,
-    /// A comma or full stop ending a line always hangs, and the rest of the line fills the measure.
+    /// Hanging punctuation ending a line always hangs, and the rest of the line fills the measure.
     Forced,
 }
 
@@ -513,6 +666,8 @@ pub enum FirstBaseline {
     XHeight,
     /// The first line's leading.
     Leading,
+    /// The top of the first line's ideographic em box touches the frame top.
+    EmBoxHeight,
     /// Exactly `first_baseline_min` below the top.
     Fixed,
 }
