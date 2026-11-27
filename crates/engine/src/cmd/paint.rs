@@ -238,9 +238,11 @@ impl Session {
         }
         // A Live Paint group without faces (or edges) shows the next selected object's paint; any other
         // object without a painted object shows the defaults for new art. A face or edge selected with
-        // its Live Paint group counts with the group, wherever it is in the selection.
-        let covered = st.selection_live_paint_covered(st.selection.subjects());
-        for id in st.selection.subjects().iter().filter(|id| !covered.contains(*id)) {
+        // its Live Paint group counts with the group, wherever it is in the selection. A targeted
+        // layer stands for its selected editable art, which the paint commands edit
+        // (ItemTarget::targets), not for a locked or hidden object in it.
+        let covered = st.selection_live_paint_covered(&st.selection.objects);
+        for id in st.selection.objects.iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
             painted(n, true, stroke, &mut nodes);
