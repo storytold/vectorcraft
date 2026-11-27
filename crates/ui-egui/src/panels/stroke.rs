@@ -371,6 +371,8 @@ pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static 
 /// The Stroke panel: the weight, the stroke editor (cap, corner, align, dashes), arrowheads, scale, align and the
 /// width profile.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use craft::ui::runtime::env::{WordRows, WordsOverride, with_env};
+
     let st = current_stroke(app);
     let mixed = stroke_mixed(app, ui.ctx());
     let weight = shown_weight(app, st.as_ref(), &mixed);
@@ -381,11 +383,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let style = style_of(st.as_ref());
-    let output = StrokeEditor::new(tl!("Stroke"), Bind::given(style.clone()))
+    let editor = StrokeEditor::new(tl!("Stroke"), Bind::given(style.clone()))
         .sections(StrokeSections::PANEL | StrokeSections::DASH_ALIGN)
         .closed(mixed.can_align)
-        .mixed(&mixed_of(&mixed))
-        .show(ui);
+        .mixed(&mixed_of(&mixed));
+    // VectorCraft's catalog calls this field "Miter Limit".
+    let word = craft::i18n::Word::keyed("strokeEditor.miterLimit", "Miter limit");
+    let lang = app.ui_language();
+    let translated = crate::i18n::tr(lang, "Miter Limit");
+    let output = if translated != "Miter Limit" && crate::i18n::tr_id(lang, word.id, word.english) == word.english {
+        with_env(ui, |env| env.words = Some(WordsOverride::Overlay(WordRows::new().row(word, translated))), |ui| editor.show(ui))
+    } else {
+        editor.show(ui)
+    };
     if let (Some(new), Some(field)) = (output.events.landed(), output.field) {
         apply_style(app, &style, new.clone(), field);
     }
