@@ -293,6 +293,22 @@ fn shown_match(app: &VectorcraftApp, at: &Value, found: &Value) -> Option<String
     Some(format!("{} / {}   {lead}{before}{hit}{after}{tail}", found["index"], found["count"]))
 }
 
+/// Refreshes the match line when a drawing or query change makes its match ineligible or current again.
+fn refresh_match(app: &mut VectorcraftApp, query: &Value) -> (bool, Option<String>) {
+    let Some(last) = app.ui.last_find.as_ref() else { return (false, None) };
+    let Some(found) = last.get("found") else { return (false, None) };
+    let at = place(app, last, query);
+    let matched = at.is_some();
+    if found["visible"].as_bool().unwrap_or(true) == matched {
+        return (matched, None);
+    }
+    let message = at.and_then(|at| shown_match(app, at, found)).unwrap_or_default();
+    if let Some(found) = app.ui.last_find.as_mut().and_then(|last| last.get_mut("found")) {
+        found["visible"] = json!(matched);
+    }
+    (matched, Some(message))
+}
+
 /// Runs the request the dialog made this frame, then tells the dialog its message and whether a
 /// match is current. The match is evaluated in every pump, so a changed Find text or switch
 /// disables Replace and Replace & Find at once; a pass that has no request only refreshes it.
@@ -309,10 +325,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         };
         Some(ran.unwrap_or_else(|e| said(&e)))
     });
-    let matched = app.ui.last_find.as_ref().is_some_and(|last| current_match(app, last, &form.query).is_some());
+    let (matched, match_message) = refresh_match(app, &form.query);
     dialogs.with(|host| {
         if let Some(d) = host.get_mut::<FindReplaceDialog>() {
-            if let Some(message) = message {
+            if let Some(message) = message.or(match_message) {
                 d.set_message(message);
             }
             d.set_matched(matched);

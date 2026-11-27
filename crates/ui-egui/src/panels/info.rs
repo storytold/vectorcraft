@@ -48,49 +48,10 @@ fn paint_name(p: &Paint) -> Option<String> {
     }
 }
 
-/// One paint's block: its tile, its values, and its name (a swatch's with Show Options, else a
-/// non-solid paint's kind). A paint the selected objects do not share (`mixed`) leaves it empty.
-struct PaintLines {
-    paint: Paint,
-    mixed: bool,
-    /// The monospaced `R: 230` values of a solid color.
-    values: Vec<String>,
-    note: Option<String>,
-}
-
-impl PaintLines {
-    fn of(paint: Paint, mixed: bool, options: bool) -> Self {
-        if mixed {
-            return PaintLines { paint, mixed, values: Vec::new(), note: None };
-        }
-        let (values, note) = match &paint {
-            Paint::Solid { color, .. } => {
-                (color_values(color).into_iter().map(|(k, v)| format!("{k}: {v}")).collect(), paint_name(&paint).filter(|_| options))
-            }
-            other => (Vec::new(), Some(paint_name(other).filter(|_| options).unwrap_or_else(|| other.label()))),
-        };
-        PaintLines { paint, mixed, values, note }
-    }
-}
-
-/// What the panel shows, ready to lay out.
-pub(crate) struct InfoLines {
-    left: Vec<String>,
-    right: Vec<String>,
-    zoom: Option<String>,
-    brush: Option<String>,
-    fill: PaintLines,
-    stroke: PaintLines,
-    /// The font, and the size and tracking, the selected type shares.
-    type_block: Option<(String, String)>,
-}
-
-fn mono(ui: &mut Ui, s: &str) -> bool {
-    super::doc_info::copy_value(ui, s, s, true)
-}
-
-/// One paint's row: its tile, its values and its note. A mixed paint keeps the tile's room empty.
+/// One paint's tile and readout. A solid tint's name sits below its channel values.
+/// A mixed paint keeps the tile's room empty.
 fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {
+    let (inline_note, tint_name) = if p.values.is_empty() { (p.note.as_ref(), None) } else { (None, p.note.as_ref()) };
     let mut copy = None;
     Row::new().show(ui, |ui, _| {
         Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
@@ -104,12 +65,17 @@ fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {
                 copy = Some(v.clone());
             }
         }
-        if let Some(note) = &p.note
+        if let Some(note) = inline_note
             && super::doc_info::copy_value(ui, note, note, false)
         {
             copy = Some(note.clone());
         }
     });
+    if let Some(name) = tint_name
+        && super::doc_info::copy_value(ui, name, name, false)
+    {
+        copy = Some(name.clone());
+    }
     copy
 }
 
@@ -424,5 +390,30 @@ mod tests {
         assert_eq!(paint_name(&Paint::Gradient(Box::new(g.clone()))), None);
         g.swatch = Some("Sunset".into());
         assert_eq!(paint_name(&Paint::Gradient(Box::new(g))), Some("Sunset".into()));
+    }
+
+    #[test]
+    fn a_solid_tint_and_its_channels_fit_in_the_narrowest_info_panel() {
+        use crate::panel_docking::PANEL_MIN_WIDTH;
+        use crate::tests::panel_harness::{Place, floated};
+
+        const SWATCH: &str = "Signal Red Coated";
+        const TINT: &str = "Signal Red Coated 40%";
+        let mut app = app_with_rect();
+        let color = json!({"model": "cmyk", "c": 0.1, "m": 0.8, "y": 0.6, "k": 0.2});
+        run(&mut app, "swatch.new", json!({"name": SWATCH, "color": color, "spot": true}));
+        run(&mut app, "paint.setFill", json!({"swatch": SWATCH, "tint": 40}));
+        let paint = lines(&mut app, &crate::testing::ui_context()).fill;
+        assert_eq!(paint.note.as_deref(), Some(TINT));
+        assert_eq!(paint.values.len(), 4, "the fixture has four CMYK channels");
+        let names: Vec<_> = paint.values.iter().map(String::as_str).chain([TINT]).collect();
+        let panel = floated(app, "info", "en", Place::Floating(PANEL_MIN_WIDTH), &names);
+        assert!((panel.body.width() - PANEL_MIN_WIDTH).abs() < 1.0, "the Info panel is at its minimum width");
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "the readout extends past the Info panel: {past:?}");
+        let tint = panel.rects(TINT)[0];
+        for name in &paint.values {
+            assert!(panel.rects(name)[0].center().y < tint.top(), "the tint follows the color channels on its own line");
+        }
     }
 }

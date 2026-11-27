@@ -179,6 +179,34 @@ fn simplify_slider_escape_puts_the_paths_back() {
     assert_eq!(anchor_count(&app), 20);
 }
 
+#[test]
+fn path_sliders_close_on_a_drawing_switch() {
+    for (kind, command) in
+        [(simplify_slider::StripKind::Simplify, "object.path.simplify"), (simplify_slider::StripKind::Smooth, "object.path.smooth")]
+    {
+        let mut app = app_with_dense_path();
+        let original = app.session.doc().unwrap().doc.clone();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let anchors: Vec<_> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": 120.0 + (i % 2) as f64 * 0.2})).collect();
+        let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 19]]})).unwrap();
+        let second = app.session.doc().unwrap().doc.clone();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        crate::menus::invoke(&mut app, command, json!({}));
+        settle(&mut app);
+        assert!(simplify_slider::showing_of(&app, kind));
+        assert!(app.session.in_interaction());
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert!(simplify_slider::auto_of(&mut app, kind).is_err(), "Auto must not use the second drawing");
+        frame(&mut app, vec![]);
+        assert!(!simplify_slider::showing_of(&app, kind));
+        assert!(!app.session.in_interaction());
+        assert_eq!(app.session.doc().unwrap().doc, second);
+        assert_eq!(app.session.documents()[0].doc, original);
+    }
+}
+
 /// The Simplify slider stays where it opened, under the paths as they were, while the preview changes their bounds, so a
 /// drag doesn't move the rail under the pointer.
 #[test]

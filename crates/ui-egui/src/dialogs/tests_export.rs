@@ -344,6 +344,40 @@ fn a_bad_range_keeps_export_as_open() {
     assert!(written.borrow().is_empty());
 }
 
+#[test]
+fn export_as_opened_without_a_drawing_does_not_take_a_later_drawing() {
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
+    save_panel(&mut app, |_| Some("/out/untitled.png".into()));
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    assert_eq!(fields(&app)["format"], "png");
+
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = try_confirm(&mut app).expect_err("the old Export As draft has no source drawing");
+    assert!(error.contains("Open Export As from the drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    PANEL.with_borrow(|panel| assert!(panel.as_ref().unwrap().picker.requests().is_empty()));
+}
+
+#[test]
+fn export_as_waits_for_the_drawing_that_opened_it() {
+    let (mut app, written) = app(2);
+    app.run("file.exportAs", json!({"format": "png", "useArtboards": true, "range": "1"})).unwrap();
+    app.run("file.new", json!({ "width": 200, "height": 100 })).unwrap();
+    let error = try_confirm(&mut app).expect_err("Export As must refuse the other drawing");
+    assert!(error.contains("original drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    assert_eq!(fields(&app)["range"], "1");
+    PANEL.with_borrow(|panel| assert!(panel.as_ref().unwrap().picker.requests().is_empty()));
+    app.run("document.activate", json!({ "index": 0 })).unwrap();
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    confirm(&mut app);
+    assert_eq!(written.borrow().len(), 1);
+    assert_eq!(&written.borrow()[0].1[16..20], 60u32.to_be_bytes());
+}
+
 /// Each format's Export As continues in its options dialog, writes nothing before that dialog's OK, and then
 /// writes its files: (case, artboards, Export As params, the options' key, the files, the pages of a PDF, the
 /// page size of a PDF of the art's bounds).

@@ -9,6 +9,8 @@
 //!
 //! Field: `selected` (a preset's name).
 
+use std::sync::Arc;
+
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::host::PickRequest;
 use craft::ui::buttons::Button;
@@ -117,13 +119,22 @@ pub(super) struct PresetsDialog {
     names: Vec<String>,
     /// The button pressed in the last pass, for [`pump`] to run outside the host's lock.
     action: Option<Action>,
+    /// Identifies the manager that opened an Import picker.
+    import_owner: Arc<()>,
     open: bool,
 }
 
 impl PresetsDialog {
     fn new(selected: &str, presets: Vec<GridDefinition>) -> Self {
-        let mut dialog =
-            PresetsDialog { id: dialog_id(KIND), selected: selected.to_owned(), presets: Vec::new(), names: Vec::new(), action: None, open: true };
+        let mut dialog = PresetsDialog {
+            id: dialog_id(KIND),
+            selected: selected.to_owned(),
+            presets: Vec::new(),
+            names: Vec::new(),
+            action: None,
+            import_owner: Arc::new(()),
+            open: true,
+        };
         dialog.set_presets(presets);
         dialog
     }
@@ -296,13 +307,18 @@ pub(super) fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Resul
             select(app, &next);
         }
         Action::Import => {
+            let Some(owner) = with_dialog(app, |manager| Arc::clone(&manager.import_owner)) else { return Ok(()) };
             let request = PickRequest::open(KIND).filter("Perspective grid presets", PRESET_EXTS);
-            file_asks::ask(app, request, Owner::Free, |app, picked| {
+            file_asks::ask(app, request, Owner::Free, move |app, picked| {
                 let mut params = file_asks::open_params(&picked).ok_or("cancelled")?;
                 params.remove("name");
                 let r = app.run("perspective.presets.import", Value::Object(params))?;
                 if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
-                    select(app, first);
+                    with_dialog(app, |manager| {
+                        if Arc::ptr_eq(&manager.import_owner, &owner) {
+                            manager.selected = first.to_owned();
+                        }
+                    });
                 }
                 Ok(r)
             });

@@ -270,6 +270,7 @@ fn load_profile(app: &mut VectorcraftApp) {
             Some(path) => app.run("color.loadProfile", json!({ "path": path })),
             None => Ok(Value::Null),
         },
+        Picked::Contents(files) if !files.is_empty() => Err("loading profiles from disk isn't available in the browser".into()),
         _ => Ok(Value::Null),
     });
 }
@@ -456,6 +457,24 @@ mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
     use vectorcraft_engine::Session;
+
+    #[test]
+    fn browser_profile_pick_reports_why_it_cannot_load() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let picker = crate::tests::picks::scripted(&mut app);
+        app.status("Previous status");
+
+        load_profile(&mut app);
+        picker.cancel();
+        crate::file_asks::poll(&mut app);
+        assert_eq!(app.ui.status, "Previous status");
+
+        load_profile(&mut app);
+        assert_eq!(picker.requests().len(), 2);
+        picker.answer_contents(&[("proof.icc", b"test profile")]);
+        crate::file_asks::poll(&mut app);
+        assert_eq!(app.ui.status, "loading profiles from disk isn't available in the browser");
+    }
 
     /// The panel's Proof Setup list offers the targets of View › Proof Setup, in the same order and
     /// with the same labels, and each one is a target `view.proofSetup` accepts.
