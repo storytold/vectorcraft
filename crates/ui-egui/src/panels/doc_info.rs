@@ -62,34 +62,35 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     let primary = egui::PointerButton::Primary;
     let press_id = shown.id.with("readout_copy_press");
     let saved_origin = ui.ctx().data(|d| d.get_temp::<egui::Pos2>(press_id));
-    let (origin, release) = ui.input(|i| {
-        let mut origin = saved_origin;
-        let mut release = None;
-        let mut release_count = 0_usize;
-        // egui clears pointer.press_origin on release. Remember only a press that starts in
-        // this clipped readout, and consume events in order even for a same-frame click.
-        for event in &i.events {
-            if let egui::Event::PointerButton { pos, button, pressed, modifiers } = event
-                && *button == primary
-            {
-                if *pressed {
-                    origin = area.contains(*pos).then_some(*pos);
-                } else {
-                    release_count += 1;
-                    release = Some((origin.take(), *pos, *modifiers));
-                }
-            }
-        }
+    let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
+    let (events, single) = ui.input(|i| {
+        let events: Vec<_> = i.events.iter().filter_map(|event| match event {
+            egui::Event::PointerButton { pos, button, pressed, modifiers } if *button == primary => Some((*pos, *pressed, *modifiers)),
+            _ => None,
+        }).collect();
         let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
-        (origin, release.filter(|_| release_count == 1 && single))
+        (events, single)
     });
+    let mut origin = saved_origin;
+    let mut release = None;
+    let mut release_count = 0_usize;
+    // egui clears pointer.press_origin on release. Remember only an eligible press in
+    // this clipped readout's own layer, including a press/release in the same frame.
+    for (pos, pressed, modifiers) in events {
+        if pressed {
+            origin = (eligible && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())).then_some(pos);
+        } else {
+            release_count += 1;
+            release = Some((origin.take(), pos, modifiers));
+        }
+    }
+    let release = release.filter(|_| release_count == 1 && single);
     if origin != saved_origin {
         ui.ctx().data_mut(|d| match origin {
             Some(pos) => d.insert_temp(press_id, pos),
             None => d.remove::<egui::Pos2>(press_id),
         });
     }
-    let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
     ui.ctx().accesskit_node_builder(shown.id, |node| {
         node.set_description(tl!("Copy"));
         node.add_action(egui::accesskit::Action::Click);
