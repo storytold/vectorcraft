@@ -102,9 +102,61 @@ impl TargetKey {
     }
 }
 
+/// A Color mode command from the popover's menu that has not been seen to finish.
+struct OwnMode {
+    /// The document's history step when it ran.
+    from: (u64, u64),
+    /// The mode it picked.
+    mode: ColorPanelMode,
+    /// The Color panel showed `mode` at an earlier pass with no new history step.
+    shown: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OwnModeNow {
+    /// No command is pending.
+    None,
+    /// The command has not been seen to finish.
+    Waiting,
+    /// The command made the new history step: the changed paint is the popover's own edit.
+    Edited,
+    /// The command finished without a history step.
+    Unchanged,
+}
+
+impl OwnMode {
+    /// What the command has done by this pass, with the document at history `step` and the Color panel showing
+    /// `shown_mode`. The first new history step after it is its own edit. Once the panel shows the picked mode, one
+    /// more pass with no new step means it changed nothing.
+    fn now(&mut self, step: Option<(u64, u64)>, shown_mode: ColorPanelMode) -> OwnModeNow {
+        if step != Some(self.from) {
+            return OwnModeNow::Edited;
+        }
+        if shown_mode != self.mode {
+            return OwnModeNow::Waiting;
+        }
+        if std::mem::replace(&mut self.shown, true) { OwnModeNow::Unchanged } else { OwnModeNow::Waiting }
+    }
+}
+
 /// The gradient in that slot as the popover last saw it, including any live edits it applied.
 #[derive(Clone)]
 struct TargetOwner {
+    key: TargetKey,
+    paints: Arc<TargetPaints>,
+    /// The history step when the popover took `paints`.
+    step: Option<(u64, u64)>,
+    /// The document's count of Undo and Redo steps as of the popover's last pass.
+    restores: Option<u64>,
+    /// The paints the popover owned before its own later edits, newest last, each with the history step it was
+    /// current at and the stop or point it edited then, so that Undo and Redo of those edits keep it open on the
+    /// same stop or point.
+    earlier: Vec<Earlier>,
+}
+
+#[derive(Clone)]
+struct Earlier {
+    step: Option<(u64, u64)>,
     key: TargetKey,
     paints: Arc<TargetPaints>,
 }
@@ -115,10 +167,49 @@ struct TargetPaints {
 }
 
 impl TargetOwner {
+    /// The most earlier paints kept.
+    const EARLIER: usize = 32;
+
+    fn new(key: TargetKey, paints: Arc<TargetPaints>, step: Option<(u64, u64)>, restores: Option<u64>) -> Self {
+        Self { key, paints, step, restores, earlier: Vec::new() }
+    }
+
     fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
-        self.key.matches(app, target)
-            && self.paints.shown == *target.paint()
-            && app.session.gradient_edit_paints(!self.key.fill).is_ok_and(|paints| paints == self.paints.edited)
+        self.key.matches(app, target) && self.owns(app, target, &self.paints)
+    }
+
+    /// The earlier owned paint and stop or point that the target shows now after Undo or Redo of one of the popover's
+    /// own edits. A stop selected after Undo that is not the one that paint belonged to matches nothing, and so does
+    /// an earlier paint set again by anything other than Undo or Redo.
+    fn owned_earlier(&self, app: &VectorcraftApp, target: &Target, restores: Option<u64>) -> Option<TargetKey> {
+        if restores == self.restores {
+            return None;
+        }
+        self.earlier.iter().rev().find(|e| e.key.matches(app, target) && self.owns(app, target, &e.paints)).map(|e| e.key.clone())
+    }
+
+    fn owns(&self, app: &VectorcraftApp, target: &Target, paints: &TargetPaints) -> bool {
+        paints.shown == *target.paint() && app.session.gradient_edit_paints(!self.key.fill).is_ok_and(|now| now == paints.edited)
+    }
+
+    /// The popover now owns `paints`, taken at history step `step`; the paints it owned until now are kept as earlier
+    /// ones, with `was`, the stop or point they belonged to.
+    fn adopt(&mut self, paints: Arc<TargetPaints>, was: TargetKey, step: Option<(u64, u64)>) {
+        let old = std::mem::replace(&mut self.paints, paints);
+        let old_step = std::mem::replace(&mut self.step, step);
+        self.earlier.retain(|e| !Arc::ptr_eq(&e.paints, &old));
+        // Undo and Redo return only to the first or the last paints of one history step. The samples of a live drag
+        // between them replace each other, so a long drag does not push out the paints before it.
+        if let [.., before, last] = self.earlier.as_slice()
+            && before.step == old_step
+            && last.step == old_step
+        {
+            self.earlier.pop();
+        }
+        self.earlier.push(Earlier { step: old_step, key: was, paints: old });
+        if self.earlier.len() > Self::EARLIER {
+            self.earlier.remove(0);
+        }
     }
 }
 
@@ -237,6 +328,8 @@ struct Filed {
     panels: Vec<ColorPanelOutput>,
     /// Only an actual Shift-cycle changes this; an unchanged local snapshot must not overwrite a menu command.
     mode: Option<ColorPanelMode>,
+    /// The mode whose row of the popover's Color mode menu ran its command this pass.
+    mode_command: Option<ColorPanelMode>,
 }
 
 /// The gradient stop popover.
@@ -253,6 +346,9 @@ pub(crate) struct GradientStopPopover {
     /// The fields set from outside, applied at confirm.
     set: PopoverFields,
     filed: Filed,
+    /// A command the popover's Color mode menu ran, which runs outside `pump`: the document's history step when it
+    /// ran, the mode it picked, and whether the Color panel already showed that mode at an earlier pass.
+    own_mode: Option<OwnMode>,
 }
 
 impl GradientStopPopover {
@@ -266,6 +362,7 @@ impl GradientStopPopover {
             feed: None,
             set: PopoverFields::default(),
             filed: Filed::default(),
+            own_mode: None,
         }
     }
 
@@ -360,7 +457,9 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
                 filed.eyedropper |= DropperButton::new(tip, Bind::given(false)).show(ui).edit.value() == Some(&true);
             }
             if *tab == Tab::Color {
-                outside |= mode_menu(ui, &feed.shown, panel.mode);
+                let (closed, picked) = mode_menu(ui, &feed.shown, panel.mode);
+                outside |= closed;
+                filed.mode_command = picked.or(filed.mode_command);
             }
         });
         match *tab {
@@ -389,8 +488,9 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
 }
 
 /// The Color panel's existing five mode commands. Native menu ownership keeps its parent popover
-/// open on a pick and gives the child the first Escape, including rows outside the parent bounds.
-fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> bool {
+/// open on a pick and gives the child the first Escape, including rows outside the parent bounds. Returns whether
+/// an outside press closed the menu, and the mode whose row ran its command.
+fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> (bool, Option<ColorPanelMode>) {
     let words = Env::of(ui).words::<ColorPanelWords>();
     let label = match shown {
         ColorPanelShown::Mode(mode) => mode.label(&words),
@@ -398,13 +498,16 @@ fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> 
         _ => fallback.label(&words),
     };
     let button = Button::new(label).popup(PopupKind::Menu).show(ui);
+    let mut picked = None;
     let menu = Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
         for mode in ColorPanelMode::FILL_STROKE {
-            MenuItem::command(mode.command()).show(ui);
+            if MenuItem::command(mode.command()).show(ui).ran {
+                picked = Some(mode);
+            }
         }
     });
     // The child absorbs an outside press before its parent sees it. Close both for that event only.
-    menu.output.closed == Some(CloseReason::Outside)
+    (menu.output.closed == Some(CloseReason::Outside), picked)
 }
 
 /// Document swatches as tiles: a pick gives the stop (or point) that colour.
@@ -514,8 +617,10 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     let Some(key) = TargetKey::of(app, &target) else { return };
     let Ok(edited) = app.session.gradient_edit_paints(!key.fill) else { return };
     let paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
+    let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor, TargetOwner { key, paints }));
+        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints, step, restores)));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -538,13 +643,40 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         Some(_) => return,
         None => {}
     }
-    let Some(mut owner) = dialogs.with(|host| host.get_by_id::<GradientStopPopover>(id).map(|popover| popover.target.clone())) else {
+    let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
+    let shown_mode = app.ui.color_panel.mode;
+    let Some((mut owner, own_mode)) = dialogs.with(|host| {
+        host.get_mut_by_id::<GradientStopPopover>(id).map(|popover| {
+            if let Some(mode) = popover.filed.mode_command.take() {
+                popover.own_mode = step.map(|from| OwnMode { from, mode, shown: false });
+            }
+            let own = popover.own_mode.as_mut().map_or(OwnModeNow::None, |pending| pending.now(step, shown_mode));
+            if own != OwnModeNow::Waiting {
+                popover.own_mode = None;
+            }
+            (popover.target.clone(), own == OwnModeNow::Edited)
+        })
+    }) else {
         return;
     };
-    let Some(target) = selected(app).filter(|target| owner.matches(app, target)) else {
+    let accepted = selected(app).and_then(|target| {
+        if owner.matches(app, &target) || (own_mode && owner.key.matches(app, &target)) {
+            Some((target, None))
+        } else {
+            owner.owned_earlier(app, &target, restores).map(|key| (target, Some(key)))
+        }
+    });
+    let Some((target, earlier)) = accepted else {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
+    // The stop or point the paints owned until now belong to, before Undo or Redo or this pass's edits move it.
+    let owned_key = owner.key.clone();
+    if let Some(key) = earlier {
+        owner.key = key;
+    }
+    owner.restores = restores;
     let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
@@ -581,7 +713,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     };
     // The popover can continue with the paints resulting from its own edits in this pass.
     if owner.paints.shown != *target.paint() || owner.paints.edited != edited {
-        owner.paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
+        let step = app.session.active().map(|st| st.history.step());
+        owner.adopt(Arc::new(TargetPaints { shown: target.paint().clone(), edited }), owned_key, step);
     }
     dialogs.with(|host| {
         if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
@@ -803,6 +936,139 @@ mod tests {
         host::pump(&mut app, &ctx);
         assert_eq!(stops(&app)[1].opacity, 1.0, "the live edit belongs to the original gradient");
         assert!(!is_open(&app));
+    }
+
+    #[test]
+    fn a_mode_command_that_changes_nothing_stops_counting_as_its_own_edit() {
+        let (from, other) = ((3, 0), ColorPanelMode::FILL_STROKE[0]);
+        let picked = ColorPanelMode::FILL_STROKE[1];
+        let mut pending = OwnMode { from, mode: picked, shown: false };
+        assert!(OwnModeNow::Waiting == pending.now(Some(from), other), "the command has not run yet");
+        assert!(OwnModeNow::Waiting == pending.now(Some(from), picked), "the panel shows the mode; one more pass");
+        assert!(OwnModeNow::Unchanged == pending.now(Some(from), picked), "no history step followed: nothing changed");
+        let mut pending = OwnMode { from, mode: picked, shown: false };
+        assert!(OwnModeNow::Edited == pending.now(Some((4, 0)), picked), "the first new step is the command's own");
+    }
+
+    #[test]
+    fn undo_after_a_stop_crosses_its_neighbor_does_not_edit_the_neighbor() {
+        let mut app = app();
+        open_at(&mut app, 0, Anchor::Screen(egui::pos2(200.0, 200.0)));
+        assert!(is_open(&app));
+        let ctx = ctx(&app);
+        let edit = |app: &VectorcraftApp, fields: PopoverFields| {
+            app.dialogs().unwrap().with(|host| host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields = fields);
+        };
+        edit(&app, PopoverFields { location: Some(75.0), ..PopoverFields::default() });
+        host::pump(&mut app, &ctx);
+        assert_eq!(app.session.selected_stop(), Some(1), "the stop crossed its neighbor");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        if is_open(&app) {
+            edit(&app, PopoverFields { opacity: Some(25.0), ..PopoverFields::default() });
+            host::pump(&mut app, &ctx);
+            let stops = stops(&app);
+            assert!(stops[0].opacity < 1.0, "the edit reaches the stop the popover opened on");
+            assert_eq!(stops[1].opacity, 1.0, "the neighbor is left alone");
+        }
+    }
+
+    #[test]
+    fn redo_after_a_stop_crosses_its_neighbor_does_not_reopen_on_the_neighbor() {
+        let mut app = app();
+        open_at(&mut app, 0, Anchor::Screen(egui::pos2(200.0, 200.0)));
+        let ctx = ctx(&app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.location = Some(75.0);
+        });
+        host::pump(&mut app, &ctx);
+        assert_eq!(app.session.selected_stop(), Some(1), "the stop crossed its neighbor");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app), "Undo returns to the paint it owned on stop 0");
+        app.run("edit.redo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "after Redo, stop 0 is the neighbor");
+    }
+
+    #[test]
+    fn its_earlier_paint_set_again_from_elsewhere_closes_the_popover() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let queue = |app: &VectorcraftApp, opacity: f64| {
+            app.dialogs().unwrap().with(|host| {
+                host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(opacity);
+            });
+        };
+        queue(&app, 25.0);
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app) && stops(&app)[1].opacity < 1.0, "the live edit applied");
+        // The fixture's gradient again, set without Undo.
+        let stops_json = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops_json, "start": [100, 150], "end": [200, 150]}})).unwrap();
+        assert_eq!(app.session.selected_stop(), Some(1));
+        queue(&app, 50.0);
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "a gradient from elsewhere closes it, even one it owned before");
+        assert_eq!(stops(&app)[1].opacity, 1.0, "the pending edit is discarded");
+    }
+
+    #[test]
+    fn undo_after_a_long_live_drag_keeps_the_popover_open() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let dialogs = app.dialogs().unwrap();
+        let gesture = GestureId::new(1);
+        let pick = |hex: &str| PickedColor::rgb(Srgba::from_hex(hex).unwrap());
+        let before = pick("#00ff00");
+        let original = stops(&app)[1].color.to_hex();
+        let samples = (0..2 * TargetOwner::EARLIER).map(|i| EditEvent::update(gesture, pick(&format!("#{:02x}0000", 40 + i))));
+        for edit in samples.chain([EditEvent::commit(gesture, Mixed::Same(before), pick("#0000ff"))]) {
+            let mut edit = Some(edit);
+            ctx.run_ui(Default::default(), |ui| {
+                let Some(edit) = edit.take() else { return };
+                let mut state = ColorPanelState::default();
+                let mut output = ColorPanel::new(Bind::bound(&mut state), [before.color; 2]).show(ui);
+                output.edits.push((PanelTarget::Foreground, edit));
+                dialogs.with(|host| {
+                    host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.panels.push(output);
+                });
+            })
+            .textures_delta
+            .clear();
+            host::pump(&mut app, &ctx);
+        }
+        assert_eq!(stops(&app)[1].color.to_hex(), "#0000ff");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].color.to_hex(), original, "Undo returns to the paint before the drag");
+        assert!(is_open(&app), "the paint before the drag is still the popover's own");
+    }
+
+    #[test]
+    fn undo_of_its_own_edit_keeps_the_popover_open() {
+        let mut app = app();
+        open_popover(&mut app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(25.0);
+        });
+        let ctx = ctx(&app);
+        host::pump(&mut app, &ctx);
+        assert!(stops(&app)[1].opacity < 1.0, "the live edit applied");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].opacity, 1.0);
+        assert!(is_open(&app), "Undo returns to a paint the popover owned");
+        app.run("edit.redo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app), "Redo returns to a paint the popover owned");
+        replace_gradient(&mut app);
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "a gradient from elsewhere still closes it");
     }
 
     #[test]
