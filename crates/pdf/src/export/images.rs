@@ -63,7 +63,8 @@ impl Exporter<'_> {
     /// missing or left out, its pixels can't be decoded, or its color channel exceeds
     /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
     /// resampled), image rejections too.
-    /// With `interpolate` (and the export's own setting), viewers may smooth it. With `overprint`
+    /// With `interpolate` (and the export's own setting), viewers may smooth it, unless every
+    /// pixel is covered or not ([`crate::images::bilevel_coverage`]). With `overprint`
     /// a gray or CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
     /// leaves at zero keep the inks below: the nonzero overprint mode does not apply to an image's
     /// samples (ISO 32000-1 §8.6.7).
@@ -94,6 +95,11 @@ impl Exporter<'_> {
             self.images.insert(cache, None);
             return None;
         };
+        // A mask that only covers or doesn't, a 1-bit image mask as both importers open one, is
+        // never smoothed: a RIP that smooths it greys its edges, so where the same mask is drawn
+        // over itself in another ink the ink below shows at the edges. krilla has no 1-bit soft
+        // mask or /ImageMask, so it stays an 8-bit mask that isn't smoothed.
+        let interpolate = interpolate && !crate::images::bilevel_coverage(&alpha);
         let n = alpha.len();
         let registration = swatch.as_deref() == Some(vectorcraft_color::swatch::REGISTRATION);
         let inks: Vec<(String, [f32; 4])> = if registration {
