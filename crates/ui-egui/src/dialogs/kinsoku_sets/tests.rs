@@ -256,7 +256,8 @@ fn old_ok_keeps_restored_kinsoku_rules_and_the_current_tab() {
     assert_eq!(restored.history.undo.len(), undo);
     assert_eq!(app.session.active().unwrap().uid, other, "a stale OK does not activate the original tab");
     assert!(is_open(&app));
-    cancel(&mut app);
+    dialog(&app, |d| assert_eq!(d.problem.as_deref(), Some("The document was reverted. Reopen this dialog to continue.")));
+    cancel(&app);
 
     assert!(app.session.set_active(0));
     open(&mut app).unwrap();
