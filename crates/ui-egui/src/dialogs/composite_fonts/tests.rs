@@ -127,6 +127,42 @@ fn load_and_replace_accept_a_browser_picked_file() {
     }
 }
 
+/// Load and Replace refuse an oversized browser file while preserving both the draft and artwork;
+/// a later valid file still reaches that same draft.
+#[test]
+fn oversized_browser_composite_font_files_leave_the_draft_unchanged() {
+    for command in [PresetCommands::Load, PresetCommands::Replace] {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("Draft".into()));
+        let dialogs = app.dialogs().unwrap();
+        ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
+        let before = dialog(&mut app, |d| d.fonts.clone());
+        let bytes = file_bytes(&before).unwrap();
+        let step = steps(&app);
+        let large = vec![b' '; MAX_FILE_BYTES + 1];
+        request(&mut app, command, None);
+        picker.answer_contents(&[("large.vccomposite", &large)]);
+        poll(&mut app, &ctx);
+        assert_eq!(
+            app.ui.status,
+            vectorcraft_engine::EngineError::BadParams { cmd: IMPORT.into(), msg: "the file is larger than 4 MB".into() }.to_string()
+        );
+        assert_eq!(dialog(&mut app, |d| d.fonts.clone()), before);
+        assert!(names(&app).is_empty());
+        assert_eq!(steps(&app), step);
+        request(&mut app, command, None);
+        picker.answer_contents(&[("valid.vccomposite", &bytes)]);
+        poll(&mut app, &ctx);
+        assert!(app.ui.status.contains("valid.vccomposite"), "{}", app.ui.status);
+        assert_eq!(dialog(&mut app, |d| d.fonts.clone()), before);
+        assert!(names(&app).is_empty());
+        assert_eq!(steps(&app), step);
+    }
+}
+
 fn steps(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
