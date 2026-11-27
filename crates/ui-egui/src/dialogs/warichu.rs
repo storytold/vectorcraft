@@ -11,6 +11,7 @@
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed path of `UnitKind`
 use craft::ui::runtime::env::UnitKind;
@@ -78,7 +79,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let initial = fields.clone();
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = crate::canvas::rulers::type_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Warichu Settings"), rows(lengths)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Warichu Settings"), rows(lengths)).values(Bind::bound(fields))
+    });
     super::host::open_held(app, dialog, move |app, result| {
         let p = params(&result.fields, &initial);
         if p.is_empty() {
@@ -165,6 +168,16 @@ pub(super) mod driver {
         app.dialogs().expect("window").with(|h| h.set_json_field(&ctx, id, key, value))
     }
 
+    /// Steps a focused number field up once and clicks the dialog's OK button.
+    pub fn step_number_and_ok(panel: &mut crate::tests::panel_harness::Panel, label: &str) {
+        panel.frame();
+        let field = panel.rect_role(label, craft::ui::contract::Role::SPIN_BUTTON).center();
+        panel.click_at(field);
+        panel.key(egui::Key::ArrowUp, egui::Modifiers::NONE);
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        panel.click("OK");
+    }
+
     /// Runs the frame's pump.
     pub fn pump(app: &mut VectorcraftApp) {
         let ctx = ctx(app);
@@ -214,6 +227,17 @@ mod tests {
                 .collect(),
             _ => panic!("not text"),
         }
+    }
+
+    #[test]
+    fn warichu_settings_step_the_opening_number_on_ok() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"warichuLines": 3, "warichuScale": 70})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        panel.app().run("ui.warichuSettings", json!({})).unwrap();
+        driver::step_number_and_ok(&mut panel, "Lines");
+        assert_eq!(settings(&panel.app(), id), [(false, 4, 0.0, 70.0, WarichuAlign::Auto)]);
+        assert!(!driver::is_open(&panel.app()));
     }
 
     /// `ui.warichuSettings` opens on the characters' values; OK sets the changed ones in one undo
