@@ -101,6 +101,22 @@ fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
 }
 
 #[test]
+fn only_unlinked_process_swatches_can_travel_as_canvas_color() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Global red", "color": "#ff0000", "global": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Spot blue", "color": "#0000ff", "spot": true})).unwrap();
+    let tint = app.run("swatch.new", json!({"swatch": "Spot blue", "tint": 40})).unwrap();
+    let can_travel = |name| {
+        let PanelDrag::Paint { rows: Some(rows), .. } = rows_drag(&app, name, &[name]) else { panic!("a swatch row drag") };
+        rows.unlinked_process_color
+    };
+    assert!(can_travel("Red"));
+    for name in ["Global red", "Spot blue", tint["name"].as_str().unwrap(), "[None]", "[Registration]"] {
+        assert!(!can_travel(name), "{name}");
+    }
+}
+
+#[test]
 fn a_swatch_row_drag_reorders_only_its_source_document() {
     use crate::tests::panel_harness::Panel;
     use craft::ui::contract::{ListDrag, Role};
@@ -359,6 +375,54 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     delete(&mut app, vec!["Orange".into()], true);
     assert!(!dialog_open(&app, confirm_key) && doc(&app).swatch("Orange").is_none());
     assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+}
+
+#[test]
+fn delete_confirmation_keeps_matching_swatches_in_another_drawing() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let source = app.session.active().unwrap().uid;
+    delete(&mut app, vec!["Red".into()], false);
+    assert!(dialog_open(&app, key));
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    assert_ne!(app.session.active().unwrap().uid, source);
+    let undo = app.session.active().unwrap().history.undo.len();
+    assert!(doc(&app).swatch("Red").is_some());
+
+    confirm(&mut app, key);
+    assert!(doc(&app).swatch("Red").is_some(), "the other tab keeps its identically named swatch");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+    assert!(app.session.set_active(0));
+    assert!(doc(&app).swatch("Red").is_some(), "the source swatch still needs a fresh confirmation");
+}
+
+#[test]
+fn delete_confirmation_keeps_the_swatch_restored_by_revert() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    let file = std::env::temp_dir().join(format!("vectorcraft-swatch-delete-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let saved_color = doc(&app).swatch("Red").unwrap().paint.color();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("swatch.edit", json!({"name": "Red", "color": "#00ff00"})).unwrap();
+    assert_ne!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    delete(&mut app, vec!["Red".into()], false);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(doc(&app).swatch("Red").unwrap().paint.color(), saved_color);
+    let undo = st.history.undo.len();
+
+    confirm(&mut app, key);
+    assert_eq!(doc(&app).swatch("Red").expect("the restored swatch stays").paint.color(), saved_color);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 }
 
 /// Only None and Registration are reserved: a user swatch or color group whose name starts with

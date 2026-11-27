@@ -88,8 +88,10 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
     let token = Arc::new(());
     let dialog = {
         let (key, heading, opening) = (command.to_string(), heading_label(label), params.clone());
-        HostedParamDialog::command(&ctx, command, fields, move |_: &mut DialogFields| {
-            ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting)).previews(previews)
+        HostedParamDialog::command(&ctx, command, fields, move |fields| {
+            ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting))
+                .previews(previews)
+                .values(craft::ui::contract::Bind::bound(fields))
         })
         // The Preview box starts off, as production's dialogs did (#5360).
         .preview_off()
@@ -588,6 +590,75 @@ mod tests {
 
     fn cols(app: &VectorcraftApp) -> u64 {
         crate::panels::pattern_options::repeat_fields(app).unwrap()["cols"].as_u64().unwrap()
+    }
+
+    #[test]
+    fn hosted_commands_keep_actual_keyboard_edits_until_ok() {
+        use egui::accesskit::Role;
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let type_and_accept = |app: &mut VectorcraftApp, command: &str, name: &str, role: Role, value: &str, preview: bool| {
+            let ctx = app.ui_ctx.clone().unwrap();
+            let time = std::cell::Cell::new(0.0);
+            let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                ctx.enable_accesskit();
+                time.set(time.get() + 0.1);
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time.get()), screen_rect: Some(viewport), ..Default::default() })
+            };
+            let locate = |app: &mut VectorcraftApp, label: &str, role: Role| {
+                frame(app, vec![]);
+                let nodes = frame(app, vec![]).platform_output.accesskit_update.unwrap().nodes;
+                let node = nodes
+                    .iter()
+                    .map(|(_, node)| node)
+                    .find(|node| {
+                        node.role() == role
+                            && (node.label() == Some(label)
+                                || node.labelled_by().iter().any(|id| nodes.iter().any(|(key, name)| key == id && name.label() == Some(label))))
+                    })
+                    .unwrap_or_else(|| panic!("{command}: missing {role:?} {label}"));
+                let b = node.bounds().unwrap();
+                let at = pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+                assert!(viewport.contains(at), "{command}: {label} is reachable");
+                at
+            };
+            let click = |app: &mut VectorcraftApp, at: Pos2| {
+                frame(app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    frame(app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                frame(app, vec![]);
+            };
+            frame(app, vec![]);
+            assert_eq!(ctx.content_rect(), viewport);
+            crate::menus::invoke(app, command, json!({}));
+            let id = id_of(app);
+            if preview {
+                let toggle = locate(app, "Preview", Role::CheckBox);
+                click(app, toggle);
+                assert!(app.session.in_interaction(), "{command}: pointer turns Preview on");
+            }
+            let at = locate(app, name, role);
+            click(app, at);
+            frame(app, vec![Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND }]);
+            frame(app, vec![Event::Text(value.to_owned())]);
+            frame(app, vec![Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
+            frame(app, vec![]);
+            let live_columns = preview.then(|| cols(app));
+            let ok = locate(app, "OK", Role::Button);
+            click(app, ok);
+            frame(app, vec![]);
+            assert!(app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).is_none()), "{command}: OK closes the dialog");
+            live_columns
+        };
+
+        let (mut repeat, _) = prepared("object.repeat.options");
+        let preview = type_and_accept(&mut repeat, "object.repeat.options", "Columns", Role::SpinButton, "5", true);
+        let (mut selection, _) = prepared("select.save");
+        type_and_accept(&mut selection, "select.save", "Name", Role::TextInput, "Typed selection", false);
+        let saved = &selection.session.active().unwrap().doc.saved_selections;
+        assert_eq!((preview, cols(&repeat), saved.last().map(|s| s.name.as_str())), (Some(5), 5, Some("Typed selection")));
     }
 
     #[test]

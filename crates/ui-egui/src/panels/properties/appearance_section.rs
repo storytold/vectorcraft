@@ -100,7 +100,7 @@ fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: NodeId, effects: &[(
 /// Whether a stroke that `stroke.set` edits has a width profile
 /// ([`vectorcraft_engine::Session::edited_strokes_profiled`]), cached per document revision and
 /// active Appearance row in `PropertiesUi::edited_profiled`. False while the Type tool edits text or
-/// the Live Paint Bucket is active, when the list edits the stroke the panel shows.
+/// a tool paints the stroke ([`vectorcraft_engine::Session::tool_paints`]), when the list edits the stroke the panel shows.
 fn edited_strokes_profiled(app: &mut VectorcraftApp) -> bool {
     if panels::character::text_editing(app).is_some() || app.session.tool_paints(true) {
         return false;
