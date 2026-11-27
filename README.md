@@ -237,7 +237,7 @@ and what's next; [`docs/target-app-parity.md`](docs/target-app-parity.md) the fu
 (92.5% of menu items do something), feature depth is ~75%, and we estimate ~65% ready for real work for a mainstream illustrator (~62% across all tracked features): everyday
 vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
-files (SVG, PDF and PDF-compatible `.ai` with PDF/X, legacy version 7 `.ai` keeping layers, groups and type, EPS, DXF, EMF/WMF, raster formats, PSD out and PSD/PSB in as their merged image, Print, Package).
+files (SVG, PDF and PDF-compatible `.ai` with PDF/X, legacy version 7 `.ai` keeping layers, groups and type, EPS, DXF, EMF/WMF, raster formats, PSD out, PSD/PSB opened with their layers and placed as their merged image, JPEG XL in, Print, Package).
 Affinity documents (`.af` from Affinity 3, `.afdesign`, `.afpub` and, by their content, `.afphoto` from Affinity 1 and 2) open
 and place natively: layers, groups, artboards and pages, curves and shapes, fills, gradients and strokes, clipping
 and masks, text with each paragraph's indents, spacing and leading, tables (as text frames and lines), master
@@ -252,11 +252,12 @@ speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified
 The scores are self-assessed from our code against public documentation;
 [target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.
 
+All 57 approximated Photoshop-style raster filters are available. The Effect Gallery includes filter thumbnails and an in-dialog preview.
+
 **What's missing:**
 - reliable exchange of .ai files (layer structure in real files; the editing copy a save writes keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), leaves out other objects' effects other than geometry effects, and writes live objects as their art);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
-- 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
-- filter thumbnails and a preview area inside the Effect Gallery (the gallery itself and all 57 Photoshop-style raster filters, approximated, are in);
+- the rest of 3D and Materials (base and Adobe Substance materials, shadows from lights after the first, ray-traced rendering, Turntable; see [docs/three-d.md](docs/three-d.md));
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.
@@ -269,8 +270,8 @@ alongside the raster-effects package; then type, recent additions and 3D. The ra
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 
-Agent and contributor rules (clean-room, the asset policy, no panics in shipped code, quality gates) are in
-[`AGENTS.md`](AGENTS.md); [`docs/development.md`](docs/development.md#robustness-vectorcraft-never-crashes)
+Agent and contributor rules are the shared rules in
+[`AGENTS.md`](AGENTS.md), which also lists the checks for the crates you change; [`docs/development.md`](docs/development.md#robustness-vectorcraft-never-crashes)
 explains how VectorCraft avoids crashing, and [`docs/releasing.md`](docs/releasing.md) how releases are built,
 signed and published. Every bundled asset is listed with its licence in [`ASSETS.md`](ASSETS.md).
 
@@ -286,7 +287,9 @@ signed and published. Every bundled asset is listed with its licence in [`ASSETS
 |---|---|---|
 | x64 (64-bit Intel/AMD) | `vectorcraft-<ver>-windows-x64.msi` | `vectorcraft-<ver>-windows-x64-portable.zip` |
 | arm64 (Snapdragon and other ARM PCs) | `vectorcraft-<ver>-windows-arm64.msi` | `vectorcraft-<ver>-windows-arm64-portable.zip` |
-| x86 (32-bit) | `vectorcraft-<ver>-windows-x86.msi` | `vectorcraft-<ver>-windows-x86-portable.zip` |
+
+For 32-bit Windows, [VectorCraft v0.22.0](https://github.com/storytold/vectorcraft/releases/tag/v0.22.0)
+was the last release with both an x86 MSI and portable ZIP.
 
 Installers and executables are code-signed.
 
@@ -305,19 +308,24 @@ Installers and executables are code-signed.
 | Flatpak | `vectorcraft-<ver>-linux-x86_64.flatpak` | `vectorcraft-<ver>-linux-aarch64.flatpak` | Sandboxed; `flatpak install --user <file>` |
 | Debian/Ubuntu | `vectorcraft-<ver>-linux-x86_64.deb` | `vectorcraft-<ver>-linux-aarch64.deb` | |
 | Fedora/RHEL/openSUSE | `vectorcraft-<ver>-linux-x86_64.rpm` | `vectorcraft-<ver>-linux-aarch64.rpm` | |
+| Arch Linux | `vectorcraft-<ver>-linux-x86_64.pkg.tar.zst` | `vectorcraft-<ver>-linux-aarch64.pkg.tar.zst` | |
 | Tarball | `vectorcraft-<ver>-linux-x86_64.tar.gz` | `vectorcraft-<ver>-linux-aarch64.tar.gz` | Unpack anywhere |
+
+RISC-V (riscv64) packages are `vectorcraft-<ver>-linux-riscv64.deb`,
+`vectorcraft-<ver>-linux-riscv64.rpm`, and `vectorcraft-<ver>-linux-riscv64.tar.gz`.
 
 ### FreeBSD
 
 | Build | File |
 |---|---|
 | x86_64 | `vectorcraft-<ver>-freebsd-x86_64.tar.gz` |
+| aarch64 (ARM64) | `vectorcraft-<ver>-freebsd-aarch64.tar.gz` |
 
 ### Web (WebAssembly)
 
 | Build | File | Notes |
 |---|---|---|
-| Static site | `vectorcraft-web-<ver>.zip` | Runs in a modern browser; host it on any static server |
+| Static site | `vectorcraft-web-<ver>.zip` | Runs in a browser with WebAssembly SIMD (Chrome/Edge 91, Firefox 89, Safari 16.4 or newer), see `packaging/web/README.md`; host it on any static server |
 
 ## The Crafting Apps
 

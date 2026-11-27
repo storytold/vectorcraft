@@ -45,7 +45,24 @@ fn local_affinity_documents_render_like_their_thumbnails() {
             eprintln!("  {w}");
         }
         let Ok(preview) = vectorcraft_affinity::preview(&bytes) else { continue };
-        let thumb = image::load_from_memory(preview.png).unwrap().to_rgba8();
+        let thumb = craft_image_codecs::decode(preview.png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         let union = d.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap();
         let scale = f64::from(thumb.width()) / union.width();
         let mut total = 0.0;

@@ -3,10 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
-use craft_pdf::syntax::page::Page;
-use craft_pdf::syntax::xref::XRef;
-use craft_pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
+use craft::pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft::pdf::syntax::page::Page;
+use craft::pdf::syntax::xref::XRef;
+use craft::pdf::syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
 use vectorcraft_doc::setup::MAX_BLEED;
 
@@ -215,7 +215,7 @@ fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
 }
 
 /// `bytes` for a message, in whole megabytes, or gigabytes when it is a whole number of them.
-fn decoded_size(bytes: usize) -> String {
+pub(crate) fn decoded_size(bytes: usize) -> String {
     const GB: usize = 1 << 30;
     if bytes >= GB && bytes.is_multiple_of(GB) { format!("{} GB", bytes / GB) } else { format!("{} MB", bytes >> 20) }
 }
@@ -261,6 +261,18 @@ impl Opened {
         crate::editing::editing_in(&self.pdf)
     }
 
+    /// Does the PDF list the editing file among its attachments, also when
+    /// [`editing`](Self::editing) can't read it?
+    pub fn has_editing_file(&self) -> bool {
+        crate::editing::has_editing_file_in(&self.pdf)
+    }
+
+    /// Is the PDF's attachment name tree too large to search to its end? It may then list an
+    /// editing file that [`editing`](Self::editing) doesn't find, besides the one it reads.
+    pub fn editing_search_cut(&self) -> bool {
+        crate::editing::editing_search_cut_in(&self.pdf)
+    }
+
     /// The private data of an Illustrator `.ai`, as [`illustrator_data`] reads it.
     pub fn illustrator_data(&self) -> Option<Vec<u8>> {
         private_data(&self.pdf)
@@ -297,6 +309,17 @@ impl Opened {
             bleed,
         }
     }
+
+    /// How far page `index`'s (0-based) bleed box reaches past its trim box, `[top, bottom, left,
+    /// right]` in points, as the page shows (rotated); `None` past the last page, and when the bleed
+    /// box doesn't hold the trim box.
+    pub fn page_bleed(&self, index: usize) -> Option<[f64; 4]> {
+        let page = self.pdf.pages().get(index)?;
+        let init = Affine::new(page.initial_transform(true).as_coeffs());
+        let (trim, bleed) = (init.transform_rect_bbox(page_box(page, CropTo::Trim)), init.transform_rect_bbox(page_box(page, CropTo::Bleed)));
+        let sides = [trim.y0 - bleed.y0, bleed.y1 - trim.y1, trim.x0 - bleed.x0, bleed.x1 - trim.x1];
+        sides.iter().all(|b| b.is_finite() && *b >= 0.0).then_some(sides)
+    }
 }
 
 /// A PDF's pages as an import on their trim boxes sizes them ([`Opened::trim_pages`]).
@@ -312,13 +335,16 @@ pub struct TrimPages {
     pub bleed: [f64; 4],
 }
 
-/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
-/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
-pub(crate) fn open_options() -> craft_pdf::OpenOptions {
-    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+/// The shared reader's options: files of any size are accepted. Ordinary stream decoding uses the shared reader's immutable per-document limits, and its input
+/// copy is fallible. One image may decode to the bytes and pixels of
+/// [`crate::streams::image_limits`] for this build, past the shared reader's defaults.
+pub(crate) fn open_options() -> craft::pdf::OpenOptions {
+    let (bytes, pixels) = crate::streams::image_limits(crate::streams::LARGE_IMAGES);
+    let decode_limits = craft::pdf::syntax::DecodeLimits::default().with_max_decoded_image(bytes).with_max_image_pixels(pixels);
+    craft::pdf::OpenOptions { max_input_bytes: usize::MAX, decode_limits }
 }
 
-pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft::pdf::OpenOptions) -> Result<Pdf, PdfError> {
     // Twice: looking at every object makes the reader repair a damaged table of objects (once
     // only), and the objects are other ones after that.
     open_structural_with_options(bytes, password, options).and_then(|pdf| match (0..2).find_map(|_| hostile(&pdf)) {
@@ -340,7 +366,7 @@ pub fn reads_of(bytes: &[u8]) -> usize {
 /// [`open_with_options`] without looking at the file's objects ([`hostile`]): the reader builds its
 /// table of objects and its page tree, and nothing on a page is read. For reading one object that
 /// is checked on its own ([`illustrator_data_without_pdf_part`]), never for importing a page.
-fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
+fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &craft::pdf::OpenOptions) -> Result<Pdf, PdfError> {
     #[cfg(any(test, feature = "read-count"))]
     if let Ok(mut reads) = READS.lock() {
         let n = reads.entry(bytes.as_ptr() as usize).or_default();
@@ -353,21 +379,21 @@ fn open_structural_with_options(bytes: &[u8], password: Option<&str>, options: &
         return Err(PdfError::Parse(STREAM_NOTE.into()));
     }
     let password = password.unwrap_or_default();
-    let read = |pw: &str| craft_pdf::open_slice_with_options(bytes, Some(pw), options);
+    let read = |pw: &str| craft::pdf::open_slice_with_options(bytes, Some(pw), options);
     read(password)
         .or_else(|e| match e {
             // The reader takes only the open password of RC4 and 128-bit AES files: the
             // permissions password gives it.
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if !password.is_empty() => {
                 crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
             }
             e => Err(e),
         })
         .map_err(|e| match e {
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) if password.is_empty() => {
                 PdfError::NeedsPassword
             }
-            craft_pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
+            craft::pdf::OpenError::Load(LoadPdfError::Decryption(DecryptionError::PasswordProtected)) => PdfError::WrongPassword,
             e => PdfError::Parse(e.to_string()),
         })
 }
@@ -386,10 +412,10 @@ fn info_in(pdf: &Pdf) -> PdfInfo {
         .map(|page| {
             let (w, h) = page.render_dimensions();
             let rotation = match page.rotation() {
-                craft_pdf::syntax::page::Rotation::None => 0,
-                craft_pdf::syntax::page::Rotation::Horizontal => 90,
-                craft_pdf::syntax::page::Rotation::Flipped => 180,
-                craft_pdf::syntax::page::Rotation::FlippedHorizontal => 270,
+                craft::pdf::syntax::page::Rotation::None => 0,
+                craft::pdf::syntax::page::Rotation::Horizontal => 90,
+                craft::pdf::syntax::page::Rotation::Flipped => 180,
+                craft::pdf::syntax::page::Rotation::FlippedHorizontal => 270,
             };
             let unit = f64::from(page.user_unit());
             let boxes = CropTo::ALL.iter().filter(|c| **c != CropTo::Bounding).map(|c| (*c, page_box(page, *c).scale_from_origin(unit))).collect();
@@ -419,7 +445,7 @@ pub(crate) fn picked(opts: &ImportOptions, count: usize) -> Result<Vec<usize>, P
     Ok(v)
 }
 
-fn rect(r: craft_pdf::syntax::object::Rect) -> Rect {
+fn rect(r: craft::pdf::syntax::object::Rect) -> Rect {
     Rect::new(r.x0, r.y0, r.x1, r.y1).abs()
 }
 
@@ -436,7 +462,7 @@ pub(crate) fn page_box(page: &Page<'_>, which: CropTo) -> Rect {
         CropTo::Trim => b"TrimBox",
         CropTo::Art => b"ArtBox",
     };
-    page.raw().get::<craft_pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
+    page.raw().get::<craft::pdf::syntax::object::Rect>(key).map(|r| rect(r).intersect(media)).filter(|r| r.area() > 0.0).unwrap_or(crop)
 }
 
 /// Where `page` draws on its artboard: the page transform (PDF user space → y-down page space
@@ -491,25 +517,42 @@ pub struct IllustratorData {
 /// objects, and only the private data streams are read, with the same limits. `None` when the
 /// file itself can't be opened, or as for [`illustrator_data`].
 pub fn illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Option<IllustratorData> {
-    let pdf = open_structural_with_options(bytes, password, &open_options()).ok()?;
-    let data = private_data(&pdf)?;
-    let page = pdf.pages().first()?;
+    read_illustrator_data_without_pdf_part(bytes, password).ok().flatten()
+}
+
+/// [`illustrator_data_without_pdf_part`], with why the private data can't be read: `Ok(None)`
+/// when the file can't be opened or has no private data, `Err` (for a note, such as "it is larger
+/// than 256 MB") when it has private data that can't be read.
+pub fn read_illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Result<Option<IllustratorData>, String> {
+    let Ok(pdf) = open_structural_with_options(bytes, password, &open_options()) else { return Ok(None) };
+    let Some(data) = read_private_data(&pdf)? else { return Ok(None) };
+    let Some(page) = pdf.pages().first() else { return Ok(None) };
     // (The page transform is in points: it applies the `UserUnit`.)
     let trim = frame(page, CropTo::Trim).1;
-    Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) })
+    Ok(Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) }))
 }
 
 /// The private data of `pdf`'s first page, as [`illustrator_data`] reads it.
 fn private_data(pdf: &Pdf) -> Option<Vec<u8>> {
-    let page = pdf.pages().first()?;
-    let private = page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
+    read_private_data(pdf).ok().flatten()
+}
+
+/// [`private_data`], with why a private data stream can't be read ([`inflated`]).
+fn read_private_data(pdf: &Pdf) -> Result<Option<Vec<u8>>, String> {
+    let Some(private) = pdf
+        .pages()
+        .first()
+        .and_then(|page| page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"))
+    else {
+        return Ok(None);
+    };
     let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
     let mut data = vec![];
     for n in 1..=100_000u32 {
         let Some(stream) = private.get::<Stream<'_>>(format!("{key}{n}").as_bytes()) else { break };
-        data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len())?);
+        data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len()).map_err(|why| why.to_string())?);
     }
-    (!data.is_empty()).then_some(data)
+    Ok((!data.is_empty()).then_some(data))
 }
 
 /// Does the PDF's first page carry an editor's copy of the art: a PDF-compatible `.ai`
@@ -527,10 +570,12 @@ fn has_private_data_keys(pdf: &Pdf) -> bool {
 /// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
 /// `decoded()`, which has no limit, so a stream of zeros can't grow to the size of the memory. Only a
 /// stream that is plain or only deflated is read (the private data is no other), without decode
-/// parameters; else, or when it is larger once decoded, `None`. A filter the reader doesn't know
-/// counts as another filter.
-fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
+/// parameters; else, or when it is larger once decoded, `Err` with why. A filter the reader
+/// doesn't know counts as another filter.
+fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     use std::io::Read;
+    let unread = || "it is stored in a form that isn't read".to_string();
+    let too_large = || format!("it is larger than {} MB", MAX_PRIVATE >> 20);
     let dict = stream.dict();
     let named = |key: &[u8]| match dict.get::<Object<'_>>(key) {
         None | Some(Object::Null(_)) => Some(0),
@@ -544,24 +589,28 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
         Some(_) => true,
     };
     if params(b"DecodeParms") || params(b"DP") {
-        return None;
+        return Err(unread());
     }
     let filters = stream.filters();
     // (The reader leaves out the filters it doesn't know.)
-    if named(b"Filter")?.max(named(b"F")?) != filters.len() {
-        return None;
+    if named(b"Filter").zip(named(b"F")).is_none_or(|(a, b)| a.max(b) != filters.len()) {
+        return Err(unread());
     }
     let raw = stream.raw_data();
     let mut out = vec![];
-    let limit = u64::try_from(most).ok()?.checked_add(1)?;
+    let limit = u64::try_from(most).ok().and_then(|m| m.checked_add(1)).ok_or_else(too_large)?;
     match filters.as_slice() {
         [] if raw.len() <= most => out.extend_from_slice(&raw),
-        [craft_pdf::syntax::Filter::FlateDecode] => {
-            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).ok()?;
+        [] => return Err(too_large()),
+        [craft::pdf::syntax::Filter::FlateDecode] => {
+            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).map_err(|_| "its zlib compression is damaged".to_string())?;
         }
-        _ => return None,
+        _ => return Err(unread()),
     }
-    (out.len() <= most).then_some(out)
+    if out.len() > most {
+        return Err(too_large());
+    }
+    Ok(out)
 }
 
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?

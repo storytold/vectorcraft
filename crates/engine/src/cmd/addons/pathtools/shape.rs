@@ -4,13 +4,15 @@
 //! (`vectorcraft_tools::addons::parametric_shape`), which SVG export leaves out.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point};
 use vectorcraft_pathops::addons::pathtools::shapes::{ParametricShape, ShapeKind, recognise};
+use vectorcraft_render::effects;
 use vectorcraft_tools::addons::parametric_shape::{CREATE, EDIT, KEY, apply, read, stored, to_json};
 
+use super::super::super::menucmds::whole_or;
 use super::super::super::{CommandSpec, bad, checked_id, checked_ids_or_selection, cmd, has_doc, has_selection};
-use crate::{EngineError, Result, Session};
+use crate::{EngineError, MAX_COORD, Result, Session};
 
 /// The undo step's name and the command's label.
 const CONVERT: &str = "Convert to Parametric Shape";
@@ -31,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Parametric Shape",
             [],
             None,
-            "{id, kind?, center?, width?, height?, rotation?, count?, a?, b?, radius?} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with none, or the same ones, nothing changes → {id, shape (its numbers now)}",
+            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), with `center` the shape's center moves to it, otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
             has_doc,
             set
         ),
@@ -95,15 +97,55 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "the path is locked or hidden"));
     }
     let old = d.node(id).and_then(read).ok_or_else(|| bad(C, "the object is not an editable parametric shape"))?;
+    let reference = match p.get("reference").filter(|v| !v.is_null()) {
+        Some(_) => match whole_or(p, "reference", 4, C)? {
+            i @ 0..=8 => Some(i as usize),
+            _ => return Err(bad(C, "`reference` must be from 0 to 8")),
+        },
+        None => None,
+    };
     let shape = apply(old, p).map_err(|e| bad(C, e))?;
     if shape != old {
+        // Without a center, the reference point of the bounding box (as the Transform panel and
+        // `object.setBounds` measure it; the geometric box where the preview leaves none) keeps
+        // its place: the new outline moves onto it. The box after the edit is measured the same way
+        // as the box before it.
+        let how = s.bounds_measure();
+        let geometric = effects::preview::Measure { preview: false, ..how };
+        let boxed = |d: &Document, m: effects::preview::Measure| effects::preview::oriented_bounds_with(d, &[id], m).map(|b| (m, b));
+        let keep = match reference.filter(|_| p.get("center").is_none_or(Value::is_null)) {
+            Some(i) => {
+                let d = &s.doc()?.doc;
+                let (m, b) = boxed(d, how).or_else(|| boxed(d, geometric)).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+                Some((i, m, b.reference_point(i)))
+            }
+            None => None,
+        };
         let path = outline(&shape, C)?;
         s.edit(EDIT, |d, sel| {
             shape_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &shape, path);
+            if let Some((i, m, was)) = keep
+                && let Some(now) = boxed(d, m).map(|(_, b)| b.reference_point(i))
+                && now != was
+            {
+                let mut moved = shape;
+                moved.center += was - now;
+                let path = outline(&moved, C)?;
+                shape_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &moved, path);
+            }
+            // A shape named by `id` and not selected is not checked after the edit: one the edit
+            // takes past the coordinate limit is an error here, and nothing changes.
+            if !crate::sanity::objects_in_range(d, &[id]) {
+                return Err(bad(C, format!("coordinate out of range (limit ±{MAX_COORD} pt)")));
+            }
             sel.anchors.remove(&id);
             sel.segments.remove(&id);
             Ok(())
         })?;
+        // The numbers the edit committed (an object attached to a path is put back on it); none
+        // when snapping to the pixel grid left a plain path.
+        let committed = s.doc()?.doc.node(id).and_then(read);
+        return Ok(json!({ "id": id.0, "shape": committed.map_or(Value::Null, |c| to_json(&c)) }));
     }
     Ok(json!({ "id": id.0, "shape": to_json(&shape) }))
 }

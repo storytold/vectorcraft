@@ -14,14 +14,14 @@ use vectorcraft_geom::{Affine, Anchor, AnchorKind, BezPath, PathData, Point, Sub
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{Cap, Join};
 
-use crate::{Action, Tool, ToolContext};
+use crate::{Action, PenPose, Tool, ToolContext};
 
 pub use anchor::AnchorTool;
 pub use curvature::{
     CurvatureTool, EndCurve, curvature_close, curvature_extend, curvature_insert, curvature_move, curvature_remove, curvature_smooth,
 };
 pub use family::FamilyTool;
-pub use gesture::GestureTool;
+pub use gesture::{GestureTool, can_smooth};
 
 /// Colour of tool feedback (Illustrator's selection blue).
 pub const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
@@ -34,8 +34,48 @@ pub const MIN_FIDELITY: f64 = 0.01;
 /// Fidelity at the highest zoom (64000 %), whose screen pixels the tools send in points (#5729).
 pub const MIN_FIT_TOLERANCE: f64 = MIN_FIDELITY / 640.0;
 
-/// The lowest Fidelity (points) the Smooth tool takes.
+/// The coarsest tolerance (points) `path.freehand` fits a Pencil or Paintbrush stroke at: the highest
+/// Fidelity the tools and their Tool Options take (100 px) at the lowest zoom (3.13 %), about 3195 pt.
+/// A change to either range changes this bound with it.
+pub const MAX_FIT_TOLERANCE: f64 = 100.0 / 0.0313;
+
+/// The lowest Fidelity (screen pixels) the Smooth tool takes.
 pub const SMOOTH_MIN_FIDELITY: f64 = 0.05;
+
+/// The finest tolerance (points) `path.smoothRegion` refits at: the Smooth tool's lowest Fidelity at
+/// the highest zoom (64000 %), whose screen pixels the tools send in points.
+pub const SMOOTH_MIN_TOLERANCE: f64 = SMOOTH_MIN_FIDELITY / 640.0;
+
+/// The coarsest tolerance (points) `path.smoothRegion` refits at: the highest Fidelity (100 screen
+/// pixels) at the lowest zoom (3.13 %).
+pub const SMOOTH_MAX_TOLERANCE: f64 = 100.0 / 0.0313;
+
+/// The range (points) of `path.smoothRegion`'s `radius`, `path.joinScrub`'s `tolerance` and
+/// `path.eraseSegments`' `width`, which the tools send as screen pixels divided by the zoom.
+/// VectorCraft's own range.
+pub const REACH_RANGE: (f64, f64) = (0.001, 1000.0);
+
+/// Whether segment `i` of `sp` is straight, so the Smooth tool leaves it as it is: its handles lie
+/// on the line through its ends, and the segment runs from one end to the other without turning back.
+pub fn segment_is_straight(sp: &SubPath, i: usize) -> bool {
+    let c = sp.segment(i);
+    let chord = c.p3 - c.p0;
+    let len = chord.hypot();
+    if len < 1e-9 {
+        return c.p1.distance(c.p0) < 1e-9 && c.p2.distance(c.p0) < 1e-9;
+    }
+    // A millionth of a point, and the rounding error of a very long segment's coordinates.
+    let eps = 1e-6 + 1e-9 * len;
+    let off = |q: Point| chord.cross(q - c.p0).abs() / len;
+    if off(c.p1) > eps || off(c.p2) > eps {
+        return false;
+    }
+    // How far along the line the segment moves at its start, middle and end (the Bernstein
+    // coefficients of its speed along it): it never moves backward when these allow no negative.
+    let along = |q: Point| chord.dot(q - c.p0) / len;
+    let (a, b, e) = (along(c.p1), along(c.p2) - along(c.p1), len - along(c.p2));
+    a >= -eps && e >= -eps && (b >= -eps || b * b <= a * e + eps)
+}
 
 /// The lowest Fidelity tool `id` takes.
 pub fn min_fidelity(id: &str) -> f64 {
@@ -51,6 +91,40 @@ pub fn pressure_size(size: f64, variation: f64, pressure: f64) -> f64 {
 
 /// The narrowest a Blob Brush or Eraser stroke gets, in points (their Size field's minimum).
 pub const MIN_BRUSH_SIZE: f64 = 0.1;
+
+/// The modes the Blob Brush's Size takes (`sizeMode`). The Eraser's Size takes every
+/// [`vectorcraft_brush::Variation`].
+pub const BLOB_SIZE_MODES: [vectorcraft_brush::Variation; 3] =
+    [vectorcraft_brush::Variation::Fixed, vectorcraft_brush::Variation::Pressure, vectorcraft_brush::Variation::StylusWheel];
+
+/// A pen's tilt as a lean on the page (each tilt's tangent) and its angle from upright in degrees,
+/// as Pointer Events' tiltX and tiltY convert to an altitude and an azimuth.
+fn pen_lean(tilt: [f32; 2]) -> ([f64; 2], f64) {
+    let [x, y] = tilt.map(|d| f64::from(d).to_radians().tan());
+    ([x, y], x.hypot(y).atan().to_degrees())
+}
+
+/// Which way pose `q` leans, in degrees counter-clockwise on the page from leaning to the right,
+/// when it leans 1° or more from upright (`path.eraseRegion` keeps the bearing before a pen
+/// nearer upright than that).
+pub(crate) fn pen_bearing(q: PenPose) -> Option<f64> {
+    let ([x, y], from_upright) = pen_lean(q.tilt?);
+    (from_upright >= 1.0).then(|| (-y).atan2(x).to_degrees())
+}
+
+/// The 0..1 that each of the Eraser's variation modes Pressure, Tilt, Bearing, Rotation and Stylus
+/// Wheel reads, in that order, from a pen at `pressure` (0..1) held as `pose`, leaning toward
+/// `bearing` (degrees, from [`pen_bearing`]): 0 gives the value less its variation and 1 the value
+/// plus it, as `path.eraseRegion` reads a stroke's points. Tilt reads 1 upright and 0 lying flat;
+/// Bearing and Rotation read ½ plus the angle over 360°, the rotation turned counter-clockwise;
+/// Stylus Wheel reads the pen's wheel (0..1). What the pen does not give reads ½, the value itself.
+pub(crate) fn pen_controls(pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 5] {
+    let tilt = pose.and_then(|q| q.tilt).map_or(0.5, |t| 1.0 - pen_lean(t).1 / 90.0);
+    let rotation = pose.and_then(|q| q.rotation).map_or(0.5, |r| 0.5 + vectorcraft_geom::normalize_deg(-f64::from(r)) / 360.0);
+    let bearing = bearing.map_or(0.5, |b| 0.5 + b / 360.0);
+    let wheel = pose.and_then(|q| q.wheel).map_or(0.5, f64::from);
+    [pressure, tilt, bearing, rotation, wheel].map(|c| if c.is_finite() { c.clamp(0.0, 1.0) } else { 0.5 })
+}
 
 /// Create a drawing tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -302,7 +376,7 @@ pub(crate) fn walk_pickable<'a>(cx: &ToolContext<'a>, mut f: impl FnMut(&'a vect
 }
 
 /// Editable path nodes, selected ones first, then the rest top-most first ([`walk_pickable`]).
-fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
+pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
     let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(|n| n.path_data().is_some())).collect();
     let mut rest = vec![];
     walk_pickable(cx, |n| {
@@ -311,8 +385,10 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    // The loop skips ids that are already listed.
+    let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
-        if !v.contains(&id) {
+        if seen.insert(id) {
             v.push(id);
         }
     }
@@ -411,6 +487,22 @@ pub(crate) fn remove_anchor((id, si, ai): (NodeId, usize, usize)) -> Action {
 mod tests {
     use super::*;
     use vectorcraft_geom::ParamCurve;
+
+    /// A segment is straight only when its handles lie on its line between its ends; a bend of 50 pt
+    /// on a segment 100,000,000 pt long is a curve.
+    #[test]
+    fn segment_is_straight_needs_handles_on_the_line_between_the_ends() {
+        let seg = |h1: (f64, f64), h2: (f64, f64), end: f64| {
+            let a = Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(h1.0, h1.1));
+            let b = Anchor::with_handles(Point::new(end, 0.0), Point::new(h2.0, h2.1), Point::new(end, 0.0));
+            segment_is_straight(&SubPath::new(vec![a, b], false), 0)
+        };
+        assert!(seg((0.0, 0.0), (100.0, 0.0), 100.0));
+        assert!(seg((30.0, 0.0), (70.0, 0.0), 100.0));
+        assert!(!seg((30.0, 1.0), (70.0, 0.0), 100.0));
+        assert!(!seg((150.0, 0.0), (-50.0, 0.0), 100.0), "turns back along its line");
+        assert!(!seg((3e7, 50.0), (7e7, 50.0), 1e8), "a long, gentle bend");
+    }
 
     #[test]
     fn catmull_rom_passes_through_points() {

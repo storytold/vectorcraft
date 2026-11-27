@@ -7,7 +7,8 @@
 //! fields; `perspective.grid.preset` applies one, `perspective.presets.*` manage them.
 //!
 //! View options (Lock Grid, Lock Station Point, Snap to Grid, Show Rulers) are view state on
-//! the grid: they toggle without an undo step, as Show Grid does.
+//! the grid: they toggle without an undo step, as Show Grid does. So is the point Automatic Plane
+//! Positioning holds the active plane through (`perspective.plane.infer`).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -15,12 +16,15 @@ use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_geom::{Point, Rect, Vec2};
 use vectorcraft_tools::distort::perspective::Plane;
 use vectorcraft_tools::distort::perspective::define::{BUILTINS, LETTER, first_artboard, is_builtin};
+use vectorcraft_tools::distort::perspective::infer::{HIT_PX, InferSource};
 use vectorcraft_tools::distort::perspective::widget::{WidgetCorner, WidgetPlace};
-use vectorcraft_tools::distort::perspective::{GridDefinition, PerspectiveGrid};
+use vectorcraft_tools::distort::perspective::{GridDefinition, MAX_DEPTH, PerspectiveGrid};
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
-use super::distortcmds::{grid_of, silent, store_grid};
-use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, str_param, switch_or, unique_name};
+use super::distortcmds::{grid_kept, grid_of, silent, store_grid};
+use super::{
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, number_or, str_param, switch_or, unique_name,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -92,9 +96,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Perspective Grid Options",
             [],
             None,
-            "{show?: bool, position?: topLeft|topRight|bottomLeft|bottomRight} the Plane Switching Widget: shown or not, and the corner of the document window it stays in (kept with the preferences; no params reads them) → {show, position}",
+            "{show?: bool, position?: topLeft|topRight|bottomLeft|bottomRight, anchorPoint?: bool, gridlineIntersection?: bool} the Plane Switching Widget: shown or not, and the corner of the document window it stays in; Automatic Plane Positioning: whether it takes a point from an anchor point of art in perspective and from a gridline intersection (both on by default; see perspective.plane.infer). Kept with the preferences; no params reads them → {show, position, anchorPoint, gridlineIntersection}",
             always,
             widget_options
+        ),
+        cmd!(
+            "perspective.plane.infer",
+            "Automatic Plane Positioning",
+            [],
+            None,
+            "{at?: [x, y], tolerance?: pt around `at` (default 6), clear?: bool} with `at` on an anchor point of shown art in perspective, or on a gridline intersection of a plane that shows, the active plane moves through that point for now and the other planes hide (the Perspective Selection tool: Shift held over one with no button down). An anchor point within reach wins over an intersection, and perspective.widget.options turns either off. Making another plane active (perspective.plane.set) brings that plane through the same point. The plane goes back to its place when an object is drawn on it or attached to it (perspective.draw, perspective.attach, an object brought into perspective by perspective.move or perspective.transform), when a plane is moved (perspective.plane.move, perspective.plane.matchObject), when the grid hides or no plane is active, when the file is opened again, and with `clear` (Escape with the Perspective Selection tool). View state: not an undo step; no params reads it → {active, plane, offset: where the active plane is, point?: [x, y, z] in the grid's frame, source?: anchor|gridline (what `at` found; absent when nothing was within reach)}",
+            has_doc,
+            plane_infer
         ),
         cmd!(
             "perspective.grid.lock",
@@ -259,12 +272,34 @@ pub(crate) fn grid_preset(s: &mut Session, p: &Value) -> Result<Value> {
     let old = grid_of(&s.doc()?.doc);
     let ab = s.doc()?.doc.artboards.first().map(|a| a.rect).ok_or_else(|| EngineError::Other("no artboard".into()))?;
     let g = s.perspective_preset_grid(&name, ab).ok_or_else(|| bad(C, format!("no perspective grid preset named `{name}`")))?;
-    // The objects stay attached and the view options stay as they were.
-    let g = PerspectiveGrid { attached: old.attached, locked: old.locked, lock_station: old.lock_station, snap: old.snap, rulers: old.rulers, ..g };
-    s.edit("Perspective Grid Preset", |d, _| {
-        store_grid(d, &g);
-        Ok(())
-    })?;
+    // The objects stay attached and the view options stay as they were, and so does a plane held
+    // by Automatic Plane Positioning while the new grid can hold it.
+    let mut g = PerspectiveGrid {
+        attached: old.attached,
+        locked: old.locked,
+        lock_station: old.lock_station,
+        snap: old.snap,
+        rulers: old.rulers,
+        inferred: old.inferred,
+        ..g
+    };
+    g.keep_positioning_valid();
+    // When the document holds this grid already, apart from whether it shows and its active plane,
+    // the preset only sets those two, without an undo step (as perspective.grid.show and
+    // perspective.plane.set do).
+    let view = PerspectiveGrid { visible: old.visible, plane: old.plane, inferred: old.inferred, ..g.clone() };
+    if !grid_kept(&s.doc()?.doc, &view) {
+        s.edit("Perspective Grid Preset", |d, _| {
+            store_grid(d, &g);
+            Ok(())
+        })?;
+    } else if (old.visible, old.plane, old.inferred) != (g.visible, g.plane, g.inferred) {
+        silent(s, |cur| {
+            cur.visible = g.visible;
+            cur.plane = g.plane;
+            cur.inferred = g.inferred;
+        })?;
+    }
     Ok(g.definition_json())
 }
 
@@ -428,7 +463,7 @@ fn rulers(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Snap to Grid for a move of `ids` from page point `from` to `to` (unless `p` says `snap: false`):
 /// the plane and depth of the first one and the plane-space correction that lands the edge of the
-/// joint bounds of the objects there nearer a gridline on it.
+/// joint bounds of the objects on that plane, each measured at its own depth, nearer a gridline on it.
 pub(crate) fn snap_fix(doc: &Document, ids: &[NodeId], p: &Value, (from, to): (Point, Point)) -> Option<(Plane, f64, Vec2)> {
     let g = grid_of(doc);
     if !bool_or(p, "snap", g.snap) {
@@ -449,8 +484,98 @@ fn widget_options(s: &mut Session, p: &Value) -> Result<Value> {
         o.position =
             v.as_str().and_then(WidgetCorner::parse).ok_or_else(|| bad(C, "position must be topLeft, topRight, bottomLeft or bottomRight"))?;
     }
+    if let Some(v) = p.get("anchorPoint") {
+        o.anchor_point = v.as_bool().ok_or_else(|| bad(C, "anchorPoint must be true or false"))?;
+    }
+    if let Some(v) = p.get("gridlineIntersection") {
+        o.gridline_intersection = v.as_bool().ok_or_else(|| bad(C, "gridlineIntersection must be true or false"))?;
+    }
     s.prefs.perspective_widget = o;
     Ok(json!(o))
+}
+
+/// What `perspective.plane.infer` reports for `g`.
+fn infer_info(g: &PerspectiveGrid, source: Option<InferSource>) -> Value {
+    let active = g.inferred.is_some() && g.plane != Plane::None;
+    let mut v = json!({ "active": active, "plane": g.plane.id(), "offset": g.offset(g.plane) });
+    if let Some(at) = g.inferred.filter(|_| active) {
+        v["point"] = json!(at);
+    }
+    if let Some(source) = source {
+        v["source"] = json!(source.id());
+    }
+    v
+}
+
+fn plane_infer(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "perspective.plane.infer";
+    let clear = switch_or(p, "clear", false, C)?;
+    let at = match p.get("at") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, "`at` must be [x, y]"))?),
+    };
+    let tol = number_or(p, "tolerance", HIT_PX, C)?;
+    if !(tol.is_finite() && (0.0..=MAX_DEPTH).contains(&tol)) {
+        return Err(bad(C, "tolerance must be 0 or more"));
+    }
+    if clear && at.is_some() {
+        return Err(bad(C, "give `at` or `clear`, not both"));
+    }
+    let doc = &s.doc()?.doc;
+    let g = PerspectiveGrid::current(doc);
+    let mut source = None;
+    let next = match at {
+        _ if clear => None,
+        None => g.inferred,
+        Some(at) => {
+            if !g.visible {
+                return Err(EngineError::Other("the perspective grid is hidden".into()));
+            }
+            if g.plane == Plane::None {
+                return Err(EngineError::Other("no active perspective plane".into()));
+            }
+            let targets = s.prefs.perspective_widget.targets();
+            if !targets.any() {
+                return Err(EngineError::Other(
+                    "Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)".into(),
+                ));
+            }
+            match g.infer_at(doc, at, tol, targets) {
+                Some((found, point)) => {
+                    source = Some(found);
+                    Some(point)
+                }
+                None => g.inferred,
+            }
+        }
+    };
+    if next == g.inferred {
+        return Ok(infer_info(&g, source));
+    }
+    // A plane through the point stays in front of the viewer.
+    if next.is_some() {
+        PerspectiveGrid { inferred: next, ..g }.validate().map_err(|e| bad(C, e))?;
+    }
+    let g = silent(s, |g| g.inferred = next)?;
+    Ok(infer_info(&g, source))
+}
+
+/// An object was drawn on, or attached to, `plane`: when Automatic Plane Positioning holds that
+/// plane, it goes back to its place as view state, not an undo step (a plane it doesn't hold
+/// leaves it as it is). In a drag that happens once the drag is committed
+/// ([`Session::commit_interaction`]), so the plane stays put while the object is drawn.
+pub(crate) fn plane_positioning_used(s: &mut Session, plane: Plane) -> Result<()> {
+    let st = s.doc_mut()?;
+    let g = grid_of(&st.doc);
+    if g.inferred.is_none() || g.plane != plane {
+        return Ok(());
+    }
+    if let Some(it) = &mut st.interaction {
+        it.plane_placed = true;
+        return Ok(());
+    }
+    silent(s, |g| g.inferred = None)?;
+    Ok(())
 }
 
 impl Session {

@@ -485,7 +485,7 @@ fn making_and_restyling_type_reports_its_overflow() {
 }
 
 /// The formats whose exports draw type.
-const DRAWING_FORMATS: [&str; 8] = ["pdf", "eps", "svg", "png", "jpg", "tiff", "emf", "wmf"];
+const DRAWING_FORMATS: [&str; 9] = ["pdf", "eps", "svg", "png", "jpg", "tiff", "emf", "wmf", "hpgl"];
 
 /// The warnings of `document.export {format, …options}` about type that doesn't fit its frame.
 fn export_overflow(s: &mut Session, format: &str, options: Value) -> Vec<String> {

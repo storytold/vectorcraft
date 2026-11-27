@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
+use craft::pdf::syntax::Pdf;
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, Intent};
 use vectorcraft_color::{Color, Paint};
@@ -136,5 +136,5 @@ fn separations_separate_with_a_cmyk_printer_profile() {
     assert_ne!(device, press, "the profile separates");
     // An RGB printer profile doesn't separate.
     let r = job(&d, json!({"output": {"mode": "separations"}, "color": {"profile": cms::SRGB}}));
-    assert!(r.warnings.iter().any(|w| w.contains("RGB printer profile")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("RGB printer profile")), "{:?}", r.setting_notes);
 }

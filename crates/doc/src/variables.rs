@@ -95,8 +95,9 @@ pub struct DataSet {
 
 impl DataSet {
     /// Whether the art, as [`Document::captured_values`] read it, still holds what this row
-    /// says. A value the art can't report (its object is locked or gone) isn't drift: the row
-    /// keeps it, and applying it again would skip it too.
+    /// says. A value the art can't report (its object is gone, or is locked or in a locked layer
+    /// or group and the variable isn't a visibility variable) isn't drift: the row keeps it, and
+    /// applying it again would skip it too.
     pub fn matches(&self, current: &BTreeMap<String, DataValue>) -> bool {
         self.values.iter().all(|(k, v)| current.get(k).is_none_or(|c| c == v))
     }
@@ -105,12 +106,11 @@ impl DataSet {
 /// The variable state of a document: definitions, datasets, bindings
 /// (object id → the variables bound to it) and which dataset is active.
 ///
-/// An object may be driven by several variables — the reference app binds the selected object
-/// to the selected variable, one click at a time, and never says a second binding replaces the
-/// first — so a binding is a set. `dataset.select` applies the text values in the order the
-/// variables are defined, which is what makes two text variables on one object deterministic:
-/// the last one wins, and `applied` counts both. Of two visibility variables on one object, the
-/// last one defined wins too.
+/// An object may be driven by several variables, so a binding is a set. `variable.bind` and Make
+/// Text Dynamic refuse a second text variable on one type object, but a document saved before
+/// they did may hold two: `dataset.select` applies the text values in the order the variables
+/// are defined, so the last one wins, and `applied` counts both. Of two visibility variables on
+/// one object, the last one defined wins too.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Variables {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -194,33 +194,35 @@ impl Document {
         self.variables.bindings = bindings;
     }
 
-    /// Whether a variable may be bound to the object `id`: it is in the document, neither it nor
-    /// anything above it is locked, nothing above it is hidden, and it is not on a locked artboard
-    /// ([`Document::on_locked_artboard`]). Its own visibility doesn't count, as that is what a
-    /// visibility variable drives.
-    pub fn variable_target(&self, id: NodeId) -> bool {
-        self.variable_target_with(&self.locked_artboards(), id)
+    /// Whether a variable of `kind` may be bound to the object `id`: it is in the document,
+    /// nothing above it is hidden, it is not on a locked artboard ([`Document::on_locked_artboard`]),
+    /// and, unless `kind` is visibility, neither it nor anything above it is locked. Its own
+    /// visibility doesn't count, as that is what a visibility variable drives.
+    pub fn variable_target(&self, id: NodeId, kind: VariableKind) -> bool {
+        self.variable_target_with(&self.locked_artboards(), id, kind)
     }
 
     /// [`Document::variable_target`] with the locked artboards `locks` of this document, measured
     /// once for many ids.
-    pub fn variable_target_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked && (n.visible || *i == id))))
+    pub fn variable_target_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> bool {
+        let locking = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locking && n.locked) && (n.visible || *i == id))))
             && !locks.holds_id(id)
     }
 
-    /// Whether a data set reads and rewrites the bound object `id`: it is in the document, neither
-    /// it nor anything above it is locked, and it is not on a locked artboard
-    /// ([`Document::on_locked_artboard`]). Hidden objects count, and so do objects in a hidden
-    /// layer or group.
-    pub fn dataset_target(&self, id: NodeId) -> bool {
-        self.dataset_target_with(&self.locked_artboards(), id)
+    /// Whether a data set reads and rewrites the bound object `id` for a variable of `kind`: it
+    /// is in the document, it is not on a locked artboard ([`Document::on_locked_artboard`]) and,
+    /// unless `kind` is visibility, neither it nor anything above it is locked. Hidden objects
+    /// count, and so do objects in a hidden layer or group.
+    pub fn dataset_target(&self, id: NodeId, kind: VariableKind) -> bool {
+        self.dataset_target_with(&self.locked_artboards(), id, kind)
     }
 
     /// [`Document::dataset_target`] with the locked artboards `locks` of this document, measured
     /// once for many ids.
-    pub fn dataset_target_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
-        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !n.locked))) && !locks.holds_id(id)
+    pub fn dataset_target_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> bool {
+        let locking = kind != VariableKind::Visibility;
+        self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| !(locking && n.locked)))) && !locks.holds_id(id)
     }
 
     /// The type objects of the story that the type object `id` belongs to, in thread order: the
@@ -254,21 +256,21 @@ impl Document {
     /// [`Document::story_target`] with the locked artboards `locks` of this document, measured
     /// once for many ids.
     pub fn story_target_with(&self, locks: &LockedArtboards, id: NodeId) -> bool {
-        self.story_of(id).into_iter().all(|f| self.dataset_target_with(locks, f))
+        self.story_of(id).into_iter().all(|f| self.dataset_target_with(locks, f, VariableKind::Text))
     }
 
     /// What the object `id` holds for the variable of `kind`: its characters (the whole story
     /// for a frame of threaded text), whether it shows, or a linked image's path. `None` when the
-    /// object is gone, is not of that kind, has no link path yet (an embedded image), or is locked,
-    /// in a locked layer or group, or on a locked artboard, or for text when a frame of its story
-    /// is (the document's value is whatever it was left at).
+    /// object is gone, is not of that kind, has no link path yet (an embedded image), or, unless
+    /// `kind` is visibility, is locked or in a locked layer or group, or is on a locked artboard,
+    /// or for text when a frame of its story is (the document's value is whatever it was left at).
     pub fn variable_value(&self, id: NodeId, kind: VariableKind) -> Option<DataValue> {
         self.variable_value_with(&self.locked_artboards(), id, kind)
     }
 
     /// [`Document::variable_value`] with the locked artboards `locks` of this document.
     fn variable_value_with(&self, locks: &LockedArtboards, id: NodeId, kind: VariableKind) -> Option<DataValue> {
-        if !self.dataset_target_with(locks, id) {
+        if !self.dataset_target_with(locks, id, kind) {
             return None;
         }
         let node = self.node(id)?;

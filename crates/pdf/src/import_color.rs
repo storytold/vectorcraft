@@ -11,12 +11,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Write as _};
 
-use craft_pdf::interpret::Function;
-use craft_pdf::interpret::color::ColorSpace;
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::array::FlexArrayIter;
-use craft_pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
-use craft_pdf::syntax::reader::{Reader, ReaderExt};
+use craft::pdf::interpret::Function;
+use craft::pdf::interpret::color::ColorSpace;
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::array::FlexArrayIter;
+use craft::pdf::syntax::object::{Array, Dict, MaybeRef, Name, Object, Stream};
+use craft::pdf::syntax::reader::{Reader, ReaderExt};
 use smallvec::SmallVec;
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, Paint, Swatch};
@@ -170,7 +170,7 @@ impl<'p> Colors<'p> {
 
     /// A solid color in its own model; `None`: use its RGB. `inks`: the colorant names of the
     /// space the page's walk found it painted in ([`Colors::space_of`]).
-    pub fn solid(&mut self, c: &craft_pdf::interpret::color::Color, inks: Option<&[String]>) -> Option<Native> {
+    pub fn solid(&mut self, c: &craft::pdf::interpret::color::Color, inks: Option<&[String]>) -> Option<Native> {
         let mapped = debug_text(c).and_then(|t| {
             let (space, comps) = split_color(&t)?;
             let space = self.space_of(space, comps.len(), inks);
@@ -237,6 +237,18 @@ impl<'p> Colors<'p> {
             }
             _ => Space::Other,
         }
+    }
+
+    /// The space of colour space array `a` (`[/Separation name alt tint]` or `[/DeviceN …]`, such
+    /// as an image's) among the file's: matched by its kind, its colorant names and its tint
+    /// transform, not by the page's walk. `None` for another array.
+    pub fn array_space(&mut self, a: &Array<'_>) -> Option<Space> {
+        self.scan();
+        let mut it = a.flex_iter();
+        let (device_n, names) = ink_names(&mut it)?;
+        it.next::<Object<'_>>()?;
+        let key = debug_text(&Function::new(&it.next::<Object<'_>>()?)?)?;
+        self.spaces.iter().position(|s| s.device_n == device_n && s.names == names && s.key == key).map(Space::Inks)
     }
 
     /// Whether a space of inks `names` has the kind, colorant count and tint transform of a space
@@ -559,7 +571,7 @@ fn lab_profile(profile: &Stream<'_>) -> bool {
     let mut head = vec![];
     match profile.filters().as_slice() {
         [] => head.extend(raw.iter().take(20)),
-        [craft_pdf::syntax::Filter::FlateDecode] => {
+        [craft::pdf::syntax::Filter::FlateDecode] => {
             let _ = flate2::read::ZlibDecoder::new(&*raw).take(20).read_to_end(&mut head); // a damaged profile reads as not Lab
         }
         _ => return false,

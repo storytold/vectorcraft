@@ -8,77 +8,14 @@
 //! functions SVG lacks (`translateX`, `scaleY`, `skew`…) spelled with SVG's. A value that can't be
 //! (percentages, `em`, 3D functions) is left as it is.
 
-use std::f64::consts::PI;
 use std::ops::Range;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 
 use super::css::XNode;
 
 /// The CSS transform `value` in SVG syntax; `None` when it has nothing to rewrite or can't be.
-pub(super) fn to_svg(value: &str) -> Option<String> {
-    let v = value.trim();
-    if v.eq_ignore_ascii_case("none") {
-        return Some("matrix(1 0 0 1 0 0)".into());
-    }
-    let mut out = Vec::new();
-    let mut rest = v;
-    while !rest.trim_start().is_empty() {
-        rest = rest.trim_start();
-        let open = rest.find('(')?;
-        let close = rest.find(')')?;
-        let name = rest.get(..open)?.trim().to_ascii_lowercase();
-        let args: Vec<&str> = rest.get(open + 1..close)?.split(|c: char| c == ',' || c.is_whitespace()).filter(|a| !a.is_empty()).collect();
-        let len = |i: usize| args.get(i).and_then(|a| length(a));
-        let ang = |i: usize| args.get(i).and_then(|a| angle(a));
-        let num = |i: usize| args.get(i).and_then(|a| a.parse::<f64>().ok()).filter(|n| n.is_finite());
-        let f = match (name.as_str(), args.len()) {
-            ("matrix", 6) => format!("matrix({} {} {} {} {} {})", num(0)?, num(1)?, num(2)?, num(3)?, len(4)?, len(5)?),
-            ("translate", 1) => format!("translate({} 0)", len(0)?),
-            ("translate", 2) => format!("translate({} {})", len(0)?, len(1)?),
-            ("translatex", 1) => format!("translate({} 0)", len(0)?),
-            ("translatey", 1) => format!("translate(0 {})", len(0)?),
-            ("scale", 1) => format!("scale({})", num(0)?),
-            ("scale", 2) => format!("scale({} {})", num(0)?, num(1)?),
-            ("scalex", 1) => format!("scale({} 1)", num(0)?),
-            ("scaley", 1) => format!("scale(1 {})", num(0)?),
-            ("rotate", 1) => format!("rotate({})", ang(0)?),
-            ("skewx", 1) => format!("skewX({})", ang(0)?),
-            ("skewy", 1) => format!("skewY({})", ang(0)?),
-            ("skew", 1) => format!("skewX({})", ang(0)?),
-            ("skew", 2) => format!("matrix(1 {} {} 1 0 0)", ang(1)?.to_radians().tan(), ang(0)?.to_radians().tan()),
-            _ => return None,
-        };
-        out.push(f);
-        rest = rest.get(close + 1..)?;
-    }
-    let svg = out.join(" ");
-    (!out.is_empty() && svg != v).then_some(svg)
-}
-
-/// A length in user units: `px` or unitless.
-fn length(a: &str) -> Option<f64> {
-    let n = a.strip_suffix("px").unwrap_or(a).parse::<f64>().ok()?;
-    n.is_finite().then_some(n)
-}
-
-/// An angle in degrees.
-fn angle(a: &str) -> Option<f64> {
-    let a = a.to_ascii_lowercase();
-    let (n, k) = if let Some(n) = a.strip_suffix("deg") {
-        (n, 1.0)
-    } else if let Some(n) = a.strip_suffix("grad") {
-        (n, 0.9)
-    } else if let Some(n) = a.strip_suffix("rad") {
-        (n, 180.0 / PI)
-    } else if let Some(n) = a.strip_suffix("turn") {
-        (n, 360.0)
-    } else {
-        (a.as_str(), 1.0)
-    };
-    let d = n.parse::<f64>().ok()? * k;
-    d.is_finite().then_some(d)
-}
+pub(super) use craft_svg::transform_compat::css_transform_to_svg as to_svg;
 
 /// Where CSS can be in `svg`: `style` attribute values and `<style>` contents.
 fn css_ranges(xml: &roxmltree::Document) -> Vec<Range<usize>> {

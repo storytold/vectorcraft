@@ -1,27 +1,34 @@
 //! Edit → Edit Colors → Adjust Color Balance: the colour mode (Gray, RGB, CMYK or Global), a slider
-//! per channel (−100..100 %; Global has one, Tint, for the tints of global and spot colours),
+//! per channel (−100..100 %; Global has one, Tint, for the tints of global and spot colors),
 //! Convert, Fill and Stroke, previewed live on the canvas; OK keeps the preview as one undo step
 //! (`edit.colors.adjustBalance`).
 //!
+//! The dialog lives on the dialog host as a `HostedParamDialog`; [`Adjust`] is the one mechanism it
+//! shares with Saturate: it opens the dialog, runs the live preview from the dialog's values each
+//! frame (`pump`) and commits the preview at OK.
+//!
 //! Fields: `mode` (`gray`, `rgb`, `cmyk` or `global`), the channels `r`, `g`, `b`, `c`, `m`, `y`,
-//! `k`, `gray`, `tint`, then `convert`, `fill`, `stroke` and `preview`.
+//! `k`, `gray`, `tint`, then `convert`, `fill` and `stroke`. The preview check box is the host's.
 
+use craft::color_ui::ui::{ChannelRow, ChannelUnit};
+use craft::theme::Srgba;
+use craft::ui::contract::Bind;
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 
-use super::{DialogSpec, form};
+use super::color_picker::ColorDialogs;
+use super::host;
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
 use crate::panels::c32;
-use crate::state::Dialog;
-use crate::widgets;
 
 /// The dialog kind of Adjust Color Balance.
 pub const KIND: &str = "colorBalance";
 
 const CMD: &str = "edit.colors.adjustBalance";
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Adjust Colors").into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
 
 /// A colour mode: its `mode` id, label and channels as (field, label).
 struct Mode {
@@ -40,32 +47,155 @@ const MODES: [Mode; 4] = [
 /// Global mode: it shifts the tints of linked colours, which keep their model (no Convert).
 const GLOBAL: &str = "global";
 
-/// Open the dialog with every channel at 0, adjusting fills and strokes.
-pub fn open(app: &mut VectorcraftApp) {
-    let fields = json!({
-        "mode": "rgb", "r": 0, "g": 0, "b": 0, "c": 0, "m": 0, "y": 0, "k": 0, "gray": 0, "tint": 0,
-        "convert": false, "fill": true, "stroke": true, "preview": true,
-    });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+/// The record of an open Edit Colors dialog: its id on the host and the live preview it shows on the canvas.
+pub(crate) struct Open {
+    /// The dialog's id on the host.
+    pub id: DialogId,
+    /// The document whose art the dialog can adjust.
+    document: Option<u64>,
+    /// The preview the dialog's values run as one interaction.
+    pub preview: LivePreview,
 }
 
-fn mode(d: &Dialog) -> &'static Mode {
-    let id = d.str("mode");
+/// What an Edit Colors dialog is: how it opens, previews and commits. Balance and Saturate differ only in these values.
+#[derive(Clone, Copy)]
+pub(super) struct Adjust {
+    /// The dialog's key on the host.
+    pub(super) kind: &'static str,
+    /// The command the dialog previews and commits.
+    pub(super) cmd: &'static str,
+    /// The title and the name of the preview's undo step.
+    pub(super) label: &'static str,
+    /// Where the open dialog's record is kept.
+    pub(super) slot: fn(&mut ColorDialogs) -> &mut Option<Open>,
+    /// The values the dialog opens with.
+    pub(super) initial: fn() -> DialogFields,
+    /// The dialog's rows.
+    pub(super) rows: fn() -> Vec<Param>,
+    /// The command's parameters for the dialog's values.
+    pub(super) params: fn(&DialogFields) -> Value,
+}
+
+impl Adjust {
+    /// Opens the dialog with its initial values; one still open is replaced and its preview rolled back.
+    pub(super) fn open(self, app: &mut VectorcraftApp) {
+        if let Err(reason) = self.try_open(app) {
+            app.status(reason);
+        }
+    }
+
+    fn try_open(self, app: &mut VectorcraftApp) -> Result<(), String> {
+        const NO_WINDOW: &str = "no window to open the dialog in";
+        let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
+        let document = app.session.active().map(|st| st.uid);
+        if let Some(old) = (self.slot)(&mut app.color_dialogs).take()
+            && old.document == document
+        {
+            old.preview.cancel(app);
+        }
+        let dialog = HostedParamDialog::new(&ctx, self.kind, (self.initial)(), move |fields| {
+            ParamDialog::new(self.kind, self.label, (self.rows)()).values(Bind::bound(fields)).previews(true)
+        });
+        let id = host::open_held(app, dialog, move |app, answer| self.commit(app, answer)).ok_or(NO_WINDOW)?;
+        *(self.slot)(&mut app.color_dialogs) = Some(Open { id, document, preview: LivePreview::default() });
+        Ok(())
+    }
+
+    /// OK: keeps the preview as one undo step; an `Err` keeps the dialog open with the reason.
+    fn commit(self, app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
+        let document = app.session.active().map(|st| st.uid);
+        let open = (self.slot)(&mut app.color_dialogs)
+            .as_ref()
+            .filter(|open| open.document == document)
+            .ok_or(tl!("This adjustment can only apply to the document where it was opened."))?;
+        open.preview.clone().commit(app, self.cmd, (self.params)(&answer.fields))?;
+        *(self.slot)(&mut app.color_dialogs) = None;
+        Ok(())
+    }
+
+    /// Once per frame: previews the dialog's values while its Preview box is on, and rolls the preview back once the
+    /// dialog is gone without OK.
+    pub(super) fn pump(self, app: &mut VectorcraftApp) {
+        let Some(mut open) = (self.slot)(&mut app.color_dialogs).take() else { return };
+        let on_its_document = app.session.active().map(|st| st.uid) == open.document;
+        let shown = app.dialogs().and_then(|dialogs| {
+            dialogs.with(|host| host.get_by_id::<HostedParamDialog>(open.id).map(|dialog| (dialog.is_previewing(), (self.params)(dialog.fields()))))
+        });
+        if let Some((on, params)) = shown {
+            if on_its_document {
+                // `run` reports a failed preview to the status line itself.
+                let _ = open.preview.run(app, on, self.label, self.cmd, &params);
+            } else {
+                // Switching documents rolled back the original interaction.
+                open.preview = LivePreview::default();
+            }
+            *(self.slot)(&mut app.color_dialogs) = Some(open);
+        } else if on_its_document {
+            open.preview.cancel(app);
+        }
+    }
+}
+
+/// A channel row over the percent value `key` of `fields` (−100..100 %), its rail the colours `track` gives from the
+/// rail's start to its end.
+pub(super) fn percent_row(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, label: &'static str, track: impl Fn(f32) -> Srgba) {
+    const RAIL_STOPS: usize = 5;
+    let rail = (0..RAIL_STOPS).map(|i| track(i as f32 / (RAIL_STOPS - 1) as f32)).collect();
+    let rule = crate::panels::whole_steps(-100.0..=100.0);
+    let value = fields.number(key).unwrap_or(0.0);
+    let edit = ChannelRow::new(label, Bind::given(value), rule).unit(ChannelUnit::Percent).track(rail).show(ui);
+    if let Some(value) = edit.as_ref().and_then(|edit| edit.value()) {
+        fields.set(key, *value);
+    }
+}
+
+const ADJUST: Adjust = Adjust { kind: KIND, cmd: CMD, label: "Adjust Colors", slot, initial, rows, params };
+
+fn slot(dialogs: &mut ColorDialogs) -> &mut Option<Open> {
+    &mut dialogs.balance
+}
+
+/// Open the dialog with every channel at 0, adjusting fills and strokes.
+pub fn open(app: &mut VectorcraftApp) {
+    ADJUST.open(app);
+}
+
+/// Previews the open dialog; one line of `dialogs::host::pump`.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    ADJUST.pump(app);
+}
+
+/// Every channel field of every mode.
+fn channel_keys() -> impl Iterator<Item = &'static str> {
+    MODES.iter().flat_map(|m| m.channels.iter()).map(|(key, _)| *key)
+}
+
+fn initial() -> DialogFields {
+    let mut fields = DialogFields::new();
+    for key in channel_keys() {
+        fields.set(key, 0.0);
+    }
+    fields
+}
+
+fn mode(fields: &DialogFields) -> &'static Mode {
+    let id = fields.text("mode").unwrap_or_default();
     MODES.iter().find(|m| m.id == id).unwrap_or(&MODES[1])
 }
 
 /// `edit.colors.adjustBalance` parameters: the mode, its channels and the options.
-fn params(d: &Dialog) -> Value {
-    let m = mode(d);
-    let mut p = json!({"mode": m.id, "convert": d.bool("convert"), "fill": d.bool("fill"), "stroke": d.bool("stroke")});
+fn params(fields: &DialogFields) -> Value {
+    let m = mode(fields);
+    let flag = |key: &str| fields.bool(key).unwrap_or_default();
+    let mut p = json!({"mode": m.id, "convert": flag("convert"), "fill": flag("fill"), "stroke": flag("stroke")});
     for (k, _) in m.channels {
-        p[*k] = json!(d.f64(k, 0.0));
+        p[*k] = json!(fields.number(k).unwrap_or(0.0));
     }
     p
 }
 
 /// The rail of channel `key`: the channel from −100 % to +100 % over a mid colour.
-fn track(key: &str, x: f32) -> egui::Color32 {
+fn track(key: &str, x: f32) -> Srgba {
     let v = x.clamp(0.0, 1.0);
     let c = match key {
         "r" => Color::rgb(v, 0.5, 0.5),
@@ -77,93 +207,176 @@ fn track(key: &str, x: f32) -> egui::Color32 {
         "k" => Color::cmyk(0.0, 0.0, 0.0, v),
         _ => Color::gray(v),
     };
-    c32(&c)
+    Srgba::from(c32(&c))
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let m = mode(d);
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Color Mode:"));
-        let labels: Vec<&str> = MODES.iter().map(|m| m.label).collect();
-        if let Some(i) = widgets::dropdown(ui, "balance-mode", m.label, &labels, 120.0) {
-            d.fields.insert("mode".into(), json!(MODES[i].id));
+/// The channel rows of the current mode.
+fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
+    super::form::stacked(ui, fields, |ui, fields| {
+        for (key, label) in mode(fields).channels {
+            percent_row(ui, fields, key, label, |x| track(key, x));
         }
-        ui.add_space(12.0);
-        if widgets::check(ui, tl!("Convert"), d.bool("convert"), m.id != GLOBAL) {
-            d.fields.insert("convert".into(), json!(!d.bool("convert")));
-        }
-    });
-    ui.add_space(8.0);
-    let m = mode(d);
-    if m.id == GLOBAL {
-        widgets::dim_label(ui, tl!("Shifts the tints of global and spot colors; other colors stay."));
-    }
-    for (k, label) in m.channels {
-        form::slider(ui, d, k, label, -100.0..=100.0, "%", &|x| track(k, x));
-    }
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Adjust Options:"));
-        for (k, label) in [("fill", tl!("Fill")), ("stroke", tl!("Stroke"))] {
-            if widgets::check(ui, label, d.bool(k), true) {
-                d.fields.insert(k.into(), json!(!d.bool(k)));
-            }
-        }
-    });
-    let p = params(d);
-    form::preview(app, ui, d, "Adjust Colors", CMD, p);
-    false
+    })
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, CMD, params(d))
+fn rows() -> Vec<Param> {
+    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(m.label))).collect();
+    let with_model = MODES.iter().map(|m| m.id).filter(|id| *id != GLOBAL);
+    vec![
+        Param::new("mode", "Color Mode", ParamKind::choice(modes, Some("rgb".to_owned()))),
+        Param::new("convert", "Convert", ParamKind::bool(false)).enabled_when_in("mode", with_model),
+        Param::read_only_text("note", "", "Shifts the tints of global and spot colors; other colors stay.").visible_when("mode", GLOBAL),
+        Param::custom("channels", "Channels", channels).companions(channel_keys()),
+        Param::section("Adjust Options"),
+        Param::new("fill", "Fill", ParamKind::bool(true)),
+        Param::new("stroke", "Stroke", ParamKind::bool(true)),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use craft::ui::dialog::{HeldOk, dialog_id};
     use vectorcraft_engine::Session;
+
+    use super::*;
 
     fn fill_hex(app: &VectorcraftApp, id: u64) -> String {
         let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
         n.appearance.fill_paint().color().unwrap().to_hex()
     }
 
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
+    /// An app with the window context that hosts the dialog.
+    fn app() -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = crate::testing::ui_context();
+        app.ui_ctx = Some(ctx.clone());
+        (app, ctx)
+    }
+
+    fn set(app: &VectorcraftApp, ctx: &egui::Context, field: &str, value: Value) {
+        app.dialogs().unwrap().with(|host| host.set_json_field(ctx, dialog_id(KIND), field, value)).unwrap();
+    }
+
+    /// OK as the button files it, then the frame that drains it.
+    fn confirm(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(ctx, dialog_id(KIND)));
+        host::pump(app, ctx);
+    }
+
+    fn two_documents(color: &str) -> (VectorcraftApp, egui::Context, [u64; 2]) {
+        let (mut app, ctx) = app();
+        let ids = [0, 1].map(|_| {
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            app.run("paint.setFill", json!({"color": color})).unwrap();
+            id
+        });
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        (app, ctx, ids)
+    }
+
+    #[test]
+    fn color_adjustment_stays_in_its_opening_document_with_preview_on() {
+        let (mut app, ctx, [source, destination]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        let source_undo = app.session.active().unwrap().history.undo.len();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#808080", "another document is not previewed");
+        assert!(!app.session.in_interaction());
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
+        assert_eq!(fill_hex(&app, source), "#b38080");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), source_undo + 1);
+    }
+
+    #[test]
+    fn color_adjustment_stays_in_its_opening_document_with_preview_off() {
+        let (mut app, ctx, [source, destination]) = two_documents("#cc6666");
+        let id = dialog_id(crate::dialogs::saturate::KIND);
+        let dialogs = app.dialogs().unwrap();
+        crate::dialogs::saturate::open(&mut app);
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "intensity", json!(-100)).unwrap();
+            host.set_json_field(&ctx, id, "preview", json!(false)).unwrap();
+        });
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#cc6666");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#cc6666", "another document is not adjusted");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
+        assert_ne!(fill_hex(&app, source), "#cc6666");
+    }
+
+    #[test]
+    fn color_adjustment_cancel_leaves_the_new_documents_interaction_intact() {
+        let (mut app, ctx, [source, destination]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Change fill").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        dialogs.with(|host| host.cancel_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#00ff00", "cancelling the old dialog leaves the new edit intact");
+        assert!(app.session.in_interaction());
     }
 
     #[test]
     fn previews_live_and_commits_one_undo_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let (mut app, ctx) = app();
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
         app.run("paint.setFill", json!({"color": "#808080"})).unwrap();
         let undo = app.session.doc().unwrap().history.undo.len();
-        app.run("ui.colorBalanceDialog", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
-        app.ui.dialog.as_mut().unwrap().fields.insert("r".into(), json!(20));
-        frame(&mut app);
+        open(&mut app);
+        assert!(app.dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
         assert!(app.session.in_interaction(), "the preview runs");
         assert_eq!(fill_hex(&app, id), "#b38080", "previewed on the canvas");
-        // A field set from outside (`ui.dialog.set`) previews on the next frame.
-        app.ui.dialog.as_mut().unwrap().fields.insert("r".into(), json!(40));
-        frame(&mut app);
+        // A field set from outside previews on the next frame.
+        set(&app, &ctx, "r", json!(40));
+        host::pump(&mut app, &ctx);
         assert_eq!(fill_hex(&app, id), "#e68080");
         // Cancel rolls the preview back.
-        super::super::cancel(&mut app);
+        app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog_id(KIND)));
+        host::pump(&mut app, &ctx);
         assert_eq!(fill_hex(&app, id), "#808080");
         // OK keeps it as one undo step.
-        app.run("ui.colorBalanceDialog", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("mode".into(), json!("cmyk"));
-        d.fields.insert("k".into(), json!(-50));
-        frame(&mut app);
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+        open(&mut app);
+        set(&app, &ctx, "mode", json!("cmyk"));
+        set(&app, &ctx, "k", json!(-50));
+        host::pump(&mut app, &ctx);
+        confirm(&mut app, &ctx);
+        assert!(!app.session.in_interaction());
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
         let lighter = vectorcraft_color::Color::from_hex(&fill_hex(&app, id)).unwrap().to_rgb()[0];
         assert!(lighter > 0.6, "{lighter}");
@@ -171,18 +384,19 @@ mod tests {
 
     #[test]
     fn global_mode_shifts_the_tints_of_global_colours() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let (mut app, ctx) = app();
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
         app.run("paint.setFill", json!({"swatch": "Ink", "tint": 50})).unwrap();
-        app.run("ui.colorBalanceDialog", json!({})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("mode".into(), json!("global"));
-        d.fields.insert("tint".into(), json!(-20));
-        frame(&mut app);
-        assert_eq!(params(app.ui.dialog.as_ref().unwrap())["tint"], json!(-20.0));
-        super::super::confirm(&mut app).unwrap();
+        open(&mut app);
+        set(&app, &ctx, "mode", json!("global"));
+        set(&app, &ctx, "tint", json!(-20));
+        host::pump(&mut app, &ctx);
+        let tint =
+            app.dialogs().unwrap().with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| params(d.fields())["tint"].clone()));
+        assert_eq!(tint, Some(json!(-20.0)));
+        confirm(&mut app, &ctx);
         let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
         let vectorcraft_color::Paint::Solid { swatch, tint, .. } = n.appearance.fill_paint() else { panic!() };
         assert_eq!(swatch.as_deref(), Some("Ink"), "the colour stays linked");

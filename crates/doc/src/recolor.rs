@@ -16,6 +16,11 @@ pub trait ColorVisitor {
     fn color(&mut self, c: Color) -> Color;
     /// The key of embedded image `key` recoloured, `None` when it stays as it is.
     fn image(&mut self, key: &str) -> Option<String>;
+    /// Whether the pass recolors child `n` of a container: false leaves `n` and everything inside
+    /// it as they are.
+    fn enters(&mut self, _n: &Node) -> bool {
+        true
+    }
 }
 
 /// What a recolouring pass reaches: fills (including colorized image fills and gradient-mesh
@@ -82,6 +87,9 @@ pub fn recolor_node(n: &mut Node, reach: Reach, v: &mut dyn ColorVisitor) -> usi
         }
         _ => {
             for c in n.children_mut().into_iter().flatten() {
+                if !v.enters(c) {
+                    continue;
+                }
                 let mut m = (**c).clone();
                 let k = recolor_node(&mut m, reach, v);
                 if k > 0 {

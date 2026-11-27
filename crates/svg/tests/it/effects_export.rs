@@ -103,6 +103,37 @@ fn a_strokes_own_glow_filters_the_stroke_element_only() {
 }
 
 #[test]
+fn a_clipping_paths_transform_effect_moves_the_written_clip_path() {
+    // A clip group whose clipping path covers x 0 to 50; `effect` moves it 50 pt right.
+    let clipped = |x0: f64, effect: bool| {
+        let mut clip =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(x0, 0.0, x0 + 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        if effect {
+            clip.appearance.effects.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 50}), visible: true });
+        }
+        let art = Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let mut d = Document::new(200.0, 200.0);
+        let (clip, art) = (Node { id: d.alloc_id(), ..clip }, Node { id: d.alloc_id(), ..art });
+        let g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(art)], clip: true });
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        let svg = export(&d, &ExportOptions::default());
+        let open = svg.find("<clipPath").expect("a clip path");
+        let body = &svg[open..open + svg[open..].find("</clipPath>").expect("its end")];
+        body[body.find('>').unwrap()..].to_string()
+    };
+    assert_eq!(clipped(0.0, true), clipped(50.0, false), "the clip path is written where the effect moves it");
+    assert_ne!(clipped(0.0, true), clipped(0.0, false));
+}
+
+#[test]
 fn geometry_effects_on_type_export_as_its_reshaped_outlines() {
     let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
     let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 60.0), "Hi", style))));
@@ -113,4 +144,53 @@ fn geometry_effects_on_type_export_as_its_reshaped_outlines() {
     let svg = export(&doc_with(n), &ExportOptions::default());
     assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
     assert!(svg.contains("<filter "), "the shadow stays a filter: {svg}");
+}
+
+/// What `n` paints, in paint order, with consecutive repeats dropped: 'b' for a blue fill, 'r' for a
+/// red fill and 'g' for a green stroke, each with whether a clip group clips it. Clipping paths
+/// themselves are left out.
+fn painted_order(n: &Node, clipped: bool, out: &mut Vec<(char, bool)>) {
+    use vectorcraft_doc::AppearanceItem;
+    let solid = |p: &Paint, r: f32, g: f32, b: f32| matches!(p, Paint::Solid { color, .. } if *color == Color::rgb(r, g, b));
+    for i in &n.appearance.items {
+        let mark = match i {
+            AppearanceItem::Fill(f) if solid(&f.paint, 0.0, 0.0, 1.0) => 'b',
+            AppearanceItem::Fill(f) if solid(&f.paint, 1.0, 0.0, 0.0) => 'r',
+            AppearanceItem::Stroke(s) if s.width > 0.0 && solid(&s.paint, 0.0, 1.0, 0.0) => 'g',
+            _ => continue,
+        };
+        if out.last() != Some(&(mark, clipped)) {
+            out.push((mark, clipped));
+        }
+    }
+    let clips = matches!(n.kind, NodeKind::Group { clip: true, .. });
+    for c in n.children().into_iter().flatten().skip(usize::from(clips)) {
+        painted_order(c, clipped || clips, out);
+    }
+}
+
+#[test]
+fn painted_clipping_type_exports_with_group_effect() {
+    // Type filled blue and stroked green clips a red square in a group with an Offset Path effect:
+    // the SVG paints the type's fill inside the clip behind the square, and its stroke over the
+    // clipped art, outside the clip.
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let green = Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let style = CharStyle { size: 40.0, fill: blue, stroke: green, stroke_width: 2.0, ..Default::default() };
+    let mut d = Document::new(200.0, 200.0);
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), red);
+    let clip = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(text), std::sync::Arc::new(square)], clip: true });
+    let mut outer = Node::group(d.alloc_id(), vec![std::sync::Arc::new(clip)]);
+    outer.appearance.effects.push(Effect { params: json!({"offset": 1}), ..fx("path.offsetPath") });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, outer).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    let back = vectorcraft_svg::import(&svg).unwrap_or_else(|e| panic!("{e}: {svg}"));
+    let mut order = vec![];
+    for layer in &back.layers {
+        painted_order(layer, false, &mut order);
+    }
+    assert_eq!(order, [('b', true), ('r', true), ('g', false)], "{svg}");
 }

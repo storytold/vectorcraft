@@ -40,7 +40,7 @@ fn close(a: f64, b: f64) -> bool {
 fn segment_angles(p: &PathData) -> Vec<f64> {
     p.subpaths
         .iter()
-        .flat_map(|sp| sp.anchors.windows(2).map(|w| w[1].p - w[0].p))
+        .flat_map(|sp| sp.anchors.iter().zip(sp.anchors.iter().skip(1)).map(|(a, b)| b.p - a.p))
         .filter(|v| v.hypot() > 1e-9)
         .map(|v| (-v.y).atan2(v.x).to_degrees().rem_euclid(90.0))
         .collect()
@@ -253,6 +253,25 @@ fn constrain_angle_turns_shapes_made_by_a_click() {
     }
 }
 
+/// An ellipse of another anchor count made by a click turns along the Constrain Angle like the
+/// live ellipse: it keeps its anchors and its box runs along the turned axes from the click.
+#[test]
+fn constrain_angle_turns_an_ellipse_of_six_anchors_made_by_a_click() {
+    let mut s = new_doc();
+    set_angle(&mut s, 90.0);
+    let p = json!({"x": 10, "y": 200, "width": 100, "height": 50, "anchors": 6});
+    let p = constrain_click(&s, "shape.ellipse", p.clone(), corner(&p));
+    assert_eq!(p["anchors"], json!(6));
+    let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.live_shape().is_none());
+    assert_eq!(n.path_data().unwrap().anchor_count(), 6);
+    let b = bounds(&s, id);
+    for (got, want) in [(b.x0, 10.0), (b.y0, 100.0), (b.x1, 60.0), (b.y1, 200.0)] {
+        assert!(close(got, want), "{b:?}");
+    }
+}
+
 /// The Line Segment tool's Shift steps of 45° count from the Constrain Angle.
 #[test]
 fn constrain_angle_steps_the_line_segment_tool() {
@@ -392,4 +411,187 @@ fn constrain_angle_turns_a_click_made_grid_about_its_reference_point() {
     let id = NodeId(s.execute("shape.rectangularGrid", &p).unwrap()["id"].as_u64().unwrap());
     let b = bounds(&s, id);
     assert_eq!((b.x0, b.y0, b.x1, b.y1), (175.0, 150.0, 225.0, 250.0), "turned about the click: {b:?}");
+}
+
+/// The anchor points of the path `id`.
+fn path_points(s: &Session, id: NodeId) -> Vec<Point> {
+    match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect(),
+        other => panic!("a path: {other:?}"),
+    }
+}
+
+/// The direction (degrees, counter-clockwise on the page) of the arc `id`'s first handle.
+fn first_handle_angle(s: &Session, id: NodeId) -> f64 {
+    let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("a path") };
+    let a = &path.subpaths[0].anchors[0];
+    let v = a.h_out - a.p;
+    (-v.y).atan2(v.x).to_degrees()
+}
+
+fn near(p: Point, x: f64, y: f64) -> bool {
+    close(p.x, x) && close(p.y, y)
+}
+
+/// An arc dragged out runs along the turned axes: at 30° it still runs from the drag's start to
+/// its end, its base leaves the start along the turned x axis and its bounding box turns 30°; at
+/// 0° it is as before.
+#[test]
+fn constrain_angle_draws_a_dragged_arc_along_the_turned_axes() {
+    let mut s = new_doc();
+    for (deg, handle) in [(0.0, 0.0), (30.0, 30.0)] {
+        set_angle(&mut s, deg);
+        s.select_tool("arc", ViewInfo::default()).unwrap();
+        gesture(&mut s, Mods::default(), &[(Down, 100.0, 100.0), (Drag, 130.0, 110.0), (Drag, 160.0, 120.0), (Up, 160.0, 120.0)]);
+        let id = last_id(&s);
+        let pts = path_points(&s, id);
+        assert!(near(pts[0], 100.0, 100.0) && near(pts[1], 160.0, 120.0), "{deg}°: {pts:?}");
+        assert!(close(first_handle_angle(&s, id), handle), "{deg}°: {}", first_handle_angle(&s, id));
+        if deg == 0.0 {
+            assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits());
+        } else {
+            assert!(close(bbox_angle(&s, id), 30.0), "{}", bbox_angle(&s, id));
+        }
+    }
+}
+
+/// An arc placed by the click dialog keeps its reference point at the click and runs its lengths
+/// along the turned axes: at 30° from the top-left reference point, and at 90° about the center
+/// one; at 0° the dialog's params are unchanged.
+#[test]
+fn constrain_angle_turns_a_click_made_arc_about_its_reference_point() {
+    let mut s = new_doc();
+    let params = |reference: u64, x: f64, y: f64| json!({"x": x, "y": y, "lengthX": 100, "lengthY": 50, "reference": reference, "baseAlong": "x", "slope": 50, "closed": false, "fillArc": false});
+    let click = Point::new(200.0, 200.0);
+    let p = params(0, 200.0, 200.0);
+    assert_eq!(constrain_click(&s, "shape.arc", p.clone(), click), p, "0°");
+    set_angle(&mut s, 30.0);
+    let turned = constrain_click(&s, "shape.arc", p, click);
+    assert_eq!(turned["rotation"], json!(-30.0));
+    let id = NodeId(s.execute("shape.arc", &turned).unwrap()["id"].as_u64().unwrap());
+    let pts = path_points(&s, id);
+    let r = 30f64.to_radians();
+    let end = (200.0 + 100.0 * r.cos() + 50.0 * r.sin(), 200.0 - 100.0 * r.sin() + 50.0 * r.cos());
+    assert!(near(pts[0], 200.0, 200.0) && near(pts[1], end.0, end.1), "{pts:?} vs {end:?}");
+    assert!(close(bbox_angle(&s, id), 30.0));
+    set_angle(&mut s, 90.0);
+    let p = constrain_click(&s, "shape.arc", params(4, 200.0, 200.0), click);
+    let id = NodeId(s.execute("shape.arc", &p).unwrap()["id"].as_u64().unwrap());
+    // The ends at opposite corners of the 100 × 50 box centered on the click, turned exactly.
+    assert_eq!(path_points(&s, id), vec![Point::new(175.0, 250.0), Point::new(225.0, 150.0)]);
+    let b = bounds(&s, id);
+    assert!(close(b.x0, 175.0) && close(b.y0, 150.0) && close(b.x1, 225.0) && close(b.y1, 250.0), "turned about the click: {b:?}");
+    assert_eq!(bbox_angle(&s, id), 90.0);
+}
+
+/// `shape.arc` turns by an explicit `rotation` (clockwise) about `x1`, `y1` or about its reference
+/// point; a `rotation` that is not a number is refused and adds nothing.
+#[test]
+fn arc_rotation_turns_it_and_must_be_a_number() {
+    let mut s = new_doc();
+    let id = NodeId(s.execute("shape.arc", &json!({"x1": 0, "y1": 0, "x2": 10, "y2": 20, "rotation": 90})).unwrap()["id"].as_u64().unwrap());
+    let pts = path_points(&s, id);
+    assert!(near(pts[0], 0.0, 0.0) && near(pts[1], -20.0, 10.0), "{pts:?}");
+    assert_eq!(bbox_angle(&s, id), -90.0, "a quarter turn clockwise");
+    let id =
+        NodeId(s.execute("shape.arc", &json!({"x": 50, "y": 50, "lengthX": 10, "lengthY": 20, "rotation": 360})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(path_points(&s, id), vec![Point::new(50.0, 50.0), Point::new(60.0, 70.0)], "a whole turn leaves it upright");
+    assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits());
+    for bad in [json!("x"), Value::Null] {
+        for p in
+            [json!({"x1": 0, "y1": 0, "x2": 10, "y2": 20, "rotation": bad}), json!({"x": 0, "y": 0, "lengthX": 10, "lengthY": 20, "rotation": bad})]
+        {
+            assert!(s.execute("shape.arc", &p).is_err(), "{p}");
+            assert_eq!(last_id(&s), id, "nothing added for {p}");
+        }
+    }
+}
+
+/// The outer end of the spiral `id`.
+fn spiral_outer_end(s: &Session, id: NodeId) -> Point {
+    *path_points(s, id).last().unwrap()
+}
+
+/// A spiral dragged out turns about its center so that its outer end is at the pointer, in every
+/// direction and with a turned Constrain Angle too; its bounding box stays on the page, except
+/// along the turned x axis, where it is the click dialog's spiral with its turned box.
+#[test]
+fn a_dragged_spiral_turns_its_outer_end_to_the_pointer() {
+    let mut s = new_doc();
+    for deg in [0.0, 30.0] {
+        set_angle(&mut s, deg);
+        s.select_tool("spiral", ViewInfo::default()).unwrap();
+        for (x, y) in [(260.0, 200.0), (200.0, 260.0), (140.0, 200.0), (200.0, 140.0), (240.0, 170.0)] {
+            gesture(&mut s, Mods::default(), &[(Down, 200.0, 200.0), (Drag, 230.0, 230.0), (Drag, x, y), (Up, x, y)]);
+            let id = last_id(&s);
+            let end = spiral_outer_end(&s, id);
+            assert!(near(end, x, y), "{deg}°, to ({x}, {y}): {end:?}");
+            assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "{deg}°, to ({x}, {y})");
+        }
+    }
+    let mut s = new_doc();
+    set_angle(&mut s, 90.0);
+    s.select_tool("spiral", ViewInfo::default()).unwrap();
+    gesture(&mut s, Mods::default(), &[(Down, 200.0, 200.0), (Drag, 230.0, 230.0), (Drag, 200.0, 150.0), (Up, 200.0, 150.0)]);
+    let id = last_id(&s);
+    assert_eq!(spiral_outer_end(&s, id), Point::new(200.0, 150.0));
+    assert_eq!(bbox_angle(&s, id), 90.0, "along the turned x axis");
+}
+
+/// A spiral placed by the click dialog starts along the turned x axis, about the click: at 90° its
+/// outer end is straight above the center, exactly, and its bounding box turns with it; at 0°, a
+/// whole turn and with a `rotation` given the dialog's params are unchanged.
+#[test]
+fn constrain_angle_turns_a_click_made_spiral() {
+    let mut s = new_doc();
+    let click = Point::new(200.0, 200.0);
+    let p = json!({"cx": 200.0, "cy": 200.0, "radius": 50.0, "decay": 80.0, "segments": 10, "clockwise": true});
+    assert_eq!(constrain_click(&s, "shape.spiral", p.clone(), click), p, "0°");
+    set_angle(&mut s, 360.0);
+    assert_eq!(constrain_click(&s, "shape.spiral", p.clone(), click), p, "a whole turn");
+    set_angle(&mut s, 90.0);
+    let mut given = p.clone();
+    given["rotation"] = json!(10.0);
+    assert_eq!(constrain_click(&s, "shape.spiral", given.clone(), click), given, "a given rotation");
+    let turned = constrain_click(&s, "shape.spiral", p.clone(), click);
+    assert_eq!(turned["rotation"], json!(-90.0));
+    let id = NodeId(s.execute("shape.spiral", &turned).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(spiral_outer_end(&s, id), Point::new(200.0, 150.0));
+    assert_eq!(bbox_angle(&s, id), 90.0);
+    set_angle(&mut s, 30.0);
+    let id = NodeId(s.execute("shape.spiral", &constrain_click(&s, "shape.spiral", p, click)).unwrap()["id"].as_u64().unwrap());
+    let r = 30f64.to_radians();
+    let end = spiral_outer_end(&s, id);
+    assert!(near(end, 200.0 + 50.0 * r.cos(), 200.0 - 50.0 * r.sin()), "{end:?}");
+    assert!(close(bbox_angle(&s, id), 30.0), "{}", bbox_angle(&s, id));
+}
+
+/// `shape.spiral` turns by an explicit `rotation` (clockwise) about its center; 0 and a whole
+/// turn draw it exactly as without one; a `rotation` that is not a number is refused and adds
+/// nothing.
+#[test]
+fn spiral_rotation_turns_it_and_must_be_a_number() {
+    let mut s = new_doc();
+    let base = json!({"cx": 100, "cy": 100, "radius": 40, "segments": 6});
+    let with = |r: Value| {
+        let mut p = base.clone();
+        p["rotation"] = r;
+        p
+    };
+    let plain = NodeId(s.execute("shape.spiral", &base).unwrap()["id"].as_u64().unwrap());
+    let plain = path_points(&s, plain);
+    assert_eq!(*plain.last().unwrap(), Point::new(140.0, 100.0), "upright: the outer end to the right");
+    for r in [json!(0), json!(360)] {
+        let id = NodeId(s.execute("shape.spiral", &with(r.clone())).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(path_points(&s, id), plain, "{r}");
+        assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "{r}");
+    }
+    let id = NodeId(s.execute("shape.spiral", &with(json!(90))).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(spiral_outer_end(&s, id), Point::new(100.0, 140.0), "a quarter turn clockwise");
+    assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "not the Constrain Angle's turn");
+    for bad in [json!("x"), Value::Null, json!(true)] {
+        let p = with(bad);
+        assert!(s.execute("shape.spiral", &p).is_err(), "{p}");
+        assert_eq!(last_id(&s), id, "nothing added for {p}");
+    }
 }

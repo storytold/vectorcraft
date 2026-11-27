@@ -12,7 +12,7 @@ use vectorcraft_geom::FillRule;
 
 use super::appearance::{ItemTarget, item_target};
 use super::edit::selected_roots;
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, f64_or, has_doc, ids_param, targets};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, ids_param, number_or, switch_or, targets};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint",
             [],
             None,
-            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too). Without item and ids, the Appearance panel's active item stands in when it is of that kind → {changed: objects}",
+            "{fill?: bool, stroke?: bool, item?: appearance item index|null, ids?|id?, target?: \"object\"|\"contents\"} make fills and/or strokes overprint (Overprint Preview, Separations Preview) or knock out: item's, else every fill or stroke of the painted objects (groups: their contents; type: its characters too; a grayscale or 1-bit image colorized by paint.setFill: without item, the fill flags set whether its color overprints). Without item and ids, the Appearance panel's active item stands in when it is of that kind. A whole Live Paint group (also its contents with `item`) takes the fill flags on its faces and the stroke flags on its edges, and its hidden source paths keep theirs → {changed: objects}",
             has_doc,
             set_overprint
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attributes",
             [],
             None,
-            "{ids?|id?, item?, target?: \"object\"|\"contents\"} → {ids, overprintFill, overprintStroke, showCenter, imageMap: \"none\"|\"rectangle\"|\"polygon\", url, note, fillRule: \"nonZero\"|\"evenOdd\" (of the paths and compound paths in them), reversed (their subpaths run counter-clockwise on screen: Reverse Path Direction On), recentUrls: [newest first]} the Attributes panel's values for `ids` or the selection, overprint aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill, stroke or path)",
+            "{ids?|id?, item?, target?: \"object\"|\"contents\"} → {ids, overprintFill, overprintStroke, showCenter, imageMap: \"none\"|\"rectangle\"|\"polygon\", url, note, fillRule: \"nonZero\"|\"evenOdd\" (of the paths and compound paths in them), reversed (their subpaths run counter-clockwise on screen: Reverse Path Direction On), recentUrls: [newest first, at most 30]} the Attributes panel's values for `ids` or the selection, overprint aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill, stroke or path)",
             has_doc,
             |s, p| Ok(attributes(s, p)?.to_json())
         ),
@@ -97,7 +97,16 @@ fn flags(n: &Node, fill: bool, index: Option<usize>) -> Vec<bool> {
     if let (None, NodeKind::Text(t)) = (index, &n.kind) {
         v.extend(t.runs.iter().map(|r| if fill { r.style.overprint_fill } else { r.style.overprint_stroke }));
     }
+    if fill && index.is_none() && colorized(n) {
+        v.push(n.extras().colorize_overprint);
+    }
     v
+}
+
+/// Is `n` an image colorized with a color, whose fill overprint is its color's
+/// ([`vectorcraft_doc::NodeExtras::colorize_overprint`])?
+fn colorized(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_)) && n.extras().colorize.as_deref().is_some_and(|p| !p.is_none())
 }
 
 /// [`flags`], to change.
@@ -126,14 +135,18 @@ fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
         .collect()
 }
 
-/// Each kind's item target and objects: (fill?, item, ids).
-fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
+/// Each kind's item target and objects: (fill?, item, ids). With `edit`, the art of graph designs drawn in graph series
+/// is left out, and an explicit item that the art left out has no row of that kind for is an error, as when the edit
+/// resolves it on the other objects. Without it, the art is read with the other objects.
+fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>, edit: bool) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
     let item = item_target(s, p, cmd)?;
     kinds
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, it.targets(s, p)?))
+            let ids = it.targets_for(s, p, fill)?;
+            let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
+            Ok((fill, it, ids))
         })
         .collect()
 }
@@ -156,10 +169,10 @@ pub(super) fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Doc
 pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 
 /// The overprint edits `p` asks for under `keys` (the fill's and the stroke's), aimed as
-/// `object.setOverprint` aims.
+/// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
-    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0), true)?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
 }
 
 /// Apply `jobs` to `d`, adding the objects changed to `changed`.
@@ -173,6 +186,10 @@ pub(super) fn apply_overprint(d: &mut Document, jobs: &[OverprintJob], cmd: &str
                     *f = *on;
                     changed.insert(*id);
                 }
+            }
+            if *fill && index.is_none() && colorized(n) && n.extras().colorize_overprint != *on {
+                n.extras_mut().colorize_overprint = *on;
+                changed.insert(*id);
             }
         }
     }
@@ -198,7 +215,7 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
     let d = &s.doc()?.doc;
     let mut info = AttributesInfo { ids: targets(s, p)?, recent_urls: s.recent_urls.clone(), ..Default::default() };
     super::attributes::fill_info(d, &mut info);
-    for (fill, item, ids) in aims(s, p, C, [true, false])? {
+    for (fill, item, ids) in aims(s, p, C, [true, false], false)? {
         let mut all =
             ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| Some(flags(n, fill, item.resolve(&n.appearance, fill, C).ok()?))).flatten();
         let same = all.next().and_then(|first| all.all(|b| b == first).then_some(first));
@@ -214,22 +231,23 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
 /// Overprint Black on `n` and its descendants; returns the objects changed.
 fn overprint_black_tree(n: &mut Node, op: &OverprintBlack, spots: &[String]) -> usize {
     let mut changed = usize::from(op.apply(n, spots));
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         changed += overprint_black_tree(Arc::make_mut(c), op, spots);
     }
     changed
 }
 
 pub(crate) fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.colors.overprintBlack";
     let op = OverprintBlack {
-        remove: bool_or(p, "remove", false),
-        min_k: (f64_or(p, "percentage", 100.0) / 100.0).clamp(0.0, 1.0) as f32,
-        fill: bool_or(p, "fill", true),
-        stroke: bool_or(p, "stroke", true),
-        rich: bool_or(p, "includeCmyBlacks", false),
-        spot: bool_or(p, "includeSpotBlacks", false),
+        remove: switch_or(p, "remove", false, C)?,
+        min_k: (number_or(p, "percentage", 100.0, C)? / 100.0).clamp(0.0, 1.0) as f32,
+        fill: switch_or(p, "fill", true, C)?,
+        stroke: switch_or(p, "stroke", true, C)?,
+        rich: switch_or(p, "includeCmyBlacks", false, C)?,
+        spot: switch_or(p, "includeSpotBlacks", false, C)?,
     };
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", C)? {
         Some(v) => v,
         None => selected_roots(s)?,
     };

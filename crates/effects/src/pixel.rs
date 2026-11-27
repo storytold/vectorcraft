@@ -29,8 +29,10 @@ mod sketch_ink;
 mod texture;
 mod video;
 
+use std::f64::consts::{PI, TAU};
+
 use serde_json::Value;
-use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::util::{flag, num, text};
 
@@ -155,12 +157,14 @@ pub enum PixelFx {
     /// `texture_coverage` (0..40) says.
     Underpainting { brush_size: f64, texture_coverage: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
     /// Artistic › Rough Pastels: diagonal pastel strokes `length` (0..40) long, bristle detail
-    /// (1..20), then a [`Texture`] surface scaled by `scaling` (0.5..2), in relief as strong as
-    /// `relief` (0..50) and lit from `light`; `invert` turns the surface's heights over.
+    /// (1..20), then a [`Texture`] surface (a loaded one included) scaled by `scaling` (0.5..2), in
+    /// relief as strong as `relief` (0..50) and lit from `light`; `invert` turns the surface's
+    /// heights over.
     RoughPastels { length: f64, detail: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
-    /// Blur › Radial Blur around the object's centre: along arcs (spin, an arc of `amount`°) or
-    /// along rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
-    RadialBlur { amount: f64, zoom: bool, passes: u32 },
+    /// Blur › Radial Blur around its Blur Center, `center` (0..1 across and down the object's
+    /// bounds; (0.5, 0.5) the object's centre): along arcs (spin, an arc of `amount`°) or along
+    /// rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
+    RadialBlur { amount: f64, zoom: bool, passes: u32, center: [f64; 2] },
     /// Blur › Smart Blur (Normal mode): each pixel averaged with the neighbours within `radius`
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
@@ -287,6 +291,8 @@ pub enum PixelFx {
     DeInterlace { even: bool, interpolate: bool },
     /// Video › NTSC Colors: colours a television signal can't carry made less saturated.
     NtscColors,
+    /// Effect › SVG Filters: an SVG `<filter>` element run on the pixels.
+    Svg(crate::svg_filter::SvgFilterFx),
 }
 
 /// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
@@ -312,9 +318,12 @@ pub struct PixelSpace {
     pub to_doc: Affine,
     /// The size of a pixel in document units.
     pub px: f64,
-    /// The object's centre (document coordinates): where Radial Blur blurs around, and where the
-    /// Pixelate filters' patterns are anchored (so they move with the object).
+    /// The object's centre (document coordinates): where Radial Blur blurs around by default, and
+    /// where the Pixelate filters' patterns are anchored (so they move with the object).
     pub center: Point,
+    /// The width and height of the object's bounds (document units), centred on `center`: Radial
+    /// Blur's Blur Center lies at a share of them.
+    pub size: Vec2,
     /// What the colour channels hold.
     pub channels: Channels,
     /// The height of a line of the document's raster grid (document units: 72 / Document Raster
@@ -324,6 +333,9 @@ pub struct PixelSpace {
     /// Glass's light fades out over it.
     pub extent: f64,
 }
+
+/// Color Halftone's screen angle parameters with their defaults (degrees).
+const SCREEN_ANGLES: [(&str, f64); 4] = [("channel1", 108.0), ("channel2", 162.0), ("channel3", 90.0), ("channel4", 45.0)];
 
 /// Effect `id`'s parameters `p` (defaults merged in) as a [`PixelFx`]; `None` for other effects.
 pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
@@ -379,7 +391,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "artistic.roughPastels" => PixelFx::RoughPastels {
             length: num(p, "strokeLength", 6.0).clamp(0.0, 40.0),
             detail: num(p, "strokeDetail", 10.0).clamp(1.0, 20.0),
-            texture: Texture::parse(text(p, "texture", "canvas")),
+            texture: Texture::parse_with(text(p, "texture", "canvas"), p.get(TEXTURE_IMAGE).and_then(Value::as_str)),
             scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
             relief: num(p, "relief", 4.0).clamp(0.0, 50.0),
             light: Light::parse(text(p, "lightDirection", "top")),
@@ -419,6 +431,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             amount: num(p, "amount", 10.0).clamp(1.0, 100.0),
             zoom: text(p, "method", "spin").eq_ignore_ascii_case("zoom"),
             passes: quality([("draft", 4), ("good", 6), ("best", 8)], 6),
+            center: [num(p, "centerX", 0.5).clamp(0.0, 1.0), num(p, "centerY", 0.5).clamp(0.0, 1.0)],
         },
         "blur.smart" => PixelFx::SmartBlur {
             radius: num(p, "radius", 3.0).clamp(0.1, 100.0),
@@ -557,8 +570,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         },
         "pixelate.colorHalftone" => PixelFx::ColorHalftone {
             max_radius: num(p, "maxRadius", 8.0).clamp(4.0, 127.0),
-            angles: [("channel1", 108.0), ("channel2", 162.0), ("channel3", 90.0), ("channel4", 45.0)]
-                .map(|(k, d)| num(p, k, d).clamp(-360.0, 360.0)),
+            angles: SCREEN_ANGLES.map(|(k, d)| num(p, k, d).clamp(-360.0, 360.0)),
         },
         "pixelate.crystallize" => PixelFx::Crystallize { cell: num(p, "cellSize", 10.0).clamp(3.0, 300.0) },
         "pixelate.mezzotint" => PixelFx::Mezzotint { kind: Mezzotint::parse(text(p, "type", "fineDots")) },
@@ -598,6 +610,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             interpolate: text(p, "create", "duplication").eq_ignore_ascii_case("interpolation"),
         },
         "video.ntscColors" => PixelFx::NtscColors,
+        crate::SVG_FILTER => PixelFx::Svg(crate::svg_filter::SvgFilterFx::parse(p)?),
         _ => return None,
     })
 }
@@ -605,13 +618,13 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
 impl PixelFx {
     /// How far beyond `bounds` (the content's, document units) the effect can paint.
     pub fn outset(&self, bounds: Rect) -> f64 {
-        // From the centre to the farthest corner, and to the nearest side.
-        let far = 0.5 * bounds.width().hypot(bounds.height());
-        let near = 0.5 * bounds.width().min(bounds.height());
         match *self {
-            // A rotated corner reaches the circle through the corners.
-            PixelFx::RadialBlur { zoom: false, .. } => (far - near).max(0.0),
-            PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
+            // A rotated corner reaches the circle about the Blur Center through the farthest corner.
+            PixelFx::RadialBlur { zoom: false, center, .. } => {
+                let (far, near) = blur::center_reach(bounds, center);
+                (far - near).max(0.0)
+            }
+            PixelFx::RadialBlur { amount, zoom: true, center, .. } => blur::center_reach(bounds, center).0 * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::AccentedEdges { .. } => 0.0,
             // Strokes reach out of the object as far as they reach into it.
@@ -666,6 +679,7 @@ impl PixelFx {
             PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } | PixelFx::StainedGlass { cell, .. } => 1.5 * cell,
             // A square whose centre is on the object is drawn whole.
             PixelFx::Patchwork { square, .. } => square.max(1.0),
+            PixelFx::Svg(ref f) => f.outset(bounds),
         }
     }
 
@@ -745,12 +759,17 @@ impl PixelFx {
             // The lines above and below.
             PixelFx::DeInterlace { .. } => Some(video::MAX_LINE),
             PixelFx::NtscColors => Some(0.0),
+            // A filter's object bounding box is the whole object's.
+            PixelFx::Svg(_) => None,
         }
     }
 
     /// Run the effect on `data`, `w` × `h` premultiplied RGBA8 pixels lying in the document as
     /// `space` says. Does nothing when the sizes don't match.
     pub fn apply(&self, data: &mut [u8], w: usize, h: usize, space: &PixelSpace) {
+        if let PixelFx::Svg(f) = self {
+            return f.apply(data, w, h, space);
+        }
         let Some(px) = pixels(data, w, h) else { return };
         let to_px = |len: f64| len / space.px.max(1e-9);
         match *self {
@@ -777,7 +796,7 @@ impl PixelFx {
             PixelFx::RoughPastels { length, detail, ref texture, scaling, relief, light, invert } => {
                 artistic::rough_pastels(px, w, h, space, length, detail, texture, scaling, relief, light, invert)
             }
-            PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
+            PixelFx::RadialBlur { amount, zoom, passes, center } => blur::radial(px, w, h, space, amount, zoom, passes, center),
             PixelFx::SmartBlur { radius, threshold, samples, mode: SmartBlurMode::Normal } => {
                 blur::smart(px, w, h, to_px(radius), threshold, samples)
             }
@@ -829,6 +848,7 @@ impl PixelFx {
             }
             PixelFx::DeInterlace { even, interpolate } => video::deinterlace(px, w, h, space, even, interpolate),
             PixelFx::NtscColors => video::ntsc(px),
+            PixelFx::Svg(_) => {}
         }
     }
 }
@@ -837,6 +857,113 @@ impl PixelFx {
 /// otherwise.
 fn pick<T: Clone>(table: &[(&str, &str)], all: &[T], value: &str, default: T) -> T {
     table.iter().zip(all).find(|((_, v), _)| v.eq_ignore_ascii_case(value)).map_or(default, |(_, t)| t.clone())
+}
+
+/// The shortest that a direction's unit vector may become under a Transform effect and still give
+/// a direction ([`turned_directions`]).
+const MIN_TURNED: f64 = 1e-9;
+
+/// How close (radians) two directions' angles to a turned direction must be to count as equally
+/// near ([`nearest`]).
+const TIE: f64 = 1e-9;
+
+/// The parameters of pixel filter `id` (params `p`, defaults not merged in) that set a direction
+/// on the page, as `a` turns them: `a` is the linear part of a Transform effect listed after the
+/// filter, which turns, reflects and scales what the filter paints. A light direction or stroke
+/// direction becomes the one nearest to where `a` takes it, the one clockwise of it when two are
+/// equally near ([`snapped`]); `later` is the map the filter still goes through when it is drawn,
+/// after `a`. Color Halftone's screen angles (degrees counterclockwise from the page's horizontal)
+/// turn with `a`, from 0 up to 360. A direction that `a` takes to no direction (a zero scale) stays
+/// as it is. Empty for filters with no such parameter.
+pub(crate) fn turned_directions(id: &str, p: &Value, a: Affine, later: Affine) -> Vec<(&'static str, Value)> {
+    enum Kind {
+        Light(&'static str),
+        Stroke,
+        Screens,
+    }
+    let kind = match id {
+        "sketch.basRelief" => Kind::Light("bottom"),
+        "artistic.underpainting" | "artistic.roughPastels" | "sketch.conteCrayon" | "sketch.plaster" | "texture.texturizer" => Kind::Light("top"),
+        "brushStrokes.sprayedStrokes" | "sketch.graphicPen" => Kind::Stroke,
+        "pixelate.colorHalftone" => Kind::Screens,
+        _ => return Vec::new(),
+    };
+    let p = crate::merged_params(id, p);
+    match kind {
+        Kind::Light(default) => {
+            let light = Light::parse(text(&p, "lightDirection", default));
+            snapped(&Light::ALL, Light::toward, light, a, later, false)
+                .and_then(|t| name_of(&LIGHT_DIRECTIONS, &Light::ALL, t))
+                .map(|name| vec![("lightDirection", Value::from(name))])
+                .unwrap_or_default()
+        }
+        Kind::Stroke => {
+            let direction = StrokeDirection::parse(text(&p, "strokeDirection", "rightDiagonal"));
+            snapped(&StrokeDirection::ALL, StrokeDirection::along, direction, a, later, true)
+                .and_then(|t| name_of(&STROKE_DIRECTIONS, &StrokeDirection::ALL, t))
+                .map(|name| vec![("strokeDirection", Value::from(name))])
+                .unwrap_or_default()
+        }
+        // A screen at θ° runs along (cos θ, −sin θ) on the page (y down).
+        Kind::Screens => SCREEN_ANGLES
+            .iter()
+            .filter_map(|&(key, default)| {
+                let t = num(&p, key, default).clamp(-360.0, 360.0).to_radians();
+                let v = mapped(a, Vec2::new(t.cos(), -t.sin()))?;
+                let degrees = ((-v.y).atan2(v.x).to_degrees() * 1e6).round() / 1e6;
+                Some((key, Value::from(degrees.rem_euclid(360.0) + 0.0)))
+            })
+            .collect(),
+    }
+}
+
+/// Where the linear part of `a` takes direction `v`; `None` when it takes it to no direction.
+fn mapped(a: Affine, v: Vec2) -> Option<Vec2> {
+    let w = (a * v.to_point()) - (a * Point::ORIGIN);
+    (w.is_finite() && w.hypot() > MIN_TURNED).then_some(w)
+}
+
+/// The entry of `all` to store for `from` (directions `dir`) once `a` turns it: the one nearest to
+/// where `a` takes it ([`nearest`]). When the stored entry is still to be mapped by `later` and
+/// rounded again as it is drawn, it is the entry nearest to that among those that `later` takes to
+/// the entry nearest to where `later` after `a` takes `from`, so that the drawn direction is
+/// rounded once. `None` when `a` takes `from` to no direction.
+fn snapped<T: Copy + PartialEq>(all: &[T], dir: fn(T) -> Vec2, from: T, a: Affine, later: Affine, axis: bool) -> Option<T> {
+    let v = mapped(a, dir(from))?;
+    let turned = nearest(all, dir, v, axis)?;
+    if later == Affine::IDENTITY {
+        return Some(turned);
+    }
+    let Some(target) = mapped(later * a, dir(from)).and_then(|w| nearest(all, dir, w, axis)) else { return Some(turned) };
+    let fits: Vec<T> = all.iter().copied().filter(|&t| mapped(later, dir(t)).and_then(|w| nearest(all, dir, w, axis)) == Some(target)).collect();
+    nearest(&fits, dir, v, axis).or(Some(turned))
+}
+
+/// The entry of `all` whose direction (`dir`, page axes with y down) is nearest to `v` by angle,
+/// a direction and its opposite counting as the same with `axis`. Of two equally near, the one
+/// clockwise of `v` on the page.
+fn nearest<T: Copy>(all: &[T], dir: impl Fn(T) -> Vec2, v: Vec2, axis: bool) -> Option<T> {
+    let period = if axis { PI } else { TAU };
+    let at = v.atan2();
+    let mut best: Option<(T, f64)> = None;
+    for &t in all {
+        // How far clockwise of `v` the entry lies, within half a period either way.
+        let d = (dir(t).atan2() - at).rem_euclid(period);
+        let d = if d > period / 2.0 { d - period } else { d };
+        let better = match best {
+            None => true,
+            Some((_, b)) => d.abs() < b.abs() - TIE || (d.abs() <= b.abs() + TIE && d > b),
+        };
+        if better {
+            best = Some((t, d));
+        }
+    }
+    best.map(|(t, _)| t)
+}
+
+/// The value in `table` of entry `t` of `all` (the same order).
+fn name_of<T: PartialEq>(table: &[(&'static str, &'static str)], all: &[T], t: T) -> Option<&'static str> {
+    table.iter().zip(all).find(|(_, u)| **u == t).map(|((_, v), _)| *v)
 }
 
 /// `data` as `w` × `h` RGBA pixels, `None` when it isn't that size (or is empty).

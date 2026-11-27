@@ -1,11 +1,23 @@
-use super::build::{Builder, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
-use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
-use super::rings::{MAX_SOLID_POINTS, rings, signed_area};
-use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
+use super::build::{
+    Attrs, BandMesh, Builder, Built, Camera, Keep, Order, Place, Placing, PlaneUv, Turn, WallCurves, along_ring, check_bounds, cuts, fit, newell,
+    outward, share,
+};
+use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
+use super::outline::{self, Along, Budget, CURVE_TOLERANCE, EdgeCurve};
+use super::rings::{MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings_traced};
+use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, V3, Vec2, View};
+use crate::mesh::MeshPart;
+
+/// The slices the sides are cut into: more to follow a twist or taper.
+fn slices(o: &Inflate) -> usize {
+    if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 }
+}
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
 struct Puff {
     rings: Vec<Vec<Point>>,
+    /// The rings with the piece of curve each edge follows.
+    traced: Vec<Ring>,
     /// The index of the rings' edges.
     edges: Edges,
     cell: f64,
@@ -16,13 +28,40 @@ struct Puff {
     height: f64,
 }
 
+/// The pieces each curve of `path` is sampled in for Inflate's solid ([`curve_pieces`]); an error
+/// when its outline does not fit the solid's limits.
+fn outline_pieces(path: &PathData, bounds: Rect, o: &Inflate) -> Result<u32, String> {
+    // The sides take one face for each edge of the outline in each slice; the grid's faces are
+    // counted as they are built.
+    curve_pieces(path, bounds.width().max(bounds.height()), if o.depth > 0.0 { slices(o) } else { 0 }, 0)
+}
+
+/// Whether `path` has few enough anchors that [`curve_pieces`] might take it: fewer than
+/// [`MAX_SOLID_POINTS`] contours, and at most three times as many anchors (a contour of one anchor
+/// adds one, and every other takes at most two anchors for each segment it adds). Counts the
+/// contours' anchors without reading them.
+pub(super) fn might_fit(path: &PathData) -> bool {
+    let mut anchors = 0usize;
+    for (contours, sp) in path.subpaths.iter().enumerate() {
+        anchors = anchors.saturating_add(sp.anchors.len());
+        if contours >= MAX_SOLID_POINTS || anchors > MAX_SOLID_POINTS.saturating_mul(3) {
+            return false;
+        }
+    }
+    true
+}
+
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    #[cfg(test)]
+    PUFFED.with(|n| n.set(n.get() + 1));
+    let size = bounds.width().max(bounds.height());
+    let most = outline_pieces(path, bounds, o)?;
+    let traced = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    let rings: Vec<Vec<Point>> = traced.iter().map(|r| r.points.clone()).collect();
     if rings.is_empty() {
         return Ok(None);
     }
-    let size = bounds.width().max(bounds.height());
     if size <= 0.0 {
         return Ok(None);
     }
@@ -35,11 +74,14 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     }
     let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
     let (nx, ny) = (side(bounds.width()), side(bounds.height()));
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings)?;
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;
-    Ok(Some(Puff { rings, edges, cell, nx, ny, m, height }))
+    Ok(Some(Puff { rings, traced, edges, cell, nx, ny, m, height }))
 }
 
 /// Inflate: the shape puffed out like a cushion, its edge kept where the art's outline is.
@@ -51,24 +93,168 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
 /// on its own over the grid of `bounds`, and one eye sees them all, as far away as the highest
 /// puff needs with Perspective. One result for each shape, in order.
 pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View) -> Vec<Result<Vec<Facet>, String>> {
+    inflate_each(shapes, bounds, options, view).collect()
+}
+
+/// [`inflate_together`], each solid built only as the iterator reaches it: a caller that stops early
+/// builds none of the solids after (and with no volume, solves none of their puffs).
+pub fn inflate_each(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<Vec<Facet>, String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Facets).map(|r| r.map(|(facets, ..)| facets))
+}
+
+/// [`inflate_together`], keeping each solid's facets, its faces before projection, or both, as
+/// `keep` asks. Every shape's membrane is solved at once (the eye depends on the highest puff),
+/// except with no volume: nothing puffs then, and each shape's membrane is solved when its solid
+/// is taken. Each solid is built as the iterator reaches it.
+pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View, keep: Keep) -> Solids {
     let o = options.sanitized();
+    let later = o.volume == 0.0;
+    #[cfg(test)]
+    let later = later && !SOLVE_FIRST.with(std::cell::Cell::get);
+    if later {
+        // A shape is copied to be solved later only when its anchors are few enough for the
+        // solid's point limit; a larger one is refused now, with the error its puff gives.
+        let shapes: Vec<Result<(PathData, FillRule), String>> = shapes
+            .iter()
+            .map(|(path, rule)| {
+                check_bounds(bounds)?;
+                if !might_fit(path) {
+                    outline_pieces(path, bounds, &o)?;
+                }
+                Ok(((*path).clone(), *rule))
+            })
+            .collect();
+        return Solids { pending: Pending::Later(shapes.into_iter()), bounds, o, view, reach: 0.0, keep };
+    }
     let puffs: Vec<Result<Option<Puff>, String>> =
         shapes.iter().map(|(path, rule)| check_bounds(bounds).and_then(|()| puff(path, *rule, bounds, &o))).collect();
     let reach = puffs.iter().flatten().flatten().map(|p| p.height).fold(0.0, f64::max);
-    puffs
-        .into_iter()
-        .map(|p| match p {
-            Ok(Some(p)) => inflated(p, bounds, o, view, reach),
-            Ok(None) => Ok(vec![]),
+    Solids { pending: Pending::Solved(puffs.into_iter()), bounds, o, view, reach, keep }
+}
+
+/// The shapes' puffs still to take: every one solved when the shapes were laid out, or each
+/// shape's path and fill rule (or the error its bounds or outline already gives), its puff solved
+/// when its solid is taken.
+enum Pending {
+    Solved(std::vec::IntoIter<Result<Option<Puff>, String>>),
+    Later(std::vec::IntoIter<Result<(PathData, FillRule), String>>),
+}
+
+/// The solids of [`inflate_faces`], one result for each shape in order, each built as it is taken.
+pub(crate) struct Solids {
+    pending: Pending,
+    bounds: Rect,
+    o: Inflate,
+    view: View,
+    /// The highest puff of the shapes drawn together.
+    reach: f64,
+    keep: Keep,
+}
+
+impl Solids {
+    /// Pass over the next shape without building its solid, or solving its puff if that waits.
+    pub(crate) fn pass(&mut self) {
+        match &mut self.pending {
+            Pending::Solved(puffs) => {
+                puffs.next();
+            }
+            Pending::Later(shapes) => {
+                shapes.next();
+            }
+        }
+    }
+}
+
+impl Iterator for Solids {
+    type Item = Result<Built, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let p = match &mut self.pending {
+            Pending::Solved(puffs) => puffs.next()?,
+            Pending::Later(shapes) => shapes.next()?.and_then(|(path, rule)| puff(&path, rule, self.bounds, &self.o)),
+        };
+        Some(match p {
+            Ok(Some(p)) => inflated(p, self.bounds, self.o, self.view, self.reach, self.keep),
+            Ok(None) => Ok((vec![], Ok(vec![]), None)),
             Err(e) => Err(e),
         })
-        .collect()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.pending {
+            Pending::Solved(puffs) => puffs.size_hint(),
+            Pending::Later(shapes) => shapes.size_hint(),
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many puffs this thread has solved, for the tests.
+    pub(crate) static PUFFED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Solve every shape's puff before the first solid is taken even with no volume, as with
+    /// volume, for the tests that compare the two.
+    pub(crate) static SOLVE_FIRST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many inflated solids this thread has built, for the tests.
+    pub(crate) static INFLATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The grid work of the last solid this thread inflated in full, for the tests.
+    pub(super) static GRID_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The work of cutting cells with holes for graphics in the last solid this thread inflated
+    /// in full, for the tests.
+    pub(super) static FLAT_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The work the next solids of this thread may take cutting cells with holes for graphics,
+    /// for the tests.
+    pub(super) static FLAT_BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_FLAT_WORK) };
+}
+
+/// Most work one inflated surface may take cutting the cells graphics are mapped onto that
+/// [`cell_triangles`] can't take (a hole inside the cell, or a ring of more corners), all its
+/// cells together ([`crate::mesh::flat_triangles`]).
+pub(super) const MAX_FLAT_WORK: usize = 1 << 26;
+
+/// Most edges of the outline one inflated surface may look at to find the edges of its cells that
+/// lie along the outline ([`Edges::holding`]). Past it, the cells' remaining edges stay straight.
+pub(super) const MAX_RIM_WORK: usize = 1 << 22;
+
+/// Most corners the pieces of one such cell may have.
+pub(super) const MAX_FLAT_CORNERS: usize = 4096;
+
+/// The work cutting cells with holes for graphics may take.
+fn flat_budget() -> usize {
+    #[cfg(test)]
+    return FLAT_BUDGET.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    MAX_FLAT_WORK
+}
+
+/// Marks the facet the builder `b` added after it held `before` facets, if it added one, as a piece
+/// of `face` (Inflate's front or puffed back) whose corners lie at the art points `points`, as
+/// offsets from `center` ([`Facet::surface`]). `outward` is the triangle's normal pointing out of
+/// the solid: the piece shows the outside of the surface when it was neither turned around to show
+/// its inside (on a shell open behind) nor kept turned away.
+fn mark_surface(b: &mut Builder<'_>, before: usize, points: [Point; 3], center: Point, outward: V3, face: PlanarFace) {
+    if b.facets.len() <= before {
+        return;
+    }
+    let Some(f) = b.facets.last_mut() else { return };
+    let Some(page) = f.contours.first().filter(|c| c.len() == 3).cloned() else { return };
+    let shows = !f.away && f.normal[0] * outward.0 + f.normal[1] * outward.1 + f.normal[2] * outward.2 > 0.0;
+    f.surface = Some(crate::SurfaceCell { page, uv: points.iter().map(|q| Point::new(q.x - center.x, q.y - center.y)).collect(), outward: shows });
+    f.membrane = Some(face);
 }
 
 /// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
-/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together.
-fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result<Vec<Facet>, String> {
-    let Puff { rings, edges, cell, nx, ny, m, height } = p;
+/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together. Its faces
+/// before projection instead, or both, as `keep` asks.
+fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Keep) -> Result<Built, String> {
+    #[cfg(test)]
+    INFLATED.with(|n| n.set(n.get() + 1));
+    let Puff { rings, traced, edges, cell, nx, ny, m, height } = p;
     let outline: Vec<(Rect, vectorcraft_geom::SubPath)> = rings
         .iter()
         .filter_map(|r| {
@@ -104,12 +290,73 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
         if n.dot(n) > 0.5 { n } else { V3(0.0, 0.0, 1.0) }
     };
     let smooth = view.shade && view.has_colored_lights();
+    // For a mesh, a point of the front or back takes its art point in `bounds`, which every shape
+    // inflated together shares, and on a puffed surface its own normal, front or back (turned as
+    // the back is).
+    let area = bounds;
+    let uv = |q: Point| [share(q.x, area.x0, area.x1), share(q.y, area.y0, area.y1)];
+    let puffed = height > 0.0;
+    let back_normal = |n: V3, turn: &Turn| V3(turn.cos * n.0 - turn.sin * n.1, turn.sin * n.0 + turn.cos * n.1, -n.2);
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
+    // A graphic's offsets are from the center of the bounds the solid is built with.
+    let center = bounds.center();
     // Without its back cap the object is a shell open behind, its inside showing.
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
+    let mut b = Builder::new(&camera, o.cap, false, keep);
     let half = o.depth / 2.0;
     // The back: turned and scaled by the twist and taper, its puff too.
     let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);
+    // The outline of the front and the back where the surface meets it, through the art's curves:
+    // the cells' edges along it follow its curves within the sampling tolerance, as the cells'
+    // corners there lie on its sampled points and edges.
+    let mut budget = Budget::default();
+    let sampled = (bounds.width().max(bounds.height()) / 2000.0).max(0.05);
+    let (front_map, back_map) =
+        (Placing::new(&camera, center, Turn::new(bounds, 0.0, 1.0, 0.0), half), Placing::new(&camera, center, back_turn, -half));
+    let (front_at, back_at) = (
+        |span: &Span, t: f64| camera.project(front_map.place(span.curve.eval(t))),
+        |span: &Span, t: f64| camera.project(back_map.place(span.curve.eval(t))),
+    );
+    let (front_point, back_point) = (|p: Point| camera.project(front_map.place(p)), |p: Point| camera.project(back_map.place(p)));
+    let affine = camera.center_and_eye().1.is_none();
+    let front_rim = Along { at: &front_at, map: Some(&front_point), affine, tolerance: sampled };
+    let back_rim = Along { at: &back_at, map: Some(&back_point), affine, tolerance: sampled };
+    // Where each ring's edges start among all the rings' edges, as the edge index counts them.
+    let starts: Vec<usize> = rings
+        .iter()
+        .scan(0usize, |s, r| {
+            let at = *s;
+            *s = s.saturating_add(r.len());
+            Some(at)
+        })
+        .collect();
+    let rim_work = std::cell::Cell::new(MAX_RIM_WORK);
+    // The pieces of curve the edges of `pieces` (art points, lifted by `lifts`) follow where they
+    // lie along the outline: an edge whose two ends are on the outline, on one of its edges.
+    let rim = |pieces: &[Vec<Point>], lifts: &[Vec<f64>]| -> Vec<Vec<Option<EdgeCurve>>> {
+        pieces
+            .iter()
+            .zip(lifts)
+            .map(|(p, h)| {
+                let n = p.len();
+                (0..n)
+                    .map(|k| {
+                        let (a, b) = (*p.get(k)?, *p.get((k + 1) % n)?);
+                        if h.get(k).copied() != Some(0.0) || h.get((k + 1) % n).copied() != Some(0.0) {
+                            return None;
+                        }
+                        let mut work = rim_work.get();
+                        let found = edges.holding(a, b, 1e-9, &mut work);
+                        rim_work.set(work);
+                        let (e, sa, sb) = found?;
+                        let r = starts.partition_point(|s| *s <= e).checked_sub(1)?;
+                        let span = traced.get(r)?.spans.get(e - starts.get(r)?)?.as_ref().copied()?;
+                        let t = |s: f64| span.t0 + (span.t1 - span.t0) * s;
+                        (sa != sb).then(|| (span, t(sa), t(sb)))
+                    })
+                    .collect()
+            })
+            .collect()
+    };
     // The grid's cells, those the surface rises steeply across (near the outline) cut into
     // halves or quarters each way, so the steep rim is drawn in facets as fine as its curve.
     // Every corner sits on one fine lattice (a quarter cell), computed the same way wherever it
@@ -124,14 +371,43 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     // builds the topology of every outline ring near its cell, so a self-crossing outline cost its
     // crossings again in every cell it spans. Past it, cells take their clipped pieces.
     let material_left = std::cell::Cell::new(MAX_MATERIAL_SEGMENTS);
-    // The shape's part of a rectangle, as rings.
+    // The work of cutting cells with holes for graphics, all the cells together ([`MAX_FLAT_WORK`]).
+    let mut flat_work = 0usize;
+    // Every ring's bounds, and the crossings of the last few rows the cells' centres lie on (a
+    // row of cells has at most seven, at its three levels).
+    let ring_bounds: Vec<Option<Rect>> =
+        rings.iter().map(|r| Some(r.iter().skip(1).fold(Rect::from_points(*r.first()?, *r.first()?), |b, p| b.union_pt(*p)))).collect();
+    let points = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+    let rows: std::cell::RefCell<Vec<(u64, Vec<f64>)>> = std::cell::RefCell::new(vec![]);
+    let filled_at = |p: Point| -> bool {
+        let mut rows = rows.borrow_mut();
+        if let Some((_, xs)) = rows.iter().find(|(y, _)| *y == p.y.to_bits()) {
+            return filled(xs, p.x);
+        }
+        let xs = if edges.charge(points) { crossings(&rings, p.y) } else { vec![] };
+        let inside = filled(&xs, p.x);
+        if rows.len() >= 8 {
+            rows.remove(0);
+        }
+        rows.push((p.y.to_bits(), xs));
+        inside
+    };
+    // The shape's part of a rectangle, as rings: only the rings whose bounds meet it are clipped,
+    // each point counted as work.
     let cut = |r: Rect| -> Vec<Vec<Point>> {
         // A cell no edge crosses is wholly inside the shape or wholly outside it.
         if !edges.touch(r) {
             let corners = vec![Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
-            return if filled(&rings, r.center()) { vec![corners] } else { vec![] };
+            return if filled_at(r.center()) { vec![corners] } else { vec![] };
         }
-        let pieces: Vec<Vec<Point>> = rings.iter().map(|ring| clip(ring, r)).filter(|c| !c.is_empty()).collect();
+        let pieces: Vec<Vec<Point>> = rings
+            .iter()
+            .zip(&ring_bounds)
+            .filter(|(_, b)| b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1))
+            .filter(|(ring, _)| edges.charge(ring.len()))
+            .map(|(ring, _)| clip(ring, r))
+            .filter(|c| !c.is_empty())
+            .collect();
         if pieces.iter().map(|p| signed_area(p)).sum::<f64>() <= 1e-9 * r.area() {
             return vec![];
         }
@@ -166,6 +442,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
             }
         })
         .collect();
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     let level =
         |i: isize, j: isize| -> u32 { if i < 0 || j < 0 || i as usize >= nx || j as usize >= ny { 0 } else { levels[j as usize * nx + i as usize] } };
     for j in 0..ny {
@@ -182,6 +461,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
                 for sx in (bx0..bx1).step_by(step) {
                     let r = Rect::from_points(at(sx, sy), at(sx + step, sy + step));
                     let pieces = cut(r);
+                    if edges.spent() {
+                        return Err(TOO_COMPLEX_SURFACE.into());
+                    }
                     if pieces.is_empty() {
                         continue;
                     }
@@ -241,22 +523,73 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
                             out
                         })
                         .collect();
-                    if height > 0.0
-                        && smooth
-                        && let Some(triangles) = cell_triangles(&pieces)
-                    {
+                    // Smooth shading draws the pieces as triangles, and so do graphics mapped onto
+                    // the front or back: each triangle then carries where its corners lie in the
+                    // art's plane.
+                    let smoothed = height > 0.0 && smooth;
+                    let triangles = match (smoothed || o.map_surface).then(|| cell_triangles(&pieces)) {
+                        // A cell graphics are mapped onto that the quick cut can't take (a hole
+                        // inside it, or a ring of more corners) is cut with its holes, against one
+                        // budget for the whole surface. Drawn whole instead, its piece would show
+                        // no graphics.
+                        Some(None) if o.map_surface => {
+                            if pieces.iter().map(Vec::len).fold(0usize, usize::saturating_add) > MAX_FLAT_CORNERS {
+                                return Err(TOO_COMPLEX_SURFACE.into());
+                            }
+                            let budget = flat_budget();
+                            let holed = crate::mesh::flat_triangles(&pieces, &mut flat_work, budget);
+                            if flat_work > budget {
+                                return Err(TOO_COMPLEX_SURFACE.into());
+                            }
+                            Some(holed.ok_or_else(|| TOO_COMPLEX_SURFACE.to_string())?)
+                        }
+                        quick => quick.flatten(),
+                    };
+                    if let Some(triangles) = triangles {
+                        let order = if flat { Order::Last } else { Order::Depth };
                         for points in triangles {
-                            let front = points.map(|q| camera.place(q, half + lift(q)));
-                            b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false)?;
+                            let lifts = points.map(&lift);
+                            let front: [V3; 3] = std::array::from_fn(|k| camera.place(points[k], half + lifts[k]));
+                            let found = std::cell::OnceCell::new();
+                            let curves = || found.get_or_init(|| rim(&[points.to_vec()], &[lifts.to_vec()]));
+                            let before = b.facets.len();
+                            let outward = newell(&[front.to_vec()]);
+                            if smoothed {
+                                b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false, MeshPart::Front, points.map(uv))?;
+                            } else {
+                                let attrs = |_: &[Vec<V3>]| {
+                                    Attrs::Corners(vec![points.iter().map(|q| (uv(*q), puffed.then(|| camera.rotate(normal(*q))))).collect()])
+                                };
+                                b.face(vec![front.to_vec()], outward, order, MeshPart::Front, attrs)?;
+                            }
+                            b.outline(before, |c| outline::edges(c, curves(), &front_rim, &mut budget));
+                            if o.map_surface {
+                                mark_surface(&mut b, before, points, center, outward, PlanarFace::Front);
+                            }
                             if o.both_sides && o.cap {
-                                let back = points.map(|q| camera.place(back_turn.apply(q), -half - lift(q) * back_turn.scale));
-                                let normals = points.map(|q| {
-                                    let n = normal(q);
-                                    // A uniform taper scales all three coordinates equally;
-                                    // twist turns the back normal about the shape's z-axis.
-                                    camera.rotate(V3(back_turn.cos * n.0 - back_turn.sin * n.1, back_turn.sin * n.0 + back_turn.cos * n.1, -n.2))
-                                });
-                                b.smooth_triangle(back, normals, true)?;
+                                let back: [V3; 3] =
+                                    std::array::from_fn(|k| camera.place(back_turn.apply(points[k]), -half - lifts[k] * back_turn.scale));
+                                let before = b.facets.len();
+                                let n = newell(&[back.to_vec()]);
+                                // The back winds the same way round as the front, so its outward
+                                // normal is reversed.
+                                let outward = V3(-n.0, -n.1, -n.2);
+                                if smoothed {
+                                    // A uniform taper scales all three coordinates equally; twist
+                                    // turns the back normal about the shape's z-axis.
+                                    let normals = points.map(|q| camera.rotate(back_normal(normal(q), &back_turn)));
+                                    b.smooth_triangle(back, normals, true, MeshPart::Back, points.map(uv))?;
+                                } else {
+                                    let attrs = |_: &[Vec<V3>]| {
+                                        let corner = |q: &Point| (uv(*q), puffed.then(|| camera.rotate(back_normal(normal(*q), &back_turn))));
+                                        Attrs::Corners(vec![points.iter().map(corner).collect()])
+                                    };
+                                    b.face(vec![back.to_vec()], outward, order, MeshPart::Back, attrs)?;
+                                }
+                                b.outline(before, |c| outline::edges(c, curves(), &back_rim, &mut budget));
+                                if o.map_surface {
+                                    mark_surface(&mut b, before, points, center, outward, PlanarFace::Back);
+                                }
                             }
                         }
                         continue;
@@ -269,7 +602,15 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
                         pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, half + h)).collect()).collect();
                     let n = newell(&front);
                     let order = if flat { Order::Last } else { Order::Depth };
-                    b.face(front, n, order)?;
+                    let corners = |side: &dyn Fn(Point) -> Option<V3>| -> Attrs {
+                        Attrs::Corners(pieces.iter().map(|p| p.iter().map(|q| (uv(*q), side(*q))).collect()).collect())
+                    };
+                    let front_normal = |q: Point| puffed.then(|| camera.rotate(normal(q)));
+                    let found = std::cell::OnceCell::new();
+                    let curves = || found.get_or_init(|| rim(&pieces, &lifts));
+                    let before = b.facets.len();
+                    b.face(front, n, order, MeshPart::Front, |_| corners(&front_normal))?;
+                    b.outline(before, |c| outline::edges(c, curves(), &front_rim, &mut budget));
                     if o.both_sides && o.cap {
                         // The back winds the same way round as the front, so its outward normal is
                         // reversed.
@@ -279,7 +620,10 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
                             .map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(back_turn.apply(*q), -half - h * back_turn.scale)).collect())
                             .collect();
                         let n = newell(&back);
-                        b.face(back, V3(-n.0, -n.1, -n.2), order)?;
+                        let back_side = |q: Point| puffed.then(|| camera.rotate(back_normal(normal(q), &back_turn)));
+                        let before = b.facets.len();
+                        b.face(back, V3(-n.0, -n.1, -n.2), order, MeshPart::Back, |_| corners(&back_side))?;
+                        b.outline(before, |c| outline::edges(c, curves(), &back_rim, &mut budget));
                     }
                 }
             }
@@ -287,25 +631,107 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     }
     if !o.both_sides && o.cap {
         let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(back_turn.apply(*p), -half)).collect()).collect();
+        let (x, y, origin) = Placing::new(&camera, bounds.center(), back_turn, -half).frame();
+        let plane = Attrs::Planar(PlaneUv { origin, x, y, area });
         // The back turned toward the viewer covers the walls it overlaps, even those nearer than
         // its center: twisted walls, and the walls of a fill inside the solid of its stroke.
-        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last)?;
+        let before = b.len();
+        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last, MeshPart::Back, |_| plane)?;
+        // The flat back is the art turned and scaled: its curves map exactly without perspective.
+        let along = Along { tolerance: CURVE_TOLERANCE, ..back_rim };
+        let traced: Vec<&Ring> = traced.iter().collect();
+        b.outline(before, |c| outline::face(&traced, c, &along, &mut budget));
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.
-        let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+        let slices = slices(&o);
         let at = |ring: &[Point], k: usize| -> Vec<V3> {
             let t = k as f64 / slices as f64;
             let turn = Turn::new(bounds, o.twist, o.taper, t);
             ring.iter().map(|p| camera.place(turn.apply(*p), half - o.depth * t)).collect()
         };
-        let mut pieces: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
-        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.facets.len()));
-        for (ring, pieces) in rings.iter().zip(&pieces) {
-            for k in 0..slices {
-                b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
+        let cut: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
+        let mut pieces = cut.clone();
+        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.len()));
+        let edges = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+        if b.len().saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
+            return Err(TOO_COMPLEX_SURFACE.into());
+        }
+        // For a mesh, the sides run across from the front (0) to the back (1).
+        let across = |k: usize| k as f64 / slices.max(1) as f64;
+        // Each slice's ring follows the art's curves, turned and scaled, at its depth.
+        let maps: Vec<Placing> = (0..=slices)
+            .map(|k| {
+                let t = k as f64 / slices as f64;
+                Placing::new(&camera, center, Turn::new(bounds, o.twist, o.taper, t), half - o.depth * t)
+            })
+            .collect();
+        let places: Vec<_> = maps.iter().map(|m| move |span: &Span, t: f64| m.place(span.curve.eval(t))).collect();
+        let slice_at: Vec<_> = places
+            .iter()
+            .map(|place| {
+                let camera = &camera;
+                move |span: &Span, t: f64| camera.project(place(span, t))
+            })
+            .collect();
+        let point_maps: Vec<_> = maps
+            .iter()
+            .map(|m| {
+                let camera = &camera;
+                move |p: Point| camera.project(m.place(p))
+            })
+            .collect();
+        let along: Vec<Along> = slice_at
+            .iter()
+            .zip(&point_maps)
+            .map(|(at, map)| Along { at, map: Some(map as &dyn Fn(Point) -> Point), affine, tolerance: CURVE_TOLERANCE })
+            .collect();
+        let place = |k: usize| places.get(k).map(|p| p as &Place);
+        let sides = |b: &mut Builder<'_>, pieces: &[Vec<usize>], budget: &mut Budget| -> Result<(), String> {
+            for ((ring, traced), pieces) in rings.iter().zip(&traced).zip(pieces) {
+                let u = along_ring(ring);
+                for k in 0..slices {
+                    let curves = WallCurves {
+                        spans: &traced.spans,
+                        near: along.get(k),
+                        far: along.get(k + 1),
+                        places: [place(k), place(k + 1)],
+                        budget: &mut *budget,
+                    };
+                    let mesh = BandMesh { part: MeshPart::Side, u: &u, v: [across(k), across(k + 1)], normals: None };
+                    b.curved_band([&at(ring, k), &at(ring, k + 1)], pieces, |i| outward(ring, i, 0.0), Some(curves), None, &mesh)?;
+                }
+            }
+            Ok(())
+        };
+        // A mesh kept with the facets has the sides a mesh alone has: limited, and with a twist
+        // cut, by the faces the mesh holds, which can be more than the facets.
+        let mut own_sides = None;
+        if let Some(kept) = b.faces_kept() {
+            let mut own = cut;
+            fit(&mut own, slices, MAX_FACES.saturating_sub(kept));
+            if kept.saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
+                b.lose_mesh();
+            } else if own != pieces {
+                own_sides = Some((own, b.mesh.take()));
             }
         }
+        sides(&mut b, &pieces, &mut budget)?;
+        if let Some((own, faces)) = own_sides {
+            let mut m = Builder::new(&camera, o.cap, false, Keep::Faces);
+            m.mesh = faces;
+            match sides(&mut m, &own, &mut budget) {
+                Ok(()) => b.mesh = m.mesh,
+                Err(_) => b.lose_mesh(),
+            }
+        }
+    }
+    #[cfg(test)]
+    GRID_WORK.with(|w| w.set(edges.work()));
+    #[cfg(test)]
+    FLAT_WORK.with(|w| w.set(flat_work));
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
     }
     Ok(b.finish())
 }
