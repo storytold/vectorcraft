@@ -25,6 +25,7 @@ const TYPES: [&str; 5] = ["calligraphic", "scatter", "art", "bristle", "pattern"
 /// It starts on Art when there is art, and it starts on Calligraphic otherwise.
 pub fn open(app: &mut VectorcraftApp, ids: Option<Value>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
+    let document = st.uid;
     let art = match &ids {
         Some(ids) => ids.as_array().is_some_and(|a| !a.is_empty()),
         None => !st.selection.is_empty(),
@@ -36,7 +37,13 @@ pub fn open(app: &mut VectorcraftApp, ids: Option<Value>) -> Result<Value, Strin
     // PLAN: `HostedParamDialog::new` takes (ctx, key, fields, build); the sheet's (KIND, title, build) has no such form.
     let dialog =
         HostedParamDialog::new(&ctx, KIND, fields, move |f| ParamDialog::new(KIND, title.clone(), rows.clone()).values(Bind::bound(f))).held_ok();
-    host::open_held(app, dialog, move |app, answer| confirm(app, &answer.fields, ids.clone())).ok_or("no window")?;
+    host::open_held(app, dialog, move |app, answer| {
+        if app.session.active().is_none_or(|st| st.uid != document) {
+            return Err(tl!("Return to the original drawing to make the brush").into());
+        }
+        confirm(app, &answer.fields, ids.clone())
+    })
+    .ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -154,6 +161,25 @@ mod tests {
         press_ok(&mut app, json!({"size": 9}));
         let def = app.run("brush.get", json!({"name": "New Calligraphic Brush"})).unwrap();
         assert_eq!((&def["type"], &def["size"]), (&json!("calligraphic"), &json!(9.0)));
+    }
+
+    #[test]
+    fn the_new_brush_type_chooser_waits_for_its_source_drawing() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+        app.run("ui.newBrush", json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let id = craft::ui::dialog::dialog_id(KIND);
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, "type", json!("scatter"))).unwrap();
+        app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+        app.run("shape.ellipse", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+
+        let error = super::super::tests_export::try_confirm(&mut app).expect_err("cannot take another drawing's artwork");
+        assert!(error.contains("original drawing"), "{error}");
+        assert_eq!(open_fields(&app).text("type"), Some("scatter"));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        press_ok(&mut app, json!({}));
+        assert_eq!(open_fields(&app).text("__type"), Some("scatter"));
     }
 
     /// The new brush takes the art its Brush Options opened with: changing or clearing the
