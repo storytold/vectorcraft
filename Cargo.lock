@@ -8670,6 +8670,7 @@ name = "vectorcraft-js"
 version = "0.24.1"
 dependencies = [
  "chrono",
+ "craft-xml",
  "getrandom 0.4.3",
  "proptest",
  "unicode-properties",
