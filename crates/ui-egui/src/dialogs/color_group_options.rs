@@ -101,6 +101,42 @@ mod tests {
         app.session.active().unwrap().history.undo.len()
     }
 
+    #[test]
+    fn an_old_rename_draft_keeps_the_color_group_restored_by_revert() {
+        let (ctx, mut app) = app();
+        let dir = vectorcraft_testkit::TempDir::new("color-group-options-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("colors.vectorcraft")})).unwrap();
+        let color = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatch("Bright Red").unwrap().paint.color();
+        let saved_color = color(&app);
+        let saved_groups = groups(&app);
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("swatch.edit", json!({"name": "Bright Red", "color": "#1784ca"})).unwrap();
+        assert_ne!(color(&app), saved_color);
+        app.run("ui.colorGroupOptions", json!({"group": "Brights"})).unwrap();
+        let id = dialog_id(KIND);
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, "name", json!("Old palette draft"))).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = app.session.active().unwrap();
+        assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+        assert_eq!(color(&app), saved_color);
+        assert_eq!(groups(&app), saved_groups);
+        let undo = undo_len(&app);
+
+        crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+        assert_eq!(groups(&app), saved_groups, "old Color Group Options must leave the restored group named Brights");
+        assert_eq!(color(&app), saved_color);
+        assert_eq!(undo_len(&app), undo);
+
+        app.run("ui.colorGroupOptions", json!({"group": "Brights"})).unwrap();
+        ok(&mut app, &ctx, "Restored palette");
+        assert!(groups(&app).iter().any(|name| name == "Restored palette"));
+        assert_eq!(undo_len(&app), undo + 1);
+    }
+
     /// Whether the dialog is still open.
     fn is_open(app: &VectorcraftApp) -> bool {
         app.dialogs().unwrap().with(|h| h.get_by_id::<craft::ui::patterns::form_dialogs::HostedParamDialog>(dialog_id(KIND)).is_some())
