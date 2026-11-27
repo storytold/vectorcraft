@@ -91,6 +91,15 @@ pub fn specs() -> Vec<CommandSpec> {
             list_installed
         ),
         cmd!(
+            query "script.startup.run",
+            "Run Startup Scripts",
+            [],
+            None,
+            "{reason: launch|menu (launch: the app starting; menu: before a script chosen from File › Scripts), then?: script.run's parameters (the script to run once the startup scripts have run; its source is read once and must compile before enabled startup scripts run), maxFuel?: whole number from 1 to 100000000000 (each startup script's instructions; default 1000000000)} run the .jsx files of the Startup Scripts folder next to the settings, one at a time, as script.run runs a file, each with the same limits as any script and its own undo step; nothing runs, and the reply says why, when the runStartupScripts preference is off (the default), in Safe Mode, or in a session without the folder (the web, and a run with VECTORCRAFT_NO_PREFS); only the folder's own .jsx files run, sorted by name without regard to case, then by name; links, hidden files, names starting with a dot, subfolders and other files are left out, and so is a script the Safe Mode choice disabled; a missing folder runs nothing; a script that cannot be read, is larger than 8 MiB, fails or is stopped is named in failed and in the Script Console, and the next one runs, then the script of then; while a startup script runs, the launch marker names it, so a launch that stops there offers to disable it; script.* commands are refused inside a script, so a startup script does not start another startup run. VectorCraft's own rules: the folder, the order, the limits of a listing (2048 folder entries, 512 scripts, 250 ms) and what a failure does → {reason, skipped: true, why: off|safeMode|noFolder, then?: script.run's reply} | {reason, skipped: false, ran: [names], failed: [{name, error}], disabled: [names], truncated, unreadable, then?: script.run's reply}, or, in the app, {reason, skipped: false, running, queued: the runs queued, then's included, failed: [{name, error}] (the runs that could not start before the first one did), disabled, truncated, unreadable, then?: script.run's reply when it ran to its end at once}, each run then reporting as script.run's do, and a later run that cannot start is named in the status bar, where the message of a startup script that fails or is stopped also stays; included files are read again when the chosen run starts; a preflight compilation failure clears the previous script report; each app queue pump processes at most one startup entry",
+            always,
+            startup_run
+        ),
+        cmd!(
             query "script.grants",
             "List Script File Permissions",
             [],
@@ -104,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Revoke Script File Permissions",
             [],
             None,
-            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as script.grants lists it, after its links are followed (a path outside the automation read roots is matched as given); refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
+            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as given, as script.grants lists it, or after its links are followed when no grant holds it as given (a path outside the automation read roots is matched as given only); refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
             always,
             grants_revoke
         ),
@@ -149,6 +158,21 @@ const NOT_TEXT: &str = "the script is not UTF-8 text";
 pub const TOO_LARGE: &str = "the script is too large to run";
 
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = prepare(s, p)?;
+    run_prepared(s, request)
+}
+
+fn run_prepared(s: &mut Session, request: script::Request) -> Result<Value> {
+    let name = s.script_start(request)?;
+    if s.script_frames {
+        return Ok(json!({"running": true, "name": name}));
+    }
+    s.script_run_to_end()
+}
+
+/// The run `script.run`'s parameters `p` ask for, with its file read and checked, or the error that
+/// keeps it from starting.
+fn prepare(s: &Session, p: &Value) -> Result<script::Request> {
     let optional_str = |key: &str| match p.get(key) {
         None => Ok(None),
         Some(Value::String(t)) => Ok(Some(t.as_str())),
@@ -207,7 +231,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let name = given_name.map(str::to_string).or_else(|| path.map(super::fileio::file_name)).unwrap_or_else(|| "script".to_string());
     let locale = script::dollar::ui_locale(s.ui_language.as_deref().unwrap_or(&s.prefs.interface_language));
-    let request = script::Request {
+    Ok(script::Request {
         name,
         name_given: given_name.is_some(),
         file: path.map(str::to_string),
@@ -217,12 +241,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         fuel,
         locale,
         answers,
-    };
-    let name = s.script_start(request)?;
-    if s.script_frames {
-        return Ok(json!({"running": true, "name": name}));
-    }
-    s.script_run_to_end()
+    })
 }
 
 fn stop(s: &mut Session, _: &Value) -> Result<Value> {
@@ -342,6 +361,278 @@ impl Session {
     }
 }
 
+/// The error of a startup script that is no longer a `.jsx` file of the Startup Scripts folder, or
+/// cannot be read, when its turn comes.
+pub const STARTUP_UNREADABLE: &str = "the startup script could not be read";
+
+impl Session {
+    /// Have `script.startup.run` run the scripts of the folder `dir`. The folder is only read, and
+    /// never made.
+    pub fn attach_startup_scripts_dir(&mut self, dir: std::path::PathBuf) {
+        self.startup_scripts_dir = Some(dir);
+    }
+
+    /// The Startup Scripts folder ([`Session::attach_startup_scripts_dir`]); none on the web.
+    pub fn startup_scripts_dir(&self) -> Option<&std::path::Path> {
+        self.startup_scripts_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
+    }
+
+    /// Why `script.startup.run` runs nothing now: `off` (the `runStartupScripts` preference),
+    /// `safeMode`, or `noFolder` (no Startup Scripts folder); `None` when it runs the folder.
+    pub fn startup_skip(&self) -> Option<&'static str> {
+        if !self.prefs.run_startup_scripts {
+            Some("off")
+        } else if vectorcraft_plugins::safe_mode::active() {
+            Some("safeMode")
+        } else if self.startup_scripts_dir().is_none() {
+            Some("noFolder")
+        } else {
+            None
+        }
+    }
+
+    /// The startup script that ran has ended: the launch marker no longer names it.
+    pub(crate) fn startup_ended(&mut self) {
+        if let Some(token) = self.startup_loading.take() {
+            vectorcraft_plugins::safe_mode::loaded(token);
+        }
+    }
+
+    /// The running script is a startup script (`script.startup.run`), not the script queued after
+    /// them.
+    pub fn startup_script_running(&self) -> bool {
+        self.startup_loading.is_some()
+    }
+
+    /// Begins a run of the startup script at `path`, read now and checked as `script.run` checks a
+    /// file, with the launch marker naming it while it runs. → the run's name, or the error that kept
+    /// it from starting, which the Script Console also shows.
+    fn start_startup(&mut self, path: &std::path::Path, fuel: u64) -> std::result::Result<String, String> {
+        let name = file_name_of(path);
+        let text = self.startup_text(path);
+        let (text, real) = match text {
+            Ok(read) => read,
+            Err(message) => {
+                self.note_unread(&name, &message);
+                return Err(message);
+            }
+        };
+        let item = startup_item(path);
+        self.startup_loading = Some(vectorcraft_plugins::safe_mode::loading(&item));
+        let locale = script::dollar::ui_locale(self.ui_language.as_deref().unwrap_or(&self.prefs.interface_language));
+        let request = script::Request {
+            name: name.clone(),
+            name_given: false,
+            file: Some(path.to_string_lossy().into_owned()),
+            checked_real: Some(real),
+            source: text,
+            args: serde_json::Map::new(),
+            fuel,
+            locale,
+            answers: vec![],
+        };
+        let runs = self.script_runs;
+        self.script_start(request).map_err(|e| {
+            self.startup_ended();
+            let message = e.to_string();
+            // A run refused before it began, such as with an undo group open, has no console entry yet.
+            if self.script_runs == runs {
+                self.note_unread(&name, &message);
+            }
+            message
+        })
+    }
+
+    /// The text of the startup script at `path` and its real path, or the error that keeps it from
+    /// running.
+    fn startup_text(&self, path: &std::path::Path) -> std::result::Result<(String, std::path::PathBuf), String> {
+        let unreadable = || STARTUP_UNREADABLE.to_string();
+        let root = self.startup_scripts_dir().ok_or_else(unreadable)?;
+        let mut real = std::fs::canonicalize(root).map_err(|_| unreadable())?;
+        real.push(path.file_name().ok_or_else(unreadable)?);
+        // One byte more than a script may have shows that the file is too large.
+        let bytes = script::startup::read(root, path, script::MAX_SOURCE_BYTES + 1).ok_or_else(unreadable)?;
+        if bytes.len() > script::MAX_SOURCE_BYTES {
+            return Err(TOO_LARGE.to_string());
+        }
+        Ok((script_text(&bytes).map_err(|e| e.to_string())?, real))
+    }
+
+    /// With no script running, starts the next run `script.startup.run` queued: the next startup
+    /// script that starts, or the script queued after them. A run that cannot start is kept for
+    /// [`Self::take_startup_failures`], and the next one starts on a later pump. → the reply of the script queued
+    /// after them when it ran to its end at once.
+    pub(crate) fn start_queued(&mut self) -> Option<Value> {
+        // Held aside while a run starts, so that the queue does not count as a running script then.
+        let mut queue = std::mem::take(&mut self.script_queue);
+        // Each run starts in the file access scope of the request that queued it, which the run
+        // keeps, and not in the scope of the frame that starts it.
+        let scope = self.script_queue_scope.clone().unwrap_or_else(crate::file_access::ScopeHandle::capture);
+        let mut reply = None;
+        if self.script_key.is_none()
+            && let Some(next) = queue.pop_front()
+        {
+            match next {
+                script::startup::Queued::Startup { path, fuel } => {
+                    if let Err(e) = scope.clone().run(|| self.start_startup(&path, fuel)) {
+                        self.startup_failures.push((file_name_of(&path), e));
+                    }
+                }
+                script::startup::Queued::Then(params) => {
+                    let prepared = self.script_queue_then.take();
+                    match scope.clone().run(|| match prepared {
+                        Some(request) => run_prepared(self, request),
+                        None => run(self, &params),
+                    }) {
+                        Ok(_) if self.script_key.is_some() => {}
+                        Ok(v) => reply = Some(v),
+                        Err(e) => self.startup_failures.push((then_name(&params), e.to_string())),
+                    }
+                }
+            }
+        }
+        if queue.is_empty() {
+            self.script_queue_scope = None;
+            self.script_queue_then = None;
+        }
+        self.script_queue = queue;
+        reply
+    }
+
+    /// The runs `script.startup.run` queued that could not start since the last call, as (name,
+    /// error), in order.
+    pub fn take_startup_failures(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.startup_failures)
+    }
+}
+
+/// The file name of `path`, or the whole path when it has none.
+fn file_name_of(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(|| path.to_string_lossy().into_owned(), |n| n.to_string_lossy().into_owned())
+}
+
+/// The name a failure of the script `params` (`script.run`'s) names it by: `name`, else the file
+/// name of `path`, else "script".
+fn then_name(params: &Value) -> String {
+    let given = |key: &str| params.get(key).and_then(Value::as_str).filter(|v| !v.trim().is_empty());
+    match (given("name"), given("path")) {
+        (Some(name), _) => name.to_string(),
+        (None, Some(path)) => file_name_of(std::path::Path::new(path)),
+        (None, None) => "script".to_string(),
+    }
+}
+
+/// The launch marker's entry for the startup script at `path`: its file and its file name.
+fn startup_item(path: &std::path::Path) -> vectorcraft_plugins::safe_mode::Item {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+    vectorcraft_plugins::safe_mode::Item { id: None, file: Some(path.to_string_lossy().into_owned()), name }
+}
+
+fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "script.startup.run";
+    let reason = match p.get("reason").and_then(Value::as_str) {
+        Some(r @ ("launch" | "menu")) => r,
+        _ => {
+            let key = "reason";
+            return Err(bad(C, format!("`{key}` must be one of {}", "launch, menu")));
+        }
+    };
+    let then = match p.get("then") {
+        None => None,
+        Some(v @ Value::Object(_)) => Some(v.clone()),
+        Some(_) => {
+            let key = "then";
+            return Err(bad(C, format!("`{key}` must be an object")));
+        }
+    };
+    let fuel = match p.get("maxFuel") {
+        None => script::DEFAULT_FUEL,
+        Some(v) => v.as_u64().filter(|n| (1..=script::MAX_FUEL).contains(n)).ok_or_else(|| EngineError::BadParams {
+            cmd: C.into(),
+            msg: format!("`maxFuel` must be a whole number from 1 to {}", script::MAX_FUEL),
+        })?,
+    };
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    // A chosen script that cannot start ends the request before any startup script runs, and its
+    // parameters are checked as `script.run` checks them.
+    if let Some(then) = &then {
+        super::params::check_params("script.run", then)?;
+    }
+    let root = match (s.startup_skip(), s.startup_scripts_dir()) {
+        (None, Some(root)) => root.to_path_buf(),
+        (why, _) => {
+            let mut out = json!({"reason": reason, "skipped": true, "why": why.unwrap_or("noFolder")});
+            if let Some(then) = then {
+                out["then"] = run(s, &then)?;
+            }
+            return Ok(out);
+        }
+    };
+    let prepared = then.as_ref().map(|params| prepare(s, params)).transpose()?;
+    if let Some(request) = &prepared {
+        let mut preflight = Session::new();
+        if let Err(error) = preflight.script_start(request.clone()) {
+            s.script_report = None;
+            return Err(error);
+        }
+    }
+    let folder = root.to_string_lossy().into_owned();
+    // The folder is the app's: a refusal names it as the request may see it.
+    crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
+    let listing = script::startup::list(&root);
+    let name_of = |path: &std::path::Path| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let (disabled, scripts): (Vec<_>, Vec<_>) =
+        listing.scripts.into_iter().partition(|path| vectorcraft_plugins::safe_mode::skipped(&startup_item(path)));
+    let disabled: Vec<String> = disabled.iter().map(|p| name_of(p)).collect();
+    if s.script_frames {
+        s.script_queue =
+            scripts.into_iter().map(|path| script::startup::Queued::Startup { path, fuel }).chain(then.map(script::startup::Queued::Then)).collect();
+        s.script_queue_scope = Some(crate::file_access::ScopeHandle::capture());
+        s.script_queue_then = prepared;
+        let queued = s.script_queue.len();
+        s.startup_failures.clear();
+        let then = s.start_queued();
+        let failed: Vec<Value> = s.take_startup_failures().into_iter().map(|(name, error)| json!({"name": name, "error": error})).collect();
+        let mut out = json!({
+            "reason": reason,
+            "skipped": false,
+            "running": s.script_running(),
+            "queued": queued,
+            "failed": failed,
+            "disabled": disabled,
+            "truncated": listing.truncated,
+            "unreadable": listing.unreadable,
+        });
+        if let Some(then) = then {
+            out["then"] = then;
+        }
+        return Ok(out);
+    }
+    let (mut ran, mut failed) = (vec![], vec![]);
+    for path in scripts {
+        let name = name_of(&path);
+        match s.start_startup(&path, fuel).map_err(EngineError::Other).and_then(|_| s.script_run_to_end()) {
+            Ok(_) => ran.push(name),
+            Err(e) => failed.push(json!({"name": name, "error": e.to_string()})),
+        }
+    }
+    let mut out = json!({
+        "reason": reason,
+        "skipped": false,
+        "ran": ran,
+        "failed": failed,
+        "disabled": disabled,
+        "truncated": listing.truncated,
+        "unreadable": listing.unreadable,
+    });
+    if let Some(request) = prepared {
+        out["then"] = run_prepared(s, request)?;
+    }
+    Ok(out)
+}
+
 /// The file name a reply names `path` by when the file is outside the automation read roots; `None`
 /// when a reply may name it whole.
 fn hidden_name(path: &str) -> Option<String> {
@@ -384,16 +675,19 @@ fn grants(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn grants_revoke(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "script.grants.revoke";
+    // A path is matched as given, or with its links followed when no grant holds it as given, so a
+    // grant whose path a link has since taken the place of is still removed. A path the request may not read (outside the
+    // automation read roots, a network path among them) is compared as written, without looking it up.
     let path_of = |key: &str| match p.get(key) {
         None => Ok(None),
-        // A path the request may not read (outside the automation read roots, a network path among
-        // them) is compared as written, without looking it up.
-        Some(Value::String(t)) if !t.is_empty() => Ok(Some(
-            crate::file_access::check_read(t)
+        Some(Value::String(t)) if !t.is_empty() => {
+            let real = crate::file_access::check_read(t)
                 .ok()
                 .and_then(|()| std::fs::canonicalize(t).ok())
-                .map_or_else(|| t.clone(), |real| crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()),
-        )),
+                .map(|real| crate::cmd::findfiles::plain(real).to_string_lossy().into_owned())
+                .filter(|real| real != t);
+            Ok(Some([Some(t.clone()), real].into_iter().flatten().collect::<Vec<_>>()))
+        }
         Some(_) => Err(bad(C, format!("`{key}` must be a path"))),
     };
     let (script_path, path) = (path_of("script")?, path_of("path")?);

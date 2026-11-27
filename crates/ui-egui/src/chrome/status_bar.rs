@@ -9,6 +9,7 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
 use craft::ui::pickers::{Select, SelectLook};
+use craft::ui::runtime::env::Env;
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
@@ -32,7 +33,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .map(|d| d.doc.artboards.iter().enumerate().map(|(i, a)| Entry::new(i, format!("{}  {}", i + 1, a.name))).collect())
         .unwrap_or_default();
     let angles: Vec<Entry<usize>> = ROTATE_VIEW_ANGLES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
-    let rotation = app.view().map_or(0.0, |v| v.rotation);
+    let view = app.view();
+    let rotation = view.map_or(0.0, |v| v.rotation);
     let turned = ROTATE_VIEW_ANGLES.iter().position(|(_, a)| (rotation - a).abs() < 1e-9).unwrap_or(usize::MAX);
     // An angle between the presets, from the Rotate View tool or `view.rotate`, shows in whole degrees; adding 0.0
     // turns the -0 of a small negative angle into 0.
@@ -46,6 +48,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let busy = busy_labels(app);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
+    let mut invalid_zoom = None;
     // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
     // first, then the position, before the message.
     let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
@@ -72,14 +75,18 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
         // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
-        if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
-            zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(&view, app.ui_scaling()), print));
+        if let Some(zoom) = zoom.inner {
+            if let Some(view) = zoom.view.committed() {
+                zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(view, app.ui_scaling()), print));
+            }
+            invalid_zoom = zoom.invalid_zoom.map(|invalid| invalid.message(&Env::of(ui)));
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
             rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles)
                 .placeholder(angle.clone())
                 .look(SelectLook::Filled)
+                .enabled(view.is_some())
                 .show(ui)
                 .value()
                 .copied();
@@ -153,6 +160,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
     {
         app.status(e);
+    }
+    if let Some(message) = invalid_zoom {
+        app.status(message);
     }
 }
 

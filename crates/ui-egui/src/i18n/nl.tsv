@@ -102,6 +102,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` voor het bestandsdialoogvenster van een script moet een van deze waarden zijn: once, always, deny, stop
 @msg	choose a file or folder first, or deny	kies eerst een bestand of map, of weiger
 @msg	the script file permissions could not be saved: {e}	de toestemmingen voor scriptbestanden konden niet worden opgeslagen: {e}
+@msg	the script file permissions could not be read: {e}	de toestemmingen voor scriptbestanden konden niet worden gelezen: {e}
 @msg	this script's file access can be allowed only once	de bestandstoegang van dit script kan maar één keer worden toegestaan
 @msg	Only the person at the keyboard can allow a script's file access	Alleen de persoon aan het toetsenbord kan de bestandstoegang van een script toestaan
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Een script krijgt maximaal 2.048 bestanden: de bestanden die daarna zijn gekozen, zijn weggelaten
@@ -606,6 +607,21 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	time budget	tijdbudget
 @msg	memory budget (the selection is too large to hand over)	geheugenbudget (de selectie is te groot om door te geven)
 @msg	output size ({what} is {len} bytes, limit {max})	uitvoergrootte ({what} is {len} bytes, limiet {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} regel {line}, kolom {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	geheugenbudget
+@msg	call depth	aanroepdiepte
+@msg	run(input, params) returned no output object	run(input, params) heeft geen uitvoerobject teruggegeven
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" heeft `script` nodig: de naam van het .js-bestand van de plug-in, naast het manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` moet de naam zijn van een .js-bestand in de map van het manifest: 1-128 bytes, geen map, geen `:`, niet beginnend met `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` is de tekst van het script en staat alleen in de JSON die dataBase64 van plugin.install aanneemt: een .vcplugin-bestand noemt zijn script in `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	het manifest van een JavaScript-plug-in geeft `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" is voor een objectfilter (`kind` "filter"), niet voor `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	een JavaScript-plug-in kan de toestemming `{name}` niet vermelden: van de toestemmingen van de host mag hij `progress` vermelden
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	het manifest van een WebAssembly-module laat `runtime` weg: "js" is voor een JavaScript-plug-in
+@msg	a JavaScript plug-in makes no command calls	een JavaScript-plug-in roept geen opdrachten aan
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) neemt twee getallen
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) neemt een niveau, 0 (fout), 1 (waarschuwing), 2 (informatie) of 3 (foutopsporing), en een tekenreeks
 @msg	the plug-in's grant can't be removed from the plug-in store	de toekenning van de plug-in kan niet uit de plug-inopslag worden verwijderd
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	machtiging `{shown}` is gereserveerd voor een latere plug-in-API; deze host kent haar niet toe
 @msg	unknown permission `{shown}`	onbekende machtiging `{shown}`
@@ -1302,6 +1318,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	Generieke VectorCraft-CMYK (SWOP-achtig)
+	VectorCraft Coated CMYK (FOGRA51)	Gestreken VectorCraft-CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	Ongestreken VectorCraft-CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Verouderde Macintosh-RGB (Gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetstandaard-RGB (sRGB)
 	Monitor RGB	Monitor-RGB
@@ -5606,6 +5624,14 @@ imageTrace	Outline	Contour
 	The script asks to read and write a folder you choose, with everything in it.	Het script vraagt een map die u kiest te lezen en te schrijven, met alles wat erin staat.
 	Allow Once	Eenmaal toestaan
 	Always Allow This Script	Dit script altijd toestaan
+	No script has kept file access.	Geen enkel script heeft bewaarde bestandstoegang.
+	Read file	Bestand lezen
+	Read and write file	Bestand lezen en schrijven
+	Read and write folder	Map lezen en schrijven
+	Revoke	Intrekken
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Intrekken verwijdert de toegang die voor elke versie van het script is bewaard. Toegang tot een map omvat alles erin.
+@msg	Script file access revoked	Bestandstoegang van script ingetrokken
+@msg	The script file access was already revoked	De bestandstoegang van het script was al ingetrokken
 	Deny	Weigeren
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen
@@ -10870,6 +10896,11 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Fold Angle	Vouwhoek
+	Set Fold Angle…	Vouwhoek instellen…
+	Set Fold Angle	Vouwhoek instellen
+	Reset Fold Angle	Vouwhoek herstellen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecteer een rillijn, halve snijlijn of perforatielijn die niet vergrendeld of verborgen is
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Toont in plaats van de tooltip een kaart met wat een gereedschap in de werkbalk en zijn toetsen doen; vereist Tooltips tonen.
 	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.

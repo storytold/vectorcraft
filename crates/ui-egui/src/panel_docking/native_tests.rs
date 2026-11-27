@@ -24,6 +24,7 @@ struct Window {
     /// The OS files held over it, as the OS sends them before a drop.
     hovered: Vec<egui::HoveredFile>,
     dropped: Vec<egui::DroppedFileHandle>,
+    close_requested: bool,
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
     texts: Vec<(String, Rect)>,
@@ -48,7 +49,13 @@ impl Host {
             ..Default::default()
         };
         std::iter::once((ViewportId::ROOT, info(ViewportId::ROOT, SCREEN.translate(ORIGIN.to_vec2()))))
-            .chain(self.windows.iter().map(|(id, w)| (*id, info(*id, w.rect))))
+            .chain(self.windows.iter().map(|(id, w)| {
+                let mut info = info(*id, w.rect);
+                if w.close_requested {
+                    info.events.push(egui::ViewportEvent::Close);
+                }
+                (*id, info)
+            }))
             .collect()
     }
 
@@ -59,6 +66,7 @@ impl Host {
                 match command {
                     ViewportCommand::OuterPosition(pos) => window.rect = Rect::from_min_size(*pos, window.rect.size()),
                     ViewportCommand::InnerSize(size) => window.rect = Rect::from_min_size(window.rect.min, *size),
+                    ViewportCommand::CancelClose => window.close_requested = false,
                     _ => {}
                 }
             }
@@ -77,6 +85,7 @@ impl Host {
                 events: Vec::new(),
                 hovered: Vec::new(),
                 dropped: Vec::new(),
+                close_requested: false,
                 frames: 0,
                 texts: Vec::new(),
                 nodes: Vec::new(),
@@ -242,6 +251,28 @@ fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
     }
 }
 
+/// Swatches and Color as tabs of one native window, with its OS window drawn.
+fn native_tab_group(h: &mut Harness) -> ViewportId {
+    let viewport = h.float("swatches");
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    viewport
+}
+
+#[test]
+fn a_group_float_of_a_tab_group_resizes_its_native_window() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let id = floating_window(layout_of(&h.app.ui), "swatches").unwrap().id;
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(floating_window(layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
 /// `window.toolbar.float` with x, y moves the OS window a toolbar made with New Toolbar already has.
 #[test]
 fn floating_a_toolbar_at_a_point_moves_its_native_window() {
@@ -336,6 +367,40 @@ fn a_file_dropped_on_a_native_window_opens() {
 
 fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+#[test]
+fn select_all_returns_to_the_art_after_closing_a_focused_artboards_window() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    h.app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 30, "height": 40})).unwrap();
+    for x in [500, 1000] {
+        h.app.run("artboard.new", json!({"x": x, "y": 0, "width": 400, "height": 300})).unwrap();
+    }
+    h.app.run("select.none", json!({})).unwrap();
+    h.app.select_tool("artboard");
+    let viewport = h.float("artboards");
+    h.frames(3);
+    let row = h.host.borrow().windows[&viewport].texts.iter().find(|(name, _)| name == "Artboard 2").expect("Artboard 2 row").1.center();
+    for events in [vec![Event::PointerMoved(row)], vec![button(row, true)], vec![button(row, false)]] {
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend(events);
+        h.frame(vec![]);
+    }
+    assert_eq!(crate::panels::artboards::picked(&h.app, 3), vec![1], "the panel row was selected");
+    assert!(crate::panels::artboards::selects_all(&h.app, &h.ctx), "the detached list owns Select All before closing");
+
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().close_requested = true;
+    h.frame(vec![]);
+    assert!(!showing(&h.app.ui, "artboards"), "the platform close hides the Artboards panel");
+    {
+        let mut host = h.host.borrow_mut();
+        host.windows.remove(&viewport);
+        host.focus = ViewportId::ROOT;
+    }
+    h.frames(3);
+    h.frame(vec![Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND }]);
+    assert_eq!(h.app.session.active().unwrap().selection.objects.len(), 2, "Select All returns to the artwork");
+    assert_eq!(crate::panels::artboards::picked(&h.app, 3), vec![1], "the closed panel no longer handles the shortcut");
 }
 
 /// Art dragged off the canvas onto a panel in an OS window of its own, which lies over the

@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Settings…",
             ["Edit"],
             Some("Cmd+Shift+K"),
-            "{rgb?: profile, cmyk?: profile, intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\", askMismatchOpen?: bool, askMismatchPaste?: bool, askMissingOpen?: bool (all false by default)} set the working spaces, the color management policies and the Ask boxes → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, askMismatchOpen, askMismatchPaste, askMissingOpen, profiles: [{name, kind, builtin}]}. With askMismatchOpen or askMissingOpen on, the desktop app's File › Open asks what to do when the profile of a document's color mode is not the working space, or it has none (document.open takes the answer as profileChoice; it never asks); with askMismatchPaste on, Paste asks whether colors copied from a document with another profile keep their numbers or convert (edit.paste takes it as profileMismatch; see clipboard.profileMismatch). A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
+            "{rgb?: profile, cmyk?: profile (built in: \"VectorCraft Generic CMYK (SWOP-like)\" (default), \"VectorCraft Coated CMYK (FOGRA51)\" and \"VectorCraft Uncoated CMYK (FOGRA52)\" (computed from Fogra's characterization data), \"Device CMYK (uncalibrated)\"), intent?: \"perceptual\"|\"relative\"|\"saturation\"|\"absolute\", bpc?: bool, rgbPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\", cmykPolicy?: \"off\"|\"preserveEmbedded\"|\"convert\"|\"preserveNumbers\", askMismatchOpen?: bool, askMismatchPaste?: bool, askMissingOpen?: bool (all false by default)} set the working spaces, the color management policies and the Ask boxes → {rgb, cmyk, intent, bpc, rgbPolicy, cmykPolicy, askMismatchOpen, askMismatchPaste, askMissingOpen, profiles: [{name, kind, builtin}]}. With askMismatchOpen or askMissingOpen on, the desktop app's File › Open asks what to do when the profile of a document's color mode is not the working space, or it has none (document.open takes the answer as profileChoice; it never asks); with askMismatchPaste on, Paste asks whether colors copied from a document with another profile keep their numbers or convert (edit.paste takes it as profileMismatch; see clipboard.profileMismatch). A policy decides what opening a document (document.open, file.newFromTemplate, file.revert) does with an RGB or CMYK profile it is tagged with that is not the working space: preserveEmbedded (default) keeps it; off and preserveNumbers take it off and keep the color numbers; convert converts the colors of that model into the working space with the intent and bpc and takes it off. The open reply's warnings name each profile taken off or converted, and a document a policy changed opens with unsaved changes. The desktop app and vectorcraft-cli keep them in `Color Settings.json` next to the preferences and use them again at the next start (not with VECTORCRAFT_NO_PREFS); saved settings naming a profile that is gone leave the defaults",
             always,
             color_settings
         ),
@@ -562,16 +562,30 @@ fn mode_converter(mode: ColorMode, intent: Option<Intent>, grays: Grays) -> impl
 }
 
 /// The name and color of each global swatch of `d`, for [`mode_color`].
-fn global_bases(d: &vectorcraft_doc::Document) -> Vec<(String, Color)> {
-    d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect()
+fn global_bases(d: &vectorcraft_doc::Document) -> BTreeMap<String, Color> {
+    let mut first = BTreeMap::new();
+    for w in d.swatches_iter() {
+        // An ineligible first record still shadows a later global solid of the same name.
+        first.entry(w.name.as_str()).or_insert(w);
+    }
+    first
+        .into_values()
+        .filter_map(|w| {
+            if !w.global {
+                return None;
+            }
+            let Paint::Solid { color, swatch: None, .. } = &w.paint else { return None };
+            Some((w.name.clone(), d.linked_color(*color, w.spot)))
+        })
+        .collect()
 }
 
 /// The color Document Color Mode gives `col` (swatch link `link`): a tint of a global swatch in
 /// `bases` (already converted) is that swatch's color at its tint; any other color goes through
 /// `conv` ([`mode_converter`]).
-fn mode_color(col: &Color, link: proof::Link, bases: &[(String, Color)], conv: &dyn Fn(&Color) -> Color) -> Color {
-    match link.and_then(|(name, tint)| Some((bases.iter().find(|(n, _)| n == name)?, tint))) {
-        Some(((_, base), tint)) if tint < 1.0 => base.tinted(tint),
+fn mode_color(col: &Color, link: proof::Link, bases: &BTreeMap<String, Color>, conv: &dyn Fn(&Color) -> Color) -> Color {
+    match link.and_then(|(name, tint)| Some((bases.get(name)?, tint))) {
+        Some((base, tint)) if tint < 1.0 => base.tinted(tint),
         _ => conv(col),
     }
 }
@@ -685,8 +699,8 @@ fn convert_colors(d: &mut vectorcraft_doc::Document, conv: &dyn Fn(&Color) -> Co
         vectorcraft_brush::store(d, &brushes);
     }
     // This pass gives tint swatches their converted swatch's color at their tint; the passes above already did the same for the art's tints.
-    d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
-        Some((_, base)) if *tint < 1.0 => {
+    d.map_solid_paints(&mut |c, link, tint| match link.as_ref().and_then(|name| bases.get(name)) {
+        Some(base) if *tint < 1.0 => {
             *c = base.tinted(*tint);
             true
         }

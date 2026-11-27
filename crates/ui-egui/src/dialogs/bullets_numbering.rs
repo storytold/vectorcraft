@@ -25,18 +25,21 @@
 //! <https://web.archive.org/web/20260417034638/https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/create-bulleted-or-numbered-lists.html>.
 
 use std::borrow::Cow;
+use std::sync::{Arc, Weak};
 
 use craft::behavior::{Mixed, Selection, SelectionChange, keyed};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::ui::dialog::{Dialog, DialogId, DialogOutput, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
+use craft::ui::dialog::{Dialog, DialogId, DialogOutput, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{HAlign, IconSpec, TextRun};
-use craft::ui::runtime::env::{Env, LengthUnits};
+use craft::ui::runtime::env::{Env, Label, LengthUnits};
+use craft::ui::runtime::measure;
+use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::runtime::words::CommonWords;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
@@ -44,10 +47,13 @@ use craft::ui::text::NumberField;
 use craft::ui::tile_grid::{CaptionPlace, Tile, TileGrid};
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::Selection as ArtworkSelection;
 use vectorcraft_doc::text::{LIST_HANGING_INDENT, LIST_LEVELS, MAX_LIST_START, NumberStyle, ParaList};
 
 use crate::VectorcraftApp;
 use crate::panels::paragraph::BulletGlyph;
+
+use super::preview::LivePreview;
 
 /// The dialog kind of Bullets and Numbering.
 pub const KIND: &str = "bulletsAndNumbering";
@@ -122,7 +128,71 @@ pub(crate) struct BulletsDialog {
     hanging: bool,
     /// The General unit the indent fields show; the pump keeps it current.
     lengths: LengthUnits,
+    active_document: bool,
+    held: HeldAnswer<Map<String, Value>>,
     open: bool,
+}
+
+/// The preview from the opening drawing and the interaction that owns its undo snapshot.
+pub(crate) struct Preview {
+    document: (u64, u64),
+    live: LivePreview,
+    selection: Option<Weak<ArtworkSelection>>,
+}
+
+impl Preview {
+    fn owns_interaction(&self, app: &VectorcraftApp) -> bool {
+        let Some(selection) = &self.selection else { return false };
+        app.session.active().is_some_and(|state| {
+            (state.uid, state.reverts) == self.document
+                && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
+        })
+    }
+
+    fn update(&mut self, app: &mut VectorcraftApp, fields: Map<String, Value>) {
+        let Some(state) = app.session.active().filter(|state| (state.uid, state.reverts) == self.document) else { return };
+        if !self.owns_interaction(app) {
+            self.live = LivePreview::default();
+            self.selection = None;
+            if state.interaction.is_some() {
+                return;
+            }
+        }
+        let on = changes(&fields);
+        let ran = self.live.run(app, on, tl!("Bullets and Numbering"), CMD, &Value::Object(fields)).is_some();
+        if !on {
+            self.selection = None;
+        } else if ran {
+            self.selection = app.session.active().and_then(|state| state.interaction.as_ref()).map(|it| Arc::downgrade(&it.selection));
+        }
+    }
+
+    fn apply(&mut self, app: &mut VectorcraftApp, fields: Map<String, Value>) -> Result<(), String> {
+        if !changes(&fields) {
+            if self.owns_interaction(app) {
+                std::mem::take(&mut self.live).cancel(app);
+                self.selection = None;
+            }
+            return Ok(());
+        }
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document.0) else {
+            return Err(tl!("Bullets and Numbering can only change the document where it was opened.").to_owned());
+        };
+        if state.reverts != self.document.1 {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
+        if app.session.in_interaction() && !self.owns_interaction(app) {
+            return Err(tl!("Finish the active edit before applying Bullets and Numbering.").to_owned());
+        }
+        self.selection = None;
+        std::mem::take(&mut self.live).commit(app, CMD, Value::Object(fields)).map(drop)
+    }
+
+    fn cancel(self, app: &mut VectorcraftApp) {
+        if self.owns_interaction(app) {
+            self.live.cancel(app);
+        }
+    }
 }
 
 /// The kind of list `list` is, as the `list` field names it.
@@ -144,8 +214,12 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Some(v) => Some(v.as_str().and_then(ListTab::of).ok_or_else(|| format!("`{key}` must be one of {}", TABS.join(", ")))?),
     };
     crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
     // A dialog this one replaces leaves its preview on the type: end it, so the values read below are the document's own.
-    std::mem::take(&mut app.bullets_preview).cancel(app);
+    if let Some(old) = app.bullets_preview.take() {
+        old.cancel(app);
+    }
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
     if let Some((id, a, b)) = crate::panels::character::text_editing_kept(app)? {
@@ -192,9 +266,12 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         targets,
         hanging: false,
         lengths: crate::canvas::general_lengths(app),
+        active_document: true,
+        held: HeldAnswer::default(),
         open: true,
     };
     host.with(|h| h.open(dialog));
+    app.bullets_preview = Some(Preview { document, live: LivePreview::default(), selection: None });
     Ok(Value::Null)
 }
 
@@ -468,8 +545,7 @@ fn changes(p: &Map<String, Value>) -> bool {
 }
 
 impl StackDialog for BulletsDialog {
-    /// The `text.setFormat` parameters OK runs.
-    type Result = Value;
+    type Result = ();
 
     fn id(&self) -> DialogId {
         dialog_id(KIND)
@@ -479,20 +555,46 @@ impl StackDialog for BulletsDialog {
         Some(KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Value>> {
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
         let common = Env::of(ui).words::<CommonWords>();
-        let buttons = [FooterButton::new(common.ok.clone(), DialogRole::Accept), FooterButton::new(common.cancel.clone(), DialogRole::Cancel)];
+        let finish = self.held.is_accepted();
+        let refusal = self.held.refusal().map(|(reason, _)| reason.clone());
+        let buttons = [
+            FooterButton::new(common.ok.clone(), DialogRole::Accept).stays_open(true).enabled(!self.held.is_waiting()),
+            FooterButton::new(common.cancel.clone(), DialogRole::Cancel),
+        ];
         let mut open = self.open;
-        let dialog = Dialog::new(tl!("Bullets and Numbering")).buttons(buttons).opened(Bind::bound(&mut open));
-        let shown = dialog.show(ui, |ui, _| self.body(ui));
+        let dialog = Dialog::new(tl!("Bullets and Numbering")).buttons(buttons).opened(Bind::bound(&mut open)).refusal(move || refusal.clone());
+        let shown = dialog.show(ui, |ui, cx| {
+            if finish && !measure::active(ui.ctx()) {
+                cx.request_close_as(CloseReason::Activated);
+            }
+            self.body(ui);
+        });
         self.open = open;
         let DialogOutput { closed, picked, .. } = shown.output;
-        closed?;
-        Some(if picked == Some(OK) { DialogResult::Ok(Value::Object(params(self))) } else { DialogResult::Cancel })
+        if picked == Some(OK) && !self.held.is_waiting() {
+            self.held.file(params(self));
+        }
+        match closed {
+            Some(CloseReason::Activated) if finish => self.held.finish().map(|_| DialogResult::Ok(())),
+            Some(_) => Some(DialogResult::Cancel),
+            None => None,
+        }
     }
 
-    fn confirm(&mut self, _: &Context) -> Option<Value> {
-        Some(Value::Object(params(self)))
+    fn confirm(&mut self, _: &Context) -> Option<()> {
+        if self.held.is_accepted() {
+            return self.held.finish().map(drop);
+        }
+        if !self.held.is_waiting() {
+            self.held.file(params(self));
+        }
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
     }
 
     fn json_fields(&self) -> Option<Value> {
@@ -515,38 +617,41 @@ impl StackDialog for BulletsDialog {
     }
 }
 
-/// Runs once per frame: keeps the indent fields' unit current, shows the dialog's values on the type while they change
-/// something, and answers a finished dialog: OK keeps the preview as one undo step, Cancel (Escape and the close box
-/// too) and an OK that changes nothing put the type back.
+/// Shows the draft on its opening drawing and answers OK before the dialog closes.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(host) = app.dialogs() else { return };
-    if let Some(result) = host.with(|h| h.take::<BulletsDialog>()) {
-        let live = std::mem::take(&mut app.bullets_preview);
-        match result {
-            DialogResult::Ok(Value::Object(p)) if changes(&p) => {
-                if let Err(e) = live.commit(app, CMD, Value::Object(p)) {
-                    app.status(e);
-                    // The dialog is gone: a preview the refused OK left running goes with it. Nothing runs
-                    // when the refusal came before the interaction began, which is the right outcome too.
-                    let _ = app.session.cancel_interaction();
-                }
-            }
-            _ => live.cancel(app),
-        }
-    }
+    let Some(mut preview) = app.bullets_preview.take() else { return };
+    let active_document = app.session.active().is_some_and(|state| (state.uid, state.reverts) == preview.document);
     let lengths = crate::canvas::general_lengths(app);
-    // The host's lock is released before the preview runs: a command never runs inside `with`.
-    let Some(p) = host.with(|h| {
+    let Some((fields, answer)) = host.with(|h| {
         h.get_mut::<BulletsDialog>().map(|d| {
             d.lengths = lengths;
-            params(d)
+            let fields = params(d);
+            if (active_document && !d.active_document) || d.held.refusal().is_some_and(|(_, at)| *at != fields) {
+                d.held.clear_refusal();
+            }
+            d.active_document = active_document;
+            (fields, d.held.take())
         })
     }) else {
+        preview.cancel(app);
         return;
     };
-    let mut live = std::mem::take(&mut app.bullets_preview);
-    let _ = live.run(app, changes(&p), tl!("Bullets and Numbering"), CMD, &Value::Object(p));
-    app.bullets_preview = live;
+    if let Some(answer) = answer {
+        let result = preview.apply(app, answer).map_err(Label::from);
+        let accepted = result.is_ok();
+        host.with(|h| {
+            if let Some(dialog) = h.get_mut::<BulletsDialog>() {
+                dialog.held.answer(result);
+            }
+        });
+        if accepted {
+            return;
+        }
+    } else {
+        preview.update(app, fields);
+    }
+    app.bullets_preview = Some(preview);
 }
 
 #[cfg(test)]
@@ -618,11 +723,21 @@ mod tests {
         crate::dialogs::host::pump(app, &ctx);
     }
 
-    /// OK on the open dialog, as automation answers it, then the frame's pump.
-    fn ok(app: &mut VectorcraftApp) {
+    fn press_ok(app: &mut VectorcraftApp) {
         let (ctx, (id, _)) = (window(app), top(app));
-        assert!(app.dialogs().expect("a window").with(|h| h.confirm_by_id(&ctx, id)), "OK is enabled");
+        let host = app.dialogs().unwrap();
+        host.with(|h| {
+            assert!(!h.confirm_by_id(&ctx, id), "the app must accept the answer first");
+            assert_eq!(h.held_state(id), Some(HeldOk::Waiting));
+        });
         frame(app);
+    }
+
+    /// Files OK and closes with the accepted answer, as the view or automation does.
+    fn ok(app: &mut VectorcraftApp) {
+        press_ok(app);
+        let (ctx, (id, _)) = (window(app), top(app));
+        assert!(app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id)), "the app accepted OK");
     }
 
     /// Cancel on the open dialog, as Esc gives it, then the frame's pump.
@@ -639,6 +754,127 @@ mod tests {
     /// The `text.setFormat` parameters the open dialog would send.
     fn sent(app: &VectorcraftApp) -> Map<String, Value> {
         with_dialog(app, |d| params(d))
+    }
+
+    fn other_drawing(app: &mut VectorcraftApp) -> u64 {
+        app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 15, "y": 10, "text": "Other\nDrawing", "area": {"width": 200, "height": 100}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        id
+    }
+
+    #[test]
+    fn bullets_preview_pauses_in_another_drawing() {
+        let (mut app, id) = app();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        let other = other_drawing(&mut app);
+        let before = first(&app, other);
+
+        frame(&mut app);
+
+        assert_eq!(first(&app, other), before, "the other drawing's paragraphs are unchanged by preview");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        frame(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+        ok(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+    }
+
+    #[test]
+    fn bullets_ok_does_not_change_the_other_drawings_type() {
+        let (mut app, id) = app();
+        let opening = first(&app, id);
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "number", Some("arabic"));
+        let other = other_drawing(&mut app);
+        let before = first(&app, other);
+        let undo = app.session.doc().unwrap().history.undo.len();
+
+        press_ok(&mut app);
+
+        assert_eq!(first(&app, other), before, "the other drawing's paragraphs are unchanged by OK");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(with_dialog(&app, |d| matches!(d.held.state(), Some(HeldOk::Refused(_)))));
+        assert_eq!(fields(&app)["number"], "arabic");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(first(&app, id), opening);
+        frame(&mut app);
+        assert!(with_dialog(&app, |d| d.held.state().is_none()));
+        ok(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::numbered(NumberStyle::Arabic)));
+    }
+
+    #[test]
+    fn bullets_preview_and_ok_leave_restored_paragraphs_unchanged() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("bullets-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let saved = paras(&app, id);
+        app.run("file.saveAs", json!({"path": dir.join("Paragraphs.vectorcraft")})).unwrap();
+        app.run("text.setFormat", json!({"ids": [id], "leftIndent": 19})).unwrap();
+        let drawing = app.session.active().unwrap();
+        let (uid, reverts) = (drawing.uid, drawing.reverts);
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        frame(&mut app);
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let restored = app.session.active().unwrap();
+        assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+        let undo = restored.history.undo.len();
+        frame(&mut app);
+        assert_eq!(paras(&app, id), saved);
+        assert!(!app.session.in_interaction());
+        press_ok(&mut app);
+        assert!(with_dialog(&app, |dialog| matches!(dialog.held.state(), Some(HeldOk::Refused(_)))));
+        assert_eq!(paras(&app, id), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn bullets_cancel_keeps_the_other_drawings_pending_edit() {
+        let (mut app, id) = app();
+        let opening = first(&app, id);
+        let other = other_drawing(&mut app);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        frame(&mut app);
+        assert!(app.session.in_interaction());
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other paragraph edit").unwrap();
+        app.session.preview("text.setFormat", &json!({"ids": [other], "leftIndent": 41})).unwrap();
+        let editing = first(&app, other);
+        assert_eq!(editing.1, 41.0);
+        cancel(&mut app);
+
+        assert!(app.session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(first(&app, other), editing);
+        app.session.commit_interaction().unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(first(&app, id), opening);
+    }
+
+    #[test]
+    fn accepted_bullets_close_on_the_next_view_pass() {
+        let (mut app, id) = app();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        pick_preset(&mut app, "bullet", Some("square"));
+        press_ok(&mut app);
+        let ctx = window(&app);
+
+        crate::tests_synthetic::key_frame(&mut app, &ctx, vec![]);
+
+        assert!(!is_open(&app));
+        assert_eq!(first(&app, id).0, Some(ParaList::bulleted(Bullet::Square)));
     }
 
     /// `ui.bulletsAndNumbering` opens on the selected type's values; a preset, Alignment and the

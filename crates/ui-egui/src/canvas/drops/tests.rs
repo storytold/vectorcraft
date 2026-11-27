@@ -10,8 +10,9 @@ use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
 
 use super::{CarriedArt, Dropped, Payload, apply_drop};
-use crate::panel_drag::PanelDrag;
+use crate::panel_drag::{PanelDrag, SwatchRows};
 use crate::panels::brushes::{BrushKey, BrushLibraries};
+use crate::panels::graphic_styles::StyleDrag;
 use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
 use crate::panels::symbols::{SymbolKey, SymbolLibraries};
 use crate::{VectorcraftApp, canvas};
@@ -45,6 +46,71 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
 
+#[test]
+fn a_foreign_graphic_style_drop_does_not_apply_a_style_with_the_same_name() {
+    let (mut app, ctx) = app_with_canvas();
+    let add = |app: &mut VectorcraftApp, x| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    add(&mut app, 20);
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Shared name"})).unwrap();
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    add(&mut app, 20);
+    app.run("paint.setFill", json!({"color": "#ed1c24"})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Shared name"})).unwrap();
+    let target = add(&mut app, 200);
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+    let before = fill(&app);
+    let history = undo_len(&app);
+    let at = Point::new(250.0, 70.0);
+    let payload = Payload::Style(StyleDrag { document, name: "Shared name".into() });
+    for operation in [DropOperation::Move, DropOperation::Copy] {
+        drop_at(&mut app, payload.clone(), at, operation).unwrap();
+        assert_eq!(fill(&app), before);
+        assert_eq!(undo_len(&app), history, "neither kind of foreign drop makes an edit");
+    }
+}
+
+fn drop_dithered_rgb_gradient(app: &mut VectorcraftApp, fill: bool) -> NodeId {
+    app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+    let result = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100})).unwrap();
+    let id = NodeId(result["id"].as_u64().unwrap());
+    app.session.fill_active = fill;
+    let mut gradient = GradientPaint::new(Default::default());
+    gradient.gradient.stops[0].color = Color::rgb8(255, 0, 0);
+    gradient.gradient.dither = true;
+    let start = undo_len(app);
+    let drag = PanelDrag::paint(Paint::Gradient(Box::new(gradient)));
+    drop_at(app, Payload::Panel(drag), Point::new(50.0, 50.0), DropOperation::Move).unwrap();
+    assert_eq!(undo_len(app), start + 1);
+    id
+}
+
+#[test]
+fn a_gradient_drop_preserves_rgb_stops_and_fill_dither() {
+    let (mut app, _ctx) = app_with_canvas();
+    let id = drop_dithered_rgb_gradient(&mut app, true);
+    let doc = &app.session.active().unwrap().doc;
+    let Paint::Gradient(fill) = doc.node(id).unwrap().appearance.fill_paint() else { panic!("expected a gradient fill") };
+    assert_eq!(fill.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert!(fill.gradient.dither);
+}
+
+#[test]
+fn a_dithered_gradient_drop_applies_to_a_stroke_without_dither() {
+    let (mut app, _ctx) = app_with_canvas();
+    let id = drop_dithered_rgb_gradient(&mut app, false);
+    let doc = &app.session.active().unwrap().doc;
+    let Paint::Gradient(stroke) = &doc.node(id).unwrap().appearance.stroke().unwrap().paint else { panic!("expected a gradient stroke") };
+    assert_eq!(stroke.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert!(!stroke.gradient.dither);
+}
+
 /// Each payload's effect, on art and off it: a style applies to the object hit (Alt adds on top), a paint fills it
 /// and leaves the selection (a gradient fits it), an appearance copies unless dropped on its source, a brush strokes
 /// the path hit and off art places its art if it has any, a library brush is added and applied in one step, a symbol
@@ -67,12 +133,14 @@ fn a_drop_runs_the_effect_of_its_payload() {
     drop_at(&mut app, Payload::Panel(swatch), on_b, Move).unwrap();
     assert_eq!(app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint(), red);
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "the selection stays");
-    let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
-    drop_at(&mut app, Payload::Style(name.clone()), on_b, Move).unwrap();
+    let st = app.session.active().unwrap();
+    let name = st.doc.graphic_styles[2].name.clone();
+    let style = Payload::Style(StyleDrag { document: st.uid, name: name.clone() });
+    drop_at(&mut app, style.clone(), on_b, Move).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
     let items = st.doc.node(b).unwrap().appearance.items.len();
-    drop_at(&mut app, Payload::Style(name.clone()), on_b, Copy).unwrap();
+    drop_at(&mut app, style, on_b, Copy).unwrap();
     let added = app.session.active().unwrap().doc.node(b).unwrap();
     assert!(added.appearance.items.len() > items && added.extras().graphic_style.is_none(), "with Alt the style goes on top, unlinked");
     let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint();
@@ -134,6 +202,32 @@ fn a_drop_runs_the_effect_of_its_payload() {
     symbol_at(&app, empty);
 }
 
+#[test]
+fn a_foreign_brush_drop_never_applies_or_places_a_same_named_brush() {
+    let (mut app, ctx) = app_with_canvas();
+    let make_brush = |app: &mut VectorcraftApp, width| {
+        app.run("shape.rectangle", json!({"x": 15, "y": 15, "width": width, "height": 30})).unwrap();
+        app.run("brush.new", json!({"name": "Shared Brush", "type": "art"})).unwrap();
+    };
+    make_brush(&mut app, 30);
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    make_brush(&mut app, 60);
+    app.run("brush.setCurrent", json!({"name": null})).unwrap();
+    let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
+    frame(&mut app, &ctx, vec![]);
+
+    let brush_of = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(path).unwrap().appearance.stroke().and_then(|s| s.brush.clone());
+    let before = brush_of(&app);
+    assert!(before.is_none());
+    let history = undo_len(&app);
+    let payload = Payload::Brush(BrushKey { doc: document, name: "Shared Brush".into(), group: false });
+    drop_at(&mut app, payload.clone(), Point::new(200.0, 200.0), DropOperation::Move).unwrap();
+    assert_eq!(brush_of(&app), before, "the foreign drop leaves the path's stroke alone");
+    drop_at(&mut app, payload, Point::new(200.0, 260.0), DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), history, "no artwork is placed on empty canvas either");
+}
+
 /// A symbol of another document is added here and placed in one undo step, the source is unchanged, and a symbol of
 /// a closed document places nothing.
 #[test]
@@ -162,6 +256,138 @@ fn a_symbol_from_another_document_is_added_and_placed_in_one_step() {
 
 /// A colour dropped on a selected mesh recolors the point under the pointer, else the patch's four points; the same
 /// colour again records no step.
+#[test]
+fn a_process_swatch_canvas_drop_keeps_its_color_in_another_document() {
+    let (mut app, ctx) = app_with_canvas();
+    let name = "Shared Swatch";
+    let at = Point::new(250.0, 70.0);
+    let add_target = |app: &mut VectorcraftApp| {
+        NodeId(app.run("shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    let fill = |app: &VectorcraftApp, target| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+
+    app.run("swatch.new", json!({"name": name, "color": "#ff0000"})).unwrap();
+    let source = app.session.active().unwrap();
+    let paint = source.doc.swatch(name).unwrap().paint.clone();
+    let rows = SwatchRows { document: source.uid, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: true };
+    let payload = PanelDrag::Paint { paint: paint.clone(), params: json!({"swatch": name}), rows: Some(rows), library: None };
+
+    let local_target = add_target(&mut app);
+    app.run("swatch.edit", json!({"name": name, "color": "#ff8800"})).unwrap();
+    let edited = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+    drop_at(&mut app, Payload::Panel(payload.clone()), at, DropOperation::Move).unwrap();
+    assert_eq!(fill(&app, local_target), edited, "a same-document drop still resolves the swatch by name");
+    assert_ne!(edited, paint);
+
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("swatch.new", json!({"name": name, "color": "#0000ff"})).unwrap();
+    let destination = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+    let target = add_target(&mut app);
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+
+    drop_at(&mut app, Payload::Panel(payload), at, DropOperation::Move).unwrap();
+    assert_eq!(fill(&app, target), paint);
+    assert_eq!(app.session.active().unwrap().doc.swatch(name).unwrap().paint, destination);
+}
+
+#[test]
+fn a_swatch_drag_keeps_its_color_after_next_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let name = "Shared Swatch";
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": name, "color": "#ff0000"})).unwrap();
+    let source = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": name, "color": "#0000ff"})).unwrap();
+    let target = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    app.run("window.previousDocument", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, |app, ui| {
+        app.sync_views();
+        ui.allocate_ui_with_layout(egui::vec2(280.0, 480.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+            crate::panels::swatches::show(app, ui);
+        });
+        canvas::show(app, ui);
+    });
+    let label = "Shared Swatch, #ff0000";
+    let from = panel.rect(label).center();
+    let to = panel.app().canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
+    panel.drag_hold_role(label, Role::LIST_ITEM, to - from);
+    assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the Swatches row starts a paint drag");
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, destination);
+    assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the drag stays held during Next Document");
+    panel.release();
+
+    let app = panel.app();
+    assert_eq!(app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint(), source);
+}
+
+#[test]
+fn linked_swatch_drops_stay_in_their_source_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    for spot in [false, true] {
+        for (different_drawing, same_name) in [(false, false), (true, false), (true, true)] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let name = "Shared Swatch";
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("swatch.new", json!({"name": name, "color": "#ff0000", "global": true, "spot": spot})).unwrap();
+            if different_drawing {
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            }
+            if same_name {
+                app.run("swatch.new", json!({"name": name, "color": "#0000ff", "global": true})).unwrap();
+            }
+            let target = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+            app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+            let destination = app.session.active().unwrap().uid;
+            if different_drawing {
+                app.run("window.previousDocument", json!({})).unwrap();
+            }
+            let mut panel = Panel::new(app, |app, ui| {
+                app.sync_views();
+                ui.allocate_ui_with_layout(egui::vec2(280.0, 480.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                    crate::panels::swatches::show(app, ui);
+                });
+                canvas::show(app, ui);
+            });
+            let label = "Shared Swatch, #ff0000";
+            let from = panel.rect(label).center();
+            let to = panel.app().canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
+            panel.drag_hold_role(label, Role::LIST_ITEM, to - from);
+            assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the Swatches row starts a paint drag");
+            if different_drawing {
+                panel.key(Key::F6, Modifiers::COMMAND);
+            }
+            assert_eq!(panel.app().session.active().unwrap().uid, destination);
+            assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the drag stays active");
+            panel.release();
+            let app = panel.app();
+            let doc = &app.session.active().unwrap().doc;
+            let fill = doc.node(target).unwrap().appearance.fill_paint();
+            if different_drawing {
+                assert_eq!(fill, Paint::solid(Color::rgb8(0, 255, 0)), "the destination fill stays unchanged");
+                assert_eq!(app.ui.status, "A linked color swatch can only be applied in its own document.");
+                assert_eq!(doc.swatch(name).and_then(|s| s.paint.color()), same_name.then_some(Color::rgb8(0, 0, 255)));
+            } else {
+                assert_eq!(fill, doc.tint_paint(name, 1.0).unwrap(), "the fill remains linked to its swatch");
+            }
+        }
+    }
+}
+
 #[test]
 fn a_color_dropped_on_a_selected_mesh_recolors_the_point_or_patch_under_it() {
     use vectorcraft_doc::GradientMesh;

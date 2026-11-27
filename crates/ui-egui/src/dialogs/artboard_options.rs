@@ -137,8 +137,7 @@ impl ArtboardOptionsValue {
     }
 }
 
-/// What the dialog shows but does not edit; read from the app when it opens, since a modal dialog's
-/// document, presets and preferences cannot change while it is open.
+/// What the dialog shows but does not edit, read from the app when it opens.
 struct Setup {
     /// The lengths the fields keep and show.
     lengths: LengthUnits,
@@ -152,9 +151,18 @@ struct Setup {
     fit_bounds: [Option<Rect>; 2],
 }
 
+#[derive(Clone, Copy)]
+struct Target {
+    document: u64,
+    reverts: u64,
+    /// The current artboard's ID, or no ID while creating a new artboard.
+    artboard: Option<u32>,
+}
+
 /// Artboard Options on the dialog host: the artboard's value, the held OK and the color requests.
 pub struct ArtboardOptionsDialog {
     id: DialogId,
+    target: Target,
     value: ArtboardOptionsValue,
     setup: Setup,
     held: HeldAnswer<ArtboardOptionsValue>,
@@ -162,8 +170,8 @@ pub struct ArtboardOptionsDialog {
 }
 
 impl ArtboardOptionsDialog {
-    fn new(value: ArtboardOptionsValue, setup: Setup) -> Self {
-        ArtboardOptionsDialog { id: dialog_id(KIND), value, setup, held: HeldAnswer::new(), requests: HostRequests::new() }
+    fn new(target: Target, value: ArtboardOptionsValue, setup: Setup) -> Self {
+        ArtboardOptionsDialog { id: dialog_id(KIND), target, value, setup, held: HeldAnswer::new(), requests: HostRequests::new() }
     }
 }
 
@@ -546,13 +554,15 @@ pub(crate) fn active_index(app: &VectorcraftApp) -> usize {
 
 /// Opens the dialog over `value`, with the preferences, the shared reference point and what the dialog
 /// shows read from the app.
-fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue) -> Result<Value, String> {
+fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue, artboard: Option<u32>) -> Result<Value, String> {
     let host = app.dialogs().ok_or("no window")?;
+    let st = app.session.active().ok_or("no document")?;
+    let target = Target { document: st.uid, reverts: st.reverts, artboard };
+    let artwork = vectorcraft_render::encode::art_bounds(&st.doc);
     let [(_, fade), (_, update_while_dragging)] = global_fields(app);
     (value.fade, value.update_while_dragging, value.reference) = (fade, update_while_dragging, app.ui.transform_panel.reference_point);
     let fills = fill_colors(app);
     value.seed_customs(&fills);
-    let artwork = app.session.active().and_then(|st| vectorcraft_render::encode::art_bounds(&st.doc));
     let setup = Setup {
         lengths: crate::canvas::rulers::general_lengths(app),
         origin: app.ruler_origin(),
@@ -560,7 +570,7 @@ fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue) -> Result<
         fills,
         fit_bounds: [artwork, app.selection_bounds()],
     };
-    host.with(|h| h.open(ArtboardOptionsDialog::new(value, setup)));
+    host.with(|h| h.open(ArtboardOptionsDialog::new(target, value, setup)));
     Ok(json!({ "dialog": KIND }))
 }
 
@@ -569,6 +579,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let index = active_index(app);
     let st = app.session.active().ok_or("no document")?;
     let a = st.doc.artboards.get(index).ok_or("no artboard")?;
+    let artboard = a.id;
     let r = a.rect;
     let value = ArtboardOptionsValue {
         index,
@@ -585,7 +596,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         pixel_aspect: a.video_ruler_pixel_aspect_ratio,
         ..Default::default()
     };
-    present(app, value)
+    present(app, value, Some(artboard))
 }
 
 /// `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard): Artboard Options for a new
@@ -605,7 +616,7 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
         pixel_aspect: 1.0,
         ..Default::default()
     };
-    present(app, value)
+    present(app, value, None)
 }
 
 /// Runs once per frame after the shell pass: runs the artboard command of a filed OK and answers it
@@ -613,12 +624,15 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// point picked in the dialog.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
-    let Some((held, reference)) = host.with(|h| h.get_mut::<ArtboardOptionsDialog>().map(|d| (d.held.take(), d.value.reference))) else { return };
+    let Some((target, held, reference)) = host.with(|h| h.get_mut::<ArtboardOptionsDialog>().map(|d| (d.target, d.held.take(), d.value.reference)))
+    else {
+        return;
+    };
     if app.ui.transform_panel.reference_point != reference {
         app.ui.transform_panel.reference_point = reference;
     }
     if let Some(value) = held {
-        let answer = confirm(app, &value).map(drop).map_err(Label::from);
+        let answer = confirm(app, target, &value).map(drop).map_err(Label::from);
         host.with(|h| {
             if let Some(d) = h.get_mut::<ArtboardOptionsDialog>() {
                 d.held.answer(answer);
@@ -633,21 +647,31 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// used (its column and row), all in one undo step. Fitting applies only to this artboard and never
 /// moves its artwork. The Global checkboxes' preferences are set only after the artboard command
 /// succeeds, so an error leaves them as they were.
-fn confirm(app: &mut VectorcraftApp, v: &ArtboardOptionsValue) -> Result<Value, String> {
+fn confirm(app: &mut VectorcraftApp, target: Target, v: &ArtboardOptionsValue) -> Result<Value, String> {
+    let st = app
+        .session
+        .active()
+        .filter(|st| st.uid == target.document)
+        .ok_or(tl!("Artboard Options can only change the document where it was opened."))?;
+    if st.reverts != target.reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+    }
     let globals = global_changes(app, v);
     if v.new {
         let r = confirm_new(app, v)?;
         set_globals(app, globals)?;
         return Ok(r);
     }
-    let p = v.params();
-    let was = app.session.active().and_then(|st| st.doc.artboards.get(v.index)).map(|a| a.rect);
-    let changed = |k: &str, old: Option<f64>| p[k].as_f64().filter(|n| old.is_some_and(|old| (n - old).abs() > 1e-6));
-    let (w, h) = (changed("width", was.map(|r| r.width())), changed("height", was.map(|r| r.height())));
+    let (index, board) =
+        st.doc.artboards.iter().enumerate().find(|(_, board)| Some(board.id) == target.artboard).ok_or(tl!("This artboard was removed."))?;
+    let mut p = v.params();
+    p["index"] = json!(index);
+    let changed = |k: &str, old: f64| p[k].as_f64().filter(|n| (n - old).abs() > 1e-6);
+    let (w, h) = (changed("width", board.rect.width()), changed("height", board.rect.height()));
     let refi = v.ref_y.min(2) * 3 + v.ref_x.min(2);
     let mut entries = vec![];
     if !v.fit && (v.size_choice.is_some() || w.is_some() || h.is_some()) {
-        for i in crate::panels::artboards::resized_with(app, v.index).into_iter().filter(|i| *i != v.index) {
+        for i in crate::panels::artboards::resized_with(app, index).into_iter().filter(|i| *i != index) {
             if let Some(r) = app.session.active().and_then(|st| st.doc.artboards.get(i)).map(|a| a.rect) {
                 let (w, h) = if let Some(choice) = v.size_choice {
                     let Some((w, h)) = choice.size_for(r.width(), r.height()) else { continue };
@@ -751,6 +775,69 @@ mod tests {
 
     fn undo_len(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().history.undo.len()
+    }
+
+    #[test]
+    fn confirmation_follows_the_original_artboard_after_reorder() {
+        let mut app = app();
+        app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 50})).unwrap();
+        crate::panels::artboards::select(&mut app, 0);
+        let original = app.session.active().unwrap().doc.artboards[0].id;
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Renamed"))]).unwrap();
+
+        app.run("artboard.reorder", json!({"index": 0, "to": 1})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[1].id, original);
+        let undo = undo_len(&app);
+        ok(&mut app).unwrap();
+        let artboards = &app.session.active().unwrap().doc.artboards;
+        assert_eq!((artboards[0].name.as_str(), artboards[1].name.as_str()), ("Artboard 2", "Renamed"));
+        assert_eq!(undo_len(&app), undo + 1);
+    }
+
+    #[test]
+    fn confirmation_refuses_to_edit_or_add_artboards_in_another_document() {
+        for create in [false, true] {
+            let mut app = app();
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            if create {
+                open_new(&mut app).unwrap();
+            } else {
+                open(&mut app).unwrap();
+            }
+            set(&app, &[("name", json!("Source"))]).unwrap();
+
+            app.run("document.activate", json!({"index": 1})).unwrap();
+            let undo = undo_len(&app);
+            let answer = ok(&mut app);
+            let artboards = &app.session.active().unwrap().doc.artboards;
+            assert_eq!((artboards.len(), artboards[0].name.as_str()), (1, "Artboard 1"));
+            assert_eq!(undo_len(&app), undo);
+            assert!(answer.is_err() && is_open(&app));
+
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            ok(&mut app).unwrap();
+            let artboards = &app.session.active().unwrap().doc.artboards;
+            assert_eq!(artboards.len(), if create { 2 } else { 1 });
+            assert_eq!(artboards.last().unwrap().name, "Source");
+        }
+    }
+
+    #[test]
+    fn confirmation_refuses_to_edit_a_deleted_artboards_replacement() {
+        let mut app = app();
+        app.run("artboard.new", json!({"x": 400, "y": 0, "width": 100, "height": 50})).unwrap();
+        crate::panels::artboards::select(&mut app, 0);
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Renamed"))]).unwrap();
+
+        app.run("artboard.delete", json!({"index": 0})).unwrap();
+        let undo = undo_len(&app);
+        let answer = ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 2");
+        assert_eq!(undo_len(&app), undo);
+        assert!(answer.is_err() && is_open(&app));
     }
 
     /// A new X moves the art only with Move Artwork with Artboard on, and Undo restores the document.
@@ -979,5 +1066,40 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id()));
         assert!(!is_open(&app));
         assert_eq!(*app.session.doc().unwrap().doc, *before);
+    }
+
+    #[test]
+    fn artboard_options_refuses_a_stale_draft_after_confirmed_revert() {
+        let file = std::env::temp_dir().join(format!("vectorcraft-artboard-options-revert-{}.vectorcraft", std::process::id()));
+        let path = file.to_string_lossy();
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        let original = app.session.active().unwrap();
+        let (uid, reverts, artboard) = (original.uid, original.reverts, original.doc.artboards[0].id);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Stale Draft"))]).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(&file);
+        let reverted = app.session.active().unwrap();
+        assert_eq!((reverted.uid, reverted.reverts, reverted.doc.artboards[0].id), (uid, reverts + 1, artboard));
+        let undo = undo_len(&app);
+
+        let answer = ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1");
+        assert_eq!(undo_len(&app), undo);
+        assert_eq!(answer, Err("The document was reverted. Reopen this dialog to continue.".into()));
+        assert!(is_open(&app));
+        let host = app.dialogs().unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        assert_eq!(host.with(|h| h.get::<ArtboardOptionsDialog>().unwrap().value.name.clone()), "Stale Draft");
+        host.with(|h| h.cancel_by_id(&ctx, id()));
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Fresh Draft"))]).unwrap();
+        ok(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Fresh Draft");
     }
 }

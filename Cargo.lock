@@ -8480,6 +8480,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.21",
 ]
 
@@ -8669,6 +8670,7 @@ name = "vectorcraft-js"
 version = "0.24.1"
 dependencies = [
  "chrono",
+ "craft-xml",
  "getrandom 0.4.3",
  "proptest",
  "unicode-properties",
@@ -8786,6 +8788,7 @@ dependencies = [
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
+ "vectorcraft-js",
  "wasmi",
  "wasmparser 0.228.0",
  "wat",
@@ -8930,6 +8933,7 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
+ "vectorcraft-tools",
 ]
 
 [[package]]
