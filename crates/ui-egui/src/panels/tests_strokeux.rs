@@ -14,6 +14,101 @@ use crate::tests::panel_harness::{Panel, ROOM};
 type Show = fn(&mut VectorcraftApp, &mut Ui);
 
 #[test]
+fn stroke_style_choices_cross_the_editor_bridge_in_both_directions() {
+    use craft::draw::ui::stroke::{self as draw, StrokeField};
+    use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign};
+
+    let mut app = app_with_rect();
+    run(&mut app, "paint.setStroke", json!({"color": "#222222"}));
+    let mut document = current_stroke(&app).unwrap();
+    let rows = [
+        (LineCap::Butt, draw::LineCap::Butt, "butt"),
+        (LineCap::Round, draw::LineCap::Round, "round"),
+        (LineCap::Square, draw::LineCap::Square, "square"),
+    ];
+    for (choice, shown, keyword) in rows {
+        document.cap = choice;
+        let style = stroke::style_of(Some(&document));
+        assert_eq!(style.cap, shown);
+        let params = stroke::params_of(&draw::StrokeStyle::default(), &style, StrokeField::Cap);
+        run(&mut app, "stroke.set", params.clone());
+        assert_eq!(params, json!({"cap": keyword}));
+        assert_eq!(current_stroke(&app).unwrap().cap, choice);
+    }
+    let rows = [
+        (LineJoin::Miter, draw::LineJoin::Miter, "miter"),
+        (LineJoin::Round, draw::LineJoin::Round, "round"),
+        (LineJoin::Bevel, draw::LineJoin::Bevel, "bevel"),
+    ];
+    for (choice, shown, keyword) in rows {
+        document.join = choice;
+        let style = stroke::style_of(Some(&document));
+        assert_eq!(style.join, shown);
+        let params = stroke::params_of(&draw::StrokeStyle::default(), &style, StrokeField::Join);
+        run(&mut app, "stroke.set", params.clone());
+        assert_eq!(params, json!({"join": keyword}));
+        assert_eq!(current_stroke(&app).unwrap().join, choice);
+    }
+    let rows = [
+        (StrokeAlign::Center, draw::StrokeAlign::Center, "center"),
+        (StrokeAlign::Inside, draw::StrokeAlign::Inside, "inside"),
+        (StrokeAlign::Outside, draw::StrokeAlign::Outside, "outside"),
+    ];
+    for (choice, shown, keyword) in rows {
+        document.align = choice;
+        let style = stroke::style_of(Some(&document));
+        assert_eq!(style.align, shown);
+        let params = stroke::params_of(&draw::StrokeStyle::default(), &style, StrokeField::Align);
+        run(&mut app, "stroke.set", params.clone());
+        assert_eq!(params, json!({"align": keyword}));
+        assert_eq!(current_stroke(&app).unwrap().align, choice);
+    }
+}
+
+#[test]
+fn compact_stroke_miter_limit_only_applies_to_miter_joins() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Pos2, Rect};
+    use vectorcraft_doc::LineJoin;
+
+    for (join, width) in [("round", crate::panel_docking::PANEL_MIN_WIDTH), ("bevel", 320.0)] {
+        let mut app = app_with_rect();
+        app.session.prefs.interface_language = "en".into();
+        run(&mut app, "paint.setStroke", json!({"color": "#222222"}));
+        run(&mut app, "stroke.set", json!({"join": join, "miterLimit": 4}));
+        let original = current_stroke(&app).unwrap();
+        let room = egui::vec2(width, 500.0);
+        let mut panel = Panel::new(app, stroke::show);
+        panel.room(room).frame();
+        let baseline = panel.app().session.active().unwrap().history.undo.len();
+        let edit = |panel: &mut Panel| {
+            let field = panel.rect_role("Miter limit", Role::SPIN_BUTTON);
+            assert!(Rect::from_min_size(Pos2::ZERO, room).contains_rect(field));
+            let value = panel.app().host.i18n().unwrap().format().number(8.5, 1);
+            panel.click_at(field.center());
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(&value);
+            panel.key(Key::Enter, Modifiers::NONE);
+        };
+        edit(&mut panel);
+        assert_eq!(current_stroke(&panel.app()).unwrap(), original);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), baseline);
+        panel.click("Miter");
+        let miter = current_stroke(&panel.app()).unwrap();
+        assert_eq!(miter.join, LineJoin::Miter);
+        edit(&mut panel);
+        let mut expected = miter.clone();
+        expected.miter_limit = 8.5;
+        assert_eq!(current_stroke(&panel.app()).unwrap(), expected);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), baseline + 2);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(current_stroke(&panel.app()).unwrap(), miter);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(current_stroke(&panel.app()).unwrap(), original);
+    }
+}
+
+#[test]
 fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "millimeters".into();
