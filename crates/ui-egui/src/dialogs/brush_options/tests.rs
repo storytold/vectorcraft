@@ -9,6 +9,102 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn unchanged_normal_brush_approval_keeps_the_document_and_undo_history_exact() {
+    use crate::tests::panel_harness::Panel;
+
+    for name in ["6 pt. Flat", "Bristle Round", "Confetti", "Arrow", "Diamonds"] {
+        let mut app = app();
+        let params = if name == "Arrow" { json!({"width": 100.25}) } else { json!({}) };
+        // Establish a saved library before testing a normal approval of an existing brush.
+        app.run("brush.options", json!({"name": name, "params": params})).unwrap();
+        let brush = app.run("brush.get", json!({"name": name})).unwrap();
+        let document = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(vec2(1200.0, 1200.0));
+        panel.app().run("ui.brushOptions", json!({"name": name})).unwrap();
+        panel.frame();
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        assert!(!is_open(&panel.app()), "the unchanged {name} dialog closes normally");
+        assert_eq!(panel.app().run("brush.get", json!({"name": name})).unwrap(), brush);
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc, document, "unchanged {name} approval preserves the entire stored library");
+        assert_eq!(st.revision, revision);
+        assert_eq!(st.history.undo.len(), undo, "unchanged {name} approval adds no Undo step");
+    }
+}
+
+#[test]
+fn brush_automation_approval_skips_noop_but_saves_changed_options_in_one_step() {
+    let mut app = app();
+    app.run("brush.options", json!({"name": "Arrow", "params": {"width": 100.25}})).unwrap();
+    let original = app.session.active().unwrap().doc.clone();
+    let revision = app.session.active().unwrap().revision;
+    let undo = app.session.active().unwrap().history.undo.len();
+    open(&mut app, "Arrow");
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, original);
+    assert_eq!(app.session.active().unwrap().revision, revision);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    for name in [" Arrow ", ""] {
+        open(&mut app, "Arrow");
+        set(&mut app, json!({"name": name}));
+        confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc, original, "a command-equivalent name does not rewrite the brush");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+    open(&mut app, "Arrow");
+    set(&mut app, json!({"width": 110.25}));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.run("brush.get", json!({"name": "Arrow"})).unwrap()["width"], json!(110.25));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc, original);
+}
+
+#[test]
+fn normal_brush_rename_still_saves_and_a_deleted_brush_still_refuses_approval() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    app.run("brush.options", json!({"name": "Arrow", "params": {}})).unwrap();
+    let original = app.session.active().unwrap().doc.clone();
+    let undo = app.session.active().unwrap().history.undo.len();
+    let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+    panel.room(vec2(1200.0, 1200.0));
+    panel.app().run("ui.brushOptions", json!({"name": "Arrow"})).unwrap();
+    panel.frame();
+    panel.click_role("Name", Role::TEXT_INPUT);
+    panel.key(Key::A, Modifiers::COMMAND);
+    panel.type_text("Renamed Arrow");
+    panel.key(Key::Tab, Modifiers::NONE);
+    panel.click("OK");
+    panel.frame();
+    panel.frame();
+    assert!(!is_open(&panel.app()));
+    assert!(panel.app().run("brush.get", json!({"name": "Renamed Arrow"})).is_ok());
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().session.active().unwrap().doc, original);
+
+    open(&mut panel.app(), "Arrow");
+    panel.app().run("brush.delete", json!({"name": "Arrow"})).unwrap();
+    let deleted = panel.app().session.active().unwrap().doc.clone();
+    let undo = panel.app().session.active().unwrap().history.undo.len();
+    assert!(confirm(&mut panel.app()).unwrap_err().contains("no brush named"));
+    assert!(is_open(&panel.app()), "the stale unchanged dialog reports its normal error");
+    assert_eq!(panel.app().session.active().unwrap().doc, deleted);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+    cancel(&mut panel.app());
+}
+
 fn ctx(app: &VectorcraftApp) -> egui::Context {
     app.ui_ctx.clone().expect("the test app has a context")
 }

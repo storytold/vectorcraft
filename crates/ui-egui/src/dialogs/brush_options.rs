@@ -3,8 +3,9 @@
 //! Tilt, Bearing or Rotation with its Variation, over live previews of the nib and of a stroke
 //! (light, heavy, light pressure). Bristle Brush Options: Name (a new bristle brush name that is too
 //! long is refused at OK), Shape and the bristle sliders. Scatter, Art and Pattern Brush Options: see
-//! [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with the brush update);
-//! a name another brush has, or a new bristle brush name that is too long, keeps the dialog open.
+//! [`super::brush_art_options`]. A changed OK runs `brush.options` (strokes painted with the brush update);
+//! accepting unchanged settings closes without an Undo step.
+//! A name another brush has, or a new bristle brush name that is too long, keeps the dialog open.
 //!
 //! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle` | `scatter` | `art` |
 //! `pattern`), `name`.
@@ -183,6 +184,7 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
         initial.set(OPENED, FieldValue::Json(Value::Object(opened)));
         initial.set(KEYS, FieldValue::Json(json!(keys)));
     }
+    let unchanged = (!object && !flag(&initial, CREATE)).then(|| (string(&initial, "name"), string(&initial, "__brush"), params(&initial)));
     // The canvas of the current window: the Key Color dropper samples there while the dialog is open.
     let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
     let dialog = HostedParamDialog::new(&ctx, KIND, initial, move |fields| {
@@ -201,6 +203,15 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
                 }
                 None if !object => return Err(tl!("Return to the original drawing to edit its brush").into()),
                 _ => {}
+            }
+            if let Some((opened_name, brush, opened_params)) = &unchanged {
+                let name = string(&result.fields, "name");
+                // The command ignores an empty name and trims a supplied rename.
+                let same_name = name == *opened_name || name.trim().is_empty() || name.trim() == brush;
+                if same_name && params(&result.fields) == *opened_params {
+                    // A deleted brush still reports its normal error instead of accepting a stale dialog.
+                    return app.run("brush.get", json!({"name": brush})).map(|_| ());
+                }
             }
             ok(app, result)
         })
