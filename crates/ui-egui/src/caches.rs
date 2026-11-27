@@ -11,9 +11,6 @@ use super::{canvas, render_worker};
 /// Cached canvas raster.
 pub struct CanvasCache {
     pub renderer: vectorcraft_render::Renderer,
-    /// Draws for a patch against a web frame with bounded view-sensitive art.
-    /// The renderer of the whole frame keeps its raster and derived-art caches across these patches.
-    pub web_patch_renderer: Option<Box<vectorcraft_render::Renderer>>,
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with
@@ -35,6 +32,9 @@ pub struct CanvasCache {
     /// The shown web frame can still be patched outside this enclosure in its own raster pixels.
     /// Present only when all frame-size-dependent output has a known bound.
     pub view_sized_bounds: Option<vectorcraft_geom::Rect>,
+    /// Draws for a patch against a web frame with bounded view-sensitive art.
+    /// The renderer of the whole frame keeps its raster and derived-art caches across these patches.
+    pub web_patch_renderer: Option<Box<vectorcraft_render::Renderer>>,
     /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
     /// (seconds, egui's input time): it renders whole once it has been shown for
     /// [`canvas::STILL_SECS`] with the view unmoved.
