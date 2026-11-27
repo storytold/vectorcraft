@@ -61,6 +61,14 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
+    struct SavedFile(std::path::PathBuf);
+
+    impl Drop for SavedFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
     fn app() -> VectorcraftApp {
         let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
@@ -141,6 +149,48 @@ mod tests {
         rename(&mut app, "Source only");
         assert_eq!(names(&app), ["Source only", "Artboard 2", "Artboard 3"]);
         assert!(!app.any_dialog_open());
+    }
+
+    #[test]
+    fn rename_cannot_use_a_draft_opened_before_file_revert() {
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-rename-artboards-revert-{}.vectorcraft", std::process::id())));
+        let services = crate::Services {
+            read: Some(Box::new(|path: &str| std::fs::read(path).map_err(|e| e.to_string()))),
+            write: Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string()))),
+            ..Default::default()
+        };
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        let active = app.session.active().unwrap();
+        let (document, reverts, artboard) = (active.uid, active.reverts, active.doc.artboards[0].id);
+        app.run(CMD, json!({"indices": [0], "name": "Temporary"})).unwrap();
+        open(&mut app).unwrap();
+        let (id, fields) = open_rename(&app);
+        assert_eq!(fields["name"], "Temporary");
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "name", json!("Stale")).unwrap();
+            assert!(!host.confirm_by_id(&ctx, id));
+        });
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let active = app.session.active().unwrap();
+        assert_eq!((active.uid, active.reverts, active.doc.artboards[0].id), (document, reverts + 1, artboard));
+        let undo = active.history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+
+        assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"], "an older draft cannot rename the reloaded board");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        open(&mut app).unwrap();
+        rename(&mut app, "Page");
+        assert_eq!(names(&app), ["Page-1", "Artboard 2", "Page-2"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
     }
 
     #[test]
