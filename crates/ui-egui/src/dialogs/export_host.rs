@@ -64,8 +64,8 @@ pub(crate) enum Export {
 pub(crate) struct Open {
     /// The hosted dialog's id.
     pub id: DialogId,
-    /// The drawing whose options and output this dialog controls.
-    document: Option<u64>,
+    /// The drawing and loaded contents whose options and output this dialog controls.
+    document: Option<(u64, u64)>,
     /// Which dialog it is.
     pub kind: Export,
     /// Whether Export Selection opened it: OK then writes the selection alone.
@@ -92,10 +92,17 @@ impl ExportDialogs {
 
 impl Open {
     fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
-        if !matches!(self.kind, Export::As { .. } | Export::Hpgl { .. }) && self.document != app.session.active().map(|doc| doc.uid) {
-            return Err(tl!("Return to the original drawing to continue").into());
+        if matches!(self.kind, Export::As { .. } | Export::Hpgl { .. }) {
+            return Ok(());
         }
-        Ok(())
+        let active = app.session.active().map(|doc| (doc.uid, doc.reverts));
+        if active == self.document {
+            return Ok(());
+        }
+        if active.zip(self.document).is_some_and(|((uid, _), (source, _))| uid == source) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        Err(tl!("Return to the original drawing to continue").into())
     }
 }
 
@@ -108,10 +115,9 @@ pub(super) fn options<L: From<&'static str>>(ids: &[&'static str], labels: &[&'s
 /// replaces the one open, and its record.
 pub(crate) fn open(app: &mut VectorcraftApp, kind: Export, selection: bool, dialog: HostedParamDialog) -> Option<DialogId> {
     let document = match &kind {
-        Export::As { document } => *document,
-        Export::Hpgl { doc } => Some(*doc),
+        Export::As { .. } | Export::Hpgl { .. } => None,
         Export::EpsCustom { parent } => app.export_dialogs.find(*parent)?.document,
-        _ => app.session.active().map(|doc| doc.uid),
+        _ => app.session.active().map(|doc| (doc.uid, doc.reverts)),
     };
     let options = match &kind {
         Export::EpsCustom { parent } => HeldOptions { parent: Some(*parent), cancel: None },
