@@ -12471,8 +12471,10 @@ glyph it is close to when its leftover distance from that glyph, relative to the
 mean square distance of its sampled outline points from their center), is at most the
 tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
 and this measure are VectorCraft's own. When glyphs of several fonts match, exactly or nearly, each shape is set in
-the font that the most selected shapes match, and among fonts that as many shapes match, in the one whose glyphs fit
-those shapes closest in all, even when another font has a glyph closer to that one shape. A near-matched glyph may
+the font, of those it matches, that the most selected shapes match, and among fonts that as many shapes match, in the
+one whose glyphs fit those shapes closest in all, even when another font has a glyph closer to that one shape. A shape
+that has no match in the font most shapes match is set in the first of its own fonts in that order, so one selection
+can become type in several fonts. A near-matched glyph may
 differ from its line by the tolerance in size, turn and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
 a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
 the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
