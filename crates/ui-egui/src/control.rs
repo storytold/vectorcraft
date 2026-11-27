@@ -1378,6 +1378,9 @@ fn collect_library_params(v: &Value, ids: &mut std::collections::BTreeSet<String
 }
 
 fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Value) -> Reply {
+    if app.session.plugin_calls_open() && INPUT_METHODS.contains(&method) {
+        return err(vectorcraft_engine::EngineError::PluginBusy);
+    }
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     match method {
         "engine.execute" | "ui.menu.invoke" | "command" => {

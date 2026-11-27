@@ -286,6 +286,38 @@ fn returned_effects_refuse_nested_fields_as_top_level_parameters() {
 }
 
 #[test]
+fn returned_svg_filters_require_xml() {
+    for params in [serde_json::Value::Null, json!({}), json!({"scale": 1.0})] {
+        let effect = Effect { id: crate::SVG_FILTER.into(), params, visible: true };
+        assert!(crate::check_returned_effect(&effect, false).is_err(), "{effect:?}");
+    }
+}
+
+#[test]
+fn returned_svg_filter_names_match_the_xml_id() {
+    let xml = r##"<filter id="f"><feFlood flood-color="#ff0000"/></filter>"##;
+    let check = |params| crate::check_returned_effect(&Effect { id: crate::SVG_FILTER.into(), params, visible: true }, false);
+    assert_eq!(check(json!({"xml": xml})), Ok(()));
+    assert_eq!(check(json!({"xml": xml, "name": "f"})), Ok(()));
+    for name in [json!(3), json!(null), json!("other"), json!("")] {
+        let params = json!({"xml": xml, "name": name});
+        assert!(check(params.clone()).is_err(), "{params}");
+    }
+}
+
+#[test]
+fn returned_effect_seeds_are_whole_numbers() {
+    for id in ["distort.roughen", "distort.tweak", "stylize.scribble"] {
+        for seed in [json!(0), json!(-1), json!(1.0)] {
+            let effect = Effect { id: id.into(), params: json!({"seed": seed}), visible: true };
+            assert_eq!(crate::check_returned_effect(&effect, false), Ok(()), "{effect:?}");
+        }
+        let effect = Effect { id: id.into(), params: json!({"seed": 1.5}), visible: true };
+        assert!(crate::check_returned_effect(&effect, false).is_err(), "{effect:?}");
+    }
+}
+
+#[test]
 fn returned_duotone_effects_validate_each_tone() {
     let check = |params| crate::check_returned_effect(&Effect { id: "addon.color.duotone".into(), params, visible: true }, false);
     let mut accepted = vec![];
@@ -454,8 +486,8 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     ] {
         assert_eq!(check(&e(id, params.clone()), false), Ok(()), "{id} {params}");
     }
-    // Every effect's own defaults pass the check, so each documented range holds its default.
-    for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id) && !crate::is_pathfinder(i.id)) {
+    // Defaults pass for effects that do not require additional parameters.
+    for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id) && !crate::is_pathfinder(i.id) && i.id != crate::SVG_FILTER) {
         assert_eq!(check(&e(info.id, info.defaults.clone()), false), Ok(()), "{}", info.id);
     }
     for (effect, row) in [

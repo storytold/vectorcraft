@@ -240,6 +240,12 @@ pub struct Session {
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// The modules a load in another place checked, with the manifest it read
+    /// ([`Session::hand_in_checked_plugin`]), the newest last.
+    plugin_checked: Vec<cmd::plugin::Checked>,
+    /// The run of a filter that calls commands that holds the documents while the web build's
+    /// plug-in worker runs it ([`cmd::plugin::FilterRun::begin_calls`]).
+    plugin_calling: Option<cmd::plugin::Calling>,
     /// What a person approved for the next `plugin.install` ([`Session::approve_plugin_install`]);
     /// that install spends it, whatever it does.
     plugin_install_approval: Option<cmd::plugin::InstallApproval>,

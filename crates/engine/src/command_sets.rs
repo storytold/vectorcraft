@@ -35,7 +35,8 @@ pub const DRAWS_SHAPE: [&str; 5] = ["shape.rectangle", "shape.ellipse", "shape.p
 /// Artboard tool had selected for its commands and for Paste in Place, in Front and in Back; the artboards and art Cut and Copy took with that
 /// tool chosen; the view's center the app passes to Edit Symbol); an action leaves them out
 /// ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 35] = [
+const REPLAY_ONLY: [(&str, &str); 36] = [
+    ("plugin.run", cmd::plugin::REPLAY_INPUT_IDS),
     ("file.new", "created"),
     ("edit.newDocumentFromState", "created"),
     ("document.save", "modified"),
@@ -77,7 +78,9 @@ const REPLAY_ONLY: [(&str, &str); 35] = [
 pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
     let strip = |id: &str, p: &mut Value| {
         if let Value::Object(m) = p {
-            m.retain(|k, _| !REPLAY_ONLY.iter().any(|&(c, key)| c == id && key == k));
+            m.retain(|k, _| {
+                !(REPLAY_ONLY.iter().any(|&(c, key)| c == id && key == k) || (k == cmd::plugin::REPLAY_INPUT_IDS && cmd::plugin::is_command_id(id)))
+            });
         }
     };
     strip(id, p);

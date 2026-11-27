@@ -285,10 +285,41 @@ how much there is only once the run has ended.
   thread of its own while editing goes on, shown in the status bar and, after a moment, in a progress window with
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
-  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once, under the same instruction budget and 300 s limit.
+  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web it runs in a worker of
+  its own, under the same instruction budget and 300 s limit ([The web build](#the-web-build)).
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
+
+### The web build
+
+The web build checks plug-ins in Web Workers, and runs there the filters and plug-in commands that the menus and
+their dialogs start, so that code of a plug-in does not run on the page (the last item below lists the runs that
+still do). Trunk
+builds the worker, `vectorcraft-plugin-worker` (`apps/vectorcraft-plugin-worker`), beside the app, and the page starts
+one worker for each check and each run (`vectorcraft_plugins::worker` describes the messages).
+
+- **Installing.** Install Plug-in… and File › Open send the module to a worker, which loads it as the desktop app
+  does: its start function, `vc_abi_version` and `vc_manifest` run there. The page then makes the checks that run
+  none of the module's code and installs it with the manifest the worker read. A module that fails in the worker is
+  not installed, and the status bar says why. `ui.installPlugin` with module bytes that no worker has checked yet
+  returns `{"pending": true}` while the worker checks them, before it is known whether the install needs approval.
+  The install then goes on in the app: an approval question, if one is needed, shows in its dialog, and the reply
+  to that `ui.installPlugin` does not report it.
+- **Running a filter.** A filter's item in Object › Plug-ins, a plug-in command, or OK in their dialog, runs the
+  filter in a worker, shown in the status bar and the progress window as a heavy filter is. The dialogs have no
+  Preview. A command's run is one undo step named after the command, as on the desktop. The page terminates the
+  worker at once on Cancel, when the document or the plug-in changes before the run ends (the status bar says to run
+  it again), and 5 s past the run's time budget when the worker has not answered (`Limit("time budget")`). The
+  budget counts from when the page starts the worker, so the worker's start-up counts toward it.
+- **Command calls.** A filter that calls commands sends each call to the page, which makes it and sends back the
+  answer before the filter goes on. The calls and the output are one undo step. While it runs, every other command
+  and edit is refused with "a plug-in is running: cancel it or wait for it to finish", and the progress window shows
+  at once, with Cancel only. Cancel undoes the calls it made.
+- At most 4 workers run at once; a fifth check or run is refused with the same message. A worker that sends more than
+  8 messages between two frames (progress reports aside), a message the page can't read, or a message of another
+  version is terminated, and the run fails.
+- Other plug-in runs still run on the page: live effects, exporters, importers, and `plugin.run`, `plugin.inspect`,
+  `plugin.install` and plug-in commands that automation runs as commands, which return their result when they end.
 
 ### Permissions
 
@@ -709,7 +740,8 @@ the module's start function, in a run that isn't a filter's run on a document, o
   of arguments and results a run. Each call costs 10,000 instructions of the run's budget, plus one for every 64 bytes
   of its arguments and its result, and the run checks Cancel and its time budget before and after each call.
 - A filter that calls commands runs on the app's main thread, so it can't ask for a heavy budget: a manifest with
-  `commandAllowlist` and `budget: "heavy"` is refused.
+  `commandAllowlist` and `budget: "heavy"` is refused. On the web it runs in a worker, and the page makes each call
+  ([The web build](#the-web-build)).
 
 ### Manifest
 
@@ -1231,13 +1263,13 @@ fill and stroke the piece returns, three more keys:
   (`pathfinder.*`, which has nothing to combine on a piece's one path), with parameters that effect takes, each of the
   type of its default, within the range `effect.list` gives for it, where it gives one, and one of the choices it
   lists for it, where it lists them (Roughen's `points` is `"smooth"` or `"corner"`). Curves' `points` is
-  `"x,y x,y …"` or `[[x, y], …]`, each number from 0 to 255, and a Transform's `copies` and `reference` are whole numbers. The values
+  `"x,y x,y …"` or `[[x, y], …]`, each number from 0 to 255. A Transform's `copies` and `reference` and Roughen's, Tweak's, and Scribble's `seed` are whole numbers. The values
   `effect.apply` checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`, `axes` and
   `name`, a Warp's `version`, a `color` (`"#rrggbb"`, `[r, g, b]` with each component from 0 to 1, or a color object
   whose RGB, CMYK or Gray components are each from 0 to 1, or whose Lab `l` is from 0 to 100 and `a` and `b` are any
   finite numbers), a Levels or Curves `channel` and a Radial Blur's
   center. A Drop Shadow's, Inner Glow's or Outer Glow's `mode` must name a blend mode (`"multiply"`, `"color-burn"`).
-  Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
+  An SVG filter requires `xml`; a supplied `name` must match its XML filter id. Other omitted parameters take the effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
   the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
   pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a
   piece carries never run a plug-in.

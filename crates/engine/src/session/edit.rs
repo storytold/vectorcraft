@@ -15,6 +15,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
         if !self.previewing && cmd::typing_in_progress(self) {
@@ -224,11 +227,15 @@ impl Session {
     }
 
     /// Change only the selection (not an undo step).
+    /// Returns [`EngineError::PluginBusy`] while a plug-in run holds the document.
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.revealing(|s| s.select_unwatched(f))
     }
 
     fn select_unwatched(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         self.active_appearance_item = None;
         let menu = self.menu.clone();
         let st = self.doc_mut()?;
@@ -513,6 +520,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
         // from the snapshot taken before the typing, and drop it (#1881).
         if label != "Typing" && cmd::typing_in_progress(self) {
@@ -558,7 +568,11 @@ impl Session {
     }
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
+    /// Returns [`EngineError::PluginBusy`] while a plug-in run holds the interaction.
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         self.put_back_interaction();
         if self.script_running() {
             return Err(EngineError::Busy);
@@ -641,7 +655,11 @@ impl Session {
         r
     }
 
+    /// Commits the interaction. Returns [`EngineError::PluginBusy`] while a plug-in run holds it.
     pub fn commit_interaction(&mut self) -> Result<()> {
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         // The interaction is taken below, so its starting state is read first: the commit is what
         // the previews that came before it changed.
         let before = (self.depth == 0).then(|| self.active().and_then(|st| st.interaction.as_ref().map(|it| st.layers_view_before(it)))).flatten();
@@ -744,7 +762,11 @@ impl Session {
         }
     }
 
+    /// Cancels the interaction. Returns [`EngineError::PluginBusy`] while a plug-in run holds it.
     pub fn cancel_interaction(&mut self) -> Result<()> {
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         self.put_back_interaction();
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();

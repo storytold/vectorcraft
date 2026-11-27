@@ -338,9 +338,11 @@ impl VectorcraftApp {
     }
 
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
-    /// every change to the documents ends in a busy error until the script ends.
+    /// every change to the documents ends in a busy error until the script ends. Plug-in worker runs
+    /// are still read then, so Cancel and their time budgets still end them ([`plugin_runs::poll`]).
     pub(crate) fn poll_finished_work(&mut self) {
         if self.session.script_running() {
+            plugin_runs::poll(self);
             return;
         }
         background::poll(self);
@@ -512,7 +514,7 @@ impl VectorcraftApp {
         crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
-            || !self.plugin_runs.running.is_empty()
+            || plugin_runs::any_pending(self)
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
             || self.retype_runs.running.is_some()

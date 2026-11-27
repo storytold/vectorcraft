@@ -14167,7 +14167,16 @@ also lists `doc.read` in its `permissions`, and each filter or command run is gi
 `_context.document`, with or without a selection: the document's name without its folder, color mode, units, active
 artboard size, bleed and raster effects resolution; every artboard's id, name and rectangle; every layer and sublayer
 with its id, parent, depth, name, visibility, lock, template, color and whether it is current; and every swatch as
-`swatch.list` lists it. It holds no path and no object. More than 10,000 rows, or more than 4 MiB of them, make
+`swatch.list` lists it. The app reads the active artboard from the document's current view, including for runs in a web worker.
+For a worker run without command calls, the app discards the result if its input or context changes before the result applies. Non-null command parameters must be objects;
+unknown command keys and explicit ruler-guide targets fail before a worker starts or an edit in progress is committed.
+After the app's worker deadline, a pending command call is discarded; a completed result can still apply.
+A recorded web plug-in command uses the selection when it plays unless the original command supplied explicit `ids`.
+If applying a background result fails, the app discards that result before another command can run.
+Synthetic pointer, key, and text input returns the busy error while a worker run holds its command transaction.
+Unrelated interaction previews, commits, and cancels return the busy error while that transaction is held.
+Direct selection updates through `Session::select` return the same error. A web worker snapshot uses the revision after a live preview is committed.
+`_context.document` holds no path and no object. More than 10,000 rows, or more than 4 MiB of them, make
 `plugin.run` and the command return an error before the plug-in starts, with nothing changed, and each row takes 1,000
 instructions from the run's budget (VectorCraft's own values; docs/plugins.md, Document information). This is narrower
 than `document.inspect`, which plug-ins can't call. A filter at plug-in API level 2 whose manifest lists the
@@ -14273,7 +14282,9 @@ A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may repor
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
 under its id. With a desktop app connected, `plugin.dialog` runs such a filter (one without a `commandAllowlist`) in the
 background when it runs at once or OK runs it with Preview off, and returns `{background: true, status}`;
-`plugin.cancelRuns` stops it. With a desktop app connected, `plugin.applyLastFilter {}` (Object › Plug-ins › Apply
+`plugin.cancelRuns` stops it. In the web build, `plugin.dialog` has no Preview and runs every filter in a Web Worker,
+returning `{background: true, status}`, and `ui.installPlugin` returns `{pending: true}` while a worker checks module
+bytes that no worker has checked yet ([plug-ins](plugins.md#the-web-build)). With a desktop app connected, `plugin.applyLastFilter {}` (Object › Plug-ins › Apply
 Last Filter) runs the object filter whose `plugin.run` last succeeded in the app's session again on the selection, with
 the same parameters and without a dialog, and returns `plugin.run`'s result, or `{background: true, status}` for a
 filter that runs in the background; `plugin.lastFilter {}` (Last Filter…) opens its dialog with those parameters

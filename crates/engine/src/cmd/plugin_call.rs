@@ -392,15 +392,15 @@ fn names_plugin_in(v: &Value, named: bool) -> bool {
 }
 
 /// Commits an edit in progress in the active document (not a preview's), as [`transaction`] does →
-/// whether that changed the document or its selection. A run that calls commands is prepared again
+/// whether that changed the document, its selection, or its revision. A run that calls commands is prepared again
 /// then, so its input is the document its calls change.
 pub(crate) fn settle(s: &mut Session) -> Result<bool> {
     if s.previewing {
         return Ok(false);
     }
-    let Some(before) = s.active().map(|d| (d.doc.clone(), d.selection.clone())) else { return Ok(false) };
+    let Some(before) = s.active().map(|d| (d.doc.clone(), d.selection.clone(), d.revision)) else { return Ok(false) };
     super::edit::settle_interaction(s)?;
-    Ok(s.active().is_none_or(|d| !Arc::ptr_eq(&before.0, &d.doc) || before.1 != d.selection))
+    Ok(s.active().is_none_or(|d| !Arc::ptr_eq(&before.0, &d.doc) || before.1 != d.selection || before.2 != d.revision))
 }
 
 /// What a run that makes command calls keeps fixed: the document it runs in, the documents open,
@@ -424,7 +424,7 @@ impl Calls {
 
     /// Is `s` still as the run needs it: the same documents open, the same one active and the
     /// interaction holding the run's changes still open?
-    fn kept(&self, s: &Session) -> bool {
+    pub(crate) fn kept(&self, s: &Session) -> bool {
         s.active().map(|d| d.uid) == self.document
             && s.docs.iter().map(|d| d.uid).eq(self.open.iter().copied())
             && (!self.interaction || s.in_interaction())
@@ -476,44 +476,77 @@ fn execute_confined(s: &mut Session, id: &str, args: &Value) -> Result<Value> {
 /// changes. A trace handed in for the next Image Trace is set aside while `f` runs, so a call
 /// traces anew, and handed back after; the next Image Trace still checks it was made of its inputs.
 pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Session) -> Result<Value>) -> Result<Value> {
-    if s.active().is_some() && !s.previewing {
-        super::edit::settle_interaction(s)?;
-    }
-    let own = s.active().is_some() && !s.previewing && !s.in_interaction();
-    if own {
-        s.begin_interaction(label)?;
-    }
-    let saved = Saved::of(s);
-    let start = s.docs.clone();
-    let active = s.active;
-    let trace = s.trace_hand_off.take();
+    let t = Transaction::begin(s, label)?;
     let r = f(s);
-    s.trace_hand_off = trace;
-    match r {
-        Ok(v) => {
-            if own
-                && let Some(st) = s.active_mut()
-                && let Some(it) = st.interaction.take()
-            {
-                st.keep_interaction(it);
-            }
-            Ok(v)
+    t.end(s, r)
+}
+
+/// A [`transaction`] that stays open between calls: [`Transaction::begin`] starts it, and
+/// [`Transaction::end`] keeps or undoes what was done meanwhile. A run of a plug-in that calls
+/// commands from the web build's plug-in worker holds one while it waits for the worker.
+pub(crate) struct Transaction {
+    own: bool,
+    saved: Saved,
+    start: Vec<crate::DocState>,
+    active: Option<usize>,
+    trace: Option<super::Traced>,
+}
+
+impl Transaction {
+    /// Starts one undo step named `label` in the active document, as [`transaction`] does before it
+    /// runs its function.
+    pub(crate) fn begin(s: &mut Session, label: &str) -> Result<Transaction> {
+        if s.active().is_some() && !s.previewing {
+            super::edit::settle_interaction(s)?;
         }
-        Err(e) => {
-            let open = std::mem::replace(&mut s.docs, start);
-            for st in &mut s.docs {
-                // Past the newest revision the document reached, so the restored one redraws.
-                let newest = open.iter().filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
-                st.revision = newest.max(st.revision).saturating_add(1);
-                crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
+        let own = s.active().is_some() && !s.previewing && !s.in_interaction();
+        if own {
+            s.begin_interaction(label)?;
+        }
+        let saved = Saved::of(s);
+        let start = s.docs.clone();
+        let active = s.active;
+        let trace = s.trace_hand_off.take();
+        Ok(Transaction { own, saved, start, active, trace })
+    }
+
+    /// Ends it with `r`, what was done in it: kept as one undo step when it succeeded, else every
+    /// document and the session state go back to how they were when it began → `r`.
+    pub(crate) fn end(self, s: &mut Session, r: Result<Value>) -> Result<Value> {
+        let Transaction { own, saved, start, active, trace } = self;
+        s.trace_hand_off = trace;
+        match r {
+            Ok(v) => {
+                if own
+                    && let Some(st) = s.active_mut()
+                    && let Some(it) = st.interaction.take()
+                {
+                    st.keep_interaction(it);
+                }
+                Ok(v)
             }
-            s.active = active;
-            if own && let Some(st) = s.active_mut() {
-                st.interaction = None;
+            Err(e) => {
+                let open = std::mem::replace(&mut s.docs, start);
+                for st in &mut s.docs {
+                    // Past the newest revision the document reached, so the restored one redraws. A
+                    // document the transaction left as it was keeps its revision, so a run made
+                    // away from the session on it still applies.
+                    let reached: Vec<_> = open.iter().filter(|d| d.uid == st.uid).collect();
+                    let unchanged = !reached.is_empty() && reached.iter().all(|d| d.revision == st.revision && d.selection == st.selection);
+                    if !unchanged {
+                        let newest = reached.iter().map(|d| d.revision).max().unwrap_or(st.revision);
+                        st.revision = newest.max(st.revision).saturating_add(1);
+                    }
+                    crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
+                }
+                s.active = active;
+                if own && let Some(st) = s.active_mut() {
+                    st.interaction = None;
+                }
+                saved.restore(s);
+                s.sync_front_profiles();
+                Err(e)
             }
-            saved.restore(s);
-            s.sync_front_profiles();
-            Err(e)
         }
     }
 }

@@ -8773,6 +8773,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-plugin-worker"
+version = "0.24.1"
+dependencies = [
+ "js-sys",
+ "vectorcraft-plugins",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "vectorcraft-plugins"
 version = "0.24.1"
 dependencies = [
