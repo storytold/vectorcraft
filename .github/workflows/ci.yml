@@ -1,10 +1,14 @@
 name: CI
 
 # Quality gates for every push to main and every pull request (`cargo xtask ci`), through the
-# suite's shared gate workflow in craft-common-actions.
+# suite's shared gate workflow in craft-common-actions. Every night the gate runs a cold build:
+# the safety net for the workspace crates it keeps between runs (`cache-workspace-crates`), and a
+# fresh start for that cache entry.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "37 3 * * *"
   pull_request:
   workflow_dispatch:
 
@@ -39,7 +43,38 @@ jobs:
       test-shards: 5
       shard-command: cargo xtask ci shard
       warm-command: cargo xtask ci warm
+      # The dependency cache also keeps the compiled workspace crates and test executables, so a
+      # pull request's shards rebuild only the crates its changes reach. Each main run's `cache
+      # warm` leg saves a rolling entry of its own, every leg restores the newest one, and
+      # `cache-prune` below deletes the one it replaced. The nightly run restores nothing and
+      # builds everything from source.
+      cache-workspace-crates: true
+      cold-build: ${{ github.event_name == 'schedule' }}
       packages: >-
         pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcursor-dev
         libxrandr-dev libxi-dev libfontconfig1-dev libfreetype-dev mesa-vulkan-drivers
         libgl1-mesa-dev
+
+  # Keeps one rolling gate entry on main, so the repository stays within its 10 GB Actions cache
+  # budget. It runs beside the gate and prunes each time the `cache warm` leg finishes saving. A
+  # failed prune warns instead of failing the run; the next main run's prune deletes what it missed.
+  cache-prune:
+    name: cache prune
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      actions: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - name: Prune replaced cache entries
+        uses: storytold/craft-common-actions/actions/cache-prune@main
+        continue-on-error: true
+        with:
+          watch: true
+          watch-minutes: 110
+          saving-jobs: |
+            ^gate( / cache warm \(.*\))?$
