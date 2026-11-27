@@ -722,10 +722,7 @@ fn ask_save(app: &mut VectorcraftApp, name: &str, filters: &[(&str, &[&str])], c
         return Value::Null;
     };
     let bytes = text.as_bytes().to_vec();
-    file_asks::save(app, request, bytes, Owner::Document, move |_app, picked| match picked {
-        craft::host::Picked::Failed(error) => Err(error),
-        _ => Ok(Value::Null),
-    })
+    file_asks::save(app, request, bytes, Owner::Document, |_, _| Ok(Value::Null))
 }
 
 /// Import…: one file dialog for a CSV, TSV, TXT or XML file, and `variable.import` on the chosen
@@ -800,6 +797,33 @@ mod tests {
                 if failed {
                     assert_eq!(app.ui.status, "save was refused");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_variables_download_reports_its_error_after_the_source_closes() {
+        use craft::host::{Picked, ScriptedFiles};
+
+        for command in [EXPORT_DATA_SETS, SAVE_LIBRARY] {
+            for answer in [Picked::Failed("downloads are blocked".into()), Picked::Cancelled, Picked::Downloaded("export".into())] {
+                let mut app = app_with_data();
+                let files = Arc::new(ScriptedFiles::held().in_browser());
+                crate::tests::picks::install_files(&mut app, files.clone());
+                run(&mut app, command, &json!({})).unwrap().unwrap();
+                app.session.execute("file.close", &json!({"index": 0})).unwrap();
+                app.run("file.new", json!({"width": 80, "height": 80})).unwrap();
+                app.status("another drawing");
+                let before = app.session.active().unwrap().doc.clone();
+                let expected = match &answer {
+                    Picked::Failed(error) => error.as_str(),
+                    Picked::Cancelled => "another drawing",
+                    _ => file_asks::closed(),
+                };
+                files.answer(answer.clone());
+                file_asks::poll(&mut app);
+                assert_eq!(app.ui.status, expected);
+                assert_eq!(app.session.active().unwrap().doc, before);
             }
         }
     }

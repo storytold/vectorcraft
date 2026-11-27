@@ -40,6 +40,8 @@ pub(crate) enum Owner {
 struct Waiting {
     ticket: PickId,
     owner: Owner,
+    /// The file service is writing bytes that the caller already prepared.
+    saving: bool,
     /// The active document's uid when asked (`DocState::uid`); `None` for [`Owner::Free`].
     doc: Option<u64>,
     /// The automation roots in force when asked: the continuation runs under them, not under the
@@ -123,7 +125,7 @@ pub(crate) fn ask(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), None, then)
+    start(app, owner, |files| files.pick(request), false, None, then)
 }
 
 /// Like [`ask`], but drops a reply if its requester is gone, before choosing a document or reporting a picker error.
@@ -134,7 +136,7 @@ pub(crate) fn ask_while(
     current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), Some(Box::new(current)), then)
+    start(app, owner, |files| files.pick(request), false, Some(Box::new(current)), then)
 }
 
 /// Save `bytes` as the file service saves them (`Files::save`: the desktop asks where with `request` and
@@ -147,7 +149,7 @@ pub(crate) fn save(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.save(request, bytes), None, then)
+    start(app, owner, |files| files.save(request, bytes), true, None, then)
 }
 
 /// Asks the file service with `ask` and files `then` for its answer.
@@ -155,6 +157,7 @@ fn start(
     app: &mut VectorcraftApp,
     owner: Owner,
     ask: impl FnOnce(&dyn Files) -> PickId,
+    saving: bool,
     current: Option<PickGuard>,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
@@ -165,7 +168,7 @@ fn start(
         Owner::Free => None,
     };
     let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
-    app.file_asks.waiting.push(Waiting { ticket, owner, doc, scope, automated, current, then: Box::new(then) });
+    app.file_asks.waiting.push(Waiting { ticket, owner, saving, doc, scope, automated, current, then: Box::new(then) });
     json!({ "pending": "fileDialog" })
 }
 
@@ -309,6 +312,11 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
         }
         match &picked {
             Picked::Cancelled => continue,
+            Picked::Failed(error) if w.saving => {
+                // The file service already had the bytes. It can report a failure without a drawing.
+                report(app, Err(error.clone()));
+                continue;
+            }
             Picked::Unavailable(why) => {
                 // The desktop says what gives it a file dialog; the browser has none for this kind of pick.
                 #[cfg(not(target_arch = "wasm32"))]
