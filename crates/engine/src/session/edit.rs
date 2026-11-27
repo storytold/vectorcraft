@@ -1,12 +1,17 @@
 use super::{
-    Arc, Document, EngineError, Interaction, LastTransform, NamedStep, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden, doc_sane,
-    objects_in_range,
+    Arc, Document, EngineError, Interaction, LastTransform, NamedStep, NodeKind, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden,
+    doc_sane, objects_in_range,
 };
+use crate::doc_state::objects_only;
 
 impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        self.revealing(|s| s.edit_unwatched(label, f))
+    }
+
+    fn edit_unwatched<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
@@ -198,21 +203,66 @@ impl Session {
         Ok(v)
     }
 
+    /// Run `f`, an edit that applies or edits built-in effect `effect`. The undo step it records,
+    /// when named after the effect, keeps the effect's id ([`crate::HistoryEntry::effect`]), so a
+    /// frontend names it as the Effect menu names the effect. Run as an interaction's preview
+    /// itself, not as one command of a batch the preview runs, the step the interaction records
+    /// keeps it instead, while that preview is the last one. A later edit of an undo group keeps
+    /// none.
+    pub(crate) fn edit_effect<T>(&mut self, effect: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let id = vectorcraft_render::effects::built_in_effect(effect).map(|(id, _)| id);
+        let previewed = self.previewing && self.depth == 1;
+        let outer = std::mem::replace(&mut self.doc_mut()?.effect_step, id);
+        let v = f(self);
+        if let Ok(st) = self.doc_mut() {
+            st.effect_step = outer;
+            if v.is_ok()
+                && previewed
+                && let Some(it) = &mut st.interaction
+            {
+                it.effect = id;
+            }
+        }
+        v
+    }
+
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
+        self.revealing(|s| s.select_unwatched(f))
+    }
+
+    fn select_unwatched(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
         let menu = self.menu.clone();
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
         let new_art = st.selection.new_art.clone();
+        let record = if st.selection_record().is_some() { st.selection_record.take() } else { None };
         f(&st.doc, &mut st.selection);
-        st.selection.prune(&st.doc);
-        // Lock Guides locks the paths made into guides too (#1534), and Lock Slices and Hide
-        // Slices keep the slices out, whatever selects them.
-        deselect_hidden(&menu, &st.doc, &mut st.selection);
-        // The art on a locked artboard can't be selected, whatever selects it, except new art
-        // that was selected and still is.
-        st.protect_locked_artboards(&before, &new_art, None);
+        let added = objects_only(&st.selection) && st.selection.objects.starts_with(&before);
+        // Objects added to objects this checked in the same document, with Lock Guides as it was
+        // then and no art on a locked artboard to protect, are checked alone, by the rules `prune`
+        // and `deselect_hidden` apply to an object.
+        let settled = record.as_ref().is_some_and(|r| r.settled == Some(menu.guides_locked))
+            && st.selection.new_art.is_empty()
+            && st.doc.new_art.get().is_empty()
+            && !st.doc.artboards.iter().any(|a| a.locked);
+        if added && settled {
+            let doc = &st.doc;
+            let tail = st.selection.objects.split_off(before.len());
+            st.selection.objects.extend(tail.into_iter().filter(|id| {
+                doc.node(*id).is_some_and(|n| !n.is_ruler_guide() && !(menu.guides_locked && matches!(n.kind, NodeKind::Path { guide: true, .. })))
+            }));
+        } else {
+            st.selection.prune(&st.doc);
+            // Lock Guides locks the paths made into guides too (#1534), and Lock Slices and Hide
+            // Slices keep the slices out, whatever selects them.
+            deselect_hidden(&menu, &st.doc, &mut st.selection);
+            // The art on a locked artboard can't be selected, whatever selects it, except new art
+            // that was selected and still is.
+            st.protect_locked_artboards(&before, &new_art, None);
+        }
+        st.record_selection(record, menu.guides_locked);
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
         if st.selection.objects != before
@@ -263,6 +313,190 @@ impl Session {
         (r, settled)
     }
 
+    /// Run `f`, the top-level command `id` with `params` from outside the tool (a panel, a menu
+    /// item, an automation client), with the active document's tool drag set aside: the command
+    /// runs on the document the drag started from and records its own undo step and journal entry.
+    /// The drag then starts from what the command left, and its preview is applied again, so the
+    /// next preview, the commit and a cancel keep the command's edit, and Undo takes back the drag's
+    /// step before the command's. While the command runs, [`Session::in_interaction`] is false, so
+    /// it updates Recent Colors and converts or remaps the new-art paints at once, as it does with
+    /// no drag in progress.
+    ///
+    /// The interaction stays as it is, and the command runs inside it, for an interaction a dialog
+    /// or a panel began (it builds its preview from commands), for typing in progress
+    /// ([`Session::edit`] keeps it as a step of its own), for the Quick Pen (an edit made outside
+    /// it ends the path it draws), and for a copy made with `object.transform` during a drag that
+    /// copies (it copies the document as the drag's move left it). A command that settles,
+    /// commits or cancels the interaction, or that hands the active tool actions to apply, gets it
+    /// back first ([`Session::put_back_interaction`]), as it found it.
+    pub(crate) fn outside_interaction(&mut self, id: &str, params: &Value, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
+        if cmd::typing_in_progress(self) || self.tool_id() == vectorcraft_tools::quickpen::ID {
+            return f(self);
+        }
+        let Some(st) = self.active_mut() else { return f(self) };
+        let Some(it) = st.interaction.as_ref().filter(|it| it.tool) else { return f(self) };
+        // A drag that copies: its latest preview, applied or held back by Real-time Drawing off, copies.
+        let copying = it.preview.as_ref().is_some_and(|(c, p)| c == "object.transform" && p.get("copy").and_then(Value::as_bool) == Some(true));
+        if copying && id == "object.transform" && params.get("copy").and_then(Value::as_bool) == Some(true) {
+            return f(self);
+        }
+        let Some(interaction) = st.interaction.take() else { return f(self) };
+        // The document and selection on show, when a preview changed them.
+        let previewed = !Arc::ptr_eq(&st.doc, &interaction.doc) || st.selection != *interaction.selection;
+        let shown = previewed.then(|| (st.doc.clone(), st.selection.clone()));
+        if previewed {
+            st.doc = interaction.doc.clone();
+            st.selection.clone_from(&interaction.selection);
+            st.revision += 1;
+            cmd::globaledit::follow_history(st);
+        }
+        let (uid, state) = (st.uid, crate::interaction::ViewState::of(st));
+        let paint = self.paint.clone();
+        self.held_interaction = Some(crate::HeldInteraction { uid, interaction, shown, state, paint });
+        if previewed {
+            self.sync_front_profiles();
+        }
+        let r = f(self);
+        self.put_back_interaction();
+        r
+    }
+
+    /// Put back the interaction [`Session::outside_interaction`] set aside. When the command left
+    /// the document and the selection as it found them, the preview on show before it is on show
+    /// again. Otherwise the interaction starts from the document the command left and from its
+    /// own selection, without the objects the command removed, hid or locked, and the preview that Real-time
+    /// Drawing showed is applied to it again. The warning or the error of that preview goes to
+    /// the command's result ([`Session::note_settled_warning`]); a preview that fails leaves the
+    /// interaction with nothing to commit. An interaction whose document the command closed ends,
+    /// and so does one with anchors or segments selected on a path the command changed in more
+    /// than a move. A document
+    /// the command left an interaction of its own on keeps that one.
+    pub(crate) fn put_back_interaction(&mut self) {
+        let Some(crate::HeldInteraction { uid, interaction: mut it, shown, state, paint }) = self.held_interaction.take() else { return };
+        // A selection command loaded the paints of the selection it made into the fill and stroke
+        // proxies. The drag goes on with its own selection, so they show its paints again.
+        if self.paint != paint
+            && let Some(st) = self.active_mut().filter(|d| d.uid == uid && d.interaction.is_none())
+        {
+            let own = drag_selection(&it.selection, &st.doc);
+            if st.selection != own {
+                let made = std::mem::replace(&mut st.selection, own);
+                self.inherit_new_art();
+                self.load_selection_paints();
+                if let Some(st) = self.active_mut() {
+                    st.selection = made;
+                }
+            }
+        }
+        // A change the command made to the new-art paints stays when the next preview or a cancel
+        // puts back the paints the interaction began with (the Live Paint Bucket's colors); the
+        // parts it left alone keep the interaction's. The pattern lists every field, so a field
+        // added to `PaintDefaults` does not compile until it is handled here.
+        let vectorcraft_tools::PaintDefaults { fill, stroke, stroke_width, appearance, opacity, blend, style, inherited } = &self.paint;
+        let start = &mut it.paint;
+        if *fill != paint.fill {
+            start.fill.clone_from(fill);
+        }
+        if *stroke != paint.stroke {
+            start.stroke.clone_from(stroke);
+        }
+        if *stroke_width != paint.stroke_width {
+            start.stroke_width = *stroke_width;
+        }
+        if *appearance != paint.appearance {
+            start.appearance.clone_from(appearance);
+        }
+        if *opacity != paint.opacity {
+            start.opacity = *opacity;
+        }
+        if *blend != paint.blend {
+            start.blend = *blend;
+        }
+        if *style != paint.style {
+            start.style.clone_from(style);
+        }
+        if *inherited != paint.inherited {
+            start.inherited = *inherited;
+        }
+        let active = self.active().is_some_and(|d| d.uid == uid);
+        let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid) else { return };
+        if st.interaction.is_some() {
+            return;
+        }
+        // A change the command made to the current layer, the highlighted rows or variable, or
+        // isolation stays when the interaction is canceled.
+        state.rebase(crate::interaction::ViewState::of(st), &mut it);
+        let previewed = shown.is_some();
+        if Arc::ptr_eq(&st.doc, &it.doc) && st.selection == *it.selection {
+            if let Some((doc, selection)) = shown {
+                st.doc = doc;
+                st.selection = selection;
+                st.revision += 1;
+                cmd::globaledit::follow_history(st);
+            }
+            st.interaction = Some(it);
+            if previewed {
+                self.sync_front_profiles();
+            }
+            return;
+        }
+        // The drag's anchors and segments are numbered in the paths it began on. When the command
+        // changed one of those paths in more than a move, the numbers can name other points, and
+        // the drag ends without a step.
+        if renumbered(&it.selection, &it.doc, &st.doc) {
+            self.clear_deferred_overlay_cache();
+            return;
+        }
+        let began = std::mem::replace(&mut it.doc, st.doc.clone());
+        // The drag acts on the objects it began with: a selection the command made (a paste, a
+        // duplicate, Select All) does not change what the drag moves.
+        it.selection = Arc::new(drag_selection(&it.selection, &st.doc));
+        // The journal holds the selection the command left. The drag's own selection is journaled
+        // after it, so the drag and the commands after it replay on the objects they act on.
+        let reselect = (active && st.selection != *it.selection)
+            .then(|| selection_steps(&it.selection, &st.selection, &st.doc, st.active_layer, &st.highlighted_rows()));
+        // The objects the drag's preview names leave out those the command removed, hid or locked.
+        // A preview left naming none has nothing to apply, and the drag records no step.
+        if it.preview.as_mut().is_some_and(|(_, p)| !drag_targets(p, &began, &st.doc)) {
+            it.preview = None;
+        }
+        it.copies = None;
+        it.move_box = std::sync::OnceLock::new();
+        // With Real-time Drawing off the preview waits for the commit, as it did before the command.
+        let again = it.preview.clone().filter(|_| previewed && active);
+        // Without a preview to apply, the drag's own selection is on show, as a preview would leave
+        // it before it acts.
+        if again.is_none() && st.selection != *it.selection {
+            st.selection.clone_from(&it.selection);
+            st.revision += 1;
+        }
+        st.interaction = Some(it);
+        if let Some(steps) = reselect {
+            let (from, grouped) = (self.journal.len(), self.undo_group_docs());
+            for step in steps {
+                self.journal.push(step);
+            }
+            self.journal_in_undo_groups(Some(uid), &grouped, from);
+        }
+        self.clear_deferred_overlay_cache();
+        if let Some((cmd, p)) = again {
+            match self.preview(&cmd, &p) {
+                Ok(v) => {
+                    if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                        self.note_settled_warning(w);
+                    }
+                }
+                Err(e) => self.note_settled_warning(&e.to_string()),
+            }
+        }
+    }
+
+    /// While a command from outside the tool runs: the interaction it set aside
+    /// ([`Session::outside_interaction`]).
+    pub(crate) fn holds_interaction(&self) -> bool {
+        self.held_interaction.is_some()
+    }
+
     /// [`Session::begin_interaction`] for a dialog or a panel that starts a preview → the warnings
     /// of the preview that keeping typing in progress applied, for its status bar.
     pub fn begin_interaction_warned(&mut self, label: &str) -> Result<Vec<String>> {
@@ -287,6 +521,8 @@ impl Session {
         if label != "Typing" && cmd::typing_in_progress(self) {
             cmd::settle_interaction(self)?;
         }
+        // A command from outside the tool that begins an interaction during a drag joins the drag's.
+        self.put_back_interaction();
         // An edit the tool computes on another thread (a Shape Builder merge) is applied first too,
         // so the snapshot the interaction previews from and goes back to holds it.
         if !self.in_interaction() {
@@ -300,12 +536,16 @@ impl Session {
         }
         st.interaction = Some(Interaction {
             label: label.to_string(),
+            effect: None,
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
+            tool: false,
             paint,
+            used_defaults_only: false,
             preview_paint: None,
             color_mode_paints: None,
+            tool_paints: false,
             deferred_color_mode: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
@@ -315,18 +555,22 @@ impl Session {
             plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
+            keep_on_switch: false,
         });
         Ok(())
     }
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
+        self.put_back_interaction();
         if self.script_running() {
             return Err(EngineError::Busy);
         }
-        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
-        // each preview starts from the colors the interaction began with.
-        let bucket = self.bucket_paints();
+        // While the active tool paints with the chosen fill or stroke (the Live Paint Bucket, the
+        // Shape Builder), paint previews of that kind change only the colors it paints with, so each
+        // preview starts from the colors the interaction began with; so does a preview with
+        // `defaultsOnly: true`, and one after it.
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -340,15 +584,20 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
-            let restore_paint = bucket
+            it.used_defaults_only |= cmd::asks_defaults_only(params);
+            it.tool_paints |= tool_paints;
+            let restore_paint = it.tool_paints
                 || cmd == "command.batch"
-                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || it.used_defaults_only
+                || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                 || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
             it.color_mode_paints = None;
             it.deferred_color_mode = None;
             it.plane_placed = false;
+            // The effect the preview below applies or edits marks the step, not an earlier one's.
+            it.effect = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
@@ -372,6 +621,8 @@ impl Session {
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
         self.previewing = outer;
+        // A step inside a batch that changed only the defaults counts as well.
+        let ran_defaults_only = self.defaults_only_ran.is_some();
         if let Some(paint) = color_mode_paint {
             self.paint = paint;
         }
@@ -379,6 +630,7 @@ impl Session {
         let batch_paint = (r.is_ok() && cmd == "command.batch").then(|| self.paint.clone());
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
+            it.used_defaults_only |= ran_defaults_only;
             // A failed preview leaves the document at the snapshot, so nothing is left to commit
             // (not even an earlier successful preview, which the reset above already undid).
             it.preview = r.is_ok().then(|| (cmd.to_string(), params));
@@ -393,8 +645,20 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
+        // The interaction is taken below, so its starting state is read first: the commit is what
+        // the previews that came before it changed.
+        let before = (self.depth == 0).then(|| self.active().and_then(|st| st.interaction.as_ref().map(|it| st.layers_view_before(it)))).flatten();
+        let r = self.commit_interaction_unwatched();
+        if let Some(before) = before {
+            self.reveal_since(&before);
+        }
+        r
+    }
+
+    fn commit_interaction_unwatched(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
+        self.put_back_interaction();
         if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
             self.paint = paint;
         }
@@ -484,16 +748,25 @@ impl Session {
     }
 
     pub fn cancel_interaction(&mut self) -> Result<()> {
+        self.put_back_interaction();
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
-        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
-        // cancel puts back as well.
-        let bucket = self.bucket_paints();
+        // A color previewed while the active tool painted with the chosen fill or stroke is the
+        // tool's color, which the cancel puts back as well, also after another tool was chosen, as
+        // it does a color previewed with `defaultsOnly: true`.
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
+        let used_defaults_only = self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.used_defaults_only);
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| {
+                tool_paints
+                    || it.tool_paints
+                    || it.used_defaults_only
+                    || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
+                    || it.color_mode_paints.is_some()
+            })
             .map(|it| it.paint.clone())
         {
             self.paint = paint;
@@ -506,12 +779,175 @@ impl Session {
         // A canceled preview's Assign Profile is undone with it.
         self.sync_front_profiles();
         // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
-        // the document has it again, not as a preview left it.
-        self.inherit_new_art();
+        // the document has it again, not as a preview left it. An interaction that changed only the
+        // defaults (`defaultsOnly: true`) leaves the defaults it began with.
+        if !used_defaults_only {
+            self.inherit_new_art();
+        }
         Ok(())
     }
 
     pub fn in_interaction(&self) -> bool {
         self.active().is_some_and(|d| d.interaction.is_some())
     }
+}
+
+/// The selection a drag began with, without the objects that a command run during it removed,
+/// hid or locked in `doc`.
+fn drag_selection(began: &Selection, doc: &Document) -> Selection {
+    let mut selection = began.clone();
+    selection.prune(doc);
+    let editable = doc.editable();
+    let held: Vec<_> = selection.objects.iter().copied().filter(|&id| !editable(id)).collect();
+    selection.remove_all(held);
+    selection
+}
+
+/// Take out of the `ids` of a drag's preview `params` the objects that a command run during the
+/// drag removed from `doc`, or hid or locked there while they were editable in `began` → false
+/// when the preview named objects and none of them is left.
+fn drag_targets(params: &mut Value, began: &Document, doc: &Document) -> bool {
+    let Some(ids) = params.get_mut("ids").and_then(Value::as_array_mut) else { return true };
+    if ids.is_empty() {
+        return true;
+    }
+    let (was, now) = (began.editable(), doc.editable());
+    ids.retain(|v| v.as_u64().map(vectorcraft_doc::NodeId).is_none_or(|id| doc.node(id).is_some() && (now(id) || !was(id))));
+    !ids.is_empty()
+}
+
+/// Whether a path with anchors or segments in `selection` is other in `doc` than in `began`, the
+/// document a drag began from, in more than a move: its anchors added, removed, put in another
+/// order (Reverse Path Direction) or reshaped, or a subpath opened or closed. A path the command
+/// moved as a whole keeps its numbers.
+fn renumbered(selection: &Selection, began: &Document, doc: &Document) -> bool {
+    fn path(d: &Document, id: vectorcraft_doc::NodeId) -> Option<&[vectorcraft_geom::SubPath]> {
+        d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.as_slice())
+    }
+    selection.anchors.keys().chain(selection.segments.keys()).any(|&id| match (path(began, id), path(doc, id)) {
+        (Some(was), Some(now)) => !moved_whole(was, now),
+        (was, now) => was.is_some() != now.is_some(),
+    })
+}
+
+/// Whether the subpaths `now` are the subpaths `was` moved by one offset: the same number of each,
+/// each opened or closed as before, every anchor of the same kind, and every anchor and handle
+/// offset alike.
+fn moved_whole(was: &[vectorcraft_geom::SubPath], now: &[vectorcraft_geom::SubPath]) -> bool {
+    if was.len() != now.len() || was.iter().zip(now).any(|(a, b)| a.closed != b.closed || a.anchors.len() != b.anchors.len()) {
+        return false;
+    }
+    let mut pairs = was.iter().zip(now).flat_map(|(a, b)| a.anchors.iter().zip(b.anchors.iter()));
+    let Some((a0, b0)) = pairs.next() else { return true };
+    let (dx, dy) = (b0.p.x - a0.p.x, b0.p.y - a0.p.y);
+    let alike = |a: vectorcraft_geom::Point, b: vectorcraft_geom::Point| {
+        (b.x - a.x - dx).abs() <= vectorcraft_geom::EPS && (b.y - a.y - dy).abs() <= vectorcraft_geom::EPS
+    };
+    std::iter::once((a0, b0)).chain(pairs).all(|(a, b)| a.kind == b.kind && alike(a.p, b.p) && alike(a.h_in, b.h_in) && alike(a.h_out, b.h_out))
+}
+
+/// The journal entries that select `selection` again in `doc` after `made`, the selection a
+/// command left with `layer` current and `rows` highlighted in the Layers panel ([`object_steps`]).
+/// When selecting the objects would make another layer current, `layer.setCurrent` makes `layer`
+/// current again, as the drag leaves it, and `layer.highlight` gives back the highlighted rows.
+fn selection_steps(
+    selection: &Selection,
+    made: &Selection,
+    doc: &Document,
+    layer: Option<vectorcraft_doc::NodeId>,
+    rows: &[vectorcraft_doc::NodeId],
+) -> Vec<(String, Value)> {
+    let mut steps = object_steps(selection, doc);
+    // `layer.target` on a layer makes it current; any other change to the selected objects makes
+    // the layer of the last selected object current.
+    let targeted = steps.first().is_some_and(|(id, _)| id == "layer.target");
+    let selects = match selection.target.filter(|t| targeted && doc.node(*t).is_some_and(|n| n.is_layer())) {
+        Some(t) => Some(t),
+        None if selection.objects != made.objects => {
+            selection.objects.last().and_then(|id| doc.layer_containing(*id)).filter(|l| doc.is_editable(*l))
+        }
+        None => None,
+    };
+    if let Some(layer) = layer.filter(|l| selects.is_some_and(|s| s != *l)) {
+        steps.push(("layer.setCurrent".into(), serde_json::json!({ "id": layer.0 })));
+        // `layer.setCurrent` highlights the layer's row. `layer.highlight` sets the rows the command
+        // left instead; it keeps `layer` current while the last of them is on `layer`, or none is left.
+        if rows != [layer] && rows.last().is_none_or(|r| doc.layer_containing(*r) == Some(layer)) {
+            let ids: Vec<u64> = rows.iter().map(|r| r.0).collect();
+            steps.push(("layer.highlight".into(), serde_json::json!({ "ids": ids, "mode": "set" })));
+        }
+    }
+    steps
+}
+
+/// The journal entries that select `selection` in `doc`: the selections made on their own (its
+/// slices with `object.slice.select`, its target with `layer.target`, its symbol part with
+/// `symbol.instance.selectPart`, its Objects on Path member with
+/// `object.objectsOnPath.selectMember`), or its objects in their order (`select.set`), the anchors
+/// left out on paths that are not selected whole (`select.anchorsMany`), the anchors of paths with
+/// every anchor selected (`select.anchors`) and its segments (`select.segments`); after its objects
+/// or its target, its ruler guides (`guide.select`) and its key object, key guide or key anchor
+/// (`select.key`).
+fn object_steps(selection: &Selection, doc: &Document) -> Vec<(String, Value)> {
+    use serde_json::json;
+    if !selection.slices.is_empty() {
+        let slices: Vec<u64> = selection.slices.iter().map(|id| id.0).collect();
+        return vec![("object.slice.select".into(), json!({ "slices": slices }))];
+    }
+    // A target is selected again only while targeting it selects the same objects: when a command
+    // added art to a targeted layer, `select.set` selects the drag's objects.
+    let targets = |t: vectorcraft_doc::NodeId| match doc.node(t) {
+        Some(n) if n.is_layer() => n.layer_art(true) == selection.objects,
+        _ => selection.objects == [t],
+    };
+    let json_refs = |refs: &mut dyn Iterator<Item = &(usize, usize)>| Value::Array(refs.map(|&(a, b)| json!([a, b])).collect());
+    // A targeted object keeps the ruler guides and the key selected beside it.
+    let mut steps = if let Some(t) = selection.target.filter(|&t| targets(t)) {
+        vec![("layer.target".to_string(), json!({ "id": t.0 }))]
+    } else if let Some(part) = &selection.symbol_part {
+        return vec![("symbol.instance.selectPart".into(), json!({ "id": part.instance.0, "path": part.path }))];
+    } else if let Some(member) = selection.on_path_member {
+        return vec![("object.objectsOnPath.selectMember".into(), json!({ "member": member.0 }))];
+    } else {
+        let ids: Vec<u64> = selection.objects.iter().map(|id| id.0).collect();
+        let mut steps = vec![("select.set".to_string(), json!({ "ids": ids }))];
+        // `select.set` selects each path whole: subtracting the anchors that are not selected leaves
+        // the ones that are, and keeps the order of the objects. A path with every anchor selected
+        // as anchors gets them back with `select.anchors`, which keeps them all as anchors.
+        let mut every = Vec::new();
+        let partial: Vec<Value> = selection
+            .objects
+            .iter()
+            .filter_map(|id| {
+                let refs = selection.anchors.get(id)?;
+                let path = doc.node(*id)?.path_data()?;
+                let out: Vec<(usize, usize)> = path.anchors().map(|(s, i, _)| (s, i)).filter(|r| !refs.contains(r)).collect();
+                if out.is_empty() {
+                    every.push(("select.anchors".to_string(), json!({ "id": id.0, "anchors": json_refs(&mut refs.iter()), "mode": "add" })));
+                    return None;
+                }
+                Some(json!({ "id": id.0, "anchors": json_refs(&mut out.iter()) }))
+            })
+            .collect();
+        if !partial.is_empty() {
+            steps.push(("select.anchorsMany".into(), json!({ "items": partial, "mode": "subtract" })));
+        }
+        steps.extend(every);
+        for (id, refs) in &selection.segments {
+            steps.push(("select.segments".into(), json!({ "id": id.0, "segments": json_refs(&mut refs.iter()), "mode": "add" })));
+        }
+        steps
+    };
+    if !selection.guides.is_empty() {
+        let indexes = cmd::guide_indexes(doc, &selection.guides);
+        steps.push(("guide.select".into(), json!({ "indexes": indexes, "toggle": true })));
+    }
+    if let Some((id, (s, i))) = selection.key_anchor {
+        steps.push(("select.key".into(), json!({ "id": id.0, "anchor": [s, i] })));
+    } else if let Some(g) = selection.key_guide.and_then(|g| cmd::guide_indexes(doc, &[g]).first().copied()) {
+        steps.push(("select.key".into(), json!({ "guide": g })));
+    } else if let Some(key) = selection.key {
+        steps.push(("select.key".into(), json!({ "id": key.0 })));
+    }
+    steps
 }

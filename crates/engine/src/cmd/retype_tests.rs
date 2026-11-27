@@ -98,6 +98,168 @@ fn a_drawn_shape_is_reported_and_left_alone() {
 }
 
 #[test]
+fn a_mark_in_one_font_starts_its_line_as_another_fonts_character() {
+    use vectorcraft_text::test_fonts::{SPACING_COMMA_FAMILY, spacing_comma_font};
+    // The comma below of Source Sans 3 is only marks there, and a modifier letter in this face.
+    vectorcraft_text::FontDb::global().add_font(spacing_comma_font().unwrap());
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "\u{326}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["\u{2bb}"]), "{r}");
+    assert_eq!(r["fonts"][0]["family"], json!(SPACING_COMMA_FAMILY), "{r}");
+    // After a base, it joins the line as the mark; moved off its base, the split leaves it first,
+    // and it becomes the other face's character there.
+    let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "x\u{326}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[1].id.0;
+    s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "\u{2bb}", "yz"]), &json!([])), "{r}");
+    assert_eq!(r["fonts"][1]["family"], json!(SPACING_COMMA_FAMILY), "{r}");
+}
+
+#[test]
+fn a_combining_mark_starts_no_line() {
+    // A combining mark on its own (a drawn dot, bar or ring is the same shape) stays an outline.
+    // The calls that leave a shape an outline leave the installed fonts out, so what this machine
+    // has installed does not change the result.
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
+    assert!(e.contains("no selected shape matches"), "{e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+    // A shape that is both a mark (tilde below) and a character (small tilde) starts its line as
+    // the character.
+    let g = outlined(&mut s, json!({"x": 140, "y": 100, "text": "\u{303}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["\u{2dc}"]), "{r}");
+    // A glyph after it does not turn it back into the mark (diaeresis below, diaeresis).
+    let g = outlined(&mut s, json!({"x": 240, "y": 100, "text": "\u{324}a", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["\u{a8}", "a"]), &json!([])), "{r}");
+    // First on a line, the mark stays an outline and the glyphs after it are retyped.
+    let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "\u{312}ab", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[0].id.0;
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
+    assert_eq!(r["texts"], json!(["ab"]), "{r}");
+    assert_eq!(r["unmatched"], json!([mark]));
+    // After a base, the mark is retyped with it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 300, "text": "x\u{323}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["x\u{323}"]), "{r}");
+    // Moved off its base, the mark is where the line splits, and the part after the split does
+    // not start with it either.
+    let g = outlined(&mut s, json!({"x": 300, "y": 200, "text": "x\u{312}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[1].id.0;
+    s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
+    assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "yz"]), &json!([mark])), "{r}");
+    // A mark that is also another character (dot below, dot above) becomes that character there.
+    let g = outlined(&mut s, json!({"x": 300, "y": 120, "text": "x\u{323}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[1].id.0;
+    s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "\u{2d9}", "yz"]), &json!([])), "{r}");
+    // Tracked, the part after the mark keeps the tracking its own glyphs are spaced by.
+    let id = s
+        .execute("text.create", &json!({"x": 40, "y": 60, "text": "x\u{312}yzw", "size": 40, "font": "Source Sans 3", "style": "Regular"}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 5, "tracking": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap()[1].id.0;
+    s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
+    assert_eq!((&r["texts"], &r["unmatched"]), (&json!(["x", "yzw"]), &json!([mark])), "{r}");
+    assert_eq!(r["fonts"][1]["tracking"], json!(50.0), "{r}");
+    // A one-contour glyph after a mark that stays an outline (a bar, then a dot) is alone, and
+    // beside other shapes it stays an outline too.
+    let dot = outlined(&mut s, json!({"x": 300, "y": 300, "text": "\u{312}.", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let mut pair: Vec<u64> = s.doc().unwrap().doc.children(Some(NodeId(dot))).unwrap().iter().map(|n| n.id.0).collect();
+    pair.sort_unstable();
+    let word = outlined(&mut s, json!({"x": 40, "y": 380, "text": "ab", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [dot, word]})).unwrap();
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
+    assert_eq!(r["texts"], json!(["ab"]), "{r}");
+    let mut left: Vec<u64> = r["unmatched"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    left.sort_unstable();
+    assert_eq!(left, pair, "{r}");
+}
+
+#[test]
+fn marks_of_one_compound_path_each_become_their_own_character() {
+    // Two marks that are also other characters (dot below, dot above; tilde, small tilde), moved
+    // off their base and made one compound path: each becomes the character its own shape is.
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "x\u{323}\u{303}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let kids: Vec<u64> = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap().iter().map(|n| n.id.0).collect();
+    assert_eq!(kids.len(), 5);
+    s.execute("select.set", &json!({"ids": [kids[1], kids[2]]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["unmatched"], json!([]), "{r}");
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    let mut marks = texts.get(1..3).unwrap_or_default().to_vec();
+    marks.sort_unstable();
+    assert_eq!((texts.first(), texts.get(3), texts.len()), (Some(&"x"), Some(&"yz"), 4), "{r}");
+    assert_eq!(marks, ["\u{2d9}", "\u{2dc}"], "{r}");
+}
+
+#[test]
+fn marks_first_after_a_split_leave_other_lines_their_tracking() {
+    // Twenty marks moved off their base, each one first on its line in turn, do not use up the
+    // measures of the other lines: the tracked line retyped with them keeps its tracking.
+    let mut s = session();
+    let marks = outlined(
+        &mut s,
+        json!({"x": 40, "y": 100, "text": format!("x{}a", "\u{312}".repeat(20)), "size": 40, "font": "Source Sans 3", "style": "Regular"}),
+    );
+    let mut moved: Vec<u64> = s.doc().unwrap().doc.children(Some(NodeId(marks))).unwrap().iter().map(|n| n.id.0).collect();
+    assert_eq!(moved.len(), 22);
+    moved = moved[1..21].to_vec();
+    let id = s
+        .execute("text.create", &json!({"x": 40, "y": 300, "text": "x\u{312}yzw", "size": 40, "font": "Source Sans 3", "style": "Regular"}))
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 5, "tracking": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let tracked = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mark = s.doc().unwrap().doc.children(Some(NodeId(tracked))).unwrap()[1].id.0;
+    moved.push(mark);
+    s.execute("select.set", &json!({"ids": moved})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": [marks, tracked]})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
+    let texts = r["texts"].as_array().unwrap();
+    let at = texts.iter().position(|t| t == "yzw").unwrap_or_else(|| panic!("yzw in {r}"));
+    assert_eq!(r["fonts"][at]["tracking"], json!(50.0), "{r}");
+    let mut left: Vec<u64> = r["unmatched"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    left.sort_unstable();
+    moved.sort_unstable();
+    assert_eq!(left, moved, "{r}");
+}
+
+#[test]
 fn mixed_selection_retypes_the_glyphs_and_keeps_the_rest() {
     let mut s = session();
     let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Mix", "size": 30}));
@@ -121,7 +283,7 @@ fn two_words_keep_their_space() {
 
 #[test]
 fn craft_fonts_glyphs_retype_too() {
-    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.is_japanese()) else {
+    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.has_script("Jpan")) else {
         eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
         return;
     };
@@ -215,7 +377,7 @@ fn an_open_path_along_a_glyph_is_not_a_glyph() {
     })
     .unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    assert!(s.execute("type.retype", &json!({})).is_err(), "nothing matches");
+    assert!(s.execute("type.retype", &json!({"installed": false})).is_err(), "nothing matches");
 }
 
 #[test]
@@ -329,7 +491,8 @@ fn a_glyph_painted_beyond_what_type_takes_stays_an_outline() {
     })
     .unwrap();
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["B"]), "two fills: A stays an outline: {r}");
     assert_eq!(r["unmatched"], json!([a]));
 }
@@ -392,7 +555,8 @@ fn a_drawn_dot_or_bar_beside_type_stays_art() {
     // A bar that is exactly a hyphen of the font, somewhere else: the worst case.
     let bar = outlined(&mut s, json!({"x": 200, "y": 300, "text": "-", "size": 50}));
     s.execute("select.set", &json!({"ids": [g, dot, bar]})).unwrap();
-    let r = s.execute("type.retype", &json!({})).unwrap();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let r = s.execute("type.retype", &json!({"installed": false})).unwrap();
     assert_eq!(r["texts"], json!(["AB"]), "{r}");
     let un = r["unmatched"].as_array().unwrap();
     assert!(un.contains(&json!(dot)) && un.len() == 2, "the dot and the bar stay art: {r}");
@@ -595,7 +759,8 @@ fn simplified_outlines_retype_only_with_a_tolerance_and_report_their_score() {
     simplify_every_path(&mut s, 0.05);
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
     assert!(e.contains("no selected shape matches"), "no exact match: {e}");
     for bad in [json!(-0.01), json!(0.06), json!("0.02"), json!(true), json!(null)] {
         let e = s.execute("type.retype", &json!({"tolerance": bad})).unwrap_err().to_string();
@@ -666,8 +831,9 @@ fn two_overlapping_lone_glyphs_beside_art_stay_outlines() {
     let b = outlined(&mut s, json!({"x": 49, "y": 100, "text": "M", "size": 30}));
     let dot = s.execute("shape.ellipse", &json!({"x": 300, "y": 60, "width": 8, "height": 8})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [a, b, dot]})).unwrap();
-    // Nothing is left to retype: both stay outlines, as the lone bar beside art does.
-    let e = s.execute("type.retype", &json!({})).unwrap_err();
+    // Nothing is left to retype: both stay outlines, as the lone bar beside art does. The installed
+    // fonts are left out, so what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err();
     assert!(format!("{e:?}").contains("no selected shape matches"), "{e:?}");
 }
 
@@ -1204,7 +1370,8 @@ fn a_lone_period_in_a_compound_selected_alone_stays_an_outline() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the period became type: {r}"),
         Err(e) => e.to_string(),
     };
@@ -1264,7 +1431,8 @@ fn a_compound_whose_parts_are_not_all_glyphs_stays_whole() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = s.execute("type.retype", &json!({"installed": false})).unwrap_err().to_string();
     assert!(e.contains("(1 checked)"), "reported once: {e}");
     assert!(s.doc().unwrap().doc == before, "nothing changes");
 }
@@ -1281,7 +1449,8 @@ fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
     let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the overlapping o's became type: {r}"),
         Err(e) => e.to_string(),
     };
@@ -1322,7 +1491,8 @@ fn a_translucent_compound_whose_glyphs_overlap_stays_an_outline() {
         })
         .unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
-        let r = s.execute("type.retype", &json!({}));
+        // The installed fonts left out: what this machine has installed does not change the result.
+        let r = s.execute("type.retype", &json!({"installed": false}));
         if opacity == 1.0 {
             let r = r.unwrap();
             assert_eq!(r["texts"], json!(["i", "i"]), "opaque, the two lines become type: {r}");
@@ -1343,8 +1513,9 @@ fn overlapping_exact_glyphs_stay_an_outline_when_near_matches_are_allowed() {
         s.execute("select.set", &json!({"ids": kids})).unwrap();
         let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        // The installed fonts left out: what this machine has installed does not change the result.
         for tolerance in [0.0, 0.05] {
-            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance})) {
+            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance, "installed": false})) {
                 panic!("the overlapping o's became type at dx {dx}, tolerance {tolerance}: {r}");
             }
         }
@@ -1405,7 +1576,8 @@ fn a_glyph_with_only_some_contours_turned_in_an_even_odd_compound_still_becomes_
         })
         .unwrap();
         s.execute("select.set", &json!({"ids": [c]})).unwrap();
-        assert!(s.execute("type.retype", &json!({})).is_err(), "nonzero, contour {turned} turned paints the counter");
+        // The installed fonts left out: what this machine has installed does not change the result.
+        assert!(s.execute("type.retype", &json!({"installed": false})).is_err(), "nonzero, contour {turned} turned paints the counter");
         s.execute("path.setFillRule", &json!({"rule": "evenOdd", "ids": [c]})).unwrap();
         let r = s.execute("type.retype", &json!({})).unwrap();
         assert_eq!(r["texts"], json!(["do"]), "contour {turned} turned: {r}");
@@ -1432,7 +1604,8 @@ fn a_compound_whose_glyph_stays_an_outline_keeps_its_other_glyphs_too() {
     let r = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [c, r]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    let e = match s.execute("type.retype", &json!({})) {
+    // The installed fonts left out: what this machine has installed does not change the result.
+    let e = match s.execute("type.retype", &json!({"installed": false})) {
         Ok(r) => panic!("the A became type without its period: {r}"),
         Err(e) => e.to_string(),
     };
@@ -1777,7 +1950,7 @@ fn the_glyphs_after_one_type_cannot_draw_keep_their_tracking() {
         l.matches[bad].gid = other;
         let bad_id = l.pieces[bad];
         let mut unmatched = vec![];
-        let out = super::verified(vec![l], false, &mut unmatched);
+        let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
         assert_eq!(unmatched, vec![bad_id], "{bad}");
         let last = out.last().unwrap();
         assert_eq!(last.pieces.len(), 5 - bad, "{bad}: {:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
@@ -1829,7 +2002,7 @@ fn the_rest_of_a_widely_tracked_line_keeps_its_tracking_after_a_split() {
     assert_eq!(l.tracking, 8000.0);
     l.matches[0].gid += 1;
     let mut unmatched = vec![];
-    let out = super::verified(vec![l], false, &mut unmatched);
+    let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
     assert_eq!(unmatched.len(), 1);
     let last = out.last().unwrap();
     assert_eq!((last.pieces.len(), last.tracking), (99, 8000.0), "{:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
@@ -1851,7 +2024,7 @@ fn glyphs_type_cannot_draw_do_not_use_up_the_tracking_measure() {
         m.gid += 1;
     }
     let mut unmatched = vec![];
-    let out = super::verified(vec![l], false, &mut unmatched);
+    let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
     assert_eq!(unmatched.len(), 5);
     let last = out.last().unwrap();
     assert_eq!((last.pieces.len(), last.tracking), (95, 300.0), "{:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
@@ -1944,7 +2117,7 @@ fn a_long_run_after_a_split_keeps_a_tracking_under_one_unit_that_adds_up() {
     assert!(near(l.tracking, 0.2, 0.01), "{}", l.tracking);
     l.matches[0].gid += 1;
     let mut unmatched = vec![];
-    let out = super::verified(vec![l], false, &mut unmatched);
+    let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
     assert_eq!(unmatched.len(), 1);
     let last = out.last().unwrap();
     assert!(last.pieces.len() == 399 && near(last.tracking, 0.2, 0.01), "{:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
@@ -1974,7 +2147,7 @@ fn a_long_rest_tracked_past_a_negative_space_advance_keeps_its_word_spaces_after
         assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking), "{times}");
         l.matches[0].gid += 1;
         let mut unmatched = vec![];
-        let out = super::verified(vec![l], false, &mut unmatched);
+        let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
         assert_eq!(unmatched.len(), 1, "{times}");
         let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
         assert_eq!(texts, vec![(&text[1..], tracking)], "{times}");
@@ -2011,7 +2184,7 @@ fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_
     assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
     l.matches[0].gid += 1;
     let mut unmatched = vec![];
-    let out = super::verified(vec![l], false, &mut unmatched);
+    let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
     assert_eq!(unmatched.len(), 1);
     let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
     assert_eq!(texts, vec![(&text[1..], tracking)]);
@@ -2131,7 +2304,7 @@ fn a_long_tightly_tracked_rest_keeps_its_word_spaces_after_a_split() {
     assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
     l.matches[0].gid += 1;
     let mut unmatched = vec![];
-    let out = super::verified(vec![l], false, &mut unmatched);
+    let out = super::verified(vec![l], false, &Default::default(), &mut unmatched);
     assert_eq!(unmatched.len(), 1);
     let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
     assert_eq!(texts, vec![(&text[1..], tracking)]);

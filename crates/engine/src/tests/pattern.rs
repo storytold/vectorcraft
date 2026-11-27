@@ -1697,21 +1697,31 @@ fn mirror_axis(s: &Session) -> vectorcraft_tools::mirror::MirrorAxis {
     vectorcraft_tools::mirror::MirrorAxis::of(&st.doc, &st.selection, 1.0).unwrap()
 }
 
+/// A press on the mirror axis at `at`, as the canvas's selection widgets take it.
+fn mirror_press(s: &mut Session, at: Point) -> vectorcraft_tools::mirror::MirrorDrag {
+    s.with_tool_context(ViewInfo::default(), |cx| vectorcraft_tools::mirror::MirrorDrag::hit(cx, at, Mods::default())).expect("a press on the axis")
+}
+
+/// The mirror axis drag `d` moved to `to`, its actions applied as the canvas's selection widgets apply them.
+fn mirror_drag(s: &mut Session, d: &mut vectorcraft_tools::mirror::MirrorDrag, to: Point, mods: Mods) {
+    let acts = s.with_tool_context(ViewInfo::default(), |cx| d.drag(cx, to, mods));
+    s.apply_actions(acts).unwrap();
+}
+
 #[test]
 fn mirror_axis_drag_previews_once_and_undo_redo_preserve_source() {
-    use vectorcraft_tools::{PointerEvent, PointerKind};
     let mut s = session();
     rect(&mut s, 100.0, 100.0, 60.0, 80.0);
     let id = id_of(&s.execute("object.repeat.mirror", &json!({})).unwrap());
     let before = node(&s, id);
     let axis = mirror_axis(&s);
-    let v = ViewInfo::default();
-    s.select_tool("selection", v).unwrap();
     let h = crate::tests::history(&s);
-    for (kind, dx) in [(PointerKind::Down, 0.0), (PointerKind::Drag, 20.0), (PointerKind::Drag, 30.0), (PointerKind::Up, 40.0)] {
-        s.pointer(&PointerEvent::new(kind, axis.center.x + dx, axis.center.y), v).unwrap();
+    let mut d = mirror_press(&mut s, axis.center);
+    for dx in [20.0, 30.0, 40.0] {
+        mirror_drag(&mut s, &mut d, axis.center + vectorcraft_geom::Vec2::new(dx, 0.0), Mods::default());
         assert!(close(mirror_axis(&s).center, axis.center + vectorcraft_geom::Vec2::new(dx, 0.0)));
     }
+    s.apply_actions(d.finish()).unwrap();
     assert_eq!(crate::tests::history(&s).0, h.0 + 1);
     let after = node(&s, id);
     let (NodeKind::Repeat(a), NodeKind::Repeat(b)) = (&before.kind, &after.kind) else { panic!() };
@@ -1725,33 +1735,29 @@ fn mirror_axis_drag_previews_once_and_undo_redo_preserve_source() {
 
 #[test]
 fn mirror_axis_rotation_snaps_and_escape_restores_document_and_history() {
-    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
     let mut s = session();
     rect(&mut s, 100.0, 100.0, 60.0, 80.0);
     let id = id_of(&s.execute("object.repeat.mirror", &json!({})).unwrap());
-    let v = ViewInfo::default();
-    s.select_tool("selection", v).unwrap();
     let before = node(&s, id);
     let h = crate::tests::history(&s);
     let axis = mirror_axis(&s);
     let end = axis.ends[1];
     let destination = axis.center + vectorcraft_geom::Vec2::new(70.0, 60.0);
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
     let shift = Mods { shift: true, ..Default::default() };
-    s.pointer(&PointerEvent::new(PointerKind::Drag, destination.x, destination.y).with_mods(shift), v).unwrap();
+    let mut d = mirror_press(&mut s, end);
+    mirror_drag(&mut s, &mut d, destination, shift);
     assert!((mirror_axis(&s).angle - 45.0).abs() < 1e-6);
     assert_eq!(mirror_axis(&s).center, axis.center);
-    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
-    assert!(!s.tool_busy());
-    s.pointer(&PointerEvent::new(PointerKind::Up, destination.x, destination.y), v).unwrap();
+    s.apply_actions(d.cancel()).unwrap();
     assert_eq!(node(&s, id), before);
     assert_eq!(crate::tests::history(&s), h);
     // A click is not an edit, and a subsequent real drag still works after cancellation.
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, end.x, end.y), v).unwrap();
+    let click = mirror_press(&mut s, end).finish();
+    s.apply_actions(click).unwrap();
     assert_eq!(crate::tests::history(&s), h);
-    s.pointer(&PointerEvent::new(PointerKind::Down, end.x, end.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, destination.x, destination.y).with_mods(shift), v).unwrap();
+    let mut d = mirror_press(&mut s, end);
+    mirror_drag(&mut s, &mut d, destination, shift);
+    s.apply_actions(d.finish()).unwrap();
     assert!((mirror_axis(&s).angle - 45.0).abs() < 1e-6);
     assert_eq!(crate::tests::history(&s).0, h.0 + 1);
 }

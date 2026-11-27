@@ -910,6 +910,54 @@ fn relative_corner_rounding_keeps_fraction_on_resize() {
     assert!((c.drawn_radius(0) / drawn - 2.0).abs() < 0.05, "drawn radius doubled with the shape");
 }
 
+/// `relativeRadii` on a plain path or an ellipse, which have no Live Corners record, leaves them
+/// as they are and adds no undo step.
+#[test]
+fn relative_rounding_without_live_corners_adds_no_undo_step() {
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.expandShape", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "a plain path");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": false}));
+    run(&mut s, json!({"ids": [id.0], "relativeRadii": true}));
+    assert_eq!(steps(&s), n, "a plain path: no change");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().live_shape().is_none(), "still a plain path");
+    let e = s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 50, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [e], "relativeRadii": true}));
+    assert_eq!(steps(&s), n, "an ellipse: no change");
+}
+
+/// With Relative rounding, a radius is compared as the fraction it would store: a radius past the
+/// corner's maximum, typed again, and the maximum the field then shows add no undo step, while a
+/// smaller one adds one.
+#[test]
+fn a_relative_radius_that_stores_the_same_fraction_adds_no_undo_step() {
+    let (mut s, id) = session();
+    run(&mut s, json!({"relativeRadii": true}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let max = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap().corner(0).unwrap().max_radius();
+    let n = steps(&s);
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "past the maximum: one undo step");
+    let c = LiveCorners::of(s.doc().unwrap().doc.node(id).unwrap()).unwrap();
+    assert!((c.radius(0) - 1.0).abs() < 1e-9, "stored as the whole maximum: {}", c.radius(0));
+    run(&mut s, json!({"corners": [0], "radius": max + 20.0}));
+    assert_eq!(steps(&s), n + 1, "the same radius again: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max}));
+    assert_eq!(steps(&s), n + 1, "the maximum, as shown: no undo step");
+    run(&mut s, json!({"corners": [0], "radius": max / 2.0}));
+    assert_eq!(steps(&s), n + 2, "a smaller radius: one undo step");
+    // On a large shape a small radius is a fraction below 1e-9, and still a change.
+    let big = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 3_000_000, "height": 3_000_000})).unwrap()["id"].as_u64().unwrap();
+    run(&mut s, json!({"ids": [big], "relativeRadii": true}));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [big], "corners": [0], "radius": 0.001}));
+    assert_eq!(steps(&s), n + 1, "a small radius on a large shape: one undo step");
+}
+
 /// #2898: while a corner widget is pressed or dragged, Up and Down step the corners' kind (round,
 /// inverted round, chamfer, in turn) along with the radius, as one undo step with the drag.
 #[test]
@@ -1001,4 +1049,37 @@ fn a_double_click_on_a_corner_widget_with_a_shape_tool_asks_for_the_transform_pa
     assert_eq!(st.history.undo.len(), steps, "no undo step");
     assert!(st.interaction.is_none());
     assert_eq!(s.tool_id(), "rectangle");
+}
+
+/// A double-click on a corner widget of a selected live rectangle with the Selection tool asks
+/// the frontend for the Transform panel, and leaves the document, its undo history, the
+/// selection and the tool as they were; with Direct Selection it still opens Corners.
+#[test]
+fn a_double_click_on_a_corner_widget_with_the_selection_tool_asks_for_the_transform_panel() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let (mut s, id) = session();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let v = ViewInfo::default();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let (doc, selection, steps) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+    let double_click = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, v).unwrap();
+        let mut asked = vec![];
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            asked.extend(s.pointer(&PointerEvent::new(kind, at.x, at.y).with_mods(Mods::default()), v).unwrap());
+        }
+        asked
+    };
+    assert_eq!(double_click(&mut s, "selection"), vec![UiRequest::Panel("transform".into())]);
+    let st = s.doc().unwrap();
+    assert!(*st.doc == *doc, "the document is unchanged");
+    assert_eq!(st.selection, selection);
+    assert_eq!(st.history.undo.len(), steps, "no undo step");
+    assert!(st.interaction.is_none());
+    assert_eq!(s.tool_id(), "selection");
+    // Direct Selection opens Corners for the corner it picked with the first click.
+    let asked = double_click(&mut s, "directSelection");
+    assert!(matches!(asked.as_slice(), [UiRequest::Dialog(k, _)] if k == vectorcraft_tools::corners::DIALOG), "{asked:?}");
 }
