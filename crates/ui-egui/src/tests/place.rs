@@ -462,6 +462,59 @@ fn images(app: &VectorcraftApp, i: usize) -> usize {
     n
 }
 
+#[test]
+fn a_browser_drop_uses_the_inactive_tiled_canvas_under_the_pointer() {
+    let mut app = app();
+    let inbox = crate::place::PlaceInbox::default();
+    app.services.place_inbox = Some(inbox.clone());
+    let ctx = window(&app);
+    app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    laid_out(&mut app, &ctx);
+    assert_eq!(app.session.active_index(), Some(1));
+
+    let (w, _) = app.canvas.panes.last.iter().copied().find(|(w, _)| w.0 == 0).unwrap();
+    let view = crate::doc_windows::view(&app, w).unwrap();
+    let pos = view.rect.center() + vec2(19.0, -13.0);
+    assert!(!app.canvas_view().unwrap().rect.contains(pos));
+    let want = view.canvas(app.ui_scaling(), view.rect).to_doc(pos);
+    let name = "pane.png";
+    let spot = app.drop_spot(Some(pos));
+    let (doc, reverts) = (app.session.documents()[0].uid, app.session.documents()[0].reverts);
+    let drop = DropAt { doc, reverts, at: want, embed: true };
+    assert_eq!(app.drop_target(name, spot, true), DropTarget::Place(drop));
+    assert_eq!(app.drop_target("palette.gpl", spot, false), DropTarget::Open);
+
+    inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop });
+    frame(&mut app, &ctx, vec![], &[], false);
+    assert_eq!((images(&app, 0), images(&app, 1)), (1, 0));
+    let center = selected_image(&app).geometric_bounds().unwrap().center();
+    assert!((center.x - want.x).abs() < 1e-6 && (center.y - want.y).abs() < 1e-6, "{center:?} vs {want:?}");
+}
+
+#[test]
+fn a_browser_drop_cannot_reach_an_inactive_tile_through_a_floating_window() {
+    let mut app = app();
+    let ctx = window(&app);
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
+    }
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({"index": 2, "at": [45, 130]})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    laid_out(&mut app, &ctx);
+    assert_eq!(app.session.active_index(), Some(1));
+
+    let (tile, _) = app.canvas.panes.last.iter().copied().find(|(w, _)| w.0 == 0).unwrap();
+    let tile = crate::doc_windows::view(&app, tile).unwrap().rect;
+    let floating = crate::doc_windows::view(&app, (2, app.ui.floating[0].view)).unwrap().rect;
+    let overlap = tile.intersect(floating);
+    assert!(overlap.is_positive(), "the floating window {floating:?} covers part of the tile {tile:?}");
+    let pos = overlap.center();
+    assert!(!app.canvas_view().unwrap().rect.contains(pos));
+    assert_eq!(app.drop_target("covered.png", app.drop_spot(Some(pos)), false), DropTarget::Open);
+}
+
 /// The web reads dropped files asynchronously (#359): a file that arrives after another document
 /// became active still lands where it was dropped, and is dropped itself when that document closed.
 #[test]

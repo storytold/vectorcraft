@@ -68,8 +68,10 @@ pub enum DropTarget {
 /// Where a dropped file landed, as far as the platform says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DropSpot {
-    /// On the canvas, at this document point.
+    /// On the active canvas, at this document point.
     Canvas(Point),
+    /// On a tiled canvas, identified by its document uid and point.
+    TiledCanvas { doc: u64, at: Point },
     /// Off the canvas: a panel, the tab bar, a dialog.
     Elsewhere,
     /// The platform gives no place (floating panel windows, desktop drags without a position).
@@ -805,28 +807,29 @@ impl VectorcraftApp {
     /// plug-in reads opens wherever it is dropped, as File → Open opens it ([`io::opens_as`],
     /// [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, spot: DropSpot, shift: bool) -> DropTarget {
-        let (Some(st), Some(v)) = (self.session.active(), self.view()) else { return DropTarget::Open };
-        let at = match spot {
-            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
-            DropSpot::Elsewhere => return DropTarget::Open,
-            DropSpot::Canvas(at) => at,
-            DropSpot::Unknown if is_document(name) => return DropTarget::Open,
-            DropSpot::Unknown => v.center,
+        if io::opens_as(name).is_some() || fileio::opens_with_importer(name) {
+            return DropTarget::Open;
+        }
+        let (st, at) = match spot {
+            DropSpot::Canvas(at) => (self.view().and(self.session.active()), at),
+            DropSpot::TiledCanvas { doc, at } => (self.session.documents().iter().find(|st| st.uid == doc), at),
+            DropSpot::Unknown if !is_document(name) => {
+                let Some(view) = self.view() else { return DropTarget::Open };
+                (self.session.active(), view.center)
+            }
+            _ => return DropTarget::Open,
         };
-        DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
+        st.map_or(DropTarget::Open, |st| DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift }))
     }
 
     /// Where a drop at `pos` on the window lands, for a host that follows its file drags itself (the
-    /// web's): on the active canvas as it last showed, else elsewhere; without a position, unknown.
+    /// web's): on the canvas shown under the pointer, else elsewhere; without a position, unknown.
     pub fn drop_spot(&self, pos: Option<egui::Pos2>) -> DropSpot {
         let Some(pos) = pos else { return DropSpot::Unknown };
-        match self.canvas_view() {
-            Some(view) if view.rect.contains(pos) => {
-                let at = view.to_doc(pos);
-                DropSpot::Canvas(Point::new(at.x, at.y))
-            }
-            _ => DropSpot::Elsewhere,
+        if let Some(view) = self.canvas_view().filter(|view| view.rect.contains(pos)) {
+            return DropSpot::Canvas(view.to_doc(pos));
         }
+        crate::canvas::panes::file_drop_at(self, pos).map_or(DropSpot::Elsewhere, |(doc, at)| DropSpot::TiledCanvas { doc, at })
     }
 }
 
