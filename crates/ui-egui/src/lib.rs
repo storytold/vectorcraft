@@ -274,7 +274,7 @@ pub struct VectorcraftApp {
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
     /// The document whose settings the open Document Setup dialog edits.
-    pub(crate) document_setup_source: Option<u64>,
+    pub(crate) document_setup_source: Option<(u64, u64)>,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
     /// step however many values it sets.
     pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
@@ -319,7 +319,7 @@ pub struct VectorcraftApp {
     /// The Justification dialog, while it is open.
     pub(crate) justification: Option<dialogs::justification::Open>,
     /// The Bullets and Numbering dialog's live preview.
-    pub(crate) bullets_preview: dialogs::preview::LivePreview,
+    pub(crate) bullets_preview: Option<dialogs::bullets_numbering::Preview>,
     /// The paste that waits for the answer to its colour profile question.
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.

@@ -85,6 +85,8 @@ impl StripKind {
 pub(crate) struct Strip {
     /// Which command the strip previews.
     pub kind: StripKind,
+    /// The drawing whose selection and preview the strip uses.
+    document: Option<u64>,
     /// The slider's value, 0 to 100.
     pub level: f64,
     /// The selection's document bounds when the strip opened, so the strip stays put while the
@@ -99,6 +101,18 @@ pub(crate) struct Strip {
 }
 
 impl Strip {
+    fn in_source(&self, app: &VectorcraftApp) -> bool {
+        self.document == app.session.active().map(|doc| doc.uid)
+    }
+
+    fn cancel(self, app: &mut VectorcraftApp) {
+        if self.in_source(app)
+            && app.session.active().and_then(|doc| doc.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == self.kind.cmd())
+        {
+            self.preview.cancel(app);
+        }
+    }
+
     /// The slider's level, a whole number from 0 to 100.
     fn level(&self) -> f64 {
         if self.level.is_finite() { self.level.round().clamp(0.0, 100.0) } else { self.kind.default_level() }
@@ -124,10 +138,17 @@ pub(crate) fn opening_level(app: &VectorcraftApp, kind: StripKind) -> f64 {
 /// Opens the strip of `kind`, replacing (and cancelling the preview of) one that is open.
 pub(crate) fn open(app: &mut VectorcraftApp, kind: StripKind) {
     if let Some(old) = app.object_dialogs.strip.take() {
-        old.preview.cancel(app);
+        old.cancel(app);
     }
-    let strip =
-        Strip { kind, level: opening_level(app, kind), bounds: app.selection_bounds(), open: true, auto: None, preview: LivePreview::default() };
+    let strip = Strip {
+        kind,
+        document: app.session.active().map(|doc| doc.uid),
+        level: opening_level(app, kind),
+        bounds: app.selection_bounds(),
+        open: true,
+        auto: None,
+        preview: LivePreview::default(),
+    };
     app.object_dialogs.strip = Some(strip);
 }
 
@@ -158,6 +179,9 @@ pub(super) fn auto_of(app: &mut VectorcraftApp, kind: StripKind) -> Result<Value
         return Err(not_open(kind));
     }
     let Some(mut strip) = app.object_dialogs.strip.take() else { return Err(not_open(kind)) };
+    if !strip.in_source(app) {
+        return Err(not_open(kind));
+    }
     let answer = strip.preview.run(app, true, kind.label(), kind.cmd(), &json!({ "auto": true }));
     let result = answer.unwrap_or_else(|| Ok(json!({ "level": strip.level() })));
     if let Ok(v) = &result {
@@ -176,8 +200,11 @@ pub(crate) fn more_options(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err(not_open(StripKind::Simplify));
     }
     let Some(strip) = app.object_dialogs.strip.take() else { return Err(not_open(StripKind::Simplify)) };
+    if !strip.in_source(app) {
+        return Err(not_open(StripKind::Simplify));
+    }
     let tolerance = simplify_level_tolerance(strip.level());
-    strip.preview.cancel(app);
+    strip.cancel(app);
     // PLAN: assumed `path_ops::open_simplify(app: &mut VectorcraftApp, tolerance: f64)` returning `()`.
     super::path_ops::open_simplify(app, tolerance);
     Ok(json!({ "tolerance": tolerance }))
@@ -202,6 +229,9 @@ fn anchor_rect(view: &CanvasView, bounds: Option<Rect>) -> ScreenRect {
 /// the canvas body.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, view: &CanvasView) {
     let Some(mut strip) = app.object_dialogs.strip.take() else { return };
+    if !strip.in_source(app) {
+        return;
+    }
     let kind = strip.kind;
     let anchor = anchor_rect(view, strip.bounds);
     let (mut level, mut open) = (strip.level, strip.open);
@@ -226,7 +256,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, view: &CanvasVie
     strip.open = open;
     let result = match shown.output.closed {
         Some(CloseReason::Escape) => {
-            strip.preview.cancel(app);
+            strip.cancel(app);
             return;
         }
         Some(_) => {

@@ -296,6 +296,37 @@ fn a_changed_search_starts_again() {
     assert_eq!(matched(&p), Some((bottom, 4, 7)), "the same search goes on");
 }
 
+#[test]
+fn the_match_line_follows_the_active_drawing_and_find_query() {
+    let (app, _) = app_with(&["source cat match"]);
+    let mut p = Panel::new(app, draw);
+    p.app().run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    p.app().run("text.create", json!({"x": 50, "y": 50, "text": "destination dog match"})).unwrap();
+    p.app().run("document.activate", json!({"index": 0})).unwrap();
+    choose(&p);
+    set(&p, "find", json!("cat"));
+    p.click("Find Next");
+    assert!(message(&p).contains("source cat match"));
+
+    p.app().run("document.activate", json!({"index": 1})).unwrap();
+    pump(&p);
+    assert_eq!(matched(&p), None);
+    assert_eq!(message(&p), "", "the line must not describe a match from another drawing");
+
+    p.app().run("document.activate", json!({"index": 0})).unwrap();
+    pump(&p);
+    assert!(matched(&p).is_some());
+    assert!(message(&p).contains("source cat match"));
+
+    set(&p, "find", json!("dog"));
+    pump(&p);
+    assert_eq!(matched(&p), None);
+    assert_eq!(message(&p), "", "the line must not describe a match for the previous query");
+    p.click("Find Next");
+    pump(&p);
+    assert_eq!(message(&p), "No matches found", "refreshing the dialog leaves the search result visible");
+}
+
 /// The place a search reached belongs to its document: in another document, Edit › Find Next and
 /// the dialog start at that document's first match, even where an object there has the same id.
 /// The params of a `ui.paramDialog` call take the place of the last search's, a switch that is off

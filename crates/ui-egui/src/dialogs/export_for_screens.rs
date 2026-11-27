@@ -45,6 +45,7 @@ use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleS
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
 use craft::ui::primitives::{ContentPainterCx, fit_rect};
 use craft::ui::runtime::env::Label;
+use craft::ui::runtime::focus::Initial;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
@@ -958,6 +959,10 @@ impl StackDialog for ExportForScreensDialog {
         let mut held = std::mem::take(&mut self.held);
         let mut dialog =
             FormDialog::new(tl!("Export for Screens"), Bind::bound(&mut fields)).ok_label(ok).ok_enabled(chosen.is_none()).held(&mut held);
+        if self.web {
+            // Keep the first artboard visible when the web dialog opens in a short viewport.
+            dialog = dialog.shaped(|surface| surface.initial_focus(Initial::First));
+        }
         if let Some(reason) = chosen {
             dialog = dialog.ok_reason(reason);
         }
