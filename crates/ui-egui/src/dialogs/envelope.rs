@@ -61,8 +61,8 @@ pub(crate) struct Open {
     pub id: DialogId,
     /// Which of the three dialogs it is.
     pub kind: &'static str,
-    /// The drawing that supplied the selection and defaults at opening.
-    document: Option<u64>,
+    /// The drawing and loaded contents that supplied the selection and defaults at opening.
+    document: Option<(u64, u64)>,
     /// The envelope the dialog previews.
     pub preview: LivePreview,
     // PLAN: ef.C11's `Open` has no `generation`; the same kind reopened has the same id, so the id cannot tell the held Cancel of the replaced dialog from the new one's.
@@ -72,7 +72,7 @@ pub(crate) struct Open {
 
 impl Open {
     fn on_original_drawing(&self, app: &VectorcraftApp) -> bool {
-        app.session.active().map(|st| st.uid) == self.document
+        app.session.active().map(|st| (st.uid, st.reverts)) == self.document
     }
 
     fn cancel_preview(self, app: &mut VectorcraftApp) {
@@ -186,7 +186,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
 /// Options dialog sets the defaults for new envelopes and has nothing to preview.
 fn open_dialog(app: &mut VectorcraftApp, kind: &'static str, values: Map<String, Value>, envelope: bool) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let document = app.session.active().map(|st| st.uid);
+    let document = app.session.active().map(|st| (st.uid, st.reverts));
     if let Some(previous) = app.effect_dialogs.envelope.take() {
         let id = previous.id;
         previous.cancel_preview(app);
@@ -218,6 +218,9 @@ fn accept(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> 
         return Err("the envelope dialog is gone".into());
     };
     if !open.on_original_drawing(app) {
+        if app.session.active().map(|st| st.uid) == open.document.map(|(uid, _)| uid) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
         return Err(tl!("Return to the original drawing to apply the envelope").into());
     }
     let kind = open.kind;
@@ -515,6 +518,45 @@ mod tests {
         accept(&mut app, id);
         let (_, node) = envelope(&app);
         assert!(matches!(node.kind, NodeKind::Envelope { ref kind, .. } if matches!(**kind, EnvelopeKind::Warp { bend: 31.0, .. })));
+    }
+
+    #[test]
+    fn envelope_warp_and_mesh_do_not_preview_or_apply_to_restored_art() {
+        for command in [MAKE_WARP, MAKE_MESH] {
+            let (mut app, rect) = app_with_rect();
+            let dir = vectorcraft_testkit::TempDir::new("envelope-revert");
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+            app.run("shape.ellipse", json!({"x": 5, "y": 5, "width": 20, "height": 20})).unwrap();
+            app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+            open(&mut app, command).unwrap();
+            let id = dialog(&app);
+            pump(&mut app);
+            assert!(matches!(envelope(&app).1.kind, NodeKind::Envelope { .. }));
+            let source = app.session.active().unwrap();
+            let (uid, reverts) = (source.uid, source.reverts);
+
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+            let loaded = app.session.active().unwrap();
+            assert_eq!((loaded.uid, loaded.reverts), (uid, reverts + 1));
+            let undo = loaded.history.undo.len();
+            pump(&mut app);
+            assert!(matches!(envelope(&app).1.kind, NodeKind::Path { .. }), "{command} preview");
+            let ctx = app.ui_ctx.clone().unwrap();
+            host(&app, |h| h.confirm_by_id(&ctx, id));
+            pump(&mut app);
+            assert!(matches!(host(&app, |h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+            assert!(matches!(envelope(&app).1.kind, NodeKind::Path { .. }), "{command} approval");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+            dismiss(&mut app, id);
+            open(&mut app, command).unwrap();
+            let fresh = dialog(&app);
+            accept(&mut app, fresh);
+            assert!(matches!(envelope(&app).1.kind, NodeKind::Envelope { .. }));
+        }
     }
 
     #[test]
