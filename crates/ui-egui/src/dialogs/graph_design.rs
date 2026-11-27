@@ -251,9 +251,15 @@ pub(crate) enum Answer {
 
 impl Answer {
     /// Runs the command; the refusal is its error.
-    fn run(&self, app: &mut VectorcraftApp) -> Result<(), Label> {
+    fn run(&self, app: &mut VectorcraftApp, target: &GraphTarget) -> Result<(), Label> {
+        let Some(active) = app.session.active().filter(|active| active.uid == target.document.0) else {
+            return Err(Label::from(tl!("This graph design belongs to the document that opened the dialog.")));
+        };
+        if active.reverts != target.document.1 {
+            return Err(Label::from(tl!("The document was reverted. Reopen this dialog to continue.")));
+        }
         let design = |d: &Option<DesignKey>| json!({ "design": d.as_ref().map(|d| d.name.as_str()), "library": library_of(d.as_ref()) });
-        let (command, params) = match self {
+        let (command, mut params) = match self {
             Answer::Column { design: d, options } => {
                 let mut params = design(d);
                 params["columnType"] = json!(options.column_type.as_str());
@@ -263,7 +269,32 @@ impl Answer {
             }
             Answer::Marker { design: d } => ("graph.marker", design(d)),
         };
+        // When selection still describes the opening target, let the command keep its selected series highlighted.
+        let selected = vectorcraft_engine::graph_type_subject(&app.session).ok();
+        if !selected.is_some_and(|selected| selected.id.0 == target.graph && selected.series == target.series) {
+            params["id"] = json!(target.graph);
+            if !target.series.is_empty() {
+                params["seriesIndexes"] = json!(target.series);
+            }
+        }
         app.run(command, params).map(|_| ()).map_err(Label::from)
+    }
+}
+
+/// The graph and picked series the Column or Marker form opened for.
+#[derive(Clone)]
+struct GraphTarget {
+    document: (u64, u64),
+    graph: u64,
+    series: Vec<usize>,
+}
+
+impl GraphTarget {
+    fn selected(app: &VectorcraftApp) -> Result<Self, String> {
+        let active = app.session.active().ok_or("no document open")?;
+        let document = (active.uid, active.reverts);
+        let selected = vectorcraft_engine::graph_type_subject(&app.session).map_err(|error| error.to_string())?;
+        Ok(Self { document, graph: selected.id.0, series: selected.series })
     }
 }
 
@@ -361,6 +392,7 @@ impl Lists {
 pub(crate) struct GraphDesignDialog {
     id: DialogId,
     kind: Kind,
+    target: Option<GraphTarget>,
     lists: Lists,
     /// The selected rows: any number of designs in Graph Design; one design, or None, in Column and Marker.
     selection: Selection<RowKey>,
@@ -376,14 +408,16 @@ pub(crate) struct GraphDesignDialog {
 /// What [`pump`] takes from the open dialog to run.
 struct Work {
     actions: Vec<Action>,
-    answer: Option<Answer>,
+    answer: Option<(Answer, GraphTarget)>,
+    document: Option<(u64, u64)>,
 }
 
 impl GraphDesignDialog {
-    fn new(kind: Kind, lists: Lists, chosen: Vec<DesignKey>, column: ColumnOptions) -> Self {
+    fn new(kind: Kind, lists: Lists, chosen: Vec<DesignKey>, column: ColumnOptions, target: Option<GraphTarget>) -> Self {
         let mut dialog = GraphDesignDialog {
             id: dialog_id(kind.key()),
             kind,
+            target,
             lists,
             selection: Selection::new(Vec::new(), None, None),
             name: String::new(),
@@ -432,7 +466,9 @@ impl GraphDesignDialog {
     }
 
     fn take_work(&mut self) -> Work {
-        Work { actions: std::mem::take(&mut self.actions), answer: self.held.take() }
+        let answer = self.held.take().and_then(|answer| self.target.clone().map(|target| (answer, target)));
+        let document = self.target.as_ref().map(|target| target.document);
+        Work { actions: std::mem::take(&mut self.actions), answer, document }
     }
 
     /// What OK files.
@@ -756,7 +792,7 @@ impl StackDialog for GraphDesignDialog {
 pub fn open_design(app: &mut VectorcraftApp) -> Result<Value, String> {
     let lists = Lists::read(app)?;
     let first = lists.designs.first().map(|n| DesignKey::document(n));
-    open(app, GraphDesignDialog::new(Kind::Design, lists, first.into_iter().collect(), ColumnOptions::default()))
+    open(app, GraphDesignDialog::new(Kind::Design, lists, first.into_iter().collect(), ColumnOptions::default(), None))
 }
 
 /// Open Column for the selected graph series, on the design and options they draw their columns with (None for plain
@@ -769,14 +805,16 @@ pub fn open_column(app: &mut VectorcraftApp) -> Result<Value, String> {
         fractions: v["fractions"].as_str().and_then(Fractions::parse).unwrap_or_default(),
     };
     let chosen = v["design"].as_str().map(DesignKey::document);
-    open(app, GraphDesignDialog::new(Kind::Column, Lists::read(app)?, chosen.into_iter().collect(), options))
+    let target = GraphTarget::selected(app)?;
+    open(app, GraphDesignDialog::new(Kind::Column, Lists::read(app)?, chosen.into_iter().collect(), options, Some(target)))
 }
 
 /// Open Marker for the selected graph series, on the design they draw with (None for the default).
 pub fn open_marker(app: &mut VectorcraftApp) -> Result<Value, String> {
     let v = app.session.execute("graph.marker", &json!({})).map_err(|e| e.to_string())?;
     let chosen = v["design"].as_str().map(DesignKey::document);
-    open(app, GraphDesignDialog::new(Kind::Marker, Lists::read(app)?, chosen.into_iter().collect(), ColumnOptions::default()))
+    let target = GraphTarget::selected(app)?;
+    open(app, GraphDesignDialog::new(Kind::Marker, Lists::read(app)?, chosen.into_iter().collect(), ColumnOptions::default(), Some(target)))
 }
 
 fn open(app: &VectorcraftApp, dialog: GraphDesignDialog) -> Result<Value, String> {
@@ -815,8 +853,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Err(e) => app.status(e),
         }
     }
-    let answered = work.answer.map(|answer| answer.run(app));
-    let lists = Lists::read(app).ok();
+    let answered = work.answer.map(|(answer, target)| answer.run(app, &target));
+    let same_document = work.document.is_none_or(|document| app.session.active().is_some_and(|active| (active.uid, active.reverts) == document));
+    let lists = if same_document { Lists::read(app).ok() } else { None };
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<GraphDesignDialog>() {
             if let Some(lists) = lists {
@@ -879,6 +918,94 @@ mod tests {
         super::pump(app, ctx);
         assert!(dialogs.with(|host| host.confirm::<GraphDesignDialog>(ctx)), "the accepted answer closes the dialog");
         assert!(!dialogs.with(|host| host.is_open::<GraphDesignDialog>()));
+    }
+
+    #[test]
+    fn graph_column_and_marker_keep_their_opening_graph() {
+        for (graph_kind, command) in [("column", "graph.column"), ("line", "graph.marker")] {
+            let (mut app, ctx) = app_with_design();
+            select_graph(&mut app, graph_kind);
+            let graph = app.session.active().unwrap().selection.objects[0].0;
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            let r = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20})).unwrap()["id"].clone();
+            app.run("select.set", json!({"ids": [r]})).unwrap();
+            app.run("graph.design", json!({"new": true})).unwrap();
+            select_graph(&mut app, graph_kind);
+            assert_eq!(app.session.active().unwrap().selection.objects[0].0, graph);
+            let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+            let design = |app: &mut VectorcraftApp, id| app.session.execute(command, &json!({"id": id})).unwrap()["design"].clone();
+
+            activate(&mut app, 0);
+            crate::menus::invoke(&mut app, command, json!({}));
+            set(&app, &ctx, "selected", json!("New Design")).unwrap();
+            activate(&mut app, 1);
+            let undo = app.session.active().unwrap().history.undo.len();
+            app.dialogs().unwrap().with(|host| host.confirm::<GraphDesignDialog>(&ctx));
+            super::pump(&mut app, &ctx);
+            assert_eq!(design(&mut app, graph), Value::Null);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            assert_eq!(fields(&app)["selected"], "New Design");
+
+            activate(&mut app, 0);
+            select_graph(&mut app, graph_kind);
+            let selected = app.session.active().unwrap().selection.objects[0].0;
+            assert_ne!(selected, graph);
+            ok(&mut app, &ctx);
+            assert_eq!(design(&mut app, graph), "New Design");
+            assert_eq!(design(&mut app, selected), Value::Null);
+        }
+    }
+
+    fn a_graph_design_draft_after_file_revert(graph_kind: &str, command: &str) {
+        struct SavedFile(std::path::PathBuf);
+        impl Drop for SavedFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        let (mut app, ctx) = app_with_design();
+        select_graph(&mut app, graph_kind);
+        let graph = app.session.active().unwrap().selection.objects[0].0;
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-graph-design-revert-{}-{graph_kind}.vectorcraft", std::process::id())));
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [graph]})).unwrap();
+        crate::menus::invoke(&mut app, command, json!({}));
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        let state = app.session.active().unwrap();
+        let (uid, reverts) = (state.uid, state.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        app.run("select.set", json!({"ids": [graph]})).unwrap();
+        let selected_design = |app: &mut VectorcraftApp| app.session.execute(command, &json!({"id": graph})).unwrap()["design"].clone();
+        assert_eq!(selected_design(&mut app), Value::Null);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        app.dialogs().unwrap().with(|host| host.confirm::<GraphDesignDialog>(&ctx));
+        super::pump(&mut app, &ctx);
+        assert_eq!(selected_design(&mut app), Value::Null, "the stale draft must leave the restored graph's design alone");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(fields(&app)["selected"], "New Design", "the refused answer still shows the draft");
+
+        crate::menus::invoke(&mut app, command, json!({}));
+        set(&app, &ctx, "selected", json!("New Design")).unwrap();
+        ok(&mut app, &ctx);
+        assert_eq!(selected_design(&mut app), "New Design", "a fresh draft applies to the restored graph");
+    }
+
+    #[test]
+    fn graph_column_draft_after_file_revert_leaves_the_restored_columns_alone() {
+        a_graph_design_draft_after_file_revert("column", "graph.column");
+    }
+
+    #[test]
+    fn graph_marker_draft_after_file_revert_leaves_the_restored_markers_alone() {
+        a_graph_design_draft_after_file_revert("line", "graph.marker");
     }
 
     #[test]

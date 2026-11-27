@@ -73,7 +73,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields["rgbProfile"] = json!(rgb.unwrap_or_else(|| WORKING_RGB.into()));
     fields["cmykProfile"] = json!(cmyk.unwrap_or_else(|| WORKING_CMYK.into()));
     fields["convertColors"] = json!(true);
-    let (source, mode, setup) = (st.uid, st.doc.color_mode, st.doc.setup.clone());
+    let (source, mode, setup) = ((st.uid, st.reverts), st.doc.color_mode, st.doc.setup.clone());
     let Value::Object(map) = fields else { return Err("document.setup reported no settings".into()) };
     let presets: Vec<String> = app.session.flattener_presets().into_iter().map(|p| p.name).collect();
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
@@ -186,8 +186,12 @@ fn color_commands(app: &VectorcraftApp, fields: &Map<String, Value>) -> Result<V
 }
 
 fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<Value, String> {
-    if app.session.active().is_none_or(|st| Some(st.uid) != app.document_setup_source) {
+    let source = app.document_setup_source.and_then(|(uid, reverts)| app.session.active().filter(|st| st.uid == uid).map(|st| (st, reverts)));
+    let Some((doc, reverts)) = source else {
         return Err(tl!("Document Setup can only change the document where it was opened.").to_owned());
+    };
+    if doc.reverts != reverts {
+        return Err(tl!("Reopen Document Setup after reverting the drawing.").to_owned());
     }
     let map = json_map(fields);
     let params = nest(map.iter().filter(|(k, _)| !is_ui_only(k)).map(|(k, v)| (k.clone(), v.clone())).collect());
@@ -698,6 +702,46 @@ mod tests {
     #[test]
     fn source_document_is_required_to_edit_artboards_from_document_setup() {
         check_source_document(true);
+    }
+
+    #[test]
+    fn a_revert_refuses_a_stale_document_setup_for_both_confirmation_paths() {
+        for edit_artboards in [false, true] {
+            let (mut app, ctx) = new_app();
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            let dir = vectorcraft_testkit::TempDir::new("document-setup-revert");
+            let path = dir.join("setup.vectorcraft");
+            app.run("document.setup", json!({"bleed": [2, 2, 2, 2]})).unwrap();
+            app.run("file.saveAs", json!({"path": path})).unwrap();
+            app.run("document.setup", json!({"bleed": [7, 7, 7, 7]})).unwrap();
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "bleed", json!([9, 9, 9, 9]));
+            let source = app.session.doc().unwrap();
+            let (uid, generation) = (source.uid, source.reverts);
+
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            let reverted = app.session.doc().unwrap();
+            assert_eq!(reverted.uid, uid);
+            assert_ne!(reverted.reverts, generation);
+            let undo = reverted.history.undo.len();
+            if edit_artboards {
+                set(&app, &ctx, "editArtboards", json!(true));
+                super::pump(&mut app, &ctx);
+            } else {
+                assert!(!press_ok(&mut app, &ctx));
+            }
+            assert!(is_open(&app));
+            assert_eq!(app.session.tool_id(), "selection");
+            let reverted = app.session.doc().unwrap();
+            assert_eq!(reverted.doc.setup.bleed, [2.0; 4]);
+            assert_eq!(reverted.history.undo.len(), undo);
+
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "bleed", json!([5, 5, 5, 5]));
+            assert!(press_ok(&mut app, &ctx));
+            assert_eq!(app.session.doc().unwrap().doc.setup.bleed, [5.0; 4]);
+        }
     }
 
     #[test]
