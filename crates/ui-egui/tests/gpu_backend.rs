@@ -116,11 +116,17 @@ fn graphics_backend_shows_its_restart_note_and_uses_preferences_ok_cancel() {
     let _language = LanguageGuard::new();
     let mut scene = Scene::new();
     prefs_dialog::open(&mut scene.app, Some("Performance"));
-    // Isolate this row: another startup-only setting's note cannot satisfy the oracle.
+    // Match this row's complete note: another startup-only setting cannot satisfy the oracle.
     scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "__search", "value": "Graphics Backend"}));
     let shown = scene.settle();
     assert!(shown.iter().any(|t| t.starts_with("Graphics Backend")), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
+    let backend_note = concat!(
+        "Applies the next time VectorCraft starts.\n",
+        "From the next start, the desktop window uses this graphics API. ",
+        "Automatic keeps the platform default; WGPU_BACKEND overrides this choice. ",
+        "The artwork is drawn on the CPU either way."
+    );
+    assert!(shown.iter().any(|t| t == backend_note), "{shown:?}");
     let chosen = if cfg!(target_os = "macos") { "metal" } else { "vulkan" };
     let saved_before = scene.app.ui.engine_prefs.clone();
     let processor = scene.app.session.prefs.gpu_preference.clone();
