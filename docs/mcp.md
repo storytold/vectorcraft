@@ -3410,7 +3410,11 @@ rules for these objects:
   `XMPConst.ARRAY_LAST_ITEM` inserts before the last existing item and rejects an empty array. `insertArrayItem`
   and `setArrayItem` store `null` as an empty item value. Arrays hold simple items; a structure
   or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. An
-  array item with an `xml:lang` qualifier has the qualifier and language options in `getProperty` and `getArrayItem`. A
+  array item with an `xml:lang` qualifier has the qualifier and language options in `getProperty` and `getArrayItem`.
+  `getLocalizedText` returns an `XMPProperty` with the selected text, locale and options; its `namespace` and `path` are empty strings.
+  VectorCraft returns `undefined` when the property is absent or its language alternative array is empty.
+  `appendArrayItem` keeps explicit item options, value and array options in their parameter slots, including `undefined` or `null` item options.
+  A string value can use the shorter call form; a null value with numeric array options can also use that form. A
   value with qualifiers in the `rdf:value` form also gives the text of its `rdf:value`, and an empty property element
   whose attributes are fields is a structure. The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
   gives them, or `prefix_1_` when that prefix names another namespace; a namespace the packet declares but no name

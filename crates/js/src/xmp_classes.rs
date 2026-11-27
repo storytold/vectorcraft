@@ -736,13 +736,16 @@ fn append_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
     let what = "XMPMeta.appendArrayItem";
     let o = this_meta(i, &this, what)?;
     let Target { ns, name, .. } = array_target(i, args, what)?;
-    // `itemOptions` may be left out: a string or `null` third argument is the item's value.
-    let (value, array_options) = match arg(args, 2) {
-        Value::Number(_) => {
-            item_options(i, &arg(args, 2), what)?;
-            (arg(args, 3), arg(args, 4))
-        }
-        v => (v, arg(args, 3)),
+    // Full calls keep their argument positions. Short calls can omit `itemOptions`.
+    let third = arg(args, 2);
+    let positional = args.len() >= 5
+        || matches!(&third, Value::Number(_) | Value::Undefined)
+        || (matches!(&third, Value::Null) && matches!(arg(args, 3), Value::String(_)));
+    let (value, array_options) = if positional {
+        item_options(i, &third, what)?;
+        (arg(args, 3), arg(args, 4))
+    } else {
+        (third, arg(args, 3))
     };
     let array_options = flags(i, &array_options, what)?;
     only(i, array_options, xmp::PROP_IS_ARRAY | xmp::ARRAY_IS_ORDERED | xmp::ARRAY_IS_ALTERNATIVE, what)?;
@@ -829,16 +832,22 @@ fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let Target { ns, name, .. } = array_target(i, args, what)?;
     let generic = lang(i, &arg(args, 2), what)?;
     let specific = lang(i, &arg(args, 3), what)?;
-    let Some((at, _, _)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
+    let Some((at, _, len)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
+    spend(i, len.saturating_mul(std::mem::size_of::<Item>()).saturating_mul(6))?;
+    let language_bytes = match &meta_of(i, o)?.props[at].value {
+        xmp::Value::Array { items, .. } => items.iter().fold(0usize, |bytes, item| bytes.saturating_add(item.lang.as_ref().map_or(0, String::len))),
+        _ => 0,
+    };
+    spend(i, language_bytes.saturating_mul(3))?;
     if !is_alt_text(i, o, at)? {
         return Err(not_alt_text(i, what, &name));
     }
     let found = match &meta_of(i, o)?.props[at].value {
-        xmp::Value::Array { items, .. } => pick_lang(items, &generic, &specific).map(|i| i.text.clone()),
+        xmp::Value::Array { items, .. } => pick_lang(items, &generic, &specific).cloned(),
         _ => None,
     };
     match found {
-        Some(t) => string(i, &t),
+        Some(item) => property(i, "", "", Some(&item.text), item.options(), item.lang.as_deref().unwrap_or("")),
         None => Ok(Value::Undefined),
     }
 }
@@ -1466,6 +1475,35 @@ mod namespace_heap_tests {
                 })
                 .unwrap();
         }
+    }
+
+    #[test]
+    fn localized_text_lookup_charges_for_language_scans() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let value = new_meta(
+            &mut interp,
+            Meta {
+                props: vec![xmp::Prop {
+                    ns: xmp::DC.into(),
+                    name: "items".into(),
+                    value: xmp::Value::Array { form: Form::Alt, items: vec![Item { text: "text".into(), lang: Some("en-US".into()) }; 10_000] },
+                }],
+                ..Meta::default()
+            },
+        )
+        .unwrap();
+        interp
+            .rooted(std::slice::from_ref(&value), |interp| {
+                let args = [Value::str(xmp::DC), Value::str("items"), Value::str("fr"), Value::str("fr-FR")];
+                interp.fuel = 1_000;
+                let result = get_localized_text(interp, value.clone(), &args, false);
+                assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))), "{result:?}");
+                interp.fuel = 1_000_000;
+                assert!(get_localized_text(interp, value.clone(), &args, false).is_ok());
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

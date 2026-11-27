@@ -62,6 +62,21 @@ fn inherited_description_language_is_not_silently_discarded() {
 }
 
 #[test]
+fn localized_text_returns_the_selected_property_and_language() {
+    let specific = with_packet(
+        "var value = m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'fr-FR'); [typeof value, value.value, value.locale, value.options, value.namespace, value.path, String(value)].join('|')",
+    );
+    assert_eq!(string(&specific), "object|Bonjour|fr-FR|80|||Bonjour");
+    let fallback = with_packet("var value = m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'de-DE'); [value.value, value.locale].join('|')");
+    assert_eq!(string(&fallback), "Hello|x-default");
+    truth(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'missing', null, 'fr-FR') === undefined"));
+    truth(&with_packet(
+        "m.appendArrayItem(XMPConst.NS_DC, 'emptyAlt', 0, 'value', XMPConst.PROP_IS_ARRAY | XMPConst.ARRAY_IS_ORDERED | XMPConst.ARRAY_IS_ALTERNATIVE);
+         m.deleteArrayItem(XMPConst.NS_DC, 'emptyAlt', 1); m.doesPropertyExist(XMPConst.NS_DC, 'emptyAlt') && m.getLocalizedText(XMPConst.NS_DC, 'emptyAlt', null, 'fr-FR') === undefined",
+    ));
+}
+
+#[test]
 fn rdf_qualified_names_validate_both_parts() {
     let packet = PACKET.replace("ex:a>", "ex:a:b>");
     assert!(matches!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed)));
@@ -262,8 +277,8 @@ fn only_the_xmp_library_loads() {
 fn a_packet_reads_into_properties() {
     assert_eq!(string(&with_packet("m.getProperty(XMPConst.NS_DC, 'format').value")), "image/svg+xml");
     assert_eq!(string(&with_packet("String(m.getProperty(XMPConst.NS_XMP, 'xmp:CreatorTool'))")), "Tool & Co");
-    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'fr-FR')")), "Bonjour");
-    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'de-DE')")), "Hello");
+    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'fr-FR').value")), "Bonjour");
+    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'de-DE').value")), "Hello");
     assert_eq!(string(&with_packet("m.getArrayItem(XMPConst.NS_DC, 'subject', XMPConst.ARRAY_LAST_ITEM).value")), "two");
     assert_eq!(run(&with_packet("m.countArrayItems(XMPConst.NS_DC, 'subject')")), JsValue::Number(2.0));
     assert_eq!(run(&with_packet("m.getProperty(XMPConst.NS_DC, 'title').options")), JsValue::Number(f64::from(0x200 | 0x400 | 0x800 | 0x1000)));
@@ -314,6 +329,26 @@ fn properties_arrays_and_namespaces_round_trip() {
     truth(&with_packet("m.deleteArrayItem(XMPConst.NS_DC, 'subject', 1); m.getArrayItem(XMPConst.NS_DC, 'subject', 1).value == 'two'"));
     assert_eq!(string("XMPMeta.registerNamespace('http://example.com/a/', 'dc')"), "dc_1_:");
     assert_eq!(string("XMPMeta.getNamespaceURI('dc:')"), "http://purl.org/dc/elements/1.1/");
+}
+
+#[test]
+fn append_array_item_preserves_explicit_optional_slots() {
+    assert_eq!(
+        string(
+            "var out = []; var ns = XMPConst.NS_DC;
+            function append(option, full) { var m = new XMPMeta(); try {
+                if (full) m.appendArrayItem(ns, 'items', option, 'value', XMPConst.PROP_IS_ARRAY);
+                else { m.appendArrayItem(ns, 'items', 'first', XMPConst.PROP_IS_ARRAY);
+                    m.appendArrayItem(ns, 'items', option, 'value'); m.deleteArrayItem(ns, 'items', 1); }
+                out.push(m.getArrayItem(ns, 'items', 1).value);
+            } catch (e) { out.push('error'); } }
+            append(undefined, true); append(null, true); append(undefined, false); append(null, false);
+            var m = new XMPMeta(); m.appendArrayItem(ns, 'empty', null, XMPConst.PROP_IS_ARRAY);
+            m.appendArrayItem(ns, 'short', 'short', XMPConst.PROP_IS_ARRAY);
+            out.push(m.getArrayItem(ns, 'empty', 1).value, m.getArrayItem(ns, 'short', 1).value); out.join('|')"
+        ),
+        "value|value|value|value||short"
+    );
 }
 
 #[test]
