@@ -283,7 +283,12 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
 
 fn review_8687_menu_row(bar: &Shown, name: &str) -> Target {
     let tree = bar.tree();
-    let rows: Vec<_> = tree.keys().into_iter().filter(|key| tree.name_of(*key) == Some(name) && tree.toggled_of(*key).is_some()).collect();
+    let rows: Vec<_> = tree
+        .keys()
+        .into_iter()
+        .filter(|key| tree.role_of(*key) == Some(Role::MENU_ITEM_CHECK_BOX))
+        .filter(|key| tree.name_of(*key) == Some(name) && tree.toggled_of(*key).is_some())
+        .collect();
     assert_eq!(rows.len(), 1, "one live checked menu row named {name}");
     bar.fixture.target(rows[0]).unwrap()
 }
