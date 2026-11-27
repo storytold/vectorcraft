@@ -48,6 +48,73 @@ fn cancel(app: &VectorcraftApp) {
 }
 
 #[test]
+fn canceled_keyboard_choices_do_not_change_unicode_add_or_the_next_new_set() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        if let Some(dialogs) = app.dialogs() {
+            dialogs.with(|host| host.run(ui));
+        }
+        crate::dialogs::host::pump(app, ui.ctx());
+    }
+
+    fn code(panel: &mut Panel, text: &str) {
+        panel.click_role("Unicode", Role::TEXT_INPUT);
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text(text);
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        panel.click_role("Add", Role::BUTTON);
+    }
+
+    for cancel in [true, false] {
+        let mut app = app();
+        app.run(COMMAND, json!({"sets": [{"name": "Draft", "cannotStart": "", "cannotEnd": ""}]})).unwrap();
+        let original = app.session.active().unwrap().doc.clone();
+        let undo = steps(&app);
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(900.0, 1000.0));
+        open(&mut panel.app()).unwrap();
+        panel.frame();
+        panel.click_role("Add to", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.into.clone()), "cannotStart");
+        code(&mut panel, "U+3001");
+        assert_eq!(dialog(&panel.app(), |dialog| (dialog.cats[0].clone(), dialog.cats[1].clone())), ("、".into(), "".into()));
+        // A deliberate accepted category change directs the next Add to Cannot End Line.
+        panel.click_role("Add to", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        code(&mut panel, "U+3002");
+        assert_eq!(dialog(&panel.app(), |dialog| (dialog.cats[0].clone(), dialog.cats[1].clone())), ("、".into(), "。".into()));
+
+        panel.click_role("Based on:", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.base.clone()), "hard");
+        panel.click("New…");
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(picked(&panel.app()), "Kinsoku Set 1");
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.cats[0].clone()), category_text(&built_in("hard").unwrap(), "cannotStart"));
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "editing the dialog changes no document yet");
+        panel.click(if cancel { "Cancel" } else { "OK" });
+        assert!(!is_open(&panel.app()));
+        if cancel {
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(steps(&panel.app()), undo);
+        } else {
+            let sets = doc_sets(&panel.app());
+            assert_eq!((sets[0].name.as_str(), &sets[0].cannot_start, &sets[0].cannot_end), ("Draft", &vec!['、'], &vec!['。']));
+            assert_eq!(sets.len(), 2);
+            assert_eq!(steps(&panel.app()), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
+}
+
+#[test]
 fn empty_kinsoku_list_shows_none_in_the_preset_picker() {
     let mut fixture = craft::ui::testing::Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
     fixture.room(egui::vec2(800.0, 600.0));
