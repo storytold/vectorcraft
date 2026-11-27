@@ -80,9 +80,14 @@ fn start(app: &mut VectorcraftApp) -> Result<SpellingWalk, String> {
 
 /// Open Check Spelling on the active document's type.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let w = start(app)?;
-    let items = items_of(app, &w)?;
+    let mut w = start(app)?;
     let dialogs = app.dialogs().ok_or("no window")?;
+    let all_layers = dialogs.with(|host| host.get::<CheckSpellingDialog>().is_none_or(CheckSpellingDialog::all_layers_checked));
+    if !all_layers {
+        w.layer = w.shown.as_ref().map(|word| word.0);
+        advance(app, &mut w, None, 1)?;
+    }
+    let items = items_of(app, &w)?;
     dialogs.with(|host| match host.get_mut::<CheckSpellingDialog>() {
         Some(d) => d.restart(items),
         None => {
@@ -967,6 +972,47 @@ mod tests {
         assert_eq!(shown(&app), (b, 0, WORD_A.to_string()));
         act(&mut app, |app, w| super::change_all(app, w, "fixed"));
         assert_eq!(plain(&app, b), "fixed y");
+    }
+
+    #[test]
+    fn reopening_keeps_the_unchecked_all_layers_scope_for_change_all() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::dialog::StackDialog as _;
+
+        fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            super::pump(app, ui.ctx());
+        }
+
+        let _dictionary = crate::testing::custom_dictionary();
+        let mut app = app();
+        let first = text(&mut app, 50.0, WORD_A);
+        app.run("layer.new", json!({"name": "Other text"})).unwrap();
+        let second = text(&mut app, 100.0, WORD_A);
+        app.run("select.none", json!({})).unwrap();
+        let mut panel = Panel::new(app, draw);
+        panel.app().run(super::COMMAND, json!({})).unwrap();
+        panel.frame();
+        let checked = shown(&panel.app()).0;
+        let other = if checked == first { second } else { first };
+        panel.click("Check All Layers");
+        panel.app().run(super::COMMAND, json!({})).unwrap();
+        panel.frame();
+        {
+            let app = panel.app();
+            let ctx = panel.ctx();
+            app.dialogs().unwrap().with(|host| {
+                let dialog = host.get::<super::CheckSpellingDialog>().unwrap();
+                assert!(!dialog.all_layers_checked(), "reopening preserves the chosen scope");
+                let id = dialog.id();
+                host.set_json_field(ctx, id, "changeTo", json!("fixed")).unwrap();
+            });
+        }
+        panel.click("Change All");
+        assert_eq!(plain(&panel.app(), checked), "fixed");
+        assert_eq!(plain(&panel.app(), other), WORD_A, "the unchecked scope leaves the other layer's text alone");
     }
 
     fn app() -> VectorcraftApp {
