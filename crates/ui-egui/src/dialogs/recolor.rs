@@ -3118,6 +3118,94 @@ mod tests {
         rc
     }
 
+    fn two_red_drawings() -> (Recolor, u64, u64) {
+        let mut app = app(120);
+        let opening = square(&mut app, 10.0, "#ff0000");
+        app.run("select.set", json!({"ids": [opening]})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let other = square(&mut app, 60.0, "#ff0000");
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut rc = opened(app, json!({}));
+        rc.set("method", json!(Method::Exact.id())).unwrap();
+        rc.frame();
+        rc.set("rows", json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}])).unwrap();
+        (rc, opening, other)
+    }
+
+    #[test]
+    fn recolor_preview_does_not_change_the_other_drawings_art() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        rc.frame();
+
+        assert_eq!(fill_hex(&rc, other), "#ff0000", "preview leaves the other drawing's fill alone");
+        assert!(!rc.app().session.in_interaction());
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        rc.frame();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+        rc.confirm().unwrap();
+    }
+
+    #[test]
+    fn recolor_ok_keeps_the_draft_on_the_opening_drawing() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.set("preview", json!(false)).unwrap();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        let undo = undo_len(&rc.app());
+        let confirmed = rc.confirm();
+
+        assert_eq!(fill_hex(&rc, other), "#ff0000", "OK leaves the other drawing's fill alone");
+        assert_eq!(undo_len(&rc.app()), undo);
+        assert!(confirmed.is_err() && rc.is_open());
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#ff0000");
+        rc.confirm().unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+    }
+
+    #[test]
+    fn recolor_cancel_leaves_the_other_drawings_pending_edit() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.frame();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+        {
+            let mut app = rc.app();
+            app.run("document.activate", json!({"index": 1})).unwrap();
+            app.session.begin_interaction("Other edit").unwrap();
+            app.session.preview("paint.setFill", &json!({"ids": [other], "color": "#0000ff"})).unwrap();
+        }
+        rc.cancel();
+
+        assert!(rc.app().session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(fill_hex(&rc, other), "#0000ff");
+        rc.app().session.commit_interaction().unwrap();
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#ff0000");
+    }
+
+    #[test]
+    fn recolor_delete_leaves_the_other_drawings_same_named_group() {
+        let mut app = app(120);
+        app.run("swatch.newGroup", json!({"name": "Shared", "colors": ["#00ff00"]})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Shared", "colors": ["#ff0000"]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut rc = opened(app, json!({"group": "Shared"}));
+        rc.frame();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        let other = group_hex(&rc.app(), "Shared");
+
+        rc.act("delete").unwrap();
+
+        assert_eq!(group_hex(&rc.app(), "Shared"), other, "Delete leaves the other drawing's group alone");
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        rc.frame();
+        assert!(group_hex(&rc.app(), "Shared").is_some(), "a refused action does not run after returning");
+        rc.act("delete").unwrap();
+        assert!(group_hex(&rc.app(), "Shared").is_none());
+    }
+
     #[test]
     fn recolor_dialog_keeps_the_default_model_without_an_extra_dropdown() {
         let rc = opened(app(100), json!({"colors": ["#ff8000"]}));
