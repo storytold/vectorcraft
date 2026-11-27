@@ -477,7 +477,9 @@ mod tests {
         });
         fixture.room(egui::vec2(880.0, 720.0));
         let ctx = fixture.ctx().clone();
+        let document = app.borrow().session.active().unwrap().uid;
         let mut job = SavePdfJob {
+            document,
             path: None,
             save_mode: None,
             flattener: Some(FlattenOptions { line_art_ppi: 611.0, ..FlattenOptions::default() }),
