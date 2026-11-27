@@ -6473,22 +6473,62 @@ fn the_render_worker_waits_for_a_frame_only_as_long_as_asked() {
     let job = jobs.try_recv().expect("a job to finish");
 
     let (mut w, _, done_tx) = crate::render_worker::Worker::test_channel();
-    let t0 = std::time::Instant::now();
-    assert!(w.wait(std::time::Duration::from_millis(20)).is_none());
-    assert!(t0.elapsed() >= std::time::Duration::from_millis(20), "waited the time asked");
+    // No frame finishes: the time is up at once.
+    assert!(w.wait(std::time::Duration::ZERO).is_none(), "nothing once the time is up");
 
     w.pending = Some(job.key.clone());
     done_tx.send(finished(&job)).unwrap();
-    assert_eq!(w.wait(std::time::Duration::from_secs(5)).map(|d| d.key), Some(job.key.clone()), "finished before the wait");
+    assert_eq!(w.wait(super::raster::FIRST_FRAME_GRACE).map(|d| d.key), Some(job.key.clone()), "finished before the wait");
     assert!(w.pending.is_none());
 
+    // The frame is sent once both sides reach the barrier; with no time limit, the wait returns
+    // it whether it arrives before or during the wait.
     let late = finished(&job);
-    let sender = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(30));
-        done_tx.send(late).unwrap();
+    let ready = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let sender = std::thread::spawn({
+        let ready = ready.clone();
+        move || {
+            ready.wait();
+            done_tx.send(late).unwrap();
+        }
     });
-    assert!(w.wait(std::time::Duration::from_secs(5)).is_some(), "finished during the wait");
+    ready.wait();
+    assert!(w.wait(std::time::Duration::MAX).is_some(), "finished during the wait");
     sender.join().unwrap();
+}
+
+/// A document's first frame that the worker finishes within the wait (`FIRST_FRAME_GRACE`) shows
+/// in the frame that queued it, with no frame of bare paper; one that is not finished in time shows
+/// once it lands ([`a_documents_first_frame_renders_on_the_worker`]).
+#[test]
+fn a_first_frame_finished_within_the_wait_shows_in_the_frame_that_queued_it() {
+    keeping_color_settings(a_first_frame_finished_within_the_wait);
+}
+
+fn a_first_frame_finished_within_the_wait() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    // The worker finishes the job as soon as it receives it, and the canvas waits for it.
+    super::raster::TEST_FIRST_FRAME_GRACE.with(|g| g.set(std::time::Duration::MAX));
+    let answer = std::thread::spawn(move || {
+        let job = jobs.recv().expect("the first frame is queued on the worker");
+        done_tx.send(finished(&job)).unwrap();
+        job.key
+    });
+    let ctx = crate::testing::ui_context();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))), ..Default::default() };
+    ctx.run_ui(raw, |ui| show(&mut app, ui)).textures_delta.clear();
+    assert!(app.canvas.texture.is_some(), "shown in the frame that queued it");
+    assert!(app.canvas.from_worker);
+    // Dropping the worker ends the answering thread's wait for a job if none was queued.
+    let worker = app.canvas.worker.take().expect("the worker");
+    assert!(worker.pending.is_none(), "the job is done");
+    drop(worker);
+    let key = answer.join().expect("the first frame was queued on the worker");
+    assert_eq!(app.canvas.key.as_ref(), Some(&key));
 }
 
 /// An edit to a 3D effect renders the part it changed on this thread, measured by the renderer
