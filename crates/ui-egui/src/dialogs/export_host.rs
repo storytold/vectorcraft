@@ -22,8 +22,8 @@ pub(crate) type After = Option<Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Val
 pub(crate) enum Export {
     /// Export As.
     As {
-        /// The drawing whose export the dialog configures, when one was open.
-        document: Option<u64>,
+        /// The drawing and content generation whose export the dialog configures, when one was open.
+        document: Option<(u64, u64)>,
     },
     /// The options of the raster format `format`.
     Raster {
