@@ -339,6 +339,81 @@ pub(crate) fn open_simplify(app: &mut VectorcraftApp, tolerance: f64) {
     open_dialog(app, PathOp::Simplify, simplify_dialog(tolerance), None);
 }
 
+
+#[cfg(test)]
+mod simplify_options_tests {
+    use super::*;
+    use crate::dialogs::tests::{app, cancel, confirm, frame, set};
+
+    fn dense_path(app: &mut VectorcraftApp, top: f64) -> u64 {
+        let anchors: Vec<_> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": top + (i % 2) as f64 * 0.1})).collect();
+        let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 19]]})).unwrap();
+        id
+    }
+
+    fn drawings() -> (VectorcraftApp, NodeId) {
+        let mut app = app();
+        let id = dense_path(&mut app, 50.0);
+        app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+        let other = dense_path(&mut app, 180.0);
+        assert_eq!(id, other, "the two drawings use the same path ID");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        (app, NodeId(id))
+    }
+
+    fn more_options(app: &mut VectorcraftApp) {
+        crate::menus::invoke(app, "object.path.simplify", json!({}));
+        crate::dialogs::simplify_slider::more_options(app).unwrap();
+    }
+
+    #[test]
+    fn simplify_options_skip_the_other_drawings_artwork() {
+        for from_slider in [false, true] {
+            let (mut app, _) = drawings();
+            if from_slider {
+                more_options(&mut app);
+            } else {
+                let ctx = app.ui_ctx.clone().unwrap();
+                set_saved_value(&ctx, &SIMPLIFY_KEY, Some(simplify_dialog(DEFAULT_TOLERANCE)));
+                crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
+            }
+            set(&mut app, "preview", json!(true));
+            app.run("document.activate", json!({"index": 1})).unwrap();
+            let other = app.session.doc().unwrap().doc.clone();
+            let undo = app.session.doc().unwrap().history.undo.len();
+
+            frame(&mut app, vec![]);
+
+            assert!(app.session.doc().unwrap().doc == other, "Simplify preview leaves the other drawing unchanged");
+            assert!(!app.session.in_interaction());
+            assert!(!confirm(&mut app), "the draft stays with the opening drawing");
+            assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, vec![]);
+            assert!(app.session.in_interaction());
+            assert!(confirm(&mut app));
+        }
+    }
+
+    #[test]
+    fn simplify_options_never_outline_another_drawings_same_id() {
+        let (mut app, id) = drawings();
+        more_options(&mut app);
+        set(&mut app, "showOriginal", json!(true));
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert_eq!(original_paths(&app).iter().map(|(path, _)| *path).collect::<Vec<_>>(), [id]);
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other edit").unwrap();
+
+        assert!(original_paths(&app).is_empty(), "Show Original leaves the other drawing's canvas alone");
+        assert!(cancel(&mut app));
+        assert!(app.session.in_interaction(), "Cancel leaves the other drawing's edit in progress");
+    }
+}
+
 fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remember: Option<SaveKey>) {
     let Some(ctx) = app.ui_ctx.clone() else {
         app.status("There is no window to show the dialog in.");
