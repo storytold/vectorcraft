@@ -264,7 +264,13 @@ pub(crate) enum Opened {
         params: Arc<[Param]>,
     },
     /// An exporter's parameters, with Export As's own parameters (`format`, `path`, …) kept for Export.
-    Export { plugin: String, export: Value, params: Arc<[Param]> },
+    Export {
+        plugin: String,
+        export: Value,
+        /// The drawing the dialog opened on and its revert count then: Export writes that drawing.
+        document: Option<(u64, u64)>,
+        params: Arc<[Param]>,
+    },
     /// An importer's parameters, with Open With's own parameters (`path`, `importer`, `picked`) kept for Open.
     Import { plugin: String, open: Value, params: Arc<[Param]> },
 }
@@ -654,8 +660,11 @@ pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
         note: false,
         ok: Some(tl!("Export")),
     };
+    let document = app.session.active().map(|st| (st.uid, st.reverts));
     match open_hosted(app, EXPORT_KIND, plugin.id(), m.clone(), m.defaults(), look) {
-        Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, params } }),
+        Ok((id, params)) => {
+            app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, document, params } })
+        }
         Err(e) => app.status(e),
     }
 }
@@ -678,8 +687,17 @@ pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
     }
 }
 
-/// Writes the file with the export's parameters and the plug-in's, as `params`.
-fn export_with(app: &mut VectorcraftApp, export: Value, values: Map<String, Value>) -> Result<Value, String> {
+/// Writes the file with the export's parameters and the plug-in's, as `params`, of `document`, the
+/// drawing the dialog opened on, which is made active again first. A drawing closed or reverted
+/// since is not exported, and the status bar says why.
+fn export_with(app: &mut VectorcraftApp, export: Value, document: Option<(u64, u64)>, values: Map<String, Value>) -> Result<Value, String> {
+    if let Some((uid, reverts)) = document {
+        let closed = tl!("The drawing was closed while its export options were open");
+        let reverted = tl!("The drawing was reverted while its export options were open");
+        if !crate::file_asks::back_to(app, uid, Some(reverts), closed, reverted) {
+            return Ok(Value::Null);
+        }
+    }
     let mut p = Some(export).filter(Value::is_object).ok_or("no format to export to")?;
     p["params"] = Value::Object(values);
     let format = p.get("format").and_then(Value::as_str).map(str::to_string);
@@ -774,7 +792,7 @@ fn pump_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The dialog is already closed, so a failure goes to the status line.
     let done = match open.kind {
         Opened::Filter { .. } => confirm_filter(app, open.kind, values),
-        Opened::Export { export, .. } => export_with(app, export, values),
+        Opened::Export { export, document, .. } => export_with(app, export, document, values),
         Opened::Import { open, .. } => import_with(app, open, values),
     };
     if let Err(e) = done {
