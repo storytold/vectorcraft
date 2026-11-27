@@ -113,6 +113,62 @@ fn stays_open(app: &mut VectorcraftApp) {
 }
 
 #[test]
+fn a_queued_download_requires_fresh_confirmation_after_file_revert() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    for artboards in [1, 2] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-held-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(artboards, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "Saved"})).unwrap();
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("artboard.rename", json!({"indices": [0], "name": "Edited"})).unwrap();
+        let uid = app.session.active().unwrap().uid;
+        let reverts = app.session.active().unwrap().reverts;
+        open(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(export_for_screens::KIND);
+        assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+        assert_eq!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Waiting));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert_eq!(app.session.active().unwrap().uid, uid);
+        assert!(app.session.active().unwrap().reverts > reverts, "the actual file was loaded back into its tab");
+        let settings = app.session.active().unwrap().doc.export_settings.clone();
+        export_for_screens::pump(&mut app, &ctx);
+        assert!(log.borrow().is_empty(), "the retired drawing's approval exports no restored content");
+        assert_eq!(app.session.active().unwrap().doc.export_settings, settings);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+        try_confirm(&mut app).unwrap();
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("one download") };
+        if artboards == 1 {
+            assert_eq!(name, "Saved.png");
+        } else {
+            let names = zip_names(bytes);
+            assert!(names.iter().any(|name| name.ends_with("Saved.png")));
+            assert!(!names.iter().any(|name| name.contains("Edited")));
+        }
+    }
+}
+
+#[test]
+fn a_queued_download_still_uses_ordinary_edits_in_the_same_loaded_drawing() {
+    use craft::ui::dialog::dialog_id;
+
+    let (mut app, log) = app(1, true);
+    open(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+    app.run("artboard.rename", json!({"indices": [0], "name": "Current"})).unwrap();
+    export_for_screens::pump(&mut app, &ctx);
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Current.png"]);
+}
+
+#[test]
 fn a_queued_export_requires_fresh_confirmation_after_switching_documents() {
     use craft::ui::dialog::{HeldOk, dialog_id};
 
@@ -1490,6 +1546,30 @@ fn renaming_an_artboard_in_export_for_screens_renames_it() {
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed", "{view}");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old, "{view}");
+    }
+}
+
+/// A rename begun before File Revert cannot rename an artboard restored from the saved file.
+#[test]
+fn an_artboard_name_cannot_reach_the_contents_loaded_by_file_revert() {
+    for view in ["grid", "list"] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-rename-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(2, true);
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 5, "height": 5})).unwrap();
+        let reverts = app.session.active().unwrap().reverts;
+        let mut w = Window::default();
+        w.names(&mut app);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        type_artboard_name(&mut w, &mut app, "2  Artboard 2", "Retired Name");
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert!(app.session.active().unwrap().reverts > reverts);
+        w.key(&mut app, egui::Key::Enter);
+        assert_eq!(app.session.active().unwrap().doc.artboards[1].name, "Artboard 2");
+        assert!(app.session.active().unwrap().history.undo.is_empty());
+        assert!(log.borrow().is_empty(), "the stale name does not export either");
     }
 }
 
