@@ -245,11 +245,15 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
         bar.key(egui::Key::Escape);
     }
     bar.click("Snapping").settle();
-    for (name, on) in [
-        ("Alignment Guides", bar.app().session.prefs.alignment_guides),
-        ("Snap to Tangent", bar.app().session.prefs.snap_tangent),
-        ("Snap to Perpendicular", bar.app().session.prefs.snap_perpendicular),
-    ] {
+    let preferences = {
+        let app = bar.app();
+        [
+            ("Alignment Guides", app.session.prefs.alignment_guides),
+            ("Snap to Tangent", app.session.prefs.snap_tangent),
+            ("Snap to Perpendicular", app.session.prefs.snap_perpendicular),
+        ]
+    };
+    for (name, on) in preferences {
         assert_eq!(bar.checked(&review_8687_menu_row(&bar, name)), on);
     }
     let row = review_8687_menu_row(&bar, "Alignment Guides");
