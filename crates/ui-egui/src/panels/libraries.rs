@@ -127,8 +127,8 @@ fn ask_item_name(app: &mut VectorcraftApp, library: &str, kind: ItemKind, item: 
 fn ask(app: &mut VectorcraftApp, command: &'static str, title: &'static str, name: String, fixed: Value) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let fields = DialogFields::from_pairs([("name", name.clone())]);
-    let dialog = HostedParamDialog::command(&ctx, command, fields, move |_| {
-        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))])
+    let dialog = HostedParamDialog::command(&ctx, command, fields, move |fields| {
+        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))]).values(Bind::bound(fields))
     });
     let opened = crate::dialogs::host::open_held(app, dialog, move |app, answer| {
         let mut params = fixed.clone();

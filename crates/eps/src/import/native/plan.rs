@@ -1,7 +1,7 @@
 use super::layers::closed_where_ends_meet;
 use super::slots::{
-    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, extent, join_pieces, letters, same_type,
-    word_pieces, words,
+    Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, drawn_box, extent, join_pieces, letters,
+    same_type, word_pieces, words,
 };
 use super::{Affine, Arc, Node, NodeId, NodeKind, Point, Rect, Story, TextKind};
 
@@ -145,7 +145,8 @@ pub(super) fn made_only(
     warn: &mut Vec<String>,
 ) -> Vec<Content> {
     let [shown, hidden] = pages;
-    let mut content = made_content(infos, made);
+    // Every text object that shows has made type: each is matched with the page's type where it draws.
+    let mut content = made_content(infos, made, true);
     // The page's type where no made type draws, in the copies that looks draw, is theirs (past
     // `MAX_PAIRS` comparisons it isn't looked for).
     let looks = infos.iter().any(|i| i.shown && i.look.is_some());
@@ -315,15 +316,18 @@ fn object_words(o: &[Arc<Node>]) -> Vec<String> {
 }
 
 /// Each slot's made type as its content, else nothing yet. Made type that shows has where it draws,
-/// or where its story lies when it draws nothing.
-fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>) -> Vec<Content> {
+/// or where its story lies when it draws nothing. `laid`: point type is laid out for its box
+/// ([`drawn_box`]); without it the box is that of type without a layout, as it always was.
+fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>, laid: bool) -> Vec<Content> {
     infos
         .iter()
         .zip(made)
         .map(|(info, m)| match m {
             Some((node, region)) => {
-                let drawn = node.visual_bounds().filter(|b| !b.is_zero_area()).or(region);
-                Content::Made(node, drawn.filter(|_| info.shown), false)
+                // Type that doesn't show has no region: it isn't laid out for one.
+                let own = || if laid { drawn_box(&node) } else { node.visual_bounds() };
+                let drawn = info.shown.then(|| own().filter(|b| !b.is_zero_area() && b.is_finite()).or(region)).flatten();
+                Content::Made(node, drawn, false)
             }
             None => Content::Empty,
         })
@@ -391,8 +395,11 @@ pub(super) fn plan(
     // Where the made type that doesn't show lies, by slot.
     let hidden_at: Vec<(usize, Rect)> =
         infos.iter().zip(&made).enumerate().filter_map(|(k, (info, m))| Some((k, m.as_ref().filter(|_| !info.shown)?.1?))).collect();
-    // Type the text document makes, shown or not: the page's pieces of it aren't needed.
-    let mut content = made_content(infos, made);
+    // Type the text document makes, shown or not: the page's pieces of it aren't needed. Its box
+    // stays that of type without a layout here: with text objects whose type isn't made stacked on
+    // made type that has their words (the copies of an outlined heading), the page's pieces in the
+    // box where the made type draws are theirs too, and the made type would take them all.
+    let mut content = made_content(infos, made, false);
     // Is `object` the type of a text object that doesn't show, as the page draws it: in its frame,
     // with its words? (A copied object's lines are where its original's are, so they don't say.)
     let hidden_type = |object: &[Arc<Node>]| {

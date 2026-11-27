@@ -177,6 +177,13 @@ fn opened_document_art(
         super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
+    // The native file does not store type's layout bounds. Measure them before cropping or
+    // copying the art, so the placed group keeps the positions of aligned point type.
+    for warning in crate::Session::refresh_text_bounds(&mut l.doc) {
+        if !l.warnings.contains(&warning) {
+            l.warnings.push(warning);
+        }
+    }
     let n = l.doc.artboards.len();
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
     let artboards = if n == 1 { "artboard" } else { "artboards" };
