@@ -182,6 +182,37 @@ fn modifier_clicks_select_and_add_to_swatches_adds_the_selection() {
     assert!(selected_names(&app, "library:swatches:brights").is_empty());
 }
 
+#[test]
+fn adding_selected_library_items_requires_an_open_drawing() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.swatchLibrary", json!({"library": "earth-tones"})).unwrap();
+    let panel = "library:swatches:earth-tones";
+    click(&mut app, &ctx, "Clay 3", Modifiers::COMMAND, 0.0);
+    assert_eq!(selected_names(&app, panel), ["Clay 3"]);
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui, panel);
+    let command = CommandRef::with_params("ui.libraryPanel.add", json!({"panel": panel}));
+    let menu_enabled = |app: &VectorcraftApp| {
+        let mut states = CommandStates::new();
+        menu_states(app, panel, &mut states);
+        states.get(&command).is_some_and(CommandState::is_enabled)
+    };
+    assert!(control(&mut app, &ctx, &draw, "Add to Swatches").0);
+    assert!(menu_enabled(&app));
+
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(!control(&mut app, &ctx, &draw, "Add to Swatches").0);
+    assert!(!menu_enabled(&app));
+    assert_eq!(selected_names(&app, panel), ["Clay 3"], "the library remains browsable");
+    assert!(app.run("ui.libraryPanel.add", json!({"panel": panel})).is_err());
+
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    assert!(control(&mut app, &ctx, &draw, "Add to Swatches").0);
+    assert!(menu_enabled(&app));
+    app.run("ui.libraryPanel.add", json!({"panel": panel})).unwrap();
+    assert!(app.session.active().unwrap().doc.swatch("Clay 3").is_some());
+}
+
 const SWATCH_IDS: [&str; 9] = [
     "web-safe-216",
     "grays-neutrals",

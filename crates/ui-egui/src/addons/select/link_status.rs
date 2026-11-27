@@ -290,10 +290,7 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[Value]) {
     TextField::search(label(tl!("Search images")), Bind::bound(&mut fields.search)).show(ui);
     let shows: Vec<Entry<String>> = SHOW.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
     Field::new(label(tl!("Show:"))).show(ui, |ui, _| {
-        let picked = Select::new(label(tl!("Show:")), Bind::given(fields.show.clone()), &shows).show(ui).value().cloned();
-        if let Some(show) = picked {
-            fields.show = show;
-        }
+        Select::new(label(tl!("Show:")), Bind::bound(&mut fields.show), &shows).show(ui);
     });
     let visible = shown(rows, &fields.search, &fields.show, &Env::of(ui).folder());
     let lines: Vec<Line> = visible

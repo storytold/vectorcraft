@@ -10,6 +10,7 @@
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
 // PLAN: assumed path of `LengthUnits`
 use craft::ui::runtime::env::LengthUnits;
@@ -38,7 +39,8 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 /// Open Tate-chu-yoko Settings on the characters the Character panel acts on.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
-    let document = app.session.active().ok_or("no document")?.uid;
+    let active = app.session.active().ok_or("no document")?;
+    let (document, reverts) = (active.uid, active.reverts);
     let (up, right) = crate::panels::character::shared_tcy_offsets(app);
     let mut fields = DialogFields::new();
     for (key, v) in KEYS.into_iter().zip([up, right]) {
@@ -47,14 +49,21 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let initial = fields.clone();
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = crate::canvas::rulers::type_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Tate-chu-yoko Settings"), rows(lengths)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Tate-chu-yoko Settings"), rows(lengths)).values(Bind::bound(fields))
+    });
     super::host::open_held(app, dialog, move |app, result| {
         let p = params(&result.fields, &initial);
         if p.is_empty() {
             return Ok(());
         }
-        if !app.session.active().is_some_and(|active| active.uid == document) {
-            return Err(tl!("Tate-chu-yoko Settings can only change the document where it was opened.").to_owned());
+        let active = app
+            .session
+            .active()
+            .filter(|active| active.uid == document)
+            .ok_or_else(|| tl!("Tate-chu-yoko Settings can only change the document where it was opened.").to_owned())?;
+        if active.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         crate::panels::character::run_format(app, Value::Object(p)).map(|_| ())
     })
@@ -97,6 +106,17 @@ mod tests {
             NodeKind::Text(t) => t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect(),
             _ => panic!("not text"),
         }
+    }
+
+    #[test]
+    fn tate_chu_yoko_settings_step_the_opening_number_on_ok() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"tcyUpDown": 3, "tcyLeftRight": -7})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        panel.app().run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::step_number_and_ok(&mut panel, "Up/Down");
+        assert_eq!(offsets(&panel.app(), id), [(4.0, -7.0)]);
+        assert!(!driver::is_open(&panel.app()));
     }
 
     /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step.
@@ -184,5 +204,36 @@ mod tests {
         driver::set(&mut app, "tcyLeftRight", json!(6));
         driver::ok(&mut app);
         assert_eq!(offsets(&app, id), [(0.0, 6.0), (0.0, 0.0)]);
+    }
+
+    #[test]
+    fn tate_chu_yoko_approval_refuses_to_change_restored_text() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("tate_chu_yoko-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let before = offsets(&app, id);
+        app.run("text.setFormat", json!({"ids": [id], "tcyUpDown": 3})).unwrap();
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::set(&mut app, "tcyUpDown", json!(7));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let dialog = craft::ui::dialog::dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(offsets(&app, id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(dialog)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        driver::cancel(&mut app);
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::set(&mut app, "tcyUpDown", json!(7));
+        driver::ok(&mut app);
+        assert_eq!(offsets(&app, id)[0].0, 7.0);
     }
 }

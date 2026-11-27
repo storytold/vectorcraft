@@ -106,6 +106,7 @@ pub enum Arg {
 pub(crate) enum ArgRead {
     /// Each as [`Data`].
     Data,
+    DataWithin(DataLimits),
     /// Each as [`Data`], with the result given frozen, as [`HostItem::Value`] gives its value.
     Frozen,
     /// Each as the string `String(value)` gives.
@@ -126,6 +127,12 @@ pub enum HostItem {
     /// A read-only copy of a value.
     Value(Data),
     Function(HostFunction),
+    /// A function whose explicit arguments use `limits`. The realm's other crossings keep their
+    /// configured limits. The result uses the realm's limits.
+    FunctionWithLimits {
+        limits: DataLimits,
+        function: HostFunction,
+    },
     /// A function whose arguments arrive as strings, each the string `String(value)` gives.
     TextFunction(HostFunction),
     /// A function whose arguments arrive converted one by one as the list says. Arguments past the
@@ -507,7 +514,10 @@ impl Interp {
     /// The arguments of host function `name` as [`Data`], read as `how` says, with an optional host receiver first.
     fn read_args(&mut self, name: &Rc<str>, this: Option<&Value>, args: &[Value], how: &ArgRead) -> JsResult<Vec<Data>> {
         let mut reading = Reading {
-            limits: self.data_limits,
+            limits: match how {
+                ArgRead::DataWithin(limits) => *limits,
+                _ => self.data_limits,
+            },
             bytes: 0,
             entries: 0,
             ancestors: Vec::new(),
@@ -529,14 +539,14 @@ impl Interp {
         }
         // A conversion can run the script's own `toString`, which may collect garbage.
         let mark = self.temp_roots.len();
-        if !matches!(how, ArgRead::Data | ArgRead::Frozen | ArgRead::Hosted) {
+        if !matches!(how, ArgRead::Data | ArgRead::DataWithin(_) | ArgRead::Frozen | ArgRead::Hosted) {
             self.temp_roots.extend(args.iter().cloned());
         }
         let mut read = Ok(());
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
             let d = match how {
-                ArgRead::Data | ArgRead::Frozen | ArgRead::Site | ArgRead::Hosted => self.read_data(a, &mut reading),
+                ArgRead::Data | ArgRead::DataWithin(_) | ArgRead::Frozen | ArgRead::Site | ArgRead::Hosted => self.read_data(a, &mut reading),
                 ArgRead::Text => self.read_text(a, &mut reading),
                 ArgRead::Each(list) => match list.get(i) {
                     Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
@@ -666,6 +676,9 @@ impl Interp {
             },
             HostItem::Object(items) => Prop::Data { value: Value::Object(self.host_object(&full, items)?), flags: ENUMERABLE },
             HostItem::Function(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Data)), flags: ENUMERABLE },
+            HostItem::FunctionWithLimits { limits, function } => {
+                Prop::Data { value: Value::Object(self.host_function(function, &full, ArgRead::DataWithin(limits))), flags: ENUMERABLE }
+            }
             HostItem::TextFunction(f) => Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Text)), flags: ENUMERABLE },
             HostItem::Converted(list, f) => {
                 Prop::Data { value: Value::Object(self.host_function(f, &full, ArgRead::Each(list.into()))), flags: ENUMERABLE }
@@ -719,4 +732,31 @@ fn read_site(data: &[Data]) -> CallSite {
         _ => missing,
     };
     CallSite { source: at(0, crate::UNKNOWN_SOURCE), line: at(1, 0), column: at(2, 0) }
+}
+
+#[cfg(test)]
+mod argument_limit_tests {
+    use super::*;
+
+    #[test]
+    fn a_binding_argument_budget_does_not_change_other_crossings() {
+        let mut realm = crate::Realm::with_options(crate::Options::default(), crate::Limits::default());
+        let function: HostFunction = Rc::new(|_| Ok(Data::Bool(true)));
+        realm
+            .define_host_object(
+                "h",
+                vec![
+                    ("normal".into(), HostItem::Function(function.clone())),
+                    ("wide".into(), HostItem::FunctionWithLimits { limits: DataLimits { bytes: 64, ..DataLimits::default() }, function }),
+                ],
+            )
+            .unwrap();
+        realm.set_data_limits(DataLimits { bytes: 16, ..DataLimits::default() });
+        assert_eq!(realm.run("h.wide('abcdefgh')").unwrap(), crate::JsValue::Bool(true));
+        assert_eq!(realm.run("try { h.normal('abcdefgh'); false } catch (e) { e instanceof RangeError }").unwrap(), crate::JsValue::Bool(true));
+        assert_eq!(
+            realm.run("try { h.wide('abcdefghijklmnopqrstuvwxyz'); false } catch (e) { e instanceof RangeError }").unwrap(),
+            crate::JsValue::Bool(true)
+        );
+    }
 }
