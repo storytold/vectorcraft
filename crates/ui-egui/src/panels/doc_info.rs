@@ -98,8 +98,21 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
         });
     }
     ui.ctx().accesskit_node_builder(shown.id, |node| {
+        // TEMPORARY diagnostic: MUST REMOVE before publication.
+        if value.contains("Überlagerung") {
+            eprintln!(
+                "LINK_LOCATION_COPY_BEFORE id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
+                shown.id, node.role(), node.label(), node.value(), node.description(), node.bounds(), node.children()
+            );
+        }
         node.set_description(tl!("Copy"));
         node.add_action(egui::accesskit::Action::Click);
+        if value.contains("Überlagerung") {
+            eprintln!(
+                "LINK_LOCATION_COPY_AFTER id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
+                shown.id, node.role(), node.label(), node.value(), node.description(), node.bounds(), node.children()
+            );
+        }
     });
     let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
     eligible

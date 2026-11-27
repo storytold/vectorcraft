@@ -287,10 +287,10 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
     assert_eq!(row["owner"]["kind"], "symbol", "{list}");
     let mut h = Panel::new(app, super::links::show);
-    assert!(h.shows("20 × 20 px"), "Link Info of the selected image in the layers");
+    assert!(h.label_has_value("Dimensions", "20 × 20 px"), "Link Info of the selected image in the layers");
     h.click_with("inside.png", egui::Modifiers::NONE);
     assert!(selected(&h.app()).is_empty(), "the canvas can't select it");
-    assert!(h.shows("30 × 20 px"), "Link Info of the symbol's image");
+    assert!(h.label_has_value("Dimensions", "30 × 20 px"), "Link Info of the symbol's image");
     // Copy Info without ids copies the row picked in the panel.
     assert!(crate::menus::enabled(&h.app(), "links.copyInfo"));
     assert_eq!(h.app().run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
@@ -302,13 +302,13 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     h.advance(1.0);
     h.click_with("layer.png", egui::Modifiers::COMMAND);
     assert!(selected(&h.app()).is_empty());
-    assert!(h.shows("30 × 20 px"), "the symbol's image is still picked");
+    assert!(h.label_has_value("Dimensions", "30 × 20 px"), "the symbol's image is still picked");
     h.app().run("select.set", json!({"ids": [layer]})).unwrap();
     h.frame();
-    assert!(h.shows("20 × 20 px"));
+    assert!(h.label_has_value("Dimensions", "20 × 20 px"));
     h.app().run("select.set", json!({"ids": []})).unwrap();
     h.frame();
-    assert!(!h.shows("30 × 20 px") && !h.shows("20 × 20 px"), "nothing is picked");
+    assert!(!h.label_has_value("Dimensions", "30 × 20 px") && !h.label_has_value("Dimensions", "20 × 20 px"), "nothing is picked");
     // Go To clears the selection and says the link has no place on the canvas.
     h.app().run("select.set", json!({"ids": [layer]})).unwrap();
     super::links::go_to(&mut h.app(), row["id"].as_u64().unwrap());
