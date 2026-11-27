@@ -952,11 +952,10 @@ fn option_trees() -> Value {
     let mut trees = pdf_option_tree();
     if let Some(tree) = trees.as_object_mut() {
         tree.insert("flattener".into(), serde_json::to_value(super::flatten::FlattenOptions::default()).unwrap_or_default());
-        let mut svg = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).unwrap_or_default();
-        if let Some(svg) = svg.as_object_mut() {
-            svg.extend(super::fileio::ARTBOARD_PARAMS.iter().chain(&["useArtboards"]).map(|k| (k.to_string(), Value::Null)));
-        }
-        tree.insert("svg".into(), svg);
+        // Serialized defaults omit optional overrides such as units; the registry lists every key.
+        let svg = super::fileio::FORMATS.iter().find(|f| f.id == "svg").into_iter().flat_map(|f| f.options);
+        let svg = svg.filter(|o| o.name != "svg").map(|o| (o.name.to_string(), Value::Null)).collect();
+        tree.insert("svg".into(), Value::Object(svg));
     }
     trees
 }

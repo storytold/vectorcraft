@@ -195,7 +195,11 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         root = root.attr("version", "1.2").attr("baseProfile", "tiny");
     }
     if !opts.responsive {
-        if let Some((unit, suffix)) = doc.units.svg_unit().and_then(|u| Some((u, u.svg_suffix()?))) {
+        // Explicit SVG Options override the document unit; absence keeps its native save behavior.
+        if let Some(unit) = opts.units {
+            let (width, height) = (unit.length(rect.width(), opts.decimals), unit.length(rect.height(), opts.decimals));
+            root = root.attr("width", &width).attr("height", &height);
+        } else if let Some((unit, suffix)) = doc.units.svg_unit().and_then(|u| Some((u, u.svg_suffix()?))) {
             let w_val = physical_num(unit.from_pt(rect.width()));
             let h_val = physical_num(unit.from_pt(rect.height()));
             root = root.attr("width", format_args!("{w_val}{suffix}")).attr("height", format_args!("{h_val}{suffix}"));

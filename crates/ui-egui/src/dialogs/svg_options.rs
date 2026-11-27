@@ -1,5 +1,5 @@
 //! SVG Options (Export As SVG, Save As / Save a Copy to .svg): profile, styling, fonts, images,
-//! object ids, decimals, encoding, minify, responsive, embedded fonts, artboards (export) or
+//! object ids, decimals, encoding, units, minify, responsive, embedded fonts, artboards (export) or
 //! editing data (save), and a read-only view of the code. OK remembers the choices for next time and runs the export or save command with
 //! them as `svg: {…}`. Show in Browser (`file.export.svg.browser`) writes the SVG the choices give
 //! to a temporary folder and opens it in the default browser, leaving the dialog open.
@@ -56,6 +56,7 @@ const IMAGES: [(&str, &str); 2] = [("embed", "Embed"), ("link", "Link")];
 const OBJECT_IDS: [(&str, &str); 3] = [("layerNames", "Layer Names"), ("minimal", "Minimal"), ("unique", "Unique")];
 const PROFILES: [(&str, &str); 2] = [("svg11", "SVG 1.1"), ("tiny12", "SVG Tiny 1.2")];
 const ENCODINGS: [(&str, &str); 3] = [("utf8", "Unicode (UTF-8)"), ("utf16", "Unicode (UTF-16)"), ("latin1", "ISO 8859-1")];
+const UNITS: [(&str, &str); 5] = [("px", "Pixels"), ("pt", "Points"), ("mm", "Millimeters"), ("cm", "Centimeters"), ("in", "Inches")];
 
 /// Dialog fields that are not SVG options.
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
@@ -72,11 +73,12 @@ pub(crate) struct SvgCodeKey {
     selected: Option<Vec<vectorcraft_doc::NodeId>>,
 }
 
-/// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
-/// and Responsive on (as the reference app's Export As starts). Hidden layers are left to the
-/// command (Save keeps them, Export leaves them out).
+/// The options a first SVG Options dialog starts from: the engine's defaults with Pixels,
+/// Internal CSS and Responsive on (as the reference app's Export As starts). Hidden layers are
+/// left to the command (Save keeps them, Export leaves them out).
 pub(super) fn first_use() -> Map<String, Value> {
-    let mut m = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    let opts = vectorcraft_svg::ExportOptions { units: Some(vectorcraft_svg::SizeUnit::Px), ..Default::default() };
+    let mut m = serde_json::to_value(opts).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
     m.remove("hiddenLayers");
     m.insert("styling".into(), json!("css"));
     m.insert("responsive".into(), json!(true));
@@ -161,6 +163,8 @@ pub(crate) fn svg_params(screens: bool, tiny: bool) -> Vec<Param> {
     rows.push(pairs("objectIds", tl!("Object IDs:"), &OBJECT_IDS));
     rows.push(Param::number("decimals", tl!("Decimal:"), 3.0, 1.0, 0).bounds(Some(lo), Some(hi)));
     rows.push(pairs("encoding", tl!("Encoding:"), &ENCODINGS));
+    // Responsive omits width and height, so the unit has nothing to act on.
+    rows.push(pairs("units", tl!("Units:"), &UNITS).enabled_when("responsive", false));
     rows.push(check("minify", tl!("Minify"), false));
     rows.push(check("responsive", tl!("Responsive"), true));
     // Embedded fonts need SVG 1.1 and text that stays text.
@@ -661,6 +665,25 @@ mod tests {
         // Next time the dialog starts from these choices.
         start(&mut app, Mode::Export, "/tmp/out.svg", false);
         assert_eq!(fields(&app).number("decimals"), Some(1.0));
+    }
+
+    #[test]
+    fn svg_options_write_and_remember_units_and_decimals() {
+        let (mut app, written) = app();
+        start(&mut app, Mode::Export, "/tmp/out.svg", false);
+        set(&mut app, "responsive", json!(false));
+        set(&mut app, "units", json!("mm"));
+        set(&mut app, "decimals", json!(1));
+        confirm(&mut app);
+        let svg = text(&written, 0);
+        assert!(svg.contains("mm\"") && svg.contains("viewBox=\"0 0 120 80\""), "{svg}");
+        assert_eq!(app.ui.svg_options["decimals"], 1);
+        start(&mut app, Mode::Export, "/tmp/out.svg", false);
+        assert_eq!(fields(&app).text("units"), Some("mm"));
+        set(&mut app, "responsive", json!(true));
+        confirm(&mut app);
+        let svg = text(&written, 2);
+        assert!(!svg.contains("mm\"") && svg.contains("viewBox=\"0 0 120 80\""), "{svg}");
     }
 
     /// OK with a range the document lacks keeps the dialog open with the reason, writes nothing and
