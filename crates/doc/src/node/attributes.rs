@@ -38,6 +38,12 @@ pub struct ObjectAttributes {
     /// with it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign: Vec<ForeignAttribute>,
+    /// Elements in other applications' XML namespaces that were children of the object's SVG
+    /// group, in order, kept whole from SVG import to SVG export as `foreign` is (#9241): a tool's
+    /// own configuration (`<app:config>`) survives a round trip through VectorCraft. Export writes
+    /// them first among the group's children. Nothing in VectorCraft reads them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foreign_elements: Vec<ForeignElement>,
     /// The object's tags, in order: name and value pairs that scripts read and write
     /// (`object.tag.add`). Names may be empty or repeated. At most [`MAX_TAGS`], each name and
     /// value at most [`MAX_TAG_TEXT`] bytes.
@@ -188,6 +194,53 @@ pub struct ForeignAttribute {
     pub name: String,
     /// The attribute's value, as the file had it.
     pub value: String,
+}
+
+/// An element in another application's XML namespace, with its attributes and what it holds:
+/// `<app:config mode="on">text</app:config>` with `xmlns:app="https://example.com/app"` is
+/// `{ns: "https://example.com/app", prefix: "app", name: "config", attrs: [{ns: "", …, name:
+/// "mode", value: "on"}], content: [Text("text")]}`. Elements inside it may be in any namespace
+/// (`ns` empty: in none).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForeignElement {
+    /// The namespace's URI (empty: no namespace).
+    pub ns: String,
+    /// The prefix the file gave the namespace, which export reuses where it can.
+    pub prefix: String,
+    /// The element's local name.
+    pub name: String,
+    /// Its attributes, in order; one without a namespace has `ns` and `prefix` empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attrs: Vec<ForeignAttribute>,
+    /// Its text and elements, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content: Vec<ForeignContent>,
+}
+
+/// What a [`ForeignElement`] holds: text (CDATA sections included), or an element.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ForeignContent {
+    Text(String),
+    Element(ForeignElement),
+}
+
+impl ForeignElement {
+    /// The heap the element owns, with what it holds.
+    pub fn heap_bytes(&self) -> usize {
+        let attrs = self.attrs.capacity() * std::mem::size_of::<ForeignAttribute>()
+            + self.attrs.iter().map(|a| a.ns.capacity() + a.prefix.capacity() + a.name.capacity() + a.value.capacity()).sum::<usize>();
+        let content = self.content.capacity() * std::mem::size_of::<ForeignContent>()
+            + self
+                .content
+                .iter()
+                .map(|c| match c {
+                    ForeignContent::Text(t) => t.capacity(),
+                    ForeignContent::Element(e) => e.heap_bytes(),
+                })
+                .sum::<usize>();
+        self.ns.capacity() + self.prefix.capacity() + self.name.capacity() + attrs + content
+    }
 }
 
 /// The events the SVG Interactivity panel attaches JavaScript to, by the names of the SVG event

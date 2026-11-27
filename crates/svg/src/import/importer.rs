@@ -109,11 +109,14 @@ impl Importer {
         }
     }
 
-    /// Give `n` the attributes of element `id` in other applications' namespaces, unless it has
-    /// some already (what an inner element made of it keeps).
+    /// Give `n` the attributes of element `id` in other applications' namespaces, and the elements
+    /// in them it holds, unless it has some already (what an inner element made of it keeps).
     pub(super) fn keep_foreign(&self, id: &str, n: &mut Node) {
         if let Some(kept) = self.foreign.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.foreign.is_empty())) {
             n.edit_attrs(|a| a.foreign = kept.clone());
+        }
+        if let Some(kept) = self.foreign_elements.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.foreign_elements.is_empty())) {
+            n.edit_attrs(|a| a.foreign_elements = kept.clone());
         }
     }
 
@@ -896,6 +899,7 @@ mod tests {
             data: HashMap::new(),
             events: HashMap::new(),
             foreign: HashMap::new(),
+            foreign_elements: HashMap::new(),
             sublayers: HashSet::new(),
             sublayer_groups: HashSet::new(),
             ellipses: HashSet::new(),

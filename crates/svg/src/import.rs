@@ -9,7 +9,7 @@ use std::sync::Arc;
 use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, MAX_SVG_SCRIPTS,
+    Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ForeignContent, ForeignElement, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, MAX_SVG_SCRIPTS,
     Node, NodeId, NodeKind, PatternDef, SVG_EVENTS, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
@@ -42,7 +42,7 @@ pub(crate) use layers::SUBLAYER;
 use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name, root_title};
 pub(super) use prepass::Edits;
 use prepass::{Extras, labels, prepass};
-pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
+pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_DEPTH, MAX_FOREIGN_ELEMENT_BYTES, MAX_FOREIGN_ELEMENTS, MAX_FOREIGN_VALUE};
 
 mod budget;
 mod css;
@@ -213,6 +213,7 @@ pub(crate) fn import_finding(
         data: found.data,
         events: found.events,
         foreign: found.foreign,
+        foreign_elements: found.foreign_elements,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
         ellipses: found.ellipses,
@@ -225,6 +226,7 @@ pub(crate) fn import_finding(
         found: HashMap::new(),
     };
     im.doc.svg_scripts = found.scripts;
+    im.doc.svg_foreign_elements = found.root_foreign_elements;
     if im.files.nested_text() {
         im.warn("text inside an SVG image isn't imported".into());
     }
@@ -383,6 +385,9 @@ struct Importer {
     events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).
     foreign: HashMap<String, Vec<ForeignAttribute>>,
+    /// The elements in other applications' namespaces in groups, by the group's id
+    /// ([`prepass::foreign_children`]).
+    foreign_elements: HashMap<String, Vec<ForeignElement>>,
     /// Ids of the `<g>` elements marked as layers ([`marked_layer`]).
     sublayers: HashSet<String>,
     /// The groups made of them, made sublayers where they sit in a layer ([`promote_sublayers`]).

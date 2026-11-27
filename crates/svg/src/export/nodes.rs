@@ -924,6 +924,7 @@ impl Writer<'_> {
                 let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
+                self.foreign_children(n);
                 self.group_children(n, children);
                 self.depth -= 1;
                 self.line("</g>");
@@ -953,6 +954,7 @@ impl Writer<'_> {
                     self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
                 }
                 self.depth += 1;
+                self.foreign_children(n);
                 if let Some(fill) = &paint.fill {
                     self.node(fill);
                 }

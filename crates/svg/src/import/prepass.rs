@@ -1,7 +1,7 @@
 use super::convert::{MADE_UP_ID, href};
 use super::layers::{INKSCAPE, marked_layer};
 use super::{
-    Cow, ForeignAttribute, HashMap, HashSet, ImportOptions, MAX_SVG_SCRIPTS, Node, SVG_EVENTS, XNode, css, css_transform, files, roxmltree,
+    Cow, ForeignAttribute, ForeignContent, ForeignElement, HashMap, HashSet, ImportOptions, MAX_SVG_SCRIPTS, Node, SVG_EVENTS, XNode, css, css_transform, files, roxmltree,
     symbol_units, vector_effect,
 };
 
@@ -26,6 +26,11 @@ pub(super) struct Found {
     pub(super) events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).
     pub(super) foreign: HashMap<String, Vec<ForeignAttribute>>,
+    /// The elements in other applications' namespaces that are children of a `<g>`, by its id
+    /// ([`foreign_children`]).
+    pub(super) foreign_elements: HashMap<String, Vec<ForeignElement>>,
+    /// Those that are children of the root `<svg>`.
+    pub(super) root_foreign_elements: Vec<ForeignElement>,
     /// The JavaScript files `<script>` elements link to ([`linked_scripts`]).
     pub(super) scripts: Vec<String>,
     /// Ids of the `<g>` elements marked as layers ([`marked_layer`]).
@@ -164,7 +169,8 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// * shapes with a non-scaling stroke get an id when they have none, recorded ([`vector_effect`]);
 /// * objects with event attributes get an id when they have none, recorded with them
 ///   ([`user_events`]), and the `<script>` links are recorded ([`linked_scripts`]);
-/// * so do objects with attributes in other applications' namespaces ([`foreign`]);
+/// * so do objects with attributes in other applications' namespaces ([`foreign`]), and groups
+///   with elements in them ([`foreign_children`]), whose elements, and the root's, are recorded;
 /// * so do `<circle>` and `<ellipse>` elements, recorded: usvg makes their arcs into a varying
 ///   number of curves, and they come back as the ellipse VectorCraft draws (not in a file whose
 ///   style sheet has an attribute selector);
@@ -188,6 +194,7 @@ pub(super) fn prepass<'s>(
     let not = markers.contains(":not(");
     let events = SVG_EVENTS.iter().any(|e| markers.contains(e));
     let foreign_attrs = markers.contains("xmlns:") && has_foreign_attributes(xml);
+    let foreign_elements = markers.contains("xmlns:") && has_foreign_elements(xml);
     let attribute_selectors =
         xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "style").filter_map(|n| n.text()).any(|text| text.contains('['));
     let ellipses = !attribute_selectors && ["<circle", ":circle", "<ellipse", ":ellipse"].iter().any(|t| markers.contains(t));
@@ -195,6 +202,7 @@ pub(super) fn prepass<'s>(
         && !not
         && !events
         && !foreign_attrs
+        && !foreign_elements
         && !ellipses
         && !["<a", "display", "<use", ":use", "<image", ":image", "feImage", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
@@ -224,6 +232,24 @@ pub(super) fn prepass<'s>(
             if !kept.is_empty() {
                 found.foreign.insert(edits.id(svg, e), kept);
             }
+        }
+    }
+    if foreign_elements {
+        let mut budget = ForeignBudget::default();
+        found.root_foreign_elements = foreign_children(xml.root_element(), &mut budget);
+        // A group inside one of them is part of it.
+        let inside_foreign = |g: &XNode| g.ancestors().any(|a| a.is_element() && is_foreign(&a));
+        for g in elements().filter(|e| e.tag_name().name() == "g" && !is_foreign(e) && !inside_foreign(e)) {
+            let kept = foreign_children(g, &mut budget);
+            if !kept.is_empty() {
+                found.foreign_elements.insert(edits.id(svg, g), kept);
+            }
+        }
+        if budget.left_out {
+            found.warnings.push(format!(
+                "other applications' elements past {MAX_FOREIGN_ELEMENTS} in the file, nested more than {MAX_FOREIGN_DEPTH} deep, or holding more than {} KiB, were left out",
+                MAX_FOREIGN_ELEMENT_BYTES / 1024
+            ));
         }
     }
     if events {
@@ -387,6 +413,87 @@ pub const MAX_FOREIGN_VALUE: usize = 64 * 1024;
 /// The namespace of attribute `a` when it is another application's ([`OWN_NAMESPACES`] aside).
 fn foreign_ns<'a>(a: &roxmltree::Attribute<'a, '_>) -> Option<&'a str> {
     a.namespace().filter(|ns| !OWN_NAMESPACES.contains(ns))
+}
+
+/// Is element `e` in another application's namespace ([`OWN_NAMESPACES`] aside)?
+fn is_foreign(e: &XNode) -> bool {
+    e.tag_name().namespace().is_some_and(|ns| !OWN_NAMESPACES.contains(&ns))
+}
+
+/// Is any element of `xml` in another application's namespace?
+fn has_foreign_elements(xml: &roxmltree::Document) -> bool {
+    xml.descendants().filter(XNode::is_element).any(|e| is_foreign(&e))
+}
+
+/// The most elements in other applications' namespaces kept from one file, those inside them
+/// counted (the file is untrusted).
+pub const MAX_FOREIGN_ELEMENTS: usize = 4096;
+
+/// The most their names, values and text hold in one file, in bytes.
+pub const MAX_FOREIGN_ELEMENT_BYTES: usize = 4 * 1024 * 1024;
+
+/// How deep elements nest inside one of them, at most.
+pub const MAX_FOREIGN_DEPTH: usize = 32;
+
+/// What [`foreign_children`] has kept of a file so far, and whether it left any out.
+#[derive(Default)]
+struct ForeignBudget {
+    elements: usize,
+    bytes: usize,
+    left_out: bool,
+}
+
+/// The children of `parent` in other applications' namespaces, in order, each whole with what it
+/// holds (comments and processing instructions aside). One that would take the file past
+/// [`MAX_FOREIGN_ELEMENTS`] or [`MAX_FOREIGN_ELEMENT_BYTES`], or that nests deeper than
+/// [`MAX_FOREIGN_DEPTH`], is left out whole, and `budget` notes it.
+fn foreign_children(parent: XNode, budget: &mut ForeignBudget) -> Vec<ForeignElement> {
+    let mut kept = vec![];
+    for c in parent.children().filter(|c| c.is_element() && is_foreign(c)) {
+        let (elements, bytes) = (budget.elements, budget.bytes);
+        match foreign_element(c, 0, budget) {
+            Some(e) => kept.push(e),
+            None => {
+                (budget.elements, budget.bytes) = (elements, bytes);
+                budget.left_out = true;
+            }
+        }
+    }
+    kept
+}
+
+/// Element `e` as a [`ForeignElement`], at `depth` inside a kept one; `None` past the limits.
+fn foreign_element(e: XNode, depth: usize, budget: &mut ForeignBudget) -> Option<ForeignElement> {
+    budget.elements += 1;
+    if depth > MAX_FOREIGN_DEPTH || budget.elements > MAX_FOREIGN_ELEMENTS {
+        return None;
+    }
+    let mut charge = |s: &str| {
+        budget.bytes += s.len();
+        (budget.bytes <= MAX_FOREIGN_ELEMENT_BYTES).then(|| s.to_string())
+    };
+    // A namespaced name always has a prefix in the file but where it is the default namespace:
+    // that one is written unprefixed again, or under `ns` when it isn't SVG's.
+    let prefix_of = |ns: &str| e.lookup_prefix(ns).unwrap_or_default().to_string();
+    let ns = e.tag_name().namespace().unwrap_or_default();
+    let mut out = ForeignElement { ns: charge(ns)?, prefix: prefix_of(ns), name: charge(e.tag_name().name())?, attrs: vec![], content: vec![] };
+    for a in e.attributes() {
+        let ns = a.namespace().unwrap_or_default();
+        let (name, value) = (charge(a.name())?, charge(a.value())?);
+        out.attrs.push(ForeignAttribute { ns: ns.to_string(), prefix: prefix_of(ns), name, value });
+    }
+    for c in e.children() {
+        if c.is_element() {
+            out.content.push(ForeignContent::Element(foreign_element(c, depth + 1, budget)?));
+        } else if let Some(text) = c.text().filter(|_| c.is_text()) {
+            budget.bytes += text.len();
+            if budget.bytes > MAX_FOREIGN_ELEMENT_BYTES {
+                return None;
+            }
+            out.content.push(ForeignContent::Text(text.to_string()));
+        }
+    }
+    Some(out)
 }
 
 /// Does any element of `xml` have an attribute in another application's namespace? Most files
