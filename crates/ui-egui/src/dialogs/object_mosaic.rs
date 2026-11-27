@@ -121,6 +121,7 @@ fn label(text: &str) -> Label {
 struct MosaicSource {
     document: u64,
     reverts: u64,
+    history_restores: u64,
     image: NodeId,
 }
 
@@ -133,6 +134,9 @@ impl MosaicSource {
             .ok_or_else(|| tl!("Return to the original drawing to create the mosaic.").to_owned())?;
         if st.reverts != self.reverts {
             return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
+        if st.history_restores != self.history_restores {
+            return Err(tl!("Reopen Create Object Mosaic after Undo or Redo.").to_owned());
         }
         match selected_image(app) {
             Some((source, size)) if source == self => Ok(size),
@@ -147,7 +151,7 @@ fn selected_image(app: &VectorcraftApp) -> Option<(MosaicSource, (f64, f64))> {
     let st = app.session.active()?;
     let node = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).find(|n| matches!(n.kind, NodeKind::Image(_)))?;
     let b = node.geometric_bounds()?;
-    Some((MosaicSource { document: st.uid, reverts: st.reverts, image: node.id }, (b.width(), b.height())))
+    Some((MosaicSource { document: st.uid, reverts: st.reverts, history_restores: st.history_restores, image: node.id }, (b.width(), b.height())))
 }
 
 /// Open the dialog on the selected image, with the values `given` holds (the menu item's params, or
@@ -932,6 +936,29 @@ mod tests {
         let undo = app.session.active().unwrap().history.undo.len();
         ok(&mut app);
         assert_eq!(mosaic(&app), None);
+        assert_eq!(image_id(&app), source);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&mut app));
+
+        open(&mut app, &json!({"columns": 2, "rows": 2, "deleteRaster": true})).unwrap();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
+        assert!(!is_open(&mut app));
+    }
+
+    #[test]
+    fn held_mosaic_does_not_delete_a_raster_created_after_undo() {
+        let mut app = app_with_image();
+        let source = image_id(&app);
+        open(&mut app, &json!({"columns": 2, "rows": 2, "deleteRaster": true})).unwrap();
+
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(NodeId(source)).is_none_or(|node| !matches!(node.kind, NodeKind::Image(_))));
+        app.run("object.rasterize", json!({"ppi": 72})).unwrap();
+        assert_eq!(image_id(&app), source, "the new raster repeats the same ID and pixels");
+        let undo = app.session.active().unwrap().history.undo.len();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), None, "the old approval cannot delete the new raster");
         assert_eq!(image_id(&app), source);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
         assert!(is_open(&mut app));
