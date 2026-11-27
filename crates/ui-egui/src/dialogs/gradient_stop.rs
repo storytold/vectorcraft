@@ -101,12 +101,19 @@ impl TargetKey {
 #[derive(Clone)]
 struct TargetOwner {
     key: TargetKey,
-    paint: Arc<GradientPaint>,
+    paints: Arc<TargetPaints>,
+}
+
+struct TargetPaints {
+    shown: GradientPaint,
+    edited: Vec<(NodeId, Option<usize>, Vec<Paint>)>,
 }
 
 impl TargetOwner {
     fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
-        self.key.matches(app, target) && self.paint.as_ref() == target.paint()
+        self.key.matches(app, target)
+            && self.paints.shown == *target.paint()
+            && app.session.gradient_edit_paints(!self.key.fill).is_ok_and(|paints| paints == self.paints.edited)
     }
 }
 
@@ -464,8 +471,10 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     }
     let Some(target) = selected(app) else { return };
     let Some(key) = TargetKey::of(app, &target) else { return };
+    let Ok(edited) = app.session.gradient_edit_paints(!key.fill) else { return };
+    let paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor, TargetOwner { key, paint: Arc::new(target.paint().clone()) }));
+        host.open(GradientStopPopover::new(anchor, TargetOwner { key, paints }));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -520,13 +529,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::panels::gradient::stop_eyedropper(app);
         return;
     }
-    let Some(target) = selected(app).filter(|target| owner.key.matches(app, target)) else {
+    let updated = selected(app).filter(|target| owner.key.matches(app, target)).zip(app.session.gradient_edit_paints(!owner.key.fill).ok());
+    let Some((target, edited)) = updated else {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
-    // The popover owns the edits applied in this pass and can continue with their resulting paint.
-    if owner.paint.as_ref() != target.paint() {
-        owner.paint = Arc::new(target.paint().clone());
+    // The popover can continue with the paints resulting from its own edits in this pass.
+    if owner.paints.shown != *target.paint() || owner.paints.edited != edited {
+        owner.paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
     }
     dialogs.with(|host| {
         if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
@@ -748,6 +758,31 @@ mod tests {
         host::pump(&mut app, &ctx);
         assert_eq!(stops(&app)[1].opacity, 1.0, "the live edit belongs to the original gradient");
         assert!(!is_open(&app));
+    }
+
+    #[test]
+    fn discards_edits_when_only_a_secondary_selected_gradient_is_replaced() {
+        let mut app = app();
+        let first = app.session.active().unwrap().selection.objects[0];
+        let second = app.run("shape.rectangle", json!({"x": 230, "y": 80, "width": 50, "height": 90})).unwrap()["id"].clone();
+        let initial = json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}],
+            "start": [100, 150], "end": [200, 150]});
+        app.run("paint.setFill", json!({"id": second, "gradient": initial})).unwrap();
+        app.run("select.set", json!({"ids": [first.0, second]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects[0], first);
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        let proxy = active_paint(&app);
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 0.5, "color": "#0000ff"}, {"offset": 1, "color": "#ffffff"}]});
+        app.run("paint.setFill", json!({"id": second, "gradient": gradient})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects, selected);
+        assert_eq!(app.session.selected_stop(), Some(1));
+        assert_eq!(active_paint(&app), proxy);
+        let before = app.session.active().unwrap().doc.clone();
+        confirm(&mut app);
+        assert!(app.session.active().unwrap().doc == before, "the edit must not overwrite the secondary replacement");
     }
 
     #[test]

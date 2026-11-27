@@ -136,6 +136,36 @@ impl Session {
                 .is_ok_and(|item| item.of_kind(self, !stroke).targets_for(self, &p, !stroke).is_ok_and(|ids| !ids.is_empty()))
     }
 
+    /// Snapshot the paints a gradient edit without explicit targets would write, by object and
+    /// appearance item. Text without an item has one paint per run. The proxy can display just
+    /// the first paint when an edit goes to several objects or text runs.
+    pub fn gradient_edit_paints(&self, stroke: bool) -> Result<Vec<(NodeId, Option<usize>, Vec<Paint>)>> {
+        const CMD: &str = "paint.editGradient";
+        let p = json!({ "stroke": stroke });
+        if super::paint::for_tool(self, &p, stroke) {
+            return Ok(Vec::new());
+        }
+        let doc = &self.doc()?.doc;
+        let item = item_target(self, &p, CMD)?.of_kind(self, !stroke);
+        let ids = item.targets_for(self, &p, !stroke)?;
+        let ids = super::appearance::drop_design_art_rows(self, ids, item, !stroke, CMD)?;
+        let mut out = Vec::with_capacity(ids.len());
+        for (id, item) in ids.iter().copied().zip(item.per_target(self, &ids)) {
+            let (Some(node), Some(item)) = (doc.node(id), item) else { continue };
+            let index = item.resolve(&node.appearance, !stroke, CMD)?;
+            let (item, paints) = if index.is_none()
+                && let NodeKind::Text(text) = &node.kind
+            {
+                (None, text.runs.iter().map(|run| if stroke { run.style.stroke.clone() } else { run.style.fill.clone() }).collect())
+            } else {
+                let item = index.or_else(|| node.appearance.items.iter().rposition(|row| row.is_fill() != stroke));
+                (item, node.appearance.paint_at(index, !stroke).cloned().into_iter().collect())
+            };
+            out.push((id, item, paints));
+        }
+        Ok(out)
+    }
+
     /// The selected gradient stop (`gradient.selectStop`), while the gradient it was selected on
     /// is still the one behind the active proxy. Callers check it against the stop count (an undo
     /// can remove stops).
