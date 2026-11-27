@@ -509,6 +509,7 @@ fn delete_selection_approval_does_not_remove_restored_layer_art() {
     let st = app.session.active().unwrap();
     assert!(st.doc.node(sub).is_some() && st.doc.node(art).is_some(), "old approval cannot delete restored artwork");
     assert_eq!(undo_len(&app), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 
     assert!(app.run("ui.layerDelete", json!({"ids": [sub.0]})).unwrap().is_null());
     crate::tests::picks::answer_dialog(&mut app, confirm, &[], true);
