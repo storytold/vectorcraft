@@ -97,6 +97,48 @@ fn selected(p: &Panel) -> Vec<u64> {
     p.app().session.active().unwrap().selection.objects.iter().map(|id| id.0).collect()
 }
 
+#[test]
+fn a_cached_match_cannot_replace_text_restored_by_revert() {
+    let (mut app, ids) = app_with(&["Needle Needle"]);
+    let id = ids[0];
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    let dir = vectorcraft_testkit::TempDir::new("find-replace-reverted-match");
+    app.run("file.saveAs", json!({"path": dir.join("text.vectorcraft")})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    let version = (st.uid, st.reverts);
+    let mut p = Panel::new(app, draw);
+    choose(&p);
+    set(&p, "find", json!("Needle"));
+    set(&p, "replace", json!("Changed"));
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((id, 0, 6)));
+
+    p.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    {
+        let app = p.app();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, version.0);
+        assert_ne!(st.reverts, version.1);
+    }
+    let before = undo_steps(&p);
+    let form = with_dialog(&p, |d| super::form(d));
+    // A Replace action dispatched before the dialog has refreshed must still check the match.
+    super::replace(&mut p.app(), &form, false).unwrap();
+    assert_eq!(plain(&p, id), "Needle Needle");
+    assert_eq!(undo_steps(&p), before);
+    pump(&p);
+    assert_eq!(matched(&p), None);
+    assert!(message(&p).is_empty());
+
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((id, 0, 6)));
+    p.click("Replace");
+    assert_eq!(plain(&p, id), "Changed Needle");
+}
+
 /// The Edit menu's rows for Find and Replace, Check Spelling (in its Spelling submenu) and Edit Custom Dictionary
 /// are enabled, and invoking each puts that dialog on the host.
 #[test]
@@ -373,4 +415,31 @@ fn a_search_place_stays_in_its_document_and_given_params_win() {
     p.click("Close");
     choose(&p);
     assert_eq!((field(&p, "find"), field(&p, "matchCase")), (json!("cat"), json!(true)));
+}
+
+#[test]
+fn edit_find_next_starts_at_the_first_restored_match_with_that_frame_selected() {
+    let (mut app, ids) = app_with(&["cat in the back", "cat cat in front"]);
+    let first = ids[1];
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    let dir = vectorcraft_testkit::TempDir::new("menu-find-next-revert");
+    app.run("file.saveAs", json!({"path": dir.join("text.vectorcraft")})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap();
+    let mut p = Panel::new(app, draw);
+    choose(&p);
+    set(&p, "find", json!("cat"));
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((first, 0, 3)));
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((first, 4, 7)));
+    p.click("Close");
+
+    p.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    p.app().run("select.set", json!({"ids": [first]})).unwrap();
+    let before = undo_steps(&p);
+    choose_find_next(&p);
+    assert_eq!(from(&p), json!({"id": first, "start": 0, "end": 3}));
+    assert_eq!(selected(&p), vec![first]);
+    assert_eq!(undo_steps(&p), before);
 }

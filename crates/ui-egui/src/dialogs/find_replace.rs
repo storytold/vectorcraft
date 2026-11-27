@@ -14,10 +14,9 @@
 //! closed, and opens the dialog when there has been none.
 //!
 //! The walk lives in `UiState::last_find`: the Find text and the switches of the last request, its
-//! `replace` text and `backwards`, the place it reached in `from` (`{id, start, end}`), the `uid` of
-//! that document in `doc` and the match found in `found` (`{index, count}`). A place in a document
-//! other than the active one, or reached with other Find text or switches, is not used: the search
-//! starts again. [`pump`] runs the dialog's requests once per frame.
+//! `replace` text and `backwards`, the place it reached in `from` (`{id, start, end}`), the drawing's
+//! UID and Revert counter in `doc`, and the match in `found` (`{index, count}`). Changing the
+//! loaded drawing, Find text, or switches restarts the search. [`pump`] runs the requests each frame.
 
 use craft::text::find::FindOptions;
 use craft::text::ui::find::{FindCheck, FindReplaceDialog, FindRequest, FindTab, ReplaceButtons};
@@ -56,9 +55,18 @@ pub fn menu_params() -> Value {
     json!({"find": null})
 }
 
-/// The `uid` of the active document.
-fn active_uid(app: &VectorcraftApp) -> Option<u64> {
-    app.session.active().map(|d| d.uid)
+/// The active drawing and its loaded generation.
+fn active_drawing(app: &VectorcraftApp) -> Option<(u64, u64)> {
+    app.session.active().map(|d| (d.uid, d.reverts))
+}
+
+fn saved_drawing(last: &Map<String, Value>) -> Option<(u64, u64)> {
+    let [uid, reverts] = last.get("doc")?.as_array()?.as_slice() else { return None };
+    Some((uid.as_u64()?, reverts.as_u64()?))
+}
+
+fn same_drawing(last: &Map<String, Value>, drawing: (u64, u64)) -> bool {
+    saved_drawing(last) == Some(drawing)
 }
 
 /// The match found belongs to an open dialog: the last search keeps its place, not the match.
@@ -127,13 +135,20 @@ pub fn find_next(app: &mut VectorcraftApp) -> Result<Value, String> {
         return open(app, &Map::new());
     };
     forget_found(app);
-    let uid = active_uid(app);
+    let drawing = active_drawing(app);
     if let Some(o) = last.as_object_mut() {
+        let saved = saved_drawing(o);
         o.remove("replace");
         o.remove("found");
-        // A place in another document is no place in this one.
-        if uid.is_none() || o.remove("doc").and_then(|d| d.as_u64()) != uid {
-            o.remove("from");
+        o.remove("doc");
+        if saved != drawing || drawing.is_none() {
+            let restored = saved.zip(drawing).is_some_and(|((old_uid, _), (uid, _))| old_uid == uid);
+            if restored {
+                // An explicit start ignores the whole text frame currently selected.
+                o.insert("from".into(), Value::Null);
+            } else {
+                o.remove("from");
+            }
         }
     }
     let r = app.run(NEXT, last)?;
@@ -143,7 +158,7 @@ pub fn find_next(app: &mut VectorcraftApp) -> Result<Value, String> {
     }
     if let Some(l) = app.ui.last_find.as_mut() {
         l["from"] = json!({ "id": r["id"], "start": r["start"], "end": r["end"] });
-        l["doc"] = json!(uid);
+        l["doc"] = json!(drawing);
     }
     Ok(r)
 }
@@ -178,9 +193,9 @@ fn form(d: &FindReplaceDialog) -> Form {
 /// The place the last search reached, `{id, start, end}`, while its document is the active one and
 /// the Find text and the switches are `query`, those it was reached with.
 fn place<'a>(app: &VectorcraftApp, last: &'a Value, query: &Value) -> Option<&'a Value> {
-    let uid = active_uid(app)?;
+    let drawing = active_drawing(app)?;
     let last = last.as_object()?;
-    let same = last.get("doc").and_then(Value::as_u64) == Some(uid) && query_in(last) == *query;
+    let same = same_drawing(last, drawing) && query_in(last) == *query;
     same.then(|| last.get("from")).flatten().filter(|at| at.is_object())
 }
 
@@ -204,7 +219,7 @@ fn remember(app: &mut VectorcraftApp, form: &Form, at: Option<Value>, found: Opt
     last["backwards"] = json!(form.backwards);
     if let Some(at) = at {
         last["from"] = at;
-        last["doc"] = json!(active_uid(app));
+        last["doc"] = json!(active_drawing(app));
     }
     if let Some(found) = found {
         last["found"] = found;
