@@ -47,7 +47,7 @@
 //! while the adapters were being listed, before one was picked, it lists OpenGL's adapters alone
 //! (except on macOS, where wgpu has none). A start that `WGPU_BACKEND` or `WGPU_ADAPTER_NAME`
 //! chooses leaves nothing out, and the crashes are forgotten when the app version or
-//! Preferences › Performance › Graphics Processor changes, when a start shows its first frame on
+//! Preferences › Performance › Graphics Processor or Graphics Backend changes, when a start shows its first frame on
 //! the adapter that crashed, or when no adapter is left to show the window.
 
 use std::io::{Read as _, Seek as _, Write as _};
@@ -136,6 +136,30 @@ pub fn backends(default: Backends, env_set: bool, opengl: bool) -> Backends {
         (true, true) => Backends::DX12 | Backends::GL,
         (true, false) => Backends::DX12,
         (false, _) => default,
+    }
+}
+
+/// A saved desktop backend supported on this platform; Automatic keeps the old startup policy.
+pub fn backend_preference(pref: Option<&str>) -> Option<Backends> {
+    match vectorcraft_engine::cmd::prefscmds::gpu_backend_name(pref) {
+        "dx12" => Some(Backends::DX12),
+        "vulkan" => Some(Backends::VULKAN),
+        "metal" => Some(Backends::METAL),
+        "gl" => Some(Backends::GL),
+        _ => None,
+    }
+}
+
+/// WGPU_BACKEND wins. A healthy saved choice starts only that API; after a startup failure,
+/// the existing automatic policy supplies the other adapters/backends recovery can try.
+pub fn selected_backends(default: Backends, env_set: bool, saved: Option<Backends>, opengl: bool, recovering: bool) -> Backends {
+    if !env_set
+        && !recovering
+        && let Some(chosen) = saved
+    {
+        chosen
+    } else {
+        backends(default, env_set, opengl)
     }
 }
 
@@ -501,10 +525,10 @@ struct Starting {
 /// What [`START_FILE`] holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct StartRecord {
-    /// The app version and the Graphics Processor preference (`gpuPreference`) it was written
-    /// under: the crashes count only for the same ones.
+    /// App version, Graphics Processor and Graphics Backend: crashes count only for the same choices.
     version: String,
     preference: String,
+    backend: String,
     /// The start in progress, from before the graphics start until its first frame reaches the
     /// screen or the app ends without crashing.
     starting: Option<Starting>,
@@ -517,9 +541,9 @@ struct StartRecord {
 impl StartRecord {
     /// This start's record, made from the one the last start left (`previous`; `None` when there
     /// is none or it can't be read), and the crash that start ended in, if it did. A record
-    /// written by another version or under another `preference` is dropped.
-    fn begin(previous: Option<Self>, version: &str, preference: &str) -> (Self, Option<Crash>) {
-        let mut record = previous.filter(|r| r.version == version && r.preference == preference).unwrap_or_default();
+    /// written by another version or under another `preference` or `backend` is dropped.
+    fn begin(previous: Option<Self>, version: &str, preference: &str, backend: &str) -> (Self, Option<Crash>) {
+        let mut record = previous.filter(|r| r.version == version && r.preference == preference && r.backend == backend).unwrap_or_default();
         let crash = record.starting.take().map(|s| match s.adapter {
             Some(Recorded { key, name }) => Crash::Adapter { key, name },
             None => Crash::Listing,
@@ -536,6 +560,7 @@ impl StartRecord {
         }
         record.version = version.to_string();
         record.preference = preference.to_string();
+        record.backend = backend.to_string();
         record.starting = Some(Starting::default());
         (record, crash)
     }
@@ -586,6 +611,7 @@ impl StartRecord {
         let mut v = serde_json::json!({
             "version": self.version,
             "gpuPreference": self.preference,
+            "gpuBackend": self.backend,
             "crashed": self.crashed.iter().map(recorded).collect::<Vec<_>>(),
             "listingCrashed": self.listing_crashed,
         });
@@ -615,6 +641,8 @@ impl StartRecord {
         Some(Self {
             version: v.get("version")?.as_str()?.to_string(),
             preference: v.get("gpuPreference")?.as_str()?.to_string(),
+            // Records made before Graphics Backend existed used the Automatic startup policy.
+            backend: v.get("gpuBackend").map_or(Some("automatic"), serde_json::Value::as_str)?.to_string(),
             starting,
             crashed: crashed.iter().take(CRASHED_LIMIT).map(recorded).collect::<Option<_>>()?,
             listing_crashed: v.get("listingCrashed")?.as_bool()?,
@@ -694,9 +722,9 @@ impl Startup {
     /// Record this start in `dir`'s [`START_FILE`] until the window's first frame reaches the
     /// screen or the app ends without crashing, and say what it leaves out for the starts that
     /// crashed before (see the module docs). `preference` is Preferences › Performance › Graphics
-    /// Processor, and `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
+    /// Processor; `backend` is Graphics Backend and `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
     /// written, or another copy of the app is starting), nothing is recorded or left out.
-    pub fn track(&self, dir: &Path, preference: Option<&str>, explicit: bool) -> LeftOut {
+    pub fn track(&self, dir: &Path, preference: Option<&str>, backend: Option<&str>, explicit: bool) -> LeftOut {
         let (file, previous) = match StartFile::open(dir) {
             Ok(Some(opened)) => opened,
             Ok(None) => {
@@ -708,7 +736,8 @@ impl Startup {
                 return LeftOut::default();
             }
         };
-        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference_name(preference));
+        let backend = vectorcraft_engine::cmd::prefscmds::gpu_backend_name(backend);
+        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference_name(preference), backend);
         let left_out = record.left_out(crash.clone(), explicit);
         match &crash {
             Some(Crash::Adapter { key, name }) => {

@@ -98,6 +98,22 @@ const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 /// `automatic` (#502).
 pub const GPU_PREFERENCES: &[(&str, &str)] =
     &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
+/// Desktop graphics APIs available to this platform, independently of the GPU power preference.
+pub const GPU_BACKENDS: &[(&str, &str)] = if cfg!(windows) {
+    &[("automatic", "Automatic"), ("dx12", "Direct3D 12"), ("vulkan", "Vulkan"), ("gl", "OpenGL")]
+} else if cfg!(target_os = "macos") {
+    &[("automatic", "Automatic"), ("metal", "Metal")]
+} else if cfg!(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
+    &[("automatic", "Automatic"), ("vulkan", "Vulkan"), ("gl", "OpenGL")]
+} else {
+    &[("automatic", "Automatic")]
+};
+
+/// A saved choice from another platform or version falls back to the existing startup policy.
+pub fn gpu_backend_name(value: Option<&str>) -> &'static str {
+    GPU_BACKENDS.iter().find(|(id, _)| Some(*id) == value).map_or("automatic", |(id, _)| *id)
+}
+
 /// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
 /// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
 /// (winit 0.30 has no Wayland drag and drop, #1151); `automatic` and `x11WithPen` do the same only
@@ -385,6 +401,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
     // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
     p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
+    p!("gpuBackend", "Performance", "GPU Performance", "Graphics Backend", choice(GPU_BACKENDS)),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),

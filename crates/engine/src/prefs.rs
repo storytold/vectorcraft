@@ -38,6 +38,12 @@ fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<S
     Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
+/// An unknown saved backend must not discard the other preferences or select an unsupported API.
+fn gpu_backend<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
+    let saved = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
+    Ok(cmd::prefscmds::gpu_backend_name(saved.as_str()).to_string())
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -274,6 +280,10 @@ pub struct Prefs {
     /// Read at startup (it takes effect after a restart); `--present-mode` and
     /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
     pub low_latency_drawing: bool,
+    /// Desktop graphics API, read once at startup; `automatic` preserves the platform defaults.
+    /// WGPU_BACKEND overrides it. Unsupported saved choices become Automatic.
+    #[serde(deserialize_with = "gpu_backend")]
+    pub gpu_backend: String,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -612,6 +622,7 @@ impl Default for Prefs {
             animated_zoom: true,
             gpu_preference: s("automatic"),
             low_latency_drawing: false,
+            gpu_backend: s("automatic"),
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,

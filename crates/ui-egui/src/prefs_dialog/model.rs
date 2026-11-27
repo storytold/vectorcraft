@@ -128,7 +128,7 @@ impl Live<'_> {
             "systemTitleBar" => cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))),
             "appTitleBar" => APP_TITLE_BAR_SHOWN,
             "linuxDisplayServer" => cfg!(target_os = "linux"),
-            "monitorProfileDisplay" | "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
+            "monitorProfileDisplay" | "lowLatencyDrawing" | "gpuBackend" => !cfg!(target_arch = "wasm32"),
             // Only where the session keeps script grants: not without a settings folder, and not on the web.
             script_access::KEY => self.w.script_access.is_some(),
             "editOriginal" => self.app.services.check_application.is_some() && self.app.services.open_in_application.is_some(),
@@ -171,7 +171,7 @@ impl Live<'_> {
                 });
                 notes
             }
-            "gpuPreference" | "lowLatencyDrawing" => vec![applies_at_start()],
+            "gpuPreference" | "lowLatencyDrawing" | "gpuBackend" => vec![applies_at_start()],
             "linuxDisplayServer" => vec![
                 applies_at_start(),
                 // Many Wayland desktops give a drawing tablet's pen to the window only through XWayland (#2028).

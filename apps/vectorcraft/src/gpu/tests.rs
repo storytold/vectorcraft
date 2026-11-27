@@ -641,7 +641,7 @@ fn start_dir(tag: &str) -> (TestDir, std::sync::RwLockReadGuard<'static, ()>) {
 /// What a start in `dir` leaves out; it then ends without crashing.
 fn next_start(dir: &std::path::Path, explicit: bool) -> LeftOut {
     let s = Startup::default();
-    let left_out = s.track(dir, None, explicit);
+    let left_out = s.track(dir, None, None, explicit);
     s.ended();
     left_out
 }
@@ -664,13 +664,13 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
     let (dir, _spawns) = start_dir("crash");
     let c = issue_2243();
     let first = Startup::default();
-    assert_eq!(first.track(&dir, None, false), LeftOut::default());
+    assert_eq!(first.track(&dir, None, None, false), LeftOut::default());
     first.picked(&c[0].key, &c[0].name, true);
     // The process ends here: its file is closed and unlocked, and the start is still recorded.
     drop(first);
 
     let second = Startup::default();
-    let left_out = second.track(&dir, Some("automatic"), false);
+    let left_out = second.track(&dir, Some("automatic"), None, false);
     assert_eq!(left_out.adapters, ["Dx12:8086:3184"]);
     assert_eq!(left_out.crash, Some(Crash::Adapter { key: "Dx12:8086:3184".into(), name: "Intel(R) UHD Graphics 605".into() }));
     assert!(!left_out.opengl_only);
@@ -681,7 +681,7 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
     second.presented();
 
     let third = Startup::default();
-    let left_out = third.track(&dir, None, false);
+    let left_out = third.track(&dir, None, None, false);
     assert_eq!(left_out.adapters, ["Dx12:8086:3184"], "kept");
     assert_eq!(left_out.crash, None, "the note is shown once");
     third.ended();
@@ -695,7 +695,7 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
     let c = issue_2243();
     for end in [Startup::presented as fn(&Startup), Startup::ended] {
         let first = Startup::default();
-        first.track(&dir, None, false);
+        first.track(&dir, None, None, false);
         first.picked(&c[0].key, &c[0].name, true);
         end(&first);
         drop(first);
@@ -703,7 +703,7 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
     }
     // So does a start that ended before it picked an adapter.
     let first = Startup::default();
-    first.track(&dir, None, false);
+    first.track(&dir, None, None, false);
     assert!(finish(Ok(Ok(())), &first).is_ok());
     drop(first);
     assert_eq!(next_start(&dir, false), LeftOut::default());
@@ -716,10 +716,10 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
 fn a_crash_while_listing_lists_opengl_alone() {
     let (dir, _spawns) = start_dir("listing");
     let first = Startup::default();
-    first.track(&dir, None, false);
+    first.track(&dir, None, None, false);
     drop(first);
     let second = Startup::default();
-    let left_out = second.track(&dir, None, false);
+    let left_out = second.track(&dir, None, None, false);
     assert!(left_out.adapters.is_empty());
     if cfg!(target_os = "macos") {
         assert_eq!(left_out, LeftOut::default());
@@ -743,14 +743,14 @@ fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
     let (dir, _spawns) = start_dir("explicit");
     let c = issue_2243();
     let first = Startup::default();
-    first.track(&dir, None, false);
+    first.track(&dir, None, None, false);
     first.picked(&c[0].key, &c[0].name, true);
     drop(first);
     assert_eq!(next_start(&dir, true), LeftOut::default());
     assert_eq!(next_start(&dir, false).adapters, ["Dx12:8086:3184"], "still left out without them");
 
     let explicit = Startup::default();
-    explicit.track(&dir, None, true);
+    explicit.track(&dir, None, None, true);
     explicit.picked(&c[0].key, &c[0].name, true);
     explicit.presented();
     assert_eq!(next_start(&dir, false), LeftOut::default(), "a new driver shows the window");
@@ -781,7 +781,7 @@ fn a_damaged_or_unreadable_start_file_is_ignored() {
     // Another copy of the app is starting: this start neither reads nor writes the file.
     let c = issue_2243();
     let starting = Startup::default();
-    starting.track(&dir, None, false);
+    starting.track(&dir, None, None, false);
     starting.picked(&c[0].key, &c[0].name, true);
     assert_eq!(next_start(&dir, false), LeftOut::default());
     drop(starting);
@@ -796,16 +796,16 @@ fn a_damaged_or_unreadable_start_file_is_ignored() {
 #[test]
 fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     let starting = |key: &str| Starting { adapter: Some(Recorded { key: key.into(), name: "GPU".into() }), native: true };
-    let (mut record, crash) = StartRecord::begin(None, "0.9.0", "automatic");
+    let (mut record, crash) = StartRecord::begin(None, "0.9.0", "automatic", "automatic");
     assert_eq!(crash, None);
     record.starting = Some(starting("Dx12:8086:3184"));
-    let (record, crash) = StartRecord::begin(Some(record), "0.9.0", "automatic");
+    let (record, crash) = StartRecord::begin(Some(record), "0.9.0", "automatic", "automatic");
     assert_eq!(crash, Some(Crash::Adapter { key: "Dx12:8086:3184".into(), name: "GPU".into() }));
     assert_eq!(record.left_out(None, false).adapters, ["Dx12:8086:3184"]);
     // Written and read back.
     assert_eq!(StartRecord::parse(&record.to_json()), Some(record.clone()));
-    assert!(StartRecord::begin(Some(record.clone()), "0.9.1", "automatic").0.crashed.is_empty());
-    assert!(StartRecord::begin(Some(record.clone()), "0.9.0", "highPerformance").0.crashed.is_empty());
+    assert!(StartRecord::begin(Some(record.clone()), "0.9.1", "automatic", "automatic").0.crashed.is_empty());
+    assert!(StartRecord::begin(Some(record.clone()), "0.9.0", "highPerformance", "automatic").0.crashed.is_empty());
     assert_eq!(preference_name(None), "automatic");
     assert_eq!(preference_name(Some("powerSaving")), "automatic");
     assert_eq!(preference_name(Some("lowPower")), "lowPower");
@@ -814,7 +814,7 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     for n in 0..CRASHED_LIMIT + 4 {
         for _ in 0..2 {
             record.starting = Some(starting(&format!("Dx12:10de:{n:04x}")));
-            record = StartRecord::begin(Some(record), "0.9.0", "automatic").0;
+            record = StartRecord::begin(Some(record), "0.9.0", "automatic", "automatic").0;
         }
     }
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
@@ -840,4 +840,60 @@ fn an_adapter_that_crashed_an_earlier_start_is_tried_again_when_no_other_is_left
     assert_eq!(order_leaving_out(&mac, PowerPreference::LowPower, &[], None, None, &crashed, &crashed), (vec![], false));
     let two = [gpu("Apple M6", Backend::Metal, DeviceType::IntegratedGpu), gpu("llvmpipe", Backend::Gl, DeviceType::Cpu)];
     assert_eq!(order_leaving_out(&two, PowerPreference::LowPower, &[], None, None, &[], &crashed), (vec![1], false));
+}
+
+#[test]
+fn saved_backends_preserve_automatic_environment_and_recovery_policy() {
+    let all = Backends::all();
+    for opengl in [false, true] {
+        for pref in [None, Some("automatic"), Some("unknown"), Some("")] {
+            assert_eq!(selected_backends(all, false, backend_preference(pref), opengl, false), backends(all, false, opengl));
+        }
+    }
+    for (name, _) in vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS {
+        if *name == "automatic" {
+            continue;
+        }
+        let chosen = backend_preference(Some(name)).unwrap();
+        assert_eq!(selected_backends(all, false, Some(chosen), false, false), chosen, "{name}: no extra API");
+        for env in [Backends::VULKAN, Backends::GL, Backends::empty()] {
+            assert_eq!(selected_backends(env, true, Some(chosen), true, true), env, "environment stays authoritative");
+        }
+        assert_eq!(
+            selected_backends(all, false, Some(chosen), true, true),
+            backends(all, false, true),
+            "a persisted choice does not bypass recovery"
+        );
+    }
+    let offered = vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
+    for unsupported in ["dx12", "metal", "vulkan", "gl"].into_iter().filter(|name| !offered.iter().any(|(id, _)| id == name)) {
+        assert_eq!(backend_preference(Some(unsupported)), None);
+    }
+    let listing = LeftOut { opengl_only: true, ..Default::default() };
+    let defaults = if cfg!(target_os = "macos") { Backends::METAL } else { all };
+    let recovering = selected_backends(defaults, false, Some(Backends::VULKAN), true, true);
+    assert_eq!(listing.backends(recovering), if cfg!(target_os = "macos") { Backends::METAL } else { Backends::GL });
+}
+
+#[test]
+fn backend_changes_reset_crashes_and_old_records_keep_automatic_recovery() {
+    let old = serde_json::json!({"version":"v", "gpuPreference":"automatic", "crashed":[], "listingCrashed":false,
+        "starting":{"adapter":{"key":"Dx12:gpu","name":"GPU"},"native":true}});
+    let parsed = StartRecord::parse(&old.to_string()).unwrap();
+    assert_eq!(parsed.backend, "automatic");
+    let (automatic, crash) = StartRecord::begin(Some(parsed.clone()), "v", "automatic", "automatic");
+    assert!(crash.is_some());
+    assert_eq!(automatic.left_out(None, false).adapters, ["Dx12:gpu"]);
+    let (mut changed, crash) = StartRecord::begin(Some(parsed), "v", "automatic", "vulkan");
+    assert_eq!(crash, None);
+    assert!(changed.crashed.is_empty());
+    changed.picked("Vulkan:gpu", "GPU", true);
+    let (same, crash) = StartRecord::begin(Some(changed), "v", "automatic", "vulkan");
+    assert!(crash.is_some());
+    assert_eq!(same.left_out(None, false).adapters, ["Vulkan:gpu"]);
+    assert_eq!(same.left_out(None, true), LeftOut::default(), "environment override retains its existing bypass");
+    assert_eq!(StartRecord::parse(&same.to_json()), Some(same.clone()));
+    let (reset, crash) = StartRecord::begin(Some(same), "v", "automatic", "automatic");
+    assert_eq!(crash, None);
+    assert!(reset.crashed.is_empty());
 }

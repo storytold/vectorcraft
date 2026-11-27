@@ -624,6 +624,12 @@ fn main() -> std::process::ExitCode {
     #[cfg(feature = "wgpu")]
     let low_latency_drawing = engine_pref("lowLatencyDrawing").and_then(|v| v.as_bool()).unwrap_or(false);
     #[cfg(feature = "wgpu")]
+    let backend_pref_value = engine_pref("gpuBackend");
+    #[cfg(feature = "wgpu")]
+    let backend_pref = backend_pref_value.as_ref().and_then(serde_json::Value::as_str);
+    #[cfg(feature = "wgpu")]
+    let backend = gpu::backend_preference(backend_pref);
+    #[cfg(feature = "wgpu")]
     let power_env = eframe::wgpu::PowerPreference::from_env();
     #[cfg(feature = "wgpu")]
     let power = gpu::power_preference(gpu_pref, power_env);
@@ -651,7 +657,7 @@ fn main() -> std::process::ExitCode {
     // write no log file, don't record their starts.
     #[cfg(feature = "wgpu")]
     let left_out = match log_dir().filter(|_| prefs_enabled()) {
-        Some(dir) => startup.track(&dir, gpu_pref, gpu::explicit_choice()),
+        Some(dir) => startup.track(&dir, gpu_pref, backend_pref, gpu::explicit_choice()),
         None => gpu::LeftOut::default(),
     };
     #[cfg(feature = "wgpu")]
@@ -723,8 +729,11 @@ fn main() -> std::process::ExitCode {
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
             let env_set = std::env::var_os("WGPU_BACKEND").is_some();
-            let opengl = cfg!(windows) && !env_set && gpu::windows_opengl(&left_out);
-            create.instance_descriptor.backends = left_out.backends(gpu::backends(create.instance_descriptor.backends, env_set, opengl));
+            let recovering = left_out.opengl_only || !left_out.adapters.is_empty() || !gpu::skipped().is_empty();
+            // A healthy saved API choice needs no DX12/OpenGL probe of another backend.
+            let opengl = cfg!(windows) && !env_set && (backend.is_none() || recovering) && gpu::windows_opengl(&left_out);
+            create.instance_descriptor.backends =
+                left_out.backends(gpu::selected_backends(create.instance_descriptor.backends, env_set, backend, opengl, recovering));
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
@@ -892,10 +901,10 @@ fn main() -> std::process::ExitCode {
                     } else if let Some(crash) = &crash {
                         app.status(match crash {
                             gpu::Crash::Adapter { name, .. } => format!(
-                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or Graphics Backend, or start with WGPU_BACKEND set"
                             ),
                             gpu::Crash::Listing => format!(
-                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set"
+                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or Graphics Backend, or start with WGPU_BACKEND set"
                             ),
                         });
                     }
