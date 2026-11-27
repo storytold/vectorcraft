@@ -123,7 +123,6 @@ use std::sync::{Arc, Weak};
 use craft::behavior::edit_history::{EditHistory, Step};
 use craft::behavior::{ColumnKey, ColumnWidth, EditEvent, IconId, Mixed, Selection, SelectionChange, keyed};
 use craft::color_ui::ui::{ChannelRow, ChannelUnit, ColorPanelMode, DiscRadius, patch_at};
-use craft::host::PickRequest;
 use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba, Srgba};
 use craft::ui::buttons::{IconButton, ToggleButton};
@@ -1632,11 +1631,9 @@ fn randomize(app: &mut VectorcraftApp, d: &mut Fields, sb: bool) {
 /// Other Library…: import a library (.ase, .acb, .gpl, .vcswatches or a document's swatches) and
 /// limit to it.
 fn pick_library(app: &mut VectorcraftApp, opening: Arc<()>) {
-    let request = builtin_open_filters().fold(PickRequest::open("library"), |request, (name, exts)| request.filter(name, exts));
     // A loaded library belongs to the session. The Limit to Library choice belongs to the opening that asked.
-    crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, move |app, picked| {
-        let Some(path) = picked.first_path() else { return Ok(Value::Null) };
-        let r = app.run("swatch.library.load", json!({ "path": path }))?;
+    let _ = crate::panels::library_panel::pick_library_file(app, None, builtin_open_filters().collect(), move |app, source| {
+        let r = app.run("swatch.library.load", source)?;
         let library = r["library"].clone();
         if let Some(dialogs) = app.dialogs() {
             dialogs.with(|host| {
@@ -3206,6 +3203,21 @@ mod tests {
         rc.frame();
         rc.set("rows", json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}])).unwrap();
         (rc, opening, other)
+    }
+
+    #[test]
+    fn other_library_accepts_browser_contents_and_selects_the_loaded_library() {
+        let (mut rc, _, _) = two_red_drawings();
+        let picker = crate::tests::picks::scripted(&mut rc.app());
+        rc.settled().click_label("Other Library…").frame();
+        assert_eq!(picker.requests().len(), 1);
+        let bytes = b"GIMP Palette\nName: Recolor Browser Palette\n#\n255   0   0\tRecolor Red\n";
+        picker.answer_contents(&[("Recolor Browser Palette.gpl", bytes)]);
+        crate::file_asks::poll(&mut rc.app());
+        rc.frame();
+        let selected = rc.fields().str("limitTo");
+        assert!(!selected.is_empty(), "Other Library selects the imported library");
+        assert!(swatchlib::limit_palette(&rc.app().session, &selected).is_some());
     }
 
     #[test]
