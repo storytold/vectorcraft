@@ -6,6 +6,8 @@
 //! Fields: the switches `fiLigatures`, `flLigatures`, `quotes`, `spaces`, `dashes`, `ellipsis` and
 //! `fractions`, `scope` (`selection` or `document`) and `report`.
 
+use std::collections::HashSet;
+
 use craft::ui::contract::{Bind, SaveKey};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
@@ -51,6 +53,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let source = app.session.active().ok_or("no document")?;
     let document = source.uid;
     let selected = !source.selection.is_empty();
+    let selection = source.selection.objects.iter().copied().collect::<HashSet<_>>();
     let mut params: Vec<Param> = options()
         .into_iter()
         .map(|(key, _, label)| Param::new(key, label, ParamKind::bool(matches!(key, "quotes" | "dashes" | "ellipsis"))))
@@ -72,10 +75,18 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     ctx.data_mut(|data| data.insert_temp(owner, document));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
         let document = ctx.data(|data| data.get_temp::<u64>(owner));
-        if app.session.active().is_none_or(|st| Some(st.uid) != document) {
+        let Some(active) = app.session.active().filter(|st| Some(st.uid) == document) else {
             return Err(tl!("Return to the original drawing to replace its punctuation").into());
+        };
+        let params = params_of(result);
+        if params["scope"] == "selection"
+            && (active.selection.is_empty()
+                || active.selection.objects.len() != selection.len()
+                || active.selection.objects.iter().any(|id| !selection.contains(id)))
+        {
+            return Err(tl!("The selected text changed. Restore the selection to continue.").into());
         }
-        let r = app.run(COMMAND, params_of(result))?;
+        let r = app.run(COMMAND, params)?;
         result.remember(&ctx);
         if result.fields.bool("report") == Some(true) {
             let lines: Vec<String> = options()
@@ -228,7 +239,7 @@ mod tests {
         let answer = super::super::tests_export::try_confirm(&mut app);
         assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not expand to the document");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
-        assert!(answer.is_err());
+        assert_eq!(answer, Err("The selected text changed. Restore the selection to continue.".into()));
 
         app.run("select.set", json!({"ids": [selected]})).unwrap();
         ok(&mut app);
@@ -244,7 +255,7 @@ mod tests {
         let answer = super::super::tests_export::try_confirm(&mut app);
         assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not change later artwork");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
-        assert!(answer.is_err());
+        assert_eq!(answer, Err("The selected text changed. Restore the selection to continue.".into()));
 
         set(&app, "scope", json!("document"));
         ok(&mut app);
