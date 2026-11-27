@@ -18,6 +18,7 @@ pub const KIND: &str = "newColorGroup";
 /// art is selected and no swatches are.
 pub fn open(app: &mut VectorcraftApp, swatches: Vec<String>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
+    let document = st.uid;
     let art = !st.selection.is_empty();
     let mut fields = DialogFields::new();
     fields.set("name", st.doc.free_swatch_name("Color Group"));
@@ -37,6 +38,9 @@ pub fn open(app: &mut VectorcraftApp, swatches: Vec<String>) -> Result<Value, St
     ];
     let dialog = hosted(&ctx, KIND, tl!("New Color Group"), fields, rows, false);
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
+        if !app.session.active().is_some_and(|active| active.uid == document) {
+            return Err(tl!("Create this color group in the document that opened the dialog.").to_owned());
+        }
         app.run("swatch.newGroup", params(&answer.fields, &swatches)).map(|_| ())
     };
     super::host::open_held(app, dialog, ok).ok_or(NO_WINDOW)?;
@@ -51,5 +55,47 @@ fn params(fields: &DialogFields, swatches: &[String]) -> Value {
         json!({"name": name, "fromArtwork": true, "toGlobal": on("toGlobal"), "includeTints": on("includeTints")})
     } else {
         json!({"name": name, "swatches": swatches})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::dialog_id;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    #[test]
+    fn color_group_does_not_convert_the_other_drawings_artwork() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        for color in ["#123456", "#446688"] {
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 25, "height": 25})).unwrap()["id"].clone();
+            app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+            app.run("select.set", json!({"ids": [id]})).unwrap();
+        }
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        activate(&mut app, 0);
+        open(&mut app, Vec::new()).unwrap();
+        activate(&mut app, 1);
+
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        let confirm = |app: &mut VectorcraftApp| {
+            dialogs.with(|host| host.confirm_by_id(&ctx, id));
+            crate::dialogs::host::pump(app, &ctx);
+            crate::testing::app_frame(app, &ctx, Default::default());
+        };
+        confirm(&mut app);
+        let current = app.session.active().unwrap();
+        assert_eq!(current.doc, other, "the other drawing keeps its swatches and process fills");
+        assert_eq!(current.history.undo.len(), undo);
+
+        activate(&mut app, 0);
+        confirm(&mut app);
+        assert!(app.session.active().unwrap().doc.swatch_groups.iter().any(|group| group.name == "Color Group"));
     }
 }

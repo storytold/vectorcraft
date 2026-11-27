@@ -154,6 +154,7 @@ struct Setup {
 #[derive(Clone, Copy)]
 struct Target {
     document: u64,
+    reverts: u64,
     /// The current artboard's ID, or no ID while creating a new artboard.
     artboard: Option<u32>,
 }
@@ -556,7 +557,7 @@ pub(crate) fn active_index(app: &VectorcraftApp) -> usize {
 fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue, artboard: Option<u32>) -> Result<Value, String> {
     let host = app.dialogs().ok_or("no window")?;
     let st = app.session.active().ok_or("no document")?;
-    let target = Target { document: st.uid, artboard };
+    let target = Target { document: st.uid, reverts: st.reverts, artboard };
     let artwork = vectorcraft_render::encode::art_bounds(&st.doc);
     let [(_, fade), (_, update_while_dragging)] = global_fields(app);
     (value.fade, value.update_while_dragging, value.reference) = (fade, update_while_dragging, app.ui.transform_panel.reference_point);
@@ -652,6 +653,9 @@ fn confirm(app: &mut VectorcraftApp, target: Target, v: &ArtboardOptionsValue) -
         .active()
         .filter(|st| st.uid == target.document)
         .ok_or(tl!("Artboard Options can only change the document where it was opened."))?;
+    if st.reverts != target.reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+    }
     let globals = global_changes(app, v);
     if v.new {
         let r = confirm_new(app, v)?;
@@ -1062,5 +1066,40 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id()));
         assert!(!is_open(&app));
         assert_eq!(*app.session.doc().unwrap().doc, *before);
+    }
+
+    #[test]
+    fn artboard_options_refuses_a_stale_draft_after_confirmed_revert() {
+        let file = std::env::temp_dir().join(format!("vectorcraft-artboard-options-revert-{}.vectorcraft", std::process::id()));
+        let path = file.to_string_lossy();
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        let original = app.session.active().unwrap();
+        let (uid, reverts, artboard) = (original.uid, original.reverts, original.doc.artboards[0].id);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Stale Draft"))]).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(&file);
+        let reverted = app.session.active().unwrap();
+        assert_eq!((reverted.uid, reverted.reverts, reverted.doc.artboards[0].id), (uid, reverts + 1, artboard));
+        let undo = undo_len(&app);
+
+        let answer = ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1");
+        assert_eq!(undo_len(&app), undo);
+        assert_eq!(answer, Err("The document was reverted. Reopen this dialog to continue.".into()));
+        assert!(is_open(&app));
+        let host = app.dialogs().unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        assert_eq!(host.with(|h| h.get::<ArtboardOptionsDialog>().unwrap().value.name.clone()), "Stale Draft");
+        host.with(|h| h.cancel_by_id(&ctx, id()));
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Fresh Draft"))]).unwrap();
+        ok(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Fresh Draft");
     }
 }

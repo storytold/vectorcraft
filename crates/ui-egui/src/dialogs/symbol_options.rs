@@ -100,10 +100,14 @@ fn rows(name: &str) -> Vec<Param> {
 /// edited), applies the fields to it; `keep_art` leaves the selection as ordinary art for a new one;
 /// `opened` are the guides the dialog opened with.
 fn open_dialog(app: &mut VectorcraftApp, fields: DialogFields, edit: Option<String>, keep_art: bool, opened: [f64; 4]) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document open")?.uid;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let name = fields.text("name").unwrap_or_default().to_string();
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
+        if !app.session.active().is_some_and(|active| active.uid == document) {
+            return Err(tl!("This symbol belongs to the document that opened the dialog.").to_owned());
+        }
         let f = &result.fields;
         let name = f.text("name").unwrap_or_default().trim().to_string();
         if name.is_empty() {
@@ -185,5 +189,40 @@ pub fn open_edit(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, 
 fn merge(into: &mut Value, extra: Value) {
     if let (Some(a), Value::Object(b)) = (into.as_object_mut(), extra) {
         a.extend(b);
+    }
+}
+
+#[cfg(test)]
+mod document_tests {
+    use craft::ui::dialog::dialog_id;
+    use vectorcraft_engine::Session;
+
+    use super::super::tests_warp::{accept, set, windowed};
+    use super::*;
+
+    #[test]
+    fn editing_symbol_options_does_not_rename_another_drawings_symbol() {
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        for side in [30, 50] {
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": side, "height": side})).unwrap();
+            app.run("symbol.new", json!({"name": "Badge"})).unwrap();
+        }
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let other = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        activate(&mut app, 0);
+        open_edit(&mut app, Some("Badge")).unwrap();
+        let id = dialog_id(KIND);
+        set(&app, id, "name", json!("Source badge"));
+        activate(&mut app, 1);
+        accept(&mut app, id);
+        assert_eq!(app.session.active().unwrap().doc, other);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        activate(&mut app, 0);
+        accept(&mut app, id);
+        assert!(app.session.active().unwrap().doc.symbols.iter().any(|symbol| symbol.name == "Source badge"));
     }
 }
