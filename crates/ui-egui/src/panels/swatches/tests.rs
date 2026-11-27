@@ -2,7 +2,7 @@ use super::*;
 use crate::dialogs::swatch_options::KIND;
 use crate::tests::picks::{answer_dialog, cancel_dialog, draw_dialogs, open_dialogs};
 use craft::keymap::Mods;
-use craft::ui::contract::ReorderMove;
+use craft::ui::contract::{DropAt, ReorderMove};
 use craft::ui::dialog::DialogId;
 use egui::Pos2;
 use vectorcraft_color::Color;
@@ -96,7 +96,77 @@ fn dropped_below(app: &mut VectorcraftApp, drag: PanelDrag, mods: Mods) {
 
 /// The drag the row `name` starts, carrying rows `names`.
 fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
-    dnd::drag_of(&doc(app), &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+    let document = app.session.active().unwrap().uid;
+    dnd::drag_of(&doc(app), document, &key_of(app, name), names.iter().map(|n| n.to_string()).collect())
+}
+
+#[test]
+fn only_unlinked_process_swatches_can_travel_as_canvas_color() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Global red", "color": "#ff0000", "global": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Spot blue", "color": "#0000ff", "spot": true})).unwrap();
+    let tint = app.run("swatch.new", json!({"swatch": "Spot blue", "tint": 40})).unwrap();
+    let can_travel = |name| {
+        let PanelDrag::Paint { rows: Some(rows), .. } = rows_drag(&app, name, &[name]) else { panic!("a swatch row drag") };
+        rows.unlinked_process_color
+    };
+    assert!(can_travel("Red"));
+    for name in ["Global red", "Spot blue", tint["name"].as_str().unwrap(), "[None]", "[Registration]"] {
+        assert!(!can_travel(name), "{name}");
+    }
+}
+
+#[test]
+fn a_swatch_row_drag_reorders_only_its_source_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, Role};
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    let source = app.session.active().unwrap().uid;
+    let before_source = names_of(&app, None);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    let before_destination = names_of(&app, None);
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+
+    let mut panel = Panel::new(app, show);
+    let drag_red = |panel: &mut Panel| {
+        let red = "Red, #ed1c24";
+        let from = panel.rect(red).center();
+        let to = panel.rect("Green, #39b54a").center();
+        panel.drag_hold_role(red, Role::LIST_ITEM, to - from);
+        let grabbed = drag::active::<ListDrag<SwatchKey>>(panel.ctx()).map(|d| d.grabbed.clone());
+        assert_eq!(grabbed, Some(SwatchKey::Swatch("Red".into())));
+    };
+    drag_red(&mut panel);
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, destination);
+    panel.release();
+    assert_eq!(names_of(&panel.app(), None), before_destination);
+
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, source);
+    assert_eq!(names_of(&panel.app(), None), before_source);
+    drag_red(&mut panel);
+    panel.release();
+    assert_ne!(names_of(&panel.app(), None), before_source);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(names_of(&panel.app(), None), before_source);
+}
+
+#[test]
+fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Red", &["Red"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let before = doc(&app);
+    assert!(!dnd::accepts(&drag, app.session.active().unwrap().uid));
+    dropped_below(&mut app, drag.clone(), none());
+    dropped(&mut app, drag, "Green", alt());
+    assert_eq!(doc(&app).swatches, before.swatches);
 }
 
 /// Art `ids` dragged off the canvas.
@@ -552,6 +622,60 @@ fn drops_on_the_buttons_and_the_panel_run_their_commands() {
 }
 
 #[test]
+fn footer_drops_ignore_rows_from_another_document() {
+    let mut app = app();
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#ff8000"})).unwrap();
+    let before = doc(&app);
+    let undo = undo_steps(&app);
+    for target in [dnd::FooterTarget::New, dnd::FooterTarget::Delete] {
+        dnd::on_footer_drop(&mut app, target, &drag);
+        assert_eq!(doc(&app), before);
+        assert_eq!(undo_steps(&app), undo);
+        assert!(!dialog_open(&app, crate::dialogs::confirm::KIND));
+    }
+}
+
+/// A selected swatch dragged onto New Swatch or Delete Swatch carries the selected swatches that
+/// the find field hides, which the browser leaves out of the drag, as a click on Delete Swatch
+/// takes them too. The copies are selected in panel order. A grabbed swatch outside the selection
+/// carries only itself.
+#[test]
+fn footer_drops_carry_selected_swatches_that_find_hides() {
+    let mut app = app();
+    let key = crate::dialogs::confirm::KIND;
+    app.ui.swatches_panel.show_find = true;
+    app.ui.swatches_panel.state.browser.filter = "Orange".into();
+    let order = names_of(&app, None);
+    let at = |n: &str| order.iter().position(|x| x == n).unwrap_or_else(|| panic!("no swatch {n}"));
+    let mut copies = vec![("Lime", "Lime copy"), ("Orange", "Orange copy")];
+    copies.sort_by_key(|(n, _)| at(n));
+    let copies: Vec<String> = copies.into_iter().map(|(_, c)| c.to_string()).collect();
+    // With Find set to Orange, the browser's drag holds only the selected row it shows.
+    let drag = rows_drag(&app, "Orange", &["Orange"]);
+    select_rows(&mut app, &["Lime", "Orange"]);
+    let undo = undo_steps(&app);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    let d = doc(&app);
+    assert!(d.swatch("Orange copy").is_some() && d.swatch("Lime copy").is_some(), "the hidden selected swatch is duplicated too");
+    assert_eq!(selected(&app), copies, "both copies are selected, in panel order");
+    assert_eq!(undo_steps(&app), undo + 1, "one undo step for both");
+    select_rows(&mut app, &["Lime", "Orange"]);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::Delete, &drag);
+    assert!(dialog_open(&app, key), "Delete asks first");
+    confirm(&mut app, key);
+    let d = doc(&app);
+    assert!(d.swatch("Orange").is_none() && d.swatch("Lime").is_none(), "the hidden selected swatch is deleted too");
+    // A grabbed swatch outside the selection carries only itself.
+    let drag = rows_drag(&app, "Orange copy", &["Orange copy"]);
+    select_rows(&mut app, &["Lime copy"]);
+    dnd::on_footer_drop(&mut app, dnd::FooterTarget::New, &drag);
+    let d = doc(&app);
+    assert!(d.swatch("Orange copy copy").is_some() && d.swatch("Lime copy copy").is_none(), "only the grabbed swatch is duplicated");
+}
+
+#[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
     let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
@@ -562,6 +686,29 @@ fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     assert_eq!(patterns["patterns"].as_array().map(Vec::len), Some(1), "{patterns}");
     assert_eq!(patterns["editing"], Value::Null, "no pattern editing mode");
     assert_eq!(doc(&app).node(vectorcraft_doc::NodeId(id)), before.node(vectorcraft_doc::NodeId(id)), "the art stays as it was");
+}
+
+#[test]
+fn swatches_ignore_artwork_from_another_document_with_the_same_object_id() {
+    let mut app = app();
+    let shape = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+    let source = app.run("shape.rectangle", shape.clone()).unwrap()["id"].as_u64().unwrap();
+    let drag = art_drag(&app, vec![vectorcraft_doc::NodeId(source)]);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let local = app.run("shape.rectangle", shape).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(source, local);
+
+    dropped_below(&mut app, drag.clone(), none());
+    assert!(doc(&app).patterns.is_empty(), "foreign artwork cannot create a pattern");
+
+    let star = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+    let local_drag = art_drag(&app, vec![vectorcraft_doc::NodeId(star)]);
+    dropped_below(&mut app, local_drag, none());
+    assert_eq!(doc(&app).patterns.len(), 1, "the same document's artwork can create a pattern");
+    let before = doc(&app).patterns[0].clone();
+    let name = before.name.clone();
+    dropped(&mut app, drag, &name, alt());
+    assert_eq!(doc(&app).patterns[0].art, before.art, "foreign artwork cannot replace an existing pattern");
 }
 
 /// Art released with Alt held over a pattern swatch becomes that pattern's tile art in one undo

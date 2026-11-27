@@ -209,11 +209,21 @@ pub const TOUCH: &str = "Touch";
 /// The id of [`ESSENTIALS`].
 const ESSENTIALS_ID: &str = "essentials";
 
-/// A built-in workspace: its name, the panels it brings to the front of their groups, and its record.
+/// A built-in workspace: its name, the panels it brings to the front of their groups, the number
+/// of columns its Tools panel lays the tools out in, and its record.
 pub struct Builtin {
     pub name: &'static str,
     pub fronts: &'static [&'static str],
+    pub tools_steps: u16,
     pub record: WorkspaceRecord,
+}
+
+impl Builtin {
+    /// The workspace with its Tools panel in two columns (Window › Toolbars › Double Column on).
+    fn double_tools(mut self) -> Self {
+        self.tools_steps = 2;
+        self
+    }
 }
 
 /// The id of a built-in workspace: its lower-case name with dashes.
@@ -226,7 +236,7 @@ pub fn builtins() -> Vec<Builtin> {
     let w = |name: &'static str, fronts: &'static [&'static str], f: &dyn Fn(&mut WorkspaceRecord)| {
         let mut record = WorkspaceRecord::default();
         f(&mut record);
-        Builtin { name, fronts, record }
+        Builtin { name, fronts, tools_steps: 1, record }
     };
     vec![
         w(ESSENTIALS, &[], &|_| {}),
@@ -248,7 +258,8 @@ pub fn builtins() -> Vec<Builtin> {
         w("Painting", &["brushes"], &|x| {
             x.control_bar = true;
             x.toolbar_advanced = true;
-        }),
+        })
+        .double_tools(),
         w("Printing and Proofing", &["info"], &|x| {
             x.control_bar = true;
             x.rulers = true;
@@ -279,7 +290,10 @@ pub fn builtins() -> Vec<Builtin> {
 
 /// The built-ins as the framework's named workspaces.
 fn builtin_set() -> Vec<NamedWorkspace<String>> {
-    builtins().into_iter().map(|b| NamedWorkspace::new(builtin_id(b.name), b.name, crate::panel_docking::default_workspace(b.fronts))).collect()
+    builtins()
+        .into_iter()
+        .map(|b| NamedWorkspace::new(builtin_id(b.name), b.name, crate::panel_docking::builtin_workspace(b.fronts, b.tools_steps)))
+        .collect()
 }
 
 /// The chrome the set stores beside a layout, from `record`. Never read back: the record is the truth.
@@ -290,11 +304,23 @@ fn chrome_of(record: &WorkspaceRecord) -> WorkspaceChrome {
     chrome
 }
 
+/// Whether [`sync_touch_workspace`] with `touch_screen` switches to the Touch workspace.
+pub fn enters_touch(app: &VectorcraftApp, touch_screen: bool) -> bool {
+    app.session.prefs.touch_workspace && touch_screen && !is_current(&app.ui, TOUCH)
+}
+
+/// Whether the current workspace was saved with the Contextual Task Bar on.
+pub(crate) fn saved_task_bar(ui: &UiState) -> bool {
+    saved_record(&ui.workspaces, &ui.workspaces.set.current).task_bar
+}
+
 /// Preferences › Devices › Enable Touch Workspace (#394): on, a touch screen switches to the Touch
 /// workspace; off, or when no touch screen is reported, the workspace before that switch is
 /// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings
 /// back the one it returns to as it was left, as Window › Workspace does.
 pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
+    // A pending `prefs.reset` applies to the workspace it was run in.
+    crate::prefs_dialog::apply_prefs_resets(app);
     let auto = app.session.prefs.touch_workspace && touch_screen;
     if auto {
         if !is_current(&app.ui, TOUCH) {
@@ -743,6 +769,36 @@ mod tests {
         for n in ["Essentials", "Essentials Classic", "Painting", "Typography", "Layout", "Tracing", "Web", "Automation", TOUCH] {
             assert!(find(&ui, n).is_some(), "{n}");
         }
+    }
+
+    /// Painting lays the Tools panel out in two columns and Window › Toolbars › Double Column reads
+    /// checked; every other built-in workspace has one column. Switching back to Essentials brings
+    /// back its own column count, as it was left, and Reset Painting gives two columns again.
+    #[test]
+    fn painting_shows_tools_in_two_columns_and_essentials_keeps_its_own() {
+        let steps = |app: &VectorcraftApp| {
+            crate::panel_docking::column_of(crate::panel_docking::layout_of(&app.ui), crate::toolbar::TOOLS).and_then(|(_, column)| column.steps)
+        };
+        let double = |app: &VectorcraftApp| crate::menus::checked(app, "window.toolbarColumns", &json!({}));
+        let mut app = app();
+        assert_eq!((steps(&app), double(&app)), (Some(1), Some(false)), "Essentials starts with one column");
+        for b in builtins() {
+            switch(&mut app, b.name).unwrap();
+            let painting = b.name == "Painting";
+            assert_eq!(steps(&app), Some(if painting { 2 } else { 1 }), "{}", b.name);
+            assert_eq!(double(&app), Some(painting), "Double Column in {}", b.name);
+        }
+        switch(&mut app, ESSENTIALS).unwrap();
+        assert_eq!((steps(&app), double(&app)), (Some(1), Some(false)), "Essentials has one column again");
+        app.run("window.toolbarColumns", json!({"double": true})).unwrap();
+        switch(&mut app, "Painting").unwrap();
+        app.run("window.toolbarColumns", json!({"double": false})).unwrap();
+        switch(&mut app, ESSENTIALS).unwrap();
+        assert_eq!(double(&app), Some(true), "Essentials keeps the two columns it was left with");
+        switch(&mut app, "Painting").unwrap();
+        assert_eq!(double(&app), Some(false), "Painting keeps the one column it was left with");
+        reset(&mut app);
+        assert_eq!((steps(&app), double(&app)), (Some(2), Some(true)), "Reset Painting gives two columns again");
     }
 
     /// A file saved before `WorkspaceSet` names workspaces in any case: the layout remembered under

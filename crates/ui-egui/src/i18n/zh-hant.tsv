@@ -892,6 +892,7 @@ font-technology	Variable	可變
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
 	Disable Auto Add/Delete	停用自動增加/刪除
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 刪除錨點並保持路徑連接
 	Interpolate Control Points When Moving Anchors	移動錨點時內插控制把手
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
@@ -1464,6 +1465,9 @@ file-filter	Swatch libraries	色票資料庫
 file-filter	Flattener presets	平面化預設集
 file-filter	PDF presets	PDF 預設集
 file-filter	Print presets	列印預設集
+file-filter	Tracing presets	描圖預設集
+file-filter	Action sets	動作組
+file-filter	Composite fonts	複合字體
 file-filter	Preferences	偏好設定
 file-filter	Export presets	轉存預設集
 file-filter	SVG Compressed	壓縮 SVG
@@ -1666,6 +1670,17 @@ file-filter	Templates	範本
 	Graphic Styles	繪圖樣式
 	Graphic Styles Options	繪圖樣式選項
 	Graphics	圖形
+	Show Contrast	顯示對比度
+	Contrast For	對比度適用於
+	Normal Text	一般文字
+	Large Text	大型文字
+	Contrast Background	對比度背景
+	Behind Selection	選取範圍後方
+	Current Color	目前顏色
+	Pass	通過
+	Fail	未通過
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 最低對比度：一般文字 AA 4.5:1 (1.4.3) 和 AAA 7:1 (1.4.6)，大型文字 AA 3:1 和 AAA 4.5:1，圖形和控制項 AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景在選取範圍的中心讀取。
 	Graphics Processor	圖形處理器
 	Graphics: {adapter}	圖形：{adapter}
 	Gravity	重力
@@ -2792,6 +2807,14 @@ file-filter	Templates	範本
 	The script asks to read and write a folder you choose, with everything in it.	指令碼要求讀寫您選擇的資料夾及其中的所有內容。
 	Allow Once	允許一次
 	Always Allow This Script	一律允許此指令碼
+	No script has kept file access.	沒有指令碼保留檔案存取權。
+	Read file	讀取檔案
+	Read and write file	讀取和寫入檔案
+	Read and write folder	讀取和寫入資料夾
+	Revoke	收回權限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「收回權限」會移除為指令碼每個版本保留的存取權。資料夾的存取權包含其中的所有內容。
+@msg	Script file access revoked	已收回指令碼的檔案存取權
+@msg	The script file access was already revoked	指令碼的檔案存取權已被收回
 	Deny	拒絕
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告
@@ -2966,6 +2989,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	指令碼檔案對話框的 `answer` 必須是下列之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	請先選擇檔案或資料夾，或拒絕
 @msg	the script file permissions could not be saved: {e}	無法儲存指令碼的檔案權限：{e}
+@msg	the script file permissions could not be read: {e}	無法讀取指令碼的檔案權限：{e}
 @msg	this script's file access can be allowed only once	此指令碼的檔案存取只能允許一次
 @msg	Only the person at the keyboard can allow a script's file access	只有鍵盤前的人才能允許指令碼存取檔案
 @msg	A script is given at most 2,048 files: the files picked after them were left out	指令碼最多取得 2,048 個檔案：之後選擇的檔案已略去
@@ -3059,6 +3083,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	Couldn't paste from the clipboard: {e}	無法從剪貼簿貼上：{e}
 @msg	Couldn't paste: the document it was pasted in was closed	無法貼上：要貼上的文件已關閉
 @msg	nothing selected	未選取任何物件
+@msg	`{key}` must be a color or {_1}	`{key}` 必須是顏色或 {_1}
+@msg	the selected objects' colors differ: give `color`	所選物件的顏色不同：請提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所選物件的顏色不同：請提供 `opacity` 或 `color`
+@msg	the active fill or stroke has no color: give `color`	作用中的填色或筆畫沒有顏色：請提供 `color`
+@msg	the active fill or stroke is hidden: give `color`	作用中的填色或筆畫已隱藏：請提供 `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	作用中的填色或筆畫透過不透明度遮色片繪製：請提供 `color`
 @msg	nothing selected is in a group	選取的物件都不在群組中
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
@@ -3807,6 +3837,12 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}；{size}；{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解析度無法使用
+	estimated memory {memory}	估計記憶體 {memory}
+	memory unavailable	記憶體無法使用
+	Unknown format	未知格式
 	{kind}, {instances}	{kind}，{instances}
 	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
 	{grid}, {instances}	{grid}，{instances}
@@ -3955,6 +3991,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	One Point Perspective Preset 5	一點透視預設集 5
 	Only Web Colors	僅限網頁色彩
 	Opacity	不透明度
+	Show Opacity	顯示不透明度
 	Opacity & Mask Define Knockout Shape	不透明度與遮色片定義挖空形狀
 	Opacity Mask	不透明度遮色片
 	Opacity Mask Info	不透明度遮色片資訊
@@ -4414,6 +4451,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale Artwork with Artboard	隨工作區域縮放圖稿
 	Artboards: {n}	工作區域：{n}
 	Rearrange All Artboards…	重新排列所有工作區域…
+	Rearrange…	重新排列…
+	Selected Artboards: {n}	選取的工作區域：{n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	按一下畫布以放置工作區域 (Esc 取消)
 	Recall Selection	叫出選取範圍
 	RECENT	最近使用
 	Recent	最近使用
@@ -4656,7 +4696,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選取 › 相同 › 填色顏色、筆畫顏色和填色與筆畫只符合全域色票或特別色色票的相同色調，而不是其任意色調。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	沒有開啟文件時顯示首頁畫面；關閉時，視窗保持空白，直到你按下首頁。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和對齊中依物件的筆畫和改變形狀的效果測量物件；陰影、光暈和模糊不計入測量。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	縮放為 100% 時，文件的一英吋佔 96 個螢幕點，而不是 72 個。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	縮放為 100% 時，文件的一英吋佔顯示器上的一英吋；系統未回報可用的顯示器尺寸時佔 96 個螢幕點。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用選取工具按兩下群組、路徑或影像時，會在隔離模式中開啟它。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	圖樣填色和筆畫隨圖稿一起變形，除非變形指令或變形面板的選單另有選擇。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	即時轉角半徑隨圖稿一起縮放，除非縮放指令另有選擇。
@@ -4667,6 +4707,7 @@ digits	Malayalam	馬來亞拉姆數字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某個鍵會執行鍵盤快速鍵中其按住欄的工具或命令；快速按下則執行其一般快速鍵。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某個鍵多少秒後，執行其按住快速鍵而不是一般快速鍵。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 會刪除所選錨點並重新擬合每個錨點周圍的曲線，而不會在該處斷開路徑。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
@@ -6954,6 +6995,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	取消執行增效模組
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} 已完成，但文件或增效模組在此期間已變更：請重新執行
 @msg	Running “{name}”…	正在執行「{name}」…
+@msg	Plug-in “{name}”: {notice}	增效模組「{name}」：{notice}
+@msg	`notice` must be a string with visible text	`notice` 必須是包含可見文字的字串
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `allowHeavy: true`
@@ -6980,6 +7023,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要核准：它要求 {0}，使用者單獨安裝它時授予這些權限
 @msg	not JSON: {e}	不是 JSON：{e}
 @msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二進位檔（沒有 \\0asm 標頭）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	函式型別的參數數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	函式型別的結果數目超過上限（{MAX_FUNC_TYPE_VALUES} 個）
 @msg	parameter `{k}`: {what}	參數 `{k}`：{what}
 @msg	parameter `{name}`: {what}	參數 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效模組參數必須是 JSON 物件
@@ -6997,6 +7042,10 @@ axis	Y Axis	Y 軸
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 傳回了 0（記憶體不足）
 @msg	vc_alloc returned a block outside memory	vc_alloc 傳回了記憶體之外的區塊
 @msg	vc_run returned error code {packed}	vc_run 傳回了錯誤代碼 {packed}
+@msg	did not finish loading within {secs} s	未在 {secs} 秒內完成載入
+@msg	no thread was left to load it	沒有剩餘的執行緒可以載入它
+@msg	panicked while loading	載入時當機
+@msg	panicked while loading: {what}	載入時當機：{what}
 @msg	{_1} is not a file	{_1} 不是檔案
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} 為 {_2} 位元組（上限 {_3}）
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 個物件（上限 {MAX_OBJECTS}）
@@ -7016,6 +7065,11 @@ axis	Y Axis	Y 軸
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必須是 0-{MAX_LIST}，`maxItems` 至少為 1，且預設值的項目數須在此範圍內
 @msg	`name` must be a string	`name` 必須是字串
 @msg	`opacity` must be a number	`opacity` 必須是數字
+@msg	`opacity` must be a number from 0 to 100	`opacity` 必須是 0 到 100 之間的數字
+@msg	`opacity` must be true or false	`opacity` 必須是 true 或 false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	文字字元沒有自己的不透明度：請用「外觀」面板的「新增填色」或「新增筆畫」新增填色或筆畫
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	在符號實體中選取的物件沒有自己的填色或筆畫不透明度
+@msg	no target has that fill or stroke to take the opacity	沒有目標具有可接受該不透明度的填色或筆畫
 @msg	`type` must be "path" or "compound"	`type` 必須是 "path" 或 "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必須是 1-{MAX_UNIT} 個可列印字元
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必須為 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 個值
@@ -7034,7 +7088,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 個數字的清單
 @msg	a new object needs a `path`	新物件需要 `path`
 @msg	a number	數字
-@msg	a painted live effect returns only `objects`	繪製型即時效果只傳回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	繪製型即時效果只傳回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一個唯讀物件
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它
@@ -7139,6 +7193,8 @@ axis	Y Axis	Y 軸
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` 只能為 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
+@msg	`place` is only for an importer (`kind` "importer")	`place` 僅適用於匯入器 (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	「{shown}」只開啟檔案而不置入：其資訊清單未設定 `place`
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`
@@ -7150,12 +7206,60 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了兩次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
+@msg	only a filter declares `writes`	只有濾鏡才能宣告 `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` 列出了未知的物件類型 `{shown}`：請使用 type、image 或 symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` 列出了兩次 `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` 列出了 `{shown}`，但 `inputs` 未列出它
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` 需要 `api` {WRITES_API} 或更高
+@msg	`writes` needs the permission `doc.write`	`writes` 需要權限 `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} 不是文字、影像或符號範例
+@msg	the text of type given as `truncated` can't be changed	以 `truncated` 提供的文字物件，其文字無法變更
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	必須是最多 {MAX_INPUT_RUNS} 個項目的清單
+@msg	type needs at least one run	文字至少需要一個文字段
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	文字 {bytes} 位元組（上限 {MAX_INPUT_TEXT}）
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落 {paragraphs} 個（上限 {MAX_INPUT_RUNS}）
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	整個輸出中的文字超過 {MAX_INPUT_TEXT_TOTAL} 位元組
+@msg	unknown key '{k}'	未知的鍵 '{k}'
+@msg	must be a list of 6 numbers	必須是 6 個數字的清單
+@msg	a number is out of range (limit ±{MAX_COORD})	有數字超出範圍（上限 ±{MAX_COORD}）
+@msg	flattens the object to a line or a point	會把物件壓扁成一條線或一個點
+@msg	an object flattened to a line or a point can't be placed again	已壓扁成線或點的物件無法重新放置
+@msg	must be a number from 0 to 1	必須是 0 到 1 之間的數字
+@msg	must be the name of a symbol	必須是符號的名稱
+@msg	'{shown}' is not a symbol in this document	'{shown}' 不是此文件中的符號
+@msg	a run must be {{"text", "style", "inline"?}}	文字段必須是 {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` 含有行內圖形的字元
+@msg	inline graphics can't be added, removed, reordered or changed	行內圖形無法新增、移除、重新排序或變更
+@msg	the characters of threaded type can't be changed	串連文字的字元無法變更
+@msg	the characters of type with ruby can't be changed	含注音的文字，其字元無法變更
+@msg	expected {count} paragraph styles, one per paragraph	應有 {count} 個段落樣式，每個段落一個
+@msg	the document has no Kinsoku set named '{shown}'	文件中沒有名為 '{shown}' 的 Kinsoku 集
+@msg	must be 1-{MAX_FAMILY} printable characters	必須是 1-{MAX_FAMILY} 個可列印字元
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	讀取交給它的物件，以及文件的設定、工作區域、圖層和色票
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` 必須列出互不相同的部分：settings、artboards、layers 或 swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` 僅適用於 `api` 3 或更高、具有權限 `doc.read` 的濾鏡或帶 `commands` 的即時效果
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	增效模組要求的文件資訊太大，無法傳遞：工作區域、圖層和色票合計最多 {MAX_CONTEXT_ITEMS} 個，最多 {MAX_CONTEXT_BYTES} 位元組
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
 @msg	instruction budget	指令預算
 @msg	time budget	時間預算
 @msg	memory budget (the selection is too large to hand over)	記憶體預算（所選內容太大，無法傳遞）
 @msg	output size ({what} is {len} bytes, limit {max})	輸出大小（{what} 為 {len} 位元組，上限 {max}）
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}（{id}，{script} 第 {line} 行，第 {column} 欄）
+@msg	{reason} ({id}, {script})	{reason}（{id}，{script}）
+@msg	memory budget	記憶體預算
+@msg	call depth	呼叫深度
+@msg	run(input, params) returned no output object	run(input, params) 未傳回輸出物件
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" 需要 `script`：資訊清單旁增效模組 .js 檔案的名稱
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` 必須是資訊清單所在資料夾中 .js 檔案的名稱：1-128 位元組，不含資料夾，不含 `:`，不以 `.` 開頭
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` 是指令碼的文字，只在 plugin.install 的 dataBase64 接受的 JSON 中提供：.vcplugin 檔案在 `script` 中指定其指令碼
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 增效模組的資訊清單指定 `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" 用於物件濾鏡（`kind` "filter"），而不是 `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 增效模組不能列出權限 `{name}`：在主機的權限中，它可以列出 `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 模組的資訊清單不填寫 `runtime`："js" 用於 JavaScript 增效模組
+@msg	a JavaScript plug-in makes no command calls	JavaScript 增效模組不呼叫命令
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) 接受兩個數字
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) 接受一個層級（0（錯誤）、1（警告）、2（資訊）或 3（偵錯））和一個字串
 @msg	the plug-in's grant can't be removed from the plug-in store	無法從增效模組存放區移除該增效模組的授權
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
@@ -9582,6 +9686,7 @@ breakText	Glyphs	字符
 @msg	give a pattern name or select an object painted with a pattern	請提供圖樣名稱，或選取以圖樣上色的物件
 @msg	give at least one of clip, invert, disabled, linked	clip、invert、disabled、linked 請至少提供一個
 @msg	give color, none, swatch or gradient	請提供 color、none、swatch 或 gradient
+@msg	give color, none, swatch, gradient or opacity	請提供 color、none、swatch、gradient 或 opacity
 @msg	give dataBase64	請提供 dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	請提供 at (一次點按) 或 area (圍繞重疊處繪製的路徑) 其中之一
 @msg	give formats or a preset, not both	請提供 formats 或預設集，不要兩者都提供
@@ -10444,6 +10549,11 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Fold Angle	摺疊角度
+	Set Fold Angle…	設定摺疊角度…
+	Set Fold Angle	設定摺疊角度
+	Reset Fold Angle	重設摺疊角度
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	請選取未鎖定且未隱藏的壓痕線、半切線或打孔線
 	Check	檢查
 	Check Fold Lines	檢查摺線
 @msg	No cut lines are in the selection.	選取範圍中沒有切割線。

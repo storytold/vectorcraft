@@ -77,9 +77,15 @@ impl VectorcraftApp {
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
+        // A `prefs.reset` that ran straight on the session applies before this command can switch workspaces.
+        crate::prefs_dialog::apply_prefs_resets(self);
         let result = self.run_now(id, params);
+        crate::prefs_dialog::apply_prefs_resets(self);
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
+        }
+        if let Ok(r) = &result {
+            crate::plugin_runs::show_notice(self, id, r);
         }
         placing::settle_swatch_paste(self);
         result
@@ -234,6 +240,7 @@ impl VectorcraftApp {
             return Err(e);
         }
         let spot_base = panels::color_guide::before_command(self);
+        let plugins_before = dialogs::plugin::before_command();
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok()
@@ -241,6 +248,8 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
+        // A filter plug-in run becomes Object › Plug-ins › Apply Last Filter.
+        dialogs::plugin::after_command(self, id, &params, &r, plugins_before);
         let copied = r.is_ok() && self.publish_copy(id);
         self.sync_views();
         self.refresh_replace_font_warning(false);

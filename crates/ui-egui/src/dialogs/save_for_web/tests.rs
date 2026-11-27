@@ -313,6 +313,74 @@ fn save_remembers_and_writes_and_done_only_remembers() {
 }
 
 #[test]
+fn save_for_web_download_waits_for_the_original_drawing() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-original-download");
+    let (mut app, downloads) = app(&dir, true);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    app.run("file.new", json!({"width": 26, "height": 20, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 26, "height": 20})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    confirm(&mut app);
+
+    assert!(downloads.borrow().is_empty(), "the other drawing is never downloaded");
+    assert!(is_open(&app));
+    assert_eq!(fields(&app)["format"], "png24");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    save(&mut app);
+    assert_eq!(downloads.borrow().len(), 1);
+}
+
+#[test]
+fn save_for_web_does_not_write_another_drawing_when_the_picker_returns() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-original-picker");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.new", json!({"width": 26, "height": 20, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 26, "height": 20})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialog = id(&app);
+    host(&app).with(|h| h.confirm_by_id(&ctx, dialog));
+    settle(&mut app);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    answer_saves(&mut app);
+    settle(&mut app);
+
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    assert!(is_open(&app));
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    save(&mut app);
+    assert!(dir.join("Untitled-1.png").exists());
+}
+
+/// The remembered Transparency Dither, which the dialog does not show, reaches the file Save writes
+/// and stays remembered after Done.
+#[test]
+fn save_keeps_the_remembered_transparency_dither() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-tdither");
+    let (mut app, _) = app(&dir, false);
+    let mut written = vec![];
+    for method in ["none", "noise"] {
+        app.run("webExport.settings", json!({"format": "gif", "transparency": true, "transparencyDither": method})).unwrap();
+        app.run("file.saveForWeb", json!({})).unwrap();
+        save(&mut app);
+        let path = dir.join("Untitled-1.gif");
+        written.push(std::fs::read(&path).unwrap());
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(app.session.last_web_settings().transparency_dither.id(), method, "remembered");
+        let expected = app.session.execute("document.exportForWeb", &json!({"format": "gif", "transparencyDither": method})).unwrap();
+        assert_eq!(expected["files"][0]["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).as_ref(), written.last());
+    }
+    assert_ne!(written[0], written[1], "the partly transparent edge is dithered");
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "choice", json!("done"));
+    confirm(&mut app);
+    assert_eq!(app.session.last_web_settings().transparency_dither.id(), "noise");
+}
+
+#[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");
     let (mut app, _) = app(&dir, false);

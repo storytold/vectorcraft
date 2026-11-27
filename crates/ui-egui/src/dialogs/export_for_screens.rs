@@ -43,8 +43,9 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleState};
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
-use craft::ui::primitives::ContentPainterCx;
+use craft::ui::primitives::{ContentPainterCx, fit_rect};
 use craft::ui::runtime::env::Label;
+use craft::ui::runtime::focus::Initial;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
@@ -601,8 +602,11 @@ impl ExportForScreensDialog {
         let items = Items(doc.artboards.iter().map(|a| (u64::from(a.id), a.name.clone())).collect());
         let caption = |at: usize| format!("{}  {}", at + 1, items.0.get(at).map_or("", |(_, name)| name.as_str()));
         let thumbs = &self.thumbs;
+        // The artboard keeps its proportions, centered in the tile or the row's thumbnail.
         let paint = |at: usize, cx: &ContentPainterCx, rect: egui::Rect| match thumbs.get(at).cloned().flatten() {
-            Some(tex) => cx.picture(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0),
+            Some(tex) => {
+                cx.picture(tex.id(), fit_rect(rect, tex.size_vec2()), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), 0.0)
+            }
             None => {
                 cx.painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
             }
@@ -955,6 +959,10 @@ impl StackDialog for ExportForScreensDialog {
         let mut held = std::mem::take(&mut self.held);
         let mut dialog =
             FormDialog::new(tl!("Export for Screens"), Bind::bound(&mut fields)).ok_label(ok).ok_enabled(chosen.is_none()).held(&mut held);
+        if self.web {
+            // Keep the first artboard visible when the web dialog opens in a short viewport.
+            dialog = dialog.shaped(|surface| surface.initial_focus(Initial::First));
+        }
         if let Some(reason) = chosen {
             dialog = dialog.ok_reason(reason);
         }
@@ -993,17 +1001,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     let key = app.session.active().map(|st| (st.uid, st.revision));
     let pdf_presets = pdf::presets(&app.session);
     let saved = &app.session.prefs.screen_export_presets;
-    let Some((stale, pending, rename, filed)) = dialogs.with(|host| {
+    let Some((shown, pending, rename, filed)) = dialogs.with(|host| {
         let d = host.get_mut_by_id::<ExportForScreensDialog>(id)?;
         screen_formats::preset_list(&mut d.presets, saved);
         if d.pdf_presets != pdf_presets {
             d.pdf_presets = pdf_presets;
         }
-        Some((d.doc.as_ref().map(|s| s.key) != key, d.pending.take(), d.rename.take(), d.held.take()))
+        Some((d.doc.as_ref().map(|s| s.key), d.pending.take(), d.rename.take(), d.held.take()))
     }) else {
         return;
     };
-    if stale {
+    if shown != key {
         let (doc, thumbs) = document_view(app, ctx);
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
@@ -1028,7 +1036,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
         rename_artboard(app, board, &name);
     }
     if let Some(fields) = filed {
-        let answer = params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from);
+        // OK validated its selection against the document the dialog showed before refreshing.
+        let answer = if shown.map(|(uid, _)| uid) == app.session.active().map(|st| st.uid) {
+            params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from)
+        } else {
+            Err(Label::from(tl!("The active document changed. Review the export selection and try again.")))
+        };
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
                 d.held.answer(answer);

@@ -70,6 +70,13 @@ pub(super) fn target(app: &VectorcraftApp) -> (Option<NodeId>, ParametricShape) 
     (None, apply(fallback, &app.session.tool_options_of(tool::ID)).unwrap_or(fallback))
 }
 
+/// Whether anchors are direct-selected, so that the selection's box is the box around them.
+fn anchors_selected(app: &VectorcraftApp) -> bool {
+    app.session
+        .active()
+        .is_some_and(|st| vectorcraft_effects::preview::anchor_bounds_with(&st.selection, &st.doc, app.session.bounds_measure()).is_some())
+}
+
 /// Whether something is selected and none of it is a parametric shape Convert could take.
 pub(super) fn plain_selected(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| !st.selection.is_empty()) && selected(app).is_none()
@@ -77,7 +84,7 @@ pub(super) fn plain_selected(app: &VectorcraftApp) -> bool {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.active().is_none() {
-        empty_state(ui, "hexagon", tl!("No document"), tl!("Open a document to draw parametric shapes."));
+        empty_state(ui, "dc-parametric-shape", tl!("No document"), tl!("Open a document to draw parametric shapes."));
         return;
     }
     let (id, s) = target(app);
@@ -143,6 +150,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     match (change, id) {
         (Some(mut p), Some(id)) => {
             p["id"] = json!(id.0);
+            // The Transform panel and the Control bar share one reference point locator. W and H
+            // keep the point of the shape's bounding box chosen there in place. With anchors
+            // direct-selected the locator shows their box, so the shape keeps its center instead.
+            if p.get("width").or_else(|| p.get("height")).is_some() && !anchors_selected(app) {
+                p["reference"] = json!(app.ui.transform_panel.reference_point);
+            }
             run(app, "addon.pathtools.shape.set", p);
         }
         (Some(values), None) => run(app, "tool.setOption", json!({ "tool": tool::ID, "values": values })),

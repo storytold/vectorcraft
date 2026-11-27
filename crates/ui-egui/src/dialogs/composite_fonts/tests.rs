@@ -61,6 +61,72 @@ fn names(app: &VectorcraftApp) -> Vec<String> {
     app.session.active().unwrap().doc.composite_fonts.iter().map(|f| f.name.clone()).collect()
 }
 
+#[test]
+fn delayed_load_and_replace_leave_the_reopened_composite_fonts_draft_alone() {
+    let choices: [(PresetCommands, &[&str]); 2] = [(PresetCommands::Load, &["New draft", "From file"]), (PresetCommands::Replace, &["From file"])];
+    for (command, expected_live) in choices {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        let bytes = dialog(&mut app, |d| {
+            d.new_font("From file".into());
+            file_bytes(&d.fonts).unwrap()
+        });
+        let dir = vectorcraft_testkit::TempDir::new("composite-fonts-late-picker");
+        let file = dir.join("picked.vccomposite");
+        std::fs::write(&file, bytes).unwrap();
+        let path = file.to_str().unwrap();
+        request(&mut app, command, None);
+        assert_eq!(picker.requests().len(), 1);
+        cancel(&mut app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("New draft".into()));
+
+        picker.answer(&[path]);
+        poll(&mut app, &ctx);
+        let draft_names = |app: &mut VectorcraftApp| dialog(app, |d| d.fonts.iter().map(|font| font.name.clone()).collect::<Vec<_>>());
+        assert_eq!(draft_names(&mut app), ["New draft"], "the stale picker leaves the new draft alone");
+
+        request(&mut app, command, None);
+        assert_eq!(picker.requests().len(), 2);
+        picker.answer(&[path]);
+        poll(&mut app, &ctx);
+        assert_eq!(draft_names(&mut app), expected_live, "a picker opened by the new draft still works");
+        assert!(names(&app).is_empty(), "a picker only edits the draft");
+    }
+}
+
+#[test]
+fn load_and_replace_accept_a_browser_picked_file() {
+    let choices: [(PresetCommands, &[&str]); 2] = [(PresetCommands::Load, &["Draft", "From Web"]), (PresetCommands::Replace, &["From Web"])];
+    for (command, expected) in choices {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        let bytes = dialog(&mut app, |d| {
+            d.new_font("From Web".into());
+            file_bytes(&d.fonts).unwrap()
+        });
+        cancel(&mut app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("Draft".into()));
+        let dialogs = app.dialogs().unwrap();
+        ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
+        let step = steps(&app);
+
+        request(&mut app, command, None);
+        picker.answer_contents(&[("picked.vccomposite", &bytes)]);
+        poll(&mut app, &ctx);
+        let draft_names = dialog(&mut app, |d| d.fonts.iter().map(|font| font.name.clone()).collect::<Vec<_>>());
+        assert_eq!(draft_names, expected, "{}", app.ui.status);
+        assert!(app.ui.status.contains("picked.vccomposite"), "{}", app.ui.status);
+        assert!(names(&app).is_empty(), "picking a file edits only the draft");
+        assert_eq!(steps(&app), step);
+    }
+}
+
 fn steps(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
@@ -131,6 +197,41 @@ fn composite_fonts_change_on_ok_as_one_undo_step() {
     });
     ok(&mut app).unwrap();
     assert!(names(&app).is_empty());
+}
+
+#[test]
+fn a_held_composite_fonts_ok_keeps_the_draft_with_its_opening_document() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 440, "height": 440})).unwrap();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Destination only".into()));
+    ok(&mut app).unwrap();
+    let destination = (names(&app), steps(&app));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let source = (names(&app), steps(&app));
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("From the source".into()));
+    let ctx = ctx(&app);
+    let id = dialog_id(KIND);
+    let dialogs = app.dialogs().unwrap();
+    dialogs.with(|host| {
+        assert!(!host.confirm_by_id(&ctx, id));
+        assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+    });
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    pump(&mut app, &ctx);
+    assert_eq!((names(&app), steps(&app)), destination, "the other document keeps its fonts and undo history");
+    assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+    assert!(is_open(&app));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!((names(&app), steps(&app)), source);
+    ok(&mut app).unwrap();
+    assert_eq!(names(&app), ["From the source"]);
+    assert_eq!(steps(&app), source.1 + 1);
+    assert!(!is_open(&app));
 }
 
 /// New is based on the font picked and takes the next free name; a name two fonts share, or one
@@ -457,4 +558,20 @@ fn the_sample_draws_color_glyphs_in_their_colors() {
     let (_, plain) = sample::measure(&inter_font(|_| {}), 36.0);
     let (_, tall) = sample::measure(&f, 36.0);
     assert!(tall.ascender.unwrap() > plain.ascender.unwrap() * 1.5, "{plain:?} {tall:?}");
+}
+
+/// With Custom on, the dialog draws the set's characters and its buttons.
+#[test]
+fn custom_character_sets_draw_their_characters_and_the_buttons() {
+    let mut p = crate::tests::panel_harness::Panel::new(app(), crate::tests::picks::dialogs);
+    open(&mut p.app()).unwrap();
+    new_font(&mut p.app());
+    dialog(&mut p.app(), |d| d.custom = true);
+    new_set(&mut p.app());
+    dialog(&mut p.app(), |d| d.entry = "AB".into());
+    edit(&mut p.app(), SetAction::AddChars).unwrap();
+    p.frame();
+    for name in ["A", "B", "OK", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
 }

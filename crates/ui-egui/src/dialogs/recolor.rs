@@ -118,7 +118,7 @@ mod prominent;
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use craft::behavior::edit_history::{EditHistory, Step};
 use craft::behavior::{ColumnKey, ColumnWidth, EditEvent, IconId, Mixed, Selection, SelectionChange, keyed};
@@ -152,6 +152,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::harmony::{self, Harmony, move_on_wheel};
 use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method};
 use vectorcraft_color::{Color, keep_model};
+use vectorcraft_doc::Selection as ArtworkSelection;
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::fileio::builtin_open_filters;
 use vectorcraft_engine::cmd::swatchlib;
@@ -212,8 +213,6 @@ const ARROW: ColumnKey = ColumnKey::new("arrow");
 const NEW: ColumnKey = ColumnKey::new("new");
 const HEX: ColumnKey = ColumnKey::new("hex");
 /// The arrow of a row that is recolored, and of one that is excluded (a dashed line without a head).
-// PLAN: assumed icons `dc-recolor-arrow` and `dc-recolor-arrow-off` (VectorCraft's own solid and dashed arrows);
-// the assets owner draws them and adds them to `assets/icons`, `icon_data.rs` and `ASSETS.md`.
 const ARROW_ON: &str = "dc-recolor-arrow";
 const ARROW_OFF: &str = "dc-recolor-arrow-off";
 
@@ -260,20 +259,86 @@ impl Fields {
 pub(crate) struct Open {
     /// The dialog on the window's host.
     pub id: DialogId,
+    document: u64,
     /// The preview the pump runs and OK commits.
     pub preview: LivePreview,
+    /// The selection snapshot identifies the interaction that ran the preview.
+    preview_selection: Option<Weak<ArtworkSelection>>,
 }
 
-/// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
-/// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
-/// which become their new colours; without art the rows are the group's colours. `colors` is a
-/// count (an n-colour job) or the new colours to assign (without art or a group they are the
+impl Open {
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        let Some(selection) = &self.preview_selection else { return false };
+        app.session.active().is_some_and(|state| {
+            state.uid == self.document
+                && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
+        })
+    }
+
+    fn problem(&self, app: &VectorcraftApp) -> Option<&'static str> {
+        if app.session.active().is_none_or(|state| state.uid != self.document) {
+            Some("Return to the document where Recolor Artwork opened.")
+        } else if app.session.in_interaction() && !self.owns_preview(app) {
+            Some("Finish the active edit before applying Recolor Artwork.")
+        } else {
+            None
+        }
+    }
+
+    fn take_preview(&mut self) -> LivePreview {
+        self.preview_selection = None;
+        std::mem::take(&mut self.preview)
+    }
+
+    fn cancel(&mut self, app: &mut VectorcraftApp) {
+        let owns_preview = self.owns_preview(app);
+        let preview = self.take_preview();
+        if owns_preview {
+            preview.cancel(app);
+        }
+    }
+}
+
+/// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?, preset?}`) on the selected
+/// art and, with `group`, on that colour group: art is reduced to as many rows as the group has
+/// colours, which become their new colours; without art the rows are the group's colours. `colors`
+/// is a count (an n-colour job) or the new colours to assign (without art or a group they are the
 /// rows, which OK saves as a new colour group); `library` limits to a library or "document" (""
-/// picks the first library).
+/// picks the first library). With `preset: true` the Recolor with Preset dialog opens first.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    match p.get("preset") {
+        None | Some(Value::Bool(false)) => {}
+        Some(Value::Bool(true)) => return super::recolor_preset::open(app, p),
+        Some(_) => return Err("`preset` must be true or false".into()),
+    }
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
-    let group = p.get("group").and_then(Value::as_str);
+    let group = match p.get("group") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(g)) => Some(g.as_str()),
+        Some(_) => return Err("`group` must be a colour group name".into()),
+    };
+    // The group is looked for in the document without the preview of a Recolor Artwork this one
+    // replaces (which can rename the group), as that dialog's rollback below leaves it.
+    let unpreviewed = match &st.interaction {
+        Some(it) if app.color_dialogs.recolor.as_ref().is_some_and(|open| open.owns_preview(app)) => &it.doc,
+        _ => &st.doc,
+    };
+    if let Some(g) = group
+        && !unpreviewed.swatch_groups.iter().any(|x| x.name == g)
+    {
+        return Err(format!("no colour group `{g}`"));
+    }
+    // Colours alone (no art, no group) become a new colour group.
+    let new_group = !art && group.is_none();
+    if new_group && !matches!(p.get("colors"), Some(Value::Array(cs)) if cs.iter().any(|c| color_value(c).is_some())) {
+        return Err("select artwork (or a colour group) to recolor".into());
+    }
+    let limit = library_param(app, p)?;
+    // A Recolor Artwork still open is replaced: its preview goes before the group's colours are read.
+    cancel_open(app);
+    let st = app.session.active().ok_or("no document open")?;
+    let document = st.uid;
     let group_colors: Option<Vec<Color>> = match group {
         Some(g) => {
             let g = st.doc.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| format!("no colour group `{g}`"))?;
@@ -286,20 +351,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (None, Some(Value::Array(cs))) => cs.iter().filter_map(color_value).map(|c| key(&c)).collect(),
         _ => vec![],
     };
-    // Colours alone (no art, no group) become a new colour group.
-    let new_group = !art && group.is_none();
-    if new_group && assign.is_empty() {
-        return Err("select artwork (or a colour group) to recolor".into());
-    }
     let count = match p.get("colors").and_then(Value::as_u64) {
         Some(n) => json!(n.max(1)),
         None if !assign.is_empty() => json!(assign.len()),
         None => Value::Null,
-    };
-    let limit = match p.get("library").and_then(Value::as_str) {
-        Some("") => first_library(app).unwrap_or_default(),
-        Some(l) => limit_key(app, l)?,
-        None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
     let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
@@ -319,14 +374,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut rs = rows(&d);
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
-    // A Recolor Artwork still open is replaced: its preview goes before this one's starts.
-    if let Some(old) = app.color_dialogs.recolor.take() {
-        old.preview.cancel(app);
-    }
     let dialog = RecolorDialog::new(app, d);
     let options = HeldOptions { cancel: Some(Box::new(cancelled)), ..HeldOptions::default() };
     let id = open_held_with(app, dialog, confirm, options).ok_or("no window to show Recolor Artwork in")?;
-    app.color_dialogs.recolor = Some(Open { id, preview: LivePreview::default() });
+    app.color_dialogs.recolor = Some(Open { id, document, preview: LivePreview::default(), preview_selection: None });
     Ok(Value::Null)
 }
 
@@ -336,8 +387,8 @@ fn cancelled(app: &mut VectorcraftApp) {
     if app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.is_open::<RecolorDialog>())) {
         return;
     }
-    if let Some(open) = app.color_dialogs.recolor.take() {
-        open.preview.cancel(app);
+    if let Some(mut open) = app.color_dialogs.recolor.take() {
+        open.cancel(app);
     }
 }
 
@@ -348,8 +399,41 @@ fn key(c: &Color) -> Value {
 /// The name a new colour group (opened on colours alone) starts with.
 const NEW_GROUP: &str = "Color Group";
 
+/// Ends an open Recolor Artwork as Cancel ends it: its preview is rolled back and it closes.
+pub(super) fn cancel_open(app: &mut VectorcraftApp) {
+    let Some(mut old) = app.color_dialogs.recolor.take() else { return };
+    let id = old.id;
+    old.cancel(app);
+    if let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
+        dialogs.with(|host| {
+            host.cancel_by_id(&ctx, id);
+        });
+    }
+}
+
 fn first_library(app: &VectorcraftApp) -> Option<String> {
     colour_libraries(app).into_iter().next().map(|l| l.id)
+}
+
+/// Limit to Library's choices: the key `limitTo` takes and the name the menu shows. None, the
+/// document's swatches, then the colour libraries: the built-in ones translated, those the user
+/// saved or loaded by their names.
+pub(super) fn library_choices(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let libs = colour_libraries(app);
+    let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
+    let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
+    fixed.into_iter().chain(named).collect()
+}
+
+/// The `limitTo` key of `ui.recolorDialog`'s `library`: none without it or for null, the first
+/// library for ""; a `library` that is not a string is an error.
+pub(super) fn library_param(app: &VectorcraftApp, p: &Value) -> Result<String, String> {
+    match p.get("library") {
+        Some(Value::String(l)) if l.is_empty() => Ok(first_library(app).unwrap_or_default()),
+        Some(Value::String(l)) => limit_key(app, l),
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(_) => Err("`library` must be a library id or name".into()),
+    }
 }
 
 /// `recolor.reduce` parameters (Method only picks each row's colour, so changing it keeps the rows).
@@ -430,8 +514,9 @@ const SAVE_GROUP: &str = "__saveGroup";
 
 /// Cancel the preview, so commands read the art's own colors; the pump runs it again afterwards.
 fn cancel_preview(app: &mut VectorcraftApp) {
-    if let Some(preview) = app.color_dialogs.recolor.as_mut().map(|open| std::mem::take(&mut open.preview)) {
-        preview.cancel(app);
+    if let Some(mut open) = app.color_dialogs.recolor.take() {
+        open.cancel(app);
+        app.color_dialogs.recolor = Some(open);
     }
 }
 
@@ -1443,15 +1528,11 @@ struct Feed {
 
 impl Feed {
     fn of(app: &VectorcraftApp, d: &Fields) -> Feed {
-        // None, the document's swatches, then the colour libraries: the built-in ones translated,
-        // those the user saved or loaded by their names.
-        let libs = colour_libraries(app);
-        let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
-        let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
-        let libraries = fixed.into_iter().chain(named).collect();
+        let libraries = library_choices(app);
         Feed {
+            // The colour libraries follow None and the document's swatches.
+            first_library: libraries.get(2).map(|(k, _)| k.clone()),
             libraries,
-            first_library: libs.first().map(|l| l.id.clone()),
             groups: doc_groups(app),
             other_paints: other_paint_groups(app),
             previewing: app.session.in_interaction(),
@@ -1463,6 +1544,7 @@ impl Feed {
 /// What the pump works on with the app, out of the host: the values, their steps and what `show`
 /// asked for.
 struct Work {
+    opening: Arc<()>,
     fields: Fields,
     steps: Steps,
     filed: Filed,
@@ -1502,7 +1584,7 @@ impl Work {
             randomize(app, &mut self.fields, sb);
         }
         if filed.library {
-            pick_library(app);
+            pick_library(app, Arc::clone(&self.opening));
         }
         let d = &mut self.fields;
         if let Some(before) = filed.edited {
@@ -1549,16 +1631,16 @@ fn randomize(app: &mut VectorcraftApp, d: &mut Fields, sb: bool) {
 
 /// Other Library…: import a library (.ase, .acb, .gpl, .vcswatches or a document's swatches) and
 /// limit to it.
-fn pick_library(app: &mut VectorcraftApp) {
+fn pick_library(app: &mut VectorcraftApp, opening: Arc<()>) {
     let request = builtin_open_filters().fold(PickRequest::open("library"), |request, (name, exts)| request.filter(name, exts));
-    // PLAN: assumed `file_asks::Owner::Free` (fl.A3's owner of a continuation no document holds), as appearance-w19 codes it.
-    crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, |app, picked| {
+    // A loaded library belongs to the session. The Limit to Library choice belongs to the opening that asked.
+    crate::file_asks::ask(app, request, crate::file_asks::Owner::Free, move |app, picked| {
         let Some(path) = picked.first_path() else { return Ok(Value::Null) };
         let r = app.run("swatch.library.load", json!({ "path": path }))?;
         let library = r["library"].clone();
         if let Some(dialogs) = app.dialogs() {
             dialogs.with(|host| {
-                if let Some(d) = host.get_mut::<RecolorDialog>() {
+                if let Some(d) = host.get_mut_by_id::<RecolorDialog>(dialog_id(KIND)).filter(|d| Arc::ptr_eq(&opening, &d.opening)) {
                     d.fields.fields.insert("limitTo".into(), library);
                 }
             });
@@ -1579,14 +1661,28 @@ fn preview_params(d: &Fields) -> Option<(bool, &'static str, Value)> {
     })
 }
 
+/// The Limit to Library key (`"document"` or a library id) of `parent` when it is a Recolor Artwork
+/// dialog that limits to a library: the library a Color Picker over it shows in its swatches view.
+pub(super) fn limit_to(dialogs: &craft::ui::shell::WindowDialogs, parent: DialogId) -> Option<String> {
+    dialogs.with(|host| host.get_by_id::<RecolorDialog>(parent).map(|d| d.fields.str("limitTo"))).filter(|limit| !limit.is_empty())
+}
+
 /// Runs the open dialog's live preview with `(on, command, params)`.
 fn run_preview(app: &mut VectorcraftApp, (on, cmd, params): (bool, &'static str, Value)) {
-    let Some(mut live) = app.color_dialogs.recolor.as_mut().map(|open| std::mem::take(&mut open.preview)) else { return };
-    // `run` reports a preview that fails on the status line itself.
-    let _ = live.run(app, on, TITLE, cmd, &params);
-    if let Some(open) = app.color_dialogs.recolor.as_mut() {
-        open.preview = live;
+    let Some(mut open) = app.color_dialogs.recolor.take() else { return };
+    if open.problem(app).is_none() {
+        if !open.owns_preview(app) {
+            open.take_preview();
+        }
+        // `run` reports a preview that fails on the status line itself.
+        let ran = open.preview.run(app, on, TITLE, cmd, &params).is_some();
+        if !on {
+            open.preview_selection = None;
+        } else if ran {
+            open.preview_selection = app.session.active().and_then(|state| state.interaction.as_ref()).map(|it| Arc::downgrade(&it.selection));
+        }
     }
+    app.color_dialogs.recolor = Some(open);
 }
 
 /// Feeds the open Recolor Artwork what it shows of the app, runs what its passes asked for, asks for
@@ -1594,8 +1690,27 @@ fn run_preview(app: &mut VectorcraftApp, (on, cmd, params): (bool, &'static str,
 /// previews its recolour: once a frame, after the window's dialog host ran.
 // PLAN: hub-w2 adds the line `recolor::pump(app, ctx)` to `dialogs::host::pump` (co.A6 names this pump).
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some(id) = app.color_dialogs.recolor.as_ref().map(|open| open.id) else { return };
+    let Some(open) = app.color_dialogs.recolor.as_ref() else { return };
+    let id = open.id;
     let Some(dialogs) = app.dialogs() else { return };
+    if let Some(reason) = open.problem(app) {
+        let requests = dialogs.with(|host| {
+            let d = host.get_mut_by_id::<RecolorDialog>(id)?;
+            let group_action = d.fields.fields.remove(GROUP_ACTION).is_some();
+            let save_group = d.fields.fields.remove(SAVE_GROUP).is_some();
+            let library = std::mem::take(&mut d.filed.library).then(|| Arc::clone(&d.opening));
+            Some((library, group_action || save_group))
+        });
+        if let Some((library, action_refused)) = requests {
+            if let Some(opening) = library {
+                pick_library(app, opening);
+            }
+            if action_refused {
+                app.status(reason);
+            }
+        }
+        return;
+    }
     // The colour the picker answered for a row reaches the row here, where the app can snap it to Limit to Library.
     dialogs.with(|host| {
         if let Some(d) = host.get_mut_by_id::<RecolorDialog>(id)
@@ -1632,7 +1747,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// Artwork dialog → {changed, canUndo, canRedo}.
 pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String> {
     const NOT_OPEN: &str = "Recolor Artwork is not open";
-    let id = app.color_dialogs.recolor.as_ref().map(|open| open.id).ok_or(NOT_OPEN)?;
+    let open = app.color_dialogs.recolor.as_ref().ok_or(NOT_OPEN)?;
+    if let Some(reason) = open.problem(app) {
+        return Err(crate::i18n::msg(reason));
+    }
+    let id = open.id;
     let dialogs = app.dialogs().ok_or(NOT_OPEN)?;
     let mut work = dialogs.with(|host| host.get_mut_by_id::<RecolorDialog>(id).map(RecolorDialog::take_work)).ok_or(NOT_OPEN)?;
     // Fields set since the last frame take effect first, as the next frame would give them.
@@ -1657,7 +1776,8 @@ pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String
 
 /// Whether Undo Changes (`back`) or Redo Changes can run: Recolor Artwork is open with a step to go to.
 pub(crate) fn can_step(app: &VectorcraftApp, back: bool) -> bool {
-    app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get::<RecolorDialog>().is_some_and(|d| d.steps.can(&d.fields, back))))
+    app.color_dialogs.recolor.as_ref().is_some_and(|open| open.problem(app).is_none())
+        && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get::<RecolorDialog>().is_some_and(|d| d.steps.can(&d.fields, back))))
 }
 
 /// Row `i`'s new colour set to `c` (the Color Picker's OK), snapped to Limit to Library.
@@ -1676,6 +1796,10 @@ pub(super) fn with_new_color(app: &VectorcraftApp, d: &mut RecolorDialog, i: usi
 /// save colours opened alone as a new colour group). The dialog closes once this answers `Ok`; an
 /// `Err` keeps it open with the reason.
 fn confirm(app: &mut VectorcraftApp, fields: &Fields) -> Result<(), String> {
+    let open = app.color_dialogs.recolor.as_ref().ok_or("Recolor Artwork is not open")?;
+    if let Some(reason) = open.problem(app) {
+        return Err(crate::i18n::msg(reason));
+    }
     let mut d = fields.clone();
     select_group(app, &mut d)?;
     sync(app, &mut d);
@@ -1694,7 +1818,7 @@ fn confirm(app: &mut VectorcraftApp, fields: &Fields) -> Result<(), String> {
         }
         r?;
     }
-    let preview = app.color_dialogs.recolor.as_mut().map(|open| std::mem::take(&mut open.preview)).unwrap_or_default();
+    let preview = app.color_dialogs.recolor.as_mut().map(Open::take_preview).unwrap_or_default();
     let committed = if d.bool("__newGroup") {
         let colors = group_colors(app, &d, rows(&d).iter().filter(|r| in_group(r) && to_color(r).is_some()));
         preview.commit(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}))
@@ -1717,6 +1841,8 @@ fn confirm(app: &mut VectorcraftApp, fields: &Fields) -> Result<(), String> {
 /// commits the recolour.
 pub(crate) struct RecolorDialog {
     id: DialogId,
+    /// The identity of this opening, since Recolor Artwork reuses its dialog ID.
+    opening: Arc<()>,
     fields: Fields,
     steps: Steps,
     held: HeldAnswer<Fields>,
@@ -1739,6 +1865,7 @@ impl RecolorDialog {
     fn new(app: &VectorcraftApp, fields: Fields) -> Self {
         RecolorDialog {
             id: dialog_id(KIND),
+            opening: Arc::new(()),
             feed: Feed::of(app, &fields),
             steps: Steps::opened(snapshot(&fields)),
             fields,
@@ -1755,6 +1882,7 @@ impl RecolorDialog {
     /// The values, steps and requests, for the pump to work on with the app.
     fn take_work(&mut self) -> Work {
         Work {
+            opening: Arc::clone(&self.opening),
             fields: std::mem::take(&mut self.fields),
             steps: std::mem::replace(&mut self.steps, Steps::opened(Snapshot::new())),
             filed: std::mem::take(&mut self.filed),
@@ -1809,10 +1937,7 @@ impl RecolorDialog {
         let mut preview = self.fields.bool("preview");
         let footer = ResetFooter::new(ui, None, true);
         let RecolorDialog { fields, feed, filed, ends, row_menu, .. } = self;
-        // PLAN: Enter is not OK here: a form whose OK stays open closes on Enter without reporting it as its OK
-        // (form_dialogs/form.rs:429, :534), which would close a held dialog unanswered; the forms owner makes
-        // `FormDialog` report Enter as the pick of OK when `accept_stays_open` is on.
-        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).enter_confirms(false).ok_enabled(!waiting);
+        let mut form = FormDialog::new(tl!(TITLE), Bind::bound(fields)).accept_stays_open(true).ok_enabled(!waiting);
         if art {
             form = form.preview(Some(Bind::bound(&mut preview)));
         }
@@ -2076,7 +2201,7 @@ fn assign_tab(
     let total: usize = rows.iter().map(|r| r["from"].as_array().map_or(0, Vec::len)).sum();
     // Reduction and the preserve rules apply to art (a colour group alone has a row per colour).
     if art {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             let counts: Vec<Entry<usize>> = std::iter::once(Entry::new(0, Label::from(tl!("Auto"))))
                 .chain((1..=total).map(|n| Entry::new(n, Label::from(n.to_string()))))
                 .collect();
@@ -2093,9 +2218,6 @@ fn assign_tab(
                 }
             }
         });
-    }
-    if rows.is_empty() {
-        Text::new(tl!("No colors to recolor (preserved colors are left out).")).shade(Shade::Muted).show(ui);
     }
     let columns = vec![
         ColumnSpec::new(
@@ -2124,10 +2246,12 @@ fn assign_tab(
     let source = keyed(&keys, |k| *k).with_text(|k| Cow::Owned(names.get(*k).cloned().unwrap_or_default()));
     let edits: RefCell<Vec<RowEdit>> = RefCell::new(Vec::new());
     let shown_rows: &[Value] = rows;
-    let out = Table::<usize>::new(tl!("Colors"), columns).min_rows(5).max_rows(8).selection(Bind::bound(&mut sel)).show_items(
-        ui,
-        &source,
-        &mut |key, icx| {
+    let out = Table::<usize>::new(tl!("Colors"), columns)
+        .min_rows(5)
+        .max_rows(8)
+        .empty(tl!("No colors to recolor (preserved colors are left out)."))
+        .selection(Bind::bound(&mut sel))
+        .show_items(ui, &source, &mut |key, icx| {
             let i = *key;
             let edits = &edits;
             let row = shown_rows.get(i).cloned().unwrap_or_default();
@@ -2161,8 +2285,7 @@ fn assign_tab(
                         edits.borrow_mut().push(RowEdit::Hex(i, *c));
                     }
                 })
-        },
-    );
+        });
     let mut items = sel.items.clone();
     items.sort_unstable();
     items.dedup();
@@ -3068,6 +3191,94 @@ mod tests {
         let rc = Recolor::new(app);
         rc.app().run("ui.recolorDialog", params).unwrap();
         rc
+    }
+
+    fn two_red_drawings() -> (Recolor, u64, u64) {
+        let mut app = app(120);
+        let opening = square(&mut app, 10.0, "#ff0000");
+        app.run("select.set", json!({"ids": [opening]})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let other = square(&mut app, 60.0, "#ff0000");
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut rc = opened(app, json!({}));
+        rc.set("method", json!(Method::Exact.id())).unwrap();
+        rc.frame();
+        rc.set("rows", json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}])).unwrap();
+        (rc, opening, other)
+    }
+
+    #[test]
+    fn recolor_preview_does_not_change_the_other_drawings_art() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        rc.frame();
+
+        assert_eq!(fill_hex(&rc, other), "#ff0000", "preview leaves the other drawing's fill alone");
+        assert!(!rc.app().session.in_interaction());
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        rc.frame();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+        rc.confirm().unwrap();
+    }
+
+    #[test]
+    fn recolor_ok_keeps_the_draft_on_the_opening_drawing() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.set("preview", json!(false)).unwrap();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        let undo = undo_len(&rc.app());
+        let confirmed = rc.confirm();
+
+        assert_eq!(fill_hex(&rc, other), "#ff0000", "OK leaves the other drawing's fill alone");
+        assert_eq!(undo_len(&rc.app()), undo);
+        assert!(confirmed.is_err() && rc.is_open());
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#ff0000");
+        rc.confirm().unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+    }
+
+    #[test]
+    fn recolor_cancel_leaves_the_other_drawings_pending_edit() {
+        let (mut rc, opening, other) = two_red_drawings();
+        rc.frame();
+        assert_eq!(fill_hex(&rc, opening), "#00ff00");
+        {
+            let mut app = rc.app();
+            app.run("document.activate", json!({"index": 1})).unwrap();
+            app.session.begin_interaction("Other edit").unwrap();
+            app.session.preview("paint.setFill", &json!({"ids": [other], "color": "#0000ff"})).unwrap();
+        }
+        rc.cancel();
+
+        assert!(rc.app().session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(fill_hex(&rc, other), "#0000ff");
+        rc.app().session.commit_interaction().unwrap();
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(fill_hex(&rc, opening), "#ff0000");
+    }
+
+    #[test]
+    fn recolor_delete_leaves_the_other_drawings_same_named_group() {
+        let mut app = app(120);
+        app.run("swatch.newGroup", json!({"name": "Shared", "colors": ["#00ff00"]})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Shared", "colors": ["#ff0000"]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut rc = opened(app, json!({"group": "Shared"}));
+        rc.frame();
+        rc.app().run("document.activate", json!({"index": 1})).unwrap();
+        let other = group_hex(&rc.app(), "Shared");
+
+        rc.act("delete").unwrap();
+
+        assert_eq!(group_hex(&rc.app(), "Shared"), other, "Delete leaves the other drawing's group alone");
+        rc.app().run("document.activate", json!({"index": 0})).unwrap();
+        rc.frame();
+        assert!(group_hex(&rc.app(), "Shared").is_some(), "a refused action does not run after returning");
+        rc.act("delete").unwrap();
+        assert!(group_hex(&rc.app(), "Shared").is_none());
     }
 
     #[test]

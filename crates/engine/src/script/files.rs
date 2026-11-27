@@ -923,8 +923,15 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 /// that is not well formed is left out. It is read under [`lock_store`]'s lock, so it is read
 /// between two changes, and none are read when the lock cannot be taken.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let Ok(_lock) = lock_store(store) else { return Vec::new() };
-    load_store(store, false).unwrap_or_default()
+    list_store(store).unwrap_or_default()
+}
+
+/// The grants [`read_store`] reads; none when the grants file is missing, and `Err` when the lock
+/// cannot be taken or the file is there but cannot be read, is too large, is not a grants file of
+/// this version or holds no list of grants.
+fn list_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    let _lock = lock_store(store)?;
+    load_store(store, false)
 }
 
 /// The grants the grants file at `store` holds, to change and write back; none when it is missing,
@@ -940,7 +947,8 @@ fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
 fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
     let bytes = match read_head(store, MAX_STORE_BYTES) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        // A link whose target is missing is there but cannot be read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(store).is_err() => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
     if bytes.len() > MAX_STORE_BYTES {
@@ -958,14 +966,14 @@ fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Val
             && g["write"].is_boolean()
             && g["folder"].is_boolean()
     };
+    let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
     if strict {
-        let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
         if grants.len() > MAX_STORED_GRANTS || !grants.iter().all(valid) {
             return Err(std::io::Error::other("the grants file holds a grant that cannot be read"));
         }
         return Ok(grants.clone());
     }
-    Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
+    Ok(grants.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect())
 }
 
 /// The number in the name of the next file [`write_store`] writes before it takes the grants file's
@@ -1065,21 +1073,35 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
-/// its text, the path and whether it may be written (`script.grants`).
-pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
-    read_store(&data_dir.with_file_name(GRANTS_FILE))
+/// its text, the path and whether it may be written (`script.grants`); as [`list_store`] reads them.
+pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    list_store(&data_dir.with_file_name(GRANTS_FILE))
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
 /// `path`, of both when both are given and of every grant when neither is (`script.grants.revoke`).
-/// → how many were removed.
-pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
+/// The spellings of each are tried in order, the script's first, and the first pair that some grant
+/// holds is the one removed, so a grant kept under the spellings given first is removed without the
+/// grants of later ones. → how many were removed.
+pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&[String]>, path: Option<&[String]>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
-    let kept: Vec<serde_json::Value> =
-        grants.into_iter().filter(|g| !(script.is_none_or(|s| g["script"] == *s) && path.is_none_or(|p| g["path"] == *p))).collect();
+    // `None` matches any value; `Some(name)` only that name.
+    fn spellings(names: Option<&[String]>) -> Vec<Option<&str>> {
+        match names {
+            None => vec![None],
+            Some(names) => names.iter().map(|n| Some(n.as_str())).collect(),
+        }
+    }
+    let matches = |g: &serde_json::Value, (script, path): (Option<&str>, Option<&str>)| {
+        script.is_none_or(|s| g["script"] == s) && path.is_none_or(|p| g["path"] == p)
+    };
+    let pairs = spellings(script).into_iter().flat_map(|s| spellings(path).into_iter().map(move |p| (s, p)));
+    let pair = pairs.into_iter().find(|&pair| grants.iter().any(|g| matches(g, pair)));
+    let Some(pair) = pair else { return Ok(0) };
+    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !matches(g, pair)).collect();
     let removed = before - kept.len();
     if removed > 0 {
         write_store(&store, kept)?;

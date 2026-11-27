@@ -115,6 +115,18 @@ fn simplify_opens_a_slider_whose_drag_previews_fewer_or_more_points() {
     assert_eq!(anchor_count(&app), 2);
 }
 
+/// The Simplify dialog's count of anchor points before and after is in the window's accessibility tree.
+#[test]
+fn the_simplify_dialog_names_its_anchor_point_counts() {
+    let mut app = app_with_dense_path();
+    open_simplify_dialog(&mut app);
+    settle(&mut app);
+    let out = frame(&mut app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let names: Vec<&str> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+    assert!(names.iter().any(|n| n.starts_with("Anchor Points:") && n.contains('→')), "{names:?}");
+}
+
 /// A wave of 20 anchors `width` pt wide and `width / 5` pt high, selected.
 fn app_with_wave(width: f64) -> VectorcraftApp {
     let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));
@@ -165,6 +177,34 @@ fn simplify_slider_escape_puts_the_paths_back() {
     assert_eq!(app.session.doc().unwrap().doc, before);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len);
     assert_eq!(anchor_count(&app), 20);
+}
+
+#[test]
+fn path_sliders_close_on_a_drawing_switch() {
+    for (kind, command) in
+        [(simplify_slider::StripKind::Simplify, "object.path.simplify"), (simplify_slider::StripKind::Smooth, "object.path.smooth")]
+    {
+        let mut app = app_with_dense_path();
+        let original = app.session.doc().unwrap().doc.clone();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let anchors: Vec<_> = (0..20).map(|i| json!({"x": 30 + i * 15, "y": 120.0 + (i % 2) as f64 * 0.2})).collect();
+        let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.anchors", json!({"id": id, "anchors": [[0, 19]]})).unwrap();
+        let second = app.session.doc().unwrap().doc.clone();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        crate::menus::invoke(&mut app, command, json!({}));
+        settle(&mut app);
+        assert!(simplify_slider::showing_of(&app, kind));
+        assert!(app.session.in_interaction());
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert!(simplify_slider::auto_of(&mut app, kind).is_err(), "Auto must not use the second drawing");
+        frame(&mut app, vec![]);
+        assert!(!simplify_slider::showing_of(&app, kind));
+        assert!(!app.session.in_interaction());
+        assert_eq!(app.session.doc().unwrap().doc, second);
+        assert_eq!(app.session.documents()[0].doc, original);
+    }
 }
 
 /// The Simplify slider stays where it opened, under the paths as they were, while the preview changes their bounds, so a

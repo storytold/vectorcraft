@@ -27,6 +27,8 @@ struct Window {
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
     texts: Vec<(String, Rect)>,
+    /// The named nodes of its last frame's access tree, with their rects in the window.
+    nodes: Vec<(String, Rect)>,
 }
 
 struct Host {
@@ -77,6 +79,7 @@ impl Host {
                 dropped: Vec::new(),
                 frames: 0,
                 texts: Vec::new(),
+                nodes: Vec::new(),
             });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
@@ -105,9 +108,16 @@ impl Host {
         }
         let mut shown = Vec::new();
         full.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        let nodes = full.platform_output.accesskit_update.as_ref().map_or_else(Vec::new, |update| {
+            let rect = |b: egui::accesskit::Rect| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32));
+            update.nodes.iter().filter_map(|(_, node)| Some((node.label()?.to_string(), rect(node.bounds()?)))).collect()
+        });
         let mut host = host.borrow_mut();
         if let Some(window) = host.windows.get_mut(&id) {
             window.texts = shown;
+            if !nodes.is_empty() {
+                window.nodes = nodes;
+            }
         }
         host.apply(&full);
     }
@@ -232,6 +242,44 @@ fn an_explicit_float_command_updates_an_existing_native_windows_geometry() {
     }
 }
 
+/// Swatches and Color as tabs of one native window, with its OS window drawn.
+fn native_tab_group(h: &mut Harness) -> ViewportId {
+    let viewport = h.float("swatches");
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    viewport
+}
+
+#[test]
+fn a_group_float_of_a_tab_group_resizes_its_native_window() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let id = floating_window(layout_of(&h.app.ui), "swatches").unwrap().id;
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(floating_window(layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
+/// `window.toolbar.float` with x, y moves the OS window a toolbar made with New Toolbar already has.
+#[test]
+fn floating_a_toolbar_at_a_point_moves_its_native_window() {
+    let mut h = Harness::new();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 240, "y": 160})).unwrap();
+    h.frames(3);
+    let panel = crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&h.app.ui, "Mine").unwrap().id);
+    let viewport = h.viewport(&panel);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(240.0, 160.0));
+    h.app.run("window.toolbar.float", json!({"name": "Mine", "x": 300, "y": 220})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport(&panel), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(300.0, 220.0));
+}
+
 #[test]
 fn keys_typed_in_a_native_window_run_the_main_windows_shortcuts() {
     let mut h = Harness::new();
@@ -317,6 +365,7 @@ fn button(pos: Pos2, pressed: bool) -> Event {
 #[test]
 fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     let mut h = Harness::new();
+    h.ctx.enable_accesskit();
     let id = h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     let id = vectorcraft_doc::NodeId(id);
     let viewport = h.float("graphicStyles");
@@ -327,8 +376,14 @@ fn art_dragged_from_the_canvas_onto_a_native_panel_window_drops_there() {
     let before = art(&h);
     let view = h.app.canvas_view().expect("the canvas was drawn");
     let from = view.to_screen(vectorcraft_geom::Point::new(35.0, 30.0));
-    let window = h.host.borrow().windows.get(&viewport).map(|w| w.rect).unwrap();
-    let to = window.min + vec2(60.0, 120.0) - ORIGIN.to_vec2();
+    // The first style's tile, found by its name: the panel takes art dropped onto a style or between styles.
+    let first = h.app.session.active().unwrap().doc.graphic_styles[0].name.clone();
+    let to = {
+        let host = h.host.borrow();
+        let window = &host.windows[&viewport];
+        let tile = window.nodes.iter().find(|(name, _)| *name == first).map(|(_, r)| *r).expect("the first style's tile");
+        window.rect.min + tile.center().to_vec2() - ORIGIN.to_vec2()
+    };
     assert!(view.rect.contains(to), "the window lies over the canvas");
     h.frame(vec![Event::PointerMoved(from), button(from, true)]);
     for k in 1..=8 {

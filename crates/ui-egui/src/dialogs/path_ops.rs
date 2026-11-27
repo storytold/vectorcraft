@@ -3,18 +3,25 @@
 //! Every dialog is a held parameter dialog: its OK is the closure given to `open_held`, a refusal keeps it open with
 //! the reason, and [`pump`] only runs the live preview of the kinds that have one.
 
+use std::sync::{Arc, Weak};
+
 // PLAN: the framework import paths below are assumed from the contract rows (craft-ui-patterns re-exports contract and
 // runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
-use craft::ui::contract::{Bind, FieldLabelRole, Show as _, ShowContainer as _, SideLabel};
+use craft::behavior::ColumnWidth;
+use craft::ui::contract::{Bind, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::DialogId;
+use craft::ui::display::Text;
 use craft::ui::form::Field;
+use craft::ui::layout::GridFit;
+use craft::ui::layout_components::Grid;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::runtime::measure;
 use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
 use craft::ui::text::{NumberField, NumberOutput};
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{NodeId, NodeKind};
+use vectorcraft_doc::{NodeId, NodeKind, Selection};
 use vectorcraft_geom::PathData;
 
 use super::form;
@@ -28,6 +35,10 @@ use crate::VectorcraftApp;
 /// The command's `cornerAngle` is the turn above which an anchor stays a corner, so the dialog
 /// sends 180° less the threshold: 150° sends `object.path.simplify`'s default of 30°.
 pub(crate) const ANGLE_THRESHOLD: f64 = 150.0;
+
+/// Split Into Grid's two columns, each as wide as its fields: the rows on the left, the columns on the right. The
+/// grid keeps both columns in a narrow dialog.
+const AXES: [ColumnWidth; 2] = [ColumnWidth::Content; 2];
 
 /// Simplify's tolerance when the dialog opens from the menu, in points.
 const DEFAULT_TOLERANCE: f64 = 1.0;
@@ -114,8 +125,55 @@ pub(crate) struct Open {
 /// The open Split Into Grid dialog's live state.
 pub(crate) struct SplitOpen {
     id: DialogId,
+    document: u64,
     preview: LivePreview,
-    last: Value,
+    /// An interaction allocates its own selection snapshot, even when the selected objects did not change.
+    preview_selection: Option<Weak<Selection>>,
+}
+
+impl SplitOpen {
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        let Some(selection) = &self.preview_selection else { return false };
+        app.session.active().is_some_and(|state| {
+            state.uid == self.document
+                && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
+        })
+    }
+
+    fn update_preview(&mut self, app: &mut VectorcraftApp, on: bool, fields: &DialogFields) {
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else { return };
+        if !self.owns_preview(app) {
+            self.preview = LivePreview::default();
+            self.preview_selection = None;
+            if state.interaction.is_some() {
+                return;
+            }
+        }
+        let params = split_params(fields);
+        let ran = self.preview.run(app, on, tl!("Split Into Grid"), SPLIT_COMMAND, &params).is_some();
+        if !on {
+            self.preview_selection = None;
+        } else if ran {
+            self.preview_selection = app.session.active().and_then(|state| state.interaction.as_ref()).map(|it| Arc::downgrade(&it.selection));
+        }
+    }
+
+    fn confirm(&mut self, app: &mut VectorcraftApp, fields: &DialogFields) -> Result<(), String> {
+        if app.session.active().is_none_or(|state| state.uid != self.document) {
+            return Err(tl!("Split Into Grid can only change the document where it was opened.").to_owned());
+        }
+        if app.session.in_interaction() && !self.owns_preview(app) {
+            return Err(tl!("Finish the active edit before applying Split Into Grid.").to_owned());
+        }
+        self.preview_selection = None;
+        std::mem::take(&mut self.preview).commit(app, SPLIT_COMMAND, split_params(fields)).map(drop)
+    }
+
+    fn cancel(self, app: &mut VectorcraftApp) {
+        if self.owns_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
 }
 
 /// The command the dialog runs and its parameters.
@@ -174,7 +232,7 @@ pub(crate) fn split_fields(width: f64, height: f64) -> DialogFields {
 fn cell(ui: &mut egui::Ui, label: &'static str, name: String, describes: bool, value: f64, lengths: Option<LengthUnits>) -> Option<f64> {
     let role = if describes { FieldLabelRole::Describes } else { FieldLabelRole::Names };
     let mut edited = None;
-    Field::new(label).side(SideLabel::new().role(role)).show(ui, |ui, _| {
+    Field::new(label).side(SideLabel::new().role(role)).id_salt(name.as_str()).show(ui, |ui, _| {
         let bind = Bind::given(Some(value));
         let out: NumberOutput = match lengths {
             Some(l) => NumberField::length(name.clone(), bind, l).show(ui),
@@ -193,41 +251,45 @@ fn split_grid(ui: &mut egui::Ui, f: &mut DialogFields, lengths: LengthUnits) -> 
         ("rows", tl!("Rows:"), tl!("Height:"), "rowGutter", "totalHeight", 2.0),
         ("columns", tl!("Columns:"), tl!("Width:"), "columnGutter", "totalWidth", 2.0),
     ];
-    egui::Grid::new("split-grid")
-        .num_columns(2)
-        .show(ui, |ui| {
-            for (number, label, _, _, _, default) in axes {
-                let n = f.number(number).unwrap_or(default);
-                if let Some(v) = cell(ui, label, label.to_string(), false, n, None) {
-                    f.set(number, v);
-                }
+    // The grid can run its body twice in a pass, so the body edits a copy, kept only from the run that takes effect.
+    let before = f.clone();
+    let mut edited = None;
+    let shown = Grid::new(&AXES).fit(GridFit::Fixed).id_salt("split-grid").show(ui, |ui, _| {
+        let mut f = before.clone();
+        for (number, label, _, _, _, default) in axes {
+            let n = f.number(number).unwrap_or(default);
+            if let Some(v) = cell(ui, label, label.to_string(), false, n, None) {
+                f.set(number, v);
             }
-            ui.end_row();
-            for (number, _, label, gutter, total, default) in axes {
-                let n = f.number(number).unwrap_or(default).max(1.0);
-                let gaps = f.number(gutter).unwrap_or(0.0) * (n - 1.0);
-                let size = (f.number(total).unwrap_or(0.0) - gaps) / n;
-                if let Some(v) = cell(ui, label, label.to_string(), false, size, Some(lengths)) {
-                    f.set(total, n * v + gaps);
-                }
+        }
+        for (number, _, label, gutter, total, default) in axes {
+            let n = f.number(number).unwrap_or(default).max(1.0);
+            let gaps = f.number(gutter).unwrap_or(0.0) * (n - 1.0);
+            let size = (f.number(total).unwrap_or(0.0) - gaps) / n;
+            if let Some(v) = cell(ui, label, label.to_string(), false, size, Some(lengths)) {
+                f.set(total, n * v + gaps);
             }
-            ui.end_row();
-            for (_, axis, _, gutter, _, _) in axes {
-                let label = tl!("Gutter:");
-                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(gutter).unwrap_or(0.0), Some(lengths)) {
-                    f.set(gutter, v);
-                }
+        }
+        for (_, axis, _, gutter, _, _) in axes {
+            let label = tl!("Gutter:");
+            if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(gutter).unwrap_or(0.0), Some(lengths)) {
+                f.set(gutter, v);
             }
-            ui.end_row();
-            for (_, axis, _, _, total, _) in axes {
-                let label = tl!("Total:");
-                if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(total).unwrap_or(0.0), Some(lengths)) {
-                    f.set(total, v);
-                }
+        }
+        for (_, axis, _, _, total, _) in axes {
+            let label = tl!("Total:");
+            if let Some(v) = cell(ui, label, format!("{axis} {label}"), true, f.number(total).unwrap_or(0.0), Some(lengths)) {
+                f.set(total, v);
             }
-            ui.end_row();
-        })
-        .response
+        }
+        if measure::effect(ui.ctx(), "Split Into Grid's fields edit their values") {
+            edited = Some(f);
+        }
+    });
+    if let Some(edited) = edited {
+        *f = edited;
+    }
+    shown.output
 }
 
 /// Split Into Grid's rows: the grid and Add Guides.
@@ -286,7 +348,7 @@ fn counts_row(ui: &mut egui::Ui, f: &DialogFields) {
     if let Some(FieldValue::Json(c)) = f.get(COUNTS)
         && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
     {
-        ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
+        Text::new(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points")))).show(ui);
     }
 }
 
@@ -397,34 +459,25 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
         app.status("There is no window to show the dialog in.");
         return;
     };
-    let (width, height) =
-        app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
+    let Some(state) = app.session.active() else {
+        app.status("Open a document before using Split Into Grid.");
+        return;
+    };
+    let document = state.uid;
+    let (width, height) = state.doc.bounds_of(&state.selection.objects, false).map_or((0.0, 0.0), |b| (b.width(), b.height()));
     let lengths = crate::canvas::general_lengths(app);
     let dialog = HostedParamDialog::new(&ctx, SPLIT_COMMAND, split_fields(width, height), move |f| {
         ParamDialog::new(SPLIT_COMMAND, tl!("Split Into Grid"), split_rows(lengths)).values(Bind::bound(f)).previews(true)
     });
     let ok = |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
-        let params = split_params(&result.fields);
-        match app.object_dialogs.split.take() {
-            Some(record) => {
-                let id = record.id;
-                record.preview.commit(app, SPLIT_COMMAND, params).map(drop).inspect_err(|_| {
-                    app.object_dialogs.split = Some(SplitOpen { id, preview: LivePreview::default(), last: Value::Null });
-                })
-            }
-            None => app.run(SPLIT_COMMAND, params).map(drop),
-        }
+        let Some(mut record) = app.object_dialogs.split.take() else { return Err(tl!("The Split Into Grid dialog is closed.").to_owned()) };
+        record.confirm(app, &result.fields).inspect_err(|_| app.object_dialogs.split = Some(record))
     };
     if let Some(old) = app.object_dialogs.split.take() {
-        old.preview.cancel(app);
+        old.cancel(app);
     }
-    let cancel = Box::new(|app: &mut VectorcraftApp| {
-        if let Some(record) = app.object_dialogs.split.take() {
-            record.preview.cancel(app);
-        }
-    });
-    match open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }) {
-        Some(id) => app.object_dialogs.split = Some(SplitOpen { id, preview: LivePreview::default(), last: Value::Null }),
+    match open_held(app, dialog, ok) {
+        Some(id) => app.object_dialogs.split = Some(SplitOpen { id, document, preview: LivePreview::default(), preview_selection: None }),
         None => app.status("There is no window to show the dialog in."),
     }
 }
@@ -443,17 +496,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     records.append(&mut app.object_dialogs.path);
     app.object_dialogs.path = records;
-    if let Some(mut s) = app.object_dialogs.split.take() {
-        if let Some((on, fields)) = dialog_state(app, s.id) {
-            let params = split_params(&fields);
-            if !on {
-                s.last = Value::Null;
-            }
-            if s.preview.run(app, on, tl!("Split Into Grid"), SPLIT_COMMAND, &params).is_some() {
-                s.last = params;
-            }
+    if let Some(mut split) = app.object_dialogs.split.take() {
+        if let Some((on, fields)) = dialog_state(app, split.id) {
+            split.update_preview(app, on, &fields);
+            app.object_dialogs.split = Some(split);
+        } else {
+            split.cancel(app);
         }
-        app.object_dialogs.split = Some(s);
     }
 }
 
@@ -502,4 +551,116 @@ pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
             _ => None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod split_tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::dialogs::tests::{app, cancel, confirm, frame, is_open, set};
+
+    fn selected_rectangle(app: &mut VectorcraftApp, width: u32, height: u32) {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": width, "height": height})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+    }
+
+    fn other_document(app: &mut VectorcraftApp) {
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        selected_rectangle(app, 150, 90);
+    }
+
+    #[test]
+    fn split_into_grid_skips_preview_in_the_other_drawing() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        let original = app.session.doc().unwrap().doc.clone();
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        other_document(&mut app);
+        let other = app.session.doc().unwrap().doc.clone();
+        set(&mut app, "preview", json!(true));
+
+        frame(&mut app, vec![]);
+
+        assert!(app.session.doc().unwrap().doc == other, "the other drawing is unchanged by Preview");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        frame(&mut app, vec![]);
+        assert_ne!(app.session.doc().unwrap().doc, original);
+        assert!(app.session.in_interaction());
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 6);
+        assert!(!app.session.in_interaction());
+    }
+
+    #[test]
+    fn split_into_grid_keeps_the_draft_when_ok_is_in_another_drawing() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        other_document(&mut app);
+        let other = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+
+        let closed = confirm(&mut app);
+
+        assert!(app.session.doc().unwrap().doc == other, "the other drawing is unchanged by OK");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(!closed && is_open(&app), "the user can return to confirm");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn split_into_grid_cancel_preserves_the_other_drawings_edit() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        other_document(&mut app);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let opening = app.session.doc().unwrap().doc.clone();
+        open_split(&mut app);
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert!(app.session.in_interaction(), "the opening drawing is previewing");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Other edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+        assert!(cancel(&mut app));
+
+        assert!(app.session.in_interaction(), "Cancel preserves the other drawing's pending edit");
+        assert_eq!(app.session.doc().unwrap().doc, other);
+        app.session.commit_interaction().unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+    }
+
+    #[test]
+    fn split_into_grid_does_not_adopt_a_new_edit_on_return() {
+        let mut app = app();
+        selected_rectangle(&mut app, 112, 62);
+        other_document(&mut app);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        open_split(&mut app);
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert!(app.session.in_interaction());
+        for index in [1, 0] {
+            app.run("document.activate", json!({"index": index})).unwrap();
+        }
+        app.session.begin_interaction("New edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        let editing = app.session.doc().unwrap().doc.clone();
+
+        frame(&mut app, vec![]);
+        assert!(!confirm(&mut app));
+        assert!(cancel(&mut app));
+
+        assert!(app.session.in_interaction());
+        assert_eq!(app.session.doc().unwrap().doc, editing);
+    }
 }

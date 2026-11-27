@@ -66,6 +66,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
         app.status(tl!("no document").to_string());
         return true;
     };
+    let document = st.uid;
     let vars = st.doc.variables.clone();
     let mut fields = DialogFields::new();
     match id {
@@ -128,18 +129,19 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
         let rows = params(&vars, &build_id, fields);
         ParamDialog::command(KEY, Label::from(title.clone()), rows)
     });
-    crate::dialogs::host::open_held(app, dialog, move |app, result| ok(app, &command, result));
+    crate::dialogs::host::open_held(app, dialog, move |app, result| ok(app, document, &command, result));
     true
 }
 
 /// Runs `command` with what the confirmed `result` says. A data set dialog answers the error, which
 /// keeps it open with what was typed (a taken or empty name); any other command's error goes to the
 /// status line and the dialog closes.
-fn ok(app: &mut VectorcraftApp, command: &str, result: &ParamResult) -> Result<(), String> {
-    let Some(vars) = app.session.active().map(|st| st.doc.variables.clone()) else {
-        return Err(tl!("no document").to_string());
+fn ok(app: &mut VectorcraftApp, document: u64, command: &str, result: &ParamResult) -> Result<(), String> {
+    let Some(st) = app.session.active().filter(|st| st.uid == document) else {
+        return Err(tl!("These changes belong to the document this dialog was opened for.").to_owned());
     };
-    let Err(e) = app.run(command, params_of(command, result, &vars)) else { return Ok(()) };
+    let params = params_of(command, result, &st.doc.variables);
+    let Err(e) = app.run(command, params) else { return Ok(()) };
     if matches!(command, "dataset.new" | "dataset.set") {
         return Err(e);
     }
@@ -438,6 +440,37 @@ mod tests {
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!({"text": "Changed"}));
         assert_eq!(sets["datasets"][0]["values"]["Badge"], json!({"visible": true}));
+    }
+
+    #[test]
+    fn a_data_set_edit_stays_with_the_drawing_that_opened_it() {
+        let mut app = app_with_variables();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Source"}})).unwrap();
+        app.run("file.new", json!({"width": 240, "height": 220})).unwrap();
+        app.run("variable.define", json!({"name": "Title", "kind": "text"})).unwrap();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Other"}})).unwrap();
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let other = app.run("dataset.list", json!({})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        activate(&mut app, 0);
+        assert!(open(&mut app, "dataset.set", None));
+        set(&mut app, "name", json!("Revised"));
+        set(&mut app, &value_key("Title"), json!("New value"));
+        activate(&mut app, 1);
+        ok(&mut app);
+
+        assert_eq!(app.run("dataset.list", json!({})).unwrap(), other);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&app));
+        assert_eq!(fields(&app)[value_key("Title")], "New value");
+
+        activate(&mut app, 0);
+        ok(&mut app);
+        assert!(!is_open(&app));
+        let source = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(source["datasets"][0]["name"], "Revised");
+        assert_eq!(source["datasets"][0]["values"]["Title"], json!({"text": "New value"}));
     }
 
     #[test]

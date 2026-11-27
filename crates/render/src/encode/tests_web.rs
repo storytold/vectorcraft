@@ -22,6 +22,15 @@ fn locked_colours_survive_a_reduction() {
     let ix = quantize_locked(&px, 64, 16, &o, &[rare]);
     assert!(ix.palette.contains(&rare) && ix.palette.len() <= 4, "{:?}", ix.palette);
     assert_eq!(colours(&ix)[0], rare);
+    // Black & White with black locked and one entry left: white takes it, though most pixels are black.
+    let px = image(8, 8, |x, _| if x == 7 { [255; 3] } else { [0; 3] });
+    let o = PaletteOptions { colors: 2, dither: Dither::None, reduction: Reduction::BlackWhite, ..Default::default() };
+    let ix = quantize_locked(&px, 8, 8, &o, &[[0; 3]]);
+    assert_eq!(ix.palette, [[0; 3], [255; 3]]);
+    // With a light gray locked, black takes the entry left, though most pixels are white.
+    let px = image(10, 1, |x, _| if x < 4 { [0; 3] } else { [255; 3] });
+    let ix = quantize_locked(&px, 10, 1, &o, &[[200; 3]]);
+    assert_eq!(ix.palette, [[200; 3], [0; 3]]);
 }
 
 #[test]

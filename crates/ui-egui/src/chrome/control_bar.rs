@@ -23,14 +23,18 @@ pub(crate) mod rank {
     pub const SELECT_SIMILAR: u8 = 1;
     /// The inline X/Y/W/H fields and the Snapping menu.
     pub const FIELDS: u8 = 2;
+    /// The type groups (Character, Paragraph and area type's vertical alignment) and the Align buttons after them:
+    /// they leave after Select Similar, Snapping and the X/Y/W/H fields and before every other member, so Opacity,
+    /// the Style picker and Recolor Artwork show while type is selected.
+    pub const TYPE: u8 = 3;
     /// The parts of a group that its other members work without: the width profile, Recolor Artwork, Global Edit
     /// Options, Document Setup, an image's Edit Original.
-    pub const DETAIL: u8 = 3;
+    pub const DETAIL: u8 = 4;
     /// The Opacity link and field: they leave before the groups, so the narrower Style link and picker after them
     /// can show without them.
-    pub const OPACITY: u8 = 4;
+    pub const OPACITY: u8 = 5;
     /// Every other member of the bar.
-    pub const GROUP: u8 = 5;
+    pub const GROUP: u8 = 6;
 }
 
 /// An anchor button: icon, tooltip, command and the convert command's `to`.
@@ -116,48 +120,21 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
-/// The selected paths' eligible corners, as document lengths, beside the anchor controls.
-/// Explicit partial selections with no corners contribute no target (unlike `picked`'s fallback).
+/// The Corners link and the radius of the selected paths' picked corners
+/// ([`crate::panels::picked_corners`]), beside the anchor controls. The link opens the Corners
+/// pop-up for those corners; a narrow bar leaves out the link and the field together.
 fn corner_radius(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else { return };
-    let mut items = Vec::new();
-    let mut radius: Option<f64> = None;
-    let mut mixed = false;
-    for &id in &st.selection.objects {
-        let Some(lc) = st.doc.node(id).and_then(vectorcraft_doc::LiveCorners::of) else { continue };
-        let corners = st.selection.partial(id).map_or_else(|| lc.all(), |anchors| lc.corners_of(anchors));
-        if corners.is_empty() {
-            continue;
-        }
-        for &k in &corners {
-            // Keep absolute requested radii, even when their drawing is fitted smaller. Relative
-            // storage is a fraction, but the field and setLiveShape both consume document lengths.
-            let value = if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) };
-            if let Some(first) = radius {
-                mixed |= (first - value).abs() >= 1e-9;
-            } else {
-                radius = Some(value);
-            }
-        }
-        items.push(json!({"id": id, "corners": corners}));
-    }
-    if items.is_empty() {
-        return;
-    }
+    let Some(picked) = crate::panels::picked_corners(app) else { return };
     let label = tl!("Corner Radius:");
-    let shown = if mixed { None } else { radius };
-    // PLAN: assumed `crate::canvas::general_lengths(app) -> LengthUnits` (cv.B5b, canvas-w15).
     let lengths = crate::canvas::general_lengths(app);
     let mut typed = None;
     group(ui, rank::GROUP, |ui| {
-        Field::new(label).show(ui, |ui, _| {
-            let number = NumberField::length(label, Bind::given(shown), lengths).show(ui);
-            typed = number.edit.events.committed().copied().flatten().or(typed);
-        });
+        crate::panels::corners_link(app, ui);
+        let number = NumberField::length(label, Bind::given(picked.radius), lengths).show(ui);
+        typed = number.edit.events.committed().copied().flatten().or(typed);
     });
     if let Some(radius) = typed {
-        // App::run reports any command failure in the status bar, as the other inline fields do.
-        app.run("object.setLiveShape", json!({"items": items, "radius": radius.max(0.0)})).ok();
+        crate::panels::set_picked_corners(app, &picked, json!({"radius": radius.max(0.0)}));
     }
 }
 
@@ -597,14 +574,20 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
     if group_on(app, "graphicStyle") && count > 0 {
         style_group(app, ui);
     }
-    if group_on(app, "character") {
-        crate::panels::character::control_bar(app, ui);
+    let (character, paragraph) = (group_on(app, "character"), group_on(app, "paragraph"));
+    let typed = (character || paragraph) && crate::panels::character::text_style(app).is_some();
+    if typed && character {
+        ranked(ui, rank::TYPE, |ui| {
+            crate::panels::character::control_bar(app, ui);
+        });
     }
-    if group_on(app, "paragraph") {
+    if typed && paragraph {
+        // The Paragraph group ranks its link and its Align buttons as two members, so the buttons leave first.
         crate::panels::paragraph::control_bar(app, ui);
     }
-    if group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some() {
-        group(ui, rank::GROUP, |ui| {
+    let vertical = group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some();
+    if vertical {
+        group(ui, rank::TYPE, |ui| {
             crate::panels::properties::vertical_align::buttons(app, ui);
         });
     }
@@ -615,7 +598,9 @@ fn members(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if group_on(app, "alignDistribute") {
-        group(ui, rank::GROUP, |ui| crate::panels::align::control_bar_strip(app, ui));
+        // After the type groups, the Align buttons take their rank and, coming last, leave first.
+        let rank = if typed || vertical { rank::TYPE } else { rank::GROUP };
+        group(ui, rank, |ui| crate::panels::align::control_bar_strip(app, ui));
     }
     if transform {
         // The Transform link opens the whole Transform panel in a popover; X/Y/W/H follow inline while the

@@ -10,8 +10,10 @@ use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSec
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
+use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, TooltipSpec};
+use craft::ui::display::Divider;
 use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
@@ -134,7 +136,7 @@ pub(crate) fn builtin_arrow_name(label: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
-/// The preview cache key of `a`: its name, and for a custom head its art.
+/// The preview cache key of `a`: its name, and for a custom head its art and where the stroke ends.
 fn arrow_key(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => {
@@ -146,6 +148,7 @@ fn arrow_key(a: Option<&Arrowhead>) -> String {
                     (p.x.to_bits(), p.y.to_bits()).hash(&mut h);
                 }
             }
+            c.stop().to_bits().hash(&mut h);
             format!("custom:{}:{:x}", c.name, h.finish())
         }
         _ => format!("{a:?}"),
@@ -348,7 +351,7 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
 /// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
 /// the row's body did not run.
 fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
-    Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
+    Field::new(label).side(side).id_salt("weight").sizing(Sizing::Content).show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
@@ -386,11 +389,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let (Some(new), Some(field)) = (output.events.landed(), output.field) {
         apply_style(app, &style, new.clone(), field);
     }
-    ui.separator();
+    Divider::horizontal().show(ui);
     arrow_rows(app, ui, st.as_ref());
-    ui.separator();
+    Divider::horizontal().show(ui);
     Field::new(tl!("Profile")).show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             profile_select(app, ui);
             flip_buttons(app, ui, st.as_ref());
         });
@@ -410,11 +413,14 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
         (st.and_then(|s| s.end_arrow.clone()), false, tl!("End arrowhead"), "endArrow"),
     ];
     Field::new(tl!("Arrowheads")).show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        // The two heads share the width the Swap button leaves; a field too narrow for all three puts Swap on a
+        // new line.
+        Row::new().fill_width().wrap(true).show(ui, |ui, _| {
             for (head, start, label, key) in &heads {
                 let (start, key) = (*start, *key);
                 let out = Select::new(*label, Bind::given(head.clone()), &entries)
                     .picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start))
+                    .sizing(Sizing::FillWidth)
                     .show(ui);
                 // A custom head goes with its art, as document.inspect reports it.
                 if let Some(a) = out.events.landed() {
@@ -482,8 +488,13 @@ pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -
         let weight = fit(w - 6.0, long).min(fit(h / 2.0 - 1.0, half)).min(2.5);
         inset = -b.x0.min(0.0) * weight;
         if weight < LEAST {
-            let path = c.path.transformed(vectorcraft_geom::Affine::scale(weight / LEAST));
-            a = Some(Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path))));
+            let shrink = weight / LEAST;
+            let path = c.path.transformed(vectorcraft_geom::Affine::scale(shrink));
+            let mut head = vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path);
+            if let Some(stop) = c.stop {
+                head = head.with_stop(stop * shrink);
+            }
+            a = Some(Arrowhead::Custom(std::sync::Arc::new(head)));
         }
         scale = scale.min(weight.max(LEAST) / WIDTH * 100.0);
     }
@@ -582,7 +593,7 @@ pub fn paint_profile(cx: &ContentPainterCx, rect: Rect, points: Option<&[(f64, f
 /// first member's.
 pub(crate) fn brush_keeps_size(app: &mut VectorcraftApp, shown: Option<&StrokeLayer>) -> Option<bool> {
     let st = app.session.active()?;
-    let bucket = app.session.bucket_paints();
+    let bucket = app.session.tool_paints(true);
     if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
         let s = shown?;
         let name = s.brush.as_deref()?;
@@ -728,6 +739,26 @@ mod tests {
         assert!((middle - (r.height() / 2.0 - 1.0)).abs() < 1e-3, "the widest point fills the box ({middle})");
         let (top, bottom) = profile_outline(r, None);
         assert!(top.iter().chain(&bottom).all(|p| (p.y - r.center().y).abs() <= 0.35 * (r.height() / 2.0 - 1.0) + 1e-3));
+    }
+
+    #[test]
+    fn custom_arrowhead_thumbnails_preserve_where_the_stroke_ends() {
+        use vectorcraft_doc::CustomArrowhead;
+        use vectorcraft_geom::{PathData, Point, SubPath};
+
+        let outline = PathData::single(SubPath::polyline(&[Point::new(0.0, -60.0), Point::new(4.0, 60.0), Point::new(4.0, -60.0)], true));
+        let custom = CustomArrowhead::new("Wide Flag".into(), outline);
+        let halfway = Arrowhead::Custom(std::sync::Arc::new(custom.clone()));
+        let explicit_stop = Arrowhead::Custom(std::sync::Arc::new(custom.with_stop(0.75)));
+        assert_ne!(arrow_key(Some(&halfway)), arrow_key(Some(&explicit_stop)), "each stroke attachment needs its own thumbnail");
+
+        let preview = arrow_doc(Some(explicit_stop), true, 56.0, 22.0).unwrap();
+        let node = preview.node(preview.selectable_art()[0]).unwrap();
+        let Some(Arrowhead::Custom(head)) = &node.appearance.stroke().unwrap().start_arrow else {
+            panic!("the preview should draw the custom arrowhead");
+        };
+        // The preview has 10 points above the line. At the minimum weight, 60 units would need 15.
+        assert_eq!(head.stop, Some(0.5));
     }
 
     #[test]

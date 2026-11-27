@@ -267,6 +267,12 @@ pub trait Tool: Send {
     fn wants_rehover(&self) -> bool {
         false
     }
+    /// The object a click at `p` with `mods` would act on, which Smart Guides › Object
+    /// Highlighting outlines while the pointer rests there (the Eyedropper's source). None when a
+    /// click there acts on no object, or the tool does not name one.
+    fn hover_object(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Option<NodeId> {
+        None
+    }
     /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
     /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
     /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
@@ -311,6 +317,12 @@ pub trait Tool: Send {
     /// one whose drag preview is costly (moving a large selection, Free Distort, the Width tool)
     /// doesn't redo it for each sample.
     fn wants_samples(&self) -> bool {
+        false
+    }
+    /// Does a stroke the tool draws now vary with an airbrush pen's finger wheel (a brush or tip
+    /// with Stylus Wheel variation)? A host that has to open a tablet interface of its own to read
+    /// the wheel opens it only while this is so.
+    fn reads_wheel(&self, _cx: &ToolContext) -> bool {
         false
     }
     /// Is the tool waiting for work it runs on another thread (the planar map of a large selection
@@ -633,6 +645,7 @@ pub(crate) mod testutil {
             shape_widgets: true,
             fill_active: true,
             gradient_stop: None,
+            tool_paints: false,
             appearance_item: None,
             constrain_angle: 0.0,
             keyboard_increment: 1.0,
@@ -653,6 +666,7 @@ pub(crate) mod testutil {
             path_only: false,
             type_path_only: false,
             double_click_isolate: true,
+            double_click_adds_anchor: false,
             select_behind: true,
             highlight_anchors: true,
             snap_tolerance: 2.0,

@@ -372,14 +372,13 @@ impl ImportPdfDialog {
         if self.held.refusal().is_some_and(|(_, refused)| *refused != self.s) {
             self.held.clear_refusal();
         }
-        match (out.accepted, out.closed) {
-            (Some(_), _) => {
-                self.ok();
-                None
-            }
-            (None, Some(_)) => Some(DialogResult::Cancel),
-            (None, None) => None,
+        if out.closed.is_some() {
+            return Some(DialogResult::Cancel);
         }
+        if out.picked == Some(0) && !waiting {
+            self.ok();
+        }
+        None
     }
 }
 
@@ -580,12 +579,19 @@ pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     offer(app, &name, &bytes, path, Some(p))
 }
 
+/// Whether the `file.place` params `p` give a password. `file.place` reads an empty or null
+/// `password` as none; a value that isn't text counts as given, for `file.place` to refuse.
+fn gives_password(p: &Value) -> bool {
+    p.get("password").is_some_and(|v| !v.is_null() && v.as_str() != Some(""))
+}
+
 /// [`offer_place`] when Show Import Options is off: asks (true) only for the password of an
-/// encrypted PDF given no `password`, which nothing else opens, and places its first page (or
-/// `page`) and crop box once it is unlocked; any other PDF is placed that way without asking.
+/// encrypted PDF given no password (see [`gives_password`]), which nothing else opens, and places
+/// its first page (or `page`) and crop box once it is unlocked; any other PDF is placed that way
+/// without asking.
 pub fn offer_place_password(app: &mut VectorcraftApp, p: &Value) -> bool {
     // A `page` that isn't a page number is left for `file.place` to refuse.
-    if p.get("password").is_some() || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
+    if gives_password(p) || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
         return false;
     }
     let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
@@ -623,20 +629,36 @@ pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[
     p
 }
 
-/// The `file.place` params `p` of a PDF the user places embedded (Link off, from bytes or with a
-/// password) get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
-/// `textAs`. A linked page shows the file's own text, and a `.ai` or `.ait` file is placed as it
-/// says.
+/// The `file.place` params `p` of a PDF placed embedded (Link off, from bytes or with a password),
+/// by the user or as a command, get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
+/// `textAs`. Bytes are a PDF by their content ([`places_pdf`]). A linked page shows the file's own
+/// text, and a `.ai` or `.ait` file is placed as it says. An empty `password` is none, so a place
+/// from a path with Link on and an empty `password` stays linked.
 pub(crate) fn place_with_preferred_text_as(app: &VectorcraftApp, p: &mut Value) {
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
     let path = p.get("path").and_then(Value::as_str);
     let name = path.or_else(|| p.get("name").and_then(Value::as_str)).unwrap_or_default();
-    let linked = path.is_some() && p.get("link").and_then(Value::as_bool) != Some(false) && !given("password");
-    if given("textAs") || linked || preferred_text_as(app) == TextAs::Text || fileio::extension(name) != "pdf" {
+    let linked = path.is_some() && p.get("link").and_then(Value::as_bool) != Some(false) && !gives_password(p);
+    if given("textAs") || linked || preferred_text_as(app) == TextAs::Text || !places_pdf(p, path, name) {
         return;
     }
     if let Some(o) = p.as_object_mut() {
         o.insert("textAs".into(), json!(TextAs::Outlines.id()));
+    }
+}
+
+/// Do the `file.place` params `p` place a PDF (not a `.ai` or `.ait` file, which is PDF inside):
+/// a `path` by its extension, as [`place_source`] picks one, and `dataBase64` by its content, as
+/// `file.place` reads it ([`fileio::detect`]: bytes that start with `%PDF`), so bytes without a
+/// `name` or with another extension count too. Only the first bytes are decoded.
+fn places_pdf(p: &Value, path: Option<&str>, name: &str) -> bool {
+    let ext = fileio::extension(name);
+    match (path, p.get("dataBase64").and_then(Value::as_str)) {
+        (None, Some(b64)) => {
+            let head: String = b64.chars().filter(|c| !c.is_ascii_whitespace()).take(8).collect();
+            !matches!(ext.as_str(), "ai" | "ait") && vectorcraft_format::base64_decode(&head).is_some_and(|b| b.starts_with(b"%PDF"))
+        }
+        _ => ext == "pdf",
     }
 }
 

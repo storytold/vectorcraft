@@ -100,6 +100,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
 @msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
 @msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	the script file permissions could not be read: {e}	scriptets filtilladelser kunne ikke læses: {e}
 @msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
 @msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
@@ -530,6 +531,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gælder for lineære, radiale, koniske og diamantformede gradienter
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} blev færdig, men dokumentet eller plug-in'et ændrede sig i mellemtiden: kør det igen
 @msg	Running “{name}”…	Kører »{name}«…
+@msg	Plug-in “{name}”: {notice}	Plug-in »{name}«: {notice}
+@msg	`notice` must be a string with visible text	`notice` skal være en streng med synlig tekst
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt kører, mens dokumentet tegnes, så den kan ikke være `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	en eksportør får altid et eksportbudget: udelad `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	»{_1}« beder om et tungt budget (hver kørsel op til {minutes} minutter og {times} gange de sædvanlige instruktioner): en person skal godkende det i skrivebordsappen, eller send `allowHeavy: true` i en session startet med --allow-plugin-grants
@@ -555,6 +558,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kræver godkendelse: det beder om {0}, som brugeren tildeler, når det installeres for sig selv
 @msg	not JSON: {e}	ikke JSON: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	ikke en WebAssembly-binærfil (headeren \\0asm mangler)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} parametre
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	en funktionstype overskrider grænsen på {MAX_FUNC_TYPE_VALUES} resultater
 @msg	parameter `{k}`: {what}	parameteren `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt
@@ -572,6 +577,10 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc returnerede 0 (ikke mere hukommelse)
 @msg	vc_alloc returned a block outside memory	vc_alloc returnerede en blok uden for hukommelsen
 @msg	vc_run returned error code {packed}	vc_run returnerede fejlkoden {packed}
+@msg	did not finish loading within {secs} s	blev ikke færdig med at indlæse inden for {secs} s
+@msg	no thread was left to load it	der var ingen tråd tilbage til at indlæse den
+@msg	panicked while loading	gik ned under indlæsningen
+@msg	panicked while loading: {what}	gik ned under indlæsningen: {what}
 @msg	{_1} is not a file	{_1} er ikke en fil
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} fylder {_2} byte (grænse {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objekter (grænse {MAX_OBJECTS})
@@ -592,6 +601,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` og `maxItems` skal være 0-{MAX_LIST}, `maxItems` mindst 1, og standardværdien skal have så mange
 @msg	`name` must be a string	`name` skal være en streng
 @msg	`opacity` must be a number	`opacity` skal være et tal
+@msg	`opacity` must be a number from 0 to 100	`opacity` skal være et tal fra 0 til 100
+@msg	`opacity` must be true or false	`opacity` skal være true eller false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	tegn i tekst har ingen egen opacitet: tilføj en udfyldning eller kontur med Tilføj ny udfyldning eller Tilføj ny kontur i panelet Udseende
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	et objekt, der er markeret i en symbolforekomst, har ingen egen opacitet for udfyldning eller kontur
+@msg	no target has that fill or stroke to take the opacity	intet mål har den udfyldning eller kontur, der kan modtage opaciteten
 @msg	`type` must be "path" or "compound"	`type` skal være "path" eller "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` skal være 1-{MAX_UNIT} tegn, der kan udskrives
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` angiver 1 til {MAX_CONDITION_VALUES} værdier for `{other}`
@@ -610,7 +624,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a list of {min_items} to {max_items} numbers	en liste med {min_items} til {max_items} tal
 @msg	a new object needs a `path`	et nyt objekt kræver en `path`
 @msg	a number	et tal
-@msg	a painted live effect returns only `objects`	en malet live-effekt returnerer kun `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en malet live-effekt returnerer kun `objects` og `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills` og `strokes`
 @msg	a read-only object was left out	et skrivebeskyttet objekt blev udeladt
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet
@@ -696,6 +710,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` er {_1}; denne vært implementerer plug-in-API-niveau 1 til {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` må kun være true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` er kun til en live-effekt (`kind` "effect") ved `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` er kun til en importør (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	»{shown}« åbner filer, men placerer dem ikke: dens manifest angiver ikke `place`
 @msg	`grant` must be a list of permission names	`grant` skal være en liste med tilladelsesnavne
 @msg	`grant` names an unknown permission `{shown}`	`grant` angiver en ukendt tilladelse `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	et plug-in af typen `{_1}` kræver tilladelsen `{_2}`
@@ -707,12 +723,60 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` angiver `{shown}` to gange
 @msg	`inputs` needs `api` 2 or later	`inputs` kræver `api` 2 eller nyere
 @msg	`inputs` needs the permission `doc.read`	`inputs` kræver tilladelsen `doc.read`
+@msg	only a filter declares `writes`	kun et filter angiver `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` angiver en ukendt objekttype `{shown}`: brug type, image eller symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` angiver `{shown}` to gange
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` angiver `{shown}`, som `inputs` ikke angiver
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` kræver `api` {WRITES_API} eller nyere
+@msg	`writes` needs the permission `doc.write`	`writes` kræver tilladelsen `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} er hverken tekst, et billede eller en symbolforekomst
+@msg	the text of type given as `truncated` can't be changed	teksten i et tekstobjekt givet som `truncated` kan ikke ændres
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	skal være en liste med højst {MAX_INPUT_RUNS} elementer
+@msg	type needs at least one run	tekst skal have mindst ét tekststykke
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte tekst (grænse {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} afsnit (grænse {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mere end {MAX_INPUT_TEXT_TOTAL} byte tekst i hele outputtet
+@msg	unknown key '{k}'	ukendt nøgle '{k}'
+@msg	must be a list of 6 numbers	skal være en liste med 6 tal
+@msg	a number is out of range (limit ±{MAX_COORD})	et tal er uden for området (grænse ±{MAX_COORD})
+@msg	flattens the object to a line or a point	gør objektet fladt til en linje eller et punkt
+@msg	an object flattened to a line or a point can't be placed again	et objekt, der er gjort fladt til en linje eller et punkt, kan ikke placeres igen
+@msg	must be a number from 0 to 1	skal være et tal fra 0 til 1
+@msg	must be the name of a symbol	skal være navnet på et symbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' er ikke et symbol i dette dokument
+@msg	a run must be {{"text", "style", "inline"?}}	et tekststykke skal være {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` indeholder tegnet for en indlejret grafik
+@msg	inline graphics can't be added, removed, reordered or changed	indlejrede grafikker kan ikke tilføjes, fjernes, omarrangeres eller ændres
+@msg	the characters of threaded type can't be changed	tegnene i sammenkædet tekst kan ikke ændres
+@msg	the characters of type with ruby can't be changed	tegnene i tekst med ruby kan ikke ændres
+@msg	expected {count} paragraph styles, one per paragraph	forventede {count} afsnitsstile, én pr. afsnit
+@msg	the document has no Kinsoku set named '{shown}'	dokumentet har intet Kinsoku-sæt med navnet '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	skal være 1-{MAX_FAMILY} tegn, der kan udskrives
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Læse de objekter, den får, og dokumentets indstillinger, tegneflader, lag og farveprøver
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` skal angive forskellige afsnit: settings, artboards, layers eller swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` er til et filter eller en live-effekt med `commands`, ved `api` 3 eller senere og med tilladelsen `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	de dokumentoplysninger, som plug-in'et beder om, er for store til at blive overdraget: højst {MAX_CONTEXT_ITEMS} tegneflader, lag og farveprøver i {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	hukommelsesbudget (objekt {_1} kræver {size} byte input, {left} tilbage)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (mere end {MAX_OBJECTS} skrivebeskyttede objekter)
 @msg	instruction budget	instruktionsbudget
 @msg	time budget	tidsbudget
 @msg	memory budget (the selection is too large to hand over)	hukommelsesbudget (markeringen er for stor til at blive overdraget)
 @msg	output size ({what} is {len} bytes, limit {max})	outputstørrelse ({what} fylder {len} byte, grænse {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linje {line}, kolonne {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	hukommelsesbudget
+@msg	call depth	kaldedybde
+@msg	run(input, params) returned no output object	run(input, params) returnerede intet outputobjekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" kræver `script`: navnet på plug-in'ets .js-fil ved siden af manifestet
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` skal være navnet på en .js-fil i manifestets mappe: 1-128 byte, ingen mappe, intet `:`, må ikke starte med `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` er scriptets tekst og angives kun i den JSON, som dataBase64 i plugin.install tager: en .vcplugin-fil navngiver sit script i `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	et JavaScript-plug-ins manifest angiver `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" er til et objektfilter (`kind` "filter"), ikke `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	et JavaScript-plug-in kan ikke angive tilladelsen `{name}`: af værtens tilladelser må det angive `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	et WebAssembly-moduls manifest udelader `runtime`: "js" er til et JavaScript-plug-in
+@msg	a JavaScript plug-in makes no command calls	et JavaScript-plug-in kalder ingen kommandoer
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) tager to tal
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) tager et niveau, 0 (fejl), 1 (advarsel), 2 (information) eller 3 (fejlsøgning), og en streng
 @msg	the plug-in's grant can't be removed from the plug-in store	plug-in'ets tilladelse kan ikke fjernes fra plug-in-lageret
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	tilladelsen `{shown}` er reserveret til et senere plug-in-API; denne vært tildeler den ikke
 @msg	unknown permission `{shown}`	ukendt tilladelse `{shown}`
@@ -3093,6 +3157,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Artboards	Tegneflader
 	Convert to Artboards	Konvertér til tegneflader
 	Rearrange All Artboards…	Omarrangér alle tegneflader…
+	Rearrange…	Omarrangér…
+	Selected Artboards: {n}	Markerede tegneflader: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Klik på lærredet for at placere tegnefladerne (Esc annullerer)
 	Fit to Artwork Bounds	Tilpas til grafikkens grænser
 	Fit to Selected Art	Tilpas til valgt grafik
 	Graph	Diagram
@@ -3244,6 +3311,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Fill & Stroke	Fyld og streg
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
+	Show Opacity	Vis opacitet
 	Stroke Color	Stregfarve
 	Fill Gradient	Fyldgradient
 	Stroke Gradient	Streggradient
@@ -3389,6 +3457,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft-generisk CMYK (SWOP-lignende)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestrøget CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft ubestrøget CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Ældre Macintosh RGB (gamma 1,8)
 	Internet Standard RGB (sRGB)	Internetstandard-RGB (sRGB)
 	Monitor RGB	Skærm-RGB
@@ -4744,6 +4814,17 @@ digits	Malayalam	Malayalam
 	Create New Sublayer	Opret nyt underlag
 	Search All	Søg i alle
 	Graphics	Grafik
+	Show Contrast	Vis kontrast
+	Contrast For	Kontrast for
+	Normal Text	Normal tekst
+	Large Text	Stor tekst
+	Contrast Background	Kontrastbaggrund
+	Behind Selection	Bag markeringen
+	Current Color	Aktuel farve
+	Pass	Bestået
+	Fail	Ikke bestået
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Mindstekontrast efter WCAG 2.2: normal tekst AA 4.5:1 (1.4.3) og AAA 7:1 (1.4.6), stor tekst AA 3:1 og AAA 4.5:1, grafik og kontrolelementer AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Baggrunden aflæses i midten af markeringen.
 	Local Libraries	Lokale biblioteker
 	Add Content	Tilføj indhold
 	Click to apply to the selected type	Klik for at anvende på den markerede tekst
@@ -6270,6 +6351,12 @@ theme	Appearance	Udseende
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} – {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	opløsning ikke tilgængelig
+	estimated memory {memory}	anslået hukommelse {memory}
+	memory unavailable	hukommelse ikke tilgængelig
+	Unknown format	Ukendt format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -6717,6 +6804,7 @@ theme	Appearance	Udseende
 	Data Recovery	Datgendannelse
 	Default Language	Standardsprog
 	Disable Auto Add/Delete	Deaktivér automatisk tilføjelse/sletning
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete fjerner ankerpunkter og holder stier samlet
 	Interpolate Control Points When Moving Anchors	Interpolér retningshåndtag ved flytning af ankerpunkter
 	Display All Blacks Accurately	Vis alle sorte nøjagtigt
 	Display All Blacks as Rich Black	Vis alle sorte som rich black
@@ -7266,7 +7354,7 @@ font-technology	Variable	Variable
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Markér › Samme › Fyldfarve, Stregfarve og Fyld og streg finder kun samme nuance af en global farveprøve eller staffagefarve, ikke en hvilken som helst nuance af den.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Viser startskærmen, når intet dokument er åbent; når den er slået fra, forbliver vinduet tomt, indtil du klikker på Home.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Måler objekter med deres streger og formændrende effekter til størrelse, position og justering; skygger, glød og sløringer måles ikke.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Ved 100 % zoom fylder en tomme af dokumentet 96 skærmpunkter i stedet for 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Ved 100 % zoom fylder en tomme af dokumentet en tomme af skærmen, eller 96 skærmpunkter, hvis systemet ikke oplyser en brugbar skærmstørrelse.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dobbeltklik på en gruppe, en sti eller et billede med værktøjet Markering åbner det i isolationstilstand.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Mønsterfyld og -streger transformeres med grafikken, medmindre en transformation eller menuen i panelet Transformér vælger andet.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Live-hjørneradier skaleres med grafikken, medmindre skaleringen vælger andet.
@@ -7277,6 +7365,7 @@ font-technology	Variable	Variable
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Når du holder en tast nede, køres værktøjet eller kommandoen i dens Hold-kolonne i Tastaturgenveje; et kort tryk kører dens sædvanlige genvej.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hvor mange sekunder en tast skal holdes nede, før dens holdegenvej køres i stedet for dens sædvanlige genvej.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete fjerner de markerede ankerpunkter og tilpasser kurven omkring hvert af dem i stedet for at åbne stien der.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.
@@ -7674,6 +7763,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Scriptet beder om at læse og skrive en mappe, du vælger, med alt indhold.
 	Allow Once	Tillad én gang
 	Always Allow This Script	Tillad altid dette script
+	No script has kept file access.	Intet script har gemt adgang til filer.
+	Read file	Læs fil
+	Read and write file	Læs og skriv fil
+	Read and write folder	Læs og skriv mappe
+	Revoke	Tilbagekald
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Tilbagekald fjerner den adgang, der er gemt for hver version af scriptet. Adgang til en mappe omfatter alt i den.
+@msg	Script file access revoked	Scriptets adgang til filer er tilbagekaldt
+@msg	The script file access was already revoked	Scriptets adgang til filer var allerede tilbagekaldt
 	Deny	Afvis
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Et script kan ændre de åbne dokumenter og skrive filer gennem de kommandoer, det kører. Kør kun scripts, du stoler på.
 	Do not show this warning again	Vis ikke denne advarsel igen
@@ -8830,6 +8927,9 @@ file-filter	Swatch libraries	Farveprøvebiblioteker
 file-filter	Flattener presets	Flattener-forudindstillinger
 file-filter	PDF presets	PDF-forudindstillinger
 file-filter	Print presets	Printforudindstillinger
+file-filter	Tracing presets	Vektoriseringsforudindstillinger
+file-filter	Action sets	Handlingssæt
+file-filter	Composite fonts	Sammensatte skrifttyper
 file-filter	Preferences	Præferencer
 file-filter	Export presets	Eksportforudindstillinger
 file-filter	SVG Compressed	Komprimeret SVG
@@ -10821,6 +10921,7 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+@msg	{saving} failed: {e}	{saving} mislykkedes: {e}
 	Banner Hems and Grommets…	Bannersømme og maljer…
 	Banner Hems and Grommets	Bannersømme og maljer
 	Hem	Søm
@@ -10847,6 +10948,11 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Fold Angle	Foldevinkel
+	Set Fold Angle…	Angiv foldevinkel…
+	Set Fold Angle	Angiv foldevinkel
+	Reset Fold Angle	Nulstil foldevinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markér en rillelinje, delvis skærelinje eller perforeringslinje, der hverken er låst eller skjult
 	Check	Kontrollér
 	Check Fold Lines	Kontrollér foldelinjer
 @msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.

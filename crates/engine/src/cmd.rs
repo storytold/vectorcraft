@@ -102,6 +102,7 @@ pub mod swatchlib;
 pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
+pub(crate) mod tags;
 mod textedit;
 
 pub use textedit::effective_kerning;
@@ -376,6 +377,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(library::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
         v.extend(svgfilter::specs());
@@ -845,16 +847,17 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
 /// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
-pub use addons::{fold_source, print_hidden};
-/// Document Info's category titles and the Objects category's count labels.
-pub use docinfo::{CATEGORIES, OBJECT_LABELS};
+pub use addons::{FoldAngles, fold_source, print_hidden, selection_fold_angles, selection_fold_lines};
+/// Document Info's category titles, the Objects category's count labels, and how its image rows
+/// write a resolution and a number of bytes.
+pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.
 pub use object::{reflect_axis, scale_factors, shear_tangent};
-pub(crate) use paint::{LIVE_PAINT_BUCKET, asks_defaults_only};
+pub(crate) use paint::{asks_defaults_only, painting_tool_of};
 pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
@@ -922,6 +925,9 @@ pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYT
 
 /// An Image Trace made off the UI thread, and what it traced (#3098).
 pub use buildcmds::{TraceRun, Traced, image_trace_target};
+
+/// Retype's search of the installed fonts, made off the UI thread.
+pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
 
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;

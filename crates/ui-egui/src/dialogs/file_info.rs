@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use craft::behavior::IconId;
-use craft::host::{Host, PickId, PickKind, PickRequest};
+use craft::host::{Host, PickId, PickKind, PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Rating};
@@ -55,8 +55,14 @@ type Info = Map<String, Value>;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields = app.session.execute("file.info", &json!({})).map_err(|e| e.to_string())?;
     let fields = fields.as_object().cloned().ok_or("file.info gave no fields")?;
-    let ok = |app: &mut VectorcraftApp, fields: &Info| app.run("file.info", Value::Object(fields.clone())).map(|_| ());
-    crate::dialogs::host::open_held(app, FileInfoDialog::new(fields), ok).ok_or("no window")?;
+    let document = app.session.active().ok_or("no document")?.uid;
+    let ok = |app: &mut VectorcraftApp, (document, fields): &(u64, Info)| {
+        if !app.session.active().is_some_and(|active| active.uid == *document) {
+            return Err(tl!("File Info can only change the document it was opened for.").to_owned());
+        }
+        app.run("file.info", Value::Object(fields.clone())).map(|_| ())
+    };
+    crate::dialogs::host::open_held(app, FileInfoDialog::new(document, fields), ok).ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -105,6 +111,8 @@ enum Request {
     Folder,
     /// Save the fields as a template at the path the save pick answered.
     SaveTo(PathBuf),
+    /// A browser picker returned a template larger than the import limit.
+    TemplateTooLarge,
     /// Merge the template `source` into the fields as `mode` says.
     Import { source: Info, mode: &'static str },
 }
@@ -145,6 +153,15 @@ impl Templates {
             && let Some(answer) = cx.take_pick_answer(id)
         {
             self.ticket = None;
+            if let (Pick::Open, Picked::Contents(files)) = (kind, &answer) {
+                let Some((_, bytes)) = files.first() else { return };
+                if bytes.len() > vectorcraft_pdf::MAX_TEMPLATE_BYTES {
+                    self.requests.push(Request::TemplateTooLarge);
+                } else {
+                    *import = Some(source("dataBase64", vectorcraft_format::base64_encode(bytes)));
+                }
+                return;
+            }
             let Some(path) = answer.first_path() else { return };
             match kind {
                 Pick::Open => *import = Some(source("path", path.to_string_lossy().into_owned())),
@@ -215,6 +232,7 @@ impl Templates {
 /// The File Info dialog: a form over the fields `file.info` reports, whose OK is held for the app.
 pub(crate) struct FileInfoDialog {
     id: DialogId,
+    document: u64,
     open: bool,
     /// OK files its answer for the app instead of closing ([`HoldsOk::held_ok`]).
     hold: bool,
@@ -230,9 +248,10 @@ pub(crate) struct FileInfoDialog {
 }
 
 impl FileInfoDialog {
-    fn new(value: Info) -> Self {
+    fn new(document: u64, value: Info) -> Self {
         FileInfoDialog {
             id: dialog_id(KEY),
+            document,
             open: true,
             hold: false,
             value,
@@ -371,15 +390,15 @@ fn import_options(ui: &mut egui::Ui, mode: &mut &'static str) -> Option<bool> {
 }
 
 impl HoldsOk for FileInfoDialog {
-    type Answer = Info;
+    type Answer = (u64, Info);
 
     fn held_ok(mut self) -> Self {
         self.hold = true;
         self
     }
 
-    fn take_ok(&mut self) -> Option<Info> {
-        self.held.take()
+    fn take_ok(&mut self) -> Option<Self::Answer> {
+        self.held.take().map(|fields| (self.document, fields))
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
@@ -594,6 +613,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                 Some(fields) => save_template(app, path, fields),
                 None => Ok(()),
             },
+            Request::TemplateTooLarge => Err(tl!("The metadata template is larger than 8 MB.").to_owned()),
             Request::Import { source, mode } => {
                 dialogs.with(|host| host.get_mut_by_id::<FileInfoDialog>(id).map(|d| import(app, d, source, mode))).unwrap_or(Ok(()))
             }
@@ -675,6 +695,58 @@ mod tests {
     }
 
     #[test]
+    fn a_file_info_confirmation_stays_with_its_document() {
+        let mut app = windowed();
+        for (title, author) in [("Source", "Ada"), ("Destination", "Grace")] {
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("file.info", json!({"title": title, "author": author})).unwrap();
+        }
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        activate(&mut app, 0);
+        let a_undo = app.session.active().unwrap().history.undo.len();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Revised Source")).unwrap();
+        set(&app, PENDING, json!("print")).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        assert!(!app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, dialog_id(KEY))), "the edit waits for the application");
+
+        activate(&mut app, 1);
+        let before = app.session.active().unwrap();
+        let document = before.doc.clone();
+        let b_undo = before.history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        let after = app.session.active().unwrap();
+        assert_eq!(after.doc.info_title(), document.info_title(), "the destination's title stays untouched");
+        assert_eq!(after.doc.metadata, document.metadata, "the destination's metadata stays untouched");
+        assert_eq!(after.history.undo.len(), b_undo);
+        assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))));
+
+        activate(&mut app, 0);
+        assert!(press_ok(&mut app), "a fresh confirmation can apply the original draft");
+        let source = app.session.active().unwrap();
+        assert_eq!(source.doc.info_title(), "Revised Source");
+        assert_eq!(source.doc.metadata.author, "Ada");
+        assert_eq!(source.doc.metadata.keywords, ["print"]);
+        assert_eq!(source.history.undo.len(), a_undo + 1);
+    }
+
+    #[test]
+    fn a_reopened_file_info_confirmation_uses_the_new_drafts_document() {
+        let mut app = windowed();
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Revised Destination")).unwrap();
+        assert!(press_ok(&mut app));
+        assert_eq!(app.session.active().unwrap().doc.info_title(), "Revised Destination");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(app.session.active().unwrap().history.undo.is_empty());
+    }
+
+    #[test]
     fn an_imported_template_fills_the_fields_and_ok_is_one_undo_step() {
         let dir = vectorcraft_testkit::TempDir::new("ui-file-info-template");
         let mut app = windowed();
@@ -705,6 +777,54 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.doc.metadata.author.as_str(), st.doc.metadata.rating), ("Ada", 3));
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    #[test]
+    fn browser_picked_templates_enter_the_merge_choice_and_edit_only_the_draft() {
+        use std::sync::Arc;
+
+        use craft::host::{Files, PickRequest, Picked, ScriptedFiles};
+
+        let template = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo {
+            description: Some("À l’affiche 版".into()),
+            rating: Some(3),
+            ..Default::default()
+        });
+        let utf16 = std::iter::once(0xfeff).chain(template.encode_utf16()).flat_map(u16::to_le_bytes).collect::<Vec<_>>();
+        for bytes in [template.into_bytes(), utf16] {
+            let mut app = windowed();
+            let files = Arc::new(ScriptedFiles::held());
+            crate::tests::picks::install_files(&mut app, files.clone());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("ui.fileInfoDialog", json!({})).unwrap();
+            set(&app, "author", json!("Ada")).unwrap();
+            let ticket = files.pick(PickRequest::open(super::PURPOSE));
+            with_dialog(&app, |d| d.templates.ticket = Some((ticket, super::Pick::Open))).unwrap();
+            assert!(files.answer(Picked::Contents(vec![("Studio.xmp".into(), bytes)])).is_some());
+            let ctx = app.ui_ctx.clone().unwrap();
+            for _ in 0..3 {
+                crate::tests::synthetic::key_frame(&mut app, &ctx, Vec::new());
+            }
+            with_dialog(&app, |d| {
+                assert!(d.templates.ticket.is_none(), "the File Info form consumed the picker answer");
+                assert!(d.import.is_some(), "a browser-selected template reaches the merge choice");
+                assert!(super::choose_mode(&mut d.import_mode, "append"));
+                super::ask_import(&mut d.templates, &d.import, d.import_mode);
+            })
+            .unwrap();
+
+            super::pump(&mut app, &ctx);
+            let fields = with_dialog(&app, |d| d.filed_fields()).unwrap();
+            assert_eq!(
+                (fields["author"].clone(), fields["description"].clone(), fields["rating"].clone()),
+                (json!("Ada"), json!("À l’affiche 版"), json!(3))
+            );
+            assert_eq!(app.session.active().unwrap().history.undo.len(), 0, "the template updates the draft before OK");
+            assert!(press_ok(&mut app));
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc.metadata.description, "À l’affiche 版");
+            assert_eq!(st.history.undo.len(), 1);
+        }
     }
 
     #[test]

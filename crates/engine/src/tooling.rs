@@ -10,6 +10,25 @@ use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind
 
 use crate::{EngineError, Prefs, Result, Session};
 
+/// What a hover's lend decision holds for ([`Session::hover_tool_at`]).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct HoverKey {
+    /// The active document's uid and revision, which moves with the selection.
+    doc: Option<(u64, u64)>,
+    tool: &'static str,
+    mods: Mods,
+    /// The selection tool and the part selection tool chosen last.
+    last_tools: (Option<&'static str>, Option<&'static str>),
+    ctrl_click_selects_behind: bool,
+    object_selection_by_path_only: bool,
+    type_selection_by_path_only: bool,
+    selection_tolerance: f64,
+    anchor_size: u32,
+    use_preview_bounds: bool,
+    type_glyph_bounds: bool,
+    show_handles_multiple_anchors: bool,
+}
+
 /// The tool whose radius is General › Corner Radius.
 const ROUNDED_RECTANGLE: &str = "roundedRectangle";
 
@@ -183,6 +202,9 @@ impl Session {
         if self.tool.id() == id {
             return Ok(());
         }
+        // A double-click or triple-click after the switch is the new tool's, also when the switch
+        // comes back to the tool a Cmd press was lent from.
+        self.press_lent = None;
         // Sampling type keeps its highlighted characters as the target, and a whole story that
         // Select All selected. Capture before the Type tool deactivates (which commits typing and
         // clears its editing state).
@@ -200,6 +222,8 @@ impl Session {
         self.deactivate_tool(view)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
+        // A pick is armed for a stop after its tool is chosen (`note_stop_pick`).
+        self.stop_pick = None;
         if let Some(selection) = text_selection {
             self.tool.set_option("textSelection", &selection);
         }
@@ -208,6 +232,9 @@ impl Session {
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
+            if id != "selection" {
+                self.last_part_selection_tool = Some(self.tool.id());
+            }
             self.select_whole_instance(id);
         }
         Ok(())
@@ -251,8 +278,10 @@ impl Session {
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
     /// Cmd alone lends Direct Selection the Selection tool, whose bounding box transforms the
     /// object (#3901; <https://community.adobe.com/t5/illustrator-discussions/handles-disappar-on-shape-with-direct-selection-tool/m-p/14848662>).
+    /// Group Selection lends the Selection tool, and the Selection tool lends Direct Selection or
+    /// Group Selection, whichever was chosen last (Direct Selection until one is).
     /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
-    /// None for the other selection tools and the view tools.
+    /// None for the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
         use vectorcraft_tools::catalog::{edits_anchors, is_selection_tool};
         if matches!(id, "hand" | "zoom" | "rotateView") {
@@ -260,6 +289,12 @@ impl Session {
         }
         if id == "directSelection" && mods.cmd {
             return Some(if mods.alt { "groupSelection" } else { "selection" });
+        }
+        if id == "groupSelection" && mods.cmd {
+            return Some("selection");
+        }
+        if id == "selection" && mods.cmd {
+            return Some(self.last_part_selection_tool.unwrap_or("directSelection"));
         }
         if id == "perspectiveSelection" && mods.cmd && mods.alt {
             return None;
@@ -280,15 +315,118 @@ impl Session {
         self.lent_tool(self.tool.id(), mods)
     }
 
-    /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
-    /// selection tool [`Self::lent_tool`] takes the gesture, pressing without Cmd (a plain click,
-    /// not Select Behind). The tool lent to stays as it was, unaware, until the release. → the event
-    /// for the tool, and the warnings of a preview that keeping the typing applied.
-    fn lend_selection_tool(&mut self, ev: &PointerEvent) -> Result<(PointerEvent, Vec<String>)> {
-        if ev.kind != PointerKind::Down || !ev.mods.cmd || self.lender.is_some() {
+    /// The tool the status bar and the help bar name with `mods` held: the selection tool Cmd
+    /// lends ([`Self::lent_tool_id`]) while the button is up, Space does not lend a view tool and
+    /// the active tool is not computing an edit, else the active tool. Over a selected object where
+    /// a Cmd press selects behind, as the cursor last found it, it names the active tool.
+    pub fn shown_tool_id(&self, mods: &Mods) -> &'static str {
+        match self.hovered_lent(mods) {
+            Some(id) if !mods.space && !self.tool_editing() && !self.pointer_held => id,
+            _ => self.tool.id(),
+        }
+    }
+
+    /// The tool whose marks the canvas shows with `mods` held: the selection tool a Cmd press at
+    /// the pointer would borrow, as [`Self::hover_tool_at`] or [`Self::cursor`] last found it
+    /// (before either has, the one [`Self::lent_tool_id`] names), else the active tool. The canvas
+    /// asks this while the view moves, when it does not hit-test the art under the pointer.
+    pub fn hover_tool_id(&self, mods: &Mods) -> &'static str {
+        match self.hovered_lent(mods) {
+            Some(id) if mods.cmd && !mods.space && self.lender.is_none() && !self.tool_editing() && !self.pointer_held => id,
+            _ => self.tool.id(),
+        }
+    }
+
+    /// The selection tool a Cmd press with `mods` would borrow at the pointer: the one
+    /// [`Self::hover_tool_at`] or [`Self::cursor`] last found, while the document, the selection,
+    /// the active tool and the keys are as they were then (none where the press selects behind),
+    /// else the one [`Self::lent_tool_id`] names.
+    fn hovered_lent(&self, mods: &Mods) -> Option<&'static str> {
+        match self.hover_lent {
+            Some((key, lent)) if key == self.hover_key(mods) => lent,
+            _ => self.lent_tool_id(mods),
+        }
+    }
+
+    /// What a hover's lend decision holds for: the active document's state (its uid and revision,
+    /// which moves with the selection), the active tool, the keys, the selection tools chosen last
+    /// and the preferences a press's hit test reads.
+    fn hover_key(&self, mods: &Mods) -> HoverKey {
+        let p = &self.prefs;
+        HoverKey {
+            doc: self.active().map(|d| (d.uid, d.revision)),
+            tool: self.tool.id(),
+            mods: *mods,
+            last_tools: (self.last_selection_tool, self.last_part_selection_tool),
+            ctrl_click_selects_behind: p.ctrl_click_selects_behind,
+            object_selection_by_path_only: p.object_selection_by_path_only,
+            type_selection_by_path_only: p.type_selection_by_path_only,
+            selection_tolerance: p.selection_tolerance,
+            anchor_size: p.anchor_size,
+            use_preview_bounds: p.use_preview_bounds,
+            type_glyph_bounds: p.type_glyph_bounds,
+            show_handles_multiple_anchors: p.show_handles_multiple_anchors,
+        }
+    }
+
+    /// The tool whose marks and widgets the canvas draws this frame with `mods` held and the
+    /// pointer at `p` (None off the canvas): the selection tool a Cmd press there would borrow
+    /// ([`Self::lent_tool_at`]; off the canvas, the one [`Self::lent_tool_id`] names), else the
+    /// active tool. [`Self::hover_tool_id`] then answers the same until the pointer or the keys move.
+    pub fn hover_tool_at(&mut self, p: Option<Point>, mods: &Mods, view: ViewInfo) -> &'static str {
+        let lends = mods.cmd && !mods.space && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
+        let lent = match p {
+            _ if !lends => None,
+            Some(p) => self.lent_tool_at(p, mods, view),
+            None => self.lent_tool_id(mods),
+        };
+        let key = self.hover_key(mods);
+        self.hover_lent = lends.then_some((key, lent));
+        lent.unwrap_or(self.tool.id())
+    }
+
+    /// The selection tool a press at `p` with `mods` borrows ([`Self::lent_tool`]): none when
+    /// the Selection tool keeps a Cmd press on a selected object to select the object behind it
+    /// (Selection & Anchor Display › Command Click to Select Objects Behind).
+    fn lent_tool_at(&mut self, p: Point, mods: &Mods, view: ViewInfo) -> Option<&'static str> {
+        let id = self.lent_tool(self.tool.id(), mods)?;
+        let behind = self.tool.id() == "selection" && self.with_tool_cx(view, |_, cx| vectorcraft_tools::select::selects_behind_at(cx, p));
+        (!behind).then_some(id)
+    }
+
+    /// Is the press `ev` lent a selection tool ([`Self::lend_selection_tool`])? The frontend asks
+    /// before the press, to tell a gesture of the tool in hand from one of a lent tool.
+    pub fn press_lends_tool(&mut self, ev: &PointerEvent, view: ViewInfo) -> bool {
+        ev.kind == PointerKind::Down && ev.mods.cmd && self.lender.is_none() && self.lent_tool_at(ev.pos, &ev.mods, view).is_some()
+    }
+
+    /// A press with Cmd held (Ctrl elsewhere): the selection tool [`Self::lent_tool_at`] names
+    /// takes the gesture, pressing without Cmd (a plain click, not Select Behind). The tool lent to
+    /// stays as it was, unaware, until the release. With a selection tool active, the double-click
+    /// or triple-click that follows Cmd-clicks goes to the tool the clicks went to, with Cmd kept
+    /// (Cmd+Shift releases a guide), and that tool is given back after it. → the event for the tool,
+    /// and the warnings of a preview that keeping the typing applied.
+    fn lend_selection_tool(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<(PointerEvent, Vec<String>)> {
+        let follow_up =
+            matches!(ev.kind, PointerKind::DoubleClick | PointerKind::TripleClick) && vectorcraft_tools::catalog::is_selection_tool(self.tool.id());
+        if ev.kind == PointerKind::Down {
+            self.press_lent = None;
+        }
+        if (ev.kind != PointerKind::Down && !follow_up) || !ev.mods.cmd || self.lender.is_some() {
             return Ok((*ev, vec![]));
         }
-        let Some(id) = self.lent_tool(self.tool.id(), &ev.mods) else { return Ok((*ev, vec![])) };
+        // A follow-up goes where the press before it went, whatever that press selected, while the
+        // document and the active tool are the ones that press found.
+        let at = (self.active().map(|d| d.uid), self.tool.id());
+        let id = if follow_up {
+            self.press_lent.filter(|(doc, tool, _)| (*doc, *tool) == at).map(|(.., id)| id)
+        } else {
+            self.lent_tool_at(ev.pos, &ev.mods, view)
+        };
+        let Some(id) = id else { return Ok((*ev, vec![])) };
+        if !follow_up {
+            self.press_lent = Some((at.0, at.1, id));
+        }
         // Typing in progress is kept as its own step first: the lent tool's drag previews from the
         // document its interaction started from, which would drop the typing (#1881). When it
         // can't be kept, the press is not lent.
@@ -316,14 +454,15 @@ impl Session {
         }
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
-        Ok((PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }, settled))
+        let cmd = follow_up && ev.mods.cmd;
+        Ok((PointerEvent { mods: Mods { cmd, ..ev.mods }, ..*ev }, settled))
     }
 
     /// The lent selection tool's gesture is over: the tool it was lent to is back as it was (the
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
-        let lent_by_bucket = self.lent_by_bucket();
+        let lent_by_painter = self.lent_by_painter();
         let Some(lender) = self.lender.take() else { return Ok(()) };
         // The points the lent tool left picked go back to the tool it was lent to when that tool
         // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
@@ -333,14 +472,17 @@ impl Session {
             .then(|| self.tool.options().get("meshPoints").cloned())
             .flatten()
             .filter(|p| lender.options().get("meshPoints") != Some(p));
-        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
-        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
-        let outer_bucket = self.back_to_bucket;
-        self.back_to_bucket |= lent_by_bucket;
+        // The lent tool's last actions (a drag it cancels or keeps) still count as those of the tool
+        // that lent it when that tool paints with the chosen colors ([`Session::tool_paints`]).
+        let outer_painter = self.back_to_painter;
+        self.back_to_painter = self.back_to_painter.or(lent_by_painter);
         let r = self.deactivate_tool(view);
-        self.back_to_bucket = outer_bucket;
+        self.back_to_painter = outer_painter;
         self.keep_tool_settings();
         self.tool = lender;
+        // Back with the Selection or Group Selection tool, a symbol part the lent Direct
+        // Selection picked gives way to its instance, as choosing the tool does.
+        self.select_whole_instance(self.tool.id());
         if let Some(points) = mesh_points {
             self.tool.set_option("meshPoints", &points);
         }
@@ -384,12 +526,17 @@ impl Session {
                 }
             }
         }
-        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity.
+        // Alt switches the Pencil, Paintbrush or Blob Brush to Smooth, using Smooth Tool Options' Fidelity
+        // and Smoothness.
         if matches!(t.id(), "pencil" | "paintbrush" | "blobBrush")
             && wanted("smooth")
-            && let Some(v) = prefs.tool_settings.get("smooth").and_then(|s| s.get("fidelity"))
+            && let Some(saved) = prefs.tool_settings.get("smooth")
         {
-            t.set_option("smoothFidelity", v);
+            for (key, alt) in [("fidelity", "smoothFidelity"), ("smoothness", "smoothSmoothness")] {
+                if let Some(v) = saved.get(key) {
+                    t.set_option(alt, v);
+                }
+            }
         }
     }
 
@@ -427,6 +574,7 @@ impl Session {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
         let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
         let smart_guides = view.smart_guides && !view.pixel_preview;
+        let (pick_stop, armed_for_tool) = self.pick_stop();
         let cx = ToolContext {
             doc: &st.doc,
             ruler_origin: st.doc.ruler_origin_for(view.artboard),
@@ -452,7 +600,8 @@ impl Session {
             corner_widgets: view.corner_widgets,
             shape_widgets: view.shape_widgets,
             fill_active: self.fill_active,
-            gradient_stop: self.selected_stop(),
+            gradient_stop: pick_stop,
+            tool_paints: self.tool_paints(!self.fill_active) || armed_for_tool,
             appearance_item: self.appearance_item(),
             constrain_angle: self.prefs.constrain_angle,
             keyboard_increment: self.prefs.keyboard_increment,
@@ -478,6 +627,7 @@ impl Session {
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
             double_click_isolate: self.prefs.double_click_to_isolate,
+            double_click_adds_anchor: self.prefs.double_click_adds_anchor_points,
             select_behind: self.prefs.ctrl_click_selects_behind,
             highlight_anchors: self.prefs.highlight_anchors_on_hover,
             snap_tolerance: self.prefs.snap_to_point_tolerance,
@@ -771,7 +921,7 @@ impl Session {
         }
         self.leave_draw_inside(ev, view)?;
         self.tell_tool_history_moved();
-        let (ev, settled) = self.lend_selection_tool(ev)?;
+        let (ev, settled) = self.lend_selection_tool(ev, view)?;
         let ev = &ev;
         let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
@@ -795,7 +945,7 @@ impl Session {
             PointerKind::Up => self.press_point = None,
             _ => {}
         }
-        if ev.kind == PointerKind::Up {
+        if ev.kind == PointerKind::Up || (lent && matches!(ev.kind, PointerKind::DoubleClick | PointerKind::TripleClick)) {
             self.give_back_tool(view)?;
         }
         r
@@ -917,6 +1067,12 @@ impl Session {
     /// ([`vectorcraft_tools::Tool::wants_samples`])?
     pub fn tool_wants_samples(&self) -> bool {
         self.tool.wants_samples()
+    }
+
+    /// Does a stroke the active tool draws now vary with an airbrush pen's finger wheel
+    /// ([`vectorcraft_tools::Tool::reads_wheel`])? False with no document open.
+    pub fn tool_reads_wheel(&mut self, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.reads_wheel(cx))
     }
 
     /// Is the active tool waiting for work it runs on another thread ([`Tool::waiting`]), is input
@@ -1305,7 +1461,11 @@ impl Session {
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
-        let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
+        // Cmd pressed once a drag is under way lends nothing, so the tool keeps its pointer.
+        let lends = mods.cmd && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
+        let lent = if lends { self.lent_tool_at(p, &mods, view) } else { None };
+        let key = self.hover_key(&mods);
+        self.hover_lent = lends.then_some((key, lent));
         match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
@@ -1316,6 +1476,16 @@ impl Session {
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
         }
+    }
+
+    /// The object a click of the active tool at `p` with `mods` would act on
+    /// ([`vectorcraft_tools::Tool::hover_object`]), for Smart Guides › Object Highlighting. None
+    /// while Cmd lends a selection tool to the press ([`Self::lent_tool_at`]).
+    pub fn hover_object(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Option<NodeId> {
+        if mods.cmd && self.lender.is_none() && !self.tool_editing() && self.lent_tool_at(p, &mods, view).is_some() {
+            return None;
+        }
+        self.with_tool_cx(view, |t, cx| t.hover_object(cx, p, mods))
     }
 
     pub fn tool_options(&self) -> Value {
@@ -1331,6 +1501,7 @@ impl Session {
         let before_press = self.options_before_press_set();
         let sets_pressed = self.press_taken_by(self.tool.id());
         self.tool.set_option(key, v);
+        self.note_stop_pick(key, self.tool.id() == "eyedropper");
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
         self.keep_press_set(before_press, |k| sets_pressed && k == key, sets_pressed);
@@ -1417,8 +1588,42 @@ impl Session {
             let set = other.id();
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
-        self.keep_press_set(before_press, |k| sets_pressed && values.contains_key(k), sets_pressed);
+        // Another tool's set also names the keys of the stores it shares with the pressed tool.
+        let shared: Vec<&str> = match (self.pressed_tool().map(|t| t.id()), id) {
+            (Some(pressed), Some(set)) if pressed != set => settings::stores(pressed)
+                .filter(|(store, _)| settings::stores(set).any(|(s, _)| s == *store))
+                .flat_map(|(_, keys)| keys.iter().copied())
+                .collect(),
+            _ => Vec::new(),
+        };
+        self.keep_press_set(before_press, |k| values.contains_key(k) && (sets_pressed || shared.contains(&k)), sets_pressed);
+        // The Eyedropper waiting for a Cmd-drag it lent a selection tool to is armed as the active one.
+        if (active || lender) && values.contains_key("stop") {
+            let eyedropper = id.unwrap_or(self.tool.id()) == "eyedropper";
+            self.note_stop_pick("stop", eyedropper);
+        }
         out
+    }
+
+    /// After option `key` of the active tool, or of the tool waiting for a Cmd-drag it lent, is set
+    /// (`eyedropper`: that tool is the Eyedropper): an Eyedropper armed to sample into a stop of the
+    /// gradient a tool paints with (`stop`) keeps whose gradient that is ([`Session::stop_pick`]).
+    fn note_stop_pick(&mut self, key: &str, eyedropper: bool) {
+        if key == "stop" && eyedropper {
+            let selected = self.selected_stop().is_some();
+            self.stop_pick = self.gradient_stop.map(|(_, owner)| owner).filter(|owner| selected && owner.painter().is_some());
+        }
+    }
+
+    /// The stop an armed Eyedropper pick samples into ([`ToolContext::gradient_stop`]): the
+    /// selected one, and for a pick armed for a stop of the gradient a tool paints with
+    /// ([`Session::stop_pick`]) only a stop still selected on that gradient.
+    fn pick_stop(&self) -> (Option<usize>, bool) {
+        let armed = self.stop_pick.filter(|owner| self.tool.returns_to().is_some_and(|id| owner.painter() == Some(id)));
+        match armed {
+            Some(owner) => (self.selected_stop().filter(|_| self.gradient_stop.is_some_and(|(_, o)| o == owner)), true),
+            None => (self.selected_stop(), false),
+        }
     }
 
     /// The tool that took the press under way: the active tool, or the tool that lent a selection
@@ -1583,11 +1788,21 @@ impl Session {
 
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
+        // The tool acts on its own interaction, which a command from outside it may have set aside.
+        if !acts.is_empty() {
+            self.put_back_interaction();
+        }
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
-        let outer_bucket = self.back_to_bucket;
-        // The Eyedropper's sample into a stop of the Live Paint Bucket's gradient, which switches back to the bucket.
-        self.back_to_bucket |=
-            self.tool.id() == "eyedropper" && acts.iter().any(|a| matches!(a, Action::SwitchTool(t) if t == crate::cmd::LIVE_PAINT_BUCKET));
+        let outer_painter = self.back_to_painter;
+        // The Eyedropper's sample into a stop of the gradient of a tool that paints with the chosen
+        // colors (the Live Paint Bucket, the Shape Builder), which switches back to that tool.
+        if self.tool.id() == "eyedropper" {
+            let back = acts.iter().find_map(|a| match a {
+                Action::SwitchTool(t) => crate::cmd::painting_tool_of(t, false).or_else(|| crate::cmd::painting_tool_of(t, true)),
+                _ => None,
+            });
+            self.back_to_painter = self.back_to_painter.or(back);
+        }
         // A preview that settling applied (typing kept as its own step before a drag begins) shows
         // its warning in the status bar, as the tool's own commit shows its preview's.
         let r = if !outer && self.depth == 0 {
@@ -1597,7 +1812,7 @@ impl Session {
             self.apply_tool_actions(acts)
         };
         self.in_tool_actions = outer;
-        self.back_to_bucket = outer_bucket;
+        self.back_to_painter = outer_painter;
         if !outer && self.depth == 0 {
             self.trim_histories();
         }
@@ -1608,7 +1823,16 @@ impl Session {
         let mut ui = vec![];
         for a in acts {
             match a {
-                Action::Begin(label) => self.begin_interaction(&label)?,
+                Action::Begin(label) => {
+                    // The snapshot of the interaction open before, which the tool's drag then joins.
+                    let open = self.active().and_then(|st| st.interaction.as_ref()).map(|it| std::sync::Arc::as_ptr(&it.doc));
+                    self.begin_interaction(&label)?;
+                    if let Some(it) = self.active_mut().and_then(|st| st.interaction.as_mut())
+                        && open != Some(std::sync::Arc::as_ptr(&it.doc))
+                    {
+                        it.tool = true;
+                    }
+                }
                 Action::Preview(cmd, p) => {
                     // Performance › Real-time Drawing and Editing (#394): off, remember the latest
                     // params and apply them once on Commit instead of every move. A ruler guide

@@ -420,6 +420,87 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+#[test]
+fn a_long_link_location_fits_the_minimum_width_float() {
+    use crate::panel_docking::PANEL_MIN_WIDTH;
+    use crate::tests::panel_harness::{Place, floated};
+
+    let folder = Folder::new("location-width");
+    let subfolder = folder.0.join("Überlagerung".repeat(5));
+    std::fs::create_dir_all(&subfolder).unwrap();
+    let path = subfolder.join("Éléments.png");
+    std::fs::write(&path, png(30, 20)).unwrap();
+    for locale in ["en", "fr", "de"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let placed = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap();
+        let info = app.run("links.info", json!({"id": placed["ids"][0]})).unwrap();
+        let location = info["location"].as_str().unwrap();
+        let names = ["Location", location, "Show in Folder"];
+        app.services.reveal = Some(Box::new(|_| Ok(())));
+        let panel = floated(app, "links", locale, Place::Floating(PANEL_MIN_WIDTH), &names);
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "{locale} location row outside {:?}: {past:?}", panel.body);
+    }
+}
+
+/// The Location row of Link Info has a Show in Folder button that shows the file of the image Link
+/// Info shows. An embedded image has no Location row; the button is off while the file is missing
+/// and without a file manager (the web).
+#[test]
+fn link_infos_location_row_shows_the_file_in_its_folder() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let dir = Folder::new("location-reveal");
+    let (mut app, linked, embedded) = app(&dir);
+    let other = dir.file("other.png", &png(30, 20));
+    let other = app.run("file.place", json!({"path": other, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let r = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        r.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+    let path = |app: &mut VectorcraftApp, id: u64| app.run("links.info", json!({"id": id})).unwrap()["path"].as_str().unwrap().to_string();
+    let (linked_path, other_path) = (path(&mut app, linked), path(&mut app, other));
+    let mut h = Panel::new(app, super::links::show);
+    let select = |h: &mut Panel, ids: &[u64]| {
+        h.app().run("select.set", json!({ "ids": ids })).unwrap();
+        h.frame();
+    };
+    // The button is pressed as a keyboard or screen-reader user presses it: focus, then Enter.
+    let press = |h: &mut Panel| {
+        h.focus("Show in Folder");
+        h.key(egui::Key::Enter, egui::Modifiers::NONE);
+    };
+    // An embedded image has no file to show.
+    assert!(!h.shows("Show in Folder"));
+    select(&mut h, &[linked]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    select(&mut h, &[other]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone()]);
+    // Both images selected: Link Info shows the first selected, `linked`, while the list has `other`
+    // (on top) first. Only the file of the image Link Info shows is handed over.
+    select(&mut h, &[linked, other]);
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone(), linked_path]);
+    // A missing file: the row stays, the button is off once the panel looks at the files again.
+    select(&mut h, &[other]);
+    std::fs::remove_file(&other_path).unwrap();
+    h.advance(3.0);
+    h.frame();
+    assert!(h.shows("Location") && !h.enabled("Show in Folder"));
+    // Without a file manager (the web): off.
+    select(&mut h, &[linked]);
+    h.app().services.reveal = None;
+    h.frame();
+    assert!(!h.enabled("Show in Folder"));
+    assert_eq!(revealed.borrow().len(), 3, "nothing more was shown");
+}
+
 /// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
 /// Original opens a raster image in the app that made it, PhotoCraft, and falls back to the
 /// system's default app when PhotoCraft isn't installed or the file isn't a raster image.
@@ -572,6 +653,61 @@ fn properties_shows_the_selected_image_and_its_link_actions() {
     assert!(text.contains("Linked File") && text.contains("Edit Original") && text.contains("Embed"), "{text}");
 }
 
+#[test]
+fn replace_image_uses_browser_picker_bytes_and_fits_them_in_one_undo_step() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_geom::Rect;
+
+    let dir = Folder::new("replace-browser-bytes");
+    let (mut app, linked, _) = app(&dir);
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let journal = app.session.journal.len();
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let bytes = png(10, 20);
+
+    super::links::replace(&mut app, vec![linked]);
+    assert_eq!(picker.requests().len(), 1);
+    picker.answer_contents(&[("replacement.png", &bytes)]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(linked)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert!(image.link.is_none(), "browser file contents are embedded");
+    assert_eq!(state.doc.images[&image.key].bytes.as_slice(), bytes);
+    let bounds = image.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 10.0, 20.0));
+    assert_eq!((bounds.width(), bounds.height()), (100.0, 200.0), "fit in the old 300 by 200 bounds");
+    assert_eq!(state.history.undo.len(), undo + 1);
+    assert_eq!(app.session.journal.get(journal).map(|(command, _)| command.as_str()), Some("links.replaceEmbedded"));
+
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
+fn replace_image_with_a_desktop_path_remains_linked() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+
+    let dir = Folder::new("replace-desktop-path");
+    let (mut app, _, embedded) = app(&dir);
+    let path = dir.file("replacement.png", &png(10, 20));
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+
+    super::links::replace(&mut app, vec![embedded]);
+    picker.answer(&[&path]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(embedded)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert_eq!(image.link.as_ref().unwrap().path, path);
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]
@@ -604,6 +740,41 @@ fn unembed_writes_several_images_to_one_picked_folder() {
         assert_eq!(info["path"], out.join(name).to_string_lossy().as_ref(), "{info}");
     }
     assert_eq!(app.ui.status, format!("Unembedded 2 images to {picked}"));
+}
+
+#[test]
+fn switching_documents_dismisses_a_links_row_menu() {
+    let dir = Folder::new("context-switched-document");
+    let (mut app, first, _) = app(&dir);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let path = dir.file("other.png", &png(40, 20));
+    let second = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    let destination = app.session.active().unwrap().uid;
+    assert_eq!(first, second, "the two documents have different images at the same local ID");
+    app.run("window.previousDocument", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, super::links::show);
+    let activate = |panel: &mut Panel, index, document| {
+        panel.app().session.execute("document.activate", &json!({"index": index})).unwrap();
+        panel.frame();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().uid, document);
+    };
+    panel.secondary_click("linked.png");
+    assert!(panel.menu_item_enabled("Embed Image"));
+    activate(&mut panel, 1, destination);
+    assert!(!panel.shows("Embed Image"), "the other document must not inherit the row menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["linked"], true);
+
+    activate(&mut panel, 0, source);
+    assert!(!panel.shows("Embed Image"), "switching back must not revive the menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": first})).unwrap()["linked"], true);
+
+    activate(&mut panel, 1, destination);
+    panel.secondary_click("other.png");
+    panel.click_menu_item("Embed Image");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["status"], "embedded");
 }
 
 #[test]

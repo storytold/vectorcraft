@@ -55,7 +55,15 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Node> {
             c("Select All", "select.all"),
         ]);
     } else {
-        v.extend([c("Cut", "edit.cut"), c("Copy", "edit.copy"), c("Paste", "edit.paste"), Sep]);
+        v.extend([c("Cut", "edit.cut"), c("Copy", "edit.copy"), c("Paste", "edit.paste")]);
+        // With the Quick Pen, Delete removes the selected anchor points, or the selected objects
+        // (`edit.clear`), as the public
+        // [Draw with the Quick Pen tool](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/draw-with-quick-pen-tool.html)
+        // page describes for removing a path.
+        if app.session.tool_id() == vectorcraft_tools::quickpen::ID {
+            v.push(c("Delete", "edit.clear"));
+        }
+        v.push(Sep);
         // With one group or compound path selected the menu has Isolate Selected Group, and with
         // one path selected (a member of a group or a compound path too) it has Isolate Selected
         // Path, as the help page
@@ -237,8 +245,10 @@ fn artboard_items(app: &VectorcraftApp) -> Vec<Node> {
         }
     }
     v.push(Sep);
-    if n > 1 {
-        v.push(c("Rearrange", "artboard.rearrange"));
+    // Rearrange lays out the selected artboards: a click on the item opens its dialog
+    // (`menus::invoke`), whose OK waits for a click on the canvas.
+    if !sel.is_empty() {
+        v.push(cp("Rearrange", "artboard.rearrange", json!({ "indices": sel })));
     }
     if facts.map_or_else(|| boards::fit_has_art(app, &free), |f| f.any_art) {
         v.push(c("Fit to Artwork Bounds", "artboard.fitToArt"));

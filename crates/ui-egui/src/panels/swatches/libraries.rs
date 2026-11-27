@@ -2,7 +2,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use craft::ui::contract::{Entry, MemoKey, MemoProps};
+use craft::ui::contract::{Entry, MemoKey, MemoProps, Show as _};
+use craft::ui::display::Divider;
 use craft::ui::patterns::presets::PresetRow;
 use craft::ui::primitives::ContentPainterCx;
 use egui::{Rect, Ui};
@@ -163,10 +164,10 @@ impl LibraryKind for SwatchLibraries {
         if item(ui, tl!("Default Swatches"), app.session.active().is_some(), None) {
             app.run("swatch.resetDefaults", json!({})).ok();
         }
-        ui.separator();
+        Divider::horizontal().show(ui);
     }
     fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
-        ui.separator();
+        Divider::horizontal().show(ui);
         // As a command, so its file dialog, shown off the UI thread, loads the library when it
         // answers.
         if item(ui, tl!("Other Library…"), true, None)
@@ -199,12 +200,9 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
     open_library(app, &json!({ "library": r["library"] }))
 }
 
-/// Other Library…: load the library (or document) at `path`, else one picked in an open dialog
-/// (on the web the picked file arrives later and opens through [`crate::io::open_bytes`]).
+/// Other Library…: load the library (or document) at `path`, else one picked in an open dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SwatchLibraries::KIND), |app, path| {
-        load_library(app, json!({ "path": path }))
-    })
+    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SwatchLibraries::KIND), load_library)
 }
 
 /// The id prefix of the Window → Swatch Libraries → User Defined slots.

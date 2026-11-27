@@ -1,16 +1,17 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
+//! transparency and its dither, matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 
 use craft::theme::{Rgba, Srgba};
 use craft::ui::choice::Swatch;
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
 use craft::ui::form::SliderField;
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::UnitKind;
@@ -42,6 +43,8 @@ const IMAGE_MAP_LABELS: [&str; 3] = ["None", "Client-side (.html)", "Server-side
 /// Matte param values and their labels (`Other`: a colour).
 const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
+/// The Transparency Dither labels, in [`Dither::ALL`] order.
+const TRANSPARENCY_DITHER_LABELS: [&str; 4] = ["No Transparency Dither", "Diffusion", "Pattern", "Noise"];
 /// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
 const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
 /// WebP compression labels: `lossless` true, then false.
@@ -134,6 +137,8 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("dither".into(), json!(p.dither.id())),
                 ("ditherAmount".into(), json!(p.dither_amount)),
                 ("transparency".into(), json!(p.transparency)),
+                ("transparencyDither".into(), json!(p.transparency_dither.id())),
+                ("transparencyDitherAmount".into(), json!(p.transparency_dither_amount)),
                 ("matte".into(), json!(MATTES[1])),
                 ("interlaced".into(), json!(false)),
             ]);
@@ -216,25 +221,28 @@ fn resolution_row() -> Param {
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
         let other = RESOLUTION_LABELS.len() - 1;
         let entries: Vec<Entry<usize>> = RESOLUTION_LABELS.iter().enumerate().map(|(i, label)| Entry::new(i, tl!(*label))).collect();
-        ui.horizontal(|ui| {
-            if let Some(i) = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied() {
-                if let Some(p) = RESOLUTIONS.get(i) {
-                    fields.set("ppi", *p);
-                }
-                fields.set("__otherPpi", i == other);
-            }
+        let (mut picked, mut typed) = (None, None);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied();
             if preset.is_none() {
                 let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
                     .range(1.0..=4608.0)
                     .step(1.0)
                     .unit_kind(UnitKind::PixelsPerInch)
                     .show(ui);
-                if let Some(Some(v)) = field.edit.value().copied() {
-                    fields.set("ppi", v);
-                }
+                typed = field.edit.value().copied().flatten();
             }
-        })
-        .response
+        });
+        if let Some(i) = picked {
+            if let Some(p) = RESOLUTIONS.get(i) {
+                fields.set("ppi", *p);
+            }
+            fields.set("__otherPpi", i == other);
+        }
+        if let Some(v) = typed {
+            fields.set("ppi", v);
+        }
+        shown.output
     })
     .companions(["__otherPpi"])
     .opens_with(72.0)
@@ -244,7 +252,7 @@ fn resolution_row() -> Param {
 fn size_row(w: f64, h: f64) -> Param {
     Param::custom("__sizeText", tl!("Size:"), move |ui, fields, _| {
         let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), fields.number("ppi").unwrap_or(72.0) / 72.0);
-        ui.label(format!("{pw} × {ph} px"))
+        Text::new(format!("{pw} × {ph} px")).show(ui)
     })
 }
 
@@ -263,18 +271,21 @@ fn color_choice(
         let at = ids.iter().position(|v| current.eq_ignore_ascii_case(v)).unwrap_or(ids.len());
         let start = first(fields);
         let entries: Vec<Entry<usize>> = labels.iter().enumerate().skip(start).map(|(i, l)| Entry::new(i, tl!(*l))).collect();
-        ui.horizontal(|ui| {
-            if let Some(i) = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied() {
-                fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+        let color = (at == ids.len()).then(|| Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128))));
+        let (mut picked, mut pick_color) = (None, false);
+        let shown = Row::new().show(ui, |ui, _| {
+            picked = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied();
+            if let Some(color) = color {
+                pick_color = Swatch::new(tl!(label), color).show(ui).clicked;
             }
-            if at == ids.len() {
-                let color = Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128)));
-                if Swatch::new(tl!(label), color).show(ui).clicked {
-                    cx.pick_color(key, color);
-                }
-            }
-        })
-        .response
+        });
+        if let Some(i) = picked {
+            fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+        }
+        if let Some(color) = color.filter(|_| pick_color) {
+            cx.pick_color(key, color);
+        }
+        shown.output
     })
 }
 
@@ -310,18 +321,17 @@ fn jpeg_rows(screens: bool) -> Vec<Param> {
 fn quality_row() -> Param {
     Param::custom("quality", tl!("Quality:"), |ui, fields, _| {
         let q = (fields.number("quality").unwrap_or(90.0) / 10.0).round().clamp(0.0, 10.0);
-        ui.horizontal(|ui| {
+        let mut slid = None;
+        let shown = Row::new().show(ui, |ui, _| {
             let out = SliderField::new(tl!("Quality:"), Bind::given(q), 0.0..=10.0).step(1.0).show(ui);
-            let q = match out.edit.value() {
-                Some(v) => {
-                    fields.set("quality", v.round() * 10.0);
-                    v.round()
-                }
-                None => q,
-            };
+            slid = out.edit.value().map(|v| v.round());
+            let q = slid.unwrap_or(q);
             Text::new(tl!(QUALITY_BANDS.get(q as usize).copied().unwrap_or_default())).show(ui);
-        })
-        .response
+        });
+        if let Some(v) = slid {
+            fields.set("quality", v * 10.0);
+        }
+        shown.output
     })
     .opens_with(90.0)
 }
@@ -339,7 +349,8 @@ fn webp_rows() -> Vec<Param> {
 }
 
 /// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
-/// transparency and matte, interlacing.
+/// transparency and matte, interlacing, and Transparency Dither with the amount Diffusion uses
+/// (both disabled while Transparency is off, keeping their values).
 fn palette_rows() -> Vec<Param> {
     let dithering = Dither::ALL.iter().copied().filter(|d| *d != Dither::None).map(Dither::id);
     vec![
@@ -349,6 +360,11 @@ fn palette_rows() -> Vec<Param> {
         Param::new("ditherAmount", tl!("Dither Amount:"), ParamKind::int(Some(0), Some(100), 100)).enabled_when_in("dither", dithering),
         color_choice("matte", tl!("Matte:"), &MATTES, &MATTE_LABELS, |_| 0),
         check("transparency", tl!("Transparency"), true),
+        choice("transparencyDither", tl!("Transparency Dither:"), &Dither::ALL.map(Dither::id), &TRANSPARENCY_DITHER_LABELS)
+            .enabled_when("transparency", true),
+        Param::new("transparencyDitherAmount", tl!("Transparency Dither Amount:"), ParamKind::int(Some(0), Some(100), 100))
+            .visible_when("transparencyDither", Dither::Diffusion.id())
+            .enabled_when("transparency", true),
         check("interlaced", tl!("Interlaced"), false),
     ]
 }
