@@ -5959,6 +5959,8 @@ and No Shading and Diffuse Shading as the only surfaces for an object that uses 
 The defaults and the shading are VectorCraft's own. An unknown parameter (`highlightSize` and `drawHiddenFaces`
 included), a number out of range, a flag that is not true or false, a surface other than `none` or `diffuse`, or
 another shading color is refused with an error and the document is not changed.
+In all three Classic dialogs, the track cube retains untouched rotation components at their original precision;
+Page Up and Page Down change Z without rounding fractional X and Y values.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRotate","item":null,"params":{"rotationX":0,"rotationY":40,"rotationZ":0,"surface":"diffuse","blendSteps":64}}}}

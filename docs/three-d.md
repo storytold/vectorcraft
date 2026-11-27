@@ -372,6 +372,8 @@ presets, drawn at the current X, Y and Z rotation inside a ring
 The drag changes the effect's `rotationX`, `rotationY` and `rotationZ` and previews live; X, Y and Z and the
 presets follow it (**Custom** off a preset). OK keeps the change as one undo step. The angles stay between -180°
 and 180°: of the two sets of angles that give the same turn, the cube writes the one nearest the current values.
+Untouched axes retain their original precision; only a changed axis is rounded to the fields' precision. Page Up
+and Page Down change Z while preserving fractional X and Y values.
 In the 3D and Materials panel, a drag is one undo step when the pointer is released, and the cube is off while the
 selected effects hold different rotations. The cube's 0.5° per point of drag, Escape during a drag and its keyboard
 steps are VectorCraft's own.
@@ -757,6 +759,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Classic track cube screen-plane keyboard turns preserve untouched fractional X/Y angles through preview, OK, Cancel and Undo. |
 | 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
 | 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
