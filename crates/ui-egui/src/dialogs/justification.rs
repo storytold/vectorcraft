@@ -16,6 +16,7 @@
 //! Behaviour reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/adjust-word-and-letterspacing-in-justified-text.html>.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed paths of `UnitKind` and `DialogId`
 use craft::ui::dialog::DialogId;
@@ -92,7 +93,7 @@ fn problem(fields: &DialogFields) -> Option<&'static str> {
 
 /// The dialog over its values: three titled groups of Minimum, Desired and Maximum, Auto Leading and
 /// Single Word Justification. Preview starts off ([`HostedParamDialog::preview_off`]).
-fn form(fields: &DialogFields) -> ParamDialog<'_> {
+fn form(fields: &mut DialogFields) -> ParamDialog<'_> {
     let titles = [tl!("Word Spacing"), tl!("Letter Spacing"), tl!("Glyph Scaling")];
     let columns = [tl!("Minimum"), tl!("Desired"), tl!("Maximum")];
     let mut rows = Vec::new();
@@ -106,8 +107,9 @@ fn form(fields: &DialogFields) -> ParamDialog<'_> {
     rows.push(Param::number("autoLeading", tl!("Auto Leading:"), 120.0, 1.0, 0).bounds(Some(lo), Some(hi)).unit(UnitKind::Percent));
     let options = single_word_choices().into_iter().map(|(id, label)| (id.to_owned(), label.into())).collect();
     rows.push(Param::new("singleWord", tl!("Single Word Justification:"), ParamKind::choice(options, Some("fullJustify".to_owned()))));
-    let dialog = ParamDialog::new(KIND, tl!("Justification"), rows).previews(true);
-    match problem(fields) {
+    let reason = problem(fields);
+    let dialog = ParamDialog::new(KIND, tl!("Justification"), rows).previews(true).values(Bind::bound(fields));
+    match reason {
         Some(why) => dialog.ok_enabled(false).ok_reason(why.into()),
         None => dialog,
     }
@@ -142,7 +144,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     set_shared(&mut fields, "autoLeading", crate::panels::paragraph::shared_justification_f64(app, |j| j.auto_leading));
     set_shared(&mut fields, "singleWord", crate::panels::paragraph::shared_single_word_justify(app).map(single_word_name));
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields.clone(), |f| form(f)).preview_off();
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields.clone(), form).preview_off();
     let id = super::host::open_held(app, dialog, |app, result| {
         let Some(open) = app.justification.take() else { return Ok(()) };
         if !open.in_opening_document(app) {
@@ -315,6 +317,96 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.justification", json!({})).is_err());
         assert!(!driver::is_open(&app));
+    }
+
+    #[test]
+    fn justification_minimum_input_updates_validation_and_paragraphs() {
+        use egui::accesskit::Role;
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        for lang in ["en", "de", "fr", "el"] {
+            for height in [700.0, 500.0] {
+                let (mut app, id) = app();
+                app.session.prefs.interface_language = lang.into();
+                let ctx = app.ui_ctx.clone().unwrap();
+                ctx.enable_accesskit();
+                let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, height));
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut time = 0.0;
+                let mut draw = |app: &mut VectorcraftApp, events| {
+                    time += 0.25;
+                    crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+                };
+                let control = |out: egui::FullOutput, role, name: &str| {
+                    let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+                    let by_id: std::collections::HashMap<_, _> = nodes.iter().map(|(id, node)| (*id, node)).collect();
+                    let dialog = nodes.iter().find(|(_, node)| node.role() == Role::Dialog).expect("Justification modal").0;
+                    let mut pending = vec![dialog];
+                    let mut matches = Vec::new();
+                    while let Some(id) = pending.pop() {
+                        let Some(node) = by_id.get(&id) else { continue };
+                        pending.extend_from_slice(node.children());
+                        if node.role() == role
+                            && node.label() == Some(name)
+                            && let Some(bounds) = node.bounds()
+                        {
+                            let at = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+                            let text = node
+                                .children()
+                                .iter()
+                                .filter_map(|id| by_id.get(id))
+                                .find(|child| child.role() == Role::TextInput)
+                                .and_then(|child| child.bounds());
+                            let target = text.map_or(at, |text| pos2(((text.x0 + text.x1) * 0.5) as f32, ((text.y0 + text.y1) * 0.5) as f32));
+                            if screen.contains(target) {
+                                matches.push((at, target, node.is_disabled()));
+                            }
+                        }
+                    }
+                    // Word Spacing is the first Minimum control in the modal.
+                    let (_, target, disabled) = matches
+                        .into_iter()
+                        .min_by(|a, b| a.0.y.total_cmp(&b.0.y))
+                        .unwrap_or_else(|| panic!("{lang} 800x{height}: missing {role:?} {name:?}"));
+                    (target, disabled)
+                };
+                let click = |draw: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> egui::FullOutput, app: &mut VectorcraftApp, at| {
+                    draw(app, vec![Event::PointerMoved(at)]);
+                    for pressed in [true, false] {
+                        draw(app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                    }
+                };
+                let key = |key, modifiers| Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers };
+
+                draw(&mut app, vec![]);
+                app.run("ui.justification", json!({})).unwrap();
+                for _ in 0..8 {
+                    draw(&mut app, vec![]);
+                }
+                for (typed, value, invalid) in [("120", 120.0, true), ("85", 85.0, false)] {
+                    let (min, _) = control(draw(&mut app, vec![]), Role::SpinButton, crate::i18n::t("Minimum"));
+                    click(&mut draw, &mut app, min);
+                    draw(&mut app, vec![key(Key::A, Modifiers::COMMAND)]);
+                    draw(&mut app, vec![Event::Text(typed.into())]);
+                    draw(&mut app, vec![key(Key::Tab, Modifiers::NONE)]);
+                    draw(&mut app, vec![]);
+                    assert_eq!(driver::fields(&app).number("wordMin"), Some(value));
+                    let (ok, disabled) = control(draw(&mut app, vec![]), Role::Button, crate::i18n::t("OK"));
+                    assert_eq!(disabled, invalid);
+                    click(&mut draw, &mut app, ok);
+                    for _ in 0..3 {
+                        draw(&mut app, vec![]);
+                    }
+                    assert_eq!(driver::is_open(&app), invalid);
+                    if invalid {
+                        assert_eq!(paras(&app, id).0.justification.word_spacing, [80.0, 100.0, 133.0]);
+                    }
+                }
+                assert_eq!(paras(&app, id).0.justification.word_spacing, [85.0, 100.0, 133.0]);
+                assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+                crate::i18n::set_current(crate::i18n::Lang::EN);
+            }
+        }
     }
 
     /// Preview shows the values on the canvas; Cancel rolls them back.
