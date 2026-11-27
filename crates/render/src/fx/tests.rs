@@ -1531,6 +1531,78 @@ fn moved_objects_draw_their_effect_rasters_while_interacting() {
 /// frame after the drag, of the same document, is what a fresh renderer draws, as is a frame
 /// rendered while interacting without a drag (a dialog's preview).
 #[test]
+fn a_plain_patch_stops_at_a_raster_effect() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("texture.texturizer", json!({}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(94.0, 3.0, 96.0, 6.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let (width, height) = (2000, 1600);
+    let view = Affine::scale(20.0);
+    let still = RenderOptions::default();
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    renderer.render(&doc, width, height, view, &still);
+    let total_drawn = renderer.stats.drawn;
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch_view = Affine::translate((-1850.0, -50.0)) * view;
+    assert!(scratch.render_plain_patch(&doc, 100, 100, patch_view, &still).is_some(), "the distant patch does not draw the effect");
+    assert!(scratch.render_plain_patch(&doc, width, height, view, &still).is_none(), "a patch that draws the effect needs the full render");
+    assert!(scratch.stats.drawn < total_drawn, "the rejected patch does not draw the artwork after the effect");
+}
+
+#[test]
+fn a_plain_patch_does_not_build_unrelated_3d_art_to_cull_it() {
+    let mut doc = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::BLACK, vec![("threeD.extrude", json!({"depth": 10}))]);
+    let plain = Node::path(
+        doc.alloc_id(),
+        shapes::rectangle(Rect::new(290.0, 10.0, 300.0, 20.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(doc.layers[0].id), usize::MAX, plain).unwrap();
+    let opts = RenderOptions::default();
+    let mut whole = Renderer::new();
+    whole.threads = 0;
+    whole.render(&doc, 350, 150, Affine::IDENTITY, &opts);
+    assert!(whole.stats.three_d_built > 0, "the fixture generates 3D art");
+    let mut scratch = Renderer::new();
+    scratch.threads = 0;
+    let patch = Affine::translate((-280.0, 0.0));
+    let result = scratch.render_plain_patch(&doc, 40, 30, patch, &opts);
+    assert_eq!(scratch.stats.three_d_built, 0, "fall back before rebuilding 3D art");
+    assert!(result.is_none());
+
+    let layer = doc.layers[0].id;
+    let art = doc.layers[0].children().unwrap()[0].clone();
+    doc.remove(art.id).unwrap();
+    let mut group = Node::group(doc.alloc_id(), vec![art.clone()]);
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 4}), visible: true });
+    assert!(super::has_object_fx(&group), "this group uses the alternate bounds path");
+    let group = doc.insert(Some(layer), 0, group).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "alternate group bounds also need the 3D child");
+    doc.remove(group).unwrap();
+
+    let mut template = Node::layer(doc.alloc_id(), "Template", vectorcraft_doc::LayerColor::Preset(0));
+    if let vectorcraft_doc::NodeKind::Layer { template: flag, children, .. } = &mut template.kind {
+        *flag = true;
+        children.push(art.clone());
+    }
+    let template = doc.insert(Some(layer), 0, template).unwrap();
+    let hidden = RenderOptions { hide_templates: true, ..opts.clone() };
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &hidden).is_none(), "layer bounds conservatively include hidden templates");
+    assert_eq!(scratch.stats.three_d_built, 0);
+
+    doc.remove(template).unwrap();
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Solid".into(), art });
+    let instance = Node::new(doc.alloc_id(), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Solid".into(), xf: Affine::IDENTITY });
+    doc.insert(Some(layer), 0, instance).unwrap();
+    assert!(scratch.render_plain_patch(&doc, 40, 30, patch, &opts).is_none(), "a symbol's definition also needs 3D bounds");
+}
+
+#[test]
 fn a_drag_renders_raster_effects_within_the_drag_budget() {
     let effects = vec![("stylize.dropShadow", json!({"x": 4, "y": 3, "blur": 7, "opacity": 80})), ("texture.texturizer", json!({}))];
     let base = doc_with(Rect::new(20.0, 20.0, 80.0, 76.0), Color::rgb(0.9, 0.4, 0.1), effects);
