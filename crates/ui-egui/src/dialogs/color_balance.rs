@@ -157,7 +157,7 @@ fn slot(dialogs: &mut ColorDialogs) -> &mut Option<Open> {
 
 /// Open the dialog with every channel at 0, adjusting fills and strokes.
 pub fn open(app: &mut VectorcraftApp) {
-    ADJUST.open(app);
+    Adjust { label: tl!(ADJUST.label), ..ADJUST }.open(app);
 }
 
 /// Previews the open dialog; one line of `dialogs::host::pump`.
@@ -214,22 +214,22 @@ fn track(key: &str, x: f32) -> Srgba {
 fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
     super::form::stacked(ui, fields, |ui, fields| {
         for (key, label) in mode(fields).channels {
-            percent_row(ui, fields, key, label, |x| track(key, x));
+            percent_row(ui, fields, key, tl!(label), |x| track(key, x));
         }
     })
 }
 
 fn rows() -> Vec<Param> {
-    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(m.label))).collect();
+    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(tl!(m.label)))).collect();
     let with_model = MODES.iter().map(|m| m.id).filter(|id| *id != GLOBAL);
     vec![
-        Param::new("mode", "Color Mode", ParamKind::choice(modes, Some("rgb".to_owned()))),
-        Param::new("convert", "Convert", ParamKind::bool(false)).enabled_when_in("mode", with_model),
-        Param::read_only_text("note", "", "Shifts the tints of global and spot colors; other colors stay.").visible_when("mode", GLOBAL),
+        Param::new("mode", tl!("Color Mode"), ParamKind::choice(modes, Some("rgb".to_owned()))),
+        Param::new("convert", tl!("Convert"), ParamKind::bool(false)).enabled_when_in("mode", with_model),
+        Param::read_only_text("note", "", tl!("Shifts the tints of global and spot colors; other colors stay.")).visible_when("mode", GLOBAL),
         Param::custom("channels", "Channels", channels).companions(channel_keys()),
         Param::section("Adjust Options"),
-        Param::new("fill", "Fill", ParamKind::bool(true)),
-        Param::new("stroke", "Stroke", ParamKind::bool(true)),
+        Param::new("fill", tl!("Fill"), ParamKind::bool(true)),
+        Param::new("stroke", tl!("Stroke"), ParamKind::bool(true)),
     ]
 }
 
