@@ -9,11 +9,14 @@
 //! `sprayStain` and `sprayStyle` (Symbol Sprayer, each `average` or `userDefined`); `proportional`
 //! and `affectsDensity` (Symbol Sizer).
 
+use std::sync::{Arc, Weak};
+
 use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::{Label, LengthUnits};
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
+use vectorcraft_doc::{Node, NodeId};
 use vectorcraft_tools::settings::SYMBOLISM;
 
 use super::{form, host, tool_options};
@@ -120,7 +123,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
 struct DensityTarget {
     value: Option<f64>,
     document: Option<(u64, u64)>,
-    sets: Vec<u64>,
+    sets: Vec<(NodeId, Weak<Node>)>,
 }
 
 fn density_id() -> egui::Id {
@@ -144,10 +147,9 @@ impl DensityTarget {
             let editable = doc.doc.editable();
             self.sets
                 .iter()
-                .copied()
-                .filter(|id| {
-                    let id = vectorcraft_doc::NodeId(*id);
-                    doc.doc.node(id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(id)
+                .filter_map(|(id, original)| {
+                    let same = doc.doc.node_arc(*id).is_some_and(|node| Arc::as_ptr(node) == original.as_ptr());
+                    (same && editable(*id)).then_some(id.0)
                 })
                 .collect()
         };
@@ -158,15 +160,18 @@ impl DensityTarget {
     }
 }
 
-/// The selected symbol sets that can be edited (a locked or hidden one keeps its density).
-fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
+/// The selected editable sets as they exist now. Undo may reuse their IDs for newly created art.
+fn selected_sets(app: &VectorcraftApp) -> Vec<(NodeId, Weak<Node>)> {
     let Some(st) = app.session.active() else { return vec![] };
     let editable = st.doc.editable();
     st.selection
         .objects
         .iter()
-        .filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(**id))
-        .map(|id| id.0)
+        .filter(|id| editable(**id))
+        .filter_map(|id| {
+            let node = st.doc.node_arc(*id)?;
+            vectorcraft_engine::cmd::is_symbol_set(node).then(|| (*id, Arc::downgrade(node)))
+        })
         .collect()
 }
 
@@ -273,6 +278,24 @@ mod tests {
         try_confirm(&mut app, KIND).unwrap();
         assert!(width(&app, first) < first_width);
         assert_eq!(width(&app, second), second_width);
+    }
+
+    #[test]
+    fn density_draft_does_not_change_a_symbol_set_that_reuses_an_undone_id() {
+        let mut app = app();
+        let original = sprayed(&mut app);
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(original)).is_none());
+        let points: Vec<Value> = (0..8).map(|i| json!([50.0 + 35.0 * f64::from(i), 100.0])).collect();
+        let new = app.run("symbol.spray", json!({"name": "Dot", "points": points, "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(new, original, "Undo restored the allocation counter");
+        let (original_width, steps) = (width(&app, new), undo(&app));
+
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!((width(&app, new), undo(&app)), (original_width, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
     }
 
     #[test]
