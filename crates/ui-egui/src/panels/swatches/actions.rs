@@ -62,7 +62,13 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
         [n] => crate::i18n::fmt(tl!("Delete “{name}”?"), &[("name", n)]),
         _ => crate::i18n::tn(names.len() as u64, "Delete this {n} swatch or group?", "Delete these {n} swatches and groups?"),
     };
-    crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
+    crate::dialogs::confirm::ask_in_document_contents(
+        app,
+        &message,
+        tl!("Art using a deleted global swatch keeps its colour."),
+        "swatch.delete",
+        params,
+    );
 }
 
 /// Duplicates the swatches `names` (`swatch.duplicate`, each copy just after its swatch and in its

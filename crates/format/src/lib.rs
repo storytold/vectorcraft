@@ -58,7 +58,7 @@ use vectorcraft_doc::{Document, ImageBlob};
 #[cfg(all(unix, not(target_arch = "wasm32")))]
 pub use atomic::sync_parent;
 #[cfg(not(target_arch = "wasm32"))]
-pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use atomic::{keep_permissions, read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
 use craft_gzip::Gz;
 pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 use craft_vectorcraft_format::stream::{FileHeader, Indent, KeyScan, write_file_json};

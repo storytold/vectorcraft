@@ -665,3 +665,31 @@ fn package_save_first_does_not_save_a_different_drawing() {
     crate::tests::picks::poll(&mut app, &ctx);
     assert_eq!(picker.requests().len(), 1, "approval in the opening drawing starts Save As");
 }
+
+#[test]
+fn held_package_approval_does_not_write_output_after_revert() {
+    let dir = Folder::new("package-revert");
+    let mut app = saved(&dir);
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.session.execute("prefs.set", &json!({"values": {"backgroundExport": false, "backgroundSave": false}})).unwrap();
+    let before = std::fs::read(dir.path("card.vectorcraft")).unwrap();
+    let out = dir.path("out");
+    let output = std::path::Path::new(&out).join("card Folder");
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    package_dialog(&mut app, &out);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let host = app.dialogs().unwrap();
+    assert!(!host.with(|h| h.confirm_by_id(&ctx, package_id())));
+    assert_eq!(held_state(&app), Some(HeldOk::Waiting));
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    crate::dialogs::host::pump(&mut app, &ctx);
+    assert!(!output.exists(), "the old approval writes no output");
+    assert_eq!(std::fs::read(dir.path("card.vectorcraft")).unwrap(), before);
+    assert!(matches!(held_state(&app), Some(HeldOk::Refused(_))));
+
+    close_all(&app);
+    package_dialog(&mut app, &out);
+    assert!(press_ok(&mut app));
+    assert!(output.join("card.vectorcraft").exists());
+}
