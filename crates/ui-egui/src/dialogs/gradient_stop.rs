@@ -34,6 +34,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
 use vectorcraft_color::{Color, FreeformPoint, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::NodeId;
+use vectorcraft_engine::GradientEditPaints;
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::params::color_json;
 
@@ -106,7 +107,7 @@ struct TargetOwner {
 
 struct TargetPaints {
     shown: GradientPaint,
-    edited: Vec<(NodeId, Option<usize>, Vec<Paint>)>,
+    edited: GradientEditPaints,
 }
 
 impl TargetOwner {
