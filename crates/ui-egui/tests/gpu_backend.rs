@@ -1,6 +1,14 @@
 //! Desktop backend preferences use the native window's draft and public automation route.
 //! These headless frames and restore cases do not create a graphics device or verify physical blur.
-#![cfg(any(windows, target_os = "macos", target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+#![cfg(any(
+    windows,
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::{Mutex, MutexGuard};
