@@ -609,7 +609,7 @@ fn tabs_buttons(unit: Unit) -> Param {
         let (rows, _, _) = tab_rows(fields);
         let can_add = new_tab_position(&rows, unit).is_some();
         let (mut add, mut delete, mut clear) = (false, false, false);
-        let line = Row::new().show(ui, |ui, _| {
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
             add = clicked(&Button::new(tl!("Add")).enabled(can_add).show(ui));
             delete = clicked(&Button::new(tl!("Delete Tab")).enabled(!rows.is_empty()).show(ui));
             clear = clicked(&Button::new(tl!("Clear All Tabs")).enabled(!rows.is_empty()).show(ui));
