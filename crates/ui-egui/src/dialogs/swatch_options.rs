@@ -48,7 +48,7 @@ pub(crate) struct Open {
     /// The held dialog.
     pub(crate) id: DialogId,
     opening: Arc<()>,
-    document: u64,
+    document: (u64, u64),
     preview_reset: u64,
     /// The name of the swatch being edited.
     swatch: String,
@@ -291,7 +291,8 @@ fn stops_of(g: &GradientPaint) -> GradientStops {
 
 /// Opens the held dialog over swatch `swatch`: OK is one `swatch.edit` undo step, Cancel rolls the preview back.
 fn launch(app: &mut VectorcraftApp, swatch: &str, fields: DialogFields, rows: Vec<Param>) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no drawing")?.uid;
+    let active = app.session.active().ok_or("no drawing")?;
+    let document = (active.uid, active.reverts);
     let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
     let dialog = hosted(&ctx, KIND, tl!("Swatch Options"), fields, rows, true);
     if owns_preview(app) {
@@ -301,8 +302,11 @@ fn launch(app: &mut VectorcraftApp, swatch: &str, fields: DialogFields, rows: Ve
     let cancelled = Arc::clone(&opening);
     let ok = |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
         let open = app.ui.swatch_options.as_ref().ok_or("the Swatch Options dialog is gone")?;
-        if app.session.active().is_none_or(|st| st.uid != open.document) {
+        let Some(active) = app.session.active().filter(|st| st.uid == open.document.0) else {
             return Err(tl!("Return to the original drawing to edit this swatch").into());
+        };
+        if active.reverts != open.document.1 {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
         }
         let edited = open.swatch.clone();
         // The edit replaces the preview, so the preview is dropped first.
@@ -345,15 +349,17 @@ fn owns_preview(app: &VectorcraftApp) -> bool {
     app.ui.swatch_options.as_ref().is_some_and(|open| {
         open.last.is_some()
             && open.preview_reset == app.session.tool_resets()
-            && app
-                .session
-                .active()
-                .is_some_and(|st| st.uid == open.document && st.interaction.as_ref().is_some_and(|interaction| interaction.label == PREVIEW_LABEL))
+            && app.session.active().is_some_and(|st| {
+                (st.uid, st.reverts) == open.document && st.interaction.as_ref().is_some_and(|interaction| interaction.label == PREVIEW_LABEL)
+            })
     })
 }
 
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some(open) = app.ui.swatch_options.as_ref().filter(|open| app.session.active().is_some_and(|st| st.uid == open.document)) else { return };
+    let Some(open) = app.ui.swatch_options.as_ref().filter(|open| app.session.active().is_some_and(|st| (st.uid, st.reverts) == open.document))
+    else {
+        return;
+    };
     let (id, swatch, last) = (open.id, open.swatch.clone(), open.last.clone());
     let owns_preview = owns_preview(app);
     correct(app, id);
@@ -673,5 +679,37 @@ mod tests {
         assert_eq!(swatch(&app, "Sky"), (Some(ink), true, true), "still a spot colour");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(swatch(&app, "Sky").0.map(|c| c.to_hex()), Some("#0000fe".into()), "one undo step");
+    }
+
+    #[test]
+    fn swatch_options_cannot_preview_or_rename_a_restored_swatch() {
+        let (ctx, mut app) = setup();
+        app.run("swatch.new", json!({"name": "Editable", "color": "#123456"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new("swatch-options-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("swatch.edit", json!({"name": "Editable", "color": "#654321"})).unwrap();
+        open(&mut app, "Editable").unwrap();
+        let name = "Renamed";
+        set(&app, &ctx, &[("name", json!(name)), ("preview", json!(true))]);
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch(name).is_some());
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch(name).is_none());
+        let color = swatch(&app, "Editable").0.unwrap();
+        assert_eq!(color.to_hex(), "#123456");
+        let id = dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+        assert!(app.session.active().unwrap().doc.swatch(name).is_none());
+
+        app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        open(&mut app, "Editable").unwrap();
+        crate::tests::picks::answer_dialog(&mut app, id, &[("name", json!(name))], true);
+        assert!(app.session.active().unwrap().doc.swatch(name).is_some());
     }
 }
