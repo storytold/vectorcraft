@@ -74,7 +74,7 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 
 /// Whether a 3D effect is edited in its dialog: the selection's marks and widgets give way to the dialog's gizmo.
 pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
-    app.three_d_dialog.is_some()
+    crate::dialogs::three_d::editing_current_drawing(app)
 }
 
 /// The arrows the canvas takes with nothing in the window focused, as it takes every arrow while it has the focus:
