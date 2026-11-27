@@ -1438,6 +1438,54 @@ fn a_stale_delete_symbol_question_deletes_nothing() {
     assert_eq!(art(&app, "Dot"), (1, 0));
 }
 
+fn refuses_symbol_approval_after_revert(name: &str, choice: PromptChoice, after_fresh_approval: (usize, usize)) {
+    let mut app = windowed(leaf_and_dot());
+    let file = std::env::temp_dir().join(format!("vectorcraft-symbol-delete-{name}-{choice:?}-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let leaf = instance_of(&app, "Leaf").unwrap();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("symbol.place", json!({"name": "Leaf"})).unwrap();
+    assert_eq!(art(&app, "Leaf"), (2, 0));
+    symbol_delete::ask(&mut app, name, false);
+    assert_eq!(delete_question(&app), Some(name == "Leaf"));
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(instance_of(&app, "Leaf"), Some(leaf));
+    assert_eq!(art(&app, "Leaf"), (1, 0));
+    let undo = st.history.undo.len();
+
+    choose(&mut app, choice);
+    assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "an old approval keeps the restored symbols");
+    assert_eq!(art(&app, "Leaf"), (1, 0), "the restored instance stays unmodified");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+    symbol_delete::ask(&mut app, name, false);
+    choose(&mut app, choice);
+    assert!(!symbols(&mut app).iter().any(|symbol| symbol == name));
+    assert_eq!(art(&app, "Leaf"), after_fresh_approval);
+}
+
+#[test]
+fn old_delete_symbol_yes_keeps_the_symbol_restored_by_revert() {
+    refuses_symbol_approval_after_revert("Dot", PromptChoice::Proceed, (1, 0));
+}
+
+#[test]
+fn old_expand_instances_keeps_the_instance_restored_by_revert() {
+    refuses_symbol_approval_after_revert("Leaf", PromptChoice::Proceed, (0, 1));
+}
+
+#[test]
+fn old_delete_instances_keeps_the_instance_restored_by_revert() {
+    refuses_symbol_approval_after_revert("Leaf", PromptChoice::Alternate, (0, 0));
+}
+
 /// The panel menu's Reset Transformation and the Control bar's Reset are enabled only while a
 /// selected instance's scale, rotation or shear differs from its symbol's, and give the
 /// instance its symbol's again.
