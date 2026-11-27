@@ -65,6 +65,8 @@ pub(crate) mod objects_on_path;
 mod opacitymask;
 mod overprint;
 pub mod package;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod packs;
 mod paint;
 mod panelcmds;
 pub mod params;
@@ -92,8 +94,6 @@ pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;
 pub mod spelling;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod packs;
 mod stroke;
 mod style;
 pub use style::styled_node;

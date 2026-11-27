@@ -154,11 +154,24 @@ pub fn available() -> Vec<Pack> {
     backend().map(|b| b.cached_index()).unwrap_or_default()
 }
 
-/// What `proof.packs` reports about the jobs: the installs running as (locale, done, total), whether
-/// the index is being fetched, and the last error of each locale (`""`: the index).
-pub fn status() -> (Vec<(String, u64, u64)>, bool, BTreeMap<String, String>) {
+/// What `proof.packs` reports about the jobs.
+pub struct Status {
+    /// The installs running, as (locale, bytes done, bytes in all).
+    pub installing: Vec<(String, u64, u64)>,
+    /// Whether the index is being fetched.
+    pub refreshing: bool,
+    /// The last error of each locale (`""`: the index fetch).
+    pub errors: BTreeMap<String, String>,
+}
+
+/// The jobs running and the last errors.
+pub fn status() -> Status {
     let j = jobs();
-    (j.installing.iter().map(|(l, job)| (l.clone(), job.done, job.total)).collect(), j.refreshing.is_some(), j.errors.clone())
+    Status {
+        installing: j.installing.iter().map(|(l, job)| (l.clone(), job.done, job.total)).collect(),
+        refreshing: j.refreshing.is_some(),
+        errors: j.errors.clone(),
+    }
 }
 
 /// What an install or a fetch did.
@@ -176,7 +189,11 @@ fn run(f: impl FnOnce() + Send + 'static) -> Result<Outcome, String> {
         f();
         return Ok(Outcome::Done);
     }
-    std::thread::Builder::new().name("language-pack".into()).spawn(f).map(|_| Outcome::Started).map_err(|e| format!("couldn't start the download: {e}"))
+    std::thread::Builder::new()
+        .name("language-pack".into())
+        .spawn(f)
+        .map(|_| Outcome::Started)
+        .map_err(|e| format!("couldn't start the download: {e}"))
 }
 
 /// Fetches the pinned pack index again. Needs downloads on.

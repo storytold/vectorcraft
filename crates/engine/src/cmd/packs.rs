@@ -67,7 +67,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
             })
         })
         .collect();
-    let (installing, refreshing, errors) = packs::status();
+    let packs::Status { installing, refreshing, errors } = packs::status();
     // An install that ended since the last frame shows in every document's layout.
     s.poll_language_packs();
     Ok(json!({

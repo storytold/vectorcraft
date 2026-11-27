@@ -119,11 +119,11 @@ impl Backend for Fake {
         vec![nl]
     }
 
-    fn fetch_index(&self, _: &Cancel) -> Result<Vec<Pack>, String> {
+    fn fetch_index(&self, _: &Cancel) -> std::result::Result<Vec<Pack>, String> {
         Ok(self.cached_index())
     }
 
-    fn install(&self, locale: &str, cancel: &Cancel, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
+    fn install(&self, locale: &str, cancel: &Cancel, progress: &mut dyn FnMut(u64, u64)) -> std::result::Result<(), String> {
         progress(1, 2);
         while self.hold.load(Ordering::Relaxed) {
             if cancel.is_cancelled() {
@@ -139,7 +139,7 @@ impl Backend for Fake {
         Ok(())
     }
 
-    fn remove(&self, locale: &str) -> Result<(), String> {
+    fn remove(&self, locale: &str) -> std::result::Result<(), String> {
         std::fs::remove_dir_all(self.dir.join(locale)).map_err(|e| e.to_string())
     }
 }
