@@ -215,6 +215,12 @@ pub(super) struct ArtStyle {
     /// paint is a pattern: its [`StyleItem::Pattern`]. A text document's characters name such
     /// styles for their fills and strokes (`ate`). `None` for any other paint or style.
     pub simple_pattern: Option<StyleItem>,
+    /// A style that is one paint, when that paint is a colour with a swatch (a spot ink or a
+    /// global process colour, `x`, `Xx`, `Xk`; Registration): the paint at its tint, linked to the
+    /// swatch, with the named colour that makes the swatch (none for Registration). A text
+    /// document's characters name such styles for their fills and strokes (`ate`), and keep only
+    /// the colour's process values themselves. `None` for any other paint or style.
+    pub simple_color: Option<(Paint, Option<paint::Named>)>,
     /// A style that is one paint: its fill and stroke, bottom first, each there when its
     /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
     /// stroke whose paint isn't read here (a gradient that names no swatch or isn't in a gradient
@@ -477,16 +483,16 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
     let mut open: Vec<usize> = vec![];
     let mut pending: Option<bool> = None;
     let mut in_basic = false;
-    // A style that is one paint being read, and its pattern so far.
-    let mut simple: Option<Option<StyleItem>> = None;
+    // A style that is one paint being read, and its pattern or swatch colour so far.
+    let mut simple: Option<SimplePaint> = None;
     // The same style's paint operators so far.
     let mut one_paint: Option<OnePaint> = None;
-    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>, one_paint: Option<OnePaint>| {
+    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple: SimplePaint, one_paint: Option<OnePaint>| {
         if let Some(name) = name {
-            // Only a style that is one paint holds a pattern for type: one with filters as well
-            // paints with more than that.
-            let simple_pattern = simple_pattern.filter(|_| filters.is_empty());
-            let mut st = ArtStyle { simple_pattern, ..style(filters) };
+            // Only a style that is one paint holds a pattern or a swatch colour for type: one with
+            // filters as well paints with more than that.
+            let SimplePaint { pattern, color } = if filters.is_empty() { simple } else { SimplePaint::default() };
+            let mut st = ArtStyle { simple_pattern: pattern, simple_color: color, ..style(filters) };
             if let Some(one) = one_paint.filter(|_| filters.is_empty()) {
                 if let Some((mode, opacity)) = one.paint.xy {
                     let (isolate, knockout) = one.paint.xy_group.unwrap_or((false, Knockout::Off));
@@ -531,12 +537,12 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
-                    finish(name.take(), &mut filters, simple.take().flatten(), one_paint.take());
+                    finish(name.take(), &mut filters, simple.take().unwrap_or_default(), one_paint.take());
                     operands.clear();
                     open.clear();
                     (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
-                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(None), Some(OnePaint::default())),
+                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(SimplePaint::default()), Some(OnePaint::default())),
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
@@ -653,7 +659,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             operands.clear();
         }
     }
-    finish(name, &mut filters, simple.take().flatten(), one_paint.take());
+    finish(name, &mut filters, simple.take().unwrap_or_default(), one_paint.take());
     styles
 }
 
@@ -814,7 +820,7 @@ fn pattern_operands(vals: &[V], names: &mut Names) -> Option<(String, Option<[f6
 /// that is one paint (`simple` and `one_paint`, while one is read).
 fn style_paint_op(
     filters: &mut [Filter],
-    simple: &mut Option<Option<StyleItem>>,
+    simple: &mut Option<SimplePaint>,
     one_paint: &mut Option<OnePaint>,
     op: &str,
     vals: &[V],
@@ -937,14 +943,29 @@ impl OnePaint {
     }
 }
 
+/// What type takes from a style that is one paint ([`ArtStyle::simple_pattern`],
+/// [`ArtStyle::simple_color`]): one of them at most.
+#[derive(Default)]
+struct SimplePaint {
+    pattern: Option<StyleItem>,
+    color: Option<(Paint, Option<paint::Named>)>,
+}
+
 /// A paint operator of a style that is one paint: a pattern (`p`) is kept as its
-/// [`StyleItem::Pattern`], and any other paint after it (a colour, a stroke's pattern or a
-/// gradient) leaves the style without one.
-fn simple_paint_op(paint: &mut Option<StyleItem>, op: &str, vals: &[V], names: &mut Names) {
+/// [`StyleItem::Pattern`] and a fill colour that has a swatch as its paint and named colour. Any
+/// other paint after one of them (a colour, a stroke's colour or pattern, a gradient) leaves the
+/// style without it.
+fn simple_paint_op(simple: &mut SimplePaint, op: &str, vals: &[V], names: &mut Names) {
     match op {
-        "p" => *paint = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls }),
-        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
-        | "xz" | "P" | "Bg" => *paint = None,
+        "p" => {
+            let pattern = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls });
+            *simple = SimplePaint { pattern, color: None };
+        }
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
+            let color = paint::color_op_in(op, vals, names).filter(|(p, _)| matches!(p, Paint::Solid { swatch: Some(_), .. }));
+            *simple = SimplePaint { pattern: None, color };
+        }
+        "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "P" | "Bg" => *simple = SimplePaint::default(),
         _ => {}
     }
 }
