@@ -9919,7 +9919,10 @@ its allocation limit. Importing individual layers with `layers: true` retains it
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
-`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The cursor keeps an encrypted PDF, `.ai`
+`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The place tool's state includes a
+read-only `sourceIndex`: the current file's zero-based position in the original load, or null when empty.
+It stays with that file when other files are placed or discarded; `current` indexes the remaining files.
+The cursor keeps an encrypted PDF, `.ai`
 or `.ait` file that it cannot read without the password, at 612 × 792 pt (VectorCraft's own size) with
 `needsPassword: true` and no thumbnail; in the app a click or drag on it asks for the password, and headless it places
 nothing. `file.place`, `file.place.queue` and

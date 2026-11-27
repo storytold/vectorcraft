@@ -87,7 +87,7 @@ pub fn is_document(name: &str) -> bool {
 /// The app's Place state (not saved with the preferences).
 #[derive(Default)]
 pub struct PlaceState {
-    /// Web: the bytes of the files picked for the Place dialog, by name.
+    /// Web: the bytes of the files picked for the Place dialog, by selection token.
     pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
@@ -142,6 +142,7 @@ const SET_ASIDE: &str = "__placeCursorOptions";
 
 /// A place cursor thumbnail, decoded when the cursor is loaded.
 struct Thumb {
+    source_index: usize,
     image: std::sync::Arc<egui::ColorImage>,
 }
 
@@ -176,6 +177,13 @@ impl PlaceState {
     #[cfg(test)]
     pub(crate) fn thumbnails(&self) -> Vec<&str> {
         self.thumbs.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    /// The current entry's thumbnail, even after earlier entries with the same name are removed.
+    pub(crate) fn cursor_thumbnail(&self, options: &Value) -> Option<(usize, &egui::ColorImage)> {
+        let source_index = usize::try_from(options["sourceIndex"].as_u64()?).ok()?;
+        let (_, thumb) = self.thumbs.iter().find(|(_, thumb)| thumb.source_index == source_index)?;
+        Some((source_index, thumb.image.as_ref()))
     }
 }
 
@@ -348,14 +356,15 @@ fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
                 paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect()
             }
             Picked::Contents(files) => {
-                // The next Place dialog replaces the previous selection, including its source bytes.
+                // A replacement selection owns a new set of source bytes.
                 app.place.picked.clear();
                 files
                     .into_iter()
                     .map(|(name, bytes)| {
-                        app.place.picked.retain(|(n, _)| *n != name);
-                        let entry = with_importer(json!({ "name": name }), &with);
-                        app.place.picked.push((name, bytes));
+                        static SOURCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                        let source = SOURCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed).to_string();
+                        let entry = with_importer(json!({ "name": name, "__pickedSource": source }), &with);
+                        app.place.picked.push((source, bytes));
                         entry
                     })
                     .collect()
@@ -478,7 +487,9 @@ fn source(app: &VectorcraftApp, file: &Value) -> Option<Value> {
         return Some(with_importer(json!({ "path": path }), file));
     }
     let name = file.get("name").and_then(Value::as_str)?;
-    let bytes = app.place.picked.iter().find(|(n, _)| n == name).map(|(_, b)| b)?;
+    // The selection token is UI bookkeeping; only the original name and bytes reach the engine.
+    let source = file.get("__pickedSource").and_then(Value::as_str).unwrap_or(name);
+    let bytes = app.place.picked.iter().find(|(n, _)| n == source).map(|(_, b)| b)?;
     Some(with_importer(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }), file))
 }
 
@@ -773,11 +784,12 @@ pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|f| {
+        .enumerate()
+        .filter_map(|(source_index, f)| {
             let png = vectorcraft_format::base64_decode(f["thumbnailBase64"].as_str()?)?;
             let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok()?;
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], &img.to_rgba8());
-            Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color) }))
+            Some((f["name"].as_str()?.to_string(), Thumb { source_index, image: std::sync::Arc::new(color) }))
         })
         .collect();
 }
@@ -789,15 +801,15 @@ pub fn cursor_overlay(app: &mut VectorcraftApp, ui: &mut egui::Ui, at: egui::Pos
     let opts = app.session.tool_options();
     let count = opts["count"].as_u64().unwrap_or(0);
     let name = opts["name"].as_str().unwrap_or_default();
-    let found = app.place.thumbs.iter().enumerate().find(|(_, (n, _))| n == name);
+    let found = (app.place.queue_load == app.session.place_queue_loads()).then(|| app.place.cursor_thumbnail(&opts)).flatten();
     let revision = Revision::new(app.place.queue_load);
     let room = egui::Rect::from_min_max(at, ui.max_rect().max.max(at));
     ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
         match found {
-            Some((key, (_, thumb))) => {
+            Some((key, image)) => {
                 let side = |n: usize| u16::try_from(n.max(1)).unwrap_or(u16::MAX);
-                let [w, h] = thumb.image.size;
-                Picture::new(name.to_string(), key as u64, &|| (*thumb.image).clone())
+                let [w, h] = image.size;
+                Picture::new(name.to_string(), key as u64, &|| image.clone())
                     .revision(revision)
                     .aspect(ThumbAspect::new(side(w), side(h)))
                     .extent(PictureSize::Thumb(ThumbSize::Medium))
