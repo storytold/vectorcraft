@@ -14779,7 +14779,9 @@ The Fill Area tool (`fillArea`, in the Live Paint Bucket's group) adds a new clo
 and leaves the paths around it as they are. Nothing needs to be selected: the visible, unlocked paths on every layer
 bound areas, filled or not, open paths included, and the overlap of two filled shapes is an area of its own. A path
 that a clipping mask clips bounds areas only where every mask around it shows it, so a click where a mask hides the art
-finds no area there. While the
+finds no area there. When a clipped path has too many segments or crossings for its crossings with a mask to be
+found, no part of it bounds an area, and an area it crosses or comes within the gap plus 0.05 pt of is not filled
+when every mask around it reaches that area. While the
 pointer hovers an area, the tool outlines it in red and the pointer shows the bucket with paint; elsewhere the pointer
 shows the empty bucket, and a click there does nothing. The new path appears on the press and is kept on the release;
 Escape or a canceled touch before the release takes it back. In a document of more than 128 path segments the tool looks
