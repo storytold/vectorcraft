@@ -1464,6 +1464,7 @@ fn refuses_symbol_approval_after_revert(name: &str, choice: PromptChoice, after_
     assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "an old approval keeps the restored symbols");
     assert_eq!(art(&app, "Leaf"), (1, 0), "the restored instance stays unmodified");
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 
     symbol_delete::ask(&mut app, name, false);
     choose(&mut app, choice);
