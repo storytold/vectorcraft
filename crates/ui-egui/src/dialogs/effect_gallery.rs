@@ -20,9 +20,9 @@ use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
-use craft::ui::display::Picture;
+use craft::ui::display::{Picture, PictureSize};
 use craft::ui::layout_components::{Row, Stack};
-use craft::ui::list::ThumbAspect;
+use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use craft::ui::primitives::textures::{Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
@@ -45,7 +45,7 @@ use crate::file_asks::Owner;
 
 /// Thumbnail of one filter, in pixels at most. The drawing is original; the filter is this app's.
 const THUMB: usize = 36;
-/// In-dialog preview, in pixels, drawn at twice this size.
+/// Sample image dimensions before the dialog scales the image to its display size.
 const PREVIEW_W: usize = 120;
 const PREVIEW_H: usize = 84;
 
@@ -356,7 +356,7 @@ impl StackDialog for EffectGalleryDialog {
             let Some(layer) = effects.get(current) else { return };
             let image = || color_image(&preview_rgba(&visible, PREVIEW_W, PREVIEW_H), PREVIEW_W, PREVIEW_H);
             Stack::new().show(ui, |ui, _| {
-                Picture::new(tl!("Preview"), key, &image).aspect(ThumbAspect::new(10, 7)).show(ui);
+                Picture::new(tl!("Preview"), key, &image).aspect(ThumbAspect::new(10, 7)).extent(PictureSize::Sample(ThumbSize::Large)).show(ui);
                 Row::new().show(ui, |ui, _| {
                     let tree = FilterTree::new(index, &layer.filter, &thumbs, &Thumbs).layout(FilterTreeLayout::Lists).show(ui);
                     if let Some(filter) = tree.picked {
@@ -614,6 +614,122 @@ mod tests {
 
     fn effects(app: &VectorcraftApp, node: u64) -> Vec<vectorcraft_doc::Effect> {
         app.session.active().unwrap().doc.node(NodeId(node)).unwrap().appearance.effects.clone()
+    }
+
+    #[test]
+    fn localized_compact_gallery_pointer_applies_and_cancels() {
+        use egui::accesskit::Role;
+        use egui::{Event, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, TouchPhase, pos2, vec2};
+
+        let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let mut preview_heights = Vec::new();
+        for language in ["en", "de", "ja"] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.session.prefs.interface_language = language.to_owned();
+            let lang = app.ui_language();
+            let ctx = app.ui_ctx.clone().unwrap();
+            let time = std::cell::Cell::new(0.0);
+            let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                ctx.enable_accesskit();
+                time.set(time.get() + 0.1);
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time.get()), screen_rect: Some(viewport), ..Default::default() })
+            };
+            let locate = |app: &mut VectorcraftApp, label: &str, role: Option<Role>| {
+                frame(app, vec![]);
+                let nodes = frame(app, vec![]).platform_output.accesskit_update?.nodes;
+                let node = nodes.iter().map(|(_, node)| node).find(|node| {
+                    let named = node.label() == Some(label)
+                        || node.labelled_by().iter().any(|id| nodes.iter().any(|(key, name)| key == id && name.label() == Some(label)));
+                    named && role.is_none_or(|role| node.role() == role) && node.bounds().is_some()
+                })?;
+                let bounds = node.bounds()?;
+                Some(Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32)))
+            };
+            let click = |app: &mut VectorcraftApp, at: Pos2| {
+                assert!(viewport.contains(at), "{language}: pointer target is outside the actual 800 × 500 viewport: {at:?}");
+                frame(app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    frame(app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                frame(app, vec![]);
+                frame(app, vec![]);
+            };
+            let reach = |app: &mut VectorcraftApp, name: &str, role: Option<Role>, x: f32| {
+                let mut found = None;
+                for _ in 0..7 {
+                    found = locate(app, name, role);
+                    if let Some(rect) = found.filter(|rect| viewport.contains(rect.center())) {
+                        return rect;
+                    }
+                    frame(app, vec![Event::PointerMoved(pos2(x, 310.0))]);
+                    frame(
+                        app,
+                        vec![Event::MouseWheel {
+                            unit: MouseWheelUnit::Point,
+                            delta: vec2(0.0, -110.0),
+                            phase: TouchPhase::Move,
+                            modifiers: Modifiers::NONE,
+                            source: MouseWheelSource::Unknown,
+                        }],
+                    );
+                }
+                panic!("{language}: {name} cannot be reached in the actual viewport: {found:?}");
+            };
+            let label = |name: &'static str| crate::i18n::tr(lang, name);
+
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let node = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+            let history = app.session.active().unwrap().history.undo.len();
+            frame(&mut app, vec![]);
+            assert_eq!(ctx.content_rect(), viewport);
+            app.run("ui.effectGalleryDialog", json!({})).unwrap();
+            let gallery = locate(&mut app, label("Effect Gallery"), Some(Role::Dialog)).expect("localized Effect Gallery");
+            let picture = locate(&mut app, label("Preview"), Some(Role::Image)).expect("localized preview image");
+            let ok = locate(&mut app, label("OK"), Some(Role::Button)).expect("localized OK button");
+            eprintln!("{language}: window {viewport:?}, Gallery {gallery:?}, picture {picture:?}, OK {ok:?}");
+            preview_heights.push((language, picture.height()));
+            assert!(app.session.in_interaction(), "{language}: initial live preview is active");
+
+            let cutout_label = crate::i18n::effect_name(lang, "artistic.cutout").unwrap();
+            let cutout = reach(&mut app, &cutout_label, None, 330.0);
+            click(&mut app, cutout.center());
+            assert_eq!(
+                effects(&app, node).first().map(|effect| effect.id.as_str()),
+                Some("artistic.cutout"),
+                "{language}: filter click updates preview"
+            );
+
+            let levels_label = label("Levels");
+            let levels = if let Some(rect) = locate(&mut app, levels_label, None) {
+                rect
+            } else {
+                let rect = reach(&mut app, "Levels", None, 550.0);
+                eprintln!("{language}: generic setting shown as Levels instead of {levels_label}");
+                rect
+            };
+            let preview = reach(&mut app, label("Preview"), Some(Role::CheckBox), 550.0);
+            eprintln!("{language}: Cutout {cutout:?}, Levels {levels:?}, Preview checkbox {preview:?}");
+            assert!(viewport.contains(levels.center()), "{language}: Levels numeric field is reachable");
+            click(&mut app, preview.center());
+            assert!(effects(&app, node).is_empty(), "{language}: turning Preview off restores the original");
+            click(&mut app, ok.center());
+            let applied = effects(&app, node);
+            assert_eq!(applied.len(), 1, "{language}: pointer OK applies one effect");
+            assert_eq!(applied[0].id, "artistic.cutout");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+            assert!(!app.session.in_interaction());
+
+            app.run("ui.effectGalleryDialog", json!({})).unwrap();
+            let cancel = locate(&mut app, label("Cancel"), Some(Role::Button)).expect("localized Cancel button");
+            assert!(app.session.in_interaction(), "{language}: reopening starts another preview");
+            click(&mut app, cancel.center());
+            let after_cancel = effects(&app, node);
+            assert_eq!(after_cancel.len(), 1, "{language}: pointer Cancel discards only the second preview");
+            assert_eq!(after_cancel[0].id, "artistic.cutout");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+            assert!(!app.session.in_interaction());
+        }
+        assert!(preview_heights.iter().all(|(_, height)| *height >= 64.0), "the preview is an artwork sample: {preview_heights:?}");
     }
 
     #[test]
