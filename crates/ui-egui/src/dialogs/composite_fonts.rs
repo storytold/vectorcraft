@@ -26,6 +26,7 @@
 
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
+use std::path::Path;
 use std::sync::Arc;
 
 use craft::behavior::{ColumnKey, ColumnWidth, Selection, SelectionChange, keyed};
@@ -135,6 +136,8 @@ enum PartEdit {
 /// The Composite Fonts dialog on the dialog host. OK files the fonts for [`pump`], which runs
 /// [`COMMAND`] and answers whether the dialog may close.
 pub struct CompositeFontsDialog {
+    /// The document whose fonts the draft edits.
+    document: u64,
     fonts: Vec<CompositeFont>,
     /// The index of the font picked.
     selected: usize,
@@ -167,9 +170,9 @@ pub struct CompositeFontsDialog {
 /// Open Composite Fonts on the active document's composite fonts, the first one picked, with the
 /// custom character sets and the sample hidden and nothing typed.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let fonts = app.session.active().ok_or("no document open")?.doc.composite_fonts.to_vec();
+    let document = app.session.active().ok_or("no document open")?;
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
-    let dialog = CompositeFontsDialog::new(fonts, crate::font_menu::hold(app));
+    let dialog = CompositeFontsDialog::new(document.uid, document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -241,10 +244,11 @@ fn part_mut(f: &mut CompositeFont, at: usize) -> Option<&mut CompositePart> {
 
 impl CompositeFontsDialog {
     /// The dialog over `fonts`, the first picked.
-    fn new(fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
+    fn new(document: u64, fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
         let mut sample = Map::new();
         sample::defaults(&mut sample);
         CompositeFontsDialog {
+            document,
             fonts,
             selected: 0,
             set: 0,
@@ -852,15 +856,18 @@ impl StackDialog for CompositeFontsDialog {
 /// file dialog a Load…, Replace… or Save… asked for.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some((held, request)) = with_dialog(app, |d| {
-        let held = d.held.take();
+        let held = d.held.take().map(|fonts| (d.document, fonts));
         let request = d.file.take().map(|request| (request, Arc::clone(&d.file_owner)));
         (held, request)
     }) else {
         return;
     };
-    if let Some(fonts) = held {
-        // A name two fonts share or a value out of range keeps the dialog open with the reason.
-        let answer = app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from);
+    if let Some((document, fonts)) = held {
+        let answer = if app.session.active().is_some_and(|active| active.uid == document) {
+            app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from)
+        } else {
+            Err(Label::from(tl!("Composite Fonts can only change the document where it was opened.").to_owned()))
+        };
         with_dialog(app, |d| d.held.answer(answer));
     }
     if let Some((request, owner)) = request {
@@ -892,14 +899,19 @@ fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest, owner: Arc<()>
 
 /// Reads the fonts of the file picked and gives them to the dialog (Load… or Replace…).
 fn load_file(app: &mut VectorcraftApp, request: &PresetFileRequest, replace: bool, picked: &Picked) -> Result<Value, String> {
-    // PLAN: assumed fl.A23 `file_asks::open_params(&Picked) -> Option<Map<String, Value>>`; `None` is a cancelled pick.
     let Some(mut params) = open_params(picked) else { return Ok(Value::Null) };
+    let browser_name = params.remove("name");
+    let name = picked
+        .first_path()
+        .as_deref()
+        .or_else(|| browser_name.as_ref().and_then(Value::as_str).map(Path::new))
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     params.insert("apply".into(), json!(false));
     let read = app.run(IMPORT, Value::Object(params))?;
     let fonts: Vec<CompositeFont> = serde_json::from_value(read["fonts"].clone()).map_err(|e| e.to_string())?;
     with_dialog(app, |d| d.load(fonts, replace));
-    let name = picked.first_path().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_default();
-    // Only the file's name goes into the status line.
     if let Some(event) = request.loaded(name, Vec::new()) {
         report(app, event);
     }

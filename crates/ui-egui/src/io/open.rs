@@ -646,13 +646,25 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
 }
 
 /// File → New from Template…: a template (or any readable file) as a new untitled document. Without
-/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
-/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+/// a path the open dialog starts in the Templates folder. The browser supplies the picked file's
+/// name and bytes for the same template loader.
 pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
     let Some(path) = path else {
         let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::builtin_open_filters());
         let request = open_request("template", fileio::templates_dialog_folder(&app.session.prefs), filters);
-        return ask_open(app, request, Owner::Free, new_from_path);
+        return Ok(file_asks::ask(app, request, Owner::Free, |app, picked| match picked {
+            Picked::Contents(files) => {
+                let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                if let Err(error) = open_template(app, &name, &bytes, None) {
+                    report_open_error(app, &name, &error);
+                }
+                Ok(Value::Null)
+            }
+            picked => {
+                let path = picked.first_path().ok_or("cancelled")?;
+                new_from_path(app, path.to_string_lossy().into_owned())
+            }
+        }));
     };
     new_from_path(app, path)
 }
@@ -660,7 +672,11 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
 /// [`new_from_template`] for the file at `path`.
 fn new_from_path(app: &mut VectorcraftApp, path: String) -> Result<Value, String> {
     let bytes = read(app, &path)?;
-    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
+    open_template(app, &path, &bytes, Some(&path))
+}
+
+fn open_template(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value, String> {
+    let r = fileio::open_template(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
     opened(app, &r);
     Ok(r)
 }
