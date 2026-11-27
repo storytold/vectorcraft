@@ -74,7 +74,7 @@ fn other_applications_elements_survive_a_round_trip() {
     // And through the native file.
     let json = serde_json::to_value(&doc).unwrap();
     let native: Document = serde_json::from_value(json).unwrap();
-    assert_eq!((native.svg_foreign_elements, kept(&native, "inner")), (doc.svg_foreign_elements.clone(), kept(&doc, "inner")));
+    assert_eq!((native.svg_foreign_elements.clone(), kept(&native, "inner")), (doc.svg_foreign_elements.clone(), kept(&doc, "inner")));
 }
 
 /// A prefix the export uses itself, and the default namespace, are written under prefixes of their

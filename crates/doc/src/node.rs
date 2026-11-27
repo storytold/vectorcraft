@@ -24,7 +24,9 @@ mod opacity;
 mod ops;
 mod wire;
 
-pub use attributes::{ForeignAttribute, ForeignContent, ForeignElement, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS};
+pub use attributes::{
+    ForeignAttribute, ForeignContent, ForeignElement, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS,
+};
 pub use clip::{ClipPaint, Uniter};
 pub use extras::{Extras, ExtrasMut, NodeExtras};
 pub use ids::{LAYER_COLORS, LayerColor, NodeId};

@@ -9,8 +9,8 @@ use std::sync::Arc;
 use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ForeignContent, ForeignElement, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, MAX_SVG_SCRIPTS,
-    Node, NodeId, NodeKind, PatternDef, SVG_EVENTS, StrokeLayer, Unit,
+    Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ForeignContent, ForeignElement, ImageBlob, ImageObject, LayerColor,
+    LineCap, LineJoin, MAX_SVG_SCRIPTS, Node, NodeId, NodeKind, PatternDef, SVG_EVENTS, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
 
