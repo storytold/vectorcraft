@@ -1765,6 +1765,8 @@ impl Tool for GestureTool {
                 self.clear();
                 self.pressed = p;
                 self.push(start, ev);
+                // A stroke continuing a short path can start farther than the distance from its other end.
+                self.note_leaving(cx, start);
                 vec![]
             }
             PointerKind::Drag => {
