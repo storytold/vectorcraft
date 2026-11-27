@@ -33,9 +33,12 @@ use crate::{VectorcraftApp, io};
 const PENDING: &str = "savePdf";
 /// Why a Summary cannot be written without the dialog.
 const NOT_OPEN: &str = "the Save PDF dialog is not open";
+const WRONG_DOCUMENT: &str = "Return to the original drawing to save the PDF or its summary";
 
 /// What the Save PDF dialog was opened for; the preset editor has none.
 pub(crate) struct SavePdfJob {
+    /// The drawing this job reads and writes.
+    pub(crate) document: u64,
     /// The file the PDF goes to; none: the write asks.
     pub(crate) path: Option<String>,
     /// The save command (`file.saveAs`, `file.saveCopy`) this PDF finishes; none: a plain PDF copy.
@@ -69,6 +72,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
 
 /// [`open`], for Export Selection when `selection` (the page is the selection's crop).
 pub(crate) fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document")?.uid;
     let art_bounds = match params.get("useArtboards") {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => !b,
@@ -102,7 +106,7 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, params: &Value, selection: boo
     };
     let preset = s("preset").map_or_else(|| default_preset_name(APP).to_string(), str::to_string);
     let dialog = base_dialog(app, settings).preset(preset).artboards(artboards);
-    let job = SavePdfJob { path: s("path").map(str::to_string), save_mode: None, flattener, selection };
+    let job = SavePdfJob { document, path: s("path").map(str::to_string), save_mode: None, flattener, selection };
     open_dialog(app, dialog, Some(job), String::new())
 }
 
@@ -279,11 +283,14 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         }
     }
     // A failed write is told over the dialog, which shows again when the message closes.
-    if let Some(text) = filed.summary
-        && let Err(e) = write_summary(app, Some(id), None, &text)
-        && e != "cancelled"
-    {
-        app.status(e);
+    let source = check_source(app, open);
+    if let Some(text) = filed.summary {
+        let saved = source.clone().and_then(|()| write_summary(app, Some(id), None, &text));
+        if let Err(e) = saved
+            && e != "cancelled"
+        {
+            app.status(crate::i18n::message(crate::i18n::current(), &e));
+        }
     }
     let preset = filed.settings.get("flattenerPreset").and_then(Value::as_str).map(str::to_owned);
     if open.flattener_preset.is_some()
@@ -294,7 +301,10 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
     }
     open.flattener_preset = preset;
     let settings = with_custom(open, filed.settings);
-    let warnings = worded(check(app, open, &settings));
+    let warnings = match source {
+        Ok(()) => worded(check(app, open, &settings)),
+        Err(e) => worded(&Err(e)),
+    };
     let prefs = &app.session.prefs;
     let (presets, names) = (prefs.pdf_presets.clone(), prefs.flattener_presets.iter().map(|p| p.name.clone()).collect::<Vec<_>>());
     let custom = open.job.as_ref().is_some_and(|j| j.flattener.is_some());
@@ -308,7 +318,7 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
     });
     if let Some(answer) = filed.ok {
         let reply = match &open.job {
-            Some(job) => write(app, job, &answer),
+            Some(job) => check_source(app, open).and_then(|()| write(app, job, &answer)),
             None => save_preset(app, &open.editing, &answer),
         };
         // A write that asks first (the save panel, or whether to replace the file the document was opened from) closes
@@ -321,6 +331,15 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         });
     }
     false
+}
+
+fn check_source(app: &VectorcraftApp, open: &SavePdfOpen) -> Result<(), String> {
+    if let Some(job) = &open.job
+        && app.session.active().map(|doc| doc.uid) != Some(job.document)
+    {
+        return Err(WRONG_DOCUMENT.into());
+    }
+    Ok(())
 }
 
 /// OK of Custom…: the open save flattens with its options ([`super::flatten::apply_custom`]); when the saved preset
@@ -654,6 +673,7 @@ pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
 
 /// The Summary text of the open dialog `open`, after the document check.
 fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String, String> {
+    check_source(app, open)?;
     let Some(dialogs) = app.dialogs() else { return Err(NOT_OPEN.into()) };
     let id = open.id;
     let not_open = || NOT_OPEN.to_string();

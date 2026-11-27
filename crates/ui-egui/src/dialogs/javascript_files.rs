@@ -231,7 +231,11 @@ fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
                 form.file = crate::io::file_url(&path.to_string_lossy());
             }
         }
-        let row = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…")).show(ui);
+        let mut row = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…"));
+        if !cx.env.host().is_some_and(|host| host.files().can_pick()) {
+            row = row.browse_reason(tl!("To link a script here, enter its URL."));
+        }
+        let row = row.show(ui);
         if row.browse
             && form.pick.is_none()
             && let Some(host) = cx.env.host()
@@ -397,19 +401,21 @@ mod tests {
     }
 
     #[test]
-    fn a_browser_file_pick_does_not_invent_a_local_script_url() {
-        let files = Arc::new(ScriptedFiles::held());
+    fn browser_can_link_a_url_without_offering_a_local_file_picker() {
+        let files = Arc::new(ScriptedFiles::held().in_browser());
         let form = Rc::new(RefCell::new(Form { file: "https://example.test/menu.js".into(), ..Default::default() }));
         let shown = Rc::clone(&form);
         let mut fixture = Fixture::new(move |ui| body(ui, &[], &mut shown.borrow_mut()));
         fixture.host(Arc::new(Host::builder(AppInfo { id: "test", name: "Test", version: "1.0" }).files(files.clone()).build()));
         fixture.settle();
         let choose = fixture.by_label(tl!("Choose…")).expect("the Choose button");
+        assert!(fixture.tree().is_disabled_key(choose.node));
         fixture.click(&choose);
         fixture.settle();
-        let picked = Picked::Contents(vec![("menu.js".into(), b"// local script".to_vec())]);
-        assert!(files.answer(picked).is_some(), "Choose… filed a browser pick");
-        fixture.idle(3);
+        assert!(files.requests().is_empty());
         assert_eq!(form.borrow().file, "https://example.test/menu.js");
+        let add = fixture.by_label(tl!("Add")).expect("the Add button");
+        fixture.click(&add);
+        assert_eq!(form.borrow().pending, Some(Pending::Add));
     }
 }
