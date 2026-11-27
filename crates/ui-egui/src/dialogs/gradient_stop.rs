@@ -31,6 +31,7 @@ use egui::{Pos2, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
 use vectorcraft_color::{Color, FreeformPoint, GradientStop, Paint};
+use vectorcraft_doc::NodeId;
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::params::color_json;
 
@@ -56,6 +57,42 @@ pub(crate) enum Anchor {
 enum Target {
     Stop(Vec<GradientStop>, usize),
     Point(FreeformPoint, usize),
+}
+
+/// The paint target and selected stop or point shown when the popover opened.
+#[derive(Clone, PartialEq, Eq)]
+struct TargetKey {
+    document: u64,
+    objects: Vec<NodeId>,
+    item: Option<usize>,
+    fill: bool,
+    tool_paint: bool,
+    point: bool,
+    index: usize,
+}
+
+impl TargetKey {
+    fn of(app: &VectorcraftApp, target: &Target) -> Option<Self> {
+        let doc = app.session.active()?;
+        let fill = app.session.fill_active;
+        let (point, index) = match target {
+            Target::Stop(_, index) => (false, *index),
+            Target::Point(_, index) => (true, *index),
+        };
+        Some(Self {
+            document: doc.uid,
+            objects: doc.selection.objects.clone(),
+            item: app.session.appearance_item(),
+            fill,
+            tool_paint: app.session.tool_paints(!fill),
+            point,
+            index,
+        })
+    }
+
+    fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
+        Self::of(app, target).as_ref() == Some(self)
+    }
 }
 
 impl Target {
@@ -127,11 +164,16 @@ impl Tab {
 /// The fields set from outside the popover or edited in it, as percentages where the field is one; each `None` is
 /// a field left alone.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct PopoverFields {
+struct PopoverFields {
     color: Option<Color>,
     opacity: Option<f64>,
     location: Option<f64>,
     spread: Option<f64>,
+}
+
+pub(crate) struct PopoverAnswer {
+    target: TargetKey,
+    fields: PopoverFields,
 }
 
 /// The target's values and what the Color panel shows, as `pump` last pushed them.
@@ -163,6 +205,7 @@ struct Filed {
 
 /// The gradient stop popover.
 pub(crate) struct GradientStopPopover {
+    target: TargetKey,
     /// Where it opened.
     pub(crate) anchor: Anchor,
     /// The view it shows.
@@ -177,8 +220,9 @@ pub(crate) struct GradientStopPopover {
 }
 
 impl GradientStopPopover {
-    fn new(anchor: Anchor) -> Self {
+    fn new(anchor: Anchor, target: TargetKey) -> Self {
         Self {
+            target,
             anchor,
             tab: Tab::default(),
             at: Pos2::ZERO,
@@ -199,21 +243,21 @@ fn rejects(field: &str, value: &Value) -> String {
 }
 
 impl StackDialog for GradientStopPopover {
-    type Result = PopoverFields;
+    type Result = PopoverAnswer;
 
     fn id(&self) -> DialogId {
         dialog_id(KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<PopoverFields>> {
-        let Self { feed: Some(feed), tab, panel, filed, at, set, .. } = self else { return None };
+    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<PopoverAnswer>> {
+        let Self { feed: Some(feed), tab, panel, filed, at, .. } = self else { return None };
         let mut open = true;
         let shown = Popover::new("Gradient stop", Bind::bound(&mut open))
             .at_point(*at)
             .close_on_enter(true)
             .show(ui, |ui, _| body(ui, feed, tab, panel, filed));
         match shown.output.closed {
-            Some(CloseReason::Enter) => Some(DialogResult::Ok(set.clone())),
+            Some(CloseReason::Enter) => self.confirm(ui.ctx()).map(DialogResult::Ok),
             Some(_) => Some(DialogResult::Cancel),
             None => None,
         }
@@ -255,8 +299,8 @@ impl StackDialog for GradientStopPopover {
     }
 
     /// OK (agents): the fields that were set, which `pump` applies; an untouched popover confirms to no change.
-    fn confirm(&mut self, _ctx: &egui::Context) -> Option<PopoverFields> {
-        Some(self.set.clone())
+    fn confirm(&mut self, _ctx: &egui::Context) -> Option<PopoverAnswer> {
+        Some(PopoverAnswer { target: self.target.clone(), fields: self.set.clone() })
     }
 }
 
@@ -397,8 +441,9 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
         app.run("gradient.selectStop", json!({ "index": index })).ok();
     }
     let Some(target) = selected(app) else { return };
+    let Some(key) = TargetKey::of(app, &target) else { return };
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor));
+        host.open(GradientStopPopover::new(anchor, key));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -409,9 +454,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
     match dialogs.with(|host| host.take_by_id::<GradientStopPopover>(id)) {
-        Some(DialogResult::Ok(fields)) => {
+        Some(DialogResult::Ok(PopoverAnswer { target: key, fields })) => {
             if fields != PopoverFields::default()
                 && let Some(target) = selected(app)
+                && key.matches(app, &target)
             {
                 apply(app, &target, &fields);
             }
@@ -420,17 +466,24 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         Some(_) => return,
         None => {}
     }
-    if !dialogs.with(|host| host.is_open::<GradientStopPopover>()) {
-        return;
-    }
-    let Some(target) = selected(app) else {
-        // The stop or point went away (undo, another object selected): nothing left to edit.
+    let Some(key) = dialogs.with(|host| host.get_by_id::<GradientStopPopover>(id).map(|popover| popover.target.clone())) else { return };
+    let Some(target) = selected(app).filter(|target| key.matches(app, target)) else {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
     let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
+    }
+    if filed.fields.location.is_some()
+        && let Some(index) = app.session.selected_stop()
+    {
+        // The stop can cross its neighbor when its location changes.
+        dialogs.with(|host| {
+            if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
+                popover.target.index = index;
+            }
+        });
     }
     if let Some((name, color)) = filed.swatch
         && let Some(target) = selected(app)
@@ -589,6 +642,44 @@ mod tests {
         // A colour that is not `#rrggbb` is refused when it is set.
         open_at(&mut app, 2, Anchor::Screen(egui::pos2(200.0, 200.0)));
         assert!(set(&app, "color", json!("red")).is_err());
+    }
+
+    #[test]
+    fn the_popover_discards_a_pending_edit_after_selecting_other_art() {
+        let mut app = app();
+        let first = app.session.doc().unwrap().selection.objects[0];
+        let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 0.5, "color": "#0000ff"}, {"offset": 1, "color": "#ffffff"}]});
+        let second = app.run("shape.rectangle", json!({"x": 230, "y": 80, "width": 50, "height": 90})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"gradient": gradient})).unwrap();
+        app.run("select.set", json!({"ids": [first.0]})).unwrap();
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        confirm(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert!(!is_open(&app));
+
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        confirm(&mut app);
+        assert_eq!(stops(&app)[1].opacity, 0.25);
+    }
+
+    #[test]
+    fn the_popover_does_not_send_live_edits_to_another_stop() {
+        let mut app = app();
+        open_popover(&mut app);
+        let dialogs = app.dialogs().unwrap();
+        let ctx = ctx(&app);
+        dialogs.with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(25.0);
+        });
+        app.run("gradient.selectStop", json!({"index": 2})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app));
+        assert_eq!(stops(&app)[2].opacity, 1.0);
     }
 
     #[test]
