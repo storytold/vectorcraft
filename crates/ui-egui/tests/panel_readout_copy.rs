@@ -595,7 +595,10 @@ fn review_4714788866_readout_copy_requires_an_inside_primary_press() {
     assert!(!area.contains(outside) && area.contains(inside));
     let layer = a.ctx.layer_id_at(inside).expect("the readout's actual layer");
     assert_eq!(a.ctx.layer_id_at(outside), Some(layer), "the boundary crossing stays on the same layer");
-    assert!(outside.distance(inside) < a.ctx.options(|o| o.input_options.max_click_dist), "CONTROL: this two-point motion is an ordinary click, not a drag");
+    assert!(
+        outside.distance(inside) < a.ctx.options(|o| o.input_options.max_click_dist),
+        "CONTROL: this two-point motion is an ordinary click, not a drag"
+    );
     let before = a.snapshot();
     let sets = a.app.ui.status_sets;
     assert_eq!(visible_text_count(&out, COPIED), 0);

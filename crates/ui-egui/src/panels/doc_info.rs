@@ -64,10 +64,14 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     let saved_origin = ui.ctx().data(|d| d.get_temp::<egui::Pos2>(press_id));
     let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
     let (events, single) = ui.input(|i| {
-        let events: Vec<_> = i.events.iter().filter_map(|event| match event {
-            egui::Event::PointerButton { pos, button, pressed, modifiers } if *button == primary => Some((*pos, *pressed, *modifiers)),
-            _ => None,
-        }).collect();
+        let events: Vec<_> = i
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::PointerButton { pos, button, pressed, modifiers } if *button == primary => Some((*pos, *pressed, *modifiers)),
+                _ => None,
+            })
+            .collect();
         let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
         (events, single)
     });
