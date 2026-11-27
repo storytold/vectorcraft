@@ -533,24 +533,23 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
             .find(|r| (r.left() - 520.0).abs() < 1.0)
             .expect("the actual minimum-width Links float");
         assert!(body.width() <= 221.0, "{locale}: the new copy action must not widen the float: {body:?}");
-        let locations: Vec<_> = nodes
-            .iter()
-            .filter(|(_, n)| n.label() == Some(location) && n.supports_action(Action::Click))
-            .collect();
+        let locations: Vec<_> = nodes.iter().filter(|(_, n)| n.label() == Some(location) && n.supports_action(Action::Click)).collect();
         assert_eq!(locations.len(), 1, "{locale}: one live full-path accessible copy target");
         let (location_id, node) = locations[0];
         let location_rect = location_node_rect(node);
         assert!(body.contains_rect(location_rect), "{locale}: the fitted Location remains inside the panel");
-        assert!(out.shapes.iter().any(|s| shortened_location(&s.shape, location_rect, location)), "{locale}: the long path must actually be shortened on screen");
-        let buttons: Vec<_> = nodes
-            .iter()
-            .filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Copy Location")))
-            .collect();
+        assert!(
+            out.shapes.iter().any(|s| shortened_location(&s.shape, location_rect, location)),
+            "{locale}: the long path must actually be shortened on screen"
+        );
+        let buttons: Vec<_> =
+            nodes.iter().filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Copy Location"))).collect();
         assert_eq!(buttons.len(), 1, "{locale}: one named native Copy Location button");
         let (copy_id, copy_node) = buttons[0];
         assert!(copy_node.supports_action(Action::Focus), "the copy button takes real keyboard focus");
         assert!(body.contains_rect(location_node_rect(copy_node)), "{locale}: Copy Location fits beside the path");
-        let reveal = nodes.iter().find(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show in Folder"))).unwrap();
+        let reveal =
+            nodes.iter().find(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show in Folder"))).unwrap();
         assert!(body.contains_rect(location_node_rect(&reveal.1)), "{locale}: the incoming reveal action still fits");
         let (location_id, copy_id) = (*location_id, *copy_id);
         let before = a.snapshot();
@@ -558,14 +557,20 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         assert_eq!(copies(&a.tap(location_rect.center())), [location], "{locale}: a plain click copies the complete path, never its shortened paint");
         assert_no_delayed_copy(&mut a, "Location primary copy");
 
-        let request = |action, target_node| Event::AccessKitActionRequest(ActionRequest { action, target_node, target_tree: TreeId::ROOT, data: None });
+        let request =
+            |action, target_node| Event::AccessKitActionRequest(ActionRequest { action, target_node, target_tree: TreeId::ROOT, data: None });
         let activated = a.frame(vec![request(Action::Click, location_id)]);
         assert_eq!(copies(&activated), [location], "{locale}: the full-path accessibility action copies once");
         assert_no_delayed_copy(&mut a, "Location accessible copy");
         let focused = a.frame(vec![request(Action::Focus, copy_id)]);
         assert!(copies(&focused).is_empty(), "focusing the button does not copy");
-        assert_eq!(focused.platform_output.accesskit_update.as_ref().unwrap().focus, copy_id, "{locale}: focus reaches the actual native copy button");
-        let key = |pressed| Event::Key { key: egui::Key::Enter, physical_key: Some(egui::Key::Enter), pressed, repeat: false, modifiers: Modifiers::NONE };
+        assert_eq!(
+            focused.platform_output.accesskit_update.as_ref().unwrap().focus,
+            copy_id,
+            "{locale}: focus reaches the actual native copy button"
+        );
+        let key =
+            |pressed| Event::Key { key: egui::Key::Enter, physical_key: Some(egui::Key::Enter), pressed, repeat: false, modifiers: Modifiers::NONE };
         let mut copied = copies(&a.frame(vec![key(true)]));
         copied.extend(copies(&a.frame(vec![key(false)])));
         assert_eq!(copied, [location], "{locale}: native keyboard activation copies the complete path once");
