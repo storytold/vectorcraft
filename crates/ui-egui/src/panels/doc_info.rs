@@ -68,20 +68,28 @@ fn no_artwork_selected(app: &VectorcraftApp) -> bool {
     }
 }
 
-/// `document.info` with its categories, fetched again only when the document, the scope or the
-/// artboards the Artboard tool has selected change. A frame that fetches nothing returns the stored
-/// result without copying it and stores nothing; a failed fetch leaves the stored result as it was.
+/// Whether the panel shows Objects, where Path Area is: only then does it ask `document.info`
+/// for the paths' area, whose pass normalizes every closed path again after each edit.
+fn shows_path_area(view: &DocInfoView) -> bool {
+    view.category.is_empty() || view.category == "objects"
+}
+
+/// `document.info` with its categories, fetched again only when the document, the scope, the
+/// artboards the Artboard tool has selected or whether Objects is shown change. A frame that
+/// fetches nothing returns the stored result without copying it and stores nothing; a failed fetch
+/// leaves the stored result as it was.
 pub(crate) fn info(app: &mut VectorcraftApp) -> Option<Arc<Value>> {
     let selection_only = app.ui.doc_info.selection_only;
+    let path_area = shows_path_area(&app.ui.doc_info);
     let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
-    let key = (st.uid, st.revision, selection_only, artboard_tool);
+    let key = (st.uid, st.revision, selection_only, path_area, artboard_tool);
     if let Some((cached, info)) = &app.canvas.doc_info
         && *cached == key
     {
         return Some(Arc::clone(info));
     }
-    let info = Arc::new(app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?);
+    let info = Arc::new(app.session.execute("document.info", &json!({ "selectionOnly": selection_only, "pathArea": path_area })).ok()?);
     app.canvas.doc_info = Some((key, Arc::clone(&info)));
     Some(info)
 }
@@ -757,28 +765,30 @@ mod tests {
     }
 
     /// The by-value cache the panel kept before its result was shared, with the same key.
-    type CopiedCache = Option<((u64, u64, bool, Value), Value)>;
+    type CopiedCache = Option<((u64, u64, bool, bool, Value), Value)>;
 
     /// `document.info` read as the panel read it before its result was shared: the stored result
     /// copied out by value on every call, kept in `cache` so it does not touch the panel's.
     fn copied_info(app: &mut VectorcraftApp, cache: &mut CopiedCache) -> Option<Value> {
         let selection_only = app.ui.doc_info.selection_only;
+        let path_area = shows_path_area(&app.ui.doc_info);
         let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
         let st = app.session.active()?;
-        let key = (st.uid, st.revision, selection_only, artboard_tool);
+        let key = (st.uid, st.revision, selection_only, path_area, artboard_tool);
         if let Some((cached, info)) = cache.as_ref()
             && *cached == key
         {
             return Some(info.clone());
         }
-        let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only })).ok()?;
+        let info = app.session.execute("document.info", &json!({ "selectionOnly": selection_only, "pathArea": path_area })).ok()?;
         *cache = Some((key, info.clone()));
         Some(info)
     }
 
     /// A frame that fetches nothing keeps the stored `document.info` result without a copy and
     /// shows the same rows; another document (at the same revision), an edit, Selection Only and
-    /// the Artboard tool's options each store a new one, and a category does not. With no
+    /// the Artboard tool's options each store a new one, and a category that keeps Objects shown or
+    /// hidden does not. With no
     /// document nothing is fetched and the stored result stays as it was.
     #[test]
     fn frames_that_fetch_nothing_reuse_the_cached_rows() {
@@ -841,13 +851,44 @@ mod tests {
         app.select_tool("selection");
         let (key, away, _) = frame(&mut app);
         assert!(!Arc::ptr_eq(&kept, &away), "another tool stores a new result");
-        assert_eq!(key.3, Value::Null);
+        assert_eq!(key.4, Value::Null);
         // With no document the panel shows its empty state and keeps the stored result.
         app.session.execute("file.close", &json!({})).unwrap();
         app.session.execute("file.close", &json!({})).unwrap();
         let (_, closed, text) = frame(&mut app);
         assert!(Arc::ptr_eq(&away, &closed), "nothing is fetched or stored without a document");
         assert!(text.contains("No document"), "{text}");
+    }
+
+    /// The paths' area pass normalizes every closed path, so while the panel shows a category other
+    /// than Objects its `document.info` leaves the area out, and edits there do not work it out
+    /// again. Objects and All Categories ask for it and share one result.
+    #[test]
+    fn the_path_area_is_worked_out_only_while_objects_is_shown() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 20})).unwrap();
+        let shown = |app: &mut VectorcraftApp, category: &str| {
+            run(app, "ui.docInfo.category", &json!({ "category": category })).unwrap().unwrap();
+            let _ = crate::tests_labels::painted_text(app, show);
+            app.canvas.doc_info.clone().unwrap().1
+        };
+        let all = shown(&mut app, "");
+        assert!(all["pathArea"].as_f64().is_some_and(|a| a > 0.0), "{}", all["pathArea"]);
+        assert!(Arc::ptr_eq(&all, &shown(&mut app, "objects")), "Objects reuses All Categories' result");
+        for category in ["document", "fonts"] {
+            let other = shown(&mut app, category);
+            assert!(other["pathArea"].is_null(), "{category}: {}", other["pathArea"]);
+            // An edit while another category is shown fetches again, still without the area.
+            app.session.execute("shape.ellipse", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap();
+            let edited = shown(&mut app, category);
+            assert!(!Arc::ptr_eq(&other, &edited));
+            assert!(edited["pathArea"].is_null(), "{category}: {}", edited["pathArea"]);
+        }
+        // Back on Objects, the area covers the paths drawn meanwhile.
+        let objects = shown(&mut app, "objects");
+        assert!(objects["pathArea"].as_f64().unwrap() > all["pathArea"].as_f64().unwrap());
+        assert!(shown_rows(&objects, "objects").iter().any(|(l, _)| l == "Path Area"));
     }
 
     /// Time a frame's read of Document Info's result for a document with 5,000 objects painted
