@@ -357,11 +357,7 @@ fn surfaces(app: &mut VectorcraftApp, s: &Session, fields: &DialogFields, params
 /// refusal standing until the values change.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut s) = app.three_d_dialog.take() else { return };
-    if !s.is_current_drawing(app) {
-        s.tried = None;
-        app.three_d_dialog = Some(s);
-        return;
-    }
+    let current = s.is_current_drawing(app);
     // A dialog that closed is finished by the held drain (OK or Cancel), which owns the session's end.
     let Some((fields, previewing)) = dialog_of(app, s.id, |d| {
         match d.take_action().as_deref() {
@@ -375,9 +371,16 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         return;
     };
     let (cmd, p, params) = s.request(&fields);
-    let mut fresh = data(app, Some(&s.effect), &params);
+    // Map Art keeps its read-only surface list current. While away, editable document data
+    // such as symbol names and artwork drop ownership still belongs to the opening drawing.
+    let mut fresh = if current { data(app, Some(&s.effect), &params) } else { read(&s.data).clone() };
     fresh.surfaces = surfaces(app, &s, &fields, &params);
     *s.data.write().unwrap_or_else(PoisonError::into_inner) = fresh;
+    if !current {
+        s.tried = None;
+        app.three_d_dialog = Some(s);
+        return;
+    }
     let verdict = if previewing {
         s.tried = None;
         s.run_preview(app, cmd, &p)
