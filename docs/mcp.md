@@ -12466,12 +12466,14 @@ glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
-an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
-glyph it is closest to when its leftover distance from that glyph, relative to the shape's outline spread (the root
+an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes a
+glyph it is close to when its leftover distance from that glyph, relative to the shape's outline spread (the root
 mean square distance of its sampled outline points from their center), is at most the
 tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
-and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
-and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
+and this measure are VectorCraft's own. When glyphs of several fonts match, exactly or nearly, each shape is set in
+the font that the most selected shapes match, and among fonts that as many shapes match, in the one whose glyphs fit
+those shapes closest in all, even when another font has a glyph closer to that one shape. A near-matched glyph may
+differ from its line by the tolerance in size, turn and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
 a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
 the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
 with the change of size and turn) or with its center further away than its origin may be. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
