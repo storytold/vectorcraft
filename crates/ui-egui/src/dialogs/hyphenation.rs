@@ -45,12 +45,13 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     use crate::panels::character;
 
+    let editing = character::text_editing_kept(app)?;
     character::text_style(app).ok_or("select some type first")?;
     let source = app.session.active().ok_or("no document open")?;
     let document = source.uid;
     let mut target = Map::new();
     let mut story_focus = None;
-    let ids = if let Some((id, start, end)) = character::text_editing(app) {
+    let ids = if let Some((id, start, end)) = editing {
         if let Some(story) = character::text_story(app) {
             story_focus = Some(id);
             story
@@ -212,6 +213,25 @@ mod tests {
         driver::ok(&mut app);
         let (first, second) = paras(&app, id);
         assert_eq!((first.hyphenate, second.hyphenate), (true, false));
+    }
+
+    #[test]
+    fn hyphenation_confirms_the_caret_paragraph_after_buffered_typing() {
+        let (mut app, id) = app();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let view = Default::default();
+        app.session.select_tool("type", view).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 7, "caret": 7}));
+        app.session.tool_text("\nThree", view).unwrap();
+        let text = &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind;
+        assert!(matches!(text, NodeKind::Text(t) if t.plain_text() == "One\nTwo"));
+
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        driver::ok(&mut app);
+        let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("not text") };
+        assert_eq!(t.plain_text(), "One\nTwo\nThree");
+        assert_eq!([t.para_at(0).hyphenate, t.para_at(1).hyphenate, t.para_at(2).hyphenate], [false, false, true]);
     }
 
     #[test]
