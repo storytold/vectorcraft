@@ -18,7 +18,7 @@ pub const KIND: &str = "newColorGroup";
 /// art is selected and no swatches are.
 pub fn open(app: &mut VectorcraftApp, swatches: Vec<String>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
-    let document = st.uid;
+    let (document, reverts) = (st.uid, st.reverts);
     let art = !st.selection.is_empty();
     let mut fields = DialogFields::new();
     fields.set("name", st.doc.free_swatch_name("Color Group"));
@@ -38,8 +38,11 @@ pub fn open(app: &mut VectorcraftApp, swatches: Vec<String>) -> Result<Value, St
     ];
     let dialog = hosted(&ctx, KIND, tl!("New Color Group"), fields, rows, false);
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
-        if !app.session.active().is_some_and(|active| active.uid == document) {
+        let Some(source) = app.session.active().filter(|active| active.uid == document) else {
             return Err(tl!("Create this color group in the document that opened the dialog.").to_owned());
+        };
+        if source.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         app.run("swatch.newGroup", params(&answer.fields, &swatches)).map(|_| ())
     };
@@ -64,6 +67,36 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
+
+    #[test]
+    fn a_color_group_draft_cannot_change_the_drawing_restored_by_revert() {
+        for swatches in [vec!["Saved Ink".to_owned()], Vec::new()] {
+            let dir = vectorcraft_testkit::TempDir::new("new-color-group-revert");
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].clone();
+            app.run("paint.setFill", json!({"ids": [id], "color": "#123456"})).unwrap();
+            app.run("swatch.new", json!({"name": "Saved Ink", "color": "#446688"})).unwrap();
+            app.run("file.saveAs", json!({"path": dir.join("Saved.vectorcraft")})).unwrap();
+            app.run("paint.setFill", json!({"ids": [id], "color": "#abcdef"})).unwrap();
+            app.run("select.set", json!({"ids": [id]})).unwrap();
+            let before = app.session.active().unwrap();
+            let (uid, reverts) = (before.uid, before.reverts);
+            open(&mut app, swatches).unwrap();
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            app.run("select.set", json!({"ids": [id]})).unwrap();
+            let loaded = app.session.active().unwrap();
+            assert_eq!((loaded.uid, loaded.reverts), (uid, reverts + 1));
+            let (saved, undo) = (loaded.doc.clone(), loaded.history.undo.len());
+            let refused = crate::dialogs::tests_export::try_confirm(&mut app);
+            let current = app.session.active().unwrap();
+            assert_eq!(current.doc, saved);
+            assert_eq!(current.history.undo.len(), undo);
+            assert_eq!(refused.unwrap_err(), "The document was reverted. Reopen this dialog to continue.");
+        }
+    }
 
     #[test]
     fn color_group_does_not_convert_the_other_drawings_artwork() {

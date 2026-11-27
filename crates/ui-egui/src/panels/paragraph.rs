@@ -8,8 +8,9 @@
 // PLAN: assumed import paths for the framework items below (behavior::{IconId, Mixed}, keymap::CommandRef,
 // text::ui::character, ui::{buttons, choice::Select, controls::Checkbox, menu, popover, runtime::access::PopupKind}).
 use craft::behavior::{IconId, Mixed};
+use craft::i18n::WordSet as _;
 use craft::keymap::CommandRef;
-use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, TextAlign};
+use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, ParagraphWords, TextAlign};
 use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
@@ -21,6 +22,7 @@ use craft::ui::popover::Popover;
 use craft::ui::primitives::{Glyph, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::{WordRows, WordsOverride, with_env};
 use craft::ui::style::UiTokens;
 use egui::{Color32, Painter, Rect, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -822,6 +824,30 @@ fn kinsoku_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Maps the toolkit's different English names to the translations already in the app catalogs.
+fn localized_control_words() -> WordRows {
+    [
+        ("paragraph.left", ALIGNMENTS[0].2),
+        ("paragraph.center", ALIGNMENTS[1].2),
+        ("paragraph.right", ALIGNMENTS[2].2),
+        ("paragraph.justifyLeft", ALIGNMENTS[3].2),
+        ("paragraph.justifyCenter", ALIGNMENTS[4].2),
+        ("paragraph.justifyRight", ALIGNMENTS[5].2),
+        ("paragraph.justifyAll", ALIGNMENTS[6].2),
+        ("paragraph.spaceBefore", "Space Before Paragraph"),
+        ("paragraph.spaceAfter", "Space After Paragraph"),
+    ]
+    .into_iter()
+    .filter_map(|(id, source)| {
+        let translated = tl!(source);
+        if translated == source {
+            return None;
+        }
+        ParagraphWords::word(id).map(|word| (word, translated))
+    })
+    .fold(WordRows::new(), |rows, (word, translated)| rows.row(word, translated))
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((_, para)) = text_style(app) else {
         super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to edit its paragraph attributes."));
@@ -832,11 +858,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Paragraph direction, with the Middle Eastern (Indic) options.
     let direction = if app.session.prefs.show_indic_options { DirectionRow::Explicit } else { DirectionRow::Hidden };
     // Indents and paragraph spacing are distances (General); type sizes follow Units ▸ Type.
-    let out = ParagraphControls::new(tl!("Paragraph"), &shown)
-        .unit(doc_unit(app.session.general_unit()))
-        .hyphenate(!hidden)
-        .direction_row(direction)
-        .show_with(ui, |ui| lists_row(app, ui));
+    let controls =
+        ParagraphControls::new(tl!("Paragraph"), &shown).unit(doc_unit(app.session.general_unit())).hyphenate(!hidden).direction_row(direction);
+    let words = localized_control_words();
+    let show = |ui: &mut Ui| controls.show_with(ui, |ui| lists_row(app, ui));
+    let out =
+        if words.iter().next().is_some() { with_env(ui, |overrides| overrides.words = Some(WordsOverride::Overlay(words)), show) } else { show(ui) };
     for event in &out.edits {
         edits::apply_event(app, event, &EditPath::Scope, &mut |app, change, _| apply(app, change));
     }
