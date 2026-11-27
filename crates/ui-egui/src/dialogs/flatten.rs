@@ -175,12 +175,13 @@ pub(crate) fn custom_dialog(ctx: &egui::Context, parent: &HostedPdfExport, job: 
     as_written(&mut o, parent.settings().advanced.overprint);
     let mut fields = option_fields(&o);
     fields.set(KEPT_OVERPRINTS, kept);
-    HostedParamDialog::new(ctx, CUSTOM_KEY, fields, |_| {
+    HostedParamDialog::new(ctx, CUSTOM_KEY, fields, |fields| {
         ParamDialog::new(
             CUSTOM_KEY,
             tl!("Custom Transparency Flattener Options"),
             option_params(&FIXED, tl!("PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.")),
         )
+        .values(Bind::bound(fields))
     })
 }
 
@@ -213,8 +214,8 @@ pub(crate) fn apply_custom(job: &mut SavePdfJob, parent: &HostedPdfExport, field
 /// Open Flatten Transparency for the selection with the default preset.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |_| {
-        ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).previews(true)
+    let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |fields| {
+        ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).values(Bind::bound(fields)).previews(true)
     })
     // Flattening complex art is slow: the preview waits until it is turned on.
     .preview_off();
@@ -449,5 +450,72 @@ mod tests {
         // Built-in presets can't be replaced.
         create(&mut app, &ctx, id, params, "High Resolution");
         assert_eq!(app.session.prefs.flattener_presets.len(), 1);
+    }
+
+    #[test]
+    fn flattened_art_resolution_keeps_a_live_keyboard_edit() {
+        assert_live_resolution(false);
+    }
+
+    #[test]
+    fn pdf_flattener_resolution_keeps_a_live_keyboard_edit() {
+        assert_live_resolution(true);
+    }
+
+    fn assert_live_resolution(custom: bool) {
+        use craft::ui::testing::Fixture;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let app = Rc::new(RefCell::new(scene()));
+        let shown = app.clone();
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| host.run(ui));
+            super::super::host::pump(&mut app, ui.ctx());
+        });
+        fixture.room(egui::vec2(880.0, 720.0));
+        let ctx = fixture.ctx().clone();
+        let document = app.borrow().session.active().unwrap().uid;
+        let mut job = SavePdfJob {
+            document,
+            path: None,
+            save_mode: None,
+            flattener: Some(FlattenOptions { line_art_ppi: 611.0, ..FlattenOptions::default() }),
+            selection: false,
+        };
+        let parent = HostedPdfExport::new(vectorcraft_pdf::APP, vectorcraft_pdf::PdfSettings::default());
+        let id = {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(ctx.clone());
+            if custom {
+                let dialog = custom_dialog(&ctx, &parent, &job, &[]);
+                app.dialogs().unwrap().with(|host| host.open(dialog))
+            } else {
+                open(&mut app).unwrap();
+                app.flatten_dialog.open.as_ref().unwrap().id
+            }
+        };
+        fixture.settle();
+        let field = fixture
+            .by_label("Line Art and Text Resolution")
+            .or_else(|| fixture.by_label("Line Art and Text Resolution:"))
+            .expect("the hosted resolution field");
+        if custom {
+            let fields = app.borrow().dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).unwrap().fields().clone());
+            assert_eq!(fields.number("lineArtPpi"), Some(611.0), "the PDF dialog opens with the job's own resolution");
+        }
+        fixture.click(&field).key(egui::Key::A, egui::Modifiers::COMMAND).type_text("399").key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+        let app = app.borrow();
+        let fields = app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).unwrap().fields().clone());
+        assert_eq!(fields.number("lineArtPpi"), Some(399.0), "the hosted form keeps its keyboard edit");
+        if custom {
+            apply_custom(&mut job, &parent, &fields, &[]).unwrap();
+            assert_eq!(job.flattener.unwrap().line_art_ppi, 399.0);
+        } else {
+            let params = command_params(&option_params(&[], ""), &fields, &[]).unwrap();
+            assert_eq!(params["lineArtPpi"], 399.0);
+        }
     }
 }
