@@ -259,7 +259,7 @@ fn review_8687_status_snapping_uses_existing_commands_and_accessible_state() {
     assert!(!bar.app().session.prefs.alignment_guides);
     bar.key(egui::Key::Escape).click("Snapping").settle();
     let pixel = bar.app().session.prefs.pixel_snap;
-    bar.click(tl!("Pixel Snapping Options.")).settle();
+    bar.click(tl!("Pixel Snapping Options…")).settle();
     {
         let app = bar.app();
         let dialogs = app.dialogs().expect("the native dialog host");
