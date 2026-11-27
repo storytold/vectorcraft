@@ -343,16 +343,23 @@ fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
     // The web answers with the files' contents instead of paths.
     crate::file_asks::ask(app, request, Owner::Document, move |app, picked| {
         let files = match picked {
-            Picked::Paths(paths) => paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect(),
-            Picked::Contents(files) => files
-                .into_iter()
-                .map(|(name, bytes)| {
-                    app.place.picked.retain(|(n, _)| *n != name);
-                    let entry = with_importer(json!({ "name": name }), &with);
-                    app.place.picked.push((name, bytes));
-                    entry
-                })
-                .collect(),
+            Picked::Paths(paths) => {
+                app.place.picked.clear();
+                paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect()
+            }
+            Picked::Contents(files) => {
+                // The next Place dialog replaces the previous selection, including its source bytes.
+                app.place.picked.clear();
+                files
+                    .into_iter()
+                    .map(|(name, bytes)| {
+                        app.place.picked.retain(|(n, _)| *n != name);
+                        let entry = with_importer(json!({ "name": name }), &with);
+                        app.place.picked.push((name, bytes));
+                        entry
+                    })
+                    .collect()
+            }
             // Only an open's answers carry files.
             _ => return Ok(Value::Null),
         };
@@ -398,12 +405,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     use crate::dialogs::place::PlaceDialog;
     use craft::ui::dialog::DialogResult;
     let Some(dialogs) = app.dialogs() else { return };
-    let (reading, answer) = dialogs.with(|host| {
+    let (reading, answer, current_open) = dialogs.with(|host| {
         let reading = host.get_mut::<PlaceDialog>().is_some_and(|d| fill_lines(app, &d.files, &mut d.info));
-        (reading, host.take::<PlaceDialog>())
+        let answer = host.take::<PlaceDialog>();
+        (reading, answer, host.is_open::<PlaceDialog>())
     });
     if reading {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    // Place answers only after closing. Replacing an open Place leaves its Cancel while the new
+    // dialog is open; that retired selection must not clear the current selection's cache.
+    if current_open {
+        return;
     }
     match answer {
         Some(DialogResult::Ok((files, options))) => {
@@ -411,7 +424,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 app.status(e);
             }
         }
-        Some(_) => app.place.reading_lines = None,
+        Some(_) => {
+            app.place.reading_lines = None;
+            app.place.picked.clear();
+        }
         None => {}
     }
 }
