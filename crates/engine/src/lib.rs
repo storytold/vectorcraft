@@ -30,7 +30,7 @@ pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::flare::flare_settings;
-pub use cmd::gradient::StopOwner;
+pub use cmd::gradient::{GradientEditPaints, StopOwner};
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;

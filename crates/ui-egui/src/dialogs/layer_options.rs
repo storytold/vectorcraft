@@ -249,9 +249,9 @@ fn fields_of(n: &Node, xml_id: bool) -> LayerOptionsValue {
 
 /// Opens the dialog on `value`.
 fn open_value(app: &mut VectorcraftApp, value: LayerOptionsValue) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let st = app.session.active().ok_or("no document open")?;
     let dialogs = app.dialogs().ok_or("no window")?;
-    dialogs.with(|host| host.open(LayerOptionsDialog::new(document, value)));
+    dialogs.with(|host| host.open(LayerOptionsDialog::new(st.uid, st.reverts, value)));
     Ok(Value::Null)
 }
 
@@ -412,6 +412,7 @@ pub(crate) fn params(v: &LayerOptionsValue) -> (&'static str, Value) {
 pub(crate) struct LayerOptionsDialog {
     id: DialogId,
     document: u64,
+    reverts: u64,
     open: bool,
     value: LayerOptionsValue,
     held: HeldAnswer<LayerOptionsValue>,
@@ -423,8 +424,17 @@ pub(crate) struct LayerOptionsDialog {
 
 impl LayerOptionsDialog {
     /// The dialog over `value`.
-    fn new(document: u64, value: LayerOptionsValue) -> Self {
-        LayerOptionsDialog { id: dialog_id(KEY), document, open: true, value, held: HeldAnswer::new(), refused_at: None, color_request: None }
+    fn new(document: u64, reverts: u64, value: LayerOptionsValue) -> Self {
+        LayerOptionsDialog {
+            id: dialog_id(KEY),
+            document,
+            reverts,
+            open: true,
+            value,
+            held: HeldAnswer::new(),
+            refused_at: None,
+            color_request: None,
+        }
     }
 
     /// The OK filed by the user, once.
@@ -573,9 +583,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     // The closed dialog's answer was run when OK was filed.
     let _ = dialogs.with(|host| host.take::<LayerOptionsDialog>());
-    let Some((document, value)) = dialogs.with(|host| {
+    let Some((document, reverts, value)) = dialogs.with(|host| {
         let dialog = host.get_mut::<LayerOptionsDialog>()?;
-        Some((dialog.document, dialog.take_filed()?))
+        Some((dialog.document, dialog.reverts, dialog.take_filed()?))
     }) else {
         return;
     };
@@ -588,6 +598,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Isolation mode can start while the dialog is open.
     let answer = match app.session.active().filter(|st| st.uid == document) {
         None => Err(Label::from(tl!("Layer Options can only change the document it was opened for."))),
+        Some(st) if st.reverts != reverts => Err(Label::from(tl!("The document was reverted. Reopen this dialog to continue."))),
         Some(st) if sublayer.is_some_and(|sublayer| crate::panels::layers::new_layer_unlisted(st, sublayer, false)) => {
             Err(Label::from("exit isolation mode first"))
         }
@@ -934,5 +945,46 @@ mod tests {
         ok(&mut app);
         let n = app.session.doc().unwrap().doc.node(NodeId(rect)).unwrap().clone();
         assert_eq!((n.display_name(), n.locked), ("Box".to_string(), true));
+    }
+
+    #[test]
+    fn layer_options_refuses_a_stale_draft_after_confirmed_revert() {
+        let file = std::env::temp_dir().join(format!("vectorcraft-layer-options-revert-{}.vectorcraft", std::process::id()));
+        let path = file.to_string_lossy();
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        let original = app.session.active().unwrap();
+        let (uid, reverts, layer) = (original.uid, original.reverts, original.doc.layers[0].id);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        app.run("ui.layerOptions", json!({"id": layer.0})).unwrap();
+        set(&mut app, "name", json!("Stale Draft"));
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(&file);
+        let reverted = app.session.active().unwrap();
+        assert_eq!((reverted.uid, reverted.reverts, reverted.doc.layers[0].id), (uid, reverts + 1, layer));
+        let undo = reverted.history.undo.len();
+
+        let ctx = app.ui_ctx.clone().unwrap();
+        let id = open_id(&app);
+        let dialogs = app.dialogs().unwrap();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        let reverted = app.session.active().unwrap();
+        assert_eq!(reverted.doc.node(layer).unwrap().display_name(), "Layer 1");
+        assert_eq!(reverted.history.undo.len(), undo);
+        assert!(app.any_dialog_open(), "the refused draft stays available to inspect or cancel");
+        assert_eq!(fields(&app)["name"], "Stale Draft");
+        assert_eq!(
+            dialogs.with(|host| host.held_state(id)),
+            Some(HeldOk::Refused("The document was reverted. Reopen this dialog to continue.".into()))
+        );
+        dialogs.with(|host| host.cancel_by_id(&ctx, id));
+        app.run("ui.layerOptions", json!({"id": layer.0})).unwrap();
+        set(&mut app, "name", json!("Fresh Draft"));
+        ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.node(layer).unwrap().display_name(), "Fresh Draft");
     }
 }

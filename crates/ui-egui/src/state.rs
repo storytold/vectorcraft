@@ -49,6 +49,7 @@ pub enum ViewMove {
 #[derive(Clone, Debug)]
 pub struct RearrangePlacement {
     pub doc: u64,
+    pub reverts: u64,
     pub tool: String,
     pub params: Value,
     pub ids: Vec<u32>,

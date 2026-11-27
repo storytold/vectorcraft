@@ -284,11 +284,48 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let scaling = app.ui_scaling();
         app.run("view.setZoom", view_params(edited, region, print, scaling)).ok();
     }
+    if let Some(invalid) = out.invalid_zoom {
+        app.status(invalid.message(&env));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn navigator_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(show);
+    }
+
+    #[test]
+    fn status_bar_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(crate::chrome::status_bar);
+    }
+
+    fn assert_malformed_zoom_entry_reported(draw: fn(&mut VectorcraftApp, &mut Ui)) {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.view_mut().unwrap().rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(460.0, 260.0));
+        app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, draw);
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "80..2");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 0.8).abs() < 1e-9, "applies the valid prefix");
+            assert!(app.ui.status.contains("Closest value inserted"), "reports the partial entry: {:?}", app.ui.status);
+        }
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "200");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 2.0).abs() < 1e-9, "still accepts a valid entry");
+            assert!(!app.ui.status.contains("Closest value inserted"), "does not warn for a valid entry");
+        }
+    }
 
     /// A centre edit of the shifted view reaches `view.setZoom` as the document point it shows, and
     /// an unedited view's centre is shifted by the region's corner.

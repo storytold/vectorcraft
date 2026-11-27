@@ -406,6 +406,13 @@ fn edit_blends(s: &mut Session, label: &str, f: impl Fn(&mut Vec<Arc<Node>>, &mu
     ok()
 }
 
+impl Session {
+    /// Whether Blend Options would operate on selected artwork rather than new-blend defaults.
+    pub fn has_selected_blend(&self) -> bool {
+        super::common::any_selected_of(self, is_blend, |_| true)
+    }
+}
+
 /// The first selected blend: its id, spec and key ids.
 fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
     let b = *selected_of(s, is_blend).first()?;

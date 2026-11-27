@@ -3,6 +3,7 @@
 //! and runs `addon.type.textTweaker` on OK.
 
 use craft::menu::Node;
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
@@ -116,7 +117,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
                 .enabled_when("shape", FieldValue::Text("random".into())),
             Param::new("skipSpaces", tl!("Skip Spaces"), ParamKind::bool(true)),
         ]);
-        ParamDialog::new(COMMAND, tl!("Text Tweaker"), rows).previews(true)
+        ParamDialog::new(COMMAND, tl!("Text Tweaker"), rows).values(Bind::bound(fields)).previews(true)
     })
 }
 
