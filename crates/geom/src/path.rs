@@ -673,9 +673,9 @@ impl PathData {
     /// segment with a control point that is not finite or past `f64::MAX / 16` in x or y is measured
     /// by its control points.
     ///
-    /// Walks the segments in place, without building the path: the same segments in the same order,
-    /// so the result is bit for bit `curve_bounds(&self.to_bezpath())` (a path of lone anchors, with
-    /// no segment, is `Rect::ZERO`, as there).
+    /// Walks the segments in place, without building the path: the same segments in the same order
+    /// as `curve_bounds(&self.to_bezpath())`. A subpath of one anchor has no segment, and the box
+    /// also holds that anchor's point, so a path of lone anchors measures the box around them.
     pub fn bounds(&self) -> Option<Rect> {
         if self.is_empty() {
             return None;
@@ -687,6 +687,12 @@ impl PathData {
         }
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
+            if sp.segment_count() == 0
+                && let Some(a) = sp.anchors.first()
+            {
+                let lone = Rect::from_points(a.p, a.p);
+                bbox = Some(bbox.map_or(lone, |bb| bb.union(lone)));
+            }
             MEASURED_SEGMENTS.set(MEASURED_SEGMENTS.get().saturating_add(sp.segment_count() as u64));
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
@@ -873,7 +879,8 @@ mod tests {
     use super::*;
 
     /// `bounds` walks the anchors in place: bit for bit what the kurbo path it stands for gives,
-    /// for lines, curves, open and closed subpaths, lone anchors and empty subpaths.
+    /// joined with the point of each lone anchor, for lines, curves, open and closed subpaths, lone
+    /// anchors and empty subpaths.
     #[test]
     fn bounds_match_the_bezpath_bit_for_bit() {
         use proptest::prelude::*;
@@ -881,11 +888,10 @@ mod tests {
             if pd.is_empty() {
                 return None;
             }
-            if pd.anchor_count() == 1 {
-                let a = pd.subpaths.iter().find_map(|s| s.anchors.first())?;
-                return Some(Rect::from_points(a.p, a.p));
-            }
-            Some(curve_bounds(&pd.to_bezpath()))
+            let bp = pd.to_bezpath();
+            let segments = bp.segments().next().is_some().then(|| curve_bounds(&bp));
+            let lone = pd.subpaths.iter().filter(|s| s.segment_count() == 0).filter_map(|s| s.anchors.first()).map(|a| Rect::from_points(a.p, a.p));
+            lone.chain(segments).reduce(|bb, r| bb.union(r))
         }
         let bits = |r: Option<Rect>| r.map(|r| [r.x0, r.y0, r.x1, r.y1].map(f64::to_bits));
         let coord = || prop_oneof![(-1e3f64..1e3), Just(0.0), Just(1e-300), Just(-7.25)];
@@ -899,10 +905,17 @@ mod tests {
         proptest!(ProptestConfig::with_cases(2000), |(pd in path)| {
             prop_assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
         });
-        // Two lone anchors: no segment, as the path has none.
+        // Two lone anchors: the path has no segment, and the box spans the two points.
         let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);
-        assert_eq!(lone.bounds(), Some(Rect::ZERO));
+        assert_eq!(lone.bounds(), Some(Rect::new(5.0, 1.0, 9.0, 5.0)));
         assert_eq!(bits(lone.bounds()), bits(reference(&lone)));
+        // A lone anchor beside a segment widens the segment's box to reach it.
+        let line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(4.0, 2.0)], false);
+        let beside = PathData::new(vec![line.clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], false)]);
+        let segment_only = PathData::single(line).bounds().unwrap_or_default();
+        let both = beside.bounds().unwrap_or_default();
+        assert!(both.x1 >= 20.0 && both.y0 <= -3.0, "{both:?} leaves out the lone anchor at (20, -3)");
+        assert_eq!(both.union(segment_only), both, "{both:?} leaves out part of the segment's box {segment_only:?}");
         // A NaN anchor differs from itself: kurbo closes such a subpath with a line of its own.
         let nan = Point::new(f64::NAN, 1.0);
         let closed = |pts: &[Point]| SubPath::polyline(pts, true);
