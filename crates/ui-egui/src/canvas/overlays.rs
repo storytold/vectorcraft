@@ -98,6 +98,52 @@ fn badge_at(view: &CanvasView, pointer: vectorcraft_geom::Point) -> Pos2 {
     Pos2::new(wanted.x.clamp(rect.min.x, rect.max.x), wanted.y.clamp(rect.min.y, rect.max.y))
 }
 
+/// How long the text caret stays on, and then off, while it blinks (seconds).
+pub(crate) const CARET_BLINK: f64 = 0.53;
+
+/// Whether the text caret shows `elapsed` seconds after it last moved: on for [`CARET_BLINK`],
+/// off as long, and so on (#6406). Without focus the window isn't being typed in, so the caret
+/// stays on.
+pub(crate) fn caret_shown(elapsed: f64, focused: bool) -> bool {
+    !focused || !elapsed.is_finite() || elapsed < 0.0 || ((elapsed / CARET_BLINK).floor() as u64).is_multiple_of(2)
+}
+
+/// `overlays` with the text caret blinking: `caret` (its ends' bits and when it got there) starts
+/// over when the caret moves, and the caret is left out while it is off. Returns the overlays and
+/// the seconds until the caret next turns on or off (None: nothing to blink).
+pub(crate) fn blink_caret(caret: &mut Option<([u64; 4], f64)>, now: f64, focused: bool, mut overlays: Vec<Overlay>) -> (Vec<Overlay>, Option<f64>) {
+    let shown = overlays.iter().find_map(|o| match o {
+        Overlay::Caret { a, b } => Some([a.x, a.y, b.x, b.y].map(f64::to_bits)),
+        _ => None,
+    });
+    let Some(at) = shown else {
+        *caret = None;
+        return (overlays, None);
+    };
+    let since = match *caret {
+        Some((was, since)) if was == at => since,
+        _ => now,
+    };
+    *caret = Some((at, since));
+    let elapsed = (now - since).max(0.0);
+    if !caret_shown(elapsed, focused) {
+        overlays.retain(|o| !matches!(o, Overlay::Caret { .. }));
+    }
+    let next = focused.then(|| CARET_BLINK - elapsed % CARET_BLINK);
+    (overlays, next)
+}
+
+/// `overlays` with the text caret on or off as it blinks ([`blink_caret`]), asking for the frame where it next
+/// turns on or off.
+pub(super) fn blinking(caret: &mut Option<([u64; 4], f64)>, ui: &egui::Ui, overlays: Vec<Overlay>) -> Vec<Overlay> {
+    let (now, focused) = ui.input(|i| (i.time, i.focused));
+    let (overlays, toggle) = blink_caret(caret, now, focused, overlays);
+    if let Some(secs) = toggle {
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs.max(0.01)));
+    }
+    overlays
+}
+
 fn data(c: [u8; 3]) -> DataColor {
     DataColor::new(Color32::from_rgb(c[0], c[1], c[2]))
 }
@@ -200,6 +246,9 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
             }
             Overlay::Line { a, b, color, dashed: false } => {
                 stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data(*color));
+            }
+            Overlay::Caret { a, b } => {
+                stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data([0, 0, 0]));
             }
             Overlay::GridLine { a, b, color } => {
                 stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data_rgba(*color));

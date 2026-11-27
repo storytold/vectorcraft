@@ -114,6 +114,7 @@ impl VectorcraftApp {
             host,
             canvas: CanvasCache {
                 renderer: vectorcraft_render::Renderer::new(),
+                caret: None,
                 texture: None,
                 key: None,
                 shown: None,

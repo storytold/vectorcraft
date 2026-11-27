@@ -712,6 +712,8 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_in
             extra.extend(super::marks::live_paint_gap_overlays(app));
         }
     }
+    // The text caret blinks (#6406).
+    let list = super::overlays::blinking(&mut app.canvas.caret, ui, list);
     super::overlays::show(app, ui, &space, &list, &extra);
 }
 
