@@ -797,6 +797,41 @@ fn prefs_import_refreshes_an_open_preferences_dialog() {
     assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
 }
 
+#[test]
+fn browser_import_applies_picked_preferences_and_refreshes_the_draft() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    let picker = crate::tests::picks::scripted(&mut a);
+    a.services.read = None;
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    import_preferences(&mut a);
+    picker.answer_contents(&[("preferences.json", data.as_bytes())]);
+    file_asks::poll(&mut a);
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(7.0)));
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+    assert_eq!(a.ui.status, "Preferences imported.");
+    assert!(is_open(&a));
+}
+
+#[test]
+fn browser_import_refuses_bad_contents_without_losing_draft_edits() {
+    for bytes in [vec![0xff], vec![b' '; (1 << 20) + 1], b"not JSON".to_vec()] {
+        let mut a = app();
+        open(&mut a, Some("General"));
+        set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+        let before = a.session.prefs.to_json();
+        let picker = crate::tests::picks::scripted(&mut a);
+        import_preferences(&mut a);
+        picker.answer_contents(&[("preferences.json", &bytes)]);
+        file_asks::poll(&mut a);
+        assert_eq!(a.session.prefs.to_json(), before);
+        assert!(same(&field(&a, "keyboardIncrement"), &json!(9)));
+        assert!(!a.ui.status.is_empty(), "the invalid picked file reports an error");
+        assert_ne!(a.ui.status, "Preferences imported.");
+    }
+}
+
 /// An import that turns Enable Touch Workspace on or off switches the workspace on a touch screen,
 /// as OK in Preferences does.
 #[test]
