@@ -40,12 +40,16 @@ pub const KIND: &str = "swatchOptions";
 
 /// What a dialog says when the window has no dialog host to open it on.
 pub(super) const NO_WINDOW: &str = "no window";
+const PREVIEW_LABEL: &str = "Swatch Options";
 
 /// The open Swatch Options dialog: the held dialog, the swatch it edits and the parameters its preview last ran with.
 #[derive(Clone, Debug)]
 pub(crate) struct Open {
     /// The held dialog.
     pub(crate) id: DialogId,
+    opening: Arc<()>,
+    document: u64,
+    preview_reset: u64,
     /// The name of the swatch being edited.
     swatch: String,
     /// The `swatch.edit` parameters of the running preview; `None` while no preview runs.
@@ -287,24 +291,43 @@ fn stops_of(g: &GradientPaint) -> GradientStops {
 
 /// Opens the held dialog over swatch `swatch`: OK is one `swatch.edit` undo step, Cancel rolls the preview back.
 fn launch(app: &mut VectorcraftApp, swatch: &str, fields: DialogFields, rows: Vec<Param>) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no drawing")?.uid;
     let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
     let dialog = hosted(&ctx, KIND, tl!("Swatch Options"), fields, rows, true);
-    let edited = swatch.to_owned();
-    let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
-        // The edit replaces the preview, so the preview is dropped first.
+    if owns_preview(app) {
         let _ = app.session.cancel_interaction();
+    }
+    let opening = Arc::new(());
+    let cancelled = Arc::clone(&opening);
+    let ok = |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
+        let open = app.ui.swatch_options.as_ref().ok_or("the Swatch Options dialog is gone")?;
+        if app.session.active().is_none_or(|st| st.uid != open.document) {
+            return Err(tl!("Return to the original drawing to edit this swatch").into());
+        }
+        let edited = open.swatch.clone();
+        // The edit replaces the preview, so the preview is dropped first.
+        if owns_preview(app) {
+            let _ = app.session.cancel_interaction();
+        } else if app.session.in_interaction() {
+            app.keep_typing()?;
+            if app.session.in_interaction() {
+                return Err(tl!("Finish the current edit before changing this swatch").into());
+            }
+        }
         app.run("swatch.edit", edit_params(&edited, &answer.fields))?;
         app.ui.swatch_options = None;
         Ok(())
     };
-    let cancel = |app: &mut VectorcraftApp| {
-        if app.session.in_interaction() {
-            let _ = app.session.cancel_interaction();
+    let cancel = move |app: &mut VectorcraftApp| {
+        if app.ui.swatch_options.as_ref().is_some_and(|open| Arc::ptr_eq(&open.opening, &cancelled)) {
+            if owns_preview(app) {
+                let _ = app.session.cancel_interaction();
+            }
+            app.ui.swatch_options = None;
         }
-        app.ui.swatch_options = None;
     };
     let id = open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(Box::new(cancel)) }).ok_or(NO_WINDOW)?;
-    app.ui.swatch_options = Some(Open { id, swatch: swatch.to_owned(), last: None });
+    app.ui.swatch_options = Some(Open { id, opening, document, preview_reset: app.session.tool_resets(), swatch: swatch.to_owned(), last: None });
     Ok(Value::Null)
 }
 
@@ -318,26 +341,49 @@ fn edit_params(swatch: &str, fields: &DialogFields) -> Value {
 
 /// Shows the edit on the canvas while the Preview box is on and drops it when it goes off. It runs each pass; the
 /// parameters it last previewed with are remembered, so a pass that changes nothing runs nothing.
+fn owns_preview(app: &VectorcraftApp) -> bool {
+    app.ui.swatch_options.as_ref().is_some_and(|open| {
+        open.last.is_some()
+            && open.preview_reset == app.session.tool_resets()
+            && app
+                .session
+                .active()
+                .is_some_and(|st| st.uid == open.document && st.interaction.as_ref().is_some_and(|interaction| interaction.label == PREVIEW_LABEL))
+    })
+}
+
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some((id, swatch, last)) = app.ui.swatch_options.as_ref().map(|o| (o.id, o.swatch.clone(), o.last.clone())) else { return };
+    let Some(open) = app.ui.swatch_options.as_ref().filter(|open| app.session.active().is_some_and(|st| st.uid == open.document)) else { return };
+    let (id, swatch, last) = (open.id, open.swatch.clone(), open.last.clone());
+    let owns_preview = owns_preview(app);
     correct(app, id);
     let Some((previewing, fields)) = with_dialog(app, id, |d| (d.is_previewing(), d.fields().clone())) else { return };
     let want = previewing.then(|| edit_params(&swatch, &fields));
     if let Some(params) = &want {
         // A refused OK drops the interaction under an unchanged dialog: the preview starts again.
-        if want == last && app.session.in_interaction() {
+        if want == last && owns_preview {
             return;
         }
-        let begun = app.session.in_interaction() || app.begin_interaction("Swatch Options").map_err(|e| app.status(e)).is_ok();
+        if !owns_preview && app.session.in_interaction() {
+            if let Err(e) = app.keep_typing() {
+                app.status(e);
+                return;
+            }
+            if app.session.in_interaction() {
+                return;
+            }
+        }
+        let begun = owns_preview || app.begin_interaction(PREVIEW_LABEL).map_err(|e| app.status(e)).is_ok();
         if begun && let Err(e) = app.session.preview("swatch.edit", params) {
             app.status(e.to_string());
         }
-    } else if last.is_some() {
+    } else if owns_preview {
         // The Preview box went off: the document shows its own colour again. Nothing to report if none was open.
         let _ = app.session.cancel_interaction();
     }
     if let Some(open) = app.ui.swatch_options.as_mut() {
         open.last = want;
+        open.preview_reset = app.session.tool_resets();
     }
 }
 
@@ -528,6 +574,81 @@ mod tests {
     fn swatch(app: &VectorcraftApp, name: &str) -> (Option<Color>, bool, bool) {
         let sw = app.session.active().unwrap().doc.swatch(name).unwrap();
         (sw.paint.color(), sw.spot, sw.global)
+    }
+
+    #[test]
+    fn swatch_options_refuses_a_matching_name_in_another_drawing() {
+        let (ctx, mut app) = setup();
+        app.run("swatch.new", json!({"name": "Twin", "color": "#123456"})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Twin", "color": "#6789ab"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 30})).unwrap();
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let other = swatch(&app, "Twin");
+        activate(&mut app, 0);
+        open(&mut app, "Twin").unwrap();
+        set(&app, &ctx, &[("name", json!("Source paint")), ("preview", json!(false))]);
+        activate(&mut app, 1);
+        app.session.begin_interaction("Other drawing's edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        dialogs.with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "the other drawing's edit stays active");
+        assert_eq!(swatch(&app, "Twin"), other);
+
+        app.session.cancel_interaction().unwrap();
+        activate(&mut app, 0);
+        dialogs.with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch("Source paint").is_some());
+    }
+
+    #[test]
+    fn swatch_options_waits_for_another_preview_in_the_original_drawing() {
+        let (ctx, mut app) = setup();
+        app.run("swatch.new", json!({"name": "Editable", "color": "#123456"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 30})).unwrap();
+        open(&mut app, "Editable").unwrap();
+        set(&app, &ctx, &[("name", json!("Renamed")), ("preview", json!(false))]);
+        app.session.begin_interaction("An independent preview").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.in_interaction());
+        assert!(app.session.active().unwrap().doc.swatch("Renamed").is_none());
+
+        app.session.cancel_interaction().unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch("Renamed").is_some());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn reopening_swatch_options_rolls_back_the_replaced_preview() {
+        let (ctx, mut app) = setup();
+        for name in ["First color", "Second color"] {
+            app.run("swatch.new", json!({"name": name, "color": "#123456"})).unwrap();
+        }
+        open(&mut app, "First color").unwrap();
+        set(&app, &ctx, &[("name", json!("Temporary name")), ("preview", json!(true))]);
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch("Temporary name").is_some());
+        open(&mut app, "Second color").unwrap();
+        assert!(app.session.active().unwrap().doc.swatch("First color").is_some());
+        assert!(app.session.active().unwrap().doc.swatch("Temporary name").is_none());
+
+        set(&app, &ctx, &[("name", json!("New name")), ("preview", json!(false))]);
+        let dialogs = app.dialogs().unwrap();
+        dialogs.with(|host| host.confirm_by_id(&ctx, dialog_id(KIND)));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.active().unwrap().doc.swatch("New name").is_some());
+        assert!(app.session.active().unwrap().doc.swatch("First color").is_some());
     }
 
     #[test]

@@ -10,6 +10,30 @@ use crate::blobs::blob_key;
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
 
+#[test]
+fn geometry_from_measurement_only_frames_releases_old_node_versions() {
+    let mut doc = Document::new(100.0, 100.0);
+    let layer = doc.layers[0].id;
+    let id = doc.alloc_id();
+    let path = Node::path(
+        id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(5.0, 10.0, 25.0, 30.0)),
+        vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(layer), 0, path).unwrap();
+    let oldest = Arc::downgrade(&doc.layers[0].children().unwrap()[0]);
+    let mut renderer = Renderer::new();
+    let opts = RenderOptions::default();
+    for _ in 0..12 {
+        let mut next = doc.clone();
+        next.node_mut(id).unwrap().transform(Affine::translate((1.0, 0.0)), false);
+        assert!(matches!(renderer.changed(&doc, &next, &opts), Changed::Area(_)));
+        renderer.finish_measurement_only();
+        doc = next;
+    }
+    assert!(oldest.upgrade().is_none(), "obsolete measured nodes must be released without a full draw");
+}
+
 /// A `w`×`h` PNG whose pixels depend on `seed` (each test its own image: the store is shared by
 /// the tests running alongside).
 fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {

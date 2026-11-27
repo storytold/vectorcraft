@@ -38,6 +38,7 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 /// Open Tate-chu-yoko Settings on the characters the Character panel acts on.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let document = app.session.active().ok_or("no document")?.uid;
     let (up, right) = crate::panels::character::shared_tcy_offsets(app);
     let mut fields = DialogFields::new();
     for (key, v) in KEYS.into_iter().zip([up, right]) {
@@ -51,6 +52,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         let p = params(&result.fields, &initial);
         if p.is_empty() {
             return Ok(());
+        }
+        if !app.session.active().is_some_and(|active| active.uid == document) {
+            return Err(tl!("Tate-chu-yoko Settings can only change the document where it was opened.").to_owned());
         }
         crate::panels::character::run_format(app, Value::Object(p)).map(|_| ())
     })
@@ -131,6 +135,42 @@ mod tests {
         driver::ok(&mut app);
         assert!(driver::is_open(&app));
         assert_eq!(offsets(&app, id), [(0.0, 0.0)]);
+    }
+
+    #[test]
+    fn tate_chu_yoko_settings_refuses_confirmation_in_another_drawing() {
+        use craft::ui::dialog::{HeldOk, dialog_id};
+
+        let (mut app, source_id) = app();
+        let source_before = offsets(&app, source_id);
+        let source_undo = app.session.active().unwrap().history.undo.len();
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::set(&mut app, "tcyUpDown", json!(7));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, id)), "the edit waits for the app");
+
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let target_id = app.run("text.create", json!({"x": 10, "y": 50, "text": "other"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [target_id]})).unwrap();
+        let target_before = offsets(&app, target_id);
+        let target_undo = app.session.active().unwrap().history.undo.len();
+        driver::pump(&mut app);
+        assert_eq!(
+            (offsets(&app, target_id), app.session.active().unwrap().history.undo.len()),
+            (target_before, target_undo),
+            "the other drawing's text and undo history stay untouched"
+        );
+        assert!(matches!(host.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(driver::fields(&app).number("tcyUpDown"), Some(7.0));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("select.set", json!({"ids": [source_id]})).unwrap();
+        assert_eq!(offsets(&app, source_id), source_before);
+        assert!(crate::dialogs::tests::confirm(&mut app), "confirm the retained edit on its original drawing");
+        assert_eq!(offsets(&app, source_id), [(7.0, 0.0)]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), source_undo + 1);
     }
 
     /// While the Type tool edits text, OK sets the selected characters.

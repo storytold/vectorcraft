@@ -154,7 +154,14 @@ fn dialog(app: &VectorcraftApp, info: ExpandInfo) -> Result<HostedParamDialog, S
 
 /// Shows `dialog`; its OK expands.
 fn show(app: &mut VectorcraftApp, dialog: HostedParamDialog) -> Result<Value, String> {
-    crate::dialogs::host::open_held(app, dialog, ok).ok_or("no window")?;
+    let document = app.session.active().ok_or("no document open")?.uid;
+    crate::dialogs::host::open_held(app, dialog, move |app, result: &ParamResult| {
+        if app.session.active().is_none_or(|st| st.uid != document) {
+            return Err(tl!("Return to the original drawing to expand the artwork").into());
+        }
+        ok(app, result)
+    })
+    .ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -283,6 +290,24 @@ mod tests {
         let g = st.doc.node(st.selection.objects[0]).unwrap();
         let NodeKind::Group { children, clip: true } = &g.kind else { panic!("a clip group: {:?}", g.kind) };
         assert!(matches!(children[1].kind, NodeKind::Mesh(_)));
+    }
+
+    #[test]
+    fn expand_keeps_its_draft_when_another_drawing_is_active() {
+        let mut app = app();
+        gradient_rectangle(&mut app);
+        open(&mut app).unwrap();
+        set(&app, "gradient", json!("mesh")).unwrap();
+        gradient_rectangle(&mut app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let before = app.session.active().unwrap().doc.clone();
+        assert!(matches!(press_ok(&mut app), Some(HeldOk::Refused(reason)) if reason.as_str().contains("original drawing")));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &before));
+        assert_eq!(fields(&app).text("gradient"), Some("mesh"));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ok_and_close(&mut app);
+        assert!(expanded_to_a_mesh(&app));
     }
 
     #[test]
