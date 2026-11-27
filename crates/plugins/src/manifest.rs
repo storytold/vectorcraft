@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, CONTEXT_API, INPUTS_API, PROGRESS_API, Permission};
+use crate::permissions::{self, API_LEVEL, CONTEXT_API, INPUTS_API, PROGRESS_API, Permission, WRITES_API};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -221,6 +221,32 @@ impl Budget {
     /// The usual budget, which a manifest written back leaves out (`skip_serializing_if`).
     fn is_light(&self) -> bool {
         *self == Budget::Light
+    }
+}
+
+/// What runs a plug-in's code.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Runtime {
+    /// A WebAssembly module ([`crate::Plugin::load`]); the manifest is the module's `vc_manifest`.
+    #[default]
+    Wasm,
+    /// A JavaScript file run on `vectorcraft-js` ([`crate::js`]): an object filter whose manifest
+    /// gives `"runtime": "js"`.
+    Js,
+}
+
+impl Runtime {
+    pub fn name(self) -> &'static str {
+        match self {
+            Runtime::Wasm => "wasm",
+            Runtime::Js => "js",
+        }
+    }
+
+    /// WebAssembly, which a manifest written back leaves out (`skip_serializing_if`).
+    fn is_wasm(&self) -> bool {
+        *self == Runtime::Wasm
     }
 }
 
@@ -456,6 +482,11 @@ pub struct Manifest {
     /// lists them. Left out or empty, it is given paths and compound paths alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "input_names")]
     pub inputs: Vec<String>,
+    /// The kinds among `inputs` the filter may change, by [`InputKind::name`]: only a filter at
+    /// `api` 3 or later whose `permissions` list `doc.read` and `doc.write` lists them. Left out or
+    /// empty, every kind it reads stays read-only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "write_names")]
+    pub writes: Vec<String>,
     /// The parts of the document a run is given in `_context.document`, by
     /// [`ContextSection::name`]: only a filter, or a live effect with `commands` (for its command
     /// runs), at `api` 3 or later whose `permissions` list `doc.read` lists them. Left out or empty,
@@ -489,6 +520,9 @@ pub struct Manifest {
     /// lists any ([`Manifest::validate`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command_allowlist: Vec<String>,
+    /// What runs its code: WebAssembly when left out, or `"js"` for a JavaScript filter.
+    #[serde(default, skip_serializing_if = "Runtime::is_wasm")]
+    pub runtime: Runtime,
 }
 
 impl Manifest {
@@ -498,6 +532,13 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
+        Manifest::parse_text(text)
+    }
+
+    /// [`Manifest::parse`] without its size limit, for JSON that holds other keys besides the
+    /// manifest's (a JavaScript plug-in's `source`), whose caller checks the manifest's size. Keys
+    /// the manifest doesn't declare are ignored, and `params` keep the order the text gives them.
+    pub(crate) fn parse_text(text: &str) -> Result<Manifest> {
         if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
             return Err(Error::Manifest("`paintOutput` may only be true".into()));
         }
@@ -519,6 +560,7 @@ impl Manifest {
             api: 1,
             permissions: None,
             inputs: Vec::new(),
+            writes: Vec::new(),
             context: Vec::new(),
             params: Vec::new(),
             extensions: Vec::new(),
@@ -527,6 +569,7 @@ impl Manifest {
             paint_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
+            runtime: Runtime::Wasm,
         }
     }
 
@@ -591,6 +634,7 @@ impl Manifest {
             return Err(Error::Manifest(format!("permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_inputs()?;
+        self.validate_writes()?;
         self.validate_context()?;
         if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
@@ -613,7 +657,30 @@ impl Manifest {
         }
         self.validate_params()?;
         self.validate_commands()?;
-        self.validate_allowlist()
+        self.validate_allowlist()?;
+        self.validate_runtime()
+    }
+
+    /// A JavaScript plug-in (`"runtime": "js"`) is an object filter, and of the host's permissions
+    /// it lists only `progress`: its realm has no settings, cache or command calls.
+    fn validate_runtime(&self) -> Result<()> {
+        if self.runtime == Runtime::Wasm {
+            return Ok(());
+        }
+        if self.kind != Kind::Filter {
+            let kind = self.kind.name();
+            return Err(Error::Manifest(format!("`runtime` \"js\" is for an object filter (`kind` \"filter\"), not `kind` \"{kind}\"")));
+        }
+        let listed = self.permissions.as_deref().unwrap_or_default();
+        for p in [Permission::Settings, Permission::Cache, Permission::Commands] {
+            if listed.iter().any(|n| n == p.name()) {
+                let name = p.name();
+                return Err(Error::Manifest(format!(
+                    "a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`"
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// `commandAllowlist` lists at most [`MAX_ALLOWED_COMMANDS`] distinct command ids
@@ -691,6 +758,37 @@ impl Manifest {
         Ok(())
     }
 
+    /// `writes` names each [`InputKind`] at most once, each one `inputs` lists, and only a filter at
+    /// `api` 3 or later lists any, with a `permissions` list that holds `doc.read` and `doc.write`.
+    fn validate_writes(&self) -> Result<()> {
+        if self.writes.is_empty() {
+            return Ok(());
+        }
+        if self.kind != Kind::Filter {
+            return Err(Error::Manifest("only a filter declares `writes`".into()));
+        }
+        for (i, name) in self.writes.iter().enumerate() {
+            let shown = permissions::display_text(name, permissions::MAX_SHOWN_FIELD);
+            if InputKind::parse(name).is_none() {
+                return Err(Error::Manifest(format!("`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance")));
+            }
+            if self.writes.get(..i).is_some_and(|before| before.contains(name)) {
+                return Err(Error::Manifest(format!("`writes` lists `{shown}` twice")));
+            }
+            if !self.inputs.contains(name) {
+                return Err(Error::Manifest(format!("`writes` lists `{shown}`, which `inputs` doesn't list")));
+            }
+        }
+        if self.api < WRITES_API {
+            return Err(Error::Manifest(format!("`writes` needs `api` {WRITES_API} or later")));
+        }
+        let listed = |p: Permission| self.permissions.as_ref().is_some_and(|names| names.iter().any(|n| n == p.name()));
+        if !listed(Permission::DocWrite) {
+            return Err(Error::Manifest("`writes` needs the permission `doc.write`".into()));
+        }
+        Ok(())
+    }
+
     /// `context` names each [`ContextSection`] at most once, and only a filter, or a live effect
     /// with commands, at `api` 3 or later lists any, with a `permissions` list that holds
     /// `doc.read`: installing it then asks the user to grant it ([`Manifest::asks_permissions`]).
@@ -762,6 +860,11 @@ impl Manifest {
     /// The kinds of object besides paths and compound paths it asks to be given (`inputs`).
     pub fn input_kinds(&self) -> Vec<InputKind> {
         self.inputs.iter().filter_map(|n| InputKind::parse(n)).collect()
+    }
+
+    /// The kinds among those it reads that it may change (`writes`).
+    pub fn write_kinds(&self) -> Vec<InputKind> {
+        self.writes.iter().filter_map(|n| InputKind::parse(n)).collect()
     }
 
     /// An exporter or an importer lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16
@@ -926,6 +1029,16 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
 /// [`Manifest::validate_inputs`] names a wrong entry.
 fn input_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
     let wrong = || serde::de::Error::custom("`inputs` must be a list of object kinds: type, image or symbolInstance");
+    match Value::deserialize(d)? {
+        Value::Null => Ok(Vec::new()),
+        Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
+        _ => Err(wrong()),
+    }
+}
+
+/// Reads `writes` as [`input_names`] reads `inputs`.
+fn write_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
+    let wrong = || serde::de::Error::custom("`writes` must be a list of object kinds: type, image or symbolInstance");
     match Value::deserialize(d)? {
         Value::Null => Ok(Vec::new()),
         Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
@@ -1417,6 +1530,64 @@ mod tests {
         }
         let long = format!(r#"{{"id":"a","name":"x","kind":"filter","api":2,"inputs":[{}]}}"#, vec![r#""type""#; 1000].join(","));
         assert!(Manifest::parse(long.as_bytes()).unwrap_err().to_string().contains("twice"));
+    }
+
+    /// A filter at `api` 3 may change the kinds it reads that it lists in `writes`, each once, with
+    /// `doc.read` and `doc.write`. Left out or empty, everything it reads stays read-only and the key
+    /// isn't written back. Anything else is refused naming `writes`.
+    #[test]
+    fn a_filter_at_api_3_lists_the_kinds_it_writes() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.revise","name":"Revise","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"inputs":["type","image","symbolInstance"],"writes":["type","image","symbolInstance"]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.write_kinds(), InputKind::ALL);
+        assert_eq!(serde_json::to_value(&m).unwrap()["writes"], json!(["type", "image", "symbolInstance"]));
+        let some = Manifest::parse(
+            br#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read","doc.write"],"inputs":["image","type"],"writes":["image"]}"#,
+        )
+        .unwrap();
+        assert_eq!((some.input_kinds(), some.write_kinds()), (vec![InputKind::Image, InputKind::Type], vec![InputKind::Image]));
+        for none in [
+            r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"inputs":["type"]}"#,
+            r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"inputs":["type"],"writes":[]}"#,
+            r#"{"id":"a","name":"x","kind":"filter","writes":null}"#,
+        ] {
+            let m = Manifest::parse(none.as_bytes()).unwrap();
+            assert!(m.write_kinds().is_empty(), "{none}");
+            assert!(serde_json::to_value(&m).unwrap().get("writes").is_none(), "{none}");
+        }
+        let rw = r#""permissions":["doc.read","doc.write"]"#;
+        for (bad, says) in [
+            (
+                format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"inputs":["type"],"writes":["text"]}}"#),
+                "`writes` names an unknown object kind `text`",
+            ),
+            (
+                format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"inputs":["type"],"writes":["type","type"]}}"#),
+                "`writes` lists `type` twice",
+            ),
+            (
+                format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"inputs":["type"],"writes":["image"]}}"#),
+                "`writes` lists `image`, which `inputs` doesn't list",
+            ),
+            (format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"writes":["image"]}}"#), "which `inputs` doesn't list"),
+            (format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"inputs":["type"],"writes":"type"}}"#), "`writes` must be a list"),
+            (format!(r#"{{"id":"a","name":"x","kind":"filter","api":3,{rw},"inputs":["type"],"writes":[1]}}"#), "`writes` must be a list"),
+            (format!(r#"{{"id":"a","name":"x","kind":"filter","api":2,{rw},"inputs":["type"],"writes":["type"]}}"#), "`writes` needs `api` 3"),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.read"],"inputs":["type"],"writes":["type"]}"#.into(),
+                "`writes` needs the permission `doc.write`",
+            ),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","api":3,"permissions":["doc.write"],"inputs":["type"],"writes":["type"]}"#.into(),
+                "`inputs` needs the permission `doc.read`",
+            ),
+            (r#"{"id":"a","name":"x","kind":"effect","api":3,"writes":["type"]}"#.into(), "only a filter declares `writes`"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
     }
 
     /// A filter, or a live effect with commands, at `api` 3 may ask for parts of the document

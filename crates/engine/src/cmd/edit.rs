@@ -809,11 +809,13 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.redo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
     st.history.redo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     // Guides locked and slices locked or hidden since the step was made stay deselected.
@@ -845,11 +847,13 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.undo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
     st.history.undo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);

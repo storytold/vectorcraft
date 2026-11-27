@@ -1,7 +1,8 @@
 //! Windows pen tablets: with Windows Ink, winit reports a pen in contact as a touch and drops its
 //! barrel button and which end of the pen is down. For each pointer message of a pen,
 //! [`msg_hook`] reads the pen's `POINTER_PEN_INFO` before winit handles the message and writes its
-//! pressure, end, tilt and rotation into the framework's [`PenSource`] ([`start`]):
+//! pressure, end, tilt and rotation, and an airbrush pen's finger wheel, into the framework's
+//! [`PenSource`] ([`start`]):
 //! `PEN_FLAG_INVERTED` ("The pen is inverted") or `PEN_FLAG_ERASER` ("The eraser button is
 //! pressed") is the eraser end
 //! (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/pen-flags-constants>). Pointer
@@ -24,9 +25,12 @@
 //! `rotation` in degrees 0..359 clockwise
 //! (<https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_pen_info>).
 //! Toward the user is down the screen, so they are the sample's axes and direction as they come,
-//! converted to radians. `POINTER_PEN_INFO` has no field for an airbrush pen's finger wheel.
+//! converted to radians. `POINTER_PEN_INFO` has no field for an airbrush pen's finger wheel, which
+//! comes from the tablet driver's Wintab interface instead, when it has one
+//! ([`crate::windows_wintab`]).
 #![cfg_attr(not(windows), allow(dead_code))]
 
+use std::cell::Cell;
 use std::sync::OnceLock;
 
 use craft::behavior::PointerSample;
@@ -38,6 +42,8 @@ const POINTER_MESSAGE_FLAG_SECONDBUTTON: usize = 0x0020;
 /// `POINTER_MESSAGE_FLAG_INRANGE` (`winuser.h`): not set on the message of a pointer that has left
 /// detection range.
 const POINTER_MESSAGE_FLAG_INRANGE: usize = 0x0002;
+/// `POINTER_MESSAGE_FLAG_CANCELED` (`winuser.h`): the pointer's input was canceled.
+const POINTER_MESSAGE_FLAG_CANCELED: usize = 0x8000;
 /// `PEN_FLAG_INVERTED` and `PEN_FLAG_ERASER` (`winuser.h`), in `POINTER_PEN_INFO::penFlags`.
 const PEN_FLAG_INVERTED: u32 = 0x0002;
 const PEN_FLAG_ERASER: u32 = 0x0004;
@@ -65,6 +71,13 @@ const WM_POINTERLEAVE: u32 = 0x024A;
 /// A pen's tilt along x and y and its barrel rotation, in radians.
 type Pose = ([f32; 2], f32);
 
+thread_local! {
+    /// The pointer id of the pen whose leaving starts the Wintab wheel readings afresh: the pen that
+    /// took them, or the pen whose message last asked for the wheel when none has
+    /// ([`crate::windows_wintab::wheel_pen`]).
+    static WHEEL_PEN: Cell<Option<u32>> = const { Cell::new(None) };
+}
+
 /// The pen source [`msg_hook`] writes, once [`start`] has made it.
 static FEED: OnceLock<PenSource> = OnceLock::new();
 
@@ -89,14 +102,22 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
     let Some(pen) = FEED.get() else {
         return false;
     };
+    crate::windows_wintab::msg_hook(msg);
+    if forgets_wheel(msg.message, msg.wParam.0, WHEEL_PEN.get()) {
+        crate::windows_wintab::forget();
+    }
     let read_pen = || {
         let mut info = POINTER_PEN_INFO::default();
+        let id = (msg.wParam.0 & 0xffff) as u32;
         // SAFETY: `info` is a `POINTER_PEN_INFO` that lives for the call. The call fails for a
         // pointer that is not a pen.
-        unsafe { GetPointerPenInfo((msg.wParam.0 & 0xffff) as u32, &mut info) }.ok()?;
+        unsafe { GetPointerPenInfo(id, &mut info) }.ok()?;
         let in_contact = info.pointerInfo.pointerFlags.0 & POINTER_FLAG_INCONTACT.0 != 0;
+        let eraser = info.penFlags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0;
+        let wheel = crate::windows_wintab::pen_wheel(msg.hwnd, msg.time, id, eraser);
+        WHEEL_PEN.set(Some(crate::windows_wintab::wheel_pen(id)));
         let pose = pen_pose(info.penMask, info.tiltX, info.tiltY, info.rotation);
-        Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact, pose))
+        Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact, pose, wheel))
     };
     // SAFETY: `GetMessageExtraInfo` reads the extra information of the thread's last message.
     let from_mouse = || is_mouse(unsafe { GetMessageExtraInfo() }.0 as u32);
@@ -111,8 +132,10 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
 /// What a pen whose `POINTER_PEN_INFO` holds `pressure` (0..1024), `pen_mask` and `pen_flags`
 /// reports: the pressure as winit gives it to a touch, 0 while it hovers, a full press for a pen
 /// in contact that reports none; the eraser end while it is inverted or its eraser button is
-/// pressed; and how it is held, `pose` ([`pen_pose`]).
-fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool, (tilt, rotation): Pose) -> PointerSample {
+/// pressed; how it is held, `pose` ([`pen_pose`]); and `wheel`, the airbrush finger wheel the tablet
+/// driver's Wintab interface reported for the message, if any ([`crate::windows_wintab`]), kept
+/// within 0..1 and none when it is not a number.
+fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool, (tilt, rotation): Pose, wheel: Option<f32>) -> PointerSample {
     let pressure = match pressure {
         1..=1024 if pen_mask & PEN_MASK_PRESSURE != 0 => pressure as f32 / 1024.0,
         _ if in_contact => 1.0,
@@ -122,6 +145,7 @@ fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool, (t
     sample.tilt = tilt;
     sample.rotation = rotation;
     sample.eraser = pen_flags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0;
+    sample.wheel = wheel.filter(|w| w.is_finite()).map(|w| w.clamp(0.0, 1.0));
     sample
 }
 
@@ -132,6 +156,43 @@ fn pen_pose(pen_mask: u32, tilt_x: i32, tilt_y: i32, rotation: u32) -> Pose {
     let along = |mask: u32, t: i32| if pen_mask & mask != 0 { (t as f32).clamp(-90.0, 90.0).to_radians() } else { 0.0 };
     let turn = if pen_mask & PEN_MASK_ROTATION != 0 { ((rotation % 360) as f32).to_radians() } else { 0.0 };
     ([along(PEN_MASK_TILT_X, tilt_x), along(PEN_MASK_TILT_Y, tilt_y)], turn)
+}
+
+/// Whether a message with this `wParam` starts the Wintab wheel readings afresh: a pointer message
+/// of a pointer that has left detection range or whose press was canceled, or a pointer leaving the
+/// window, when the pointer is `pen`, the pen whose leaving starts them afresh. A touch or another
+/// pen leaving keeps the readings.
+fn forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
+    if pen != Some((wparam & 0xffff) as u32) {
+        return false;
+    }
+    let flags = wparam >> 16;
+    match message {
+        WM_POINTERENTER | WM_POINTERUPDATE | WM_POINTERDOWN | WM_POINTERUP => {
+            flags & POINTER_MESSAGE_FLAG_INRANGE == 0 || flags & POINTER_MESSAGE_FLAG_CANCELED != 0
+        }
+        WM_POINTERLEAVE => true,
+        _ => false,
+    }
+}
+
+/// Whether a pointer message that Windows sends to the window procedure, so that winit's message hook
+/// never sees it, starts the Wintab wheel readings afresh ([`forgets_wheel`]): `WM_POINTERENTER` and
+/// `WM_POINTERLEAVE` are sent
+/// (<https://learn.microsoft.com/en-us/windows/win32/inputmsg/wm-pointerleave>); the posted pointer
+/// messages are left to [`msg_hook`].
+fn sent_forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
+    matches!(message, WM_POINTERENTER | WM_POINTERLEAVE) && forgets_wheel(message, wparam, pen)
+}
+
+/// A message Windows sent to a window procedure of the thread, from the Wintab reader's hook on
+/// them ([`crate::windows_wintab`]): a pen leaving the window starts the wheel readings afresh, as
+/// [`msg_hook`] does for the messages it sees.
+#[cfg(windows)]
+pub fn sent_message(message: u32, wparam: usize) {
+    if sent_forgets_wheel(message, wparam, WHEEL_PEN.get()) {
+        crate::windows_wintab::forget();
+    }
 }
 
 /// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
@@ -175,7 +236,7 @@ mod tests {
 
     #[test]
     fn an_inverted_pen_or_its_eraser_button_is_the_eraser_end() {
-        let eraser = |flags| pen_sample(512, PEN_MASK_PRESSURE, flags, true, UPRIGHT).eraser;
+        let eraser = |flags| pen_sample(512, PEN_MASK_PRESSURE, flags, true, UPRIGHT, None).eraser;
         assert!(!eraser(0), "the tip");
         assert!(!eraser(PEN_FLAG_BARREL), "the barrel button");
         assert!(eraser(PEN_FLAG_INVERTED), "turned over");
@@ -194,19 +255,77 @@ mod tests {
         assert_eq!(pen_pose(PEN_MASK_ROTATION, 0, 0, 359), ([0.0, 0.0], deg(359.0)), "a 6D Art Pen's barrel");
         assert_eq!(pen_pose(all, 400, i32::MIN, 720), ([deg(90.0), deg(-90.0)], 0.0), "kept within the ranges");
         let pose = pen_pose(all, 10, 20, 180);
-        let sample = pen_sample(512, PEN_MASK_PRESSURE | all, 0, true, pose);
+        let sample = pen_sample(512, PEN_MASK_PRESSURE | all, 0, true, pose, None);
         assert_eq!((sample.tilt, sample.rotation), pose);
     }
 
     #[test]
+    fn an_airbrush_wheel_goes_into_the_sample() {
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true, UPRIGHT, Some(0.25)).wheel, Some(0.25));
+        let all = PEN_MASK_TILT_X | PEN_MASK_TILT_Y | PEN_MASK_ROTATION;
+        let pose = pen_pose(all, 10, 20, 180);
+        let sample = pen_sample(512, PEN_MASK_PRESSURE | all, 0, true, pose, Some(0.75));
+        assert_eq!((sample.tilt, sample.rotation, sample.wheel), (pose.0, pose.1, Some(0.75)), "with the tilt and rotation");
+        assert_eq!(sample.pressure, 0.5, "the pressure as before");
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true, UPRIGHT, None).wheel, None, "no wheel");
+        assert_eq!(pen_sample(0, 0, 0, false, UPRIGHT, Some(f32::NAN)).wheel, None, "not a number");
+        assert_eq!(pen_sample(0, 0, 0, false, UPRIGHT, Some(1.5)).wheel, Some(1.0), "kept within 0..1");
+    }
+
+    #[test]
+    fn leaving_range_or_the_window_and_a_cancel_forget_the_wheel() {
+        let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
+        let canceled = ((POINTER_MESSAGE_FLAG_INRANGE | POINTER_MESSAGE_FLAG_CANCELED) << 16) | 7;
+        let pen = Some(7);
+        for m in [WM_POINTERENTER, WM_POINTERUPDATE, WM_POINTERDOWN, WM_POINTERUP] {
+            assert!(!forgets_wheel(m, in_range, pen), "{m:#x}");
+            assert!(forgets_wheel(m, 7, pen), "out of range: {m:#x}");
+            assert!(forgets_wheel(m, canceled, pen), "canceled: {m:#x}");
+        }
+        assert!(forgets_wheel(WM_POINTERLEAVE, in_range, pen));
+        // WM_MOUSEMOVE and WT_PACKET.
+        assert!(!forgets_wheel(0x0200, 0, Some(0)));
+        assert!(!forgets_wheel(0x7FF0, 7, pen));
+    }
+
+    #[test]
+    fn another_pointer_leaving_keeps_the_wheel() {
+        // A touch, pointer 9, leaves the window and detection range while pen 7 hovers.
+        let touch_leaves = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 9;
+        assert!(!forgets_wheel(WM_POINTERLEAVE, touch_leaves, Some(7)));
+        assert!(!forgets_wheel(WM_POINTERUPDATE, 9, Some(7)), "out of range");
+        let canceled = (POINTER_MESSAGE_FLAG_CANCELED << 16) | 9;
+        assert!(!forgets_wheel(WM_POINTERUP, canceled, Some(7)), "canceled");
+        assert!(!forgets_wheel(WM_POINTERLEAVE, touch_leaves, None), "no pen has read the wheel");
+        assert!(forgets_wheel(WM_POINTERLEAVE, (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7, Some(7)), "the pen itself");
+    }
+
+    #[test]
+    fn the_sent_leave_of_the_wheel_pen_forgets_the_wheel() {
+        let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
+        let pen = Some(7);
+        assert!(sent_forgets_wheel(WM_POINTERLEAVE, in_range, pen), "the pen leaves the window");
+        assert!(sent_forgets_wheel(WM_POINTERLEAVE, 7, pen), "or detection range");
+        assert!(!sent_forgets_wheel(WM_POINTERLEAVE, (POINTER_MESSAGE_FLAG_INRANGE << 16) | 9, pen), "another pointer leaves");
+        assert!(!sent_forgets_wheel(WM_POINTERLEAVE, in_range, None), "no pen has read the wheel");
+        assert!(!sent_forgets_wheel(WM_POINTERENTER, in_range, pen), "the pen comes over the window");
+        // Posted messages, which the message hook already sees.
+        for m in [WM_POINTERUPDATE, WM_POINTERDOWN, WM_POINTERUP] {
+            assert!(!sent_forgets_wheel(m, 7, pen), "{m:#x}");
+        }
+        // WT_CTXCLOSE.
+        assert!(!sent_forgets_wheel(0x7FF2, 7, pen));
+    }
+
+    #[test]
     fn a_pens_pressure_is_the_one_winit_gives_its_touch() {
-        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true, UPRIGHT).pressure, 0.5);
-        assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true, UPRIGHT).pressure, 1.0);
-        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false, UPRIGHT), eraser_sample(0.0), "hovering");
-        assert_eq!(pen_sample(0, 0, 0, true, UPRIGHT).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
-        assert_eq!(pen_sample(300, 0, 0, true, UPRIGHT).pressure, 1.0, "a pressure without the pressure mask is not one");
-        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true, UPRIGHT).pressure, 1.0, "as winit, which gives no force for 0");
-        assert_eq!(pen_sample(2000, PEN_MASK_PRESSURE, 0, false, UPRIGHT).pressure, 0.0);
+        assert_eq!(pen_sample(512, PEN_MASK_PRESSURE, 0, true, UPRIGHT, None).pressure, 0.5);
+        assert_eq!(pen_sample(1024, PEN_MASK_PRESSURE, 0, true, UPRIGHT, None).pressure, 1.0);
+        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, PEN_FLAG_INVERTED, false, UPRIGHT, None), eraser_sample(0.0), "hovering");
+        assert_eq!(pen_sample(0, 0, 0, true, UPRIGHT, None).pressure, 1.0, "a pen in contact that reports no pressure presses fully");
+        assert_eq!(pen_sample(300, 0, 0, true, UPRIGHT, None).pressure, 1.0, "a pressure without the pressure mask is not one");
+        assert_eq!(pen_sample(0, PEN_MASK_PRESSURE, 0, true, UPRIGHT, None).pressure, 1.0, "as winit, which gives no force for 0");
+        assert_eq!(pen_sample(2000, PEN_MASK_PRESSURE, 0, false, UPRIGHT, None).pressure, 0.0);
     }
 
     #[test]

@@ -35,7 +35,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
-use craft::ui::text::{LinkMode, LinkedFields, NumberField};
+use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
 
 use super::host::open_held;
 use crate::VectorcraftApp;
@@ -296,7 +296,8 @@ impl DocumentSettings for VcNewDocument {
                 }
             });
         });
-        Row::new().show(ui, |ui, _| {
+        // Host viewports below the desktop main window's 800-point minimum need this row to wrap.
+        Row::new().wrap(ui.ctx().content_rect().width() < 800.0).show(ui, |ui, _| {
             Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
             Field::new(orientation.clone()).show(ui, |ui, _| {
                 let entries = [
@@ -329,6 +330,7 @@ impl DocumentSettings for VcNewDocument {
             let captions = [text(tl!("Top")), text(tl!("Bottom")), text(tl!("Left")), text(tl!("Right"))];
             let out = LinkedFields::<4>::new(bleed.clone(), Bind::given(parts), Bind::bound(&mut linked))
                 .mode(LinkMode::Equal)
+                .layout(LinkedLayout::Columns)
                 .captions(captions)
                 .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
                 .lengths(lengths)
@@ -877,6 +879,39 @@ mod tests {
         assert_eq!(fields(&app)["name"], json!("Untitled-2"));
     }
 
+    /// The four Bleed fields stay inside the dialog in a 1280 by 900 window; in one row, Right ran past the dialog's
+    /// right edge.
+    #[test]
+    fn bleed_fields_stay_inside_the_dialog() {
+        let mut app = app();
+        open(&mut app);
+        let ctx = ctx(&app);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        // Each frame gives the app's input once, as the hosts do.
+        let frame = |app: &mut VectorcraftApp, i: u32| {
+            let mut raw = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+            app.adopt_context(&ctx);
+            app.raw_input(&ctx, &mut raw);
+            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+            let mut out = ctx.run_ui(raw, |ui| app.ui(ui));
+            out.textures_delta.clear();
+            out
+        };
+        (0..3).for_each(|i| drop(frame(&mut app, i)));
+        let out = frame(&mut app, 3);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let bounds = |label: Option<&str>, role: egui::accesskit::Role| {
+            let found = nodes.iter().find(|(_, n)| n.role() == role && label.is_none_or(|l| n.label() == Some(l)));
+            let (_, n) = found.unwrap_or_else(|| panic!("no {role:?} {label:?}"));
+            n.bounds().expect("bounds")
+        };
+        let dialog = bounds(None, egui::accesskit::Role::Dialog);
+        for side in ["Top", "Bottom", "Left", "Right"] {
+            let field = bounds(Some(side), egui::accesskit::Role::SpinButton);
+            assert!(dialog.x0 <= field.x0 && field.x1 <= dialog.x1, "Bleed {side} {field:?} stays inside the dialog {dialog:?}");
+        }
+    }
+
     /// More Settings edits only the artboard layout, spacing and columns, and creates nothing.
     #[test]
     fn more_settings_is_a_popup_holding_only_the_artboard_layout() {
@@ -1074,5 +1109,67 @@ mod tests {
         assert!(!profile_action(&mut app, "profile.reset:Print"), "Reset leaves the dialog open");
         assert!(!dir.join("Print.vectorcraft").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn orientation_remains_clickable_in_compact_web_windows() {
+        use crate::i18n::LangExt;
+        use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        for code in ["en", "de", "fr", "el"] {
+            for width in [800.0, 640.0, 540.0, 799.0, 801.0] {
+                let services = crate::Services { download: Some(Box::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() };
+                let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+                app.session.prefs.interface_language = code.into();
+                let lang = crate::i18n::Lang::from_code(code).unwrap();
+                crate::i18n::set_current(lang);
+                open(&mut app);
+                set(&app, "width", json!(400)).unwrap();
+                set(&app, "height", json!(600)).unwrap();
+                set(&app, "units", json!("pt")).unwrap();
+                let context = ctx(&app);
+                let size = vec2(width, 500.0);
+                let screen = Rect::from_min_size(Pos2::ZERO, size);
+                let mut time = 0.0;
+                let mut draw = |app: &mut VectorcraftApp, events| {
+                    time += 0.25;
+                    let out = crate::testing::app_frame(
+                        app,
+                        &context,
+                        RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() },
+                    );
+                    assert_eq!(context.content_rect().size(), size, "the web host keeps the requested viewport");
+                    out
+                };
+                for _ in 0..6 {
+                    draw(&mut app, vec![]);
+                }
+                let original = fields(&app);
+                let out = draw(&mut app, vec![]);
+                let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+                let bounds = nodes
+                    .iter()
+                    .find(|(_, node)| node.role() == egui::accesskit::Role::RadioButton && node.label() == Some(crate::i18n::tr(lang, "Landscape")))
+                    .and_then(|(_, node)| node.bounds())
+                    .expect("Landscape is shown");
+                let at = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+                draw(&mut app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    draw(&mut app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                draw(&mut app, vec![]);
+                let turned = fields(&app);
+                assert_eq!(turned["width"], original["height"], "{code} {width}: Landscape swaps the page width");
+                assert_eq!(turned["height"], original["width"], "{code} {width}: Landscape swaps the page height");
+                for _ in 0..3 {
+                    draw(&mut app, vec![]);
+                }
+                for idle in 0..3 {
+                    let output = draw(&mut app, vec![]);
+                    assert_eq!(output.platform_output.num_completed_passes, 1, "{code} {width}: idle frame {idle} repeats layout");
+                }
+            }
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
     }
 }

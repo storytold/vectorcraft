@@ -172,8 +172,9 @@ fn apply_transform_moving_guides(
         if c[..4] == [1.0, 0.0, 0.0, 1.0] {
             interpolate = Some(crate::cmd::path::interpolates_handles(s, p, label)?);
         }
+        let mut ids = ids;
         if xf != Affine::IDENTITY {
-            crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?;
+            ids.extend(crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?);
         }
         ids
     } else if none || (!copy && xf == Affine::IDENTITY) {
@@ -181,7 +182,7 @@ fn apply_transform_moving_guides(
     } else {
         let kept = if copy { preview_copies(s, &ids, with_guides, below)? } else { None };
         s.edit(label, |d, sel| {
-            let targets = match &kept {
+            let mut targets = match &kept {
                 // The document becomes the snapshot with the kept copies, untransformed, and the
                 // loop below transforms only the copies.
                 Some(k) => {
@@ -231,7 +232,9 @@ fn apply_transform_moving_guides(
                     d.edit_ruler_guide(i, |g| *g = g.moved(delta));
                 }
             } else if with_guides && !is_translation {
-                d.transform_ruler_guides(sel, xf);
+                // The guide paths are made already transformed, so they join the reply after the
+                // loop above.
+                targets.extend(d.transform_ruler_guides(sel, xf));
             }
             Ok(targets)
         })?

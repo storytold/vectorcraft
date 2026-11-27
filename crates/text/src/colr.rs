@@ -73,6 +73,10 @@ pub(crate) fn colour_glyph(
         return (None, false);
     }
     let used = tree.foreground_used;
+    // Over the budget nothing is drawn, not even the raster fallback: it would replay the graph.
+    if tree.too_large {
+        return (None, used);
+    }
     if tree.unsupported.is_some() {
         // What it paints, y up, for a glyph without a clip box.
         let painted = tree.painted.map(|b| FLIP.transform_rect_bbox(b));
@@ -114,7 +118,7 @@ fn outline(font: &skrifa::FontRef<'_>, location: LocationRef<'_>, gid: GlyphId) 
     if let Some(g) = font.outline_glyphs().get(gid) {
         let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), location), &mut pen);
     }
-    let mut path = pen.0;
+    let mut path = pen.finish();
     path.apply_affine(FLIP);
     path
 }
@@ -507,6 +511,9 @@ impl ColorPainter for Tree<'_> {
             self.unsupported.get_or_insert("a fill outside any glyph");
             return;
         };
+        if self.too_large {
+            return;
+        }
         let Some(clip) = self.groups.get(at).and_then(|g| g.clip.clone()) else { return };
         let innermost = at + 1 == self.groups.len();
         let before = self.groups.last().map_or(0, |g| g.children.len());
@@ -523,6 +530,9 @@ impl ColorPainter for Tree<'_> {
 
     /// The glyph's outline filled, the brush moved by `brush_transform` (the glyph stays).
     fn fill_glyph(&mut self, glyph_id: GlyphId, brush_transform: Option<Transform>, brush: Brush<'_>) {
+        if self.too_large {
+            return;
+        }
         let path = self.layer_outline(glyph_id);
         let brush_xf = self.transform() * brush_transform.as_ref().map_or(Affine::IDENTITY, affine);
         self.transforms.push(brush_xf);

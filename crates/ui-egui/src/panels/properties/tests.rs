@@ -9,6 +9,78 @@ use super::*;
 use crate::tests::panel_harness::Panel;
 use crate::tests::synthetic::key_frame;
 
+/// Two selected groups offer Ungroup and not Isolate Group. The same holds when a path is
+/// selected ahead of a group, and when a group that holds another group is selected with other art.
+#[test]
+fn two_groups_offer_ungroup_without_isolate_group() {
+    let mut app = new_app();
+    let (first, second) = (group_at(&mut app, 20.0), group_at(&mut app, 160.0));
+    // The later group is first in the selection, so a check of only the first node still sees a group.
+    app.run("select.set", json!({"ids": [second, first]})).unwrap();
+
+    let mut panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Ungroup") && !panel.shows("Isolate Group"));
+    assert!(!panel.shows("Unite"), "groups are not a vector selection");
+    // A path selected ahead of a group that itself holds a group.
+    let inner = group_at(&mut panel.app(), 300.0);
+    let beside = rect(&mut panel.app(), 380.0, 20.0, 30.0, 30.0);
+    panel.app().run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = panel.app().run("object.group", json!({})).unwrap()["id"].clone();
+    let ahead = rect(&mut panel.app(), 20.0, 120.0, 24.0, 24.0);
+    panel.app().run("select.set", json!({"ids": [ahead, outer]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Ungroup") && !panel.shows("Isolate Group"), "path then nested group");
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask"));
+    assert!(!panel.shows("Unite"), "a group in the selection");
+}
+
+/// One selected group offers Ungroup and Isolate Group, including a group that holds another group.
+#[test]
+fn one_group_offers_ungroup_and_isolate_group() {
+    let mut app = new_app();
+    let inner = group_at(&mut app, 20.0);
+    let beside = rect(&mut app, 120.0, 20.0, 30.0, 30.0);
+    app.run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [outer]})).unwrap();
+
+    let panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Ungroup") && panel.shows("Isolate Group"));
+    assert!(!panel.shows("Unite") && !panel.shows("Make Clipping Mask"), "one group");
+}
+
+/// Several paths, or a compound path with another path, offer Group, Make Clipping Mask and Unite.
+/// Unite joins them in one undo step. A path selected with type does not offer Unite.
+#[test]
+fn several_paths_offer_group_clipping_mask_and_unite() {
+    let mut app = new_app();
+    let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 80.0, 20.0, 40.0, 40.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+
+    let mut panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask") && panel.shows("Unite"));
+    let before = panel.app().session.active().unwrap().selection.objects.len();
+    let depth = undo_depth(&panel.app());
+    panel.click("Unite");
+    let after = panel.app().session.active().unwrap().selection.objects.len();
+    assert!(after < before, "Unite joins the paths");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().session.active().unwrap().selection.objects.len(), before, "Undo restores the paths");
+    // A compound path and another path.
+    panel.app().run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    let compound = panel.app().run("object.compoundPath.make", json!({})).unwrap()["id"].clone();
+    let c = rect(&mut panel.app(), 160.0, 20.0, 40.0, 40.0);
+    panel.app().run("select.set", json!({"ids": [compound, c]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask") && panel.shows("Unite"), "compound path");
+    // Type with a path is not a vector-only selection.
+    let text = panel.app().run("text.create", json!({"x": 50, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+    panel.app().run("select.set", json!({"ids": [c, text]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Group") && !panel.shows("Unite"), "path and type");
+}
+
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,
 /// above the Transform section and before every other section, and they select its clipping path
 /// or its clipped art; one that clips nothing has Edit Clipping Path alone. A plain group, or a
@@ -1003,6 +1075,66 @@ fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
     assert_eq!(profile, None);
 }
 
+/// Two selected strokes, the shown one uniform and the other with a variable width: the Width
+/// Profile row still shows, and its Uniform removes the other stroke's profile. With brushes on both
+/// strokes the list holds only Uniform. Once both are uniform the row is hidden again.
+#[test]
+fn the_width_profile_shows_while_another_selected_stroke_has_a_variable_width() {
+    for brushed in [false, true] {
+        let mut app = new_app();
+        let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+        let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+        if brushed {
+            app.run("brush.apply", json!({"ids": [a, b], "name": "3 pt. Round"})).unwrap();
+        }
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(super::super::current_stroke(&app).and_then(|s| s.profile), None, "the shown stroke is uniform");
+        let mut panel = Panel::new(app, show);
+        assert!(panel.shows("Profile"), "brushed {brushed}");
+        panel.click("Profile");
+        assert_eq!(panel.shows("Taper Start"), !brushed, "brushed {brushed}");
+        panel.click("Uniform");
+        let profile = panel
+            .app()
+            .session
+            .active()
+            .unwrap()
+            .doc
+            .node(vectorcraft_doc::NodeId(b.as_u64().unwrap()))
+            .unwrap()
+            .appearance
+            .stroke()
+            .unwrap()
+            .profile
+            .clone();
+        assert_eq!(profile, None, "brushed {brushed}");
+        assert!(!panel.shows("Profile"), "brushed {brushed}: every stroke is uniform");
+    }
+}
+
+/// The Width Profile row follows a change of selection that leaves the document as it was: it
+/// hides when the stroke with a variable width leaves the selection and shows again when it comes
+/// back.
+#[test]
+fn the_width_profile_row_follows_a_selection_change() {
+    let mut app = new_app();
+    let a = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    let b = app.run("shape.line", json!({"x1": 20, "y1": 160, "x2": 300, "y2": 160})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("Profile"), "the other stroke has a variable width");
+    panel.app().run("select.set", json!({"ids": [a]})).unwrap();
+    panel.frame();
+    assert!(!panel.shows("Profile"), "the uniform stroke alone");
+    panel.app().run("select.set", json!({"ids": [a, b]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Profile"), "both strokes again");
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
@@ -1016,7 +1148,7 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     panel.app().select_tool("directSelection");
     panel.app().run("select.anchors", json!({"id": star, "anchors": [[0, 2]], "mode": "set"})).unwrap();
     panel.frame();
-    assert!(panel.shows("Corner") && panel.shows("Corner Radius"));
+    assert!(panel.shows("Corner") && panel.shows("Corner Radius") && panel.shows("Corners"));
     let corners = |panel: &Panel| {
         let n = panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(star)).unwrap().clone();
         let lc = vectorcraft_doc::LiveCorners::of(&n).unwrap();
@@ -1041,6 +1173,152 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     panel.app().run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     panel.frame();
     assert!(panel.shows("Corner") && panel.shows("Corner Radius"));
+    // And the Corners link, for the pop-up's rounding: Relative on the picked corner's rectangle.
+    panel.click("Corners");
+    panel.click("Relative");
+    let n = panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(vectorcraft_doc::LiveCorners::of(&n).unwrap().radii_relative());
+}
+
+/// With Direct Selection, a live rectangle or live polygon selected whole keeps its own rows and
+/// shows the Corners link, whose pop-up sets every corner of the shape. A path with Live Corners
+/// selected whole shows no corner rows.
+#[test]
+fn a_whole_live_shape_with_direct_selection_shows_the_corners_link() {
+    let mut app = new_app();
+    app.select_tool("directSelection");
+    let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
+    let polygon = app.run("shape.polygon", json!({"cx": 200, "cy": 150, "radius": 50, "sides": 5})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [polygon]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    assert!(panel.shows("Corners"), "polygon");
+    panel.app().run("select.set", json!({"ids": [r]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Corners") && panel.shows("Corner Radius"), "rectangle");
+    // The pop-up's rounding: Relative on the rectangle.
+    panel.click("Corners");
+    let depth = undo_depth(&panel.app());
+    panel.click("Relative");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    let n = panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(vectorcraft_doc::LiveCorners::of(&n).unwrap().radii_relative());
+    // A plain path selected whole: no corner selected.
+    let path = square_path(&mut panel.app(), 200.0);
+    panel.app().select_tool("directSelection");
+    panel.app().run("select.set", json!({"ids": [path]})).unwrap();
+    panel.frame();
+    assert!(!panel.shows("Corner") && !panel.shows("Corners"));
+}
+
+/// A live rectangle with Relative rounding shows its radius as a document length in its Corner
+/// Radius field, as the Corners pop-up does, not as the fraction it stores.
+#[test]
+fn a_relative_live_rectangle_shows_its_radius_as_a_length() {
+    let mut app = new_app();
+    let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [r], "radius": 10})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [r], "relativeRadii": true})).unwrap();
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(vectorcraft_doc::LiveCorners::of(&n).unwrap().radii_relative());
+    let shown = crate::panels::corner_radius(&app, &n).unwrap();
+    assert!((shown - 10.0).abs() < 1e-6, "the field shows {shown}");
+    assert_eq!(crate::panels::picked_corners(&app).unwrap().radius.map(|r| (r - 10.0).abs() < 1e-6), Some(true), "as the pop-up does");
+}
+
+/// A square path, not a live shape, its top-left corner at (`x`, 50) → its id.
+fn square_path(app: &mut VectorcraftApp, x: f64) -> u64 {
+    let id = rect(app, x, 50.0, 100.0, 100.0);
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.expandShape", json!({})).unwrap();
+    id.as_u64().unwrap()
+}
+
+/// The radius and kind of each corner of path `id`, from the top-left clockwise.
+fn path_corners(app: &VectorcraftApp, id: u64) -> Vec<(f64, vectorcraft_geom::shapes::CornerKind)> {
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let lc = vectorcraft_doc::LiveCorners::of(&n).unwrap();
+    (0..4).map(|k| (lc.radius(k), lc.kind(k))).collect()
+}
+
+/// The Corners link opens a pop-up with the corner kind, the radius and the rounding of the
+/// Direct-Selected corners. A radius typed there, or a kind or rounding picked, sets the three
+/// picked corners and leaves the fourth as it is, each in one undo step.
+#[test]
+fn the_corners_link_opens_the_settings_of_the_picked_corners() {
+    let mut app = new_app();
+    let id = square_path(&mut app, 50.0);
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    let mut panel = Panel::new(app, show);
+    assert!(!panel.shows("Relative") && !panel.shows("Chamfer"), "closed");
+    panel.click("Corners");
+    for name in ["Round", "Inverted Round", "Chamfer", "Radius", "Relative", "Absolute"] {
+        assert!(panel.shows(name), "the pop-up has {name}");
+    }
+    let depth = undo_depth(&panel.app());
+    panel.type_into("Radius", "18");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    let (round, chamfer) = (vectorcraft_geom::shapes::CornerKind::Round, vectorcraft_geom::shapes::CornerKind::Chamfer);
+    assert_eq!(path_corners(&panel.app(), id), vec![(18.0, round), (18.0, round), (18.0, round), (0.0, round)]);
+    // A kind, picked in the pop-up.
+    panel.click("Chamfer");
+    assert_eq!(undo_depth(&panel.app()), depth + 2, "one undo step");
+    assert_eq!(path_corners(&panel.app(), id), vec![(18.0, chamfer), (18.0, chamfer), (18.0, chamfer), (0.0, round)]);
+    // Relative rounding, for the path the corners are on.
+    panel.click("Relative");
+    assert_eq!(undo_depth(&panel.app()), depth + 3, "one undo step");
+    let n = panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert!(vectorcraft_doc::LiveCorners::of(&n).unwrap().radii_relative());
+}
+
+/// With a corner of each of two paths Direct-Selected and their radii different, the pop-up's
+/// radius is blank; a radius typed there sets both corners, and no other, in one undo step.
+#[test]
+fn the_corners_pop_up_sets_picked_corners_across_paths() {
+    let mut app = new_app();
+    let (a, b) = (square_path(&mut app, 20.0), square_path(&mut app, 200.0));
+    app.run("object.setLiveShape", json!({"ids": [a], "corners": [0], "radius": 5})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+    app.run("select.anchors", json!({"id": b, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    assert_eq!(crate::panels::picked_corners(&app).unwrap().radius, None, "blank while the radii differ");
+    let mut panel = Panel::new(app, show);
+    panel.click("Corners");
+    let depth = undo_depth(&panel.app());
+    panel.type_into("Radius", "7");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    let round = vectorcraft_geom::shapes::CornerKind::Round;
+    assert_eq!(path_corners(&panel.app(), a), vec![(7.0, round), (0.0, round), (0.0, round), (0.0, round)]);
+    assert_eq!(path_corners(&panel.app(), b), vec![(0.0, round), (7.0, round), (0.0, round), (0.0, round)]);
+}
+
+/// With a corner of one path Direct-Selected and a second path selected whole, the pop-up picks
+/// that corner and every corner of the second path. While one path is Relative and the other
+/// Absolute, no rounding is chosen; picking Absolute sets both paths in one undo step.
+#[test]
+fn the_corners_pop_up_takes_every_corner_of_a_whole_path_and_mixed_rounding() {
+    let mut app = new_app();
+    let (a, b) = (square_path(&mut app, 20.0), square_path(&mut app, 200.0));
+    app.run("object.setLiveShape", json!({"ids": [a], "corners": [0], "radius": 5})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [a], "relativeRadii": true})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    let picked = crate::panels::picked_corners(&app).unwrap();
+    assert_eq!(picked.relative, None, "no rounding while the paths differ");
+    assert_eq!(picked.items.len(), 2);
+    let mut panel = Panel::new(app, show);
+    panel.click("Corners");
+    let depth = undo_depth(&panel.app());
+    panel.click("Absolute");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    assert_eq!(crate::panels::picked_corners(&panel.app()).unwrap().relative, Some(false), "both Absolute");
+    panel.type_into("Radius", "7");
+    assert_eq!(undo_depth(&panel.app()), depth + 2, "one undo step");
+    let round = vectorcraft_geom::shapes::CornerKind::Round;
+    assert_eq!(path_corners(&panel.app(), a), vec![(7.0, round), (0.0, round), (0.0, round), (0.0, round)]);
+    assert_eq!(path_corners(&panel.app(), b), vec![(7.0, round); 4], "every corner of the path selected whole");
 }
 
 /// One effect on the one selected object shows its name and a Delete icon beside the fx button,

@@ -226,7 +226,7 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
             if !own {
                 by_the_menu_bar.insert(c.id);
             }
-            let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
+            let group = command_group(c.id, c.menu);
             v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false, shows_key: false });
         }
         v.extend(crate::state::all_panels().map(|(id, label)| Entry {
@@ -246,28 +246,30 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
             if !own {
                 by_the_menu_bar.insert(id);
             }
-            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false, shows_key: false });
+            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: command_group(id, &[]), is_tool: false, shows_key: false });
         }
         // A command listed only because an item of the menu bar runs it can have the group and
         // label of another entry. When that entry is an engine command that no item of the menu bar
-        // runs, the command the item runs keeps the name and the other entry is shown in the group
-        // of its id: File › Export Selection… runs `file.exportSelection`, as the menu item does,
-        // and `document.exportSelection` shows as Document › Export Selection…. Otherwise the
-        // command is left out: Window › Learn stays the Learn panel's entry. Entries that still
-        // have the same name, plug-ins included, are given names of their own by
-        // [`distinct_names`].
+        // runs, the command the item runs keeps the name and the other entry is shown in its own
+        // group ([`own_group`]): File › Export Selection… runs `file.exportSelection`, as the menu
+        // item does, and `document.exportSelection` shows as Document › Export Selection…. When
+        // that is the group the other entry has already, both are listed: Object › Expand… runs
+        // the Expand dialog, and `object.expand` shows its key. Otherwise the command is left out:
+        // Window › Learn stays the Learn panel's entry. Entries that still have the same name,
+        // plug-ins included, are given names of their own by [`distinct_names`].
         let name = |e: &Entry| (e.group.clone(), e.label.clone());
-        let new_names: HashSet<_> = v.iter().chain(&tail).filter(|e| by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
-        for e in v.iter_mut().chain(tail.iter_mut()) {
-            if new_names.contains(&name(e))
-                && !by_the_menu_bar.contains(e.key.as_str())
+        let movable = |e: &Entry| {
+            !by_the_menu_bar.contains(e.key.as_str())
                 && vectorcraft_engine::find_command(&e.key).is_some()
                 && !menu_bar_items().contains_key(e.key.as_str())
-            {
-                e.group = id_group(&e.key);
+        };
+        let new_names: HashSet<_> = v.iter().chain(&tail).filter(|e| by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        for e in v.iter_mut().chain(tail.iter_mut()) {
+            if new_names.contains(&name(e)) && movable(e) {
+                e.group = own_group(&e.key);
             }
         }
-        let names: HashSet<_> = v.iter().chain(&tail).filter(|e| !by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        let names: HashSet<_> = v.iter().chain(&tail).filter(|e| !by_the_menu_bar.contains(e.key.as_str()) && !movable(e)).map(name).collect();
         let keep = |e: &Entry| !by_the_menu_bar.contains(e.key.as_str()) || !names.contains(&name(e));
         v.retain(keep);
         tail.retain(keep);
@@ -402,6 +404,115 @@ fn name_of(e: &Entry, group: &str, label: &str) -> String {
     if e.shows_key { format!("{name} ({})", e.key) } else { name }
 }
 
+/// The group of command `id`, whose menu path is `menu`: that path, or for a command no menu holds
+/// the menu path of the item of the menu bar that runs it ([`menu_bar_path`]: Recolor Artwork…
+/// goes under Edit › Edit Colors), or else [`own_group`].
+fn command_group(id: &str, menu: &[&str]) -> String {
+    if !menu.is_empty() {
+        return menu.join(" › ");
+    }
+    menu_bar_path(id).map_or_else(|| own_group(id), str::to_string)
+}
+
+/// The group of a command that neither a menu nor an item of the menu bar holds: the menu path the
+/// items of the menu bar that run the commands of its id's first two parts share (Remove Corners
+/// goes under Object › Plug-ins › Path Precision Tools with Set Corners), else its [`GROUPS`]
+/// entry, else [`id_group`].
+fn own_group(id: &str) -> String {
+    if let Some(path) = family_path(id) {
+        return path.to_string();
+    }
+    GROUPS
+        .iter()
+        .find(|(key, _)| if key.ends_with('.') { id.starts_with(key) } else { id == *key })
+        .map_or_else(|| id_group(id), |(_, g)| g.to_string())
+}
+
+/// The one menu path of the items of the menu bar that run the other commands whose id starts with
+/// the first two parts of an id of three or more parts (`addon.pathtools.`).
+fn family_path(id: &str) -> Option<&'static str> {
+    let mut parts = id.splitn(3, '.');
+    let (Some(a), Some(b), Some(_)) = (parts.next(), parts.next(), parts.next()) else { return None };
+    let prefix = format!("{a}.{b}.");
+    let mut paths = menu_bar_paths().keys().filter(|k| k.starts_with(&prefix) && k.as_str() != id).filter_map(|k| menu_bar_path(k));
+    let first = paths.next()?;
+    paths.all(|p| p == first).then_some(first)
+}
+
+/// The groups of the commands of Keyboard Shortcuts that no menu holds and whose id's first part
+/// is no name: (id, or the start of ids when it ends with `.`; group). A panel's commands go under
+/// the panel's Window menu item (Window › Layers), and a dialog's under the menu or panel that
+/// opens it.
+const GROUPS: &[(&str, &str)] = &[
+    ("addon.", "Object › Plug-ins"),
+    ("app.", "Application"),
+    ("css.", "Window › CSS Properties"),
+    ("docInfo.", "Window › Document Info"),
+    ("imageTrace.", "Window › Image Trace"),
+    ("livePaint.", "Object › Live Paint"),
+    ("plugin.", "Object › Plug-ins"),
+    ("svgFilter.", "SVG Filters"),
+    ("svgInteractivity.", "Window › SVG Interactivity"),
+    ("threeD.", "Window › 3D and Materials"),
+    ("ui.action.", "Window › Actions"),
+    ("ui.actionSet.", "Window › Actions"),
+    ("ui.blendOptions", "Window › Properties"),
+    ("ui.brushObjectOptions", "Window › Brushes"),
+    ("ui.brushOptions", "Window › Brushes"),
+    ("ui.bulletsAndNumbering", "Window › Paragraph"),
+    ("ui.colorGroupOptions", "Window › Swatches"),
+    ("ui.colorGuideOptions", "Window › Color Guide"),
+    ("ui.colorPicker", "Color"),
+    ("ui.colorRgbPercent", "Window › Color"),
+    ("ui.corners", "Window › Transform"),
+    ("ui.dialogReset", "Dialogs"),
+    ("ui.dxfOptionsDialog", "File"),
+    ("ui.epsOptionsDialog", "File"),
+    ("ui.fileInfoDialog", "File"),
+    ("ui.findAndReplace", "Window › Properties"),
+    ("ui.findFontsInFolder", "Type"),
+    ("ui.hpglOptionsDialog", "File"),
+    ("ui.hyphenation", "Window › Paragraph"),
+    ("ui.javascriptFilesDialog", "Window › SVG Interactivity"),
+    ("ui.justification", "Window › Paragraph"),
+    ("ui.layerOptions", "Window › Layers"),
+    ("ui.layersPanelOptions", "Window › Layers"),
+    ("ui.loadAllStyles", "Window › Character Styles"),
+    ("ui.loadCharStyles", "Window › Character Styles"),
+    ("ui.loadParaStyles", "Window › Paragraph Styles"),
+    ("ui.missingFontsDialog", "Type"),
+    ("ui.newArtboard", "Window › Artboards"),
+    ("ui.newBrush", "Window › Brushes"),
+    ("ui.newCharStyle", "Window › Character Styles"),
+    ("ui.newColorGroup", "Window › Swatches"),
+    ("ui.newLayer", "Window › Layers"),
+    ("ui.newParaStyle", "Window › Paragraph Styles"),
+    ("ui.newSwatch", "Window › Swatches"),
+    ("ui.pdfSummary.", "File"),
+    ("ui.perspectivePlane", "View › Perspective Grid"),
+    ("ui.perspectiveUserPreset1.", "View › Perspective Grid › One Point Perspective"),
+    ("ui.perspectiveUserPreset2.", "View › Perspective Grid › Two Point Perspective"),
+    ("ui.perspectiveUserPreset3.", "View › Perspective Grid › Three Point Perspective"),
+    ("ui.placementOptionsDialog", "Window › Links"),
+    ("ui.rasterEffectsSettingsDialog", "Effect"),
+    ("ui.recolorRedo", "Edit › Edit Colors › Recolor Artwork"),
+    ("ui.recolorUndo", "Edit › Edit Colors › Recolor Artwork"),
+    ("ui.relinkDialog", "Window › Links"),
+    ("ui.rename", "Window › Layers"),
+    ("ui.retype", "Window › Properties"),
+    ("ui.runInstalledScript", "File › Scripts"),
+    ("ui.sampleScreenColor", "Color"),
+    ("ui.savePdfDialog", "File"),
+    ("ui.shortcutImportDialog", "Shortcuts"),
+    ("ui.simplifyAuto", "Object › Path › Simplify"),
+    ("ui.simplifyMoreOptions", "Object › Path › Simplify"),
+    ("ui.smoothAuto", "Object › Path › Smooth"),
+    ("ui.spotColors", "Window › Swatches"),
+    ("ui.symbolOptions", "Window › Symbols"),
+    ("ui.tateChuYokoSettings", "Window › Character"),
+    ("ui.warichuSettings", "Window › Character"),
+];
+
 /// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
 fn id_group(id: &str) -> String {
     let mut c = id.split('.').next().unwrap_or_default().chars();
@@ -410,7 +521,7 @@ fn id_group(id: &str) -> String {
 
 /// Gives entries that have the same group and label names of their own, and leaves the others as
 /// they are. It runs on the whole snapshot, plug-ins included, after [`fixed_entries`] has shown an
-/// engine command in the group of its id or left out a command listed only because an item of the
+/// engine command in its own group ([`own_group`]) or left out a command listed only because an item of the
 /// menu bar runs it:
 /// 1. A command that an item of the menu bar runs, as a key press would run it, is shown under
 ///    that item's menu path ([`menu_bar_path`]): the four Other Library… commands go under Window ›
@@ -614,6 +725,29 @@ const NEEDS_A_PARAM: [&str; 77] = [
     "type.ruby",
 ];
 
+/// UI commands with no default key, no menu bar item and a params doc whose fields are all optional
+/// that a key press can run with no params: each opens its dialog for the selection, the current
+/// item or the panel's selection, or reports in the status bar why it cannot. Rename names the
+/// selection, Color Picker… opens for the proxy in front, Brush Options… for the selected path's
+/// brush, and Layer Options for the highlighted rows.
+pub(crate) const KEY_ONLY_UI: [&str; 15] = [
+    "ui.rename",
+    "ui.colorPicker",
+    "ui.newSwatch",
+    "ui.newColorGroup",
+    "ui.colorGroupOptions",
+    "ui.newBrush",
+    "ui.brushOptions",
+    "ui.layerOptions",
+    "ui.corners",
+    "ui.placementOptionsDialog",
+    "ui.relinkDialog",
+    "ui.perspectivePlane",
+    "ui.bulletsAndNumbering",
+    "ui.missingFontsDialog",
+    "ui.findFontsInFolder",
+];
+
 /// The (label, params) of each menu bar item, by command id.
 fn menu_bar_items() -> &'static HashMap<String, Vec<(String, Value)>> {
     static ITEMS: OnceLock<HashMap<String, Vec<(String, Value)>>> = OnceLock::new();
@@ -704,11 +838,9 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
-/// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
-/// front.
+/// of `{}` or `{path…}`, or is one of [`KEY_ONLY_UI`].
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || KEY_ONLY_UI.contains(&id)
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -977,7 +1109,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let prefs = &app.session.prefs;
     let hold = HoldSetting::new(prefs.hold_shortcuts, prefs.key_hold_delay(), min..=max);
     app.shortcuts_dialog = Some(ShortcutsDialogState {
-        state: DialogState::new().with_tab("tools"),
+        state: DialogState::new(),
         keymap: None,
         window: None,
         hold,
@@ -1009,6 +1141,7 @@ fn accept(def: &CommandDef, binding: &Binding) -> Result<(), String> {
 fn options() -> Options {
     Options::default().with(|o| {
         o.area_tabs = true;
+        o.own_areas = true;
         o.areas = vec![Area::new("tools", "Tools", is_tool), Area::new("menu", MENU_COMMANDS, |def| !is_tool(def))];
         o.summary = false;
         o.accept = Some(Box::new(accept));
@@ -1143,9 +1276,20 @@ fn with_set_at(app: &mut VectorcraftApp, path: &str, then: SetReader) -> Result<
     if crate::dialogs::shortcut_import::is_kys(path) {
         return crate::dialogs::shortcut_import::command(app, &json!({ "path": path }));
     }
-    let read = app.services.read.as_ref().ok_or("no file reader")?;
-    let bytes = read(path)?;
+    let bytes = match (&app.services.read_head, &app.services.read) {
+        (Some(read), _) => read(path, (craft::keymap::MAX_EXPORT_BYTES + 1).max(vectorcraft_engine::cmd::shortcutset::READ_LIMIT))?,
+        (None, Some(read)) => read(path)?,
+        _ => return Err("no file reader".into()),
+    };
     then(app, path, &bytes)
+}
+
+/// Bound the original JSON file before parsing or serializing its normalized form.
+fn shortcut_json(bytes: &[u8]) -> Result<Value, String> {
+    if bytes.len() > craft::keymap::MAX_EXPORT_BYTES {
+        return Err(craft::keymap::ProfileError::TooLarge.to_string());
+    }
+    serde_json::from_slice(bytes).map_err(|e| e.to_string())
 }
 
 /// The dialog's Import…: a set another app saved as text opens its review; a JSON set waits for
@@ -1157,7 +1301,7 @@ fn import_into_dialog(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Res
     if crate::dialogs::shortcut_import::is_text_set(name, bytes) {
         return crate::dialogs::shortcut_import::open(app, name, bytes);
     }
-    let v: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let v = shortcut_json(bytes)?;
     let text = keymap_json(&v)?;
     if let Some(open) = app.shortcuts_dialog.as_mut() {
         open.pending_import = Some(text);
@@ -1525,7 +1669,7 @@ fn import_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<Va
     if crate::dialogs::shortcut_import::is_text_set(name, bytes) {
         return crate::dialogs::shortcut_import::open(app, name, bytes);
     }
-    let v: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let v = shortcut_json(bytes)?;
     import_set(app, &v)
 }
 
@@ -1628,6 +1772,84 @@ mod tests {
             Ok(())
         }));
         written
+    }
+
+    fn imported_json() -> Vec<u8> {
+        br#"{"format":"vectorcraft-shortcuts","version":1,"set":"Studio","overrides":{}}"#.to_vec()
+    }
+
+    /// A valid set padded past the shared file limit must not become acceptable after JSON
+    /// normalization. The real dialog's browser pick leaves its draft and saved preferences alone.
+    #[test]
+    fn the_shortcut_dialog_refuses_oversized_browser_json_before_normalization() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        use craft::ui::testing::{Fixture, Room};
+
+        let (mut app, _) = app();
+        open(&mut app);
+        let prefs = serde_json::to_value(&app.session.prefs).unwrap();
+        let overrides = app.shortcut_overrides.clone();
+        let saved = app.ui.shortcut_sets.clone();
+        let app = Rc::new(RefCell::new(app));
+        let shown = Rc::clone(&app);
+        let mut fixture = Fixture::new(move |ui| show(&mut shown.borrow_mut(), ui));
+        fixture.in_room(Room::Window);
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        let picker = crate::tests::picks::scripted(&mut app.borrow_mut());
+        fixture.settle();
+        let import = fixture.by_label("Import…").expect("the shortcut dialog's Import button");
+        fixture.click(&import).settle();
+        assert_eq!(picker.requests().len(), 1);
+        let mut large = imported_json();
+        large.resize(craft::keymap::MAX_EXPORT_BYTES + 1, b' ');
+        picker.answer_contents(&[("Studio.json", &large)]);
+        crate::file_asks::poll(&mut app.borrow_mut());
+        {
+            let app = app.borrow();
+            assert!(app.ui.status.contains("shortcut set file too large"), "{}", app.ui.status);
+            let draft = app.shortcuts_dialog.as_ref().unwrap();
+            assert!(draft.pending_import.is_none());
+            assert_eq!(app.shortcut_overrides, overrides);
+            assert_eq!(serde_json::to_value(&app.ui.shortcut_sets).unwrap(), serde_json::to_value(&saved).unwrap());
+            assert_eq!(serde_json::to_value(&app.session.prefs).unwrap(), prefs);
+        }
+        fixture.settle();
+        let import = fixture.by_label("Import…").unwrap();
+        fixture.click(&import).settle();
+        picker.answer_contents(&[("Studio.json", &imported_json())]);
+        crate::file_asks::poll(&mut app.borrow_mut());
+        assert!(app.borrow().shortcuts_dialog.as_ref().unwrap().pending_import.is_some(), "a small set still reaches the draft");
+    }
+
+    /// Direct automation uses the same raw-file bound and a bounded native read when available.
+    #[test]
+    fn shortcut_import_refuses_oversized_native_json_and_accepts_small_json() {
+        let (mut app, _) = app();
+        let prefs = serde_json::to_value(&app.session.prefs).unwrap();
+        let saved = serde_json::to_value(&app.ui.shortcut_sets).unwrap();
+        let requested = std::rc::Rc::new(std::cell::Cell::new(0));
+        let seen = requested.clone();
+        app.services.read = Some(Box::new(|_| panic!("a bounded reader is available")));
+        app.services.read_head = Some(Box::new(move |path, cap| {
+            seen.set(cap);
+            let mut bytes = imported_json();
+            if path == "/large.json" {
+                bytes.resize(cap, b' ');
+            } else if path == "/limit.json" {
+                bytes.resize(craft::keymap::MAX_EXPORT_BYTES, b' ');
+            }
+            Ok(bytes)
+        }));
+        let error = app.run("shortcuts.import", json!({"path": "/large.json"})).unwrap_err();
+        assert_eq!(error, "shortcut set file too large");
+        assert_eq!(requested.get(), (craft::keymap::MAX_EXPORT_BYTES + 1).max(vectorcraft_engine::cmd::shortcutset::READ_LIMIT));
+        assert_eq!(serde_json::to_value(&app.session.prefs).unwrap(), prefs);
+        assert_eq!(serde_json::to_value(&app.ui.shortcut_sets).unwrap(), saved);
+        let result = app.run("shortcuts.import", json!({"path": "/small.json"})).unwrap();
+        assert_eq!(result["set"], "Studio");
+        assert!(app.run("shortcuts.import", json!({"path": "/limit.json"})).is_ok(), "the exact byte limit is allowed");
     }
 
     /// A plug-in installed while the menus are walked doesn't leave a snapshot under the revision
@@ -2029,6 +2251,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_dialog_opens_with_only_tools_and_menu_commands() {
+        use egui::accesskit::Role;
+
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let raw = || egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        open(&mut app);
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        let nodes = crate::testing::app_frame(&mut app, &ctx, raw()).platform_output.accesskit_update.expect("dialog access tree").nodes;
+        let (_, areas) = nodes.iter().find(|(_, n)| n.role() == Role::TabList && n.label() == Some("shortcuts.area")).expect("area tabs");
+        let labels: Vec<_> = areas
+            .children()
+            .iter()
+            .filter_map(|child| nodes.iter().find(|(id, n)| id == child && n.role() == Role::Tab).and_then(|(_, n)| n.label()))
+            .collect();
+        assert_eq!(labels, ["Tools", "Menu Commands"]);
+    }
+
     /// An open dialog lists a live-effect plug-in installed while it is open, with the shortcut its
     /// set gives it, and drops the row while the plug-in is removed, keeping that shortcut in the
     /// set.
@@ -2219,8 +2466,8 @@ mod tests {
     /// params, or with the one set of params all its items give) is listed in Edit › Keyboard
     /// Shortcuts, also when the command has no menu path of its own: Set Corners…, whose params doc
     /// names a field a call must give, the Perspective Grid toggles, Edit Custom Dictionary…, a
-    /// query, and Recolor Artwork…, a UI command. Such a command is listed in the group of its id,
-    /// next to the commands of its family that were listed before. A shortcut given to one survives
+    /// query, and Recolor Artwork…, a UI command. Such a command is listed under the menu path of
+    /// the item that runs it. A shortcut given to one survives
     /// a saved set's round trip. Find Next is left out: its menu item gives `find` empty, which the
     /// command rejects. When another entry has the same group and label, the command the menu item
     /// runs keeps the name if no menu item runs the other: File › Export Selection… is
@@ -2244,7 +2491,9 @@ mod tests {
         assert_eq!(shown("file.exportSelection"), Some(("File".into(), "Export Selection…".into())));
         assert_eq!(shown("document.exportSelection"), Some(("Document".into(), "Export Selection…".into())));
         // No command listed only because an item of the menu bar runs it shares its group and label
-        // with another entry.
+        // with another entry, except an engine command that no item of the menu bar runs, whose own
+        // group is the same: that one shows its key.
+        let off_the_bar = |k: &str| vectorcraft_engine::find_command(k).is_some() && !menu_bar_items().contains_key(k);
         let own = |k: &str| {
             vectorcraft_engine::command_specs()
                 .iter()
@@ -2258,13 +2507,19 @@ mod tests {
         for e in v.iter().chain(tail) {
             names.entry((e.group.as_str(), e.label.as_str())).or_default().push(e.key.as_str());
         }
-        let shared: Vec<_> = names.iter().filter(|(_, keys)| keys.len() > 1 && keys.iter().any(|k| !own(k))).collect();
+        let shared: Vec<_> = names
+            .iter()
+            .filter(|(_, keys)| keys.len() > 1 && keys.iter().any(|k| !own(k)) && !keys.iter().filter(|k| own(k)).all(|k| off_the_bar(k)))
+            .collect();
         assert!(shared.is_empty(), "{shared:?}");
+        let keyed = |id: &str| entry(id).map(|e| (e.group, e.label, e.shows_key));
+        assert_eq!(keyed("ui.expandDialog"), Some(("Object".into(), "Expand…".into(), false)));
+        assert_eq!(keyed("object.expand"), Some(("Object".into(), "Expand…".into(), true)));
         for (id, group) in [
-            (crate::addons::pathtools::set_corners::COMMAND, "Addon"),
-            ("perspective.grid.snap", "Perspective"),
-            (crate::dialogs::custom_dictionary::COMMAND, "Text"),
-            ("ui.recolorDialog", "Ui"),
+            (crate::addons::pathtools::set_corners::COMMAND, "Object › Plug-ins › Path Precision Tools"),
+            ("perspective.grid.snap", "View › Perspective Grid"),
+            (crate::dialogs::custom_dictionary::COMMAND, "Edit"),
+            ("ui.recolorDialog", "Edit › Edit Colors"),
         ] {
             let e = entry(id).unwrap_or_else(|| panic!("{id} is listed"));
             assert_eq!(e.group, group, "{id}");
@@ -2574,5 +2829,47 @@ mod tests {
         assert!(!listed(&Overrides::default(), &entry) && listed(&saved, &entry));
         assert!(needs_a_value("document.setUnits"));
         assert!(crate::palette::items().iter().all(|(_, id)| id != "document.setUnits"));
+    }
+
+    /// A command no menu holds is grouped under the menu path of the item of the menu bar that runs
+    /// it, or under the menu or panel it belongs to: no entry's group is a run-together id part
+    /// such as "Ui", "ImageTrace" or "ThreeD".
+    #[test]
+    fn commands_no_menu_holds_are_grouped_by_their_menu_or_panel() {
+        let menu_less =
+            |key: &str| vectorcraft_engine::find_command(key).map_or_else(|| menus::UI_COMMANDS.iter().any(|c| c.0 == key), |c| c.menu.is_empty());
+        let mut names: HashSet<String> = ["Tools", "Window"].into_iter().map(String::from).collect();
+        names.extend(crate::state::all_panels().map(|(_, label)| label.to_string()));
+        names.extend(menus::menu_tree().into_iter().map(|(top, _)| top.to_string()));
+        names.extend(menu_bar_paths().values().flatten().flat_map(|(path, _)| path.split(" › ")).map(String::from));
+        // A dialog's commands go under its command's label: Recolor Artwork, Character Style Options.
+        let labels = menus::UI_COMMANDS.iter().map(|c| c.1).chain(vectorcraft_engine::command_specs().iter().map(|c| c.label));
+        names.extend(labels.map(|label| label.trim_end_matches('…').to_string()));
+        let mut wrong = vec![];
+        for e in entries().iter().filter(|e| !e.is_tool && !e.key.contains(':') && menu_less(&e.key)) {
+            if let Some(path) = menu_bar_path(&e.key)
+                && e.group != path
+            {
+                wrong.push(format!("{}: {} is not under {path}", e.key, e.group));
+            }
+            for part in e.group.split(" › ") {
+                let one_word = !part.contains(' ') && part.chars().skip(1).all(|c| !c.is_uppercase());
+                if !names.contains(part) && (!one_word || ["Ui", "App", "Addon", "Css", "Plugin"].contains(&part)) {
+                    wrong.push(format!("{}: {}", e.key, e.group));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "{wrong:#?}");
+        // Every row of GROUPS groups a listed command.
+        let unused: Vec<_> = GROUPS
+            .iter()
+            .filter(|(key, _)| !entries().iter().any(|e| if key.ends_with('.') { e.key.starts_with(key) } else { e.key == *key }))
+            .collect();
+        assert!(unused.is_empty(), "{unused:?}");
+        let group = |id: &str| entry(id).map(|e| e.group);
+        assert_eq!(group("ui.recolorDialog").as_deref(), Some("Edit › Edit Colors"));
+        assert_eq!(group("ui.rename").as_deref(), Some("Window › Layers"));
+        assert_eq!(group("ui.justification").as_deref(), Some("Window › Paragraph"));
+        assert_eq!(group("addon.pathtools.cornerRemove").as_deref(), Some("Object › Plug-ins › Path Precision Tools"));
     }
 }
