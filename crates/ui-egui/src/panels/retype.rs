@@ -2,7 +2,8 @@
 //! by how many of its shapes each matches (`type.retypeFonts`), each with a sample
 //! (<https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/identify-fonts-using-retype.html>,
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/apply-retype-suggested-fonts-to-live-text.html>).
-//! Find Matching Fonts lists ten, and Find more font matches at the end of the list five more. The
+//! Find Matching Fonts lists ten, after reading the installed fonts not loaded yet off the UI
+//! thread ([`crate::retype_runs`]), and Find more font matches at the end of the list five more. The
 //! list stays after the selection changes, so choosing a font in it sets that font on the live text
 //! selected then, as the font menus do. The sample field sets the text the samples show, and the
 //! panel menu sets their size; Reset Retype Panel clears the list. `retype.find`, `retype.list`,
@@ -84,14 +85,18 @@ fn size_name(size: Size) -> &'static str {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut run: Option<(&str, Value)> = None;
     let has_path = vectorcraft_engine::cmd::has_selected_path(&app.session).is_ok();
-    if Button::new(tl!("Find Matching Fonts")).variant(Variant::PRIMARY).enabled(has_path).show(ui).clicked() {
-        run = Some(("retype.find", json!({})));
+    // The button searches the installed fonts off the UI thread, as `retype.find` from a menu does.
+    if Button::new(tl!("Find Matching Fonts")).variant(Variant::PRIMARY).enabled(has_path).show(ui).clicked()
+        && let Err(e) = find_in_background(app, &json!({}))
+    {
+        app.status(e);
     }
     let typed = TextField::new(tl!("Type your text to preview"), Bind::given(Mixed::Same(app.ui.retype.text.clone())))
         .placeholder(tl!("Type your text to preview"))
+        .keeps_on_escape()
         .limit(MAX_TEXT)
         .show(ui);
-    if let Some(text) = typed.events.committed() {
+    if let Some(text) = typed.events.value().filter(|text| **text != app.ui.retype.text) {
         run = Some(("retype.preview", json!({ "text": text })));
     }
     Divider::horizontal().show(ui);
@@ -180,6 +185,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "retype.list" => Ok(list(&app.ui.retype)),
         "retype.preview" => preview(app, p),
         "retype.reset" => {
+            // A search Find Matching Fonts started does not fill the list again.
+            crate::retype_runs::drop_panel_search(app);
             let v = &mut app.ui.retype;
             (v.searched, v.fonts, v.rest, v.shapes, v.truncated) = (false, vec![], vec![], 0, false);
             Ok(list(&app.ui.retype))
@@ -202,11 +209,16 @@ fn list(v: &View) -> Value {
     })
 }
 
-/// `retype.find {more?}`: show the panel and list the first ten fonts matching the selected
-/// outlined text, or with `more` add the next five the last search found, whatever is selected
-/// now → what `retype.list` returns. The list stays as it was when the search fails.
+/// `retype.find {more?, installed?}`: show the panel and list the first ten fonts matching the
+/// selected outlined text (with `installed` false, the loaded fonts only), or with `more` add the
+/// next five the last search found, whatever is selected now → what `retype.list` returns. The
+/// list stays as it was when the search fails.
 fn find(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let more = crate::menus::opt_bool(p, "more")?.unwrap_or(false);
+    // A bad installed is an error even when no search runs.
+    if p.get("installed").is_some_and(|v| !v.is_null() && !v.is_boolean()) {
+        return Err("`installed` must be true, false or null".into());
+    }
     if more && app.ui.retype.searched {
         // The panel shows first: a failure leaves the list as it was.
         crate::panel_docking::reveal_panel(app, ID)?;
@@ -215,7 +227,34 @@ fn find(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         v.fonts.extend(next);
         return Ok(list(&app.ui.retype));
     }
-    let r = app.session.execute("type.retypeFonts", &json!({ "count": MAX })).map_err(|e| e.to_string())?;
+    // A search Find Matching Fonts started in the background does not replace this one's list.
+    crate::retype_runs::drop_panel_search(app);
+    search(app, &search_params(p))
+}
+
+/// Find Matching Fonts as the user asks for it (the panel's button, `retype.find` from a menu or the
+/// command palette, `p` its params without `more`): the installed fonts are searched off the UI
+/// thread ([`crate::retype_runs`]), then the list is filled.
+pub(crate) fn find_in_background(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    // A bad more is an error here too, as `retype.find` has it.
+    crate::menus::opt_bool(p, "more")?;
+    crate::retype_runs::start(app, "type.retypeFonts", search_params(p), true)
+}
+
+/// `type.retypeFonts`' params for a new search with `retype.find`'s params `p`.
+fn search_params(p: &Value) -> Value {
+    let mut q = json!({ "count": MAX });
+    if let Some(installed) = p.get("installed") {
+        q["installed"] = installed.clone();
+    }
+    q
+}
+
+/// Shows the panel and lists the first ten fonts `type.retypeFonts` with params `p` finds for the
+/// selected outlined text → what `retype.list` returns. The list stays as it was when the search
+/// fails.
+pub(crate) fn search(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let r = app.session.execute("type.retypeFonts", p).map_err(|e| e.to_string())?;
     crate::panel_docking::reveal_panel(app, ID)?;
     let mut fonts: Vec<Found> = r["fonts"]
         .as_array()

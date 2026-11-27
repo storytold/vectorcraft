@@ -427,6 +427,28 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+#[test]
+fn save_pdf_and_summary_wait_for_the_drawing_that_opened_them() {
+    let (mut app, written) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.5"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap_err();
+    assert!(error.contains("original drawing"), "{error}");
+    confirm(&mut app);
+    assert!(is_open(&app));
+    assert!(written.borrow().is_empty());
+    assert_eq!(fget(&app, "compatibility"), "1.5");
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    confirm(&mut app);
+    assert!(!is_open(&app));
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/out.pdf");
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 3);
+}
+
 /// A Save PDF that fails keeps the dialog open (#6861); saving again, once it works, closes it.
 #[test]
 fn a_failed_save_says_why_in_the_dialog() {
@@ -638,6 +660,121 @@ fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
     cancel(&mut app);
     assert!(app.run("ui.savePdfDialog", json!({"compatibility": "1.0"})).is_err(), "bad options are refused");
     assert!(!is_open(&app));
+}
+
+/// `ui.dialog.set` with `params` as a control request, and its reply.
+fn dialog_request(app: &mut VectorcraftApp, params: Value) -> Value {
+    let ctx = app.ui_ctx.clone().expect("a UI context");
+    let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", params);
+    let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("ui.dialog.set answered later") };
+    r
+}
+
+/// The four bleed sides the dialog shows: top, bottom, left, right.
+fn bleed_sides(app: &VectorcraftApp) -> [Value; 4] {
+    ["top", "bottom", "left", "right"].map(|side| fget(app, &format!("bleed.{side}")))
+}
+
+/// A settings object `ui.dialog.set` sets changes only the options it holds: the others keep the dialog's values,
+/// so linking the bleed gives every side the top value the dialog shows.
+#[test]
+fn a_settings_object_keeps_the_options_it_leaves_out() {
+    let (mut app, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("pdf.preset.save", json!({"name": "Marked", "marks": {"trim": true, "offset": 9}})).unwrap();
+    app.run("pdf.preset.save", json!({"name": "Low", "compression": {"color": {"ppi": 123}}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+
+    dialog_set(&mut app, "bleed", json!({"useDocument": false}));
+    assert_eq!(bleed_sides(&app), [3.0, 5.0, 3.0, 3.0].map(Value::from), "the sides left out keep their values");
+    dialog_set(&mut app, "bleedLinked", json!(true));
+    assert_eq!(bleed_sides(&app), [3.0; 4].map(Value::from), "linking gives every side the top value");
+    dialog_set(&mut app, "bleed", json!({"bottom": 5}));
+    assert_eq!(bleed_sides(&app), [3.0, 5.0, 3.0, 3.0].map(Value::from), "only the side set changes");
+    let r = dialog_request(&mut app, json!({"fields": [{"field": "bleed", "value": {"top": 4}}, {"field": "bleed", "value": {"left": 6}}]}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(bleed_sides(&app), [4.0, 5.0, 6.0, 3.0].map(Value::from), "each object of a list builds on the one before");
+
+    // Every settings object, not only the bleed.
+    set_field(&app, "preset", json!("Marked"));
+    dialog_set(&mut app, "marks", json!({"weight": 0.5}));
+    assert_eq!((fget(&app, "marks.trim"), fget(&app, "marks.offset"), fget(&app, "marks.weight")), (json!(true), json!(9.0), json!(0.5)));
+
+    // An object inside a settings object, set whole or by its dotted name.
+    set_field(&app, "preset", json!("Low"));
+    dialog_set(&mut app, "compression", json!({"color": {}, "compressText": false}));
+    assert_eq!((fget(&app, "compression.color.ppi"), fget(&app, "compression.compressText")), (json!(123.0), json!(false)));
+    dialog_set(&mut app, "compression.color", json!({"abovePpi": 200}));
+    assert_eq!((fget(&app, "compression.color.ppi"), fget(&app, "compression.color.abovePpi")), (json!(123.0), json!(200.0)));
+
+    // A value that isn't an object is refused, and the dialog stays as it was.
+    let before = fields(&app);
+    for bad in [json!(5), json!("3 mm"), json!([false, 3, 3, 3, 3]), Value::Null] {
+        let r = dialog_request(&mut app, json!({"field": "bleed", "value": bad}));
+        assert_eq!(r["ok"], false, "{bad}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("`bleed` must be an object of options")), "{bad}: {r}");
+        assert_eq!(fields(&app), before, "{bad}");
+    }
+}
+
+/// The preset editor's settings objects keep the options they leave out too.
+#[test]
+fn a_settings_object_in_the_preset_editor_keeps_the_options_it_leaves_out() {
+    let (mut app, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Marked", "marks": {"trim": true, "offset": 9}})).unwrap();
+    open_preset(&mut app, &json!({"name": "Marked"})).unwrap();
+    dialog_set(&mut app, "marks", json!({"weight": 0.5}));
+    assert_eq!((fget(&app, "marks.trim"), fget(&app, "marks.offset"), fget(&app, "marks.weight")), (json!(true), json!(9.0), json!(0.5)));
+}
+
+/// A `fields` list whose later field is refused leaves the whole dialog as it was before the request: the settings
+/// objects an earlier field set, and a bleed that differs from the chosen preset's.
+#[test]
+fn a_refused_field_leaves_the_whole_request_unset() {
+    let (mut app, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+    dialog_set(&mut app, "bleed", json!({"top": 7}));
+    let before = fields(&app);
+    let r = dialog_request(
+        &mut app,
+        json!({"fields": [
+            {"field": "bleed", "value": {"top": 1, "bottom": 2, "left": 3, "right": 4}},
+            {"field": "marks", "value": {"trim": true}},
+            {"field": "bleedLinked", "value": "yes"},
+        ]}),
+    );
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(fields(&app), before, "the dialog is unchanged");
+    assert_eq!(fget(&app, "bleed.top"), 7.0);
+}
+
+/// A refused settings object keeps the passwords the dialog holds, whether it is refused at once, after an earlier
+/// settings object was set, after a preset the request chose, after a password the request set, or after a standard
+/// that disables other fields.
+#[test]
+fn a_refused_settings_object_keeps_the_passwords() {
+    let (mut app, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("ui.savePdfDialog", json!({})).unwrap();
+    set_field(&app, "security.openPassword", json!("open"));
+    set_field(&app, "security.permissionsPassword", json!("own"));
+    let passwords =
+        |app: &VectorcraftApp| with_pdf(app, |d| (d.settings().security.open_password.clone(), d.settings().security.permissions_password.clone()));
+    let requests = [
+        json!({"field": "bleed", "value": null}),
+        json!({"fields": [{"field": "marks", "value": {"trim": true}}, {"field": "bleed", "value": 5}]}),
+        json!({"fields": [{"field": "preset", "value": "Uneven"}, {"field": "marks", "value": {"trim": true}}, {"field": "bleed", "value": 5}]}),
+        json!({"fields": [{"field": "security.openPassword", "value": "other"}, {"field": "marks", "value": {"trim": true}}, {"field": "bleed", "value": 5}]}),
+        json!({"fields": [{"field": "standard", "value": "pdfX1a"}, {"field": "bleed", "value": 5}]}),
+    ];
+    for request in requests {
+        let before = fields(&app);
+        let r = dialog_request(&mut app, request.clone());
+        assert_eq!(r["ok"], false, "{request}: {r}");
+        assert_eq!(fields(&app), before, "{request}");
+        assert_eq!(passwords(&app), ("open".to_string(), "own".to_string()), "{request}");
+    }
 }
 
 /// The bytes and status a save writes after `setup` and the given field writes.

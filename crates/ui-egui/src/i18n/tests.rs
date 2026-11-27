@@ -458,7 +458,7 @@ fn undo_scan() -> UndoScan {
         }
         for t in &files {
             let named = t.match_indices(NAMED_MARKER).filter_map(|(at, _)| arguments(&t[at + NAMED_MARKER.len()..]).first().copied());
-            templates.extend(named.filter_map(|a| a.strip_prefix('"').and_then(string_literal)));
+            templates.extend(named.filter_map(leading_text));
         }
     }
     UndoScan { labels: out, templates, formatted }
@@ -541,8 +541,7 @@ fn quoted_end(text: &str, at: usize) -> Option<usize> {
         }
         return it.next().filter(|(_, c)| *c == '\'').map(|(n, _)| at + 1 + n + 1);
     }
-    let hashes = text[..at].chars().rev().take_while(|c| *c == '#').count();
-    if text[..at - hashes].ends_with('r') {
+    if let Some(hashes) = raw_hashes(text, at) {
         let close = format!("\"{}", "#".repeat(hashes));
         return rest.find(&close).map(|n| at + 1 + n + close.len());
     }
@@ -557,6 +556,46 @@ fn quoted_end(text: &str, at: usize) -> Option<usize> {
         }
     }
     None
+}
+
+/// The number of `#` around the raw string literal whose opening `"` is at `text[quote]` (`r"…"`,
+/// `r#"…"#`, `br#"…"#`); `None` when the literal is not raw.
+fn raw_hashes(text: &str, quote: usize) -> Option<usize> {
+    let hashes = quote - text[..quote].trim_end_matches('#').len();
+    text[..quote - hashes].ends_with('r').then_some(hashes)
+}
+
+/// The string literal whose opening `"` is at `text[quote]`: where it starts, its prefix (`r`,
+/// `r#`, `b`, `br`, `c`, `cr`) included, where it ends, and its text when it is a `&str` literal:
+/// a `"…"` literal with its escapes resolved (see [`string_literal`]), or a raw `r"…"` or `r#"…"#`
+/// literal as written, backslashes included (https://doc.rust-lang.org/reference/tokens.html#raw-string-literals).
+/// A byte string or a C string has no text; `None` when the literal is not closed.
+fn literal_at(text: &str, quote: usize) -> Option<(usize, usize, Option<String>)> {
+    let end = quoted_end(text, quote)?;
+    let raw = raw_hashes(text, quote);
+    let mut start = quote - raw.map_or(0, |hashes| hashes + 1);
+    let not_text = text[..start].ends_with(['b', 'c']) && !text[..start - 1].ends_with(|c: char| c.is_alphanumeric() || c == '_');
+    if not_text {
+        start -= 1;
+        return Some((start, end, None));
+    }
+    let lit = match raw {
+        Some(hashes) => Some(text[quote + 1..end - 1 - hashes].to_string()),
+        None => string_literal(&text[quote + 1..]),
+    };
+    Some((start, end, lit))
+}
+
+/// The text of the `&str` literal `s` starts with (`"…"`, `r"…"`, `r#"…"#`), as [`literal_at`]
+/// reads it; `None` when `s` does not start with one.
+fn leading_text(s: &str) -> Option<String> {
+    let quote = s.find('"')?;
+    let prefix = &s[..quote];
+    let raw_prefix = prefix.strip_prefix('r').is_some_and(|hashes| hashes.chars().all(|c| c == '#'));
+    if !prefix.is_empty() && !raw_prefix {
+        return None;
+    }
+    literal_at(s, quote)?.2
 }
 
 /// In `s` (the text after an opening bracket), the offset of each top-level `,`, and where the
@@ -685,7 +724,7 @@ fn label_literals(
 ) {
     let mut e = bare(e);
     if let Some(args) = e.strip_prefix("format!(") {
-        formatted.extend(args.trim_start().strip_prefix('"').and_then(string_literal));
+        formatted.extend(leading_text(args.trim_start()));
         return;
     }
     if let Some(body) = e.strip_prefix('|').and_then(|r| r.find('|').map(|n| &r[n + 1..])) {
@@ -712,21 +751,48 @@ fn label_literals(
     }
 }
 
-/// The string literals in `e` that `keep` accepts, given the text before and after each.
+/// The text of each `&str` literal in `e` (`"…"`, `r"…"`, `r#"…"#`, see [`literal_at`]) that `keep`
+/// accepts, given the text before the literal and its prefix and the text after it. Byte strings and
+/// C strings are not read.
 fn string_literals(e: &str, keep: impl Fn(&str, &str) -> bool) -> Vec<String> {
     let mut out = vec![];
     let mut i = 0;
     while let Some(c) = e[i..].chars().next() {
-        if let Some(end) = (c == '"' || c == '\'').then(|| quoted_end(e, i)).flatten() {
-            if c == '"'
-                && let Some(lit) = string_literal(&e[i + 1..])
-                && keep(&e[..i], &e[end..])
+        if c == '"'
+            && let Some((start, end, lit)) = literal_at(e, i)
+        {
+            if let Some(lit) = lit
+                && keep(&e[..start], &e[end..])
             {
                 out.push(lit);
             }
             i = end;
+        } else if let Some(end) = (c == '\'').then(|| quoted_end(e, i)).flatten() {
+            i = end;
         } else {
             i += c.len_utf8();
+        }
+    }
+    out
+}
+
+/// Where each string literal (its prefix included, see [`literal_at`]) and character literal in
+/// `code` starts and ends, in order.
+fn literal_spans(code: &str) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    let mut i = 0;
+    while let Some(c) = code[i..].chars().next() {
+        let span = match c {
+            '"' => literal_at(code, i).map(|(start, end, _)| (start, end)),
+            '\'' => quoted_end(code, i).map(|end| (i, end)),
+            _ => None,
+        };
+        match span {
+            Some((start, end)) => {
+                out.push((start, end));
+                i = end;
+            }
+            None => i += c.len_utf8(),
         }
     }
     out
@@ -829,19 +895,18 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
     p.get("effect").and_then(serde_json::Value::as_str).filter(|_| matches!(id, "effect.apply" | "effect.dialog"))
 }
 
-/// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
-/// effect's `@id` row when the catalog has one, any other command by its id's row or its English
-/// label, and a submenu, an unbuilt item or a placeholder by its English label.
-fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
+/// The label a menu item shows in `lang`, as the menus resolve it: a built-in Effect menu item by
+/// its effect's name ([`crate::menus::effect_item_label`]), any other command by its id's row or
+/// its English label, and a submenu, an unbuilt item or a placeholder by its English label.
+fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<String> {
     use crate::menus::Node;
     match item {
-        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label)),
+        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label).to_string()),
         Node::Item(it) => {
             let (id, p) = (it.command.id.as_str(), &it.command.params);
-            let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
-            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, &it.label)))
+            Some(crate::menus::effect_item_label(id, p, lang).unwrap_or_else(|| tr_id(lang, id, &it.label).to_string()))
         }
-        Node::Submenu { label, .. } => Some(tr(lang, label)),
+        Node::Submenu { label, .. } => Some(tr(lang, label).to_string()),
         _ => None,
     }
 }
@@ -853,7 +918,7 @@ fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
 fn menu_items_side_by_side_have_different_labels() {
     use crate::menus::Node;
     fn walk(lang: Lang, path: &str, items: &[Node], out: &mut Vec<String>) {
-        let mut seen: std::collections::BTreeMap<&str, (&str, &str)> = std::collections::BTreeMap::new();
+        let mut seen: std::collections::BTreeMap<String, (&str, &str)> = std::collections::BTreeMap::new();
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
@@ -862,7 +927,7 @@ fn menu_items_side_by_side_have_different_labels() {
                 Node::Submenu { label, .. } => (label.as_str(), "submenu or unbuilt item"),
                 _ => continue,
             };
-            match seen.get(shown) {
+            match seen.get(&shown) {
                 Some(&(other, other_what)) if other != english => {
                     out.push(format!("{}: {path}: {other:?} ({other_what}) and {english:?} ({what}) both show {shown:?}", lang.code()));
                 }
@@ -916,7 +981,7 @@ fn menu_items_never_show_an_id() {
                     let (l, id) = (&it.label, it.command.id.as_str());
                     let key = menu_item_effect(id, &it.command.params).unwrap_or(id);
                     let shown = shown_menu_label(lang, item).unwrap_or_default();
-                    if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
+                    if label_shows_an_id(&shown, key) && !label_shows_an_id(l, key) {
                         out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.code()));
                     }
                 }
@@ -1009,14 +1074,15 @@ fn untranslated_report() {
     assert!(strings.len() > 500, "menu scan found only {} strings", strings.len());
     let literals = tl_literals();
     assert!(literals.len() > 300, "scan found only {} tl! literals", literals.len());
-    // Undo step names: the recorded names, every effect's name without its ellipsis, and the
-    // Liquify tools' step names (`{} Tool`). A name's row is its plain row or the row of the same
-    // name with an ellipsis (`panels::history::step_name`); a template made with
-    // `Session::edit_named` needs a plain row, which `panels::history::entry_name` fills.
+    // Undo step names: the recorded names and the Liquify tools' step names (`{} Tool`). A name's
+    // row is its plain row or the row of the same name with an ellipsis
+    // (`panels::history::step_name`); a template made with `Session::edit_named` needs a plain
+    // row, which `panels::history::entry_name` fills. A step that applies an effect is named as
+    // the Effect menu names it (`i18n::has_effect_name`), listed under "effect names".
     let scan = undo_scan();
     let mut undo = scan.labels;
     assert!(undo.len() > 300, "scan found only {} undo labels", undo.len());
-    undo.extend(vectorcraft_effects::effect_catalog().iter().map(|e| e.label.trim_end_matches('…').to_string()));
+    let effect_ids: Vec<&'static str> = vectorcraft_effects::effect_catalog().iter().map(|e| e.id).collect();
     let liquify = ["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"];
     undo.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
     assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
@@ -1040,6 +1106,11 @@ fn untranslated_report() {
         add(code, "menu strings", strings.iter().filter(|s| !kept(s) && !has(lang, s)).cloned().collect::<BTreeSet<_>>());
         add(code, "tl! strings", literals.iter().filter(|s| !has(lang, s)).cloned().collect::<BTreeSet<_>>());
         add(code, "undo labels", undo.iter().filter(|s| crate::panels::history::step_name(lang, s).is_none()).cloned().collect::<BTreeSet<_>>());
+        add(
+            code,
+            "effect names",
+            effect_ids.iter().filter(|id| !crate::i18n::has_effect_name(lang, id)).map(|id| id.to_string()).collect::<BTreeSet<_>>(),
+        );
         add(code, "undo label templates", scan.templates.iter().filter(|t| !has(lang, t)).cloned().collect::<BTreeSet<_>>());
         let render_site =
             RENDER_SITE_ROWS.iter().filter(|(ctx, src)| catalog.get(lang, ctx, src).is_none()).map(|(ctx, src)| format!("{ctx}: {src}"));
@@ -1342,6 +1413,143 @@ fn message_scan_rejects_invalid_rust_escapes() {
     assert!(read.is_empty(), "{read:?}");
     let code = r#"fn run() { let _ = Err("bad \q value"); let _ = Err("bad \u{D800} value"); let _ = Err("good value"); }"#;
     assert_eq!(source_messages(code, &[], &Default::default()), ["good value"]);
+}
+
+/// The undo scan reads a step name or a `format!` template written as a raw string (`r"…"`,
+/// `r#"…"#`, `r##"…"##`) as Rust reads it: up to the quote followed by the literal's own number of
+/// `#`, with its backslashes kept (https://doc.rust-lang.org/reference/tokens.html#raw-string-literals).
+/// `Session::edit_named` templates are read the same way.
+#[test]
+fn undo_scan_reads_raw_step_names() {
+    let (mut names, mut formatted) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    for e in [
+        r#"r"Move path""#,
+        r##"r#"Move "named" path"#"##,
+        r###"r##"Move "#tag" path"##"###,
+        r#"r"Move\npath""#,
+        r##"if copy { r#"Copy "it""# } else { "Move it" }"##,
+        r##"format!(r#"Move "named" {n}"#, n = 2)"##,
+    ] {
+        label_literals(e, 0, &[], &mut names, &mut formatted);
+    }
+    let want = ["Copy \"it\"", "Move \"#tag\" path", "Move \"named\" path", "Move it", "Move path", "Move\\npath"];
+    assert_eq!(names.iter().collect::<Vec<_>>(), want);
+    assert_eq!(formatted.iter().collect::<Vec<_>>(), ["Move \"named\" {n}"]);
+    assert_eq!(leading_text(r##"r#"Move "{0}" layers"#, count)"##).as_deref(), Some("Move \"{0}\" layers"));
+    assert_eq!(leading_text(r#""Move {0} layers", count)"#).as_deref(), Some("Move {0} layers"));
+    assert_eq!(leading_text(r#"br"Move", count)"#), None);
+}
+
+/// The message scan reads a raw string where it reads a message: after `Err(`, as an error
+/// variant's message and in `#[error(…)]`, as an error helper's argument, as a `&str` constant's
+/// value, and as the `format!` string a `.map_err` closure returns. Its quotes and backslashes stay
+/// as written, and only the `format!` string's `{e}` is a placeholder.
+#[test]
+fn message_scan_reads_raw_strings() {
+    let code = r####"
+fn run() -> Result<()> {
+    let _ = Err(r"the file is missing");
+    let _ = Err(r"the C:\temp folder is missing");
+    let _ = Error::Manifest(r#"the "named" file is missing"#);
+    let _ = bad(cmd, r#"the file is missing, {really}"#);
+    let _ = Err(LOST);
+    let _ = Err(QUOTED);
+    load().map_err(|e| format!(r##"the "#tag" file failed: {e}"##))?;
+    Ok(())
+}
+#[derive(Error)]
+enum Failure {
+    #[error(r#"the "named" file is lost: {0}"#)]
+    Lost(String),
+}
+"####;
+    let declared = r##"const LOST: &str = r"the file is lost"; const QUOTED: &'static str = r#"the "named" file is lost"#;"##;
+    let consts = str_consts(declared);
+    let want = [("LOST", "the file is lost"), ("QUOTED", "the \"named\" file is lost")];
+    assert_eq!(consts.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect::<Vec<_>>(), want);
+    let consts = std::collections::BTreeMap::from_iter(consts.into_iter().map(|(name, value)| (name, vec![value])));
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[("bad(", 1)], &consts).into_iter().collect();
+    let want = [
+        "the \"#tag\" file failed: {e}",
+        "the \"named\" file is lost",
+        "the \"named\" file is lost: {0}",
+        "the \"named\" file is missing",
+        "the C:\\temp folder is missing",
+        "the file is lost",
+        "the file is missing",
+        "the file is missing, {{really}}",
+    ];
+    assert_eq!(found.iter().collect::<Vec<_>>(), want);
+}
+
+/// Byte strings and C strings, raw or not, are not text: the scan reads none of them as a message
+/// or a step name.
+#[test]
+fn message_scan_skips_byte_and_c_strings() {
+    let e = r##"(b"byte error", br#"byte "error""#, c"C error", cr"C error", "text error")"##;
+    assert_eq!(string_literals(e, |_, _| true), ["text error"]);
+    let code = r##"fn run() { let _ = Err(b"byte error"); let _ = Err(br#"byte "error""#); let _ = Err(c"C error"); }"##;
+    assert!(source_messages(code, &[], &Default::default()).is_empty());
+    let (mut names, mut formatted) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    for e in [r#"b"Move""#, r##"br#"Move"#"##, r#"c"Move""#, r#"format!(b"Move {n}")"#] {
+        label_literals(e, 0, &[], &mut names, &mut formatted);
+    }
+    assert!(names.is_empty() && formatted.is_empty(), "{names:?} {formatted:?}");
+}
+
+/// A comma, bracket, semicolon, quote, `return` or backslash inside a raw string is text, not
+/// syntax: an error helper's message is the argument after the raw one, a statement ends at the
+/// `;` after a raw string, a closure's raw string holds no `return`, and the raw string is emptied
+/// whole before the scan looks for a local's name.
+#[test]
+fn message_scan_reads_past_raw_strings() {
+    let code = r###"fn run() { let _ = bad(r#"command ", other"#, r"the second argument is the error"); }"###;
+    assert_eq!(source_messages(code, &[("bad(", 1)], &Default::default()), ["the second argument is the error"]);
+    assert_eq!(statement(r##"r#"note "; still text"#; tail"##), r##"r#"note "; still text"#"##);
+    assert_eq!(statement(r#"(';', ")") ; tail"#), r#"(';', ")") "#);
+    let code = r###"
+fn run() -> Result<()> {
+    let fail = |e| { let note = r#"note "; still text"#; format!("the file failed: {e}") };
+    load().map_err(fail)?;
+    open().map_err(|e| {
+        let note = r##"name"; return "fake" {x}"##;
+        format!("the file could not be opened: {e}")
+    })?;
+    Ok(())
+}
+"###;
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[], &Default::default()).into_iter().collect();
+    assert_eq!(found.iter().collect::<Vec<_>>(), ["the file could not be opened: {e}", "the file failed: {e}"]);
+    assert_eq!(without_strings(r###"let note = r#"a "used_name" {x}"#; note"###), r##"let note = r#""#; note"##);
+    assert_eq!(without_strings(r###"x(r#"a\"#, "b\"c", y)"###), r##"x(r#""#, "", y)"##);
+    assert_eq!(without_strings(r#"f('"', "a")"#), r#"f('"', "")"#);
+}
+
+/// A marker, an error variant, a `.map_err` or an error helper call written inside a string literal
+/// is text, not code: the scan reads no message from it, while the same call outside a literal
+/// still gives its message.
+#[test]
+fn message_scan_skips_calls_inside_string_literals() {
+    let code = r####"
+const SAMPLE: &str = r##"Err(r#"sample error"#)"##;
+const VARIANT: &str = r##"Error::Lost(r#"variant error"#)"##;
+const CLOSURE: &str = r##"load().map_err(|e| format!(r#"closure error {e}"#))"##;
+const HELPER: &str = r##"bad(cmd, r#"helper error"#)"##;
+fn run() -> Result<()> {
+    let _ = Err(r#"real error"#);
+    Ok(())
+}
+"####;
+    let found = source_messages(code, &[("bad(", 1)], &Default::default());
+    assert_eq!(found, ["real error"]);
+}
+
+/// A bracket in a character literal among a `format!`'s arguments does not end them: the scan
+/// removes the arguments up to the `format!`'s own closing parenthesis.
+#[test]
+fn format_args_end_at_the_closing_parenthesis() {
+    assert_eq!(without_format_args(r#"format!("", ')', x) + why"#), "format!() + why");
+    assert_eq!(without_format_args(r#"format!("", f(x)[0]) + why"#), "format!() + why");
 }
 
 /// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
@@ -1930,8 +2138,8 @@ fn scoped_consts<'a>(
     std::borrow::Cow::Owned(consts)
 }
 
-/// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`), with
-/// their text, escapes resolved.
+/// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`, or a raw
+/// `r#"…"#` value), with their text as [`leading_text`] reads it.
 fn str_consts(code: &str) -> Vec<(String, String)> {
     let code = &without_comments(code);
     code.match_indices("const ")
@@ -1941,7 +2149,7 @@ fn str_consts(code: &str) -> Vec<(String, String)> {
             let (name, rest) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_')?);
             let rest = rest.trim_start().strip_prefix(':')?.trim_start();
             let rest = rest.strip_prefix("&'static str").or_else(|| rest.strip_prefix("&str"))?.trim_start();
-            let value = string_literal(rest.strip_prefix('=')?.trim_start().strip_prefix('"')?)?;
+            let value = leading_text(rest.strip_prefix('=')?.trim_start())?;
             Some((name.to_string(), value))
         })
         .collect()
@@ -1968,29 +2176,37 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// [`closure_returns`]) or the handler a `.map_err(name)` names returns (see [`handler_returns`]),
 /// the values of a local that a `.status(name)` shows (see [`status_locals`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
-/// its message), a literal, a `format!` string or the name of one of `consts` (see
+/// its message), a literal (raw ones included), a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
 /// is not a message. A `format!` string and an `#[error(…)]` string are format strings (see
 /// [`as_template`]); in any other literal or constant every brace is literal (see
-/// [`as_literal_key`]).
+/// [`as_literal_key`]). A marker, variant, `.map_err` or helper call inside a string or character
+/// literal is text and gives no message (see [`literal_spans`]).
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
+    let spans = &literal_spans(code);
+    // Whether `code[at]` is inside a string or character literal, where a call is text, not code.
+    let in_literal = move |at: usize| {
+        let k = spans.partition_point(|&(start, _)| start <= at);
+        k > 0 && at < spans[k - 1].1
+    };
+    let code_matches = move |pat: &'static str| code.match_indices(pat).filter(move |&(at, _)| !in_literal(at));
     let after_markers =
-        MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| (&code[at + marker.len()..], *marker == "#[error(")));
-    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(|enum_end| code.match_indices(enum_end)).filter_map(|(at, m)| {
+        MESSAGE_MARKERS.iter().flat_map(|marker| code_matches(marker).map(|(at, _)| (&code[at + marker.len()..], *marker == "#[error(")));
+    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(code_matches).filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
         let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
         if named { skip_args(args.strip_prefix('(')?, before).map(|rest| (rest, false)) } else { None }
     });
-    let in_map_err = code.match_indices(".map_err(").flat_map(|(at, m)| {
+    let in_map_err = code_matches(".map_err(").flat_map(|(at, m)| {
         let rest = code[at + m.len()..].trim_start();
         let params = rest.strip_prefix("move").map_or(rest, str::trim_start).strip_prefix('|');
         params.and_then(|p| p.find('|').map(|end| &p[end + 1..])).map(closure_returns).unwrap_or_default()
     });
     let mut handlers = vec![];
-    for (at, m) in code.match_indices(".map_err(") {
+    for (at, m) in code_matches(".map_err(") {
         let rest = &code[at + m.len()..];
         let name = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len())];
         if name.starts_with(|c: char| c.is_ascii_lowercase()) && rest[name.len()..].starts_with(')') && !handlers.contains(&name) {
@@ -2001,6 +2217,7 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let in_status_locals = status_locals(code).into_iter().map(|rest| (rest, false));
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
+            .filter(move |&(at, _)| !in_literal(at))
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
             .filter(|&(at, _)| {
                 let owner = code[..at].strip_suffix("::").map(|p| p.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next().unwrap_or(""));
@@ -2020,8 +2237,8 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
         let formatted = rest.strip_prefix("format!(").map(str::trim_start);
         let format = takes_format || formatted.is_some();
         let rest = formatted.unwrap_or(rest);
-        let lits = match rest.strip_prefix('"') {
-            Some(quoted) => string_literal(quoted).into_iter().collect(),
+        let lits = match leading_text(rest) {
+            Some(lit) => vec![lit],
             None => named_const(rest, consts).to_vec(),
         };
         for lit in lits {
@@ -2036,36 +2253,14 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
 }
 
 /// The arguments of a call whose opening parenthesis was just read, past the first `n` of them;
-/// `None` when `n` is 1 or more and the call has `n` arguments or fewer.
+/// `None` when `n` is 1 or more and the call has `n` arguments or fewer. A comma or bracket inside a
+/// string literal, raw ones included, or a character literal does not count (see [`top_level`]).
 fn skip_args(args: &str, n: usize) -> Option<&str> {
     if n == 0 {
         return Some(args);
     }
-    let (mut left, mut depth, mut chars) = (n, 0usize, args.char_indices());
-    while let Some((at, c)) = chars.next() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.checked_sub(1)?,
-            '\'' => skip_char_literal(args, at, &mut chars),
-            '"' => loop {
-                match chars.next()?.1 {
-                    '\\' => {
-                        chars.next()?;
-                    }
-                    '"' => break,
-                    _ => {}
-                }
-            },
-            ',' if depth == 0 => {
-                left -= 1;
-                if left == 0 {
-                    return Some(&args[at + 1..]);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    let comma = *top_level(args).0.get(n - 1)?;
+    Some(&args[comma + 1..])
 }
 
 /// Where each value the error handler `name` of a `.map_err(name)` in `code` can return starts:
@@ -2156,42 +2351,11 @@ fn declares_fn(code: &str) -> bool {
     false
 }
 
-/// Moves `chars`, just past the `'` at `text[at]`, to the end of the character literal it opens
-/// ([`quoted_end`]); a lifetime's `'` leaves it where it is.
-fn skip_char_literal(text: &str, at: usize, chars: &mut std::str::CharIndices) {
-    if let Some(end) = quoted_end(text, at) {
-        for _ in text[at + 1..end].chars() {
-            chars.next();
-        }
-    }
-}
-
-/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in.
-/// A bracket, `;` or `"` inside a character literal (`'"'`) is skipped.
+/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in;
+/// a `;` or bracket inside a string literal, raw ones included, or a character literal does not
+/// end it (see [`top_level`]).
 fn statement(code: &str) -> &str {
-    let (mut depth, mut chars) = (0usize, code.char_indices());
-    while let Some((at, c)) = chars.next() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => depth = d,
-                None => return &code[..at],
-            },
-            ';' if depth == 0 => return &code[..at],
-            '\'' => skip_char_literal(code, at, &mut chars),
-            '"' => loop {
-                match chars.next() {
-                    Some((_, '\\')) => {
-                        chars.next();
-                    }
-                    Some((_, '"')) | None => break,
-                    _ => {}
-                }
-            },
-            _ => {}
-        }
-    }
-    code
+    &code[..top_level(code).1]
 }
 
 /// Where each value a closure can return starts, `body` being the text after its parameters: the
@@ -2219,10 +2383,15 @@ fn closure_returns(body: &str) -> Vec<&str> {
     // For each open bracket, the `quiet` and `in_let` of the text around it: `quiet` names the
     // `let` that a value inside the bracket belongs to, `in_let` the `let` the statement is.
     let mut outer = vec![];
-    let (mut quiet, mut in_let, mut chars) = (None, let_at(0), body.char_indices());
+    let (mut quiet, mut in_let) = (None, let_at(0));
     // Where the innermost closure in the body that a `return` would leave ends.
     let mut inner_closure_end = 0;
-    while let Some((at, c)) = chars.next() {
+    // Where the string or character literal last read ends: nothing inside one is syntax.
+    let mut literal_end = 0;
+    for (at, c) in body.char_indices() {
+        if at < literal_end {
+            continue;
+        }
         match c {
             '|' if at >= inner_closure_end => {
                 let before = body[..at].trim_end();
@@ -2263,16 +2432,8 @@ fn closure_returns(body: &str) -> Vec<&str> {
             {
                 found.push((&body[at + "return".len()..], None, true));
             }
-            '\'' => skip_char_literal(body, at, &mut chars),
-            '"' => loop {
-                match chars.next() {
-                    Some((_, '\\')) => {
-                        chars.next();
-                    }
-                    Some((_, '"')) | None => break,
-                    _ => {}
-                }
-            },
+            '"' => literal_end = quoted_end(body, at).unwrap_or(body.len()),
+            '\'' => literal_end = quoted_end(body, at).unwrap_or(at),
             _ => {}
         }
     }
@@ -2291,58 +2452,38 @@ fn closure_returns(body: &str) -> Vec<&str> {
 }
 
 /// `code`, its string literals already emptied, with the arguments of each `format!(…)` removed:
-/// a value written into a format string is part of a message, not one of its own.
+/// a value written into a format string is part of a message, not one of its own. A bracket in a
+/// character literal (`')'`) does not end the arguments (see [`top_level`]).
 fn without_format_args(code: &str) -> String {
     let (mut out, mut rest) = (String::new(), code);
     while let Some(at) = rest.find("format!(") {
         out.push_str(&rest[..at + "format!(".len()]);
         rest = &rest[at + "format!(".len()..];
-        let mut depth = 0usize;
-        let end = rest.char_indices().find_map(|(i, c)| match c {
-            '(' | '[' | '{' => {
-                depth += 1;
-                None
-            }
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => {
-                    depth = d;
-                    None
-                }
-                None => Some(i),
-            },
-            _ => None,
-        });
-        rest = &rest[end.unwrap_or(rest.len())..];
+        let (_, end) = top_level(rest);
+        rest = &rest[end..];
     }
     out.push_str(rest);
     out
 }
 
-/// `code` with the text of its string literals removed, the quotes kept. A character literal
-/// (`'"'`) stays as it is.
+/// `code` with the text of its string literals removed, the quotes kept: a raw literal keeps its
+/// prefix and its `#`s (`r#""#`). Character literals stay as they are.
 fn without_strings(code: &str) -> String {
-    let (mut out, mut chars) = (String::new(), code.char_indices());
-    while let Some((at, c)) = chars.next() {
-        out.push(c);
-        if c == '\''
-            && let Some(end) = quoted_end(code, at)
-        {
-            out.push_str(&code[at + 1..end]);
-            skip_char_literal(code, at, &mut chars);
-        } else if c == '"' {
-            loop {
-                match chars.next().map(|(_, c)| c) {
-                    Some('\\') => {
-                        chars.next();
-                    }
-                    Some('"') => {
-                        out.push('"');
-                        break;
-                    }
-                    Some(_) => {}
-                    None => break,
-                }
-            }
+    let (mut out, mut i) = (String::new(), 0);
+    while let Some(c) = code[i..].chars().next() {
+        if c == '"' {
+            let Some(end) = quoted_end(code, i) else {
+                out.push('"');
+                break;
+            };
+            let close = 1 + raw_hashes(code, i).unwrap_or(0);
+            out.push('"');
+            out.push_str(&code[end - close..end]);
+            i = end;
+        } else {
+            let end = (c == '\'').then(|| quoted_end(code, i)).flatten().unwrap_or(i + c.len_utf8());
+            out.push_str(&code[i..end]);
+            i = end;
         }
     }
     out

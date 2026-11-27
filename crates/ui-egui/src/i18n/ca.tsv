@@ -5970,6 +5970,8 @@ digits	Malayalam	Malaiàlam
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft no es va tancar correctament l’última vegada. Aquests documents tenien canvis no desats:
 	VectorCraft documents: one locked object, updated when the file changes.	Documents de VectorCraft: un objecte bloquejat, actualitzat quan canvia el fitxer.
 	VectorCraft Generic CMYK (SWOP-like)	CMYK genèric de VectorCraft (similar a SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK estucat de VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK no estucat de VectorCraft (FOGRA52)
 	VectorCraft Help…	Ajuda de VectorCraft…
 	VectorCraft on getartcraft.com	VectorCraft a getartcraft.com
 	VectorCraft on GitHub	VectorCraft al GitHub
@@ -6446,6 +6448,14 @@ digits	Malayalam	Malaiàlam
 	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
 	Allow Once	Permet un cop
 	Always Allow This Script	Permet sempre aquest script
+	No script has kept file access.	Cap script no ha conservat accés als fitxers.
+	Read file	Lectura del fitxer
+	Read and write file	Lectura i escriptura del fitxer
+	Read and write folder	Lectura i escriptura de la carpeta
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca elimina l’accés conservat per a cada versió de l’script. L’accés a una carpeta inclou tot el que conté.
+@msg	Script file access revoked	S’ha revocat l’accés de l’script als fitxers
+@msg	The script file access was already revoked	L’accés de l’script als fitxers ja s’havia revocat
 	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
@@ -6643,6 +6653,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
 @msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
 @msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	the script file permissions could not be read: {e}	no s’han pogut llegir els permisos de fitxers dels scripts: {e}
 @msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
 @msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora
@@ -7968,6 +7979,21 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	time budget	pressupost de temps
 @msg	memory budget (the selection is too large to hand over)	pressupost de memòria (la selecció és massa gran per passar-la)
 @msg	output size ({what} is {len} bytes, limit {max})	mida de la sortida ({what} fa {len} bytes, límit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} línia {line}, columna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	pressupost de memòria
+@msg	call depth	profunditat de crides
+@msg	run(input, params) returned no output object	run(input, params) no ha retornat cap objecte de sortida
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" necessita `script`: el nom del fitxer .js del complement, al costat del manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` ha de ser el nom d’un fitxer .js a la carpeta del manifest: 1-128 bytes, sense carpeta, sense `:`, sense començar per `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` és el text de l’script i només es dona en el JSON que pren el dataBase64 de plugin.install: un fitxer .vcplugin anomena el seu script a `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	el manifest d’un complement de JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" és per a un filtre d’objectes (`kind` "filter"), no per a `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un complement de JavaScript no pot incloure el permís `{name}`: dels permisos de l’amfitrió pot incloure `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	el manifest d’un mòdul WebAssembly omet `runtime`: "js" és per a un complement de JavaScript
+@msg	a JavaScript plug-in makes no command calls	un complement de JavaScript no crida ordres
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) pren dos nombres
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) pren un nivell, 0 (error), 1 (avís), 2 (informació) o 3 (depuració), i una cadena
 @msg	the plug-in's grant can't be removed from the plug-in store	el permís del complement no es pot treure del magatzem de complements
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
@@ -9049,6 +9075,11 @@ breakText	Glyphs	Glifs
 	No objects are selected.	No hi ha cap objecte seleccionat.
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
+	Fold Angle	Angle de plegat
+	Set Fold Angle…	Defineix l’angle de plegat…
+	Set Fold Angle	Defineix l’angle de plegat
+	Reset Fold Angle	Restableix l’angle de plegat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccioneu una línia d’hendit, de tall parcial o de perforació que no estigui bloquejada ni amagada
 	Check	Comprova
 	Check Fold Lines	Comprova les línies de plegat
 @msg	No cut lines are in the selection.	No hi ha cap línia de tall a la selecció.

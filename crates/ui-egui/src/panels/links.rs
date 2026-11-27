@@ -23,11 +23,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use craft::behavior::{IconId, Selection, keyed};
-use craft::host::{PickKind, PickRequest};
+use craft::host::{PickKind, PickRequest, Picked};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow, ThumbSize};
@@ -96,7 +96,8 @@ pub(crate) struct LinksModel {
     pub(super) show: Option<(u64, u64)>,
     nested: NestedPicks,
     selection: Selection<u64>,
-    menu: Option<u64>,
+    /// The document uid and row ID whose context menu is open.
+    menu: Option<(u64, u64)>,
 }
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
@@ -363,10 +364,24 @@ fn ask(app: &mut VectorcraftApp, request: PickRequest, then: impl FnOnce(&mut Ve
 /// say.
 pub(crate) fn replace(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let request = vectorcraft_engine::cmd::fileio::place_filters().fold(PickRequest::open("links"), |r, (name, exts)| r.filter(name, exts));
-    ask(app, request, move |app, path| {
-        let r = app.run("links.relink", json!({ "ids": ids, "path": path, "preserve": "fit" }));
-        report(app, r, |v| crate::i18n::msg_n(v["relinked"].as_array().map_or(0, Vec::len) as u64, "Replaced {n} image", "Replaced {n} images", &[]));
+    file_asks::ask(app, request, Owner::Document, move |app, picked| {
+        if let Picked::Contents(files) = picked {
+            if let Some((name, bytes)) = files.into_iter().next() {
+                let result = app
+                    .run("links.replaceEmbedded", json!({ "ids": ids, "dataBase64": vectorcraft_format::base64_encode(&bytes) }))
+                    .map_err(|err| format!("{name}: {err}"));
+                report(app, result, |v| replaced_status(v["replaced"].as_array().map_or(0, Vec::len)));
+            }
+        } else if let Some(path) = picked.first_path() {
+            let r = app.run("links.relink", json!({ "ids": ids, "path": path.to_string_lossy(), "preserve": "fit" }));
+            report(app, r, |v| replaced_status(v["relinked"].as_array().map_or(0, Vec::len)));
+        }
+        Ok(Value::Null)
     });
+}
+
+fn replaced_status(n: usize) -> String {
+    crate::i18n::msg_n(n as u64, "Replaced {n} image", "Replaced {n} images", &[])
 }
 
 /// Relink images `ids` (none: every missing one) to the files of their names in a picked folder.
@@ -710,13 +725,16 @@ fn act(app: &mut VectorcraftApp, act: Act, target: Option<u64>) {
 /// The Links panel: the images as a list with a footer of link actions and the Link Info section.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     drop_stale_picks(app);
+    let uid = app.session.active().map(|st| st.uid);
+    if app.ui.links.menu.is_some_and(|(document, _)| Some(document) != uid) {
+        app.ui.links.menu = None;
+    }
     let Some(mut cache) = cached(app, ui.ctx()) else {
         Panel::new(tl!("Links")).show(ui, |ui, _| {
             Text::new(tl!("No document")).shade(Shade::Muted).show(ui);
         });
         return;
     };
-    let uid = app.session.active().map(|st| st.uid);
     let reveal = app.ui.links.show.take().filter(|(doc, _)| Some(*doc) == uid).map(|(_, id)| id);
     let listed = |cache: &Cache, id: u64| cache.list["links"].as_array().is_some_and(|rows| rows.iter().any(|r| r["id"].as_u64() == Some(id)));
     // A Show filter that leaves the requested row out goes back to Show All.
@@ -730,7 +748,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let selected = selected_links(app);
     let mut selection = std::mem::take(&mut app.ui.links.selection);
     selection.items = selected.clone();
-    let open_menu = app.ui.links.menu;
+    let open_menu = app.ui.links.menu.map(|(_, row)| row);
     let units = app.session.general_unit();
 
     let view: &VectorcraftApp = app;
@@ -808,8 +826,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let items = app.ui.links.selection.items.clone();
         apply_selection(app, rows_of(&cache), items);
     }
-    if menu_for.is_some() {
-        app.ui.links.menu = menu_for;
+    if let Some(row) = menu_for {
+        app.ui.links.menu = uid.map(|document| (document, row));
     }
     if let Some(id) = activated {
         go_to(app, id);
@@ -828,7 +846,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some((a, id)) = row_act {
         app.ui.links.menu = None;
-        act(app, a, Some(id));
+        if app.session.active().map(|st| st.uid) == uid {
+            act(app, a, Some(id));
+        }
     }
 }
 
@@ -952,7 +972,7 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
                     if IconButton::new(IconId::new("folder-open")).label(tl!("Show in Folder")).enabled(can_reveal).show(ui).clicked() {
                         reveal = Some(id);
                     }
-                    Text::new(l.to_string()).show(ui);
+                    Text::new(l.to_string()).elide(Elide::Path).tooltip(l.to_string()).show(ui);
                 });
             });
         }

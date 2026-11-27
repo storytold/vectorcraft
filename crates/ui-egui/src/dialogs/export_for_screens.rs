@@ -45,6 +45,7 @@ use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize, ToggleCell, ToggleS
 use craft::ui::patterns::form_dialogs::{FormDialog, PathRow};
 use craft::ui::primitives::{ContentPainterCx, fit_rect};
 use craft::ui::runtime::env::Label;
+use craft::ui::runtime::focus::Initial;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::TextField;
 use craft::ui::tile_grid::{Tile, TileGrid, TilePartEvent};
@@ -506,7 +507,7 @@ pub(super) fn artboard_thumb(app: &mut VectorcraftApp, ctx: &Context, i: usize) 
 /// thumbnails.
 fn document_view(app: &mut VectorcraftApp, ctx: &Context) -> (Option<Shown>, Vec<Option<TextureHandle>>) {
     let Some(st) = app.session.active() else { return (None, Vec::new()) };
-    let shown = Shown { key: (st.uid, st.revision), doc: Arc::clone(&st.doc) };
+    let shown = Shown { key: (st.uid, st.revision), reverts: st.reverts, doc: Arc::clone(&st.doc) };
     let thumbs = (0..shown.doc.artboards.len()).map(|i| artboard_thumb(app, ctx, i)).collect();
     (Some(shown), thumbs)
 }
@@ -515,6 +516,8 @@ fn document_view(app: &mut VectorcraftApp, ctx: &Context) -> (Option<Shown>, Vec
 struct Shown {
     /// The document's uid and revision.
     key: (u64, u64),
+    /// Which contents of this tab were shown; File Revert preserves its uid.
+    reverts: u64,
     doc: Arc<Document>,
 }
 
@@ -535,9 +538,9 @@ pub(crate) struct ExportForScreensDialog {
     /// What the format presets menu asked for, for the pump to run.
     pending: Option<PresetPick>,
     /// The document an artboard rename began in, while it runs.
-    renaming_in: Option<u64>,
-    /// A committed artboard name: (document uid, artboard id, name), for the pump to run.
-    rename: Option<(u64, u32, String)>,
+    renaming_in: Option<(u64, u64)>,
+    /// A committed artboard name: ((document uid, reverts), artboard id, name), for the pump to run.
+    rename: Option<((u64, u64), u32, String)>,
     held: HeldAnswer<Map<String, Value>>,
 }
 
@@ -620,13 +623,13 @@ impl ExportForScreensDialog {
             }
         }
         if picks.rename_began {
-            self.renaming_in = Some(shown.key.0);
+            self.renaming_in = Some((shown.key.0, shown.reverts));
         }
         // The name goes to the document the rename began in.
         if let Some((key, name)) = picks.renamed
             && let Ok(board) = u32::try_from(key)
         {
-            self.rename = Some((self.renaming_in.take().unwrap_or(shown.key.0), board, name));
+            self.rename = Some((self.renaming_in.take().unwrap_or((shown.key.0, shown.reverts)), board, name));
         }
         if on != boards(doc.artboards.len(), fields) {
             set_select(fields, if on.iter().all(|b| *b) { "all" } else { "range" });
@@ -958,6 +961,10 @@ impl StackDialog for ExportForScreensDialog {
         let mut held = std::mem::take(&mut self.held);
         let mut dialog =
             FormDialog::new(tl!("Export for Screens"), Bind::bound(&mut fields)).ok_label(ok).ok_enabled(chosen.is_none()).held(&mut held);
+        if self.web {
+            // Keep the first artboard visible when the web dialog opens in a short viewport.
+            dialog = dialog.shaped(|surface| surface.initial_focus(Initial::First));
+        }
         if let Some(reason) = chosen {
             dialog = dialog.ok_reason(reason);
         }
@@ -994,19 +1001,20 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     // The export ran when OK was filed: the closed dialog's answer is not read.
     let _ = dialogs.with(|host| host.take_by_id::<ExportForScreensDialog>(id));
     let key = app.session.active().map(|st| (st.uid, st.revision));
+    let contents = app.session.active().map(|st| (st.uid, st.reverts));
     let pdf_presets = pdf::presets(&app.session);
     let saved = &app.session.prefs.screen_export_presets;
-    let Some((stale, pending, rename, filed)) = dialogs.with(|host| {
+    let Some((shown, shown_contents, pending, rename, filed)) = dialogs.with(|host| {
         let d = host.get_mut_by_id::<ExportForScreensDialog>(id)?;
         screen_formats::preset_list(&mut d.presets, saved);
         if d.pdf_presets != pdf_presets {
             d.pdf_presets = pdf_presets;
         }
-        Some((d.doc.as_ref().map(|s| s.key) != key, d.pending.take(), d.rename.take(), d.held.take()))
+        Some((d.doc.as_ref().map(|s| s.key), d.doc.as_ref().map(|s| (s.key.0, s.reverts)), d.pending.take(), d.rename.take(), d.held.take()))
     }) else {
         return;
     };
-    if stale {
+    if shown != key {
         let (doc, thumbs) = document_view(app, ctx);
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
@@ -1024,14 +1032,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
             }
         });
     }
-    // A name typed in another document than the active one is dropped.
-    if let Some((uid, board, name)) = rename
-        && key.is_some_and(|(active, _)| active == uid)
+    // A name typed in another drawing or in content discarded by File Revert is dropped.
+    if let Some((origin, board, name)) = rename
+        && contents == Some(origin)
     {
         rename_artboard(app, board, &name);
     }
     if let Some(fields) = filed {
-        let answer = params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from);
+        // OK validated its selection against the loaded contents shown before refreshing.
+        let answer = if shown_contents == contents {
+            params(app, &fields).and_then(|p| io::export_for_screens(app, p)).map(drop).map_err(Label::from)
+        } else {
+            Err(Label::from(tl!("The active document changed. Review the export selection and try again.")))
+        };
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<ExportForScreensDialog>(id) {
                 d.held.answer(answer);

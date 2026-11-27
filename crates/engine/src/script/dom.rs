@@ -66,6 +66,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod tags;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -1353,7 +1355,7 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 /// `[]`. Every one must be an object of that document that can be selected.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
@@ -1599,16 +1601,23 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
-/// is hidden or locked. Its name and note may still change.
-fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+/// Refuses appearance, place, stacking order and size changes in hidden or locked layers and on
+/// locked artboards. Names and notes may still change.
+fn refuse_protected_edit(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+        let why = if d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)) {
+            Some("a layer it is in is hidden or locked")
+        } else if on_locked_artboard(h, st, item.id) {
+            Some("it is on a locked artboard")
+        } else {
+            None
+        };
+        why.map(|why| (d.node(item.id).and_then(typename).unwrap_or("page item"), why))
     });
     match refused {
-        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        Some((name, why)) => Err(HostError::Error(format!("Cannot edit {name} {}: {why}", item.id.0))),
         None => Ok(()),
     }
 }
@@ -1619,7 +1628,7 @@ fn item_hidden(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1629,7 +1638,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1657,7 +1666,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
         (now, keeps_other)
     });
     if now.is_none() || keeps_other {
-        refuse_in_closed_layer(h, item)?;
+        refuse_protected_edit(h, item)?;
     }
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
@@ -1741,7 +1750,8 @@ fn item_height(h: &Host, a: &[Data]) -> Answer {
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
@@ -1778,7 +1788,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
@@ -2024,7 +2035,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused, and so is an object in a hidden or locked layer.
+/// compound path is refused. The item must be selectable and outside hidden or locked layers and
+/// locked artboards.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -2037,7 +2049,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
@@ -2200,6 +2213,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -2220,6 +2234,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("parent", get(l, item_parent)),
         ("name", property(l, item_name, item_set_name)),
         ("note", property(l, item_note, item_set_note)),
+        ("tags", get(l, tags::item_tags)),
         ("hidden", property(l, item_hidden, item_set_hidden)),
         ("locked", property(l, item_locked, item_set_locked)),
         ("selected", property(l, item_selected, item_set_selected)),
@@ -2248,7 +2263,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "layer",
             "pixelAligned",
             "sliced",
-            "tags",
             "uRL",
             "uuid",
             "visibilityVariable",
@@ -2272,6 +2286,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
         None,
     ));
+    classes.extend(tags::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.
     realm.define_host_globals(vec![

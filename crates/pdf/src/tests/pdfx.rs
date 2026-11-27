@@ -151,6 +151,75 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     assert!(matches!(e, Err(PdfError::BadSetting(m)) if m.contains("embeds")));
 }
 
+/// The ICC tag signatures of `icc`'s tag table.
+fn icc_tags(icc: &[u8]) -> Vec<String> {
+    let count = u32::from_be_bytes(icc[128..132].try_into().unwrap()) as usize;
+    (0..count).map(|i| String::from_utf8_lossy(&icc[132 + 12 * i..136 + 12 * i]).into_owned()).collect()
+}
+
+#[test]
+fn a_registered_condition_profile_names_its_condition_and_embeds_itself() {
+    use std::io::Read;
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::cmyk(0.6, 0.0, 0.2, 0.1)]);
+    for (profile, reference) in [(cms::FOGRA51_CMYK, "FOGRA51"), (cms::FOGRA52_CMYK, "FOGRA52")] {
+        let r = export_with_report(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = profile.into())).unwrap();
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        let t = text(&r.bytes);
+        let info = profile.replace('(', r"\(").replace(')', r"\)");
+        for want in [
+            "/S/GTS_PDFX".to_string(),
+            format!("/OutputConditionIdentifier({reference})"),
+            "/RegistryName(http://www.color.org)".into(),
+            format!("/Info({info})"),
+        ] {
+            assert!(t.contains(&want), "{profile}: {want}");
+        }
+        // The embedded profile is the working space's: a CMYK output profile with Lab tables both
+        // ways, read from the file's bytes.
+        let oi: u32 = t.split("/DestOutputProfile ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let (start, end) = crate::patch::Xref::read(&r.bytes).unwrap().dict(&r.bytes, oi).unwrap();
+        let obj = &r.bytes[start..end];
+        let at = crate::lab_spot::find(obj, b"/Length", 0).unwrap();
+        let (length, _) = crate::patch::number(obj, at + b"/Length".len()).unwrap();
+        let mut data = crate::lab_spot::find(obj, b"stream", at).unwrap() + b"stream".len();
+        data += obj[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+        let raw = &obj[data..data + length];
+        let mut icc = vec![];
+        if crate::lab_spot::find(&obj[..data], b"/FlateDecode", 0).is_some() {
+            flate2::read::ZlibDecoder::new(raw).read_to_end(&mut icc).unwrap();
+        } else {
+            icc = raw.to_vec();
+        }
+        assert_eq!(icc.as_slice(), &*cms::icc_bytes(profile).unwrap());
+        assert_eq!((&icc[12..16], &icc[16..20], &icc[20..24], &icc[36..40]), (&b"prtr"[..], &b"CMYK"[..], &b"Lab "[..], &b"acsp"[..]));
+        assert!(matches!(icc[8], 2 | 4), "ICC version {}", icc[8]);
+        let tags = icc_tags(&icc);
+        for tag in ["A2B0", "B2A0", "A2B1", "B2A1", "gamt", "wtpt", "desc", "cprt"] {
+            assert!(tags.iter().any(|t| t == tag), "{profile}: {tag} in {tags:?}");
+        }
+        let back = cms::IccProfile::from_bytes(None, &icc).unwrap();
+        assert_eq!((back.name.as_str(), back.kind), (profile, cms::ProfileKind::Cmyk));
+        assert!(import(&r.bytes).is_ok());
+    }
+    // A condition identifier or registry the settings give stays.
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.output_condition_id = "Press 2".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(Press 2)") && !t.contains("/RegistryName"), "{t}");
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.registry = "https://example.com/registry".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(FOGRA51)") && t.contains("/RegistryName(https://example.com/registry)"));
+    // Other profiles keep their name as the identifier, with no registry.
+    let t = text(&export(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = GENERIC_CMYK.into())).unwrap());
+    let id = GENERIC_CMYK.replace('(', r"\(").replace(')', r"\)");
+    assert!(t.contains(&format!("/OutputConditionIdentifier({id})")) && !t.contains("/RegistryName"), "{t}");
+}
+
 #[test]
 fn pdfx_1a_files_have_no_rgb() {
     let mut d = doc(&[Color::rgb(0.9, 0.1, 0.1), Color::Lab { l: 50.0, a: 40.0, b: -20.0 }, Color::gray(0.5), Color::cmyk(0.1, 0.2, 0.3, 0.4)]);
