@@ -70,10 +70,24 @@ impl Open {
         std::mem::take(&mut self.preview)
     }
 
-    fn cancel(self, app: &mut VectorcraftApp) {
+    fn later_selection<'a>(&self, app: &'a VectorcraftApp) -> Option<&'a Selection> {
+        let st = app.session.active()?;
+        let before = &st.interaction.as_ref()?.selection;
+        (&st.selection != before.as_ref()).then_some(&st.selection)
+    }
+
+    fn cancel_preview(&mut self, app: &mut VectorcraftApp) {
         if self.owns_preview(app) {
-            self.preview.cancel(app);
+            let selection = self.later_selection(app).cloned();
+            self.take_preview().cancel(app);
+            if let Some(selection) = selection {
+                let _ = app.session.select(|_, current| *current = selection);
+            }
         }
+    }
+
+    fn cancel(mut self, app: &mut VectorcraftApp) {
+        self.cancel_preview(app);
     }
 }
 
@@ -191,6 +205,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     {
         if !owns_preview {
             open.take_preview();
+        } else if open.later_selection(app).is_some() {
+            // The next preview must start from the user's current selection.
+            open.cancel_preview(app);
         }
         // With no blend selected, the command sets application defaults instead of previewing artwork.
         let on = previewing && app.session.has_selected_blend();
@@ -229,6 +246,9 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
         return app.run(CMD, p).map(|_| ());
     }
     let mut open = app.object_dialogs.blend.take().ok_or("Blend Options is no longer open")?;
+    if open.later_selection(app).is_some() {
+        open.cancel_preview(app);
+    }
     let owned = open.owns_preview(app);
     let preview = open.take_preview();
     let preview = if owned { preview } else { LivePreview::default() };
@@ -545,5 +565,55 @@ mod tests {
         set(&app, "steps", json!(7));
         confirm(&mut app);
         assert_eq!(spec(&app, blend).spacing, BlendSpacing::Steps(7));
+    }
+
+    #[test]
+    fn deselect_after_blend_preview_stays_in_effect() {
+        let (mut app, blend) = app_with_smooth_blend();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let defaults = app.session.prefs.blend_options;
+        open(&mut app).unwrap();
+        set(&app, "spacing", json!("steps"));
+        set(&app, "steps", json!(7));
+        frame(&mut app);
+        assert_eq!(spec(&app, blend).spacing, BlendSpacing::Steps(7));
+
+        app.run("select.none", json!({})).unwrap();
+        frame(&mut app);
+        assert!(app.session.active().unwrap().selection.objects.is_empty(), "rolling back the preview preserves Deselect");
+        frame(&mut app);
+        assert!(!app.session.in_interaction());
+        assert_eq!(spec(&app, blend).spacing, BlendSpacing::SmoothColor);
+        confirm(&mut app);
+        assert!(is_open(&app), "OK waits for a selected blend");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.session.prefs.blend_options, defaults);
+
+        app.run("select.set", json!({"ids": [blend]})).unwrap();
+        frame(&mut app);
+        confirm(&mut app);
+        assert!(!is_open(&app));
+        assert_eq!(spec(&app, blend).spacing, BlendSpacing::Steps(7));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn cancel_keeps_a_selection_made_after_blend_preview() {
+        let (mut app, blend) = app_with_smooth_blend();
+        let path = app.run("shape.rectangle", json!({"x": 90, "y": 90, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [blend]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        open(&mut app).unwrap();
+        set(&app, "spacing", json!("steps"));
+        set(&app, "steps", json!(7));
+        frame(&mut app);
+        assert_eq!(spec(&app, blend).spacing, BlendSpacing::Steps(7));
+
+        app.run("select.set", json!({"ids": [path]})).unwrap();
+        cancel(&mut app);
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(path)]);
+        assert_eq!(spec(&app, blend).spacing, BlendSpacing::SmoothColor);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(!app.session.in_interaction());
     }
 }
