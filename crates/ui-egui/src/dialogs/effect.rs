@@ -477,26 +477,29 @@ pub(super) fn command_for(
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let _ = ctx;
     let Some(open) = app.effect_dialogs.effect.take() else { return };
-    let open = if open.asking {
-        match answer(app, open) {
-            Some(open) => open,
-            None => return,
-        }
+    if open.asking {
+        answer(app, open);
     } else {
-        open
-    };
-    drive(app, open);
+        drive(app, open);
+    }
 }
 
-/// The answer of the Edit or Add New question; `open` back while it is still asked.
-fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
-    let result = app.dialogs()?.with(|h| h.take_by_id::<StandardPrompt>(open.id))?;
-    let choice = result.ok().map_or(PromptChoice::Cancel, |answer| answer.choice);
+/// The answer of the Edit or Add New question; retain the opening while the question is still visible.
+fn answer(app: &mut VectorcraftApp, mut open: Open) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let (waiting, result) = dialogs.with(|host| {
+        if host.get_by_id::<StandardPrompt>(open.id).is_some() { (true, None) } else { (false, host.take_by_id::<StandardPrompt>(open.id)) }
+    });
+    if waiting {
+        app.effect_dialogs.effect = Some(open);
+        return;
+    }
+    let choice = result.and_then(|result| result.ok()).map_or(PromptChoice::Cancel, |answer| answer.choice);
     if choice != PromptChoice::Cancel
         && let Err(why) = open.check_source(app)
     {
         app.status(why);
-        return None;
+        return;
     }
     let id = open.cx.id.clone();
     let launched = match (choice, open.index) {
@@ -511,12 +514,11 @@ fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
             open.index = None;
             launch(app, open, defaults_of(&id), Map::new())
         }
-        _ => return None,
+        _ => return,
     };
     if let Err(e) = launched {
         app.status(e);
     }
-    None
 }
 
 /// The fields show what the effect stores, also for a value set while the dialog is open: Scribble's 270° angle
@@ -691,6 +693,39 @@ mod tests {
 
     fn steps(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().history.undo.len()
+    }
+
+    #[test]
+    fn edit_and_add_new_still_open_after_an_idle_effect_prompt() {
+        for (choice, editing) in [("proceed", true), ("alternate", false)] {
+            let mut app = app();
+            let node = rect(&mut app, 10);
+            app.run("effect.apply", json!({"ids": [node], "effect": "distort.roughen", "item": null, "params": {"size": 19, "detail": 8}})).unwrap();
+            app.run("select.set", json!({"ids": [node]})).unwrap();
+            let undo = steps(&app);
+            assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
+            let prompt = id(&app);
+            let ctx = app.ui_ctx.clone().unwrap();
+            let host = app.dialogs().unwrap();
+            for _ in 0..3 {
+                super::super::host::pump(&mut app, &ctx);
+                assert!(host.with(|h| h.get_by_id::<StandardPrompt>(prompt).is_some()));
+            }
+
+            host.with(|h| {
+                h.set_json_field(&ctx, prompt, "choice", json!(choice)).unwrap();
+                assert!(h.confirm_by_id(&ctx, prompt));
+            });
+            super::super::host::pump(&mut app, &ctx);
+            let open = app.effect_dialogs.effect.as_ref().expect("the accepted choice opens the effect options");
+            assert!(!open.asking);
+            assert_eq!(open.cx.editing, editing);
+            assert_eq!(open.index, editing.then_some(0));
+            if editing {
+                assert_eq!(number(&mut app, "size"), Some(19.0));
+            }
+            assert_eq!(steps(&app), undo, "choosing the options has not yet committed an edit");
+        }
     }
 
     /// An applied effect's dialog opened on a shared row of a mixed selection (`aligned`) edits
