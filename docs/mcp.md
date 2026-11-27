@@ -3457,6 +3457,7 @@ rules for these objects:
   Pending packets count once toward that limit. Library installation checks its members before
   publishing `ExternalObject`, in both ES5 and ES2015 realms. Serialization consumes fuel even
   when its escaped output exceeds the packet limit. Packet-info scans and metadata size accounting during edits also consume fuel.
+  Property getters charge fuel before copying the selected text and locale or scanning whole-array language options.
   The sidecar-write host binding accepts packets up to VectorCraft's 8 MiB packet limit.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
   one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
