@@ -487,6 +487,24 @@ fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
     (if same { Status::Ok } else { Status::Modified }, Some(f))
 }
 
+/// Whether [`probe`] would find group `g`'s file missing, without reading or hashing its content.
+/// A changed file is opened to check it can be read, and nothing more: the canvas markers ask only
+/// this, and with Update Links set to Manually a changed file keeps differing from its stored link,
+/// so a full probe would read the whole file again on every look while the markers are on.
+fn missing(g: &Group, base: LinkBase) -> bool {
+    #[cfg(test)]
+    probe_gate::hold(&g.link.path);
+    let Some(f) = locate(&g.link, base) else { return true };
+    let l = &g.link;
+    if !g.plate_files.is_empty() && super::place::dcs::plate_files_changed(&g.plate_files, &f.path) {
+        return false;
+    }
+    if l.size == Some(f.size) && l.modified.is_some() && l.modified == f.modified {
+        return false;
+    }
+    fileio::read_file_head(&f.path, 0).is_err()
+}
+
 /// Is image `key` of `d` showing its preview (its file not read)?
 fn previewing(d: &Document, key: &str) -> bool {
     d.images.get(key).is_none_or(ImageBlob::is_proxy)
@@ -2554,7 +2572,7 @@ pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option
 pub(crate) fn missing_markers(doc: &Document, base: LinkBase) -> Vec<NodeId> {
     groups(doc, None)
         .iter()
-        .filter(|g| !g.ids.is_empty() && probe(g, base).0 == Status::Missing)
+        .filter(|g| !g.ids.is_empty() && missing(g, base))
         .flat_map(|g| g.ids.iter().copied())
         .filter(|id| doc.is_visible(*id))
         .collect()

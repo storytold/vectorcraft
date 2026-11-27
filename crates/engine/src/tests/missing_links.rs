@@ -131,6 +131,7 @@ fn turning_missing_links_on_returns_before_the_file_probe_and_scans_on_the_link_
     // The toggle returns while the probe of the (slow) linked file is held closed.
     assert_eq!(s.execute("view.showMissingLinks", &json!({"on": true})).unwrap(), json!({"on": true}));
     assert!(!gate.finished(), "the toggle waited for the file probe");
+    assert_eq!(gate.entered(Duration::ZERO), None, "the toggle probed the file on the calling thread");
     assert!(s.doc().unwrap().missing_link_markers.is_none());
     assert!(s.doc().unwrap().marked_missing_links().is_empty());
     // The desktop app starts the watcher's look at once, and the probe runs there.
