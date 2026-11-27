@@ -1300,6 +1300,32 @@ fn one_effect_has_a_delete_icon_in_appearance() {
     assert!(!panel.shows(&name), "two objects");
 }
 
+#[test]
+fn properties_remove_effect_requires_the_whole_symbol_instance() {
+    let mut app = new_app();
+    let left = rect(&mut app, 20.0, 20.0, 20.0, 20.0);
+    let right = rect(&mut app, 60.0, 20.0, 20.0, 20.0);
+    let instance = app.run("symbol.new", json!({"type": "dynamic", "ids": [left, right]})).unwrap()["id"].clone();
+    let node = vectorcraft_doc::NodeId(instance.as_u64().unwrap());
+    app.run("effect.apply", json!({"ids": [instance], "effect": "stylize.dropShadow"})).unwrap();
+    app.run("symbol.instance.selectPart", json!({"id": instance, "path": [0]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    let effects = |panel: &Panel| panel.app().session.active().unwrap().doc.node(node).unwrap().appearance.effects.len();
+    let depth = undo_depth(&panel.app());
+
+    assert_eq!(effects(&panel), 1);
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (1, depth), "a part cannot remove the whole instance’s effect");
+    assert!(!panel.enabled("Remove Effect"));
+    assert!(panel.shows("Appearance panel"), "Appearance remains available for inspection");
+
+    panel.app().run("select.set", json!({"ids": [instance]})).unwrap();
+    panel.frame();
+    assert!(panel.enabled("Remove Effect"));
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (0, depth + 1));
+}
+
 /// A rectangle at 100, 100, 100 × 60 pt, selected, with `then` run on it, and the Transform
 /// panel's reference point on the top-left square.
 fn reference_setup(then: &[(&str, Value)]) -> VectorcraftApp {
