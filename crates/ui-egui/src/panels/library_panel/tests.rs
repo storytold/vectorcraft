@@ -14,6 +14,21 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn the_swatch_libraries_footer_button_uses_the_interface_language() {
+    use craft::ui::testing::Fixture;
+
+    for (locale, label) in [("en", "Swatch Libraries Menu"), ("de", "Menü „Farbfeldbibliotheken“"), ("ja", "スウォッチライブラリメニュー")]
+    {
+        let mut app = app();
+        app.session.prefs.interface_language = locale.into();
+        crate::i18n::set_current(app.ui_language());
+        let mut fixture = Fixture::new(move |ui| crate::panels::swatches::show(&mut app, ui));
+        fixture.settle();
+        assert!(fixture.by_label(label).is_some(), "missing {locale} Swatch Libraries button name: {label}");
+    }
+}
+
 /// A context whose frames report their accessibility tree, so rows are found by their names.
 pub(crate) fn context() -> egui::Context {
     let ctx = crate::testing::ui_context();

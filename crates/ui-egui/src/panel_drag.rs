@@ -47,6 +47,8 @@ pub struct SwatchRows {
     pub names: Vec<String>,
     /// The names are colour groups.
     pub groups: bool,
+    /// Whether the grabbed swatch's paint can travel as an unlinked process color.
+    pub unlinked_process_color: bool,
 }
 
 impl PanelDrag {

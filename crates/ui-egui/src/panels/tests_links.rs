@@ -420,6 +420,30 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+#[test]
+fn a_long_link_location_fits_the_minimum_width_float() {
+    use crate::panel_docking::PANEL_MIN_WIDTH;
+    use crate::tests::panel_harness::{Place, floated};
+
+    let folder = Folder::new("location-width");
+    let subfolder = folder.0.join("Überlagerung".repeat(5));
+    std::fs::create_dir_all(&subfolder).unwrap();
+    let path = subfolder.join("Éléments.png");
+    std::fs::write(&path, png(30, 20)).unwrap();
+    for locale in ["en", "fr", "de"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let placed = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap();
+        let info = app.run("links.info", json!({"id": placed["ids"][0]})).unwrap();
+        let location = info["location"].as_str().unwrap();
+        let names = ["Location", location, "Show in Folder"];
+        app.services.reveal = Some(Box::new(|_| Ok(())));
+        let panel = floated(app, "links", locale, Place::Floating(PANEL_MIN_WIDTH), &names);
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "{locale} location row outside {:?}: {past:?}", panel.body);
+    }
+}
+
 /// The Location row of Link Info has a Show in Folder button that shows the file of the image Link
 /// Info shows. An embedded image has no Location row; the button is off while the file is missing
 /// and without a file manager (the web).
