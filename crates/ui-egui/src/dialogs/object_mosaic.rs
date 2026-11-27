@@ -32,7 +32,7 @@ use craft::ui::sections::GroupBox;
 use craft::ui::text::{NumberField, StepArrows};
 use egui::{Context, Ui};
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{NodeId, NodeKind};
 
 use crate::VectorcraftApp;
 
@@ -98,7 +98,8 @@ pub struct Mosaic {
 pub struct ObjectMosaicDialog {
     id: DialogId,
     values: Mosaic,
-    /// The size (pt) of the image as of the last [`sync`]; the last size read while none is selected.
+    source: MosaicSource,
+    /// The last size (pt) read while the opening image was selected.
     image: (f64, f64),
     /// Whether an image is selected.
     selected: bool,
@@ -115,12 +116,38 @@ fn label(text: &str) -> Label {
     text.to_owned().into()
 }
 
-/// The size (pt) of the first selected image, which the mosaic is made from.
-fn image_size(app: &VectorcraftApp) -> Option<(f64, f64)> {
+/// The selected raster and the drawing contents it belongs to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MosaicSource {
+    document: u64,
+    reverts: u64,
+    image: NodeId,
+}
+
+impl MosaicSource {
+    fn size(self, app: &VectorcraftApp) -> Result<(f64, f64), String> {
+        let st = app
+            .session
+            .active()
+            .filter(|st| st.uid == self.document)
+            .ok_or_else(|| tl!("Return to the original drawing to create the mosaic.").to_owned())?;
+        if st.reverts != self.reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
+        match selected_image(app) {
+            Some((source, size)) if source == self => Ok(size),
+            None => Err(NO_IMAGE.to_owned()),
+            _ => Err(tl!("Select the original image to create the mosaic.").to_owned()),
+        }
+    }
+}
+
+/// The first selected image and its size in points, as the mosaic command reads them.
+fn selected_image(app: &VectorcraftApp) -> Option<(MosaicSource, (f64, f64))> {
     let st = app.session.active()?;
     let node = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).find(|n| matches!(n.kind, NodeKind::Image(_)))?;
     let b = node.geometric_bounds()?;
-    Some((b.width(), b.height()))
+    Some((MosaicSource { document: st.uid, reverts: st.reverts, image: node.id }, (b.width(), b.height())))
 }
 
 /// Open the dialog on the selected image, with the values `given` holds (the menu item's params, or
@@ -128,7 +155,7 @@ fn image_size(app: &VectorcraftApp) -> Option<(f64, f64)> {
 /// command's defaults for the rest. With no image selected, or with params the command refuses,
 /// nothing opens and the error says why.
 pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
-    let Some((w, h)) = image_size(app) else { return Err(NO_IMAGE.into()) };
+    let Some((source, (w, h))) = selected_image(app) else { return Err(NO_IMAGE.into()) };
     let none = json!({});
     let given = if given.is_null() { &none } else { given };
     app.session.check_params(COMMAND, given).map_err(|e| e.to_string())?;
@@ -161,18 +188,19 @@ pub fn open(app: &mut VectorcraftApp, given: &Value) -> Result<Value, String> {
     };
     let dialogs = app.dialogs().ok_or("no window")?;
     let lengths = crate::canvas::general_lengths(app);
-    dialogs.with(|host| host.open(ObjectMosaicDialog::new(values, (w, h), lengths)));
+    dialogs.with(|host| host.open(ObjectMosaicDialog::new(values, source, (w, h), lengths)));
     Ok(json!({ "dialog": KIND }))
 }
 
-/// Pushes the selected image's size and the document's length units into the open dialog. A frame runs
+/// Pushes the opening image's current size and length units into the open dialog. A frame runs
 /// it before the dialogs, and `ui.dialog.*` before each method.
 pub(crate) fn sync(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
-    let size = image_size(app);
+    let selected = selected_image(app);
     let lengths = crate::canvas::general_lengths(app);
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
+            let size = selected.filter(|(source, _)| *source == dialog.source).map(|(_, size)| size);
             dialog.sync(size, lengths);
         }
     });
@@ -181,9 +209,9 @@ pub(crate) fn sync(app: &mut VectorcraftApp) {
 /// What the dialog asked of the app.
 enum Work {
     /// Use Ratio: the counts for these values.
-    Ratio(Mosaic, (f64, f64)),
+    Ratio(Mosaic, MosaicSource),
     /// The held OK: the command for these values.
-    Run(Mosaic, (f64, f64)),
+    Run(Mosaic, MosaicSource),
 }
 
 /// Runs what the open dialog asked of the app, outside the host's lock: Use Ratio's counts, and the
@@ -195,17 +223,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
         let _ = host.take::<ObjectMosaicDialog>();
         let dialog = host.get_mut::<ObjectMosaicDialog>()?;
         if std::mem::take(&mut dialog.use_ratio) {
-            return Some(Work::Ratio(dialog.values.clone(), dialog.image));
+            return Some(Work::Ratio(dialog.values.clone(), dialog.source));
         }
-        dialog.held.take().map(|values| Work::Run(values, dialog.image))
+        dialog.held.take().map(|values| Work::Run(values, dialog.source))
     });
     match work {
         None => {}
-        Some(Work::Ratio(mut values, image)) => {
-            follow_ratio(&mut values, image);
-            let mut p = params(&values, image);
-            p["useRatio"] = json!(values.side.key());
-            let counts = vectorcraft_engine::cmd::mosaic_counts(&app.session, &p).map_err(|e| e.to_string());
+        Some(Work::Ratio(mut values, source)) => {
+            let counts = source.size(app).and_then(|image| {
+                follow_ratio(&mut values, image);
+                let mut p = params(&values, image);
+                p["useRatio"] = json!(values.side.key());
+                vectorcraft_engine::cmd::mosaic_counts(&app.session, &p).map_err(|e| e.to_string())
+            });
             dialogs.with(|host| {
                 let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() else { return };
                 match counts {
@@ -218,13 +248,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
                 }
             });
         }
-        Some(Work::Run(mut values, image)) => {
-            follow_ratio(&mut values, image);
-            // With no image selected the dialog says what it needs, not that the command is unavailable.
-            let answer = match image_size(app) {
-                Some(_) => app.run(COMMAND, params(&values, image)).map(|_| ()).map_err(Label::from),
-                None => Err(Label::from(NO_IMAGE.to_string())),
-            };
+        Some(Work::Run(mut values, source)) => {
+            let answer = source
+                .size(app)
+                .and_then(|image| {
+                    follow_ratio(&mut values, image);
+                    app.run(COMMAND, params(&values, image)).map(|_| ())
+                })
+                .map_err(Label::from);
             dialogs.with(|host| {
                 if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
                     dialog.held.answer(answer);
@@ -235,16 +266,26 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
 }
 
 impl ObjectMosaicDialog {
-    fn new(values: Mosaic, image: (f64, f64), lengths: LengthUnits) -> Self {
-        ObjectMosaicDialog { id: dialog_id(KIND), values, image, selected: true, lengths, note: None, use_ratio: false, held: HeldAnswer::new() }
+    fn new(values: Mosaic, source: MosaicSource, image: (f64, f64), lengths: LengthUnits) -> Self {
+        ObjectMosaicDialog {
+            id: dialog_id(KIND),
+            values,
+            source,
+            image,
+            selected: true,
+            lengths,
+            note: None,
+            use_ratio: false,
+            held: HeldAnswer::new(),
+        }
     }
 
     /// `size` is the selected image's size, `None` while none is selected: the last size stays and a
     /// switch to percentages is refused until one is.
     fn sync(&mut self, size: Option<(f64, f64)>, lengths: LengthUnits) {
-        self.lengths = lengths;
         self.selected = size.is_some();
         if let Some(size) = size {
+            self.lengths = lengths;
             self.image = size;
             if self.note.as_ref().is_some_and(|n| n.as_str() == NO_IMAGE) {
                 self.note = None;
@@ -375,7 +416,7 @@ impl StackDialog for ObjectMosaicDialog {
     }
 
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
-        let ObjectMosaicDialog { id: _, values, image, selected, lengths, note, use_ratio, held } = self;
+        let ObjectMosaicDialog { values, image, selected, lengths, note, use_ratio, held, .. } = self;
         // A refusal shows until a value it refused changes.
         if held.refusal().is_some_and(|(_, refused)| refused != values) {
             held.clear_refusal();
@@ -557,11 +598,15 @@ mod tests {
     /// An app with a 100 × 50 pt embedded image selected.
     fn app_with_image() -> VectorcraftApp {
         let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        add_image(&mut app);
+        app
+    }
+
+    fn add_image(app: &mut VectorcraftApp) {
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
         app.run("paint.setStroke", json!({"none": true})).unwrap();
         app.run("object.rasterize", json!({"ppi": 72})).unwrap();
-        app
     }
 
     /// The mosaic group's size and tile count.
@@ -850,5 +895,50 @@ mod tests {
         set(&mut app, "columns", json!(3.0)).unwrap();
         ok(&mut app);
         assert_eq!(mosaic(&app).map(|m| m.2), Some(30));
+    }
+
+    #[test]
+    fn held_mosaic_does_not_delete_another_drawings_raster() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"columns": 2, "rows": 2, "deleteRaster": true})).unwrap();
+        add_image(&mut app);
+        let second = image_id(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), None);
+        assert_eq!(image_id(&app), second);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&mut app));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
+        assert!(!is_open(&mut app));
+    }
+
+    #[test]
+    fn held_mosaic_does_not_delete_a_raster_restored_by_revert() {
+        let mut app = app_with_image();
+        let source = image_id(&app);
+        let dir = vectorcraft_testkit::TempDir::new("mosaic-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("object.move", json!({"dx": 10, "dy": 0})).unwrap();
+        open(&mut app, &json!({"columns": 2, "rows": 2, "deleteRaster": true})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [source]})).unwrap();
+
+        let undo = app.session.active().unwrap().history.undo.len();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), None);
+        assert_eq!(image_id(&app), source);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&mut app));
+
+        open(&mut app, &json!({"columns": 2, "rows": 2, "deleteRaster": true})).unwrap();
+        ok(&mut app);
+        assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
+        assert!(!is_open(&mut app));
     }
 }
