@@ -101,6 +101,22 @@ fn rows_drag(app: &VectorcraftApp, name: &str, names: &[&str]) -> PanelDrag {
 }
 
 #[test]
+fn only_unlinked_process_swatches_can_travel_as_canvas_color() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Global red", "color": "#ff0000", "global": true})).unwrap();
+    app.run("swatch.new", json!({"name": "Spot blue", "color": "#0000ff", "spot": true})).unwrap();
+    let tint = app.run("swatch.new", json!({"swatch": "Spot blue", "tint": 40})).unwrap();
+    let can_travel = |name| {
+        let PanelDrag::Paint { rows: Some(rows), .. } = rows_drag(&app, name, &[name]) else { panic!("a swatch row drag") };
+        rows.unlinked_process_color
+    };
+    assert!(can_travel("Red"));
+    for name in ["Global red", "Spot blue", tint["name"].as_str().unwrap(), "[None]", "[Registration]"] {
+        assert!(!can_travel(name), "{name}");
+    }
+}
+
+#[test]
 fn a_swatch_row_drag_reorders_only_its_source_document() {
     use crate::tests::panel_harness::Panel;
     use craft::ui::contract::{ListDrag, Role};

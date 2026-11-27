@@ -20,7 +20,7 @@ use craft::ui::runtime::requests::PathKind;
 use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 
-use super::confirm::ask;
+use super::confirm::{ask, ask_in_document};
 use crate::background::{self, Writer};
 use crate::{VectorcraftApp, file_asks, io};
 
@@ -46,7 +46,7 @@ fn downloads(app: &VectorcraftApp) -> bool {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let Some(path) = st.path.clone() else {
-        ask(
+        ask_in_document(
             app,
             tl!("Save the document first?"),
             tl!("Package collects a saved document with its linked files and fonts."),
@@ -55,6 +55,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         );
         return Ok(Value::Null);
     };
+    let document = st.uid;
     let p = std::path::Path::new(&path);
     let stem = p.file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let folder = p.parent().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
@@ -73,6 +74,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
             .footer_note(Label::from(tl!("Fonts whose licence doesn't allow embedding are not copied.")))
     });
     crate::dialogs::host::open_held(app, dialog, |app, answer| confirm(app, &answer.fields).map(|_| ())).ok_or("no window")?;
+    app.package_document = Some(document);
     Ok(Value::Null)
 }
 
@@ -96,13 +98,27 @@ fn params(web: bool) -> Vec<Param> {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KEY);
-    let Some(request) = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).and_then(HostedParamDialog::pick_path)) else { return };
-    file_asks::browse(app, id, request, PickRequest::folder(PURPOSE), file_asks::answer_path);
+    let Some(request) = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(HostedParamDialog::pick_path)) else {
+        app.package_document = None;
+        return;
+    };
+    if let Some(request) = request {
+        file_asks::browse(app, id, request, PickRequest::folder(PURPOSE), file_asks::answer_path);
+    }
+}
+
+fn require_package_document(app: &VectorcraftApp, document: u64) -> Result<(), String> {
+    if app.session.active().is_none_or(|st| st.uid != document) {
+        return Err(tl!("Package can only save and collect the document where it was opened.").to_owned());
+    }
+    Ok(())
 }
 
 /// What OK does: save a dirty document, then write the package (on the worker with Background Export on) or
 /// download it. `Err` refuses the OK and keeps the dialog open; the reply says whether the package is in the background.
 pub(super) fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<Value, String> {
+    let document = app.package_document.ok_or("no Package dialog open")?;
+    require_package_document(app, document)?;
     let text = |key: &str| fields.text(key).unwrap_or_default();
     let mut params = json!({ "folder": text("folder"), "name": text("name") });
     for (key, _) in OPTIONS {
@@ -144,6 +160,8 @@ pub(super) fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result
             return r;
         }
     }
+    // A completed background job may have changed the active document while Package waited.
+    require_package_document(app, document)?;
     let package = app.session.prepare_package(&params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;
     let label = format!("Packaging {}", text("name"));
     let later = Rc::new(Cell::new(false));
