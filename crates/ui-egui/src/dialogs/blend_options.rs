@@ -17,7 +17,7 @@ use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Value, json};
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{NodeId, Selection};
 
 use super::host::{HeldOptions, open_held_with};
 use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
@@ -38,11 +38,16 @@ pub(crate) const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("ste
 pub(crate) struct Open {
     opening: Arc<()>,
     document: (u64, u64),
+    blends: Vec<NodeId>,
     preview: LivePreview,
     preview_selection: Option<Weak<Selection>>,
 }
 
 impl Open {
+    fn selection_matches(&self, app: &VectorcraftApp) -> bool {
+        self.blends == app.session.selected_blend_ids()
+    }
+
     fn drawing_problem(&self, app: &VectorcraftApp) -> Option<&'static str> {
         let (uid, reverts) = self.document;
         match app.session.active() {
@@ -126,7 +131,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err("no window".into());
     }
     if on_blend && let Some(document) = document {
-        app.object_dialogs.blend = Some(Open { opening, document, preview: LivePreview::default(), preview_selection: None });
+        app.object_dialogs.blend =
+            Some(Open { opening, document, blends: app.session.selected_blend_ids(), preview: LivePreview::default(), preview_selection: None });
     }
     Ok(Value::Null)
 }
@@ -209,8 +215,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             // The next preview must start from the user's current selection.
             open.cancel_preview(app);
         }
-        // With no blend selected, the command sets application defaults instead of previewing artwork.
-        let on = previewing && app.session.has_selected_blend();
+        // Only the blends that supplied the opening values can preview this draft.
+        let on = previewing && open.selection_matches(app);
         let ran = open.preview.run(app, on, PREVIEW_LABEL, CMD, &p).is_some();
         if !on {
             open.preview_selection = None;
@@ -232,14 +238,11 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
         if app.session.in_interaction() && !open.owns_preview(app) {
             return Err(tl!("Finish the current edit before applying Blend Options.").into());
         }
-    }
-    if on_blend != app.session.has_selected_blend() {
-        let reason = if on_blend {
-            tl!("Select a blend before applying these options.")
-        } else {
-            tl!("Deselect any selected blends before applying the options for new blends.")
-        };
-        return Err(reason.to_owned());
+        if !open.selection_matches(app) {
+            return Err(tl!("Select the original blends before applying these options.").into());
+        }
+    } else if app.session.has_selected_blend() {
+        return Err(tl!("Deselect any selected blends before applying the options for new blends.").into());
     }
     let p = params(&result.fields);
     if !on_blend {
@@ -615,5 +618,40 @@ mod tests {
         assert_eq!(spec(&app, blend).spacing, BlendSpacing::SmoothColor);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
         assert!(!app.session.in_interaction());
+    }
+
+    #[test]
+    fn blend_options_do_not_transfer_to_another_blend_in_the_same_drawing() {
+        let (mut app, original) = app_with_smooth_blend();
+        let ends = [35, 235].map(|x| app.run("shape.rectangle", json!({"x": x, "y": 120, "width": 20, "height": 20})).unwrap()["id"].clone());
+        app.run("select.set", json!({"ids": ends})).unwrap();
+        let other = app.run("object.blend.make", json!({"smooth": true})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        open(&mut app).unwrap();
+        set(&app, "spacing", json!("steps"));
+        set(&app, "steps", json!(7));
+        frame(&mut app);
+        assert_eq!(spec(&app, original).spacing, BlendSpacing::Steps(7));
+
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        frame(&mut app);
+        frame(&mut app);
+        assert_eq!(spec(&app, original).spacing, BlendSpacing::SmoothColor);
+        assert_eq!(spec(&app, other).spacing, BlendSpacing::SmoothColor, "the old form does not preview another blend");
+        assert!(!app.session.in_interaction());
+        confirm(&mut app);
+        assert!(is_open(&app), "OK waits for the blends that opened the form");
+        assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(other)]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        frame(&mut app);
+        confirm(&mut app);
+        assert!(!is_open(&app));
+        assert_eq!(spec(&app, original).spacing, BlendSpacing::Steps(7));
+        assert_eq!(spec(&app, other).spacing, BlendSpacing::SmoothColor);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
     }
 }
