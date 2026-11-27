@@ -164,6 +164,45 @@ fn missing_link_scan_for_a_document_without_links_ends_without_a_worker() {
 }
 
 #[test]
+fn missing_link_hidden_when_the_overlay_turns_on_is_marked_once_shown() {
+    let dir = Folder::new("marker-hidden-then-shown");
+    let path = dir.file("art.png");
+    write(&path, &png(20, 20, RED));
+    // Found by the desktop's link watch worker, and in place as the web app does.
+    for in_place in [false, true] {
+        let mut s = session();
+        let id = place(&mut s, &path);
+        std::fs::remove_file(&path).unwrap();
+        s.execute("object.hide", &json!({"ids": [id.0]})).unwrap();
+        s.execute("view.showMissingLinks", &json!({"on": true})).unwrap();
+        let mark = |s: &mut Session| {
+            if in_place {
+                s.mark_missing_links_in_place();
+            } else {
+                s.start_link_scan();
+                s.wait_link_scan();
+                s.poll_link_scan().unwrap().unwrap();
+            }
+        };
+        mark(&mut s);
+        assert!(s.doc().unwrap().marked_missing_links().is_empty(), "hidden art is not marked");
+        s.execute("object.showAll", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().marked_missing_links(), vec![id], "shown art is marked without another scan");
+        if in_place {
+            // Artwork restored while the overlay is on is marked again.
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            s.execute("edit.clear", &json!({})).unwrap();
+            assert!(s.doc().unwrap().doc.node(id).is_none());
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert!(s.mark_missing_links_in_place());
+            assert_eq!(s.doc().unwrap().marked_missing_links(), vec![id]);
+            assert!(!s.mark_missing_links_in_place(), "unchanged art is not looked at again");
+        }
+        write(&path, &png(20, 20, RED));
+    }
+}
+
+#[test]
 fn missing_link_markers_include_placed_documents_and_exclude_hidden_art() {
     let dir = Folder::new("marker-placed");
     let path = dir.file("placed.vectorcraft");

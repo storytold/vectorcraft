@@ -105,6 +105,22 @@ impl Session {
         self.link_scan.is_none() && self.active().is_some_and(|st| st.show_missing_links && st.missing_link_markers.is_none())
     }
 
+    /// Find the active document's missing links again, here and now, when it shows them and its art
+    /// changed since they were last found (or they never were); returns whether it did. This reads
+    /// linked files on the calling thread, so only the web app calls it: it has no files to read,
+    /// so every linked file is missing there, and no link watch worker to scan in the background.
+    /// Artwork restored or placed while the overlay is on is then marked too. The desktop app
+    /// scans on the worker instead ([`Session::start_link_scan`]).
+    pub fn mark_missing_links_in_place(&mut self) -> bool {
+        let Some(st) = self.active_mut() else { return false };
+        if !st.show_missing_links || st.missing_link_markers.as_ref().is_some_and(|(seen, _)| Arc::ptr_eq(seen, &st.doc)) {
+            return false;
+        }
+        let ids = crate::cmd::links::missing_markers(&st.doc, crate::cmd::links::LinkBase::of(st));
+        st.missing_link_markers = Some((st.doc.clone(), ids));
+        true
+    }
+
     /// Start stamping the active document's linked files on a worker thread, unless a look is
     /// still running, a script is running (or the build has no files to look at: the web app).
     pub fn start_link_scan(&mut self) {

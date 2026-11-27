@@ -2567,15 +2567,12 @@ pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option
     out
 }
 
-/// Missing, visible placed objects, using the same file resolution as the Links panel.
-/// Also used on the link watch worker, away from the UI thread.
+/// Missing placed objects, using the same file resolution as the Links panel. Hidden ones are
+/// included: [`crate::DocState::marked_missing_links`] leaves out what is hidden when it is drawn, so
+/// artwork shown later is marked without another scan. Also used on the link watch worker, away
+/// from the UI thread.
 pub(crate) fn missing_markers(doc: &Document, base: LinkBase) -> Vec<NodeId> {
-    groups(doc, None)
-        .iter()
-        .filter(|g| !g.ids.is_empty() && missing(g, base))
-        .flat_map(|g| g.ids.iter().copied())
-        .filter(|id| doc.is_visible(*id))
-        .collect()
+    groups(doc, None).iter().filter(|g| !g.ids.is_empty() && missing(g, base)).flat_map(|g| g.ids.iter().copied()).collect()
 }
 
 fn show_missing_links(s: &mut Session, p: &Value) -> Result<Value> {
@@ -2586,14 +2583,8 @@ fn show_missing_links(s: &mut Session, p: &Value) -> Result<Value> {
     // Turning the overlay on leaves its markers unscanned; the link watch worker scans them
     // at once ([`Session::missing_link_scan_due`]) and the canvas repaints from its result.
     // `links.marked` stays the explicit, synchronous inspection. The web build has no worker
-    // and no files to read, so it marks at once.
-    if on && !st.show_missing_links {
-        st.missing_link_markers = None;
-        if cfg!(target_arch = "wasm32") {
-            let ids = missing_markers(&st.doc, LinkBase::of(st));
-            st.missing_link_markers = Some((st.doc.clone(), ids));
-        }
-    } else if !on {
+    // and no files to read: its app marks them in place ([`Session::mark_missing_links_in_place`]).
+    if !on || !st.show_missing_links {
         st.missing_link_markers = None;
     }
     st.show_missing_links = on;
@@ -2605,6 +2596,7 @@ fn marked(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = if st.show_missing_links { missing_markers(&st.doc, LinkBase::of(st)) } else { vec![] };
     let images: Vec<Value> = ids
         .iter()
+        .filter(|id| st.doc.is_visible(**id))
         .filter_map(|id| {
             let b = st.doc.node(*id)?.geometric_bounds()?;
             Some(json!({"id": id.0, "bounds": [b.x0, b.y0, b.x1, b.y1]}))
