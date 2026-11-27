@@ -492,7 +492,12 @@ pub(crate) fn floated(mut app: VectorcraftApp, panel: &str, lang: &str, place: P
                 let Some(node) = by_id.get(&id) else { continue };
                 eprintln!(
                     "LINK_LOCATION_FINAL lang={lang} id={id:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?} tab_panel_ancestry={ancestry:?}",
-                    node.role(), node.label(), node.value(), node.description(), node.bounds(), node.children()
+                    node.role(),
+                    node.label(),
+                    node.value(),
+                    node.description(),
+                    node.bounds(),
+                    node.children()
                 );
                 for child in node.children() {
                     let mut child_ancestry = ancestry.clone();

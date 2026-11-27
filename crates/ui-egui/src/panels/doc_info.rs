@@ -102,7 +102,13 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
         if value.contains("Überlagerung") {
             eprintln!(
                 "LINK_LOCATION_COPY_BEFORE id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
-                shown.id, node.role(), node.label(), node.value(), node.description(), node.bounds(), node.children()
+                shown.id,
+                node.role(),
+                node.label(),
+                node.value(),
+                node.description(),
+                node.bounds(),
+                node.children()
             );
         }
         node.set_description(tl!("Copy"));
@@ -110,7 +116,13 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
         if value.contains("Überlagerung") {
             eprintln!(
                 "LINK_LOCATION_COPY_AFTER id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
-                shown.id, node.role(), node.label(), node.value(), node.description(), node.bounds(), node.children()
+                shown.id,
+                node.role(),
+                node.label(),
+                node.value(),
+                node.description(),
+                node.bounds(),
+                node.children()
             );
         }
     });
