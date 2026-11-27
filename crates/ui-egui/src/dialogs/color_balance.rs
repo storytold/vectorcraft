@@ -51,8 +51,8 @@ const GLOBAL: &str = "global";
 pub(crate) struct Open {
     /// The dialog's id on the host.
     pub id: DialogId,
-    /// The document whose art the dialog can adjust.
-    document: Option<u64>,
+    /// The drawing and loaded generation whose art the dialog can adjust.
+    document: Option<(u64, u64)>,
     /// The preview the dialog's values run as one interaction.
     pub preview: LivePreview,
 }
@@ -87,7 +87,7 @@ impl Adjust {
     fn try_open(self, app: &mut VectorcraftApp) -> Result<(), String> {
         const NO_WINDOW: &str = "no window to open the dialog in";
         let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
-        let document = app.session.active().map(|st| st.uid);
+        let document = app.session.active().map(|st| (st.uid, st.reverts));
         if let Some(old) = (self.slot)(&mut app.color_dialogs).take()
             && old.document == document
         {
@@ -103,11 +103,14 @@ impl Adjust {
 
     /// OK: keeps the preview as one undo step; an `Err` keeps the dialog open with the reason.
     fn commit(self, app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
-        let document = app.session.active().map(|st| st.uid);
-        let open = (self.slot)(&mut app.color_dialogs)
-            .as_ref()
-            .filter(|open| open.document == document)
-            .ok_or(tl!("This adjustment can only apply to the document where it was opened."))?;
+        let document = app.session.active().map(|st| (st.uid, st.reverts));
+        let open = (self.slot)(&mut app.color_dialogs).as_ref().ok_or(tl!("This adjustment can only apply to the document where it was opened."))?;
+        if open.document != document {
+            if open.document.zip(document).is_some_and(|((uid, _), (active, _))| uid == active) {
+                return Err(tl!("Reopen the color adjustment after reverting the drawing").into());
+            }
+            return Err(tl!("This adjustment can only apply to the document where it was opened.").into());
+        }
         open.preview.clone().commit(app, self.cmd, (self.params)(&answer.fields))?;
         *(self.slot)(&mut app.color_dialogs) = None;
         Ok(())
@@ -117,7 +120,7 @@ impl Adjust {
     /// dialog is gone without OK.
     pub(super) fn pump(self, app: &mut VectorcraftApp) {
         let Some(mut open) = (self.slot)(&mut app.color_dialogs).take() else { return };
-        let on_its_document = app.session.active().map(|st| st.uid) == open.document;
+        let on_its_document = app.session.active().map(|st| (st.uid, st.reverts)) == open.document;
         let shown = app.dialogs().and_then(|dialogs| {
             dialogs.with(|host| host.get_by_id::<HostedParamDialog>(open.id).map(|dialog| (dialog.is_previewing(), (self.params)(dialog.fields()))))
         });
@@ -126,7 +129,7 @@ impl Adjust {
                 // `run` reports a failed preview to the status line itself.
                 let _ = open.preview.run(app, on, self.label, self.cmd, &params);
             } else {
-                // Switching documents rolled back the original interaction.
+                // Switching or reverting the drawing rolled back the original interaction.
                 open.preview = LivePreview::default();
             }
             *(self.slot)(&mut app.color_dialogs) = Some(open);
@@ -157,7 +160,7 @@ fn slot(dialogs: &mut ColorDialogs) -> &mut Option<Open> {
 
 /// Open the dialog with every channel at 0, adjusting fills and strokes.
 pub fn open(app: &mut VectorcraftApp) {
-    ADJUST.open(app);
+    Adjust { label: tl!(ADJUST.label), ..ADJUST }.open(app);
 }
 
 /// Previews the open dialog; one line of `dialogs::host::pump`.
@@ -214,22 +217,22 @@ fn track(key: &str, x: f32) -> Srgba {
 fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
     super::form::stacked(ui, fields, |ui, fields| {
         for (key, label) in mode(fields).channels {
-            percent_row(ui, fields, key, label, |x| track(key, x));
+            percent_row(ui, fields, key, tl!(label), |x| track(key, x));
         }
     })
 }
 
 fn rows() -> Vec<Param> {
-    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(m.label))).collect();
+    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(tl!(m.label)))).collect();
     let with_model = MODES.iter().map(|m| m.id).filter(|id| *id != GLOBAL);
     vec![
-        Param::new("mode", "Color Mode", ParamKind::choice(modes, Some("rgb".to_owned()))),
-        Param::new("convert", "Convert", ParamKind::bool(false)).enabled_when_in("mode", with_model),
-        Param::read_only_text("note", "", "Shifts the tints of global and spot colors; other colors stay.").visible_when("mode", GLOBAL),
+        Param::new("mode", tl!("Color Mode"), ParamKind::choice(modes, Some("rgb".to_owned()))),
+        Param::new("convert", tl!("Convert"), ParamKind::bool(false)).enabled_when_in("mode", with_model),
+        Param::read_only_text("note", "", tl!("Shifts the tints of global and spot colors; other colors stay.")).visible_when("mode", GLOBAL),
         Param::custom("channels", "Channels", channels).companions(channel_keys()),
         Param::section("Adjust Options"),
-        Param::new("fill", "Fill", ParamKind::bool(true)),
-        Param::new("stroke", "Stroke", ParamKind::bool(true)),
+        Param::new("fill", tl!("Fill"), ParamKind::bool(true)),
+        Param::new("stroke", tl!("Stroke"), ParamKind::bool(true)),
     ]
 }
 
@@ -328,6 +331,37 @@ mod tests {
         host::pump(&mut app, &ctx);
         assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
         assert_ne!(fill_hex(&app, source), "#cc6666");
+    }
+
+    #[test]
+    fn stale_color_adjustment_leaves_the_fill_restored_by_revert() {
+        let (mut app, ctx) = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("color-adjustment-revert");
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("color.vectorcraft")})).unwrap();
+        app.run("paint.setFill", json!({"color": "#406080"})).unwrap();
+        open(&mut app);
+        let doc = app.session.active().unwrap();
+        let version = (doc.uid, doc.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let doc = app.session.active().unwrap();
+        assert_eq!(doc.uid, version.0);
+        assert_ne!(doc.reverts, version.1);
+        let undo = doc.history.undo.len();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(fill_hex(&app, id), "#808080");
+
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, id), "#808080", "old Preview leaves the saved fill in place");
+        set(&app, &ctx, "preview", json!(false));
+        confirm(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, id), "#808080", "old OK leaves the saved fill in place");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     }
 
     #[test]

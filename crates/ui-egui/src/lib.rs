@@ -313,7 +313,7 @@ pub struct VectorcraftApp {
     /// Check Spelling's walk through the documents' type, while its dialog is open.
     pub(crate) spelling: Option<dialogs::check_spelling::SpellingWalk>,
     /// The Character Style Options dialog's live preview.
-    pub(crate) char_style_preview: dialogs::preview::LivePreview,
+    pub(crate) char_style_preview: dialogs::char_style_options::Preview,
     /// The Paragraph Style Options dialog's live preview.
     pub(crate) para_style_preview: dialogs::preview::LivePreview,
     /// The Justification dialog, while it is open.

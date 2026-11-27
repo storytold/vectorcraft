@@ -55,10 +55,12 @@ type Info = Map<String, Value>;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields = app.session.execute("file.info", &json!({})).map_err(|e| e.to_string())?;
     let fields = fields.as_object().cloned().ok_or("file.info gave no fields")?;
-    let document = app.session.active().ok_or("no document")?.uid;
-    let ok = |app: &mut VectorcraftApp, (document, fields): &(u64, Info)| {
-        if !app.session.active().is_some_and(|active| active.uid == *document) {
-            return Err(tl!("File Info can only change the document it was opened for.").to_owned());
+    let source = app.session.active().ok_or("no document")?;
+    let document = (source.uid, source.reverts);
+    let ok = |app: &mut VectorcraftApp, ((uid, generation), fields): &((u64, u64), Info)| {
+        let source = app.session.active().filter(|st| st.uid == *uid).ok_or(tl!("File Info can only change the document it was opened for."))?;
+        if source.reverts != *generation {
+            return Err(tl!("Reopen File Info after reverting the drawing").into());
         }
         app.run("file.info", Value::Object(fields.clone())).map(|_| ())
     };
@@ -113,6 +115,8 @@ enum Request {
     SaveTo(PathBuf),
     /// A browser picker returned a template larger than the import limit.
     TemplateTooLarge,
+    /// Download the current draft as a template, without requiring a filesystem path.
+    Download,
     /// Merge the template `source` into the fields as `mode` says.
     Import { source: Info, mode: &'static str },
 }
@@ -136,6 +140,7 @@ enum Chosen {
 #[derive(Default)]
 struct Templates {
     can_save: bool,
+    web_save: bool,
     can_open: bool,
     has_folder: bool,
     /// The metadata templates folder, where the save pick starts, once listed.
@@ -221,6 +226,7 @@ impl Templates {
             }
         });
         match chosen {
+            Some(Chosen::Pick(Pick::Save)) if self.web_save => self.requests.push(Request::Download),
             Some(Chosen::Pick(kind)) => self.pick(cx, kind, title),
             Some(Chosen::Template(file)) => wait_for_template(import, file),
             Some(Chosen::Folder) => self.requests.push(Request::Folder),
@@ -232,7 +238,7 @@ impl Templates {
 /// The File Info dialog: a form over the fields `file.info` reports, whose OK is held for the app.
 pub(crate) struct FileInfoDialog {
     id: DialogId,
-    document: u64,
+    document: (u64, u64),
     open: bool,
     /// OK files its answer for the app instead of closing ([`HoldsOk::held_ok`]).
     hold: bool,
@@ -248,7 +254,7 @@ pub(crate) struct FileInfoDialog {
 }
 
 impl FileInfoDialog {
-    fn new(document: u64, value: Info) -> Self {
+    fn new(document: (u64, u64), value: Info) -> Self {
         FileInfoDialog {
             id: dialog_id(KEY),
             document,
@@ -390,7 +396,7 @@ fn import_options(ui: &mut egui::Ui, mode: &mut &'static str) -> Option<bool> {
 }
 
 impl HoldsOk for FileInfoDialog {
-    type Answer = (u64, Info);
+    type Answer = ((u64, u64), Info);
 
     fn held_ok(mut self) -> Self {
         self.hold = true;
@@ -567,6 +573,26 @@ fn save_template(app: &mut VectorcraftApp, picked: PathBuf, fields: Info) -> Res
     save(app).map(|_| ())
 }
 
+/// Save the draft through the browser's file service. Serializing it changes neither drawing nor draft.
+fn download_template(app: &mut VectorcraftApp, fields: Info) -> Result<(), String> {
+    let title = text_of(&fields, "title");
+    let stem = vectorcraft_engine::cmd::library::file_stem_for(if title.trim().is_empty() { "Metadata" } else { &title });
+    let name = format!("{stem}.{XMP_EXT}");
+    let result = app.run("file.info.saveTemplate", json!({"fields": fields}))?;
+    let data = result["data"].as_str().ok_or("the metadata template contains no data")?.as_bytes().to_vec();
+    let request = PickRequest::save(PURPOSE).file_name(name).suggested_extension(XMP_EXT).filter(tl!("XMP metadata templates"), &[XMP_EXT]);
+    file_asks::save(app, request, data, file_asks::Owner::Free, |app, picked| {
+        match picked {
+            Picked::Downloaded(name) => app.status(format!("Saved {name}")),
+            Picked::Saved { path, .. } => app.status(format!("Saved {}", path.display())),
+            Picked::Failed(error) => return Err(error),
+            _ => {}
+        }
+        Ok(Value::Null)
+    });
+    Ok(())
+}
+
 /// Merge the template `source` names into the dialog's fields as `mode` says.
 fn import(app: &mut VectorcraftApp, d: &mut FileInfoDialog, source: Info, mode: &str) -> Result<(), String> {
     let mut p = Value::Object(source);
@@ -587,10 +613,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     // PLAN: fl.A9 lists no `file_info::pump`; the Templates menu needs the session, so hub-w2 adds this line to `dialogs::host::pump`.
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KEY);
-    let (can_save, can_open, has_folder) = (file_asks::can(app, PickKind::Save), file_asks::can(app, PickKind::Open), has_templates_folder(app));
+    let web_save = app.ui_ctx.as_ref().and_then(Host::try_of_ctx).is_some_and(|host| host.files().browser_saves());
+    let (can_save, can_open, has_folder) =
+        (web_save || file_asks::can(app, PickKind::Save), file_asks::can(app, PickKind::Open), has_templates_folder(app));
     let requests = dialogs.with(|host| {
         host.get_mut_by_id::<FileInfoDialog>(id).map(|d| {
             d.templates.can_save = can_save;
+            d.templates.web_save = web_save;
             d.templates.can_open = can_open;
             d.templates.has_folder = has_folder;
             d.take_requests()
@@ -614,6 +643,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                 None => Ok(()),
             },
             Request::TemplateTooLarge => Err(tl!("The metadata template is larger than 8 MB.").to_owned()),
+            Request::Download => match dialogs.with(|host| host.get_by_id::<FileInfoDialog>(id).map(FileInfoDialog::filed_fields)) {
+                Some(fields) => download_template(app, fields),
+                None => Ok(()),
+            },
             Request::Import { source, mode } => {
                 dialogs.with(|host| host.get_mut_by_id::<FileInfoDialog>(id).map(|d| import(app, d, source, mode))).unwrap_or(Ok(()))
             }
@@ -652,6 +685,42 @@ mod tests {
         app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, dialog_id(KEY), field, value))
     }
 
+    #[test]
+    fn stale_file_info_cannot_replace_metadata_restored_by_revert() {
+        let mut app = windowed();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("file-info-metadata-revert");
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.info", json!({"title": "Saved Title"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("metadata.vectorcraft")})).unwrap();
+        let saved = &app.session.active().unwrap().doc;
+        let (saved_title, saved_metadata) = (saved.info_title().to_owned(), saved.metadata.clone());
+        app.run("file.info", json!({"title": "Unsaved Title"})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Old Draft")).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, generation) = (source.uid, source.reverts);
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reverted = app.session.active().unwrap();
+        assert_eq!(reverted.uid, uid);
+        assert_ne!(reverted.reverts, generation);
+        assert_eq!(reverted.doc.info_title(), saved_title);
+        assert_eq!(reverted.doc.metadata, saved_metadata);
+        let undo = reverted.history.undo.len();
+        crate::tests::picks::answer_dialog(&mut app, dialog_id(KEY), &[], true);
+        let reverted = app.session.active().unwrap();
+        assert_eq!(reverted.doc.info_title(), saved_title);
+        assert_eq!(reverted.doc.metadata, saved_metadata);
+        assert_eq!(reverted.history.undo.len(), undo);
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog_id(KEY))), Some(HeldOk::Refused(_))));
+
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        crate::tests::picks::answer_dialog(&mut app, dialog_id(KEY), &[("title", json!("Fresh Title"))], true);
+        assert_eq!(app.run("file.info", json!({})).unwrap()["title"], json!("Fresh Title"));
+    }
+
     /// Presses OK: the dialog files its fields, and the frames after it run the app's OK and close an accepted dialog
     /// (a second OK would file a refused answer again). Whether it closed.
     fn press_ok(app: &mut VectorcraftApp) -> bool {
@@ -660,6 +729,75 @@ mod tests {
 
     fn held_state(app: &VectorcraftApp) -> Option<HeldOk> {
         app.dialogs().unwrap().with(|host| host.held_state(dialog_id(KEY)))
+    }
+
+    #[test]
+    fn browser_template_saves_export_the_draft_and_preserve_it_on_cancel_or_failure() {
+        use std::cell::RefCell;
+        use std::path::Path;
+        use std::rc::Rc;
+        use std::sync::Arc;
+
+        use craft::host::{Picked, ScriptedFiles};
+        use craft::ui::testing::{Fixture, Room};
+
+        let mut app = windowed();
+        let files = Arc::new(ScriptedFiles::held().in_browser());
+        crate::tests::picks::install_files(&mut app, files.clone());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let original = app.session.active().unwrap().doc.metadata.clone();
+        let app = Rc::new(RefCell::new(app));
+        let shown = Rc::clone(&app);
+        let mut fixture = Fixture::new(move |ui| crate::tests::picks::dialogs(&mut shown.borrow_mut(), ui));
+        fixture.in_room(Room::Window);
+        let ctx = fixture.ctx().clone();
+        {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(ctx.clone());
+            craft::host::Host::clone(&app.host).install(&ctx);
+            app.run("ui.fileInfoDialog", json!({})).unwrap();
+            set(&app, "title", json!("Draft Template")).unwrap();
+            set(&app, "author", json!("Ada")).unwrap();
+            set(&app, PENDING, json!("print")).unwrap();
+        }
+        fixture.settle();
+        let draft = with_dialog(&app.borrow(), |d| d.filed_fields()).unwrap();
+        for answer in [
+            Picked::Saved { path: "draft.xmp".into(), file_type: None },
+            Picked::Downloaded("draft.xmp".into()),
+            Picked::Cancelled,
+            Picked::Failed("download refused".into()),
+        ] {
+            let before = files.requests().len();
+            let menu = fixture.by_label("Templates").expect("the Templates menu");
+            fixture.click(&menu).settle();
+            let save = fixture.by_label("Save Metadata Template…").expect("browser hosts can save the draft");
+            fixture.click(&save).settle();
+            assert_eq!(files.requests().len(), before + 1, "one save per action");
+            let request = files.requests().pop().unwrap();
+            assert_eq!(request.kind, craft::host::PickKind::Save);
+            assert!(request.file_name.as_deref().is_some_and(|name| name.ends_with(".xmp")));
+            app.borrow_mut().ui.status = "before the answer".into();
+            assert!(files.answer(answer.clone()).is_some());
+            crate::file_asks::poll(&mut app.borrow_mut());
+            fixture.settle();
+            let app = app.borrow();
+            match answer {
+                Picked::Cancelled => assert_eq!(app.ui.status, "before the answer"),
+                Picked::Failed(_) => assert_eq!(app.ui.status, "download refused"),
+                _ => assert!(app.ui.status.starts_with("Saved ")),
+            }
+            assert_eq!(with_dialog(&app, |d| d.filed_fields()).unwrap(), draft);
+            let document = app.session.active().unwrap();
+            assert_eq!(document.doc.metadata, original);
+            assert!(document.history.undo.is_empty());
+            assert!(document.path.is_none(), "saving a template does not save the drawing");
+        }
+        let xmp = files.file(Path::new("draft.xmp")).expect("the service received the XMP bytes");
+        let template = vectorcraft_pdf::read_template(&xmp).expect("the saved draft is a metadata template");
+        assert_eq!(template.title.as_deref(), Some("Draft Template"));
+        assert_eq!(template.author.as_deref(), Some("Ada"));
+        assert_eq!(template.keywords, Some(vec!["print".into()]));
     }
 
     #[test]
