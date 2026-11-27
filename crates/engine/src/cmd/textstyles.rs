@@ -963,15 +963,29 @@ fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, V
         return ok();
     }
     let name = name.to_string();
-    s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| {
-        match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
-            Some(def) => def.attrs = new_attrs.clone(),
-            None => kind.defs_mut(d).push(TextStyleDef { name: name.clone(), attrs: new_attrs.clone() }),
-        }
-        update_users(d, kind, &name, &old, &new_attrs)?;
-        Ok(())
-    })?;
+    s.edit_named("Redefine {name}", &name, name == kind.normal(), |d, _| set_definition(d, kind, &name, &old, &new_attrs))?;
     ok()
+}
+
+/// Give style `name` of `d` the attributes `new_attrs` (it had `old`), and the text in it that
+/// follows the old definition the new one (users keep their overrides).
+fn set_definition(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Value>, new_attrs: &Map<String, Value>) -> Result<()> {
+    match kind.defs_mut(d).iter_mut().find(|s| s.name == name) {
+        Some(def) => def.attrs = new_attrs.clone(),
+        None => kind.defs_mut(d).push(TextStyleDef { name: name.to_string(), attrs: new_attrs.clone() }),
+    }
+    update_users(d, kind, name, old, new_attrs)
+}
+
+/// Redefine `[Normal Character Style]` of `d` with `attrs` (attributes as `charStyle.new` stores
+/// them), as Redefine Character Style does: the type in it takes the new attributes and keeps its
+/// overrides. Nothing changes when `attrs` is the current definition.
+pub(crate) fn redefine_normal_char(d: &mut Document, attrs: &Map<String, Value>) -> Result<()> {
+    let old = Kind::Char.attrs(d, NORMAL_CHAR).unwrap_or_default();
+    if *attrs == old {
+        return Ok(());
+    }
+    set_definition(d, Kind::Char, NORMAL_CHAR, &old, attrs)
 }
 
 fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {

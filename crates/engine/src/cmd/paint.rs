@@ -1159,7 +1159,7 @@ impl Session {
     /// takes from the selection now ([`Session::inherit_new_art`]). No appearance is captured
     /// while inheritance does not run (New Art Has Basic Appearance on, or the active tool painting
     /// with both the fill and the stroke).
-    fn note_defaults_only(&mut self) {
+    pub(crate) fn note_defaults_only(&mut self) {
         let inherits = !self.prefs.new_art_basic && !(self.tool_paints(false) && self.tool_paints(true));
         self.defaults_only_ran = Some(if inherits { self.new_art_source() } else { None });
     }

@@ -1601,7 +1601,8 @@ impl Clipboard {
     /// How the pasted SVG filter effects relink ([`Relink::filters`]). Each names the document's
     /// filter of its name; one that draws another definition than that filter takes the document's
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
-    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
+    /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone; an
+    /// effect of the document that draws the same definition under a name no filter has gives that name. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
     /// a free letter, digit or other printable ASCII character; the filter's id is always its name. An error when no free name fits.
     fn filter_links(&self, d: &Document, same_doc: bool) -> Result<BTreeMap<(String, String), (String, String)>> {
@@ -1627,6 +1628,8 @@ impl Clipboard {
         }
         let mut taken: BTreeSet<String> = d.svg_filters.iter().map(|f| f.name.clone()).chain(found.iter().map(|(n, _)| n.clone())).collect();
         let mut effects_read = false;
+        // The filter effects of the document, by name and definition.
+        let mut held_effects = BTreeSet::new();
         let mut links = BTreeMap::new();
         for (name, xml) in found {
             let Some(held) = d.svg_filters.iter().find(|f| f.name == name).filter(|f| f.xml != xml.trim()) else { continue };
@@ -1640,13 +1643,27 @@ impl Clipboard {
                     effects_read = true;
                     for root in d.art_roots() {
                         node_filter_names(root, &mut taken);
+                        node_filters(root, &mut held_effects);
                     }
                     for a in vectorcraft_brush::library(d).iter().flat_map(Brush::art) {
                         node_filter_names(a, &mut taken);
+                        node_filters(a, &mut held_effects);
                     }
                     for g in &d.graphic_styles {
                         appearance_filter_names(&g.appearance, &mut taken);
+                        appearance_filters(&g.appearance, &mut held_effects);
                     }
+                }
+                // An effect of the document that already draws this filter under a name no filter
+                // of the document has (one pasted or loaded before) gives its name, so pasting or
+                // loading the same filter again adds no other name.
+                let earlier = held_effects.iter().find(|(n, x)| {
+                    !d.svg_filters.iter().any(|f| &f.name == n)
+                        && vectorcraft_render::effects::svg_filter::with_id(&xml, n).is_some_and(|drawn| drawn == *x)
+                });
+                if let Some((n, x)) = earlier {
+                    links.insert((name, xml), (n.clone(), x.clone()));
+                    continue;
                 }
                 // Free names made from the starts of the name, longest first, then free letters and
                 // digits, then other single printable ASCII characters: the first under which the
@@ -1855,6 +1872,33 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
         }
     }
     Ok(placed)
+}
+
+/// Add to `d` the swatches, patterns, symbols and brushes (and what their art uses) that the
+/// appearance `look` of `src` and the character style attributes `attrs` of `src` paint with, as
+/// [`import_text_styles`] adds those of loaded styles, and give back `look` and `attrs` relinked to
+/// them (a resource `d` has under the same name and with the same contents is used; another is
+/// added under a free name; a global or spot color whose name `d` gives another color is `d`'s;
+/// an SVG filter whose name `d` gives another filter is renamed).
+pub(crate) fn import_looks(
+    src: &Document,
+    d: &mut Document,
+    look: &Appearance,
+    attrs: &Map<String, Value>,
+) -> Result<(Appearance, Map<String, Value>)> {
+    let library = OnceCell::new();
+    let defs = Defs::of(src, &library);
+    let mut used = Used::default();
+    used.follow(&defs, vec![Source::Appearance(look), Source::Attrs(attrs)]);
+    // The look goes on an empty path, so that its SVG filters are renamed where `d` gives their
+    // names other filters, as a pasted object's are.
+    let carrier = Node::path(vectorcraft_doc::NodeId(0), vectorcraft_geom::PathData::default(), look.clone());
+    let clip = Clipboard::with_used(src, &used, &library, vec![carrier]);
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
+    let (mut look, mut attrs) = (look.clone(), attrs.clone());
+    out.relink.appearance(&mut look);
+    out.relink.attrs(&mut attrs);
+    Ok((look, attrs))
 }
 
 /// The resources graph designs `names` of `src` use, through the definitions they lead to.
