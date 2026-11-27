@@ -42,7 +42,7 @@ pub(crate) struct Open {
     /// The hosted dialog.
     id: DialogId,
     opening: Arc<()>,
-    document: Option<u64>,
+    document: Option<(u64, u64)>,
     /// Where a click opened it, to draw a flare there on OK.
     click: Option<Point>,
     /// The selected flares (ids) and the settings the dialog opened with, to change them on OK.
@@ -55,7 +55,7 @@ const PREVIEW_LABEL: &str = "Flare";
 
 impl Open {
     fn on_original_drawing(&self, app: &VectorcraftApp) -> bool {
-        self.preview.is_none() || app.session.active().map(|st| st.uid) == self.document
+        self.preview.is_none() || app.session.active().map(|st| (st.uid, st.reverts)) == self.document
     }
 
     fn cancel_preview(self, app: &mut VectorcraftApp) {
@@ -132,7 +132,7 @@ pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
         ParamDialog::new(KIND, tl!("Flare Tool Options"), params(lengths)).values(Bind::bound(fields)).previews(previews).reset_to(defaults.clone())
     });
-    let document = app.session.active().map(|st| st.uid);
+    let document = app.session.active().map(|st| (st.uid, st.reverts));
     match open_held_with(app, dialog, ok, held) {
         Some(id) => app.object_dialogs.flare = Some(Open { id, opening, document, click: at, edit, preview: previews.then(LivePreview::default) }),
         None => app.status("no window"),
@@ -301,6 +301,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
     let open = app.object_dialogs.flare.as_ref().ok_or("the Flare Tool Options dialog is gone")?;
     if !open.on_original_drawing(app) {
+        if app.session.active().map(|st| st.uid) == open.document.map(|(uid, _)| uid) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
         return Err(tl!("Return to the original drawing to place or edit the flare").into());
     }
     if open.preview.is_some() && other_preview(app) {
@@ -543,5 +546,33 @@ mod tests {
         press_ok(&mut app);
         let parts = flare_parts(&app);
         assert_eq!((parts.iter().filter(|p| *p == "Ring").count(), parts.iter().any(|p| p == "Rays")), (10, true), "{parts:?}");
+    }
+
+    #[test]
+    fn a_pending_flare_does_not_draw_on_restored_art() {
+        let mut app = app();
+        let dir = vectorcraft_testkit::TempDir::new("flare-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("shape.ellipse", json!({"x": 5, "y": 5, "width": 20, "height": 20})).unwrap();
+        let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+        open(&mut app, Some(Point::new(100.0, 110.0)));
+        pump(&mut app);
+        assert_eq!(count(&app), 2, "the original art and the flare preview");
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        pump(&mut app);
+        assert_eq!(count(&app), 0, "the old preview leaves the restored art alone");
+        let options = app.session.tool_options_of("flare");
+        press_ok(&mut app);
+        assert_eq!(count(&app), 0, "the old approval leaves the restored art alone");
+        assert_eq!(app.session.tool_options_of("flare"), options);
+        assert!(app.object_dialogs.flare.is_some());
+
+        press_cancel(&mut app);
+        open(&mut app, Some(Point::new(100.0, 110.0)));
+        press_ok(&mut app);
+        assert_eq!(count(&app), 1);
     }
 }

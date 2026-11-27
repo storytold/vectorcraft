@@ -332,6 +332,63 @@ fn a_swatch_drag_keeps_its_color_after_next_document() {
 }
 
 #[test]
+fn linked_swatch_drops_stay_in_their_source_document() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    for spot in [false, true] {
+        for (different_drawing, same_name) in [(false, false), (true, false), (true, true)] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let name = "Shared Swatch";
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("swatch.new", json!({"name": name, "color": "#ff0000", "global": true, "spot": spot})).unwrap();
+            if different_drawing {
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            }
+            if same_name {
+                app.run("swatch.new", json!({"name": name, "color": "#0000ff", "global": true})).unwrap();
+            }
+            let target = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+            app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+            let destination = app.session.active().unwrap().uid;
+            if different_drawing {
+                app.run("window.previousDocument", json!({})).unwrap();
+            }
+            let mut panel = Panel::new(app, |app, ui| {
+                app.sync_views();
+                ui.allocate_ui_with_layout(egui::vec2(280.0, 480.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                    crate::panels::swatches::show(app, ui);
+                });
+                canvas::show(app, ui);
+            });
+            let label = "Shared Swatch, #ff0000";
+            let from = panel.rect(label).center();
+            let to = panel.app().canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
+            panel.drag_hold_role(label, Role::LIST_ITEM, to - from);
+            assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the Swatches row starts a paint drag");
+            if different_drawing {
+                panel.key(Key::F6, Modifiers::COMMAND);
+            }
+            assert_eq!(panel.app().session.active().unwrap().uid, destination);
+            assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the drag stays active");
+            panel.release();
+            let app = panel.app();
+            let doc = &app.session.active().unwrap().doc;
+            let fill = doc.node(target).unwrap().appearance.fill_paint();
+            if different_drawing {
+                assert_eq!(fill, Paint::solid(Color::rgb8(0, 255, 0)), "the destination fill stays unchanged");
+                assert_eq!(app.ui.status, "A linked color swatch can only be applied in its own document.");
+                assert_eq!(doc.swatch(name).and_then(|s| s.paint.color()), same_name.then_some(Color::rgb8(0, 0, 255)));
+            } else {
+                assert_eq!(fill, doc.tint_paint(name, 1.0).unwrap(), "the fill remains linked to its swatch");
+            }
+        }
+    }
+}
+
+#[test]
 fn a_color_dropped_on_a_selected_mesh_recolors_the_point_or_patch_under_it() {
     use vectorcraft_doc::GradientMesh;
     let (mut app, _ctx) = app_with_canvas();
