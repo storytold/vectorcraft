@@ -100,7 +100,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let opening = Arc::new(());
     let cancelled = Arc::clone(&opening);
     let document = app.session.active().map(|st| (st.uid, st.reverts));
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| dialog(on_blend, lengths));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| dialog(on_blend, lengths).values(Bind::bound(fields)));
     let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(move |app| {
         if app.object_dialogs.blend.as_ref().is_some_and(|open| Arc::ptr_eq(&open.opening, &cancelled))
             && let Some(open) = app.object_dialogs.blend.take()
@@ -456,6 +456,40 @@ mod tests {
         let id = app.run("object.blend.make", json!({})).unwrap()["id"].as_u64().unwrap();
         let s = spec(&app, id);
         assert_eq!((s.spacing, s.orientation), (BlendSpacing::Steps(7), BlendOrientation::AlignToPath));
+    }
+
+    #[test]
+    fn blend_step_count_keeps_a_live_keyboard_edit() {
+        use craft::ui::testing::Fixture;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let (mut app, blend) = app_with_smooth_blend();
+        app.run("object.blend.options", json!({"id": blend, "spacing": "steps", "steps": 7})).unwrap();
+        let app = Rc::new(RefCell::new(app));
+        let shown = app.clone();
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| host.run(ui));
+            super::super::host::pump(&mut app, ui.ctx());
+        });
+        fixture.room(egui::vec2(880.0, 720.0));
+        {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(fixture.ctx().clone());
+            open(&mut app).unwrap();
+        }
+        fixture.settle();
+        assert_eq!(fields(&app.borrow()).int("steps"), Some(7), "the dialog opens with the blend's existing step count");
+        let steps = fixture.by_label("Steps").expect("the enabled Steps field");
+        fixture.click(&steps).key(egui::Key::A, egui::Modifiers::COMMAND).type_text("9").key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+        {
+            let mut app = app.borrow_mut();
+            assert_eq!(fields(&app).int("steps"), Some(9), "the hosted form keeps its keyboard edit");
+            confirm(&mut app);
+            assert_eq!(spec(&app, blend).spacing, BlendSpacing::Steps(9));
+        }
     }
 
     #[test]
