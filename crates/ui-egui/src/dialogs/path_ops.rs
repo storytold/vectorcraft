@@ -339,9 +339,8 @@ pub(crate) fn open_simplify(app: &mut VectorcraftApp, tolerance: f64) {
     open_dialog(app, PathOp::Simplify, simplify_dialog(tolerance), None);
 }
 
-
 #[cfg(test)]
-mod simplify_options_tests {
+mod preview_document_tests {
     use super::*;
     use crate::dialogs::tests::{app, cancel, confirm, frame, set};
 
@@ -411,6 +410,28 @@ mod simplify_options_tests {
         assert!(original_paths(&app).is_empty(), "Show Original leaves the other drawing's canvas alone");
         assert!(cancel(&mut app));
         assert!(app.session.in_interaction(), "Cancel leaves the other drawing's edit in progress");
+    }
+
+    #[test]
+    fn offset_path_skips_the_other_drawings_artwork() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 60})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        crate::menus::invoke(&mut app, "object.path.offsetPath", json!({}));
+        set(&mut app, "offset", json!(12.0));
+        set(&mut app, "preview", json!(true));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 140, "y": 30, "width": 80, "height": 100})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        frame(&mut app, vec![]);
+
+        assert!(app.session.doc().unwrap().doc == other, "Offset Path preview leaves the other drawing unchanged");
+        assert!(!confirm(&mut app));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(confirm(&mut app));
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
     }
 }
 
