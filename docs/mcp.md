@@ -15920,7 +15920,10 @@ Commands:
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
   keeps its place, as with the Transform panel's W and H; with `center`, the shape's center moves to it; otherwise the shape's center stays. Snapping to the pixel
   grid and an attachment to a path apply after that, as they do for the Transform panel's W and H, and can move the
-  point. A `reference` outside 0 to 8 is an error. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
+  point. A `reference` outside 0 to 8 is an error. A new center, size or rotation moves, scales or turns the object as
+  a transform does: a linked opacity mask and placed gradients go with it, pattern tiles go with it when `patterns` (or
+  General › Transform Pattern Tiles) is on, and strokes and effects scale when `strokes` (or Scale Strokes & Effects)
+  is on. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
   `null` when snapping to the pixel grid left a plain path).
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same
