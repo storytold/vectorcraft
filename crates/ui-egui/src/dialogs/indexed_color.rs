@@ -25,13 +25,22 @@ const PREVIEW_LABEL: &str = "Convert to Indexed Color";
 
 pub(crate) struct Open {
     document: u64,
+    reverts: u64,
     opening: Arc<()>,
     preview: LivePreview,
 }
 
 impl Open {
     fn on_original_drawing(&self, app: &VectorcraftApp) -> bool {
-        app.session.active().is_some_and(|st| st.uid == self.document)
+        self.check_drawing(app).is_ok()
+    }
+
+    fn check_drawing(&self, app: &VectorcraftApp) -> Result<(), &'static str> {
+        let st = app.session.active().filter(|st| st.uid == self.document).ok_or(tl!("Return to the original drawing to convert its images"))?;
+        if st.reverts != self.reverts {
+            return Err(tl!("Reopen Convert to Indexed Color after reverting the drawing"));
+        }
+        Ok(())
     }
 
     fn cancel_preview(self, app: &mut VectorcraftApp) {
@@ -86,7 +95,7 @@ pub fn open(app: &mut VectorcraftApp) {
         app.status("no window".to_string());
         return;
     };
-    let Some(document) = app.session.active().map(|st| st.uid) else {
+    let Some((document, reverts)) = app.session.active().map(|st| (st.uid, st.reverts)) else {
         app.status(tl!("Open a drawing to convert its images"));
         return;
     };
@@ -98,9 +107,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let cancelled = Arc::clone(&opening);
     let ok = |app: &mut VectorcraftApp, r: &ParamResult| {
         let open = app.object_dialogs.indexed.as_ref().ok_or("the Indexed Color dialog is gone")?;
-        if !open.on_original_drawing(app) {
-            return Err(tl!("Return to the original drawing to convert its images").into());
-        }
+        open.check_drawing(app)?;
         if other_preview(app) {
             app.keep_typing()?;
             if other_preview(app) {
@@ -123,7 +130,7 @@ pub fn open(app: &mut VectorcraftApp) {
         }
     });
     if open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }).is_some() {
-        app.object_dialogs.indexed = Some(Open { document, opening, preview: LivePreview::default() });
+        app.object_dialogs.indexed = Some(Open { document, reverts, opening, preview: LivePreview::default() });
     } else {
         app.status("no window".to_string());
     }
@@ -264,5 +271,39 @@ mod tests {
         host.with(|h| h.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(&mut app, &ctx);
         assert!(palette(&app, source).indexed_png());
+    }
+
+    #[test]
+    fn indexed_color_preview_and_ok_leave_reloaded_pixels_unchanged() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("indexed-color-image-revert");
+        let image = add_raster(&mut app);
+        app.run("file.saveAs", json!({"path": dir.join("raster.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [image.0]})).unwrap();
+        open(&mut app);
+        let st = app.session.active().unwrap();
+        let version = (st.uid, st.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, version.0);
+        assert_ne!(st.reverts, version.1);
+        let undo = st.history.undo.len();
+        app.run("select.set", json!({"ids": [image.0]})).unwrap();
+        let before = palette(&app, image).rgba().unwrap().2;
+
+        let id = dialog_id(KIND);
+        crate::tests::picks::answer_dialog(
+            &mut app,
+            id,
+            &[("reduction", json!("blackWhite")), ("dither", json!("none")), ("preview", json!(true))],
+            false,
+        );
+        assert_eq!(palette(&app, image).rgba().unwrap().2, before, "old Preview leaves the saved pixels in place");
+        crate::tests::picks::answer_dialog(&mut app, id, &[("preview", json!(false))], true);
+        assert_eq!(palette(&app, image).rgba().unwrap().2, before, "old OK leaves the saved pixels in place");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     }
 }
