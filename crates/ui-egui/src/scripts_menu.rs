@@ -200,13 +200,13 @@ fn take() {
     }
 }
 
-/// Wait for the reads under way and take them in.
+/// Wait for the reads under way, however long they take, and take them in.
 #[cfg(test)]
 pub(crate) fn finish() {
     {
         let state = state();
         if let Some(queue) = &state.queue {
-            queue.finish(Duration::from_secs(10));
+            assert!(queue.finish(Duration::MAX), "the reads of the Scripts folder could not finish");
         }
     }
     take();
