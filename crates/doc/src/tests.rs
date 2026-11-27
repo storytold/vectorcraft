@@ -496,6 +496,7 @@ fn art_for_artboard_copy_takes_artwork_larger_than_artboard_or_with_bleed() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     // Shape spanning (190..300) x (50..150): 10pt on Artboard 0, 100pt on Artboard 1.
     let neighbor_art = d.alloc_id();
@@ -523,6 +524,7 @@ fn artboard_for_bounds_edge_cases_and_tie_breaks() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
 
     // 1. Artwork whose center is outside all boards, but overlaps Artboard 0 most:
