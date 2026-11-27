@@ -146,6 +146,8 @@ struct TargetOwner {
     paints: Arc<TargetPaints>,
     /// The history step when the popover took `paints`.
     step: Option<(u64, u64)>,
+    /// The document's count of Undo and Redo steps as of the popover's last pass.
+    restores: Option<u64>,
     /// The paints the popover owned before its own later edits, newest last, each with the history step it was
     /// current at and the stop or point it edited then, so that Undo and Redo of those edits keep it open on the
     /// same stop or point.
@@ -168,17 +170,21 @@ impl TargetOwner {
     /// The most earlier paints kept.
     const EARLIER: usize = 32;
 
-    fn new(key: TargetKey, paints: Arc<TargetPaints>, step: Option<(u64, u64)>) -> Self {
-        Self { key, paints, step, earlier: Vec::new() }
+    fn new(key: TargetKey, paints: Arc<TargetPaints>, step: Option<(u64, u64)>, restores: Option<u64>) -> Self {
+        Self { key, paints, step, restores, earlier: Vec::new() }
     }
 
     fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
         self.key.matches(app, target) && self.owns(app, target, &self.paints)
     }
 
-    /// The earlier owned paint and stop or point that the target shows now, as after Undo or Redo of one of the
-    /// popover's own edits. A stop selected after Undo that is not the one that paint belonged to matches nothing.
-    fn owned_earlier(&self, app: &VectorcraftApp, target: &Target) -> Option<TargetKey> {
+    /// The earlier owned paint and stop or point that the target shows now after Undo or Redo of one of the popover's
+    /// own edits. A stop selected after Undo that is not the one that paint belonged to matches nothing, and so does
+    /// an earlier paint set again by anything other than Undo or Redo.
+    fn owned_earlier(&self, app: &VectorcraftApp, target: &Target, restores: Option<u64>) -> Option<TargetKey> {
+        if restores == self.restores {
+            return None;
+        }
         self.earlier.iter().rev().find(|e| e.key.matches(app, target) && self.owns(app, target, &e.paints)).map(|e| e.key.clone())
     }
 
@@ -612,8 +618,9 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     let Ok(edited) = app.session.gradient_edit_paints(!key.fill) else { return };
     let paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
     let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints, step)));
+        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints, step, restores)));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -637,6 +644,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         None => {}
     }
     let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
     let shown_mode = app.ui.color_panel.mode;
     let Some((mut owner, own_mode)) = dialogs.with(|host| {
         host.get_mut_by_id::<GradientStopPopover>(id).map(|popover| {
@@ -656,7 +664,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if owner.matches(app, &target) || (own_mode && owner.key.matches(app, &target)) {
             Some((target, None))
         } else {
-            owner.owned_earlier(app, &target).map(|key| (target, Some(key)))
+            owner.owned_earlier(app, &target, restores).map(|key| (target, Some(key)))
         }
     });
     let Some((target, earlier)) = accepted else {
@@ -668,6 +676,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if let Some(key) = earlier {
         owner.key = key;
     }
+    owner.restores = restores;
     let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
@@ -982,6 +991,29 @@ mod tests {
         app.run("gradient.selectStop", json!({"index": 0})).unwrap();
         host::pump(&mut app, &ctx);
         assert!(!is_open(&app), "after Redo, stop 0 is the neighbor");
+    }
+
+    #[test]
+    fn its_earlier_paint_set_again_from_elsewhere_closes_the_popover() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let queue = |app: &VectorcraftApp, opacity: f64| {
+            app.dialogs().unwrap().with(|host| {
+                host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(opacity);
+            });
+        };
+        queue(&app, 25.0);
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app) && stops(&app)[1].opacity < 1.0, "the live edit applied");
+        // The fixture's gradient again, set without Undo.
+        let stops_json = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops_json, "start": [100, 150], "end": [200, 150]}})).unwrap();
+        assert_eq!(app.session.selected_stop(), Some(1));
+        queue(&app, 50.0);
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "a gradient from elsewhere closes it, even one it owned before");
+        assert_eq!(stops(&app)[1].opacity, 1.0, "the pending edit is discarded");
     }
 
     #[test]
