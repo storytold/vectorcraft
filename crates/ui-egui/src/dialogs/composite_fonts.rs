@@ -137,7 +137,7 @@ enum PartEdit {
 /// [`COMMAND`] and answers whether the dialog may close.
 pub struct CompositeFontsDialog {
     /// The document whose fonts the draft edits.
-    document: u64,
+    document: (u64, u64),
     fonts: Vec<CompositeFont>,
     /// The index of the font picked.
     selected: usize,
@@ -172,7 +172,7 @@ pub struct CompositeFontsDialog {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let document = app.session.active().ok_or("no document open")?;
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
-    let dialog = CompositeFontsDialog::new(document.uid, document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
+    let dialog = CompositeFontsDialog::new((document.uid, document.reverts), document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -244,7 +244,7 @@ fn part_mut(f: &mut CompositeFont, at: usize) -> Option<&mut CompositePart> {
 
 impl CompositeFontsDialog {
     /// The dialog over `fonts`, the first picked.
-    fn new(document: u64, fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
+    fn new(document: (u64, u64), fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
         let mut sample = Map::new();
         sample::defaults(&mut sample);
         CompositeFontsDialog {
@@ -862,11 +862,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     }) else {
         return;
     };
-    if let Some((document, fonts)) = held {
-        let answer = if app.session.active().is_some_and(|active| active.uid == document) {
-            app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from)
-        } else {
-            Err(Label::from(tl!("Composite Fonts can only change the document where it was opened.").to_owned()))
+    if let Some(((document, reverts), fonts)) = held {
+        let answer = match app.session.active().filter(|active| active.uid == document) {
+            Some(active) if active.reverts == reverts => app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from),
+            Some(_) => Err(Label::from(tl!("The document was reverted. Reopen this dialog to continue."))),
+            None => Err(Label::from(tl!("Composite Fonts can only change the document where it was opened."))),
         };
         with_dialog(app, |d| d.held.answer(answer));
     }

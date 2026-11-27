@@ -62,9 +62,8 @@ pub(crate) struct PasteAsk {
     params: Value,
     /// The models whose profiles differ, as `clipboard.profileMismatch` lists them.
     mismatches: Vec<Value>,
-    /// The uid of the document the question was asked in: a paste that runs at once pastes nothing
-    /// once another document is active.
-    doc: Option<u64>,
+    /// The drawing and content generation the question was asked in.
+    drawing: Option<(u64, u64)>,
     /// The chain of a deferred paste (one that waits for its clipboard), which placing answers.
     deferred: Option<u64>,
 }
@@ -271,8 +270,8 @@ fn open_paste(app: &mut VectorcraftApp, command: &str, params: &Value, mismatche
         crate::placing::cancel_swatch_paste(app);
     }
     let dialog = paste_dialog(&ctx, &mismatches);
-    let doc = app.session.active().map(|st| st.uid);
-    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, doc, deferred: None });
+    let drawing = app.session.active().map(|st| (st.uid, st.reverts));
+    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, drawing, deferred: None });
     dialogs.with(|h| h.open(dialog));
     Some(Ok(json!({ "dialog": PASTE_KIND })))
 }
@@ -389,12 +388,11 @@ fn pump_paste(app: &mut VectorcraftApp) {
     }
 }
 
-/// OK: run the paste with the choice; any Swatch Conflict question comes next. When another
-/// document has become the active one since a paste that runs at once asked, it pastes nothing. When
-/// the profiles that paste or drop would bring have changed since it asked (the clipboard, the
-/// dragged objects' document or the destination's profile changed), it asks again about the new ones.
+/// OK: run the paste with the choice; any Swatch Conflict question comes next. An immediate paste
+/// is canceled if its drawing is inactive or reverted. When the profiles it would bring have changed
+/// since it asked (the clipboard, dragged objects or destination changed), it asks about the new ones.
 fn paste_confirm(app: &mut VectorcraftApp, ask: PasteAsk, choice: Value) -> Result<Value, String> {
-    if ask.deferred.is_none() && ask.doc != app.session.active().map(|st| st.uid) {
+    if ask.deferred.is_none() && ask.drawing != app.session.active().map(|st| (st.uid, st.reverts)) {
         return Ok(json!({}));
     }
     let params = with_choice(&ask.params, choice);
