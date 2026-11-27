@@ -610,9 +610,63 @@ pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
 }
 
+/// Where a text object draws: its visual box, point type that has no layout laid out first, in
+/// the fonts the import has ([`vectorcraft_text::FontDb::global`]), so the box depends on which
+/// fonts are installed, as the opened document's does. Any point type without a layout is laid
+/// out, not only type made from the file's text document, which is the type that has none during
+/// the import (the page's own type is measured when it is read). Without a layout the box of point
+/// type is an estimate that runs right from its anchor
+/// ([`vectorcraft_doc::TextObject::estimate_bounds`]): beside where right-aligned type draws, over
+/// one half of centered type, across vertical type, and as wide as an average font would set it,
+/// which can be wider than the type is. The node keeps no layout: the document's type is measured
+/// when it opens. Any other object's box is its visual box.
+///
+/// `made_only` matches made type with the page's type by this box; `plan` doesn't match by it yet.
+/// The page comparison's type areas use it for every file's layers, those `plan` fills included.
+pub(super) fn drawn_box(node: &Node) -> Option<Rect> {
+    if let NodeKind::Text(t) = &node.kind
+        && matches!(t.kind, vectorcraft_doc::TextKind::Point)
+        && t.cached_bounds.is_none()
+    {
+        let mut laid = node.clone();
+        if let NodeKind::Text(t) = &mut laid.kind {
+            t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
+        }
+        return laid.visual_bounds();
+    }
+    node.visual_bounds()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Made point type's box is where its alignment and orientation draw it: right-aligned type
+    /// before its anchor, centered type round it, vertical type down from it. Its node keeps no
+    /// layout.
+    #[test]
+    fn made_point_type_s_box_is_where_its_alignment_and_orientation_draw_it() {
+        use vectorcraft_doc::{CharStyle, Justify, TextObject};
+        let anchor = 300.0;
+        let boxed = |justify: Justify, vertical: bool| {
+            let mut t = TextObject::point(Point::new(anchor, 200.0), "Wide heading", CharStyle { size: 40.0, ..CharStyle::default() });
+            t.para.justify = justify;
+            for p in t.para_styles_mut() {
+                p.justify = justify;
+            }
+            t.vertical = vertical;
+            let node = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
+            let b = drawn_box(&node).unwrap();
+            assert!(matches!(&node.kind, NodeKind::Text(t) if t.cached_bounds.is_none()));
+            b
+        };
+        let (left, right, centered, down) =
+            (boxed(Justify::Left, false), boxed(Justify::Right, false), boxed(Justify::Center, false), boxed(Justify::Left, true));
+        assert!(left.x0 > anchor - 20.0 && left.width() > 100.0, "{left:?}");
+        assert!(right.x1 < anchor + 20.0 && (right.width() - left.width()).abs() < 1.0, "{right:?}");
+        assert!((centered.center().x - anchor).abs() < 20.0 && (centered.width() - left.width()).abs() < 1.0, "{centered:?}");
+        assert!(down.height() > 2.0 * down.width() && down.height() > 100.0, "{down:?}");
+    }
 
     /// Past the limits, the slots of type that looks draw go, in groups too, and other slots stay.
     #[test]

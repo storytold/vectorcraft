@@ -287,3 +287,44 @@ fn sampler_above_the_field_previews_and_cancel_restores_the_original() {
     cancel(&mut app, &ctx);
     assert_eq!(fill_hex(&app), original);
 }
+
+#[test]
+fn the_artboard_picker_leaves_restored_artboards_unchanged() {
+    for accept in [true, false] {
+        let (mut app, ctx) = app();
+        app.run("artboard.new", json!({})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#123456"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new("artboard-picker-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#ff0000"})).unwrap();
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        set_hex(&mut app, &ctx, "#abcdef");
+        assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#abcdef"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = artboard_color(&app);
+        assert_eq!(restored.map(|c| c.to_hex()).as_deref(), Some("#123456"));
+        let steps = undo_len(&app);
+        frame(&mut app, &ctx);
+        assert_eq!(artboard_color(&app), restored);
+        assert!(!app.session.in_interaction());
+        if accept {
+            ok(&mut app, &ctx);
+            assert!(app.ui.status.contains("document was reverted"));
+        } else {
+            app.begin_interaction("New drawing edit").unwrap();
+            cancel(&mut app, &ctx);
+            assert!(app.session.in_interaction());
+            app.session.cancel_interaction().unwrap();
+        }
+        assert_eq!(artboard_color(&app), restored);
+        assert_eq!(undo_len(&app), steps);
+
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        set_hex(&mut app, &ctx, "#abcdef");
+        ok(&mut app, &ctx);
+        assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#abcdef"));
+    }
+}

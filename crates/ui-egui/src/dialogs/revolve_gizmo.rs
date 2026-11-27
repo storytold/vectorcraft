@@ -819,7 +819,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
             three_d::with_fields(app, |dialog| write(dialog, before, landed));
         }
     }
-    super::three_d_classic::show_outline(app, ui, space);
+    if three_d::editing_current_drawing(app) {
+        super::three_d_classic::show_outline(app, ui, space);
+    }
 }
 
 #[cfg(test)]

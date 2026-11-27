@@ -29,6 +29,7 @@ pub(crate) struct NewTextStyle {
     opening: Opening,
     /// Whether the dialog makes a paragraph style.
     pub(crate) para: bool,
+    document: u64,
     target: Value,
 }
 
@@ -54,7 +55,8 @@ style_dialog!(NewTextStyle, KIND);
 /// Open New Character Style (`para`: New Paragraph Style) with the name `charStyle.new` would give
 /// the style, to make it from the text `target` names.
 pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value, String> {
-    let doc = &app.session.active().ok_or("no document open")?.doc;
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = (state.uid, &state.doc);
     let name = vectorcraft_engine::cmd::textstyles::new_style_name(doc, para);
     let mut target = if target.is_object() { target } else { json!({}) };
     let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
@@ -69,7 +71,7 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
         let inner = char_style_options::hosted(KIND, tl!("New Character Style"), &opening, &name);
         (Opening::Char(opening), inner)
     };
-    app.dialogs().ok_or("no window")?.with(|host| host.open(NewTextStyle { inner, opening, para, target }));
+    app.dialogs().ok_or("no window")?.with(|host| host.open(NewTextStyle { inner, opening, para, document, target }));
     Ok(json!({ "dialog": KIND }))
 }
 
@@ -78,7 +80,7 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
 /// into view when it next draws.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some((para, frame)) = dialogs.with(|host| host.get_mut::<NewTextStyle>().map(|d| (d.para, d.frame()))) else {
+    let Some((para, document, frame)) = dialogs.with(|host| host.get_mut::<NewTextStyle>().map(|d| (d.para, d.document, d.frame()))) else {
         // The dialog closed: its answer or cancel has nothing left for the app to do.
         let _ = dialogs.with(|host| host.take::<NewTextStyle>());
         return;
@@ -86,12 +88,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     if !frame.ok {
         return;
     }
-    let made = frame.params.and_then(|params| app.run(if para { "paraStyle.new" } else { "charStyle.new" }, params));
+    let made = if app.session.active().is_some_and(|doc| doc.uid == document) {
+        frame.params.and_then(|params| app.run(if para { "paraStyle.new" } else { "charStyle.new" }, params))
+    } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+        Err("switch back to the document where this style was opened".into())
+    } else {
+        Err("the document where this style was opened has closed".into())
+    };
     let answer = match &made {
         Ok(v) => {
-            if let Some((uid, name)) = app.session.active().and_then(|doc| v["name"].as_str().map(|name| (doc.uid, name.to_string()))) {
-                app.ui.text_styles.made.retain(|(pending_uid, pending_para, _)| *pending_uid != uid || *pending_para != para);
-                app.ui.text_styles.made.push((uid, para, name));
+            if let Some(name) = v["name"].as_str() {
+                app.ui.text_styles.made.retain(|(pending_uid, pending_para, _)| *pending_uid != document || *pending_para != para);
+                app.ui.text_styles.made.push((document, para, name.to_string()));
             }
             Ok(())
         }
@@ -102,4 +110,54 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             d.hosted_mut().answer_ok(answer);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::{HeldOk, StackDialog};
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    fn style_exists(app: &VectorcraftApp, para: bool, name: &str) -> bool {
+        let doc = &app.session.doc().unwrap().doc;
+        if para { doc.para_styles.iter().any(|style| style.name == name) } else { doc.char_styles.iter().any(|style| style.name == name) }
+    }
+
+    fn assert_style_stays_in_its_opening_document(para: bool) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let opening = app.session.doc().unwrap().uid;
+        app.run(if para { "ui.newParaStyle" } else { "ui.newCharStyle" }, json!({})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.get::<NewTextStyle>().unwrap().id());
+        let name = "Opening Document Style";
+        host.with(|h| h.set_json_field(&ctx, dialog, "name", json!(name))).unwrap();
+
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        assert_ne!(app.session.doc().unwrap().uid, opening);
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+
+        assert!(!style_exists(&app, para, name), "OK must leave styles in the other document unchanged");
+        assert!(app.ui.text_styles.made.is_empty(), "the other document must not highlight a style");
+        assert!(matches!(host.with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        pump(&mut app, &ctx);
+        assert!(style_exists(&app, para, name), "the original document can accept the same draft");
+        assert_eq!(app.ui.text_styles.made, [(opening, para, name.to_string())]);
+    }
+
+    #[test]
+    fn new_character_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(false);
+    }
+
+    #[test]
+    fn new_paragraph_style_confirmation_stays_in_its_document() {
+        assert_style_stays_in_its_opening_document(true);
+    }
 }

@@ -1,6 +1,31 @@
 use super::*;
 use vectorcraft_engine::Session;
 
+#[test]
+fn create_new_swatch_requires_a_drawing_but_copy_color_remains_available() {
+    let enabled = |app: &VectorcraftApp, command| {
+        let mut states = CommandStates::new();
+        menu_states(app, &mut states);
+        states.get(&CommandRef::from(command)).is_some_and(|state| state.is_enabled())
+    };
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let new_swatch = CommandRef::from(ColorPanelCommand::NewSwatch).id;
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.session.fill_active = true;
+        app.run("paint.setFill", json!({"color": "#336699"})).unwrap();
+        assert!(enabled(&app, ColorPanelCommand::NewSwatch));
+        assert!(enabled(&app, ColorPanelCommand::CopyHex));
+        let before = app.session.active().unwrap().doc.swatches.len();
+        app.run(&new_swatch, json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.swatches.len(), before + 1);
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+        assert!(enabled(&app, ColorPanelCommand::CopyHex));
+        assert!(!enabled(&app, ColorPanelCommand::NewSwatch));
+        assert!(app.run(&new_swatch, json!({})).is_err());
+    }
+}
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
@@ -70,7 +95,7 @@ fn create_new_swatch_keeps_the_shown_colors_model_in_a_cmyk_document() {
         assert_eq!(shown.model(), model, "{fill}");
         let count = app.session.doc().unwrap().doc.swatches.len();
         let tgt = target_now(&app);
-        carry_out(&mut app, &tgt, ColorPanelAction::NewSwatch);
+        carry_out(&mut app, &tgt, ColorPanelAction::NewSwatch).unwrap();
         assert_eq!(app.session.doc().unwrap().doc.swatches.len(), count + 1, "{fill}: one new swatch");
         let w = newest(&app);
         assert_eq!(w.paint.color(), Some(shown), "{fill}: the swatch has the shown color, {}", w.name);
