@@ -49,24 +49,43 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
     let mut invalid_zoom = None;
-    // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
-    // first, then the position, before the message.
+    let mut snapping = None;
+    // Convenience controls leave first: direct toggles, then the menu. The existing timings and pointer position
+    // retain their priority, and all trailing groups leave before the navigation, info field or message narrows.
     let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
         // With no hover point the axes stay empty and keep their width.
         let origin = app.ruler_origin();
-        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(4).show(ui, |ui, _| {
             for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
                 let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
                 Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
             }
         });
         let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
-        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(3).show(ui, |ui, _| {
             readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
             readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
             // No rate until the window has drawn continuously for a moment (`frame_rate`).
             let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
             readout(fps, "8888 fps".into()).show(ui);
+        });
+        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+            for (icon, label, command, on) in [
+                ("sparkles", tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
+                ("dc-reference-point", tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
+                ("grid-3x3", tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
+            ] {
+                if IconButton::new(IconId::new(icon)).label(label).selected(on).show(ui).clicked() {
+                    snapping = Some((command, json!({})));
+                }
+            }
+        });
+        Row::new().fit_rank(2).show(ui, |ui, _| {
+            let label = tl!("Snapping");
+            let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
+            Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+                snapping = super::control_bar::snapping_menu_contents(app, ui).or(snapping.take());
+            });
         });
     };
     // PLAN: assumed VectorcraftApp::canvas_view() -> Option<CanvasView> (cv.S4) and the label msgid "Status Bar".
@@ -143,6 +162,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     if stop {
         app.session.script_interrupt().set();
+    }
+    if let Some((id, params)) = snapping {
+        crate::menus::invoke(app, id, params);
     }
     // It fails only without a document, when there is no view to turn or zoom.
     if let Some(zoom) = zoom_to {
