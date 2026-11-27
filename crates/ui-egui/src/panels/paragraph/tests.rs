@@ -34,7 +34,13 @@ fn canceling_paragraph_dropdown_choices_preserves_text_and_undo_history() {
     use crate::tests::panel_harness::Panel;
     use craft::ui::contract::Role;
 
-    for label in ["Insert Kashidas", "Mojikumi Set", "Kinsoku Set"] {
+    enum Setting {
+        Kashida,
+        Mojikumi,
+        Kinsoku,
+    }
+
+    for (label, setting) in [("Insert Kashidas", Setting::Kashida), ("Mojikumi Set", Setting::Mojikumi), ("Kinsoku Set", Setting::Kinsoku)] {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
         let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].clone();
@@ -63,11 +69,10 @@ fn canceling_paragraph_dropdown_choices_preserves_text_and_undo_history() {
         panel.key(egui::Key::Enter, egui::Modifiers::NONE);
         {
             let app = panel.app();
-            match label {
-                "Insert Kashidas" => assert_eq!(shared_para(&app, |para| para.kashida), Some(Kashida::Short)),
-                "Mojikumi Set" => assert_eq!(shared_para(&app, |para| para.mojikumi), Some(Mojikumi::YakumonoHankaku)),
-                "Kinsoku Set" => assert_eq!(shared_para(&app, |para| para.kinsoku), Some(Kinsoku::Hard)),
-                _ => unreachable!(),
+            match setting {
+                Setting::Kashida => assert_eq!(shared_para(&app, |para| para.kashida), Some(Kashida::Short)),
+                Setting::Mojikumi => assert_eq!(shared_para(&app, |para| para.mojikumi), Some(Mojikumi::YakumonoHankaku)),
+                Setting::Kinsoku => assert_eq!(shared_para(&app, |para| para.kinsoku), Some(Kinsoku::Hard)),
             }
             assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "accepting {label} is one formatting edit");
         }
