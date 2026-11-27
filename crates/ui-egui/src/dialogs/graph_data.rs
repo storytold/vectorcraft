@@ -51,6 +51,7 @@ use crate::file_asks::{self, Owner};
 /// The dialog kind of Graph Data, the key of its dialog on the host.
 pub const KIND: &str = "graphData";
 const WRONG_DOCUMENT: &str = "Graph Data belongs to the document that opened this sheet.";
+const REVERTED_DOCUMENT: &str = "Reopen Graph Data after reverting the drawing.";
 
 /// The sheet's size: a row of labels over a graph's categories, a column of labels before its
 /// series; the least rows it shows.
@@ -71,13 +72,11 @@ const ROW_H: f32 = 19.0;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // The query fails without a graph selected, with the engine's own message.
     let v = app.session.execute("graph.setData", &json!({})).map_err(|e| e.to_string())?;
-    let document = app.session.active().ok_or("no document open")?.uid;
-    let graph = app.session.active().and_then(|st| st.selection.objects.iter().find_map(|id| graph_of(&st.doc, *id)).map(|id| (st, id)));
-    let scatter = graph.is_some_and(|(st, id)| {
-        st.doc.node(id).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter)
-    });
-    let id = graph.map(|(_, id)| id.0);
-    let dialog = GraphDataDialog::new(grid_from_data(&v), document, id, scatter, can_import(app));
+    let st = app.session.active().ok_or("no document open")?;
+    let graph = st.selection.objects.iter().find_map(|id| graph_of(&st.doc, *id));
+    let scatter = graph
+        .is_some_and(|id| st.doc.node(id).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter));
+    let dialog = GraphDataDialog::new(grid_from_data(&v), st.uid, st.reverts, graph.map(|id| id.0), scatter, can_import(app));
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
@@ -437,6 +436,7 @@ fn import(app: &mut VectorcraftApp, owner: &Arc<()>, picked: Picked) -> Result<V
 /// What the window asked of the app since the last [`pump`].
 struct Asks {
     document: u64,
+    reverts: u64,
     graph: Option<u64>,
     import_owner: Arc<()>,
     apply: Option<Sheet>,
@@ -448,26 +448,29 @@ struct Asks {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let can = can_import(app);
-    let active = app.session.active().map(|doc| doc.uid);
+    let active = app.session.active().map(|doc| (doc.uid, doc.reverts));
     let asked = dialogs.with(|host| {
         host.get_mut::<GraphDataDialog>().map(|d| {
             d.can_import = can;
-            if active == Some(d.document) {
+            if active == Some((d.document, d.reverts)) {
                 d.held.clear_refusal();
             }
             d.take_asks()
         })
     });
-    let Some(Asks { document, graph, import_owner, apply: filed, actions }) = asked else { return };
-    let same_document = active == Some(document);
+    let Some(Asks { document, reverts, graph, import_owner, apply: filed, actions }) = asked else { return };
+    let refusal = match active {
+        Some((uid, current_reverts)) if uid == document => (current_reverts != reverts).then_some(tl!(REVERTED_DOCUMENT)),
+        _ => Some(tl!(WRONG_DOCUMENT)),
+    };
     if let Some(sheet) = filed {
-        let answer = if same_document {
+        let answer = if let Some(reason) = refusal {
+            Err(Label::from(reason))
+        } else {
             if let Err(e) = apply(app, &sheet, graph) {
                 app.status(e);
             }
             Ok(())
-        } else {
-            Err(Label::from(tl!(WRONG_DOCUMENT)))
         };
         dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|dialog| dialog.applied(answer)));
     }
@@ -489,13 +492,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                     move |app, picked| import(app, &owner, picked),
                 );
             }
-            Action::Revert if !same_document => app.status(tl!(WRONG_DOCUMENT).to_owned()),
-            Action::Revert => match graph_grid(app, graph) {
-                Ok(grid) => {
-                    dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
+            Action::Revert => {
+                if let Some(reason) = refusal {
+                    app.status(reason.to_owned());
+                } else {
+                    match graph_grid(app, graph) {
+                        Ok(grid) => {
+                            dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
+                        }
+                        Err(e) => app.status(e),
+                    }
                 }
-                Err(e) => app.status(e),
-            },
+            }
         }
     }
 }
@@ -675,6 +683,7 @@ pub(crate) struct GraphDataDialog {
     state: GridState,
     entry: Entry,
     document: u64,
+    reverts: u64,
     /// The graph the sheet opened on.
     graph: Option<u64>,
     scatter: bool,
@@ -687,7 +696,7 @@ pub(crate) struct GraphDataDialog {
 
 impl GraphDataDialog {
     /// The window over `grid`, the data of `graph`; Switch x/y is on for a `scatter` graph.
-    fn new(grid: Grid, document: u64, graph: Option<u64>, scatter: bool, can_import: bool) -> Self {
+    fn new(grid: Grid, document: u64, reverts: u64, graph: Option<u64>, scatter: bool, can_import: bool) -> Self {
         let sheet = Sheet { grid, ..Sheet::default() };
         let state = GridState::new(CellSelection::cell(CellAt::new(0, 1)), 1.0);
         let mut entry = Entry { text: String::new(), at: (0, 1) };
@@ -699,6 +708,7 @@ impl GraphDataDialog {
             state,
             entry,
             document,
+            reverts,
             graph,
             scatter,
             can_import,
@@ -712,6 +722,7 @@ impl GraphDataDialog {
     fn take_asks(&mut self) -> Asks {
         Asks {
             document: self.document,
+            reverts: self.reverts,
             graph: self.graph,
             import_owner: self.import_owner.clone(),
             apply: self.held.take(),
@@ -920,6 +931,62 @@ mod tests {
         let expected = grid_from_data(&data(&mut app, id));
         revert(&mut app);
         assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), expected);
+    }
+
+    fn stale_sheet_after_file_revert(test: &str) -> (VectorcraftApp, u64, Value) {
+        struct SavedFile(std::path::PathBuf);
+        impl Drop for SavedFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        let (mut app, id) = app_with(",Original\nQ1,1", "column");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-graph-data-revert-{}-{test}.vectorcraft", std::process::id())));
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        let saved = data(&mut app, id);
+        app.run("graph.setData", json!({"id": id, "series": ["Unsaved"], "categories": ["Q2"], "rows": [[3.0]]})).unwrap();
+        assert_ne!(data(&mut app, id), saved);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app).unwrap();
+        set_field(&app, "grid", json!([["", "Draft"], ["Q2", "9"]])).unwrap();
+        let state = app.session.active().unwrap();
+        let (uid, reverts) = (state.uid, state.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(data(&mut app, id), saved, "the restored graph uses the same ID");
+        (app, id, saved)
+    }
+
+    #[test]
+    fn graph_data_after_file_revert_cannot_apply_the_old_draft() {
+        let (mut app, id, saved) = stale_sheet_after_file_revert("apply");
+        let undo = app.session.active().unwrap().history.undo.len();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(read(&app, GraphDataDialog::held_state), Some(HeldOk::Refused(_))));
+
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app).unwrap();
+        set_field(&app, "grid", json!([["", "Fresh"], ["Q3", "7"]])).unwrap();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id)["rows"], json!([[7.0]]));
+    }
+
+    #[test]
+    fn graph_data_after_file_revert_keeps_the_old_sheet_on_worksheet_revert() {
+        let (mut app, id, saved) = stale_sheet_after_file_revert("worksheet");
+        let draft = read(&app, |dialog| dialog.sheet.grid.clone());
+        edit(&app, |dialog| dialog.actions.push(Action::Revert));
+        pump(&mut app, &crate::testing::ui_context());
+        assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), draft);
+        assert_eq!(data(&mut app, id), saved);
     }
 
     /// The app with the window drawn each frame as the shell draws it.

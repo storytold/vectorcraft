@@ -26,13 +26,17 @@ pub(crate) struct Open {
     pub(crate) id: DialogId,
     /// The name the dialog proposes for its colour.
     auto: String,
+    /// The drawing that supplied the paint and the possible colour group.
+    document: u64,
 }
 
 /// Open New Swatch for the active paint, going into color `group`. A color opens as a spot color
 /// with `spot`, and as a global process color with `global` alone.
 pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&str>) -> Result<Value, String> {
     let paint = crate::panels::active_paint(app);
-    let name = app.session.active().ok_or("no document open")?.doc.new_swatch_name(&paint);
+    let source = app.session.active().ok_or("no document open")?;
+    let document = source.uid;
+    let name = source.doc.new_swatch_name(&paint);
     let mut fields = DialogFields::new();
     fields.set("name", name.as_str());
     let (rows, kept) = match &paint {
@@ -48,20 +52,24 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&s
     let dialog = hosted(&ctx, KIND, tl!("New Swatch"), fields, rows, false);
     let group = group.unwrap_or_default().to_owned();
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
+        if app.session.active().is_none_or(|st| st.uid != document) {
+            return Err(tl!("Return to the original drawing to create this swatch").into());
+        }
         app.run("swatch.new", params(kept.as_ref(), &group, &answer.fields))?;
         app.ui.new_swatch = None;
         Ok(())
     };
     let options = HeldOptions { parent: None, cancel: Some(Box::new(|app: &mut VectorcraftApp| app.ui.new_swatch = None)) };
     let id = open_held_with(app, dialog, ok, options).ok_or(NO_WINDOW)?;
-    app.ui.new_swatch = Some(Open { id, auto: name });
+    app.ui.new_swatch = Some(Open { id, auto: name, document });
     Ok(Value::Null)
 }
 
 /// Keeps the default name following the colour while the name has not been edited, and applies the corrections the
 /// colour row asked for.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some((id, auto)) = app.ui.new_swatch.as_ref().map(|o| (o.id, o.auto.clone())) else { return };
+    let Some(open) = app.ui.new_swatch.as_ref().filter(|o| app.session.active().is_some_and(|st| st.uid == o.document)) else { return };
+    let (id, auto) = (open.id, open.auto.clone());
     super::swatch_options::correct(app, id);
     let Some(fields) = with_dialog(app, id, |d| d.fields().clone()) else { return };
     if !fields.contains("color") || fields.text("name") != Some(auto.as_str()) {
@@ -105,10 +113,91 @@ mod tests {
         (ctx, app)
     }
 
+    #[test]
+    fn a_new_swatch_stays_with_its_opening_drawing() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0)));
+        let frame = |app: &mut VectorcraftApp| {
+            crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect, ..Default::default() });
+        };
+        let new_file = |app: &mut VectorcraftApp| {
+            app.run("file.new", json!({"width":100,"height":100,"colorMode":"rgb"})).unwrap();
+            app.session.doc().unwrap().uid
+        };
+        let source = new_file(&mut app);
+        let other = new_file(&mut app);
+        assert_ne!(source, other);
+        app.run("document.activate", json!({"index":0})).unwrap();
+        app.run("paint.setFill", json!({"color":"#336699"})).unwrap();
+        let undo_source = app.session.doc().unwrap().history.undo.len();
+        for _ in 0..4 {
+            frame(&mut app);
+        }
+        app.run("ui.newSwatch", json!({})).unwrap();
+        let id = app.ui.new_swatch.as_ref().unwrap().id;
+        let name = "Opening Drawing Swatch";
+        with_dialog(&app, id, |d| d.set_field("name", FieldValue::Text(name.to_owned()))).unwrap();
+        for _ in 0..4 {
+            frame(&mut app);
+        }
+
+        app.run("document.activate", json!({"index":1})).unwrap();
+        let undo_other = app.session.doc().unwrap().history.undo.len();
+        assert_eq!(app.session.doc().unwrap().uid, other);
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id));
+        frame(&mut app);
+        let st = app.session.doc().unwrap();
+        assert!(st.doc.swatch(name).is_none(), "OK created the opening drawing's swatch in the other drawing");
+        assert_eq!(st.history.undo.len(), undo_other);
+        assert_eq!(app.ui.new_swatch.as_ref().unwrap().id, id, "the refused draft remains open");
+
+        app.run("document.activate", json!({"index":0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().uid, source);
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id));
+        frame(&mut app);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.swatch(name).and_then(|s| s.paint.color()).map(|c| c.to_hex()).as_deref(), Some("#336699"));
+        assert_eq!(st.history.undo.len(), undo_source + 1);
+        assert!(app.ui.new_swatch.is_none());
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.doc().unwrap().doc.swatch(name).is_none());
+    }
+
     /// Answers OK in the open dialog and lets the host run it.
     fn ok(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.dialogs().unwrap().with(|h| h.confirm_by_id(ctx, dialog_id(KIND)));
         crate::dialogs::host::pump(app, ctx);
+    }
+
+    #[test]
+    fn an_untouched_name_uses_the_opening_drawings_swatches() {
+        use vectorcraft_color::Color;
+
+        let (ctx, mut app) = setup();
+        let suggested = |app: &VectorcraftApp, c: Color| app.session.doc().unwrap().doc.new_swatch_name(&Paint::solid(c));
+        let color = Color::from_hex("#336699").unwrap();
+        let name = suggested(&app, color);
+        app.run("file.new", json!({"width":100,"height":100})).unwrap();
+        app.run("swatch.new", json!({"name":name,"color":"#445566"})).unwrap();
+        assert_ne!(suggested(&app, color), name, "the other drawing would choose a different name");
+
+        app.run("document.activate", json!({"index":0})).unwrap();
+        app.run("paint.setFill", json!({"color":"#336699"})).unwrap();
+        app.run("ui.newSwatch", json!({})).unwrap();
+        let id = app.ui.new_swatch.as_ref().unwrap().id;
+        let draft_name = |app: &VectorcraftApp| with_dialog(app, id, |d| d.fields().text("name").unwrap().to_owned()).unwrap();
+        assert_eq!(draft_name(&app), name);
+
+        app.run("document.activate", json!({"index":1})).unwrap();
+        pump(&mut app, &ctx);
+        assert_eq!(draft_name(&app), name);
+
+        app.run("document.activate", json!({"index":0})).unwrap();
+        let color = Color::from_hex("#6789ab").unwrap();
+        with_dialog(&app, id, |d| d.set_field("color", FieldValue::Json(json!(color)))).unwrap();
+        pump(&mut app, &ctx);
+        assert_eq!(draft_name(&app), suggested(&app, color));
     }
 
     #[test]

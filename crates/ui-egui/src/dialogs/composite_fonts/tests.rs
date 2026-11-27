@@ -127,6 +127,42 @@ fn load_and_replace_accept_a_browser_picked_file() {
     }
 }
 
+/// Load and Replace refuse an oversized browser file while preserving both the draft and artwork;
+/// a later valid file still reaches that same draft.
+#[test]
+fn oversized_browser_composite_font_files_leave_the_draft_unchanged() {
+    for command in [PresetCommands::Load, PresetCommands::Replace] {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = ctx(&app);
+        open(&mut app).unwrap();
+        dialog(&mut app, |d| d.new_font("Draft".into()));
+        let dialogs = app.dialogs().unwrap();
+        ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
+        let before = dialog(&mut app, |d| d.fonts.clone());
+        let bytes = file_bytes(&before).unwrap();
+        let step = steps(&app);
+        let large = vec![b' '; MAX_FILE_BYTES + 1];
+        request(&mut app, command, None);
+        picker.answer_contents(&[("large.vccomposite", &large)]);
+        poll(&mut app, &ctx);
+        assert_eq!(
+            app.ui.status,
+            vectorcraft_engine::EngineError::BadParams { cmd: IMPORT.into(), msg: "the file is larger than 4 MB".into() }.to_string()
+        );
+        assert_eq!(dialog(&mut app, |d| d.fonts.clone()), before);
+        assert!(names(&app).is_empty());
+        assert_eq!(steps(&app), step);
+        request(&mut app, command, None);
+        picker.answer_contents(&[("valid.vccomposite", &bytes)]);
+        poll(&mut app, &ctx);
+        assert!(app.ui.status.contains("valid.vccomposite"), "{}", app.ui.status);
+        assert_eq!(dialog(&mut app, |d| d.fonts.clone()), before);
+        assert!(names(&app).is_empty());
+        assert_eq!(steps(&app), step);
+    }
+}
+
 fn steps(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
@@ -574,4 +610,34 @@ fn custom_character_sets_draw_their_characters_and_the_buttons() {
     for name in ["A", "B", "OK", "Cancel"] {
         assert!(p.shows(name), "{name} is drawn");
     }
+}
+
+#[test]
+fn composite_fonts_approval_does_not_replace_definitions_restored_by_revert() {
+    let mut app = app();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Saved Font".into()));
+    ok(&mut app).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("composite-fonts-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Unsaved Font".into()));
+    ok(&mut app).unwrap();
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Stale Draft Font".into()));
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored_step = steps(&app);
+    assert_eq!(names(&app), ["Saved Font"]);
+    assert_eq!(ok(&mut app), Err("The document was reverted. Reopen this dialog to continue.".into()));
+    assert_eq!(names(&app), ["Saved Font"]);
+    assert_eq!(steps(&app), restored_step);
+
+    cancel(&mut app);
+    open(&mut app).unwrap();
+    dialog(&mut app, |d| d.new_font("Fresh Font".into()));
+    ok(&mut app).unwrap();
+    assert_eq!(names(&app), ["Saved Font", "Fresh Font"]);
 }
