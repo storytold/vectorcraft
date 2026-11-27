@@ -52,6 +52,15 @@ fn artboard_color(app: &VectorcraftApp) -> Option<Color> {
     app.session.doc().unwrap().doc.artboards[1].color
 }
 
+fn two_documents_with_artboards() -> (VectorcraftApp, egui::Context) {
+    let (mut app, ctx) = app();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    (app, ctx)
+}
+
 /// The selected art takes each colour as it is picked; OK keeps the last as one undo step and
 /// Cancel puts the art back.
 #[test]
@@ -99,6 +108,71 @@ fn an_artboard_shows_its_background_color_live() {
     cancel(&mut app, &ctx);
     assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#00ff00"));
     assert!(app.run("ui.colorPicker", json!({"artboard": 9})).is_err());
+}
+
+#[test]
+fn the_artboard_picker_previews_only_in_its_opening_document() {
+    let (mut app, ctx) = two_documents_with_artboards();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    set_hex(&mut app, &ctx, "#ff0000");
+    assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let before = undo_len(&app);
+    set_hex(&mut app, &ctx, "#00ff00");
+    assert_eq!(artboard_color(&app), None, "the other document never previews the color");
+    assert!(!app.session.in_interaction());
+    assert_eq!(undo_len(&app), before);
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(artboard_color(&app), None, "leaving the source rolled its preview back");
+    let before = undo_len(&app);
+    ok(&mut app, &ctx);
+    assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#00ff00"));
+    assert_eq!(undo_len(&app), before + 1);
+}
+
+#[test]
+fn confirming_an_artboard_picker_in_another_document_leaves_both_unchanged() {
+    let (mut app, ctx) = two_documents_with_artboards();
+    let source_undo = undo_len(&app);
+    app.run("ui.colorPicker", json!({"artboard": 1, "color": "#00ff00"})).unwrap();
+    frame(&mut app, &ctx);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let destination_undo = undo_len(&app);
+    ok(&mut app, &ctx);
+    assert_eq!(app.ui.status, "The active document changed while the Color Picker was open");
+    assert_eq!(artboard_color(&app), None);
+    assert_eq!(undo_len(&app), destination_undo);
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(artboard_color(&app), None);
+    assert_eq!(undo_len(&app), source_undo);
+}
+
+#[test]
+fn canceling_an_artboard_picker_preserves_the_other_documents_interaction() {
+    let (mut app, ctx) = two_documents_with_artboards();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    set_hex(&mut app, &ctx, "#ff0000");
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.begin_interaction("Other edit").unwrap();
+    app.session.preview("artboard.setProps", &json!({"index": 1, "color": "#445566"})).unwrap();
+
+    cancel(&mut app, &ctx);
+    assert!(app.session.in_interaction(), "the current document keeps its own interaction");
+    assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#445566"));
+}
+
+#[test]
+fn artboard_pickers_for_the_same_index_in_different_documents_have_separate_instances() {
+    let (mut app, _) = two_documents_with_artboards();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    let first = id(&app);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    assert_ne!(id(&app), first);
+    assert_eq!(app.color_dialogs.pickers.len(), 2);
 }
 
 /// OK on an untouched picker for an artboard without a color leaves it without one and adds no
