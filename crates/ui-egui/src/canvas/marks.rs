@@ -168,6 +168,13 @@ pub(crate) struct Marks {
     pub(crate) missing: Vec<([Pos2; 4], Pos2)>,
 }
 
+/// Drops the hidden-character and spelling memos and the text nodes they hold.
+pub(crate) fn release_text_marks(app: &mut VectorcraftApp) {
+    app.canvas.hidden_chars.marks.clear();
+    app.canvas.spelling = SpellingMarks::default();
+    app.canvas.text_nodes = TextNodes::default();
+}
+
 /// The marks of one canvas pass over `view`. The memos of [`crate::CanvasCache`] are kept while their
 /// gate is on and dropped, with the text nodes they hold, when it is off.
 pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
@@ -191,9 +198,7 @@ pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
     let fades = artboards::fades_outside_artboards(app);
     let shows_artboards = artboards::shows_artboards(app);
     let Some(st) = app.session.active() else {
-        app.canvas.hidden_chars.marks.clear();
-        app.canvas.spelling = SpellingMarks::default();
-        app.canvas.text_nodes = TextNodes::default();
+        release_text_marks(app);
         return m;
     };
     let key = (st.uid, st.revision);

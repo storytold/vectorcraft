@@ -363,13 +363,13 @@ fn push_app_data(app: &VectorcraftApp) {
     }
 }
 
-/// The folder picks the open Batch dialog asked for: each goes to the app's folder request, whose
-/// answer is written into the dialog.
+/// Files the folder picks the Batch dialog asked for with the identity of that opening.
 fn ask_batch_folders(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
-    let asked = dialogs.with(|host| host.get_mut::<BatchDialog>().map(BatchDialog::take_asked).unwrap_or_default());
-    for which in asked {
-        super::action_batch::ask_folder(app, which);
+    let asked = dialogs.with(|host| host.get_mut::<BatchDialog>().map(BatchDialog::take_asked));
+    let Some((owner, folders)) = asked else { return };
+    for which in folders {
+        super::action_batch::ask_folder(app, owner.clone(), which);
     }
 }
 

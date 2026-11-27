@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use craft::ui::dialog::DialogId;
+use craft::ui::dialog::{DialogHost, DialogId};
 use craft::ui::patterns::form_dialogs::{
     HostedPdfExport, ParamResult, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfExportWords, PdfPresetEvent, PresetDraft,
 };
@@ -33,9 +33,12 @@ use crate::{VectorcraftApp, io};
 const PENDING: &str = "savePdf";
 /// Why a Summary cannot be written without the dialog.
 const NOT_OPEN: &str = "the Save PDF dialog is not open";
+const WRONG_DOCUMENT: &str = "Return to the original drawing to save the PDF or its summary";
 
 /// What the Save PDF dialog was opened for; the preset editor has none.
 pub(crate) struct SavePdfJob {
+    /// The drawing this job reads and writes.
+    document: u64,
     /// The file the PDF goes to; none: the write asks.
     pub(crate) path: Option<String>,
     /// The save command (`file.saveAs`, `file.saveCopy`) this PDF finishes; none: a plain PDF copy.
@@ -69,6 +72,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
 
 /// [`open`], for Export Selection when `selection` (the page is the selection's crop).
 pub(crate) fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) -> Result<Value, String> {
+    let document = app.session.active().ok_or("no document")?.uid;
     let art_bounds = match params.get("useArtboards") {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => !b,
@@ -102,7 +106,7 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, params: &Value, selection: boo
     };
     let preset = s("preset").map_or_else(|| default_preset_name(APP).to_string(), str::to_string);
     let dialog = base_dialog(app, settings).preset(preset).artboards(artboards);
-    let job = SavePdfJob { path: s("path").map(str::to_string), save_mode: None, flattener, selection };
+    let job = SavePdfJob { document, path: s("path").map(str::to_string), save_mode: None, flattener, selection };
     open_dialog(app, dialog, Some(job), String::new())
 }
 
@@ -279,11 +283,14 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         }
     }
     // A failed write is told over the dialog, which shows again when the message closes.
-    if let Some(text) = filed.summary
-        && let Err(e) = write_summary(app, Some(id), None, &text)
-        && e != "cancelled"
-    {
-        app.status(e);
+    let source = check_source(app, open);
+    if let Some(text) = filed.summary {
+        let saved = source.clone().and_then(|()| write_summary(app, Some(id), None, &text));
+        if let Err(e) = saved
+            && e != "cancelled"
+        {
+            app.status(crate::i18n::message(crate::i18n::current(), &e));
+        }
     }
     let preset = filed.settings.get("flattenerPreset").and_then(Value::as_str).map(str::to_owned);
     if open.flattener_preset.is_some()
@@ -294,7 +301,10 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
     }
     open.flattener_preset = preset;
     let settings = with_custom(open, filed.settings);
-    let warnings = worded(check(app, open, &settings));
+    let warnings = match source {
+        Ok(()) => worded(check(app, open, &settings)),
+        Err(e) => worded(&Err(e)),
+    };
     let prefs = &app.session.prefs;
     let (presets, names) = (prefs.pdf_presets.clone(), prefs.flattener_presets.iter().map(|p| p.name.clone()).collect::<Vec<_>>());
     let custom = open.job.as_ref().is_some_and(|j| j.flattener.is_some());
@@ -308,7 +318,7 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
     });
     if let Some(answer) = filed.ok {
         let reply = match &open.job {
-            Some(job) => write(app, job, &answer),
+            Some(job) => check_source(app, open).and_then(|()| write(app, job, &answer)),
             None => save_preset(app, &open.editing, &answer),
         };
         // A write that asks first (the save panel, or whether to replace the file the document was opened from) closes
@@ -321,6 +331,15 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         });
     }
     false
+}
+
+fn check_source(app: &VectorcraftApp, open: &SavePdfOpen) -> Result<(), String> {
+    if let Some(job) = &open.job
+        && app.session.active().map(|doc| doc.uid) != Some(job.document)
+    {
+        return Err(WRONG_DOCUMENT.into());
+    }
+    Ok(())
 }
 
 /// OK of Custom…: the open save flattens with its options ([`super::flatten::apply_custom`]); when the saved preset
@@ -376,6 +395,119 @@ pub(crate) fn dialog_set(app: &mut VectorcraftApp, params: &Value) -> Option<Res
         let shown = dialogs.with(|host| craft::automation::dialogs::inspect(host));
         shown.as_array().and_then(|list| list.iter().find(|d| d["id"] == id.value())).cloned().unwrap_or(Value::Null)
     }))
+}
+
+/// `ui.dialog.set` of a settings object (`bleed`, `marks`, `compression.color`…) on Save PDF or the preset editor,
+/// the dialog `id`: the object sets only the options it holds, and the ones it leaves out keep the dialog's values. A
+/// value that isn't an object is refused there. The fields are set in order, all or none, as the framework sets a
+/// `fields` list. `None` for a request that sets no settings object on that dialog.
+pub(crate) fn set_settings_objects(host: &mut DialogHost, ctx: &egui::Context, id: DialogId, params: &Value) -> Option<Result<(), String>> {
+    let named = (params["dialog"] == "top" && host.open_dialogs().last().map(|d| d.id) == Some(id))
+        || params["dialog"] == id.value()
+        || params["dialog"].as_str() == Some(id.value().to_string().as_str());
+    let known = params.as_object()?.keys().all(|k| matches!(k.as_str(), "dialog" | "field" | "value" | "fields"));
+    if !named || !known {
+        return None;
+    }
+    let item = |f: &Value| Some((f.get("field")?.as_str()?.to_owned(), f.get("value").cloned().unwrap_or(Value::Null)));
+    let items: Vec<(String, Value)> = match params.get("fields") {
+        Some(_) if params.get("field").is_some() || params.get("value").is_some() => return None,
+        Some(list) => {
+            list.as_array().filter(|l| l.len() <= craft::automation::dialogs::MAX_DIALOG_FIELDS)?.iter().map(item).collect::<Option<_>>()?
+        }
+        None => vec![item(params)?],
+    };
+    let settings = |host: &DialogHost| host.get_by_id::<HostedPdfExport>(id).and_then(|d| serde_json::to_value(d.settings()).ok());
+    let now = settings(host)?;
+    if !items.iter().any(|(field, _)| option_at(&now, field).is_some_and(Value::is_object)) {
+        return None;
+    }
+    let before = dialog_fields(host, id);
+    let passwords = host.get_by_id::<HostedPdfExport>(id).map(|d| {
+        let security = &d.settings().security;
+        [("security.openPassword", security.open_password.clone()), ("security.permissionsPassword", security.permissions_password.clone())]
+    });
+    let mut changed = false;
+    for (field, value) in &items {
+        let set = match settings(host).as_ref().and_then(|s| option_at(s, field)).filter(|v| v.is_object()) {
+            Some(_) if !value.is_object() => Err(format!("`{field}` must be an object of options, not {value}")),
+            Some(old) => {
+                let mut merged = old.clone();
+                merge_options(&mut merged, value);
+                host.set_json_field(ctx, id, field, merged)
+            }
+            None => host.set_json_field(ctx, id, field, value.clone()),
+        };
+        if let Err(e) = set {
+            // A refused field leaves the dialog as it was, so only the fields set before it go back.
+            if changed {
+                restore_fields(host, ctx, id, before, passwords);
+            }
+            return Some(Err(e));
+        }
+        changed = true;
+    }
+    Some(Ok(()))
+}
+
+/// The JSON fields of the open dialog `id`.
+fn dialog_fields(host: &DialogHost, id: DialogId) -> Option<Value> {
+    host.open_dialogs().into_iter().find(|d| d.id == id).and_then(|d| d.fields)
+}
+
+/// The option at the dotted `path` (`compression.color`) of the settings `settings`.
+fn option_at<'a>(settings: &'a Value, path: &str) -> Option<&'a Value> {
+    path.split('.').try_fold(settings, |at, key| at.get(key))
+}
+
+/// Set the options `over` holds on `base`, object by object; any other value replaces `base`.
+fn merge_options(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(b), Value::Object(o)) => {
+            for (k, v) in o {
+                match b.get_mut(k) {
+                    Some(slot) => merge_options(slot, v),
+                    None => {
+                        b.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (b, o) => *b = o.clone(),
+    }
+}
+
+/// Set the dialog `id`'s fields that differ from `before` back to it. The preset goes first, since choosing it
+/// replaces every setting and clears the passwords. The `passwords` the dialog had, which its fields leave out, are set
+/// back last when they differ.
+fn restore_fields(host: &mut DialogHost, ctx: &egui::Context, id: DialogId, before: Option<Value>, passwords: Option<[(&str, String); 2]>) {
+    let Some(Value::Object(before)) = before else { return };
+    let preset = before.get("preset").filter(|old| dialog_fields(host, id).as_ref().and_then(|now| now.get("preset")) != Some(*old));
+    if let Some(old) = preset {
+        let _ = host.set_json_field(ctx, id, "preset", old.clone());
+    }
+    // The standard goes next, since it enables and sets other fields. A field that another one still disables is set
+    // again in a later pass, once that one is back; one that stays disabled keeps its value, as the framework's own
+    // rollback leaves it.
+    let rest = || before.get_key_value("standard").into_iter().chain(before.iter().filter(|(k, _)| !matches!(k.as_str(), "preset" | "standard")));
+    for _ in 0..3 {
+        let now = dialog_fields(host, id).unwrap_or(Value::Null);
+        let differ: Vec<_> = rest().filter(|(name, old)| now.get(name.as_str()) != Some(*old)).collect();
+        if differ.is_empty() {
+            break;
+        }
+        for (name, old) in differ {
+            let _ = host.set_json_field(ctx, id, name, old.clone());
+        }
+    }
+    let now = host
+        .get_by_id::<HostedPdfExport>(id)
+        .map(|d| [d.settings().security.open_password.clone(), d.settings().security.permissions_password.clone()]);
+    for ((name, password), now) in passwords.into_iter().flatten().zip(now.into_iter().flatten()) {
+        if password != now {
+            let _ = host.set_json_field(ctx, id, name, Value::String(password));
+        }
+    }
 }
 
 /// The dialog's `settings` with the job's Custom… flattener options, as the export gets them.
@@ -541,6 +673,7 @@ pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
 
 /// The Summary text of the open dialog `open`, after the document check.
 fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String, String> {
+    check_source(app, open)?;
     let Some(dialogs) = app.dialogs() else { return Err(NOT_OPEN.into()) };
     let id = open.id;
     let not_open = || NOT_OPEN.to_string();

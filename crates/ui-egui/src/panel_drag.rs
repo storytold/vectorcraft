@@ -1,5 +1,6 @@
 //! What panels drag onto art and onto each other.
 
+use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 
 /// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
@@ -41,10 +42,14 @@ pub enum PanelDrag {
 /// panel order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwatchRows {
+    /// The document whose rows the drag started on.
+    pub document: u64,
     pub grabbed: String,
     pub names: Vec<String>,
     /// The names are colour groups.
     pub groups: bool,
+    /// Whether the grabbed swatch's paint can travel as an unlinked process color.
+    pub unlinked_process_color: bool,
 }
 
 impl PanelDrag {
@@ -65,5 +70,21 @@ impl PanelDrag {
             Self::Paint { paint, .. } => paint.color(),
             _ => None,
         }
+    }
+
+    /// A named process swatch follows the source drawing's swatch. In another drawing its
+    /// captured process color applies without using a same-name swatch there.
+    pub(crate) fn paint_drop_params(&self, destination: Option<u64>) -> Option<Value> {
+        let Self::Paint { paint, params, rows, .. } = self else { return None };
+        if params.is_null() {
+            return None;
+        }
+        if let Some(rows) = rows.as_ref().filter(|rows| rows.unlinked_process_color)
+            && destination.is_some_and(|uid| uid != rows.document)
+            && let Some(color) = paint.color()
+        {
+            return Some(json!({"color": crate::panels::color_json(&color), "keepModel": true}));
+        }
+        Some(params.clone())
     }
 }

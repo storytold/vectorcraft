@@ -10,6 +10,15 @@ pub(in crate::dialogs) fn app() -> VectorcraftApp {
     crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
 }
 
+/// Writes a native file for the test to revert to.
+pub(in crate::dialogs) fn save_for_revert(app: &mut VectorcraftApp, tag: &str) -> std::path::PathBuf {
+    let file = std::env::temp_dir().join(format!("vectorcraft-brush-{tag}-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    file
+}
+
 /// Answers the open question `D` the way its button does (`Some(choice)`: the button of that choice,
 /// `None`: Cancel's close), then runs the module's `pump`.
 pub(in crate::dialogs) fn answer<D: StackDialog>(app: &mut VectorcraftApp, choice: Option<&str>, pump: fn(&mut VectorcraftApp, &egui::Context)) {
@@ -83,4 +92,37 @@ fn remove_strokes_runs_the_delete_and_cancel_changes_nothing() {
         assert_eq!(stroke.brush.as_deref(), choice.is_none().then_some(name));
         assert!(stroke.width > 0.0);
     }
+}
+
+#[test]
+fn stale_delete_approval_keeps_the_saved_brush_after_revert() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let slim = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 8})).unwrap()["id"].as_u64().unwrap();
+    let tall = app.run("shape.rectangle", json!({"x": 10, "y": 30, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("brush.new", json!({"type": "art", "name": "Bar", "ids": [slim]})).unwrap();
+    let file = save_for_revert(&mut app, "delete-revert");
+    let brush_height = |app: &mut VectorcraftApp| {
+        let brush = app.run("brush.get", json!({"name": "Bar"})).expect("the saved brush still exists");
+        let art: vectorcraft_doc::Node = serde_json::from_value(brush["art"].clone()).unwrap();
+        art.geometric_bounds().unwrap().height()
+    };
+    let saved = brush_height(&mut app);
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("brush.replaceArt", json!({"name": "Bar", "ids": [tall], "applyToStrokes": true})).unwrap();
+    assert!((brush_height(&mut app) - saved).abs() > 1e-6);
+    ask(&mut app, json!({"names": ["Bar"]}), false);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert!((brush_height(&mut app) - saved).abs() < 1e-6);
+
+    let undo = app.session.active().unwrap().history.undo.len();
+    answer::<BrushDeleteQuestion>(&mut app, Some("proceed"), pump);
+    assert!((brush_height(&mut app) - saved).abs() < 1e-6);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 }

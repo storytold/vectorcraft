@@ -84,6 +84,7 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     fields.set("hasSlices", FieldValue::Bool(has_slices));
     let summary = format!("{} × {} px · {} {}", info.width, info.height, crate::i18n::colon(tl!("Layers")), info.layers);
     let placing = place.is_some();
+    let drawing = place.and_then(|params| crate::place::import_options_drawing(app, params));
     let source = Source {
         place: place.map(|p| other_place_params(p, &["layers", "hiddenLayers", "importSlices"])),
         name: name.to_string(),
@@ -93,7 +94,11 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     };
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| build(fields, placing, &summary)).held_ok();
-    open_held(app, dialog, move |app, result| confirm(app, &source, result)).is_some()
+    open_held(app, dialog, move |app, result| {
+        crate::place::check_import_options_drawing(app, drawing)?;
+        confirm(app, &source, result)
+    })
+    .is_some()
 }
 
 /// `file.place` with params `p` asks first (true) when they embed a PSD or PSB file (`link: false`,
@@ -267,6 +272,25 @@ mod tests {
             assert!(!host::is_open(&app, KIND));
             assert!(app.session.active().is_some());
         }
+    }
+
+    #[test]
+    fn normal_psd_place_options_wait_for_the_original_drawing() {
+        let mut app = host::app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let encoded = vectorcraft_format::base64_encode(&layered());
+        let params = json!({"name": "poster.psd", "dataBase64": encoded, "at": [50, 50]});
+        assert_eq!(crate::place::run_for_user(&mut app, &params).unwrap()["dialog"], KIND);
+        set(&app, "convert", json!("flatten"));
+        app.run("file.new", json!({"width": 300, "height": 150})).unwrap();
+        let error = host::confirm(&mut app, KIND).expect_err("the other drawing must not receive the file");
+        assert!(error.contains("original drawing"), "{error}");
+        assert!(app.session.active().unwrap().history.undo.is_empty());
+        assert_eq!(host::fields(&app, KIND)["convert"], "flatten");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host::confirm(&mut app, KIND).unwrap();
+        let st = app.session.active().unwrap();
+        assert!(matches!(st.doc.layers[0].children().map(Vec::as_slice), Some([node]) if matches!(node.kind, NodeKind::Image(_))));
     }
 
     #[test]

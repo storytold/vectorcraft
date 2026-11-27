@@ -200,6 +200,29 @@ impl Session {
         Ok(v)
     }
 
+    /// Run `f`, an edit that applies or edits built-in effect `effect`. The undo step it records,
+    /// when named after the effect, keeps the effect's id ([`crate::HistoryEntry::effect`]), so a
+    /// frontend names it as the Effect menu names the effect. Run as an interaction's preview
+    /// itself, not as one command of a batch the preview runs, the step the interaction records
+    /// keeps it instead, while that preview is the last one. A later edit of an undo group keeps
+    /// none.
+    pub(crate) fn edit_effect<T>(&mut self, effect: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let id = vectorcraft_render::effects::built_in_effect(effect).map(|(id, _)| id);
+        let previewed = self.previewing && self.depth == 1;
+        let outer = std::mem::replace(&mut self.doc_mut()?.effect_step, id);
+        let v = f(self);
+        if let Ok(st) = self.doc_mut() {
+            st.effect_step = outer;
+            if v.is_ok()
+                && previewed
+                && let Some(it) = &mut st.interaction
+            {
+                it.effect = id;
+            }
+        }
+        v
+    }
+
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.revealing(|s| s.select_unwatched(f))
@@ -510,6 +533,7 @@ impl Session {
         }
         st.interaction = Some(Interaction {
             label: label.to_string(),
+            effect: None,
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
@@ -569,6 +593,8 @@ impl Session {
             it.color_mode_paints = None;
             it.deferred_color_mode = None;
             it.plane_placed = false;
+            // The effect the preview below applies or edits marks the step, not an earlier one's.
+            it.effect = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
