@@ -353,7 +353,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Style(_) => Ok(()),
-        Payload::Panel(drag @ PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
+        Payload::Panel(drag @ PanelDrag::Paint { params, paint, rows, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
                 && let Some((id, points)) = selected_mesh_drop(app, at, zoom)
@@ -362,7 +362,14 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 return run(app, "object.mesh.setPointColor", params);
             }
             let Some(hit) = hit() else { return Ok(()) };
-            let Some(mut params) = drag.paint_drop_params(app.session.active().map(|st| st.uid)) else { return Ok(()) };
+            let destination = app.session.active().map(|st| st.uid);
+            if rows.as_ref().is_some_and(|rows| !rows.unlinked_process_color && destination.is_some_and(|uid| uid != rows.document))
+                && paint.color().is_some()
+                && !paint.is_registration()
+            {
+                return Err(tl!("A linked color swatch can only be applied in its own document.").into());
+            }
+            let Some(mut params) = drag.paint_drop_params(destination) else { return Ok(()) };
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);

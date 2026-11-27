@@ -474,7 +474,10 @@ fn ask_import(app: &mut VectorcraftApp, source: Option<Arc<Opening>>) -> Value {
                 // The browser answers with the file's contents, not a path.
                 Picked::Contents(files) => {
                     let (_, bytes) = files.first().ok_or("cancelled")?;
-                    json!({ "svg": String::from_utf8_lossy(bytes) })
+                    if bytes.len() > vectorcraft_engine::cmd::MAX_SVG_FILTER_IMPORT_BYTES {
+                        return Err("The SVG file is larger than 16 MB".into());
+                    }
+                    json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) })
                 }
                 other => json!({ "path": other.first_path().ok_or("cancelled")?.to_string_lossy() }),
             };
@@ -498,6 +501,25 @@ mod tests {
     use vectorcraft_engine::Session;
 
     const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3"/></filter>"#;
+
+    #[test]
+    fn browser_filter_import_keeps_the_picked_file_encoding() {
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><filter id="café"><feOffset dx="3"/></filter></svg>"#;
+        let utf16: Vec<u8> = [0xfe, 0xff].into_iter().chain(svg.encode_utf16().flat_map(u16::to_be_bytes)).collect();
+        let latin1: Vec<u8> = format!("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>{svg}").chars().map(|c| c as u8).collect();
+        for bytes in [utf16, latin1] {
+            let mut app = app();
+            let picker = scripted(&mut app);
+            let ctx = app.ui_ctx.clone().unwrap();
+            open(&mut app, &json!({})).unwrap();
+            import_file(&mut app).unwrap();
+            picker.answer_contents(&[("filter.svg", &bytes)]);
+            poll(&mut app, &ctx);
+            assert_eq!(app.session.active().unwrap().doc.svg_filters[0].name, "café");
+            assert_eq!(fields(&app)[SELECTED], "café");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), 1);
+        }
+    }
 
     fn app() -> VectorcraftApp {
         let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));

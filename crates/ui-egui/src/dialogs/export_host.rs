@@ -52,7 +52,7 @@ pub(crate) enum Export {
     /// Save for Office Documents.
     Office,
     /// Text Export Options.
-    Text,
+    Text { source: Option<text_export::SelectionSource> },
     /// The options a save or open asks for before it goes on, for `action`.
     Save {
         /// The action the options belong to.
@@ -161,7 +161,7 @@ fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Resu
         Export::Dxf => dxf_options::confirm(app, open, fields),
         Export::Hpgl { .. } => hpgl_options::confirm(app, open, fields),
         Export::Office => office_export::confirm(app, open, fields),
-        Export::Text => text_export::confirm(app, open, fields),
+        Export::Text { source } => text_export::confirm(app, open, source.as_ref(), fields),
         Export::Save { .. } => save_options::confirm(app, open, fields),
     }
 }
