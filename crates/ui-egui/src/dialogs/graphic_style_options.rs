@@ -54,13 +54,15 @@ fn open_with(app: &mut VectorcraftApp, name: String, target: Target) -> Result<V
     // An `Err` (a name another style has) keeps the dialog open with the reason.
     let ok = |app: &mut VectorcraftApp, result: &ParamResult| {
         let Some(FieldValue::Json(opening)) = result.fields.get(OPENING) else { return Err("the graphic style target is missing".into()) };
-        let Some(active) = app.session.active().filter(|st| Some(st.uid) == opening["uid"].as_u64()) else {
-            return Err(tl!("This graphic style belongs to the document that opened the dialog.").to_owned());
-        };
-        if Some(active.reverts) != opening["reverts"].as_u64() {
+        let document = opening["uid"].as_u64().ok_or("the graphic style target is missing")?;
+        let target = Target::deserialize(&opening["target"]).map_err(|e| e.to_string())?;
+        let active = app.session.active();
+        if active.is_some_and(|active| active.uid == document && Some(active.reverts) != opening["reverts"].as_u64()) {
             return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
-        let target = Target::deserialize(&opening["target"]).map_err(|e| e.to_string())?;
+        if !active.is_some_and(|active| active.uid == document) {
+            return Err(tl!("This graphic style belongs to the document that opened the dialog.").to_owned());
+        }
         target.run(app, result.fields.text("name").unwrap_or_default()).map(|_| ())
     };
     host::open_held(app, dialog, ok).ok_or("no window")?;
