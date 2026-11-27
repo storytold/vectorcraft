@@ -94,6 +94,15 @@ impl crate::Renderer {
     /// renderer draws copies of the objects (`proof::prepare`), so they are measured afresh and
     /// nothing is held.
     pub fn changed(&mut self, old: &Document, new: &Document, opts: &crate::RenderOptions) -> Changed {
+        // Trim View clips each draw when blending reaches the page and clips one composited
+        // layer otherwise. Changing modes can change unchanged art at an artboard edge.
+        if opts.trim && !old.artboards.is_empty() {
+            let before = crate::proof::prepare(old, opts, &mut self.proof_art);
+            let after = crate::proof::prepare(new, opts, &mut self.proof_art);
+            if self.children_blend(&before.layers) != self.children_blend(&after.layers) {
+                return Changed::Everything;
+            }
+        }
         let renderer = (!crate::proof::overprints(opts)).then_some(self);
         changed_with(old, new, renderer, opts)
     }

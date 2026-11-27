@@ -39,6 +39,7 @@ mod ai;
 mod ate;
 mod cid;
 mod data;
+mod file_fonts;
 mod graphics;
 mod interp;
 mod lex;
@@ -113,6 +114,10 @@ const MAX_SIDE: f64 = 1e5;
 /// The start of the warning that type was set in fonts that aren't available, before ": " and
 /// their families: PDF import's words, as type in those fonts comes in the same way.
 pub(crate) const MISSING_FONTS_NOTE: &str = "fonts that aren't available show in the fallback font until they are";
+/// The start of the warning that type in fonts that aren't available is drawn in the fonts the
+/// file carries (see `file_fonts`), before ": " and their families: PDF import's words.
+pub(crate) const CARRIED_FONTS_NOTE: &str =
+    "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font)";
 /// Most families named in that warning.
 const MAX_MISSING_FONTS: usize = 64;
 
@@ -304,30 +309,41 @@ pub fn import_ai(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncod
 /// [`import_names`] (a `.ai` when `ai_file`, see [`import_ai`]).
 fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding, ai_file: bool) -> Result<Imported, String> {
     let mut r = read_names(bytes, editing_data, trust, names, ai_file)?;
-    let missing = missing_fonts(&r.document);
-    if !missing.is_empty() {
-        r.warnings.push(format!("{MISSING_FONTS_NOTE}: {}", missing.join(", ")));
+    r.warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut r.document));
+    let (carried, missing) = missing_fonts(&r.document);
+    for (note, families) in [(CARRIED_FONTS_NOTE, carried), (MISSING_FONTS_NOTE, missing)] {
+        if !families.is_empty() {
+            r.warnings.push(format!("{note}: {}", families.join(", ")));
+        }
     }
     Ok(r)
 }
 
 /// The families of the type in `d` (its layers and its symbols) that aren't available, each once
-/// in the order the type comes, at most [`MAX_MISSING_FONTS`]: the document's, whether its type
-/// came from the page or from an editing copy, and none for type only measured or outlined.
-fn missing_fonts(d: &Document) -> Vec<String> {
+/// in the order the type comes, at most [`MAX_MISSING_FONTS`] a list: the document's, whether its
+/// type came from the page or from an editing copy, and none for type only measured or outlined.
+/// The first list holds those of type drawn in fonts the file carries (bound to that type), the
+/// second those of type in the fallback font; a family both happen to is in both.
+fn missing_fonts(d: &Document) -> (Vec<String>, Vec<String>) {
     let db = vectorcraft_text::FontDb::global();
-    let mut checked: HashSet<String> = HashSet::new();
-    let mut missing: Vec<String> = Vec::new();
+    let (mut carried, mut missing): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     let mut add = |n: &Node| {
         let NodeKind::Text(t) = &n.kind else { return };
+        // The families and styles this type is drawn in from fonts the file carries.
+        let bound: Vec<(&str, &str)> = t
+            .file_fonts_in_use()
+            .iter()
+            .filter(|font| t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some())
+            .map(|font| (font.family.as_str(), font.style.as_str()))
+            .collect();
         for run in &t.runs {
-            let family = run.style.font_family.as_str();
-            if missing.len() >= MAX_MISSING_FONTS || family.is_empty() || checked.contains(family) {
+            let (family, style) = (run.style.font_family.as_str(), run.style.font_style.as_str());
+            if family.is_empty() {
                 continue;
             }
-            checked.insert(family.to_string());
-            if db.find_family(family).is_none() {
-                missing.push(family.to_string());
+            let list = if bound.contains(&(family, style)) { &mut carried } else { &mut missing };
+            if list.len() < MAX_MISSING_FONTS && !list.iter().any(|f| f == family) && db.find_family(family).is_none() {
+                list.push(family.to_string());
             }
         }
     };
@@ -335,7 +351,7 @@ fn missing_fonts(d: &Document) -> Vec<String> {
     for s in &d.symbols {
         s.art.walk(&mut add);
     }
-    missing
+    (carried, missing)
 }
 
 /// [`import_names`] before the type's fonts are checked (a `.ai` when `ai_file`, see [`import_ai`]).
@@ -407,6 +423,9 @@ fn finish(mut out: Out) -> Imported {
     if !out.shadings.is_empty() {
         graphics::collapse(&mut children, &out.shadings);
     }
+    // The fonts made of the glyphs of fonts the file carries, for their type.
+    let kept = std::mem::take(&mut out.file_glyphs).keep(&mut out.doc.images);
+    file_fonts::keep_file_fonts(&mut children, &kept, &out.doc.images);
     let mut layer = Node::layer(out.doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
     if let Some(c) = layer.children_mut() {
         *c = children;

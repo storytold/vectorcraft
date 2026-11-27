@@ -1,15 +1,17 @@
 //! A script's `alert`, `confirm` and `prompt` in the app: the dialog the run waits at, its buttons,
 //! Enter and Escape, Stop, another dialog in the way, quitting while it waits, and the same answers
-//! given by a run with nobody to ask.
+//! given by a run with nobody to ask. The helpers over the dialog host are shared with the other
+//! script tests.
 
+use craft::ui::dialog::{DialogId, StackDialog, StandardPrompt};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use crate::dialogs::script_run::{CLOSE_KIND, NOTICE_KIND};
-use crate::{VectorcraftApp, dialogs, menus, script_runs};
+use crate::dialogs::script_run::{self, CLOSE_KIND, CloseQuestion, NOTICE_KIND, ScriptNotice};
+use crate::{VectorcraftApp, menus, script_runs};
 
-fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
+pub(super) fn app() -> VectorcraftApp {
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.session.prefs.show_external_script_warning = false;
     app
@@ -25,38 +27,60 @@ fn start(app: &mut VectorcraftApp, source: &str) {
     menus::run_ui_command(app, "ui.runScript", &json!({"source": source, "name": "d.js"})).unwrap().unwrap();
 }
 
-/// Polls the run until it ends, or until its dialog is open (true).
-fn until_dialog(app: &mut VectorcraftApp) -> bool {
-    for _ in 0..10_000 {
-        if !app.session.script_running() {
-            return false;
-        }
-        script_runs::poll(app);
-        if app.ui.dialog.as_ref().is_some_and(|d| d.kind == NOTICE_KIND) {
-            return true;
-        }
-    }
-    panic!("the script neither ended nor opened a dialog");
+/// Takes the answers the dialogs gave, as the frame's pump does.
+pub(super) fn pump(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().unwrap();
+    script_run::pump(app, &ctx);
 }
 
-fn answer(app: &mut VectorcraftApp, answer: &str) {
-    app.ui.dialog.as_mut().unwrap().fields.insert("answer".into(), json!(answer));
-    dialogs::confirm(app).unwrap();
+pub(super) fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {
+    script_run::with_host(app, |host, _| host.is_open::<D>()).unwrap()
 }
 
-thread_local! {
-    // One context per test, so frames follow one another as in the app.
-    static CTX: egui::Context = {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        ctx
-    };
+/// The id of the open dialog with `key`.
+pub(super) fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
+    let open = script_run::with_host(app, |host, _| host.open_dialogs()).unwrap();
+    open.into_iter().find(|d| d.key.as_deref() == Some(key)).unwrap_or_else(|| panic!("no open dialog {key}")).id
 }
 
-/// One headless frame of the dialog layer and the shortcuts, in a window of `size`. Each key pressed
-/// in it is let go in a second frame, as a person lets go of it.
-fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>, size: egui::Vec2) {
-    let ctx = CTX.with(Clone::clone);
+/// The fields of the open dialog with `key`.
+pub(super) fn fields(app: &VectorcraftApp, key: &str) -> Value {
+    let open = script_run::with_host(app, |host, _| host.open_dialogs()).unwrap();
+    open.into_iter().find(|d| d.key.as_deref() == Some(key)).and_then(|d| d.fields).unwrap()
+}
+
+/// `ui.dialog.set` of one field.
+pub(super) fn set(app: &VectorcraftApp, key: &str, field: &str, value: Value) -> Result<(), String> {
+    let id = open_id(app, key);
+    script_run::with_host(app, |host, ctx| host.set_json_field(ctx, id, field, value)).unwrap()
+}
+
+/// `ui.dialog.confirm`, then the frame's pump.
+pub(super) fn confirm(app: &mut VectorcraftApp, key: &str) -> bool {
+    let id = open_id(app, key);
+    let done = script_run::with_host(app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap();
+    pump(app);
+    done
+}
+
+/// `ui.dialog.cancel`, then the frame's pump.
+pub(super) fn cancel(app: &mut VectorcraftApp, key: &str) {
+    let id = open_id(app, key);
+    script_run::with_host(app, |host, ctx| host.cancel_by_id(ctx, id)).unwrap();
+    pump(app);
+}
+
+/// Opens a question the run knows nothing about, over whatever is open.
+pub(super) fn open_blocker(app: &VectorcraftApp) {
+    let blocker = StandardPrompt::custom("Blocked").button(craft::ui::dialog::PromptChoice::Proceed, "OK");
+    script_run::with_host(app, |host, _| host.open(CloseQuestion(blocker))).unwrap();
+}
+
+/// One pass of the dialog host with `events`; a key pressed in it is let go in a second pass, as a
+/// person lets go of it. Returns the last pass's output.
+pub(super) fn frame(app: &VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
     let released: Vec<egui::Event> = events
         .iter()
         .filter_map(|e| match e {
@@ -66,22 +90,33 @@ fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>, size: egui::Vec2) {
             _ => None,
         })
         .collect();
-    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size));
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
     let pressed = !released.is_empty();
+    let mut last = egui::FullOutput::default();
     for events in std::iter::once(events).chain(pressed.then_some(released)) {
-        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| {
-            crate::shortcuts::handle(app, ui.ctx());
-            dialogs::show(app, ui.ctx());
-        });
-        out.textures_delta.clear();
+        last = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
+        last.textures_delta.clear();
     }
+    last
 }
 
-fn key(k: egui::Key) -> egui::Event {
+pub(super) fn key(k: egui::Key) -> egui::Event {
     egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }
 }
 
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 800.0);
+/// Polls the run until it ends, or until its dialog is open (true).
+fn until_dialog(app: &mut VectorcraftApp) -> bool {
+    for _ in 0..10_000 {
+        if !app.session.script_running() {
+            return false;
+        }
+        script_runs::poll(app);
+        if is_open::<ScriptNotice>(app) {
+            return true;
+        }
+    }
+    panic!("the script neither ended nor opened a dialog");
+}
 
 fn log(app: &VectorcraftApp) -> Value {
     app.session.script_report().unwrap()["log"].clone()
@@ -89,23 +124,24 @@ fn log(app: &VectorcraftApp) -> Value {
 
 #[test]
 fn alert_waits_and_stop_rolls_back_first_dialog() {
-    for stop_with_escape in [false, true] {
+    for stop_with_cancel in [false, true] {
         let mut app = app();
         start(&mut app, &format!("{DRAW} while (1) {{ alert('x'); }}"));
         assert!(until_dialog(&mut app));
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.fields["kind"].as_str(), d.fields["message"].as_str(), d.fields["title"].clone()), (Some("alert"), Some("x"), Value::Null));
+        let f = fields(&app, NOTICE_KIND);
+        assert_eq!((f["kind"].as_str(), f["message"].as_str(), f["title"].clone()), (Some("alert"), Some("x"), Value::Null));
         for _ in 0..5 {
             script_runs::poll(&mut app);
         }
         assert!(app.session.script_running(), "the run waits at the dialog");
         assert_eq!(objects(&app), 0);
-        if stop_with_escape {
-            frame(&mut app, vec![key(egui::Key::Escape)], WINDOW);
+        if stop_with_cancel {
+            cancel(&mut app, NOTICE_KIND);
         } else {
-            answer(&mut app, "stop");
+            set(&app, NOTICE_KIND, "answer", json!("stop")).unwrap();
+            assert!(confirm(&mut app, NOTICE_KIND));
         }
-        assert!(app.ui.dialog.is_none());
+        assert!(!is_open::<ScriptNotice>(&app));
         assert!(!until_dialog(&mut app));
         assert_eq!(objects(&app), 0);
         assert_eq!(app.ui.status, "The script was stopped and its changes were undone");
@@ -119,18 +155,25 @@ fn confirm_enter_uses_no_as_default() {
         let mut app = app();
         start(&mut app, &format!("vc.log(confirm('Go?', {no_as_default}));"));
         assert!(until_dialog(&mut app));
-        frame(&mut app, vec![], WINDOW);
-        frame(&mut app, vec![key(egui::Key::Enter)], WINDOW);
-        assert!(app.ui.dialog.is_none(), "Enter answers the dialog: noAsDflt {no_as_default}");
+        frame(&app, vec![]);
+        frame(&app, vec![]);
+        frame(&app, vec![key(egui::Key::Enter)]);
+        pump(&mut app);
+        assert!(!is_open::<ScriptNotice>(&app), "Enter answers the dialog: noAsDefault {no_as_default}");
         assert!(!until_dialog(&mut app));
-        assert_eq!(log(&app), json!([want]), "noAsDflt {no_as_default}");
+        assert_eq!(log(&app), json!([want]), "noAsDefault {no_as_default}");
     }
-    let mut app = app();
-    start(&mut app, "vc.log(confirm('Go?'));");
-    assert!(until_dialog(&mut app));
-    frame(&mut app, vec![key(egui::Key::Escape)], WINDOW);
-    assert!(!until_dialog(&mut app));
-    assert_eq!(log(&app), json!([false]), "Escape is No");
+    for no_as_default in [false, true] {
+        let mut app = app();
+        start(&mut app, &format!("vc.log(confirm('Go?', {no_as_default}));"));
+        assert!(until_dialog(&mut app));
+        frame(&app, vec![]);
+        frame(&app, vec![]);
+        frame(&app, vec![key(egui::Key::Escape)]);
+        pump(&mut app);
+        assert!(!until_dialog(&mut app));
+        assert_eq!(log(&app), json!([false]), "Escape is No: noAsDefault {no_as_default}");
+    }
 }
 
 #[test]
@@ -138,24 +181,22 @@ fn prompt_ok_and_cancel_return_values() {
     let mut app = app();
     start(&mut app, "vc.log(prompt('Name', 'pre', 'Ask')); vc.log(prompt('Again', 'x'));");
     assert!(until_dialog(&mut app));
-    assert_eq!(dialogs::script_run::notice_heading(app.ui.dialog.as_ref().unwrap()), "Ask");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["value"], "pre");
-    app.ui.dialog.as_mut().unwrap().fields.insert("value".into(), json!("typed"));
-    dialogs::confirm(&mut app).unwrap();
+    let heading = script_run::with_host(&app, |host, _| host.get::<ScriptNotice>().map(ScriptNotice::heading)).unwrap();
+    assert_eq!(heading.as_deref(), Some("Ask"));
+    assert_eq!(fields(&app, NOTICE_KIND)["value"], "pre");
+    set(&app, NOTICE_KIND, "value", json!("typed")).unwrap();
+    assert!(confirm(&mut app, NOTICE_KIND));
     assert!(until_dialog(&mut app));
-    dialogs::cancel(&mut app);
+    cancel(&mut app, NOTICE_KIND);
     assert!(!until_dialog(&mut app));
     assert_eq!(log(&app), json!(["typed", null]));
     let mut app = self::app();
     start(&mut app, "vc.log(prompt('Name', ''));");
     assert!(until_dialog(&mut app));
-    let e = {
-        app.ui.dialog.as_mut().unwrap().fields.insert("answer".into(), json!("yes"));
-        dialogs::confirm(&mut app).unwrap_err()
-    };
+    let e = set(&app, NOTICE_KIND, "answer", json!("yes")).unwrap_err();
     assert!(e.contains("ok, cancel, stop"), "{e}");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, NOTICE_KIND, "a wrong answer leaves the dialog open");
-    answer(&mut app, "ok");
+    assert!(is_open::<ScriptNotice>(&app), "a wrong answer leaves the dialog open");
+    assert!(confirm(&mut app, NOTICE_KIND));
     assert!(!until_dialog(&mut app));
     assert_eq!(log(&app), json!([""]), "OK with an empty field gives an empty string");
 }
@@ -165,7 +206,7 @@ fn the_dialog_opens_in_the_frame_the_run_waits() {
     let mut app = app();
     start(&mut app, "alert('x');");
     script_runs::poll(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(NOTICE_KIND), "no later frame is drawn while the run waits");
+    assert!(is_open::<ScriptNotice>(&app), "no later frame is drawn while the run waits");
 }
 
 #[test]
@@ -174,12 +215,12 @@ fn a_prompt_text_past_the_limit_keeps_the_dialog_open() {
     start(&mut app, "vc.log(prompt('Name', ''));");
     assert!(until_dialog(&mut app));
     let long = "x".repeat(vectorcraft_engine::script::dialogs::MAX_PROMPT_BYTES + 1);
-    app.ui.dialog.as_mut().unwrap().fields.insert("value".into(), json!(long));
-    assert!(dialogs::confirm(&mut app).is_err());
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, NOTICE_KIND, "the refused answer leaves the dialog open");
+    let e = set(&app, NOTICE_KIND, "value", json!(long)).unwrap_err();
+    assert!(e.contains("bytes"), "{e}");
+    assert!(is_open::<ScriptNotice>(&app), "the refused value leaves the dialog open");
     assert!(app.session.script_dialog().is_some(), "the run still waits");
-    app.ui.dialog.as_mut().unwrap().fields.insert("value".into(), json!("ok"));
-    answer(&mut app, "ok");
+    set(&app, NOTICE_KIND, "value", json!("ok")).unwrap();
+    assert!(confirm(&mut app, NOTICE_KIND));
     assert!(!until_dialog(&mut app));
     assert_eq!(log(&app), json!(["ok"]));
 }
@@ -188,15 +229,14 @@ fn a_prompt_text_past_the_limit_keeps_the_dialog_open() {
 fn dialog_wait_survives_another_modal() {
     let mut app = app();
     start(&mut app, "alert('x');");
-    script_runs::poll(&mut app);
-    app.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::GROWTH_KIND, json!({})));
-    let other = app.ui.dialog.clone();
+    open_blocker(&app);
     for _ in 0..3 {
         script_runs::poll(&mut app);
     }
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.clone()), other.map(|d| d.kind), "the open dialog stays");
+    assert!(is_open::<CloseQuestion>(&app), "the open dialog stays");
+    assert!(!is_open::<ScriptNotice>(&app), "nothing opens over it");
     assert!(app.session.script_running());
-    app.ui.dialog = None;
+    cancel(&mut app, CLOSE_KIND);
     assert!(until_dialog(&mut app), "the script's dialog opens once the other one closes");
 }
 
@@ -205,17 +245,17 @@ fn close_while_notification_waits_abandons_or_resumes() {
     let mut app = app();
     start(&mut app, &format!("{DRAW} vc.log(prompt('Name', ''));"));
     assert!(until_dialog(&mut app));
-    app.ui.dialog.as_mut().unwrap().fields.insert("value".into(), json!("half"));
-    dialogs::script_run::ask_to_close(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND);
+    set(&app, NOTICE_KIND, "value", json!("half")).unwrap();
+    script_run::ask_to_close(&mut app);
+    assert!(is_open::<CloseQuestion>(&app));
     script_runs::poll(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND, "the run goes on waiting");
-    dialogs::cancel(&mut app);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.fields["value"].as_str()), (NOTICE_KIND, Some("half")), "Cancel shows the dialog again as it was");
-    dialogs::script_run::ask_to_close(&mut app);
-    dialogs::confirm(&mut app).unwrap();
+    assert!(is_open::<CloseQuestion>(&app), "the run goes on waiting");
+    cancel(&mut app, CLOSE_KIND);
+    assert_eq!(fields(&app, NOTICE_KIND)["value"], "half", "Cancel shows the dialog again as it was");
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
     assert!(!app.session.script_running());
+    assert!(!is_open::<ScriptNotice>(&app), "no dialog is left for the abandoned run");
     assert_eq!(objects(&app), 0);
     assert_eq!(app.ui.status, "The script was stopped and its changes were undone");
 }
@@ -225,39 +265,35 @@ fn close_question_ends_with_a_run_stopped_another_way() {
     let mut app = app();
     start(&mut app, &format!("{DRAW} vc.log(prompt('Name', ''));"));
     assert!(until_dialog(&mut app));
-    dialogs::script_run::ask_to_close(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND);
+    script_run::ask_to_close(&mut app);
+    assert!(is_open::<CloseQuestion>(&app));
     assert_eq!(app.run("script.stop", json!({})).unwrap()["stopped"], true);
     script_runs::poll(&mut app);
     assert!(!app.session.script_running());
-    assert!(app.ui.dialog.is_none(), "the question about a run that has ended closes");
-    dialogs::cancel(&mut app);
-    assert!(app.ui.dialog.is_none(), "Cancel does not show the stopped script's dialog again");
+    assert!(!is_open::<CloseQuestion>(&app), "the question about a run that has ended closes");
+    assert!(!is_open::<ScriptNotice>(&app), "the dialog the run no longer waits at is not shown again");
     assert_eq!(objects(&app), 0);
-    // Asked to stop, the run no longer waits at its dialog before its next slice ends it.
+    // A run asked to stop no longer waits at its dialog: the question stays, over nothing.
     let mut app = self::app();
     start(&mut app, &format!("{DRAW} vc.log(prompt('Name', ''));"));
     assert!(until_dialog(&mut app));
-    dialogs::script_run::ask_to_close(&mut app);
+    script_run::ask_to_close(&mut app);
     app.run("script.stop", json!({})).unwrap();
-    dialogs::script_run::settle_close(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CLOSE_KIND, "the run has not ended yet");
-    dialogs::cancel(&mut app);
-    assert!(app.ui.dialog.is_none(), "Cancel does not show a dialog the run no longer waits at");
+    script_run::forget::<ScriptNotice>(&app);
+    assert!(is_open::<CloseQuestion>(&app), "the run has not ended yet");
+    cancel(&mut app, CLOSE_KIND);
+    assert!(!is_open::<ScriptNotice>(&app), "Cancel does not show a dialog the run no longer waits at");
 }
 
 #[test]
-fn notification_layout_with_long_text_and_small_window() {
+fn notification_message_with_control_characters_and_a_multiline_title() {
     let mut app = app();
     let long = "word ".repeat(3_000);
     start(&mut app, &format!("alert({long:?} + '\\u0007\\r\\n', 'T\\nitle', true);"));
     assert!(until_dialog(&mut app));
-    for _ in 0..3 {
-        frame(&mut app, vec![], egui::vec2(320.0, 240.0));
-    }
-    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, NOTICE_KIND);
-    assert_eq!(dialogs::script_run::notice_heading(app.ui.dialog.as_ref().unwrap()), "T\u{240a}itle");
-    answer(&mut app, "ok");
+    let heading = script_run::with_host(&app, |host, _| host.get::<ScriptNotice>().map(ScriptNotice::heading)).unwrap();
+    assert_eq!(heading.as_deref(), Some("T\u{240a}itle"));
+    assert!(confirm(&mut app, NOTICE_KIND));
     assert!(!until_dialog(&mut app));
     assert_eq!(app.session.script_report().unwrap()["dialogs"][0]["errorIcon"], true);
 }
@@ -269,7 +305,8 @@ fn the_app_and_a_run_with_nobody_to_ask_give_the_same_results() {
     start(&mut app, source);
     for a in ["yes", "ok", "ok"] {
         assert!(until_dialog(&mut app));
-        answer(&mut app, a);
+        set(&app, NOTICE_KIND, "answer", json!(a)).unwrap();
+        assert!(confirm(&mut app, NOTICE_KIND));
     }
     assert!(!until_dialog(&mut app));
     let framed = app.session.script_report().unwrap().clone();

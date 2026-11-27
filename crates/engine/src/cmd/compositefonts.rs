@@ -23,8 +23,11 @@ use super::{CommandSpec, Result, Session, bad, cmd, has_doc, switch_or, text_par
 /// The extension of the files Export writes and Import reads.
 pub const EXTS: &[&str] = &["vccomposite"];
 
+/// The id of the export command.
+const EXPORT: &str = "type.compositeFonts.export";
+
 /// The largest file Import reads, in bytes.
-const MAX_FILE_BYTES: usize = 4 << 20;
+pub const MAX_FILE_BYTES: usize = 4 << 20;
 
 /// The keys a part may give.
 const PART_KEYS: [&str; 7] = ["font", "style", "size", "baseline", "hScale", "vScale", "scaleAtCenter"];
@@ -271,7 +274,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn export(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "type.compositeFonts.export";
+    const C: &str = EXPORT;
     let path = text_param(p, "path", C)?;
     if path.is_some_and(|p| p.trim().is_empty()) {
         return Err(bad(C, "path is empty"));
@@ -306,19 +309,27 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     if fonts.is_empty() {
         return Err(bad(C, "no composite fonts to export"));
     }
-    let mut file = Map::new();
-    file.insert("compositeFonts".into(), json!(fonts));
-    let text = serde_json::to_string_pretty(&file).map_err(|e| bad(C, e.to_string()))?;
-    if text.len() > MAX_FILE_BYTES {
-        return Err(bad(C, "the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them"));
-    }
+    let bytes = file_bytes(&fonts)?;
     match path {
         Some(path) => {
-            write_file(path, text.as_bytes())?;
+            write_file(path, &bytes)?;
             Ok(json!({ "path": path, "count": fonts.len() }))
         }
-        None => Ok(json!({ "data": text, "count": fonts.len() })),
+        // The bytes are UTF-8 JSON text, so the lossy conversion changes nothing.
+        None => Ok(json!({ "data": String::from_utf8_lossy(&bytes), "count": fonts.len() })),
     }
+}
+
+/// The bytes of an export file holding `fonts`: what [`import`] reads. Refused when they would make a
+/// file larger than Import reads.
+pub fn file_bytes(fonts: &[CompositeFont]) -> Result<Vec<u8>> {
+    let mut file = Map::new();
+    file.insert("compositeFonts".into(), json!(fonts));
+    let text = serde_json::to_string_pretty(&file).map_err(|e| bad(EXPORT, e.to_string()))?;
+    if text.len() > MAX_FILE_BYTES {
+        return Err(bad(EXPORT, "the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them"));
+    }
+    Ok(text.into_bytes())
 }
 
 /// The composite fonts in the bytes of an exported file.
@@ -338,7 +349,12 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     let too_large = || bad(C, "the file is larger than 4 MB");
     let bytes = match given {
         (Some(path), None, None) if !path.trim().is_empty() => read_file_head(path, MAX_FILE_BYTES + 1)?,
-        (None, Some(text), None) => text.as_bytes().to_vec(),
+        (None, Some(text), None) => {
+            if text.len() > MAX_FILE_BYTES {
+                return Err(too_large());
+            }
+            text.as_bytes().to_vec()
+        }
         (None, None, Some(b64)) => {
             if b64.len() > MAX_FILE_BYTES / 3 * 4 + 4 {
                 return Err(too_large());
