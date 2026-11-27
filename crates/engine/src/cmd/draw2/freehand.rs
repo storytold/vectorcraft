@@ -301,12 +301,15 @@ fn flow_at(sp: &SubPath, k: usize, dir: kurbo::Vec2) -> Option<bool> {
     let prev = sp.anchors.get((k + n - 1) % n)?;
     let toward = if a.h_in != a.p {
         a.h_in
-    } else if prev.h_out != prev.p {
+    } else if prev.h_out != prev.p && prev.h_out != a.p {
         prev.h_out
     } else {
         prev.p
     };
     let back = toward - a.p;
+    if back.hypot() <= 1e-9 {
+        return None;
+    }
     let unit = |v: kurbo::Vec2| v / v.hypot().max(1e-12);
     let (d, f, b) = (unit(dir), unit(fwd), unit(back));
     let (along_f, along_b) = (d.dot(f), d.dot(b));
