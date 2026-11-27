@@ -10,6 +10,7 @@
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
 // PLAN: assumed path of `LengthUnits`
 use craft::ui::runtime::env::LengthUnits;
@@ -47,7 +48,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let initial = fields.clone();
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = crate::canvas::rulers::type_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Tate-chu-yoko Settings"), rows(lengths)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Tate-chu-yoko Settings"), rows(lengths)).values(Bind::bound(fields))
+    });
     super::host::open_held(app, dialog, move |app, result| {
         let p = params(&result.fields, &initial);
         if p.is_empty() {
@@ -97,6 +100,17 @@ mod tests {
             NodeKind::Text(t) => t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect(),
             _ => panic!("not text"),
         }
+    }
+
+    #[test]
+    fn tate_chu_yoko_settings_step_the_opening_number_on_ok() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"tcyUpDown": 3, "tcyLeftRight": -7})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+        panel.app().run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::step_number_and_ok(&mut panel, "Up/Down");
+        assert_eq!(offsets(&panel.app(), id), [(4.0, -7.0)]);
+        assert!(!driver::is_open(&panel.app()));
     }
 
     /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step.
