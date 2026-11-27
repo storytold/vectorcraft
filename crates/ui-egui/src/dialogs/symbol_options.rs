@@ -12,6 +12,8 @@
 //! Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
+use std::collections::HashSet;
+
 use craft::ui::contract::{Bind, Outcome as _, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
@@ -100,13 +102,23 @@ fn rows(name: &str) -> Vec<Param> {
 /// edited), applies the fields to it; `keep_art` leaves the selection as ordinary art for a new one;
 /// `opened` are the guides the dialog opened with.
 fn open_dialog(app: &mut VectorcraftApp, fields: DialogFields, edit: Option<String>, keep_art: bool, opened: [f64; 4]) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let st = app.session.active().ok_or("no document open")?;
+    let (document, reverts) = (st.uid, st.reverts);
+    let selection = edit.is_none().then(|| st.selection.objects.iter().copied().collect::<HashSet<_>>());
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let name = fields.text("name").unwrap_or_default().to_string();
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
-        if !app.session.active().is_some_and(|active| active.uid == document) {
-            return Err(tl!("This symbol belongs to the document that opened the dialog.").to_owned());
+        let Some(active) = app.session.active().filter(|st| st.uid == document) else {
+            return Err(tl!("This symbol belongs to the document that opened the dialog.").into());
+        };
+        if active.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        if let Some(selection) = &selection
+            && (active.selection.objects.len() != selection.len() || active.selection.objects.iter().any(|id| !selection.contains(id)))
+        {
+            return Err(tl!("The selected artwork changed. Restore the selection to continue.").into());
         }
         let f = &result.fields;
         let name = f.text("name").unwrap_or_default().trim().to_string();
@@ -243,7 +255,7 @@ mod document_tests {
         let undo = app.session.active().unwrap().history.undo.len();
 
         answer_dialog(&mut app, id, &[], true);
-        assert_eq!(app.session.active().unwrap().doc, before, "OK cannot turn the later selection into a symbol");
+        assert!(app.session.active().unwrap().doc == before, "OK cannot turn the later selection into a symbol");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
 
         app.run("select.set", json!({"ids": [original]})).unwrap();
