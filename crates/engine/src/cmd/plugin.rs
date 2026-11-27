@@ -868,6 +868,7 @@ pub const DESKTOP_MENU_ITEMS: &[(&[&str], &str)] = &[
     (&["View"], "Snap to Pixel"),
     (&["View"], "Snap to Point"),
     (&["View"], "Snap to Glyph"),
+    (&["View"], "Snapping"),
     (&["View"], "Saved View"),
 ];
 
