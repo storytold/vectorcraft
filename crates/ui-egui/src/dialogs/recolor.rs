@@ -129,7 +129,7 @@ use craft::ui::buttons::{IconButton, ToggleButton};
 use craft::ui::choice::{Checkbox, Swatch};
 use craft::ui::contract::overlay::Anchor;
 use craft::ui::contract::{
-    Bind, CollectionEvent, ColumnSpec, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Trigger,
+    Bind, CollectionEvent, ColumnSpec, EditResponse, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Trigger,
 };
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
@@ -1370,6 +1370,7 @@ fn snapshot(d: &Fields) -> Snapshot {
 /// Save Changes rewrites the group: the dialog's steps start again from the fields `d` has then, as on
 /// a new opening, so fields set before the next frame or step are a step back to them.
 fn restart_history(d: &mut Fields) {
+    clear_channel(d);
     d.fields.insert(RESTART.into(), json!(true));
 }
 
@@ -1469,7 +1470,7 @@ impl Steps {
             };
         }
         // The rows hold no slider edit or drag, and the selection keeps to them.
-        for k in [COMPS, DRAG] {
+        for k in [COMPS, DRAG, CHANNEL_GESTURE, CHANNEL_CANCEL] {
             d.fields.remove(k);
         }
         let n = rows(d).len();
@@ -1759,6 +1760,7 @@ pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String
     work.begin(app);
     let changed = work.steps.step(&mut work.fields, back);
     if changed {
+        work.filed.edited = None;
         sync_weights(app, &mut work.fields);
     }
     let answer = json!({"changed": changed, "canUndo": work.steps.can(&work.fields, true), "canRedo": work.steps.can(&work.fields, false)});
@@ -1901,6 +1903,7 @@ impl RecolorDialog {
     /// Fields that OK's Color Groups button left, which the dialog keeps.
     fn take_fields(&mut self, fields: Fields) {
         self.fields = fields;
+        clear_channel(&mut self.fields);
         self.steps.take_restart(&mut self.fields);
     }
 
@@ -1920,6 +1923,7 @@ impl RecolorDialog {
             GROUP_STORAGE if !value.is_boolean() => return Err(format!("`{GROUP_STORAGE}` must be true or false")),
             _ => {}
         }
+        clear_channel(&mut self.fields);
         self.fields.fields.insert(field.to_owned(), value);
         Ok(())
     }
@@ -2082,7 +2086,11 @@ fn body(
     });
     if changed {
         d.fields.insert("rows".into(), Value::Array(rs));
-        filed.edited.get_or_insert(before);
+        if d.fields.remove(CHANNEL_CANCEL).is_some() {
+            filed.edited = None;
+        } else {
+            filed.edited.get_or_insert(before);
+        }
     }
     if d.fields.get("group").is_some_and(Value::is_string) || d.bool("__newGroup") {
         let mut name = d.str("groupName");
@@ -2130,7 +2138,7 @@ fn toolbar(ui: &mut Ui, d: &mut Fields, feed: &Feed, filed: &mut Filed, (can_und
         }
         toggle_field(ui, d, GROUP_STORAGE, tl!("Show Color Groups"), "library", true);
         let presets: Vec<Entry<usize>> = PRESETS.iter().enumerate().map(|(i, p)| Entry::new(i, Label::from(*p))).collect();
-        if let Some(&i) = Select::new(tl!("Preset:"), Bind::given(preset_of(d)), &presets).show(ui).value() {
+        if let Some(&i) = Select::new(tl!("Preset:"), Bind::given(preset_of(d)), &presets).show(ui).events.committed() {
             set_preset(d, i, feed.first_library.as_deref());
         }
     });
@@ -2207,7 +2215,7 @@ fn assign_tab(
                 .chain((1..=total).map(|n| Entry::new(n, Label::from(n.to_string()))))
                 .collect();
             let current = d.fields.get("colors").and_then(Value::as_u64).map_or(0, |n| n as usize);
-            if let Some(&n) = Select::new(tl!("Colors:"), Bind::given(current), &counts).show(ui).value() {
+            if let Some(&n) = Select::new(tl!("Colors:"), Bind::given(current), &counts).show(ui).events.committed() {
                 d.fields.insert("colors".into(), if n == 0 { Value::Null } else { json!(n) });
             }
             Text::new(tl!("Preserve:")).shade(Shade::Muted).show(ui);
@@ -2271,7 +2279,7 @@ fn assign_tab(
                 .cells(icx.cells())
                 .thumb_aspect(ThumbSize::Small, ThumbAspect::new(6, 1), move |cx, rect| cx.data_shapes(chips(rect, &from)))
                 .cell_field(ARROW, arrow, move |out| {
-                    if let Some(&on) = out.value() {
+                    if let Some(&on) = out.events.committed() {
                         edits.borrow_mut().push(RowEdit::Exclude(i, !on));
                     }
                 })
@@ -2376,6 +2384,7 @@ fn assign_tab(
         }
         toggle_field(ui, d, FIND, tl!("Find the selected colors in the artwork"), "search", art);
         if IconButton::new(IconId::new("rotate-ccw")).label(tl!("Reset the rows to the artwork's colors")).show(ui).clicks == 1 {
+            clear_channel(d);
             d.fields.remove(REDUCED);
             d.fields.remove(COMPS);
             // The rows keep no slider edit, also when they cannot be reduced again.
@@ -2393,7 +2402,7 @@ fn assign_tab(
         let methods: Vec<Entry<usize>> = Method::ALL.iter().enumerate().map(|(i, m)| Entry::new(i, Label::from(m.label()))).collect();
         let method = Method::parse(&d.str("method")).unwrap_or_default();
         let at = Method::ALL.iter().position(|m| m.id() == method.id()).unwrap_or(0);
-        if let Some(&i) = Select::new(tl!("Method:"), Bind::given(at), &methods).show(ui).value()
+        if let Some(&i) = Select::new(tl!("Method:"), Bind::given(at), &methods).show(ui).events.committed()
             && let Some(m) = Method::ALL.get(i)
         {
             d.fields.insert("method".into(), json!(m.id()));
@@ -2403,7 +2412,7 @@ fn assign_tab(
         let libraries: Vec<Entry<usize>> = feed.libraries.iter().enumerate().map(|(i, (_, name))| Entry::new(i, Label::from(name.clone()))).collect();
         let current = d.str("limitTo");
         let at = feed.libraries.iter().position(|(k, _)| *k == current).unwrap_or(0);
-        if let Some(&i) = Select::new(tl!("Limit to Library:"), Bind::given(at), &libraries).show(ui).value()
+        if let Some(&i) = Select::new(tl!("Limit to Library:"), Bind::given(at), &libraries).show(ui).events.committed()
             && let Some((k, _)) = feed.libraries.get(i)
         {
             d.fields.insert("limitTo".into(), json!(k));
@@ -2651,7 +2660,7 @@ fn mode_menu(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, global: bool) {
     let at = modes.iter().position(|(id, _)| *id == current).unwrap_or(0);
     let entries: Vec<Entry<usize>> = modes.iter().enumerate().map(|(i, (_, label))| Entry::new(i, Label::from(*label))).collect();
     let chosen = Select::new(tl!("Color Mode:"), Bind::given(at), &entries).enabled(target.color.is_some() || global).show(ui);
-    if let Some((id, _)) = chosen.value().and_then(|i| modes.get(*i)) {
+    if let Some((id, _)) = chosen.events.committed().and_then(|i| modes.get(*i)) {
         d.fields.insert("sliderMode".into(), json!(id));
     }
 }
@@ -2667,6 +2676,71 @@ fn adjust_values(d: &Fields) -> [f64; 4] {
 fn global_adjust(values: [f64; 4]) -> GlobalAdjust {
     let [saturation, brightness, temperature, luminosity] = values.map(|v| (v / 100.0) as f32);
     GlobalAdjust { saturation, brightness, temperature, luminosity }
+}
+
+const CHANNEL_GESTURE: &str = "__channelGesture";
+const CHANNEL_CANCEL: &str = "__channelCancel";
+
+fn clear_channel(d: &mut Fields) {
+    d.fields.remove(CHANNEL_GESTURE);
+    d.fields.remove(CHANNEL_CANCEL);
+}
+
+/// A channel edits a projection of a row, so its scalar Cancel value cannot restore the row's
+/// original color model, tint or component cache. Keep exactly those source values for the gesture.
+fn channel_value(d: &mut Fields, rows: &mut [Value], row: Option<usize>, edit: &EditResponse<f64>) -> (Option<f64>, bool) {
+    let id = edit.response.id.value();
+    let keys: &[&str] = if row.is_some() { &[COMPS, "sliderMode"] } else { &["globalAdjust"] };
+    let mut value = None;
+    let mut restored = false;
+    for event in &edit.events {
+        match event {
+            EditEvent::Begin { .. } => {
+                let fields: serde_json::Map<String, Value> =
+                    keys.iter().filter_map(|key| Some(((*key).to_string(), d.fields.get(*key)?.clone()))).collect();
+                d.fields.insert(CHANNEL_GESTURE.into(), json!({"id": id, "index": row, "row": row.and_then(|i| rows.get(i)), "fields": fields}));
+            }
+            EditEvent::Cancel { before, .. } => {
+                if d.fields.get(CHANNEL_GESTURE).is_some_and(|start| start["id"] == id && start["index"] == json!(row)) {
+                    let start = d.fields.remove(CHANNEL_GESTURE).unwrap_or(Value::Null);
+                    if before.is_none() {
+                        value = None;
+                        continue;
+                    }
+                    if let Some(i) = row {
+                        if let Some(current) = rows.get_mut(i).filter(|current| current["from"] == start["row"]["from"]) {
+                            *current = start["row"].clone();
+                            // Snapping/retaining marks from the discarded proposal would alter this exact restore.
+                            d.fields.insert(CHANNEL_CANCEL.into(), json!(true));
+                            restored = true;
+                        } else {
+                            continue;
+                        }
+                    }
+                    for key in keys {
+                        match start["fields"].get(*key) {
+                            Some(before) => {
+                                d.fields.insert((*key).into(), before.clone());
+                            }
+                            None => {
+                                d.fields.remove(*key);
+                            }
+                        }
+                    }
+                }
+                value = None;
+            }
+            event => {
+                value = event.value().copied().filter(|value| value.is_finite());
+                if matches!(event, EditEvent::Commit { .. } | EditEvent::Set { .. })
+                    && d.fields.get(CHANNEL_GESTURE).is_some_and(|start| start["id"] == id)
+                {
+                    d.fields.remove(CHANNEL_GESTURE);
+                }
+            }
+        }
+    }
+    (value, restored)
 }
 
 /// The Global Adjust sliders, two to a line: Saturation, Brightness, Temperature and Luminosity,
@@ -2696,7 +2770,7 @@ fn global_sliders(ui: &mut Ui, d: &mut Fields, sample: Color) {
                 else {
                     continue;
                 };
-                if let Some(&v) = out.events.value().filter(|v| v.is_finite()) {
+                if let Some(v) = channel_value(d, &mut [], None, &out).0 {
                     set = Some((n, v.round()));
                 }
             }
@@ -2741,10 +2815,13 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
                     .unit(ChannelUnit::Percent)
                     .track(stops.clone())
                     .show(ui)
-                    && let Some(&v) = out.events.value().filter(|v| v.is_finite())
                 {
-                    rows[i]["tint"] = json!(v.round());
-                    changed = true;
+                    let (value, restored) = channel_value(d, rows, Some(i), &out);
+                    changed |= restored;
+                    if let Some(v) = value {
+                        rows[i]["tint"] = json!(v.round());
+                        changed = true;
+                    }
                 }
                 Text::new(Label::from(target.spot.clone().unwrap_or_default())).show(ui);
             });
@@ -2765,7 +2842,9 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
                     else {
                         continue;
                     };
-                    if let Some(&v) = out.events.value().filter(|v| v.is_finite()) {
+                    let (value, restored) = channel_value(d, rows, Some(i), &out);
+                    changed |= restored;
+                    if let Some(v) = value {
                         let mut next = set.take().unwrap_or_else(|| comps.clone());
                         if let Some(x) = next.get_mut(n) {
                             *x = v.clamp(lo, hi) as f32;
@@ -2960,6 +3039,7 @@ fn keeps_rows(d: &Fields) -> bool {
 /// After Remove Color: select the base row at `base`; the slider values held were for a row index
 /// that may now hold another row.
 fn removed(d: &mut Fields, base: usize) {
+    clear_channel(d);
     d.fields.insert("__sel".into(), json!([base]));
     d.fields.remove(COMPS);
 }
@@ -3171,6 +3251,334 @@ mod tests {
     use super::fixture::Recolor;
     use super::*;
     use vectorcraft_engine::Session;
+
+    fn real_key(rc: &mut Recolor, key: egui::Key) {
+        for pressed in [true, false] {
+            rc.frame_with(
+                vec![egui::Event::Key { key, physical_key: Some(key), pressed, repeat: false, modifiers: egui::Modifiers::NONE }],
+                egui::Modifiers::NONE,
+            );
+        }
+        rc.frame();
+    }
+
+    fn internal_history(rc: &Recolor) -> (usize, usize, Snapshot) {
+        rc.with_dialog(|_, d| {
+            let mut history = d.steps.history.clone();
+            let mut undo = 0;
+            while history.take_back().is_some() {
+                undo += 1;
+            }
+            (undo, d.steps.history.redo_len(), d.steps.settled.clone())
+        })
+        .unwrap()
+    }
+
+    fn custom_four_color_mapping() -> Recolor {
+        let mut app = app(220);
+        for (i, color) in ["#ff0000", "#00ff00", "#0000ff", "#ffff00"].into_iter().enumerate() {
+            square(&mut app, 10.0 + i as f64 * 30.0, color);
+        }
+        app.run("select.all", json!({})).unwrap();
+        let mut rc = opened(app, json!({}));
+        rc.set("preview", json!(false)).unwrap();
+        rc.set("colors", json!(4)).unwrap();
+        rc.set("method", json!(Method::Exact.id())).unwrap();
+        rc.settled();
+        let mut mapped = rc.rows();
+        assert_eq!(mapped.len(), 4);
+        for (i, row) in mapped.iter_mut().enumerate() {
+            row["to"] = json!(format!("cmyk {} 23.456 34.567 45.678", 12.345 + i as f64 * 3.0));
+            row["tint"] = json!(37.25);
+            row["model"] = json!("new");
+        }
+        rc.set("rows", json!(mapped)).unwrap();
+        rc.set("__sel", json!([0])).unwrap();
+        rc.set("sliderMode", json!("cmyk")).unwrap();
+        rc.settled();
+        rc
+    }
+
+    #[test]
+    fn cancelled_recolor_popup_choices_preserve_custom_rows_and_internal_history() {
+        for (label, movement, tab) in [
+            ("Preset:", egui::Key::ArrowDown, "assign"),
+            ("Colors:", egui::Key::ArrowUp, "assign"),
+            ("Method:", egui::Key::ArrowDown, "assign"),
+            ("Color Mode:", egui::Key::ArrowDown, "assign"),
+            ("Harmony Rules", egui::Key::ArrowDown, "edit"),
+            ("Limit to Library:", egui::Key::ArrowDown, "assign"),
+        ] {
+            let mut rc = custom_four_color_mapping();
+            rc.set("tab", json!(tab)).unwrap();
+            rc.settled();
+            let before = rc.fields();
+            let history = internal_history(&rc);
+            let document = rc.app().session.active().unwrap().doc.clone();
+            let undo = undo_len(&rc.app());
+            rc.click_label(label).frame();
+            real_key(&mut rc, movement);
+            real_key(&mut rc, egui::Key::Escape);
+            assert_eq!(snapshot(&rc.fields()), snapshot(&before), "cancelled {label} keeps the complete mapping");
+            assert_eq!(rc.rows(), super::rows(&before));
+            assert_eq!(rc.field(COMPS), before.fields.get(COMPS).cloned());
+            assert_eq!(rc.field("sliderMode"), before.fields.get("sliderMode").cloned());
+            assert_eq!(internal_history(&rc), history, "cancelled {label} adds no internal undo step");
+            assert_eq!(rc.app().session.active().unwrap().doc, document);
+            assert_eq!(undo_len(&rc.app()), undo);
+        }
+    }
+
+    #[test]
+    fn accepted_recolor_preset_applies_normally_as_one_artwork_undo_step() {
+        let mut rc = custom_four_color_mapping();
+        let document = rc.app().session.active().unwrap().doc.clone();
+        let undo = undo_len(&rc.app());
+        rc.click_label("Preset:").frame();
+        real_key(&mut rc, egui::Key::ArrowDown);
+        real_key(&mut rc, egui::Key::Enter);
+        assert_eq!(rc.field("colors"), Some(json!(1)));
+        assert_eq!(rc.field("method"), Some(json!(Method::ScaleTints.id())));
+        assert_eq!(rc.rows().len(), 1);
+        rc.click_label("OK").frame().frame();
+        assert!(!rc.is_open());
+        assert_eq!(undo_len(&rc.app()), undo + 1);
+        assert_ne!(rc.app().session.active().unwrap().doc, document);
+        rc.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(rc.app().session.active().unwrap().doc, document);
+    }
+
+    #[test]
+    fn a_cancelled_channel_drag_restores_raw_cmyk_tint_model_and_component_cache() {
+        let mut rc = custom_four_color_mapping();
+        let row = rc.rows()[0].clone();
+        assert_eq!(row["tint"], 37.25);
+        assert_eq!(row["model"], "new");
+        assert!(row["to"].as_str().unwrap().starts_with("cmyk "));
+        let before = rc.fields();
+        let history = internal_history(&rc);
+        let document = rc.app().session.active().unwrap().doc.clone();
+        let undo = undo_len(&rc.app());
+        let rail = rc.slider("C").expect("the selected raw CMYK row has a Cyan rail");
+        let from = rail.center();
+        let to = from + egui::vec2(30.0, 0.0);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to);
+        assert_ne!(rc.rows()[0], row, "the held drag really edits the projected color");
+        real_key(&mut rc, egui::Key::Escape);
+        rc.release(to).frame();
+        assert_eq!(rc.rows()[0], row, "Cancel restores raw color components, tint and model, not an RGB equivalent");
+        assert_eq!(snapshot(&rc.fields()), snapshot(&before));
+        assert_eq!(rc.field(COMPS), before.fields.get(COMPS).cloned());
+        assert_eq!(rc.field("sliderMode"), before.fields.get("sliderMode").cloned());
+        assert_eq!(internal_history(&rc), history);
+        assert_eq!(rc.app().session.active().unwrap().doc, document);
+        assert_eq!(undo_len(&rc.app()), undo);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to).release(to).frame();
+        let accepted = rc.rows()[0].clone();
+        assert_ne!(accepted, row);
+        assert!(rc.field(COMPS).is_some(), "a real accepted edit keeps its exact component cache");
+        let accepted_cache = rc.field(COMPS);
+        let accepted_history = internal_history(&rc);
+        let next_from = rc.slider("C").unwrap().center();
+        let next_to = next_from - egui::vec2(20.0, 0.0);
+        rc.press_at(next_from).move_to(next_from.lerp(next_to, 0.5)).move_to(next_to);
+        assert_ne!(rc.rows()[0], accepted);
+        real_key(&mut rc, egui::Key::Escape);
+        rc.release(next_to).frame();
+        assert_eq!(rc.rows()[0], accepted);
+        assert_eq!(rc.field(COMPS), accepted_cache, "Cancel restores a pre-existing cache created by a real earlier edit");
+        assert_eq!(internal_history(&rc), accepted_history);
+        rc.click_label("OK").frame().frame();
+        assert!(!rc.is_open());
+        assert_eq!(undo_len(&rc.app()), undo + 1);
+        assert_ne!(rc.app().session.active().unwrap().doc, document);
+        rc.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(rc.app().session.active().unwrap().doc, document);
+    }
+
+    #[test]
+    fn cancelled_global_adjust_drag_restores_absent_or_partial_adjustment_objects() {
+        for adjust in [None, Some(json!({"brightness": 12.5}))] {
+            let mut rc = custom_four_color_mapping();
+            rc.set("tab", json!("edit")).unwrap();
+            rc.set("sliderMode", json!("global")).unwrap();
+            if let Some(adjust) = adjust {
+                rc.set("globalAdjust", adjust).unwrap();
+            } else {
+                assert!(rc.field("globalAdjust").is_none(), "the opening field is genuinely absent");
+            }
+            rc.settled();
+            let before = rc.fields();
+            let history = internal_history(&rc);
+            let rail = rc.slider("Saturation").expect("Global Adjust shows Saturation");
+            let from = rail.center();
+            let to = from + egui::vec2(30.0, 0.0);
+            rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to);
+            assert_ne!(rc.field("globalAdjust"), before.fields.get("globalAdjust").cloned());
+            real_key(&mut rc, egui::Key::Escape);
+            rc.release(to).frame();
+            assert_eq!(rc.field("globalAdjust"), before.fields.get("globalAdjust").cloned());
+            assert_eq!(snapshot(&rc.fields()), snapshot(&before));
+            assert_eq!(internal_history(&rc), history);
+        }
+    }
+
+    #[test]
+    fn cancelled_library_tint_drag_restores_the_exact_spot_row() {
+        let mut app = app(120);
+        let lab = json!({"l": 50, "a": 60, "b": -20});
+        app.run("swatch.new", json!({"name": "Cancel Ink", "color": lab, "spot": true})).unwrap();
+        let data =
+            app.run("swatch.library.save", json!({"names": ["Cancel Ink"], "name": "Cancel Inks"})).unwrap()["data"].as_str().unwrap().to_owned();
+        let library =
+            app.run("swatch.library.load", json!({"data": data, "name": "cancel-inks.vcswatches"})).unwrap()["library"].as_str().unwrap().to_owned();
+        app.run("swatch.delete", json!({"names": ["Cancel Ink"]})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": lab})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let mut rc = opened(app, json!({"library": library}));
+        rc.set("preview", json!(false)).unwrap();
+        rc.settled();
+        let mut mapped = rc.rows();
+        assert_eq!(mapped.len(), 1);
+        mapped[0]["tint"] = json!(37.25);
+        mapped[0]["model"] = json!("new");
+        rc.set("rows", json!(mapped)).unwrap();
+        rc.set("__sel", json!([0])).unwrap();
+        rc.settled();
+        let row = rc.rows()[0].clone();
+        assert_eq!(row["tint"], 37.25);
+        let history = internal_history(&rc);
+        let before = rc.fields();
+        let rail = rc.slider("Tint").expect("a selected library spot color has a Tint rail");
+        let from = rail.center();
+        let to = from + egui::vec2(30.0, 0.0);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to);
+        assert_ne!(rc.rows()[0]["tint"], row["tint"]);
+        real_key(&mut rc, egui::Key::Escape);
+        rc.release(to).frame();
+        assert_eq!(rc.rows()[0], row, "library snapping and tint retention must leave a cancelled row exact");
+        assert_eq!(snapshot(&rc.fields()), snapshot(&before));
+        assert_eq!(rc.field(COMPS), before.fields.get(COMPS).cloned());
+        assert_eq!(rc.field("sliderMode"), before.fields.get("sliderMode").cloned());
+        assert_eq!(internal_history(&rc), history);
+    }
+
+    #[test]
+    fn a_channel_cancel_before_the_pump_discards_the_pending_row_edit() {
+        use craft::ui::contract::Role;
+        use egui::{Event, Key, Modifiers, PointerButton};
+        use std::cell::{Cell, RefCell};
+        use std::rc::Rc;
+
+        let mut app = app(120);
+        square(&mut app, 10.0, "#ff0000");
+        app.run("select.all", json!({})).unwrap();
+        let shared = Rc::new(RefCell::new(app));
+        let pump = Rc::new(Cell::new(true));
+        let shown = Rc::clone(&shared);
+        let pumping = Rc::clone(&pump);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            if pumping.get() {
+                super::super::host::pump(&mut app, ui.ctx());
+            }
+        });
+        fixture.in_room(craft::ui::testing::Room::Window);
+        shared.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        shared.borrow_mut().run("ui.recolorDialog", json!({})).unwrap();
+        for _ in 0..3 {
+            fixture.frame(vec![]);
+        }
+        let dialogs = shared.borrow().dialogs().unwrap();
+        let id = craft::ui::dialog::dialog_id(KIND);
+        let raw = json!({"from": ["rgb 255 0 0"], "to": "cmyk 12.345 23.456 34.567 45.678", "tint": 37.25, "model": "new"});
+        for (key, value) in [
+            ("preview", json!(false)),
+            ("method", json!(Method::Exact.id())),
+            ("rows", json!([raw.clone()])),
+            ("__sel", json!([0])),
+            ("sliderMode", json!("cmyk")),
+        ] {
+            dialogs.with(|host| host.set_json_field(fixture.ctx(), id, key, value)).unwrap();
+        }
+        for _ in 0..3 {
+            fixture.frame(vec![]);
+        }
+        let before = dialogs.with(|host| host.get::<RecolorDialog>().unwrap().fields.clone());
+        assert_eq!(super::rows(&before)[0], raw);
+        let tree = fixture.tree();
+        let rail = fixture.by_role(Role::SLIDER).into_iter().find(|t| tree.name_of(t.node) == Some("C")).expect("Cyan rail");
+        let from = rail.center();
+        let to = from + egui::vec2(30.0, 0.0);
+        pump.set(false);
+        fixture.frame(vec![Event::PointerMoved(from)]);
+        fixture.frame(vec![Event::PointerButton { pos: from, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+        fixture.frame(vec![Event::PointerMoved(from.lerp(to, 0.5))]);
+        fixture.frame(vec![Event::PointerMoved(to)]);
+        assert!(dialogs.with(|host| host.get::<RecolorDialog>().unwrap().filed.edited.is_some()), "the real proposal is pending before the app pump");
+        fixture.frame(vec![Event::Key {
+            key: Key::Escape,
+            physical_key: Some(Key::Escape),
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }]);
+        fixture.frame(vec![Event::Key {
+            key: Key::Escape,
+            physical_key: Some(Key::Escape),
+            pressed: false,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }]);
+        fixture.release_at(to);
+        let cancelled = dialogs.with(|host| host.get::<RecolorDialog>().unwrap().fields.clone());
+        assert_eq!(super::rows(&cancelled)[0], raw, "the host restores the exact row before any pump");
+        assert!(
+            dialogs.with(|host| host.get::<RecolorDialog>().unwrap().filed.edited.is_none()),
+            "no stale proposal remains to snap the restored row"
+        );
+        super::super::host::pump(&mut shared.borrow_mut(), fixture.ctx());
+        pump.set(true);
+        fixture.frame(vec![]);
+        let after = dialogs.with(|host| host.get::<RecolorDialog>().unwrap().fields.clone());
+        assert_eq!(super::rows(&after)[0], raw);
+        assert_eq!(snapshot(&after), snapshot(&before));
+        assert_eq!(after.fields.get(COMPS), before.fields.get(COMPS));
+    }
+
+    #[test]
+    fn undo_changes_while_a_channel_is_held_retires_its_cancel_source() {
+        let mut rc = custom_four_color_mapping();
+        let original = rc.rows()[0].clone();
+        let from = rc.slider("C").unwrap().center();
+        let to = from + egui::vec2(30.0, 0.0);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to).release(to).frame();
+        let accepted = rc.rows()[0].clone();
+        assert_ne!(accepted, original);
+        let from = rc.slider("C").unwrap().center();
+        let to = from - egui::vec2(20.0, 0.0);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to);
+        assert_ne!(rc.rows()[0], accepted);
+        // The first Undo drops the pending proposal. The second goes past the value from which
+        // the still-held gesture began, so Escape must not resurrect that retired source.
+        assert_eq!(rc.app().run("ui.recolorUndo", json!({})).unwrap()["changed"], true);
+        assert_eq!(rc.app().run("ui.recolorUndo", json!({})).unwrap()["changed"], true);
+        assert_eq!(rc.rows()[0], original);
+        assert_ne!(rc.rows()[0], accepted);
+        let before_cancel = rc.fields();
+        let history = internal_history(&rc);
+        real_key(&mut rc, egui::Key::Escape);
+        rc.release(to).frame();
+        assert_eq!(rc.rows()[0], original);
+        assert_eq!(snapshot(&rc.fields()), snapshot(&before_cancel));
+        assert_eq!(rc.field(COMPS), before_cancel.fields.get(COMPS).cloned());
+        assert_eq!(internal_history(&rc), history, "the stale Cancel neither adds a step nor clears Redo");
+    }
 
     fn rows() -> Vec<Value> {
         vec![
