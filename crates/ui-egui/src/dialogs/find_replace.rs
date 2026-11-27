@@ -60,8 +60,13 @@ fn active_drawing(app: &VectorcraftApp) -> Option<(u64, u64)> {
     app.session.active().map(|d| (d.uid, d.reverts))
 }
 
-fn same_drawing(last: &Map<String, Value>, (uid, reverts): (u64, u64)) -> bool {
-    last.get("doc").and_then(Value::as_array).is_some_and(|doc| doc.len() == 2 && doc[0].as_u64() == Some(uid) && doc[1].as_u64() == Some(reverts))
+fn saved_drawing(last: &Map<String, Value>) -> Option<(u64, u64)> {
+    let [uid, reverts] = last.get("doc")?.as_array()?.as_slice() else { return None };
+    Some((uid.as_u64()?, reverts.as_u64()?))
+}
+
+fn same_drawing(last: &Map<String, Value>, drawing: (u64, u64)) -> bool {
+    saved_drawing(last) == Some(drawing)
 }
 
 /// The match found belongs to an open dialog: the last search keeps its place, not the match.
@@ -132,12 +137,18 @@ pub fn find_next(app: &mut VectorcraftApp) -> Result<Value, String> {
     forget_found(app);
     let drawing = active_drawing(app);
     if let Some(o) = last.as_object_mut() {
-        let current = drawing.is_some_and(|d| same_drawing(o, d));
+        let saved = saved_drawing(o);
         o.remove("replace");
         o.remove("found");
         o.remove("doc");
-        if !current {
-            o.remove("from");
+        if saved != drawing || drawing.is_none() {
+            let restored = saved.zip(drawing).is_some_and(|((old_uid, _), (uid, _))| old_uid == uid);
+            if restored {
+                // An explicit start ignores the whole text frame currently selected.
+                o.insert("from".into(), Value::Null);
+            } else {
+                o.remove("from");
+            }
         }
     }
     let r = app.run(NEXT, last)?;

@@ -416,3 +416,30 @@ fn a_search_place_stays_in_its_document_and_given_params_win() {
     choose(&p);
     assert_eq!((field(&p, "find"), field(&p, "matchCase")), (json!("cat"), json!(true)));
 }
+
+#[test]
+fn edit_find_next_starts_at_the_first_restored_match_with_that_frame_selected() {
+    let (mut app, ids) = app_with(&["cat in the back", "cat cat in front"]);
+    let first = ids[1];
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    let dir = vectorcraft_testkit::TempDir::new("menu-find-next-revert");
+    app.run("file.saveAs", json!({"path": dir.join("text.vectorcraft")})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 10, "height": 10})).unwrap();
+    let mut p = Panel::new(app, draw);
+    choose(&p);
+    set(&p, "find", json!("cat"));
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((first, 0, 3)));
+    p.click("Find Next");
+    assert_eq!(matched(&p), Some((first, 4, 7)));
+    p.click("Close");
+
+    p.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    p.app().run("select.set", json!({"ids": [first]})).unwrap();
+    let before = undo_steps(&p);
+    choose_find_next(&p);
+    assert_eq!(from(&p), json!({"id": first, "start": 0, "end": 3}));
+    assert_eq!(selected(&p), vec![first]);
+    assert_eq!(undo_steps(&p), before);
+}
