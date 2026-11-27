@@ -1151,6 +1151,56 @@ mod tests {
     }
 
     #[test]
+    fn delete_confirmation_keeps_matching_styles_in_another_drawing() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let source = app.session.active().unwrap().uid;
+        on_event(&mut app, PresetEvent::Delete("Mine".into()), false);
+        assert!(asks_delete(&app));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        assert_ne!(app.session.active().unwrap().uid, source);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 25})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let before = names(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
+        assert_eq!(names(&app), before, "the other tab keeps its identically named style");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(app.session.set_active(0));
+        assert!(doc(&app).graphic_style_index("Mine").is_some(), "the source style still needs a fresh confirmation");
+    }
+
+    #[test]
+    fn delete_confirmation_keeps_the_style_restored_by_revert() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let file = std::env::temp_dir().join(format!("vectorcraft-style-delete-revert-{}.vectorcraft", std::process::id()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+        let saved = doc(&app);
+        let index = saved.graphic_style_index("Mine").unwrap();
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("paint.setFill", json!({"color": "#b32f5f"})).unwrap();
+        app.run("graphicStyle.redefine", json!({"name": "Mine"})).unwrap();
+        on_event(&mut app, PresetEvent::Delete("Mine".into()), false);
+        assert!(asks_delete(&app));
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(file);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+        assert_eq!(doc(&app).graphic_style_index("Mine"), Some(index));
+        let undo = st.history.undo.len();
+
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
+        assert_eq!(doc(&app).graphic_style_index("Mine"), Some(index), "the restored style stays");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
     fn thumbnails_are_versioned_by_look_and_change_when_a_style_changes() {
         let mut app = app();
         let mut panel = GraphicStylesPanel::default();
