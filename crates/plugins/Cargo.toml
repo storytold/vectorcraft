@@ -37,3 +37,7 @@ rustix = { workspace = true, features = ["std", "fs"] }
 
 [dev-dependencies]
 wat = { workspace = true }
+
+[features]
+# `vectorcraft_plugins::steady` for other crates' tests (dev-dependencies only).
+test-steady = []
