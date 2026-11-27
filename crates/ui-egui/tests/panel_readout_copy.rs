@@ -673,7 +673,11 @@ fn review_4714788866_readout_copy_requires_an_inside_primary_press() {
     assert!(a.ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)), "the held release is now delivered");
     assert_eq!(copies(&accepted), [LENGTH]);
     assert_eq!(a.app.ui.status_sets, sets + 1);
-    assert_eq!(visible_text_count(&accepted, COPIED), 1);
+    // The shell paints its status slot before the panel sets this confirmation.
+    let feedback = a.frame(vec![]);
+    assert!(copies(&feedback).is_empty(), "painting confirmation does not copy again");
+    assert_eq!(a.app.ui.status_sets, sets + 1, "painting confirmation does not report again");
+    assert_eq!(visible_text_count(&feedback, COPIED), 1);
     assert_no_delayed_copy(&mut a, "accepted inside readout press");
     assert_eq!(a.snapshot(), before);
 }
