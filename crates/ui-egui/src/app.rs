@@ -121,6 +121,8 @@ impl VectorcraftApp {
                 moved: false,
                 from_worker: false,
                 whole_frames: false,
+                view_sized_bounds: None,
+                web_patch_renderer: None,
                 reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,

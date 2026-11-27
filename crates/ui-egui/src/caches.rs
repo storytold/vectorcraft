@@ -26,10 +26,15 @@ pub struct CanvasCache {
     /// ([`canvas::show`]).
     pub from_worker: bool,
     /// The frame shown drew art in a way that depends on its size, or a part of it drawn again on
-    /// this thread would not have matched the frame around it: until the next whole frame is shown,
-    /// edits of the frame shown render whole, on the worker when the frame is heavy
-    /// ([`canvas::show`]).
+    /// this thread would not have matched the frame around it. Edits that reach the affected area
+    /// render whole, on the worker when the frame is heavy ([`canvas::show`]).
     pub whole_frames: bool,
+    /// The shown web frame can still be patched outside this enclosure in its own raster pixels.
+    /// Present only when all frame-size-dependent output has a known bound.
+    pub view_sized_bounds: Option<vectorcraft_geom::Rect>,
+    /// Draws for a patch against a web frame with bounded view-sensitive art.
+    /// The renderer of the whole frame keeps its raster and derived-art caches across these patches.
+    pub web_patch_renderer: Option<Box<vectorcraft_render::Renderer>>,
     /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
     /// (seconds, egui's input time): it renders whole once it has been shown for
     /// [`canvas::STILL_SECS`] with the view unmoved.
