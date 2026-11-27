@@ -3,7 +3,7 @@
 //! as they are.
 //!
 //! Fields: `name`. The group being renamed (its name, its place in the list of color groups, the names of
-//! its swatches and the uid of its document when the dialog opened) is kept by the dialog's OK.
+//! its swatches and the document's identity and revert generation at opening) is kept by the dialog's OK.
 
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind, ParamResult};
 use serde_json::{Value, json};
@@ -16,8 +16,9 @@ pub const KIND: &str = "colorGroupOptions";
 
 /// A color group as the dialog found it: what tells it apart from the others, since color groups carry nothing else.
 struct Identity {
-    /// The uid of the document the dialog opened on.
+    /// The document and its saved-content generation when the dialog opened.
     doc: u64,
+    reverts: u64,
     /// The group's place in the document's list of color groups.
     at: usize,
     /// The group's name.
@@ -40,14 +41,15 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let at = st.doc.swatch_groups.iter().position(|g| g.name == group).ok_or_else(|| format!("no colour group `{group}`"))?;
     let g = &st.doc.swatch_groups[at];
-    let identity = Identity { doc: st.uid, at, group: g.name.clone(), swatches: g.swatches.iter().map(|w| w.name.clone()).collect() };
+    let identity =
+        Identity { doc: st.uid, reverts: st.reverts, at, group: g.name.clone(), swatches: g.swatches.iter().map(|w| w.name.clone()).collect() };
     let mut fields = DialogFields::new();
     fields.set("name", g.name.as_str());
     let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
     let rows = vec![Param::new("name", field_label(tl!("Name:")), ParamKind::text(""))];
     let dialog = hosted(&ctx, KIND, tl!("Color Group Options"), fields, rows, false);
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
-        // Another document or group: it closes as Cancel does and renames nothing.
+        // A different document, a revert, or a different group closes the draft without renaming.
         if !same_group(app, &identity) {
             return Ok(());
         }
@@ -60,9 +62,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Whether the dialog's group is still in its document, at the place in the list, under the name
-/// and with the swatches it opened with, and that document is the active one.
+/// and with the swatches it opened with, and the document is still active and has not been reverted.
 fn same_group(app: &VectorcraftApp, identity: &Identity) -> bool {
-    let Some(st) = app.session.active().filter(|st| st.uid == identity.doc) else { return false };
+    let Some(st) = app.session.active().filter(|st| st.uid == identity.doc && st.reverts == identity.reverts) else { return false };
     st.doc
         .swatch_groups
         .get(identity.at)
