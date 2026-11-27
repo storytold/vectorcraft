@@ -138,6 +138,7 @@ impl ItemSource<usize> for Shown<'_> {}
 pub(crate) struct SavedNamesDialog {
     id: DialogId,
     document: u64,
+    reverts: u64,
     names: SavedNames,
     draft: NamesDraft,
     /// The picked row, by its index in the draft; one at most.
@@ -148,10 +149,10 @@ pub(crate) struct SavedNamesDialog {
 
 impl SavedNamesDialog {
     /// The dialog over `list`, with the first name picked.
-    fn new(document: u64, names: SavedNames, list: Vec<String>) -> Self {
+    fn new(document: u64, reverts: u64, names: SavedNames, list: Vec<String>) -> Self {
         let selection = if list.is_empty() { Selection::default() } else { Selection::single(0) };
         let rows = list.into_iter().map(|name| NameRow { orig: name.clone(), name, deleted: false }).collect();
-        SavedNamesDialog { id: id_of(names.kind), document, names, draft: NamesDraft { rows }, selection, held: HeldAnswer::new() }
+        SavedNamesDialog { id: id_of(names.kind), document, reverts, names, draft: NamesDraft { rows }, selection, held: HeldAnswer::new() }
     }
 
     /// OK as its button gives it: with nothing edited the dialog closes at once (`Some`); with edits they wait for
@@ -327,9 +328,10 @@ impl StackDialog for SavedNamesDialog {
 /// Opens the dialog of `names` on `list`, the saved names in their order (the first `names.max` of them).
 pub(crate) fn open(app: &mut VectorcraftApp, names: SavedNames, mut list: Vec<String>) -> Result<(), String> {
     list.truncate(names.max);
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let active = app.session.active().ok_or("no document open")?;
+    let (document, reverts) = (active.uid, active.reverts);
     let dialogs = app.dialogs().ok_or("no window")?;
-    dialogs.with(|host| host.open(SavedNamesDialog::new(document, names, list)));
+    dialogs.with(|host| host.open(SavedNamesDialog::new(document, reverts, names, list)));
     Ok(())
 }
 
@@ -343,15 +345,15 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             .filter_map(|open| {
                 let dialog = host.get_mut_by_id::<SavedNamesDialog>(open.id)?;
                 let edits = dialog.held.take()?;
-                Some((open.id, dialog.document, dialog.names.command, edits))
+                Some((open.id, dialog.document, dialog.reverts, dialog.names.command, edits))
             })
             .collect()
     });
-    for (id, document, command, edits) in filed {
-        let outcome = if app.session.active().is_some_and(|active| active.uid == document) {
-            app.run(command, json!({ "edits": edits }))
-        } else {
-            Err(tl!("Saved names can only be edited in the document this dialog was opened for.").to_owned())
+    for (id, document, reverts, command, edits) in filed {
+        let outcome = match app.session.active().filter(|active| active.uid == document) {
+            Some(active) if active.reverts != reverts => Err(tl!("The document was reverted. Reopen the dialog to edit saved names.").to_owned()),
+            Some(_) => app.run(command, json!({ "edits": edits })),
+            None => Err(tl!("Saved names can only be edited in the document this dialog was opened for.").to_owned()),
         };
         if let Err(reason) = &outcome {
             app.status(reason.clone());
