@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use craft::ui::contract::Bind;
 use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::UnitKind;
@@ -77,7 +78,7 @@ fn build(fields: &mut DialogFields) -> ParamDialog<'_> {
             fields.set("colors", clamped);
         }
     }
-    ParamDialog::new(KIND, tl!("Convert to Indexed Color"), rows()).previews(true)
+    ParamDialog::new(KIND, tl!("Convert to Indexed Color"), rows()).values(Bind::bound(fields)).previews(true)
 }
 
 /// Open the dialog with the defaults of `edit.colors.toIndexed`.
@@ -180,16 +181,24 @@ fn params(fields: &DialogFields) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::{panel_harness::Panel, picks::dialogs};
+    use craft::ui::contract::Role;
+    use std::collections::BTreeSet;
     use vectorcraft_engine::Session;
 
     fn add_raster(app: &mut VectorcraftApp) -> vectorcraft_doc::NodeId {
+        add_raster_row(app, &[[200, 30, 90, 255], [20, 40, 220, 255]])
+    }
+
+    fn add_raster_row(app: &mut VectorcraftApp, rgba: &[[u8; 4]]) -> vectorcraft_doc::NodeId {
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let width = u32::try_from(rgba.len()).unwrap();
         let img = craft_image_codecs::Image::from_raw(
-            2,
+            width,
             1,
             craft_image_codecs::ChannelLayout::Rgba,
             craft_image_codecs::SampleType::U8,
-            vec![200, 30, 90, 255, 20, 40, 220, 255],
+            rgba.as_flattened().to_vec(),
         )
         .unwrap();
         let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
@@ -199,7 +208,7 @@ mod tests {
                 let id = d.alloc_id();
                 let im = vectorcraft_doc::ImageObject {
                     key: "pic".into(),
-                    width: 2,
+                    width,
                     height: 1,
                     xf: Default::default(),
                     link: None,
@@ -217,6 +226,43 @@ mod tests {
         let st = app.session.doc().unwrap();
         let vectorcraft_doc::NodeKind::Image(im) = &st.doc.node(id).unwrap().kind else { panic!("not an image") };
         &st.doc.images[&im.key]
+    }
+
+    #[test]
+    fn indexed_color_form_edits_update_the_preview_and_confirmation() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let id = add_raster_row(&mut app, &[[200, 30, 90, 255], [20, 40, 220, 255], [220, 240, 70, 255]]);
+        let original = palette(&app, id).rgba().unwrap().2;
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, dialogs);
+        let black_and_white = |panel: &mut Panel| {
+            panel.click_role("Reduction", Role::COMBO_BOX);
+            panel.click("Black & White");
+            panel.click_role("Dither", Role::COMBO_BOX);
+            panel.click("No Dither");
+        };
+
+        panel.app().run("ui.indexedColorDialog", json!({})).unwrap();
+        panel.frame();
+        panel.click_at(panel.rect_role("Colors", Role::SPIN_BUTTON).center());
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text("2");
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        let preview = palette(&panel.app(), id).rgba().unwrap().2;
+        assert_eq!(preview.as_chunks::<4>().0.iter().collect::<BTreeSet<_>>().len(), 2);
+
+        black_and_white(&mut panel);
+        let preview = palette(&panel.app(), id).rgba().unwrap().2;
+        assert_eq!(preview, [0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255]);
+        panel.click("Cancel");
+        assert_eq!(palette(&panel.app(), id).rgba().unwrap().2, original);
+        assert_eq!(panel.app().session.doc().unwrap().history.undo.len(), undo);
+
+        panel.app().run("ui.indexedColorDialog", json!({})).unwrap();
+        black_and_white(&mut panel);
+        panel.click("OK");
+        assert_eq!(palette(&panel.app(), id).rgba().unwrap().2, preview);
+        assert_eq!(panel.app().session.doc().unwrap().history.undo.len(), undo + 1);
     }
 
     #[test]
