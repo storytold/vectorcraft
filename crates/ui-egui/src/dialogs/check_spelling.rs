@@ -4,7 +4,7 @@
 //! and the pump that runs each action against the document.
 //!
 //! The walk's state:
-//! - `doc`: uid of the document it started on; another active document ends it
+//! - `doc` and `reverts`: the drawing contents it started on; switching or reverting ends it
 //! - `ids`: object IDs checked (None: entire document; Some(empty): nothing)
 //! - `layer`: the one object checked while the dialog's Check All Layers is off
 //! - `skipped`: `(node_id, start, word)` skipped by Ignore, which Change All leaves alone
@@ -43,6 +43,8 @@ type Word = (u64, usize, usize, String, String);
 pub(crate) struct SpellingWalk {
     /// Uid of the document the walk started on.
     doc: u64,
+    /// File Revert generation of the document the walk started on.
+    reverts: u64,
     /// The selected objects; None is the whole document, which Some(empty) is not.
     ids: Option<Vec<u64>>,
     /// The one object checked while Check All Layers is off.
@@ -66,14 +68,14 @@ fn start(app: &mut VectorcraftApp) -> Result<SpellingWalk, String> {
     if app.session.active().is_none() {
         return Err("no document".into());
     }
-    let (doc, ids) = {
+    let (doc, reverts, ids) = {
         let st = app.session.doc().map_err(|e| e.to_string())?;
         // The selection (groups too: the check goes through the type inside them), or, with
         // nothing selected, every visible, unlocked type object (the check's default).
         let selected: Vec<u64> = st.selection.objects.iter().map(|n| n.0).collect();
-        (st.uid, (!selected.is_empty()).then_some(selected))
+        (st.uid, st.reverts, (!selected.is_empty()).then_some(selected))
     };
-    let mut w = SpellingWalk { doc, ids, ..Default::default() };
+    let mut w = SpellingWalk { doc, reverts, ids, ..Default::default() };
     advance(app, &mut w, None, 1)?;
     Ok(w)
 }
@@ -109,7 +111,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
         return;
     }
-    if check_doc_uid(app, &w).is_err() {
+    if check_opening_drawing(app, &w).is_err() {
         dialogs.with(|host| host.cancel::<CheckSpellingDialog>(ctx));
         return;
     }
@@ -417,17 +419,17 @@ fn shown_word(app: &VectorcraftApp, w: &SpellingWalk) -> Option<(u64, usize, usi
     Some((*id, *start, *end, still_there))
 }
 
-/// Fails when the active document is not the one the walk started on.
-fn check_doc_uid(app: &VectorcraftApp, w: &SpellingWalk) -> Result<(), String> {
-    if app.session.active().map(|st| st.uid) != Some(w.doc) {
-        return Err("the document was switched".into());
+/// Fails when the active drawing's contents are not the ones the walk started on.
+fn check_opening_drawing(app: &VectorcraftApp, w: &SpellingWalk) -> Result<(), String> {
+    if !app.session.active().is_some_and(|st| st.uid == w.doc && st.reverts == w.reverts) {
+        return Err("the document was switched or reverted".into());
     }
     Ok(())
 }
 
 /// The word shown, when the walk is still going and on the walk's document.
 fn shown_text(app: &VectorcraftApp, w: &SpellingWalk) -> Result<Option<String>, String> {
-    check_doc_uid(app, w)?;
+    check_opening_drawing(app, w)?;
     Ok(w.shown.as_ref().map(|s| s.3.clone()))
 }
 
@@ -1112,11 +1114,73 @@ mod tests {
         begin(&mut app);
 
         // PLAN: the pump's close-on-switch needs the window host fixture of the hosted-dialog
-        // tests; this drives the guard the pump calls (`check_doc_uid`) through the walk's steps.
+        // tests; this drives the guard the pump calls (`check_opening_drawing`) through the walk's steps.
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let mut w = app.spelling.take().unwrap();
-        assert!(super::check_doc_uid(&app, &w).is_err());
+        assert!(super::check_opening_drawing(&app, &w).is_err());
         assert!(super::ignore(&mut app, &mut w).is_err(), "no step runs on another document");
+    }
+
+    #[test]
+    fn queued_spelling_changes_leave_reverted_text_unchanged() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::dialog::StackDialog as _;
+
+        // The host files the real button's action; the test decides when the app consumes it.
+        fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+        }
+
+        let _dictionary = crate::testing::custom_dictionary();
+        for button in ["Change", "Change All"] {
+            let mut app = app();
+            let saved = format!("{WORD_A} saved");
+            let id = text(&mut app, 50.0, &saved);
+            app.run("select.none", json!({})).unwrap();
+            app.services.read = Some(Box::new(|path: &str| std::fs::read(path).map_err(|error| error.to_string())));
+            app.services.write = Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|error| error.to_string())));
+            let dir = vectorcraft_testkit::TempDir::new("spelling-revert");
+            app.run("file.saveAs", json!({"path": dir.join("Spelling.vectorcraft")})).unwrap();
+            let state = app.session.active().unwrap();
+            let (uid, reverts) = (state.uid, state.reverts);
+            app.run("text.editRange", json!({"id": id, "start": saved.len(), "end": saved.len(), "insert": " draft"})).unwrap();
+            let mut panel = Panel::new(app, draw);
+            panel.app().run(super::COMMAND, json!({})).unwrap();
+            panel.frame();
+            let ctx = panel.ctx().clone();
+            let set_replacement = |app: &VectorcraftApp| {
+                app.dialogs().unwrap().with(|host| {
+                    let dialog = host.get::<super::CheckSpellingDialog>().unwrap().id();
+                    host.set_json_field(&ctx, dialog, "changeTo", json!("fixed")).unwrap();
+                });
+            };
+            set_replacement(&panel.app());
+            panel.click(button);
+            assert_eq!(plain(&panel.app(), id), format!("{saved} draft"), "the action is still queued");
+            panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+            let undo = {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+                assert_eq!(plain(&app, id), saved, "the same word and local ID were reloaded from the native file");
+                state.history.undo.len()
+            };
+            super::pump(&mut panel.app(), &ctx);
+            assert_eq!(plain(&panel.app(), id), saved, "{button} from the old walk must not edit restored text");
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            assert!(panel.app().spelling.is_none(), "the reverted walk is retired");
+            assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<super::CheckSpellingDialog>()));
+
+            panel.app().run(super::COMMAND, json!({})).unwrap();
+            panel.frame();
+            set_replacement(&panel.app());
+            panel.click(button);
+            super::pump(&mut panel.app(), &ctx);
+            assert_eq!(plain(&panel.app(), id), "fixed saved", "a fresh check can still change the restored text");
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+        }
     }
 
     #[test]
