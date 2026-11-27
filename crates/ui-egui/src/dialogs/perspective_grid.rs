@@ -134,7 +134,7 @@ fn open_on(app: &mut VectorcraftApp, def: GridDefinition, mode: GridMode) -> Res
     let dialog = GridDialog::new(
         def,
         mode,
-        app.session.active().map(|st| st.uid),
+        app.session.active().map(|st| (st.uid, st.reverts)),
         (general_lengths(app).pixels_per_inch, app.session.prefs.numbers_without_units_are_points),
         app.session.perspective_presets(),
         app.session.new_perspective_preset_name(),
@@ -172,8 +172,8 @@ pub fn open_edit(app: &mut VectorcraftApp, original: Option<&str>, base: &str) -
 pub(super) struct GridDialog {
     id: DialogId,
     mode: GridMode,
-    /// The document whose grid Define Grid edits.
-    source_document: Option<u64>,
+    /// The document and loaded contents whose grid Define Grid edits.
+    source_document: Option<(u64, u64)>,
     draft: GridDraft,
     /// The presets the Preset row offers, as the document and the preferences have them.
     presets: Vec<GridDefinition>,
@@ -196,7 +196,7 @@ impl GridDialog {
     fn new(
         def: GridDefinition,
         mode: GridMode,
-        source_document: Option<u64>,
+        source_document: Option<(u64, u64)>,
         (ppi, bare_points): (f64, bool),
         presets: Vec<GridDefinition>,
         new_name: String,
@@ -527,11 +527,15 @@ enum Next {
     Presets(String),
 }
 
-fn file(app: &mut VectorcraftApp, mode: &GridMode, source_document: Option<u64>, def: &GridDefinition) -> Result<Next, String> {
+fn file(app: &mut VectorcraftApp, mode: &GridMode, source_document: Option<(u64, u64)>, def: &GridDefinition) -> Result<Next, String> {
     let mut params = serde_json::to_value(def).map_err(|e| e.to_string())?;
     if *mode == GridMode::Define {
-        if app.session.active().map(|st| st.uid) != source_document {
+        let active = app.session.active().map(|st| (st.uid, st.reverts));
+        if active.map(|(uid, _)| uid) != source_document.map(|(uid, _)| uid) {
             return Err(tl!("Define Grid can only change the document where it was opened.").to_owned());
+        }
+        if active != source_document {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         app.run("perspective.grid.define", params)?;
         return Ok(Next::Close);

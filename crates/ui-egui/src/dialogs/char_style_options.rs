@@ -1165,6 +1165,7 @@ pub(crate) use style_dialog;
 pub(crate) struct CharStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
+    document: u64,
 }
 
 impl CharStyleOptions {
@@ -1180,12 +1181,21 @@ impl CharStyleOptions {
 }
 style_dialog!(CharStyleOptions, KIND);
 
+/// The preview and the document activation that owns it, retained until the host reports Cancel.
+#[derive(Default)]
+pub(crate) struct Preview {
+    live: LivePreview,
+    activation: Option<(u64, u64)>,
+    interaction_selection: Option<Arc<vectorcraft_doc::Selection>>,
+}
+
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
-    let doc = &app.session.active().ok_or("no document open")?.doc;
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = (state.uid, &state.doc);
     let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
     let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
-    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening };
+    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))
 }
@@ -1210,15 +1220,46 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some(frame) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(CharStyleOptions::frame)) else {
+    let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
+    let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+    let owns_interaction = app.char_style_preview.activation == active
+        && app
+            .char_style_preview
+            .interaction_selection
+            .as_ref()
+            .zip(interaction_selection.as_ref())
+            .is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
+    let Some((document, frame)) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(|d| (d.document, d.frame()))) else {
         if matches!(dialogs.with(|host| host.take::<CharStyleOptions>()), Some(DialogResult::Cancel)) {
-            std::mem::take(&mut app.char_style_preview).cancel(app);
+            let preview = std::mem::take(&mut app.char_style_preview);
+            if owns_interaction {
+                preview.live.cancel(app);
+            }
         }
         return;
     };
-    let live = std::mem::take(&mut app.char_style_preview);
-    let (live, done) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
-    app.char_style_preview = live;
+    let done = if let Some(activation) = active.filter(|(uid, _)| *uid == document) {
+        if interaction_selection.is_some() && !owns_interaction {
+            frame.ok.then(|| Err("finish the active edit before applying Character Style Options".into()))
+        } else {
+            let preview = std::mem::take(&mut app.char_style_preview);
+            let live = if owns_interaction { preview.live } else { LivePreview::default() };
+            let (live, answer) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
+            let interaction_selection =
+                app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+            app.char_style_preview = Preview { live, activation: Some(activation), interaction_selection };
+            answer
+        }
+    } else if frame.ok {
+        let reason = if app.session.documents().iter().any(|doc| doc.uid == document) {
+            "switch back to the document where Character Style Options was opened"
+        } else {
+            "the document where Character Style Options was opened has closed"
+        };
+        Some(Err(reason.into()))
+    } else {
+        None
+    };
     if let Some(done) = done {
         let answer = done.map(drop).map_err(|why| reason(&why));
         dialogs.with(|host| {

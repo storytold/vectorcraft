@@ -472,13 +472,14 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     }
 }
 
-/// `ui.layerDelete {ids?|id?, doc?, confirmed?}`: Delete Selection as the Layers panel runs it (the
+/// `ui.layerDelete {ids?|id?, doc?, reverts?, confirmed?}`: Delete Selection as the Layers panel runs it (the
 /// trash button, rows dropped on it, the panel menu, Delete and Backspace), on the rows
 /// `layer.delete` takes (default: the highlighted rows, else the current layer; in isolation mode a
 /// current layer outside the isolated art is an error). When a layer or sublayer among them holds art (an object other than a
 /// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
-/// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
-/// is deleted. In isolation mode a row outside the isolated art is an error, and nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// the same document (`doc`, its uid, and `reverts`, its saved-content generation, with `confirmed`).
+/// Switching documents or reverting the drawing invalidates the approval. In isolation mode a row
+/// outside the isolated art is an error. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     super::unrevealed(app, |app| delete_rows(app, p))
@@ -487,14 +488,18 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 /// [`delete`], which locates nothing.
 fn delete_rows(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
-    let key = "doc";
-    let doc = match p.get(key) {
-        None | Some(Value::Null) => None,
-        Some(v) => Some(v.as_u64().ok_or_else(|| format!("`{key}` must be a whole number of 0 or more"))?),
+    let opening = |key| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| format!("`{key}` must be a whole number of 0 or more")),
     };
+    let doc = opening("doc")?;
+    let reverts = opening("reverts")?;
     let st = app.session.active().ok_or("no document open")?;
     if doc.is_some_and(|d| d != st.uid) {
         return Err("the active document changed while the question was open; nothing was deleted".into());
+    }
+    if reverts.is_some_and(|reverts| reverts != st.reverts) {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
     }
     let rows: serde_json::Map<String, Value> = ["ids", "id"].iter().filter_map(|k| Some((k.to_string(), p.get(*k)?.clone()))).collect();
     // An id the engine refuses: `layer.delete` gives the error, and deletes nothing.
@@ -532,7 +537,7 @@ fn delete_rows(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         [n] if n.is_layer() => tl!("Delete this layer and its artwork?"),
         _ => tl!("Delete the selected items and their artwork?"),
     };
-    let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "confirmed": true});
+    let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "reverts": st.reverts, "confirmed": true});
     crate::dialogs::confirm::ask(app, message, "", "ui.layerDelete", params);
     Ok(Value::Null)
 }

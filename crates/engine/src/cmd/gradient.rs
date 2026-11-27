@@ -124,6 +124,17 @@ impl StopOwner {
     }
 }
 
+/// The drawing paints affected by an edit from the Gradient panel.
+#[derive(PartialEq)]
+pub struct GradientEditPaints(Vec<EditedPaint>);
+
+#[derive(PartialEq)]
+struct EditedPaint {
+    id: NodeId,
+    item: Option<usize>,
+    paints: Vec<Paint>,
+}
+
 impl Session {
     /// Does `paint.editGradient` without `ids` edit objects on the fill (or the stroke, `stroke`)? It does not
     /// while the active tool paints with the chosen fill (or stroke: [`Session::tool_paints`]) or when nothing it
@@ -134,6 +145,36 @@ impl Session {
         !super::paint::for_tool(self, &p, stroke)
             && item_target(self, &p, "paint.editGradient")
                 .is_ok_and(|item| item.of_kind(self, !stroke).targets_for(self, &p, !stroke).is_ok_and(|ids| !ids.is_empty()))
+    }
+
+    /// Snapshot the paints a gradient edit without explicit targets would write, by object and
+    /// appearance item. Text without an item has one paint per run. The proxy can display just
+    /// the first paint when an edit goes to several objects or text runs.
+    pub fn gradient_edit_paints(&self, stroke: bool) -> Result<GradientEditPaints> {
+        const CMD: &str = "paint.editGradient";
+        let p = json!({ "stroke": stroke });
+        if super::paint::for_tool(self, &p, stroke) {
+            return Ok(GradientEditPaints(Vec::new()));
+        }
+        let doc = &self.doc()?.doc;
+        let item = item_target(self, &p, CMD)?.of_kind(self, !stroke);
+        let ids = item.targets_for(self, &p, !stroke)?;
+        let ids = super::appearance::drop_design_art_rows(self, ids, item, !stroke, CMD)?;
+        let mut out = Vec::with_capacity(ids.len());
+        for (id, item) in ids.iter().copied().zip(item.per_target(self, &ids)) {
+            let (Some(node), Some(item)) = (doc.node(id), item) else { continue };
+            let index = item.resolve(&node.appearance, !stroke, CMD)?;
+            let (item, paints) = if index.is_none()
+                && let NodeKind::Text(text) = &node.kind
+            {
+                (None, text.runs.iter().map(|run| if stroke { run.style.stroke.clone() } else { run.style.fill.clone() }).collect())
+            } else {
+                let item = index.or_else(|| node.appearance.items.iter().rposition(|row| row.is_fill() != stroke));
+                (item, node.appearance.paint_at(index, !stroke).cloned().into_iter().collect())
+            };
+            out.push(EditedPaint { id, item, paints });
+        }
+        Ok(GradientEditPaints(out))
     }
 
     /// The selected gradient stop (`gradient.selectStop`), while the gradient it was selected on
