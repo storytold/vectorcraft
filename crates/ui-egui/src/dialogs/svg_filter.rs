@@ -16,6 +16,8 @@
 //! `__list` (the filters listed, pushed by [`pump`]), and with an applied effect `__index`,
 //! `__item` and `missing` (the name of a deleted filter the effect names).
 
+use std::sync::Arc;
+
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
@@ -46,6 +48,32 @@ const ACTION: &str = "__action";
 const LISTING: &str = "__list";
 /// The rows the filter list shows before it scrolls.
 const LIST_ROWS: u16 = 7;
+
+struct Opening {
+    document: u64,
+    reverts: u64,
+}
+
+impl Opening {
+    fn check(&self, app: &VectorcraftApp) -> Result<(), String> {
+        let Some(doc) = app.session.active().filter(|doc| doc.uid == self.document) else {
+            return Err(tl!("Return to the original drawing to edit its SVG filters").into());
+        };
+        if doc.reverts != self.reverts {
+            return Err(tl!("Reopen Apply SVG Filter after reverting the drawing").into());
+        }
+        Ok(())
+    }
+}
+
+fn opening_id() -> egui::Id {
+    egui::Id::unique((KIND, "opening"))
+}
+
+fn opening(app: &VectorcraftApp) -> Option<Arc<Opening>> {
+    with_dialog(app, |_| ())?;
+    app.ui_ctx.as_ref()?.data(|d| d.get_temp(opening_id()))
+}
 
 /// The dialog's heading.
 fn heading() -> String {
@@ -252,9 +280,8 @@ fn code_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::p
 /// the default's code or with nothing; when neither has its name, the name shown above the list if
 /// the filter was deleted, or else its code open as a new filter.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    if app.session.active().is_none() {
-        return Err("no document open".into());
-    }
+    let doc = app.session.active().ok_or("no document open")?;
+    let source = Arc::new(Opening { document: doc.uid, reverts: doc.reverts });
     let mut fields = json!({ "selected": "", "code": "", "editing": "", "__action": "" });
     if let Some(k) = p.get("index").and_then(Value::as_u64) {
         let mut q = json!({});
@@ -289,7 +316,13 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let pairs = fields.as_object().into_iter().flatten().map(|(k, v)| (k.clone(), field_value(v.clone())));
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, KIND, DialogFields::from_pairs(pairs), build);
-    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| confirm(app, &result.fields)).ok_or("no window")?;
+    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| {
+        let source = opening(app).ok_or("the SVG Filter dialog is gone")?;
+        source.check(app)?;
+        confirm(app, &result.fields)
+    })
+    .ok_or("no window")?;
+    ctx.data_mut(|d| d.insert_temp(opening_id(), source));
     Ok(Value::Null)
 }
 
@@ -337,6 +370,15 @@ fn set(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
 /// Each frame: pushes the listed filters into the dialog (the build closure has no app) and runs the
 /// button pressed, once.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(source) = opening(app) else { return };
+    if let Err(error) = source.check(app) {
+        let has_action = with_dialog(app, |d| !text(d.fields(), ACTION).is_empty()).unwrap_or_default();
+        if has_action {
+            set(app, &[(ACTION, json!(""))]);
+            app.status(error);
+        }
+        return;
+    }
     let listing = listing(app);
     let taken = with_dialog(app, |d| {
         if json_field(d.fields(), LISTING).as_ref() != Some(&listing) {
@@ -374,7 +416,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             Ok(())
         }
         "import" => {
-            ask_import(app);
+            ask_import(app, Some(source));
             Ok(())
         }
         _ => Ok(()),
@@ -407,7 +449,7 @@ pub(crate) fn menu_items(names: &[String]) -> Vec<Node> {
 /// `ui.importSvgFilter {}`: add the filters of an SVG file the user picks to the active document.
 /// The answer is `{pending: "fileDialog"}`; the continuation runs the import.
 pub fn import_file(app: &mut VectorcraftApp) -> Result<Value, String> {
-    Ok(ask_import(app))
+    Ok(ask_import(app, None))
 }
 
 /// The extensions of the SVG files Import… reads.
@@ -420,24 +462,33 @@ pub(crate) fn pick() -> PickRequest {
 
 /// Asks for an SVG file; once picked, its filters are added to the document and the first one
 /// added is selected in the dialog when it is open.
-fn ask_import(app: &mut VectorcraftApp) -> Value {
-    file_asks::ask(app, pick(), Owner::Document, |app, picked| {
-        let params = match picked {
-            // The browser answers with the file's contents, not a path.
-            Picked::Contents(files) => {
-                let (_, bytes) = files.first().ok_or("cancelled")?;
-                json!({ "svg": String::from_utf8_lossy(bytes) })
+fn ask_import(app: &mut VectorcraftApp, source: Option<Arc<Opening>>) -> Value {
+    let dialog = source.clone().or_else(|| opening(app).filter(|opening| opening.check(app).is_ok()));
+    file_asks::ask_while(
+        app,
+        pick(),
+        Owner::Document,
+        move |app| source.is_none_or(|source| source.check(app).is_ok() && opening(app).is_some_and(|current| Arc::ptr_eq(&current, &source))),
+        move |app, picked| {
+            let params = match picked {
+                // The browser answers with the file's contents, not a path.
+                Picked::Contents(files) => {
+                    let (_, bytes) = files.first().ok_or("cancelled")?;
+                    json!({ "svg": String::from_utf8_lossy(bytes) })
+                }
+                other => json!({ "path": other.first_path().ok_or("cancelled")?.to_string_lossy() }),
+            };
+            let r = app.run("svgFilter.import", params)?;
+            let added = r["added"].as_array().map_or(0, Vec::len);
+            app.status(crate::i18n::msg_n(added as u64, "Imported {n} SVG filter", "Imported {n} SVG filters", &[]));
+            if let Some(first) = r["added"].get(0)
+                && dialog.is_some_and(|dialog| dialog.check(app).is_ok() && opening(app).is_some_and(|current| Arc::ptr_eq(&current, &dialog)))
+            {
+                set(app, &[(SELECTED, first.clone())]);
             }
-            other => json!({ "path": other.first_path().ok_or("cancelled")?.to_string_lossy() }),
-        };
-        let r = app.run("svgFilter.import", params)?;
-        let added = r["added"].as_array().map_or(0, Vec::len);
-        app.status(crate::i18n::msg_n(added as u64, "Imported {n} SVG filter", "Imported {n} SVG filters", &[]));
-        if let Some(first) = r["added"].get(0) {
-            set(app, &[(SELECTED, first.clone())]);
-        }
-        Ok(r)
-    })
+            Ok(r)
+        },
+    )
 }
 
 #[cfg(test)]
@@ -491,6 +542,78 @@ mod tests {
         let fx = effects(&app, id);
         assert_eq!((fx.len(), fx[0].params["name"].as_str()), (1, Some("Shift")));
         assert!(open_dialogs(&app).is_empty());
+    }
+
+    #[test]
+    fn svg_filter_ok_leaves_the_other_drawings_artwork_alone() {
+        let mut app = self::app();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let id = rect(&mut app);
+        app.run("file.new", json!({"width": 120, "height": 120})).unwrap();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        assert_eq!(rect(&mut app), id);
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        activate(&mut app, 0);
+        open(&mut app, &json!({})).unwrap();
+        activate(&mut app, 1);
+        let dialog = dialog_id(KIND);
+        answer_dialog(&mut app, dialog, &[(SELECTED, json!("Shift"))], true);
+        assert!(effects(&app, id).is_empty());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(fields(&app)[SELECTED], "Shift");
+
+        activate(&mut app, 0);
+        answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(effects(&app, id)[0].params["name"], "Shift");
+    }
+
+    #[test]
+    fn reopened_svg_filter_uses_the_replacement_openings_drawing() {
+        let mut app = self::app();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let first = rect(&mut app);
+        open(&mut app, &json!({})).unwrap();
+        app.run("file.new", json!({"width": 120, "height": 120})).unwrap();
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let second = rect(&mut app);
+        open(&mut app, &json!({})).unwrap();
+        answer_dialog(&mut app, dialog_id(KIND), &[(SELECTED, json!("Shift"))], true);
+        assert_eq!(effects(&app, second).first().map(|f| f.params["name"].clone()), Some(json!("Shift")));
+        assert!(open_dialogs(&app).is_empty());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(effects(&app, first).is_empty());
+    }
+
+    #[test]
+    fn an_svg_filter_draft_cannot_apply_after_reverting_its_drawing() {
+        let mut app = self::app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("svg-filter-drawing-revert");
+        let path = dir.join("drawing.vectorcraft");
+        app.run("svgFilter.define", json!({"xml": SHIFT})).unwrap();
+        let object = rect(&mut app);
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        rect(&mut app);
+        app.run("select.set", json!({"ids": [object]})).unwrap();
+        let original = app.session.doc().unwrap();
+        let (uid, generation) = (original.uid, original.reverts);
+        open(&mut app, &json!({})).unwrap();
+        let dialog = dialog_id(KIND);
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reverted = app.session.doc().unwrap();
+        assert_eq!(reverted.uid, uid);
+        assert_ne!(reverted.reverts, generation);
+        app.run("select.set", json!({"ids": [object]})).unwrap();
+        answer_dialog(&mut app, dialog, &[(SELECTED, json!("Shift"))], true);
+        assert!(effects(&app, object).is_empty());
+
+        open(&mut app, &json!({})).unwrap();
+        answer_dialog(&mut app, dialog, &[(SELECTED, json!("Shift"))], true);
+        assert_eq!(effects(&app, object).first().map(|effect| effect.params["name"].clone()), Some(json!("Shift")));
     }
 
     #[test]
