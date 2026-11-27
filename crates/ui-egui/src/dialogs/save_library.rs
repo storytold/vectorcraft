@@ -36,7 +36,8 @@ fn document_name(app: &VectorcraftApp) -> Option<String> {
 /// Open the dialog for `library`: `extra` rows sit under the Name row. `names` are the items selected in the
 /// panel.
 pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String>, extra: Vec<Param>) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let state = app.session.active().ok_or("no document open")?;
+    let document = (state.uid, state.reverts);
     let name = document_name(app).ok_or("no document open")?;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let Library { key, title, cmd, only, ext, has_user_dir } = library;
@@ -68,9 +69,12 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
     let owner = egui::Id::unique((key, "opening-drawing"));
     ctx.data_mut(|data| data.insert_temp(owner, document));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
-        let document = ctx.data(|data| data.get_temp::<u64>(owner));
-        if app.session.active().is_none_or(|st| Some(st.uid) != document) {
+        let document = ctx.data(|data| data.get_temp::<(u64, u64)>(owner));
+        let Some(state) = app.session.active().filter(|st| document.is_some_and(|(uid, _)| st.uid == uid)) else {
             return Err(tl!("Return to the original drawing to save its library").into());
+        };
+        if document.is_some_and(|(_, reverts)| state.reverts != reverts) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
         }
         save(app, cmd, ext, result)
     };
@@ -154,5 +158,59 @@ mod tests {
         let output = written.borrow();
         assert_eq!(output.len(), 1);
         assert!(output[0].0.contains("Other Marks"));
+    }
+
+    #[test]
+    fn an_old_save_library_approval_cannot_export_definitions_restored_by_revert() {
+        let (mut app, written) = tests_export::app(1);
+        app.services.read = Some(Box::new(|path: &str| std::fs::read(path).map_err(|error| error.to_string())));
+        let output = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, bytes: &[u8]| {
+            if path.ends_with(".vectorcraft") {
+                std::fs::write(path, bytes).map_err(|error| error.to_string())
+            } else {
+                output.borrow_mut().push((path.to_string(), bytes.to_vec()));
+                Ok(())
+            }
+        }));
+        let id = app.session.active().unwrap().selection.objects[0];
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Mark", "id": id.0})).unwrap();
+        let saved_fill = app.session.active().unwrap().doc.graphic_style("Mark").unwrap().appearance.fill_paint();
+        let temp = vectorcraft_testkit::TempDir::new("save-library-revert");
+        let file = temp.join("library-source.vectorcraft");
+        app.run("file.saveAs", json!({"path": file})).unwrap();
+        assert!(file.is_file());
+        let state = app.session.active().unwrap();
+        let (uid, reverts) = (state.uid, state.reverts);
+        app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+        app.run("graphicStyle.redefine", json!({"name": "Mark", "id": id.0})).unwrap();
+        assert_ne!(app.session.active().unwrap().doc.graphic_style("Mark").unwrap().appearance.fill_paint(), saved_fill);
+        super::super::save_style_library::open(&mut app, vec!["Mark".into()]).unwrap();
+        tests_export::set(&mut app, "saveTo", json!("file"));
+        tests_export::set(&mut app, "selectedOnly", json!(true));
+        tests_export::set(&mut app, "name", json!("Draft Marks"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        assert_eq!(state.doc.graphic_style("Mark").unwrap().appearance.fill_paint(), saved_fill);
+        let undo = state.history.undo.len();
+        assert!(tests_export::try_confirm(&mut app).is_err(), "old approval must not export the restored library");
+        assert!(written.borrow().is_empty(), "no output is written for the retired draft");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(tests_export::fields(&app)["name"], "Draft Marks", "refusal preserves the user's draft");
+
+        tests_export::cancel(&mut app);
+        super::super::save_style_library::open(&mut app, vec!["Mark".into()]).unwrap();
+        tests_export::set(&mut app, "saveTo", json!("file"));
+        tests_export::set(&mut app, "selectedOnly", json!(true));
+        tests_export::set(&mut app, "name", json!("Restored Marks"));
+        tests_export::try_confirm(&mut app).unwrap();
+        let output = written.borrow();
+        assert_eq!(output.len(), 1);
+        let text = std::str::from_utf8(&output[0].1).unwrap();
+        let library = vectorcraft_doc::style_libs::read(text, "Restored Marks").unwrap();
+        assert_eq!(library.style("Mark").unwrap().appearance.fill_paint(), saved_fill, "fresh approval exports the restored definition");
     }
 }

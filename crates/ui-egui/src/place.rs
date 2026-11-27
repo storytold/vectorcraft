@@ -68,8 +68,10 @@ pub enum DropTarget {
 /// Where a dropped file landed, as far as the platform says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DropSpot {
-    /// On the canvas, at this document point.
+    /// On the active canvas, at this document point.
     Canvas(Point),
+    /// On a tiled canvas, identified by its document uid and point.
+    TiledCanvas { doc: u64, at: Point },
     /// Off the canvas: a panel, the tab bar, a dialog.
     Elsewhere,
     /// The platform gives no place (floating panel windows, desktop drags without a position).
@@ -341,16 +343,23 @@ fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
     // The web answers with the files' contents instead of paths.
     crate::file_asks::ask(app, request, Owner::Document, move |app, picked| {
         let files = match picked {
-            Picked::Paths(paths) => paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect(),
-            Picked::Contents(files) => files
-                .into_iter()
-                .map(|(name, bytes)| {
-                    app.place.picked.retain(|(n, _)| *n != name);
-                    let entry = with_importer(json!({ "name": name }), &with);
-                    app.place.picked.push((name, bytes));
-                    entry
-                })
-                .collect(),
+            Picked::Paths(paths) => {
+                app.place.picked.clear();
+                paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect()
+            }
+            Picked::Contents(files) => {
+                // The next Place dialog replaces the previous selection, including its source bytes.
+                app.place.picked.clear();
+                files
+                    .into_iter()
+                    .map(|(name, bytes)| {
+                        app.place.picked.retain(|(n, _)| *n != name);
+                        let entry = with_importer(json!({ "name": name }), &with);
+                        app.place.picked.push((name, bytes));
+                        entry
+                    })
+                    .collect()
+            }
             // Only an open's answers carry files.
             _ => return Ok(Value::Null),
         };
@@ -396,12 +405,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     use crate::dialogs::place::PlaceDialog;
     use craft::ui::dialog::DialogResult;
     let Some(dialogs) = app.dialogs() else { return };
-    let (reading, answer) = dialogs.with(|host| {
+    let (reading, answer, current_open) = dialogs.with(|host| {
         let reading = host.get_mut::<PlaceDialog>().is_some_and(|d| fill_lines(app, &d.files, &mut d.info));
-        (reading, host.take::<PlaceDialog>())
+        let answer = host.take::<PlaceDialog>();
+        (reading, answer, host.is_open::<PlaceDialog>())
     });
     if reading {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    // Place answers only after closing. Replacing an open Place leaves its Cancel while the new
+    // dialog is open; that retired selection must not clear the current selection's cache.
+    if current_open {
+        return;
     }
     match answer {
         Some(DialogResult::Ok((files, options))) => {
@@ -409,7 +424,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 app.status(e);
             }
         }
-        Some(_) => app.place.reading_lines = None,
+        Some(_) => {
+            app.place.reading_lines = None;
+            app.place.picked.clear();
+        }
         None => {}
     }
 }
@@ -805,41 +823,41 @@ impl VectorcraftApp {
     /// plug-in reads opens wherever it is dropped, as File → Open opens it ([`io::opens_as`],
     /// [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, spot: DropSpot, shift: bool) -> DropTarget {
-        let (Some(st), Some(v)) = (self.session.active(), self.view()) else { return DropTarget::Open };
-        let at = match spot {
-            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
-            DropSpot::Elsewhere => return DropTarget::Open,
-            DropSpot::Canvas(at) => at,
-            DropSpot::Unknown if is_document(name) => return DropTarget::Open,
-            DropSpot::Unknown => v.center,
+        if io::opens_as(name).is_some() || fileio::opens_with_importer(name) {
+            return DropTarget::Open;
+        }
+        let (st, at) = match spot {
+            DropSpot::Canvas(at) => (self.view().and(self.session.active()), at),
+            DropSpot::TiledCanvas { doc, at } => (self.session.documents().iter().find(|st| st.uid == doc), at),
+            DropSpot::Unknown if !is_document(name) => {
+                let Some(view) = self.view() else { return DropTarget::Open };
+                (self.session.active(), view.center)
+            }
+            _ => return DropTarget::Open,
         };
-        DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
+        st.map_or(DropTarget::Open, |st| DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift }))
     }
 
     /// Where a drop at `pos` on the window lands, for a host that follows its file drags itself (the
-    /// web's): on the active canvas as it last showed, else elsewhere; without a position, unknown.
+    /// web's): on the canvas shown under the pointer, else elsewhere; without a position, unknown.
     pub fn drop_spot(&self, pos: Option<egui::Pos2>) -> DropSpot {
         let Some(pos) = pos else { return DropSpot::Unknown };
-        match self.canvas_view() {
-            Some(view) if view.rect.contains(pos) => {
-                let at = view.to_doc(pos);
-                DropSpot::Canvas(Point::new(at.x, at.y))
-            }
-            _ => DropSpot::Elsewhere,
+        if let Some(view) = self.canvas_view().filter(|view| view.rect.contains(pos)) {
+            return DropSpot::Canvas(view.to_doc(pos));
         }
+        crate::canvas::panes::file_drop_at(self, pos).map_or(DropSpot::Elsewhere, |(doc, at)| DropSpot::TiledCanvas { doc, at })
     }
 }
 
-/// Files held over, or dropped on, a canvas that would be placed there.
+/// A file drop that includes artwork for this canvas.
 pub struct CanvasDrop {
     files: Vec<OsFile>,
     at: Point,
 }
 
-/// The canvas as a target of files dragged from the OS: it takes those [`VectorcraftApp::drop_target`]
-/// places, and outlines the canvas while they hover. On the web the browser gives a hovered file's
-/// type but not its name, so any file is taken then, including libraries, presets, plug-ins and
-/// shortcut sets, which open when dropped.
+/// The canvas accepts a file drop when [`VectorcraftApp::drop_target`] would place any member and
+/// outlines the canvas while it hovers. The drop router places or opens each member of the batch.
+/// A file hovering without a name is also eligible until its name arrives.
 pub struct CanvasFiles<'a> {
     app: &'a VectorcraftApp,
     rect: egui::Rect,
@@ -859,13 +877,11 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     fn accept(&self, payload: &OsFiles, at: egui::Pos2, _op: DropOperation) -> Option<CanvasDrop> {
         let doc = self.view.to_doc(at);
         let at = Point::new(doc.x, doc.y);
-        let files: Vec<OsFile> = payload
+        let accepts = payload
             .files
             .iter()
-            .filter(|f| f.name.is_empty() || matches!(self.app.drop_target(&f.name, DropSpot::Canvas(at), false), DropTarget::Place(_)))
-            .cloned()
-            .collect();
-        (!files.is_empty()).then_some(CanvasDrop { files, at })
+            .any(|file| file.name.is_empty() || matches!(self.app.drop_target(&file.name, DropSpot::Canvas(at), false), DropTarget::Place(_)));
+        accepts.then(|| CanvasDrop { files: payload.files.clone(), at })
     }
 
     fn mark(&self, _: &CanvasDrop) -> DropMark {
@@ -878,7 +894,7 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     }
 }
 
-/// Files dropped on the canvas ([`CanvasFiles`]), placed where they landed; Shift embeds them.
+/// Route the whole canvas drop. Shift embeds its placed artwork.
 // PLAN: `DropOperation` has no Shift, so the held modifiers of the drop's frame are read here.
 pub fn canvas_drop(app: &mut VectorcraftApp, ctx: &egui::Context, dropped: CanvasDrop) {
     let shift = ctx.input(|i| i.modifiers.shift);

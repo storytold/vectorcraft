@@ -427,6 +427,28 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+#[test]
+fn save_pdf_and_summary_wait_for_the_drawing_that_opened_them() {
+    let (mut app, written) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.5"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap_err();
+    assert!(error.contains("original drawing"), "{error}");
+    confirm(&mut app);
+    assert!(is_open(&app));
+    assert!(written.borrow().is_empty());
+    assert_eq!(fget(&app, "compatibility"), "1.5");
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    confirm(&mut app);
+    assert!(!is_open(&app));
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/out.pdf");
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 3);
+}
+
 /// A Save PDF that fails keeps the dialog open (#6861); saving again, once it works, closes it.
 #[test]
 fn a_failed_save_says_why_in_the_dialog() {

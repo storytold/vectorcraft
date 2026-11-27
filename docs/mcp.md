@@ -3396,6 +3396,85 @@ VectorCraft writes files by these rules of its own:
   `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
   built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
 
+`new ExternalObject("lib:AdobeXMPScript")` defines the globals `XMPMeta`, `XMPFile` and `XMPConst`
+([the help page](https://extendscript.docsforadobe.dev/scripting-xmp/xmpscript-object-reference/)); any other library
+name throws `ExternalObject: the library … is not available`, and no native library is loaded. VectorCraft's own
+rules for these objects:
+
+- `XMPMeta` reads a packet given as a string (`new XMPMeta(packet)`) and writes one with `serialize(options?)`, with
+  the packet wrapper unless `XMPConst.SERIALIZE_OMIT_PACKET_WRAPPER` is given. It has `getProperty`, `setProperty`,
+  `deleteProperty`, `doesPropertyExist`, `countArrayItems`, `getArrayItem`, `appendArrayItem`, `insertArrayItem`,
+  `setArrayItem`, `deleteArrayItem`, `doesArrayItemExist`, `getLocalizedText` and `setLocalizedText`, and the
+  functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
+  `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. `insertArrayItem` with
+  `XMPConst.ARRAY_LAST_ITEM` inserts before the last existing item and rejects an empty array. `insertArrayItem`
+  and `setArrayItem` store `null` as an empty item value. Arrays hold simple items; a structure
+  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. An
+  array item with an `xml:lang` qualifier has the qualifier and language options in `getProperty` and `getArrayItem`.
+  `getLocalizedText` returns an `XMPProperty` with the selected text, locale and options; its `namespace` and `path` are empty strings.
+  VectorCraft returns `undefined` when the property is absent or its language alternative array is empty.
+  `appendArrayItem` keeps explicit item options, value and array options in their parameter slots, including `undefined` or `null` item options.
+  A string value can use the shorter call form; a null value with numeric array options can also use that form. A
+  value with qualifiers in the `rdf:value` form also gives the text of its `rdf:value`, and an empty property element
+  whose attributes are fields is a structure. The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
+  gives them, or `prefix_1_` when that prefix names another namespace; a namespace the packet declares but no name
+  uses is not registered. At most 4,096 namespaces, holding at most 1 MiB together, are registered. A namespace URI
+  over 1,024 bytes, a prefix over 128 bytes, and a namespace past either limit throw `… the XMP data is too large`,
+  both from `registerNamespace` and from a packet that uses the namespace. The prefix limit applies to a namespace
+  being registered, with any `_n_` suffix added to its prefix; a namespace already registered keeps its prefix, and
+  `registerNamespace` returns that prefix whatever prefix it is given. An `rdf:Alt` item with `xml:lang=""` has no
+  language, so its array is not a language alternative for `getLocalizedText` and `setLocalizedText`.
+- `XMPFile(path, format, openFlags)` reads a file through the same places as `File`, so a path outside them, a
+  missing file and a file over 8 MiB throw the `File` messages (`Script file access denied`, `Script file does not
+  exist`, `Script file exceeds 8 MiB`). A `.xmp` file is read whole as its packet (a link counts by the file it leads to,
+  when it is opened and again when it is written); any other file, and any file with
+  `XMPConst.OPEN_USE_PACKET_SCANNING`, is scanned for its first UTF-8 packet and is read only. A packet starts at a
+  `<?xpacket begin=` whose header holds `id="W5M0MpCehiHzreSzNTczkc9d"` within 256 bytes; inside a packet, a start
+  or a trailer in a CDATA section or a comment is text, except that a section that does not close, or that holds a
+  trailer and then a start, is read as text around them. Only a `.xmp` file
+  opened with `XMPConst.OPEN_FOR_UPDATE`, without packet scanning, takes `putXMP`, and opening one that way where
+  the script may not write throws `Script file access denied`; other files open read only with that flag.
+  After `putXMP`, `closeFile()` writes the packet in
+  UTF-8 through a temporary file in the same folder when the script may write there, otherwise straight to the file;
+  when no temporary name is free, nothing is written. The written packet omits a leading XML declaration and retains
+  the following packet bytes. On Unix the replacement keeps the file's permission bits, group
+  and (on Linux) access ACL, as a saved document does, and is readable by its owner alone where the group or the ACL
+  cannot be kept; on a volume that refuses Unix permissions (SMB, FAT) the update still goes through. The packet is flushed to the disk before the temporary file takes the file's
+  name. With `XMPConst.CLOSE_UPDATE_SAFELY`, `closeFile()` writes only
+  through a temporary file, and where the script may not make one it throws `Script file could not be written` and
+  leaves the file as it is. A failed write throws and keeps the file open with its packet. While an open `File` of the same file holds changes it has not written, `closeFile()` throws
+  `Script file could not be written` and the `File` keeps its changes. `getXMP`, `getPacketInfo`, `getFileInfo` and `canPutXMP` are available. An `XMPFile` is open only in the
+  run that opened it. Its file state is native, and assigning script properties does not change that state.
+  A successful close or the next script file run releases its packet buffers.
+  After a successful update, an open `File` reader with a UTF-8 byte order mark or UTF-16 encoding
+  restarts in UTF-8 at the beginning of the replacement packet. A UTF-8 reader without a byte order mark keeps its position,
+  limited to the replacement packet's length.
+- On Unix, `closeFile()` flushes the destination folder after writing the packet. If that flush fails,
+  it throws `Script file could not be written`, and the file already contains the replacement packet.
+  Open readers use that packet, `written` names the file, and the `XMPFile` keeps its pending packet for retry.
+- Registered namespace storage and expanded XML values count toward the script's heap limit.
+  `canPutXMP` checks string packets without retaining their expanded XML values.
+  Pending packets count once toward that limit. Library installation checks its members before
+  publishing `ExternalObject`, in both ES5 and ES2015 realms. Serialization consumes fuel even
+  when its escaped output exceeds the packet limit. Packet-info scans and metadata size accounting during edits also consume fuel.
+  The sidecar-write host binding accepts packets up to VectorCraft's 8 MiB packet limit.
+- A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
+  one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
+  throws. Only spaces, tabs, carriage returns and line feeds count as indentation. A qualified name's prefix
+  and local name must each be valid XML names without a colon. Explicit `rdf:about` values must agree, including empty values.
+  A nonempty `xml:lang` on an `rdf:Description` or inherited from its ancestors is not available yet and throws instead of discarding the language.
+  An empty `xml:lang` on that description clears an inherited language. Explicit property-level language qualifiers are retained.
+  A value is counted as deep as `serialize()` would write it, under `x:xmpmeta`, `rdf:RDF` and
+  `rdf:Description`. A packet that would be written with more than 1,024 attributes on one element, or more than
+  1,024 namespace declarations in scope at one element, throws
+  `… the XMP data is too large`, both from `serialize()` and when a packet with such a value is read. Members of the help page that are not built yet (iterators,
+  structure fields, qualifiers, aliases, sorting, byte-array packets and `XMPFile.getFormatInfo`) throw
+  `… is not available yet`, and so does a flag, format or path form that is not handled yet.
+
+```json
+{"name":"run_command","arguments":{"command":"script.run","params":{"source":"new ExternalObject('lib:AdobeXMPScript'); var m = new XMPMeta(); m.setProperty(XMPConst.NS_DC, 'format', 'image/svg+xml'); vc.log(m.serialize());"}}}
+```
+
 `script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file, error?}`, with `code`
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
@@ -13977,6 +14056,8 @@ has, or an empty one, keeps the dialog open, and Cancel adds no style. A plain c
 once.
 
 `ui.charStyleOptions {name}` opens Character Style Options for an existing named style.
+The dialog previews and saves changes only in the document where it opened. If another edit is active in
+that document, preview pauses and OK reports an error until that edit ends. Cancel rolls back only the dialog's own preview.
 Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the name and complete sparse
 attribute map in one undo step. `to` is trimmed and must be unique. The command updates text using the style
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`

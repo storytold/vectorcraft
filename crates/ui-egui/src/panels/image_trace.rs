@@ -80,6 +80,9 @@ fn color_group<'a>(app: &VectorcraftApp, params: &'a Value) -> Option<&'a str> {
     rows::known_group(&rows::swatch_groups(app), params)
 }
 
+/// An object's open document, content generation and node id.
+type ObjectKey = (u64, u64, NodeId);
+
 /// Panel state: the preset name, the current parameters, the view and the last result's counts.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TraceUi {
@@ -93,13 +96,13 @@ pub(crate) struct TraceUi {
     /// The selected Image Trace object's stored settings last adopted (so edits in progress
     /// aren't overwritten until the object changes).
     synced: Value,
-    /// The document and object `synced` came from.
-    object: Option<(u64, NodeId)>,
+    /// The document contents and object `synced` came from.
+    object: Option<ObjectKey>,
     /// Preview was off at the panel's last frame.
     preview_off: bool,
-    /// The settings that wait for objects no longer selected, by document and object: the preset,
+    /// The settings that wait for objects no longer selected, by document contents and object: the preset,
     /// the parameters, and the object's stored settings they were changed from.
-    drafts: std::collections::HashMap<(u64, NodeId), (String, Value, Value)>,
+    drafts: std::collections::HashMap<ObjectKey, (String, Value, Value)>,
 }
 
 /// The Image Trace panel's run-only state: what it shows, and the view settings of its preset picker.
@@ -184,6 +187,8 @@ pub(crate) fn is_trace(n: &Node) -> bool {
 /// object (wherever it is in the selection).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Target {
+    /// Present even with nothing selected, so Revert can retire that document's old drafts.
+    document: Option<(u64, u64)>,
     /// The active document's uid and the object Trace acts on.
     object: Option<(u64, NodeId)>,
     /// The object is an Image Trace object.
@@ -195,6 +200,14 @@ pub(crate) struct Target {
     any_trace: bool,
 }
 
+impl Target {
+    fn object_key(&self) -> Option<ObjectKey> {
+        let (uid, node) = self.object?;
+        let (_, reverts) = self.document?;
+        Some((uid, reverts, node))
+    }
+}
+
 /// Whether any selected object is an Image Trace object.
 fn any_trace_selected(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)))
@@ -204,13 +217,15 @@ fn any_trace_selected(app: &VectorcraftApp) -> bool {
 /// first selected non-traceable object's metadata. Release and Expand keep their own selection scope.
 fn find_target(app: &VectorcraftApp) -> Target {
     let Some(st) = app.session.active() else { return Target::default() };
+    let document = Some((st.uid, st.reverts));
     let any_trace = any_trace_selected(app);
     let node = vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null)
         .ok()
         .and_then(|id| st.doc.node(id))
         .or_else(|| first_node(app).filter(|n| !is_trace(n) && !matches!(n.kind, NodeKind::Image(_))));
-    let Some(n) = node else { return Target { any_trace, ..Target::default() } };
+    let Some(n) = node else { return Target { document, any_trace, ..Target::default() } };
     Target {
+        document,
         object: Some((st.uid, n.id)),
         is_trace: is_trace(n),
         is_image: matches!(n.kind, NodeKind::Image(_)),
@@ -482,7 +497,7 @@ pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     let mut st = std::mem::take(&mut app.ui.image_trace_panel.shown);
     follow_preset_changes(app, &mut st, &list.presets);
     let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
-    sync_with_object(&mut st, t.stored.clone(), Some((s.doc, s.target)), &list.presets, &changes);
+    sync_with_object(&mut st, &t, &list.presets, &changes);
     st.params["ignoreColor"] = json!(color);
     st.preset = "Custom".into();
     let preview = app.ui.image_trace_preview;
@@ -624,10 +639,11 @@ fn trace(app: &mut VectorcraftApp, st: &mut TraceUi) {
 /// the next panel frame must still be recognized as a change, even when it returns to the previous
 /// settings.
 fn adopt(st: &mut TraceUi, target: &Target, r: &Value) {
+    discard_retired_drafts(st, target.document);
     st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
     if let Some(stored) = &target.stored {
         st.synced = stored.clone();
-        st.object = target.object;
+        st.object = target.object_key();
     }
 }
 
@@ -678,10 +694,22 @@ fn listed_preset(name: &str, params: &Value, all: &[Preset], changes: &[&TracePr
     found.map_or_else(|| "Custom".into(), |p| p.0.clone())
 }
 
-/// Bring the panel's settings `st` in line with the selected object `object`, whose trace settings are `stored`,
+/// Drop only drafts for content that Revert replaced in the active document.
+fn discard_retired_drafts(st: &mut TraceUi, document: Option<(u64, u64)>) {
+    let Some((uid, reverts)) = document else { return };
+    st.drafts.retain(|(doc, generation, _), _| *doc != uid || *generation == reverts);
+    if st.object.is_some_and(|(doc, generation, _)| doc == uid && generation != reverts) {
+        st.object = None;
+        st.synced = Value::Null;
+    }
+}
+
+/// Bring the panel's settings `st` in line with the selected object's stored settings,
 /// with the presets `all` and the saved preset changes `changes` of this session (oldest first); whether the object
 /// came back with the settings that waited for it.
-fn sync_with_object(st: &mut TraceUi, stored: Option<Value>, object: Option<(u64, NodeId)>, all: &[Preset], changes: &[&TracePresetChange]) -> bool {
+fn sync_with_object(st: &mut TraceUi, target: &Target, all: &[Preset], changes: &[&TracePresetChange]) -> bool {
+    discard_retired_drafts(st, target.document);
+    let (stored, object) = (target.stored.clone(), target.object_key());
     let same = |a: &Value, b: &Value| a["preset"] == b["preset"] && a["params"] == b["params"];
     let mut restored = false;
     // Another object: the settings that wait for the one left are kept until it is selected again,
@@ -796,7 +824,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     follow_preset_changes(app, &mut st, &list.presets);
     let restored = {
         let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
-        sync_with_object(&mut st, t.stored.clone(), t.object, &list.presets, &changes)
+        sync_with_object(&mut st, &t, &list.presets, &changes)
     };
     let preview = app.ui.image_trace_preview;
     let mut actions = (false, false, false);
