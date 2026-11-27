@@ -208,4 +208,47 @@ mod tests {
         app.run("document.activate", json!({"index": 0})).unwrap();
         assert_eq!(plain(&app, source), "a--b");
     }
+
+    fn selected_text_pair() -> (VectorcraftApp, u64, u64) {
+        let (mut app, selected) = app_with_text("a--b");
+        let other = app.run("text.create", json!({"x": 10, "y": 70, "text": "c--d", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [selected]})).unwrap();
+        open(&mut app).unwrap();
+        assert_eq!(entry(&app, COMMAND).unwrap().fields.unwrap()["scope"], "selection");
+        (app, selected, other)
+    }
+
+    #[test]
+    fn selected_text_only_does_not_expand_to_the_document_after_clearing_selection() {
+        let (mut app, selected, other) = selected_text_pair();
+        let undo = app.session.active().unwrap().history.undo.len();
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(entry(&app, COMMAND).unwrap().fields.unwrap()["scope"], "selection");
+
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not expand to the document");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(answer.is_err());
+
+        app.run("select.set", json!({"ids": [selected]})).unwrap();
+        ok(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a–b", "c--d"], "retry changes only the original selection");
+    }
+
+    #[test]
+    fn selected_text_only_refuses_later_art_but_entire_document_still_works() {
+        let (mut app, selected, other) = selected_text_pair();
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not change later artwork");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(answer.is_err());
+
+        set(&app, "scope", json!("document"));
+        ok(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a–b", "c–d"], "an explicit Entire Document still works");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
 }
