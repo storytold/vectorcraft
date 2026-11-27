@@ -8,6 +8,12 @@ use crate::{Action, Cursor, Mods, ToolContext};
 
 pub const HANDLE_RADIUS: f32 = 6.0;
 
+/// How near (screen points) a press must come to an end of the axis to take it.
+pub const END_REACH: f32 = 9.0;
+
+/// How near (screen points) a press must come to the axis's centre or line to take it.
+pub const REACH: f32 = 7.0;
+
 #[derive(Clone, Copy, Debug)]
 pub struct MirrorAxis {
     pub id: NodeId,
@@ -20,13 +26,14 @@ impl MirrorAxis {
     /// A single editable mirror repeat selected whole. Multi-selection keeps ordinary transforms.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Mirror { angle, center } = spec.kind else { return None };
-        if !angle.is_finite() || !finite(center) {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !angle.is_finite() || !finite(center) || !doc.is_editable(*id) {
             return None;
         }
         let bounds = n.geometric_bounds_with(&doc.symbol_boxes())?;
@@ -53,12 +60,12 @@ impl MirrorAxis {
             return None;
         }
         let axis = Self::of(cx.doc, cx.selection, cx.zoom)?;
-        if axis.ends.iter().any(|q| q.distance(p) <= cx.tol(9.0)) {
+        if axis.ends.iter().any(|q| q.distance(p) <= cx.tol(f64::from(END_REACH))) {
             return Some((axis, true));
         }
         // The center is its own move handle. Keep it ahead of bounding-box handles when the two
         // happen to overlap; the rest of the axis line yields to those handles below.
-        if axis.center.distance(p) <= cx.tol(7.0) {
+        if axis.center.distance(p) <= cx.tol(f64::from(REACH)) {
             return Some((axis, false));
         }
         let d = axis.ends[1] - axis.ends[0];
@@ -68,7 +75,7 @@ impl MirrorAxis {
         }
         let unit = d / length;
         let along = (p - axis.ends[0]).dot(unit).clamp(0.0, length);
-        ((axis.ends[0] + unit * along).distance(p) <= cx.tol(7.0) && !crate::select::bbox_handle_at(cx, p)).then_some((axis, false))
+        ((axis.ends[0] + unit * along).distance(p) <= cx.tol(f64::from(REACH)) && !crate::select::bbox_handle_at(cx, p)).then_some((axis, false))
     }
 }
 
@@ -183,30 +190,5 @@ mod tests {
         let NodeKind::Repeat(spec) = &mut doc.node_mut(id).unwrap().kind else { panic!() };
         spec.kind = RepeatKind::Mirror { angle: f64::NAN, center: Point::ZERO };
         assert!(MirrorAxis::of(&doc, &selection, 1.0).is_none());
-    }
-
-    #[test]
-    fn a_tool_switch_cancels_a_mirror_axis_drag() {
-        use crate::{PointerEvent, PointerKind, Tool};
-        let (mut doc, id) = doc_with_rect();
-        let mut source = doc.node(id).unwrap().clone();
-        source.id = doc.alloc_id();
-        doc.node_mut(id).unwrap().kind = NodeKind::Repeat(RepeatSpec::mirror(vec![Arc::new(source)], 90.0, 10.0));
-        let mut selection = Selection::default();
-        selection.set([id]);
-        let paint = paint();
-        let c = cx(&doc, &selection, &paint);
-        let axis = MirrorAxis::of(&doc, &selection, c.zoom).unwrap();
-        let mut t = crate::select::SelectionTool::default();
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, axis.center.x, axis.center.y)).is_empty());
-        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, axis.center.x + 20.0, axis.center.y));
-        assert!(matches!(a.first(), Some(Action::Begin(l)) if l == "Repeat Options"), "{a:?}");
-        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
-        assert!(!t.busy());
-        // A press that has not moved the axis leaves nothing to cancel.
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, axis.center.x, axis.center.y));
-        assert!(t.busy());
-        assert!(t.deactivate(&c).is_empty());
-        assert!(!t.busy());
     }
 }

@@ -25,7 +25,8 @@
 //! [`crate::RenderOptions`] with [`active_proof`] and [`overprint_preview_on`].
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 
@@ -34,8 +35,8 @@ pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
 use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
 pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
 use vectorcraft_doc::inks::{StopPlates, map_node_inks, stop_inks};
-use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{AppearanceItem, Document, ImageBlob, Node, NodeId, Shared};
+use vectorcraft_doc::overprint::{DiscardWhite, darken_overprints};
+use vectorcraft_doc::{AppearanceItem, Document, ImageBlob, Node, NodeId, NodeKind, Shared};
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 
@@ -391,6 +392,8 @@ impl Fit {
 /// one of them while they are kept.
 pub(crate) struct Prepared {
     inputs: Inputs,
+    /// The swatches `inputs.discard_white` was read from, while Discard White Overprint is on.
+    spots: Option<SpotSwatches>,
     layers: (Vec<Arc<Node>>, Vec<Arc<Node>>),
     art: (Vec<Arc<Node>>, Vec<Arc<Node>>),
 }
@@ -398,8 +401,31 @@ pub(crate) struct Prepared {
 /// What [`prepare`] reads besides the art.
 #[derive(PartialEq)]
 struct Inputs {
-    discard_white: bool,
+    /// Discard White Overprint, with the spot inks a white tint of which still overprints.
+    discard_white: DiscardWhite,
+    /// [`images_state`]: which pixels a colorized image shows, and whether they take its color
+    /// ([`ImageBlob::takes_colorize`]), and so whether it darkens, depend on the document's images.
+    images: u64,
     plates: Option<Plates>,
+}
+
+/// The document's swatches and swatch groups, which name its spot inks ([`DiscardWhite`]): while
+/// they are unchanged, the spot ink names are not read again.
+#[derive(PartialEq)]
+struct SpotSwatches {
+    swatches: Shared<Vec<Swatch>>,
+    groups: Shared<Vec<SwatchGroup>>,
+}
+
+/// A hash of `images`' keys and the address of each one's bytes and whether they are a preview
+/// ([`ImageBlob::is_proxy`]): it changes when an image is added, removed or given other bytes,
+/// without reading any pixels.
+fn images_state(images: &BTreeMap<String, ImageBlob>) -> u64 {
+    let mut h = DefaultHasher::new();
+    for (key, b) in images {
+        (key, Arc::as_ptr(&b.bytes), b.is_proxy()).hash(&mut h);
+    }
+    h.finish()
 }
 
 /// What the colors of Separations Preview's plates are made from ([`plate_color`]).
@@ -429,21 +455,42 @@ impl PartialEq for Plates {
 /// print it ([`plate_color`]).
 struct How<'a> {
     doc: &'a Document,
-    discard_white: bool,
+    discard_white: &'a DiscardWhite,
     /// Separations Preview: the color settings, the proof setup and the visible plates.
     plates: Option<(&'a Cms, &'a ProofSetup, &'a [String])>,
 }
 
 impl How<'_> {
     /// Whether [`Self::apply`] can change `n`: with Separations Preview any node, else a node with
-    /// an overprinting fill or stroke.
+    /// an overprinting fill or stroke, or a colorized image whose color overprints.
     fn changes(&self, n: &Node) -> bool {
-        self.plates.is_some() || n.appearance.items.iter().any(|i| i.overprint())
+        self.plates.is_some() || n.appearance.items.iter().any(|i| i.overprint()) || n.colorize_overprints() || self.white_characters(n)
     }
 
-    /// Change the fills, strokes and other colors of node `a`, which holds no members.
+    /// Whether type `n` has an overprinting character fill or stroke that Discard White Overprint
+    /// knocks out ([`DiscardWhite::discards`]).
+    fn white_characters(&self, n: &Node) -> bool {
+        let white = |r: &vectorcraft_doc::TextRun| {
+            (r.style.overprint_fill && self.discard_white.discards(&r.style.fill))
+                || (r.style.overprint_stroke && self.discard_white.discards(&r.style.stroke))
+        };
+        matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(white))
+    }
+
+    /// Change the fills, strokes and other colors of node `a`, which holds no members. Character
+    /// fills and strokes that Discard White Overprint knocks out stop overprinting, judged on
+    /// their own colors before Separations Preview maps them to the visible plates; the renderer
+    /// darkens the others.
     fn apply(&self, a: &mut Arc<Node>) {
-        darken_overprints(a, self.discard_white);
+        darken_overprints(a, self.discard_white, &self.doc.images);
+        if self.white_characters(a)
+            && let NodeKind::Text(t) = &mut Arc::make_mut(a).kind
+        {
+            for r in &mut t.runs {
+                r.style.overprint_fill &= !self.discard_white.discards(&r.style.fill);
+                r.style.overprint_stroke &= !self.discard_white.discards(&r.style.stroke);
+            }
+        }
         if let Some((c, proof, visible)) = self.plates {
             map_node_inks(Arc::make_mut(a), &mut |col, sw, plates| plate_color(self.doc, c, proof, visible, col, sw, plates));
         }
@@ -461,8 +508,11 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
     }
     let seps = opts.proof.as_ref().and_then(|p| p.separations.as_ref().map(|s| (p, s)));
     let c = cms::active();
+    let spots = doc.setup.discard_white_overprint.then(|| SpotSwatches { swatches: doc.swatches.clone(), groups: doc.swatch_groups.clone() });
+    let read = kept.as_ref().filter(|k| k.spots == spots).map(|k| k.inputs.discard_white.clone());
     let inputs = Inputs {
-        discard_white: doc.setup.discard_white_overprint,
+        discard_white: read.unwrap_or_else(|| DiscardWhite::of(doc)),
+        images: images_state(&doc.images),
         plates: seps.map(|(proof, _)| Plates {
             proof: proof.clone(),
             swatches: doc.swatches.clone(),
@@ -473,7 +523,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
         }),
     };
     let earlier = kept.take().filter(|k| k.inputs == inputs);
-    let how = How { doc, discard_white: inputs.discard_white, plates: seps.map(|(proof, visible)| (&*c, proof, visible.as_slice())) };
+    let how = How { doc, discard_white: &inputs.discard_white, plates: seps.map(|(proof, visible)| (&*c, proof, visible.as_slice())) };
     let none = (vec![], vec![]);
     let (layers, art) = earlier.as_ref().map_or((&none, &none), |k| (&k.layers, &k.art));
     let made_layers = prepare_list(&doc.layers, &layers.0, &layers.1, &how);
@@ -490,7 +540,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
         }
         Cow::Owned(d)
     };
-    *kept = Some(Prepared { inputs, layers: (doc.layers.clone(), made_layers), art: (symbol_art, made_art) });
+    *kept = Some(Prepared { inputs, spots, layers: (doc.layers.clone(), made_layers), art: (symbol_art, made_art) });
     out
 }
 
@@ -619,6 +669,5 @@ pub fn active_proof() -> Option<ProofSetup> {
 
 /// Whether [`RenderOptions::overprint_preview`] should be on (Separations Preview implies it).
 pub fn overprint_preview_on() -> bool {
-    let v = view();
-    v.overprint || v.separations.is_some()
+    VIEW.read().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|v| v.overprint || v.separations.is_some())
 }

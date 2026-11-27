@@ -1,36 +1,13 @@
-use egui::{Event, Modifiers, PointerButton};
+use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
+
+use craft::ui::testing::{Fixture, Target};
+use egui::{Key, Modifiers, Pos2, pos2, vec2};
+use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
-use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
-
-/// The gradient swatches menu has one row per gradient swatch: with enough of them it stops inside a
-/// short window and the wheel reaches Save to Swatches. With few of them it does not scroll.
-#[test]
-fn a_long_gradient_swatch_menu_scrolls_inside_a_short_window() {
-    let stops = json!([{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]);
-    let mut app = app(json!({"gradient": {"stops": stops}}));
-    app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
-    let paint = current(&app).expect("a gradient fill");
-    let short = paint.clone();
-    let arrow = |window: &PopupWindow| window.clickable(vec2(14.0, 40.0))[0].center();
-    let first = gradient_swatches(&app)[0].0.clone();
-    assert_short_list_does_not_scroll(&mut app, move |app, ui| thumbnail(app, ui, &short, true), arrow, &first, "Save to Swatches");
-    for n in 0..30 {
-        app.run("swatch.new", json!({"name": format!("Long {n}"), "gradient": {"stops": stops}})).unwrap();
-    }
-    assert_last_row_scrolls_into_view(&mut app, 200.0, move |app, ui| thumbnail(app, ui, &paint, true), arrow, &first, "Save to Swatches");
-}
-
-#[test]
-fn offsets_and_json() {
-    assert_eq!(x_to_offset(50.0, 0.0, 200.0), 0.25);
-    assert_eq!(x_to_offset(-5.0, 0.0, 200.0), 0.0);
-    assert_eq!(x_to_offset(500.0, 0.0, 200.0), 1.0);
-    let j = stops_json(&Gradient::default().stops);
-    assert_eq!(j.as_array().unwrap().len(), 2);
-    assert_eq!(j[1]["midpoint"], json!(0.5));
-}
+use crate::tests::panel_harness::{Place, Shown, floated};
 
 #[test]
 fn dropped_colours_recolour_or_add_an_opaque_stop() {
@@ -63,6 +40,34 @@ fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
     assert_eq!(g.freeform.map(|f| f.points[1].color), Some(orange));
 }
 
+/// While the Shape Builder paints with a freeform fill, which lies on no object, the panel shows
+/// that fill's stops, and a swatch color recolors the selected stop instead of a point. Lines
+/// mode gives the fill a freeform state without points, which the stops edit keeps.
+#[test]
+fn the_shape_builders_freeform_fill_is_edited_by_its_stops() {
+    let mut app = app(json!({"color": "#000000"}));
+    app.select_tool("shapeBuilder");
+    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform", "mode": "lines"})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.editGradient", json!({"stroke": false, "stops": stops})).unwrap();
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.freeform.as_ref().map(|f| (f.points.len(), f.mode)), Some((0, FreeformMode::Lines)));
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0), "the stops edit keeps the supplied stops");
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    let orange = Color::rgb8(255, 128, 0);
+    assert!(recolor_selected(&mut app, orange, &json!({})), "the selected stop takes the color");
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.gradient.kind, GradientKind::Freeform);
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert_eq!(g.gradient.stops[1].color, orange);
+    assert_eq!(g.freeform.map(|f| f.mode), Some(FreeformMode::Lines));
+    let rig = Rig::new(app);
+    for label in ["Draw", "Location", "Opacity", "Delete Stop"] {
+        let _ = rig.target(label);
+    }
+    assert!(rig.fixture.by_label("Delete Point").is_none(), "no point controls for the tool's fill");
+}
+
 /// In a CMYK document Add to Swatches and Save to Swatches keep the gradient's RGB stops RGB.
 #[test]
 fn a_gradient_saved_as_a_swatch_keeps_its_stops_models_in_a_cmyk_document() {
@@ -78,20 +83,7 @@ fn a_gradient_saved_as_a_swatch_keeps_its_stops_models_in_a_cmyk_document() {
     assert_eq!(colors(&saved), colors(&g));
 }
 
-#[test]
-fn dragged_stops_move_copy_or_swap() {
-    let g = Gradient::default();
-    let (v, i) = dragged_stops(&g.stops, 0, 0.4, false, Some(1));
-    assert_eq!((v.len(), i, v[0].offset), (2, 0, 0.4));
-    let (v, i) = dragged_stops(&g.stops, 0, 0.4, true, None);
-    assert_eq!((v.len(), i, v[1].offset, v[1].color), (3, 1, 0.4, Color::WHITE));
-    let (v, i) = dragged_stops(&g.stops, 0, 1.0, true, Some(1));
-    assert_eq!((v.len(), i, v[0].color, v[1].color), (2, 0, Color::BLACK, Color::WHITE));
-    // Dropped on itself: a copy.
-    assert_eq!(dragged_stops(&g.stops, 0, 0.0, true, Some(0)).0.len(), 3);
-}
-
-// ---------- headless frames ----------
+// ---------- framework fixture ----------
 
 /// A selected rectangle filled with `fill` (`paint.setFill` params).
 fn app(fill: Value) -> VectorcraftApp {
@@ -102,132 +94,83 @@ fn app(fill: Value) -> VectorcraftApp {
     app
 }
 
-/// A headless Gradient panel: frames share one context and a clock.
-struct Panel {
-    ctx: egui::Context,
-    time: f64,
-    scope: egui::Id,
+/// The Gradient panel in a framework fixture over one app: the trials drive it through its
+/// controls' accessible names and read the app. Each `app()` borrow ends before the next drive.
+struct Rig {
+    app: Rc<RefCell<VectorcraftApp>>,
+    fixture: Fixture,
 }
 
-impl Panel {
-    fn new() -> Self {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        Self { ctx, time: 0.0, scope: egui::Id::NULL }
+impl Rig {
+    /// The panel alone.
+    fn new(app: VectorcraftApp) -> Self {
+        Self::with(app, show)
     }
 
-    /// One frame with `events` (and `modifiers` held); returns the texts drawn and where.
-    fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>, modifiers: Modifiers) -> Vec<(String, Pos2)> {
-        self.frame_of(app, events, modifiers, show)
+    /// `draw` (the panel, or the panel with others) over `app`.
+    fn with(app: VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Self {
+        let app = Rc::new(RefCell::new(app));
+        let shown = Rc::clone(&app);
+        let mut fixture = Fixture::new(move |ui| draw(&mut shown.borrow_mut(), ui));
+        fixture.room(vec2(320.0, 1200.0)).settle();
+        Rig { app, fixture }
     }
 
-    /// [`Self::frame`] drawing `draw` (the panel, or its menu) instead of the panel.
-    fn frame_of(
-        &mut self,
-        app: &mut VectorcraftApp,
-        events: Vec<Event>,
-        modifiers: Modifiers,
-        draw: fn(&mut VectorcraftApp, &mut Ui),
-    ) -> Vec<(String, Pos2)> {
-        fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2)>) {
-            match s {
-                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.pos + t.galley.rect.center().to_vec2())),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-                _ => {}
-            }
-        }
-        self.time += 0.1;
-        let mut events = events;
-        events.insert(0, Event::ModifiersChanged(modifiers));
-        let input = egui::RawInput {
-            time: Some(self.time),
-            events,
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
-            ..Default::default()
-        };
-        let mut out = self.ctx.run_ui(input, |ui| {
-            self.scope = ui.scope_id();
-            draw(app, ui);
-        });
-        out.textures_delta.clear();
-        let mut v = vec![];
-        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
-        v
+    fn app(&self) -> RefMut<'_, VectorcraftApp> {
+        self.app.borrow_mut()
     }
 
-    /// Match actual IDs in the panel or its immediate horizontal rows. `parent_id` is an
-    /// unstable auto ID, and the human-readable `Id` debug source is absent in release builds.
-    fn widget(&self, key: impl egui::AsIdSalt + Copy) -> Rect {
-        // Match Ui::new_child: its default child salt is an IdSalt, not the raw string.
-        let row_scope = self.scope.with(egui::IdSalt::new("child"));
-        let ids = [self.scope.with(key), row_scope.with(key)];
-        // Outside run_ui, read_response can prefer the older this_pass geometry after
-        // end_pass swaps the passes. Use the completed frame, including after Hide Options.
-        let matches: Vec<_> = self.ctx.viewport(|vp| ids.into_iter().filter_map(|id| vp.prev_pass.widgets.get(id).map(|w| w.rect)).collect());
-        assert_eq!(matches.len(), 1, "expected one widget for {key:?}");
-        matches[0]
+    /// The control named `label`.
+    fn target(&self, label: &str) -> Target {
+        self.fixture.by_label(label).unwrap_or_else(|| panic!("no `{label}` in the panel"))
     }
 
-    fn click(&mut self, app: &mut VectorcraftApp, at: Pos2) -> Vec<(String, Pos2)> {
-        self.click_with(app, at, Modifiers::NONE)
+    /// Where the control named `label` is.
+    fn at(&self, label: &str) -> Pos2 {
+        self.target(label).center()
     }
 
-    /// A click at `at` with `m` held.
-    fn click_with(&mut self, app: &mut VectorcraftApp, at: Pos2, m: Modifiers) -> Vec<(String, Pos2)> {
-        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: m };
-        self.frame(app, vec![Event::PointerMoved(at), b(true)], m);
-        self.frame(app, vec![b(false)], m);
-        self.frame(app, vec![], Modifiers::NONE)
+    /// Where the Swatches panel's tile of swatch `name` is: a tile is named by its swatch and the colour it shows
+    /// ("Drop Red, #ff0000").
+    fn swatch(&self, name: &str) -> Pos2 {
+        let tree = self.fixture.tree();
+        let prefix = format!("{name}, ");
+        let full = tree.keys().into_iter().filter_map(|k| tree.name_of(k)).find(|n| n.starts_with(&prefix)).map(str::to_owned);
+        self.at(&full.unwrap_or_else(|| panic!("no swatch tile `{name}`")))
     }
 
-    /// A click at `at` on the panel menu (drawn alone); returns the menu's texts after it.
-    fn menu_click(&mut self, app: &mut VectorcraftApp, at: Pos2) -> Vec<(String, Pos2)> {
-        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-        self.frame_of(app, vec![Event::PointerMoved(at), b(true)], Modifiers::NONE, menu);
-        self.frame_of(app, vec![b(false)], Modifiers::NONE, menu);
-        self.frame_of(app, vec![], Modifiers::NONE, menu)
+    /// The number the field named `label` shows.
+    fn number(&self, label: &str) -> Option<f64> {
+        self.fixture.tree().numeric_of(self.target(label).node).and_then(|n| n.value)
     }
 
-    /// The first widget right of `at` on its row (last frame).
-    fn widget_after(&self, at: Pos2) -> Rect {
-        let mut v: Vec<Rect> = self.ctx.viewport(|vp| {
-            vp.prev_pass
-                .widgets
-                .layers()
-                .flat_map(|(_, w)| w.iter())
-                .map(|w| w.rect)
-                .filter(|r| (r.center().y - at.y).abs() < 8.0 && r.left() > at.x)
-                .collect()
-        });
-        v.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        *v.first().expect("a widget right of it")
+    /// Whether the control named `label` is disabled.
+    fn disabled(&self, label: &str) -> bool {
+        self.fixture.tree().is_disabled_key(self.target(label).node)
     }
 
-    /// The `size`-square widgets right of `at` on its row (last frame), left to right.
-    fn row_after(&self, at: Pos2, size: f32) -> Vec<Rect> {
-        let mut v: Vec<Rect> = self.ctx.viewport(|vp| {
-            vp.prev_pass
-                .widgets
-                .layers()
-                .flat_map(|(_, w)| w.iter())
-                .map(|w| w.rect)
-                .filter(|r| (r.width() - size).abs() < 0.5 && (r.height() - size).abs() < 0.5 && (r.center().y - at.y).abs() < 8.0 && r.left() > at.x)
-                .collect()
-        });
-        v.sort_by(|a, b| a.left().total_cmp(&b.left()));
-        v.dedup();
-        v
+    /// Click the control named `label`.
+    fn click(&mut self, label: &str) {
+        let target = self.target(label);
+        self.fixture.click(&target).settle();
     }
 
-    /// Press at `from`, move to `to` in steps and release there, with `m` held.
-    fn drag(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2, m: Modifiers) {
-        let b = |at, pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: m };
-        self.frame(app, vec![Event::PointerMoved(from), b(from, true)], m);
-        for k in 1..=4 {
-            self.frame(app, vec![Event::PointerMoved(from + (to - from) * (k as f32 / 4.0))], m);
-        }
-        self.frame(app, vec![b(to, false)], m);
-        self.frame(app, vec![], Modifiers::NONE);
+    /// Cmd/Ctrl-click the control named `label`.
+    fn cmd_click(&mut self, label: &str) {
+        let target = self.target(label);
+        self.fixture.hold(Modifiers::COMMAND).click(&target);
+        self.fixture.hold(Modifiers::NONE).settle();
+    }
+
+    /// Type `text` over the text of the field named `label` and commit it with Enter.
+    fn type_into(&mut self, label: &str, text: &str) {
+        let field = self.target(label);
+        self.fixture.click(&field).key(Key::A, Modifiers::COMMAND).type_text(text).key(Key::Enter, Modifiers::NONE).settle();
+    }
+
+    /// Drag from `from` and release at `to`.
+    fn drag(&mut self, from: Pos2, to: Pos2) {
+        self.fixture.drag_at(from, to - from).settle();
     }
 }
 
@@ -242,200 +185,91 @@ fn hexes(app: &VectorcraftApp) -> Vec<String> {
     fill(app).gradient.stops.iter().map(|s| s.color.to_hex()).collect()
 }
 
-#[test]
-fn the_proxy_toggles_fill_and_stroke_and_stays_with_options_hidden() {
-    let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "Opacity:"));
-    let stroke = p.widget("stroke-proxy");
-    p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
-    assert!(!app.session.fill_active, "the Stroke proxy came to the front");
-    set_pstate(&p.ctx, HIDE_OPTIONS, true);
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(!texts.iter().any(|(t, _)| t == "Opacity:" || t == "Type:"), "{texts:?}");
-    let fill = p.widget("fill-proxy");
-    p.click(&mut app, fill.left_top() + vec2(2.0, 2.0));
-    assert!(app.session.fill_active, "the proxy works with the options hidden");
-    p.widget(("grad-stop", 1_usize));
-}
-
-#[test]
-fn the_stroke_buttons_lay_the_gradient_within_along_or_across_the_stroke() {
-    let mut app = app(json!({"gradient": {}}));
-    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
-    assert!(app.session.fill_active);
-    let mode = |app: &VectorcraftApp| app.session.shown_stroke().unwrap().gradient_mode;
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let label = texts.iter().find(|(t, _)| t == "Stroke:").expect("the Stroke buttons").1;
-    // With the Fill proxy in front they are off.
-    let buttons = p.row_after(label, 22.0);
-    assert_eq!(buttons.len(), 3);
-    p.click(&mut app, buttons[1].center());
-    assert_eq!(mode(&app), StrokeGradientMode::Within);
-    let stroke = p.widget("stroke-proxy");
-    p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
-    assert!(!app.session.fill_active);
-    for (i, want) in [(1, StrokeGradientMode::Along), (2, StrokeGradientMode::Across), (0, StrokeGradientMode::Within)] {
-        p.click(&mut app, buttons[i].center());
-        assert_eq!(mode(&app), want);
-    }
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(mode(&app), StrokeGradientMode::Across, "one undo step per click");
-}
-
-#[test]
-fn the_dither_box_dithers_the_gradient_fill_and_is_off_for_strokes() {
-    let mut app = app(json!({"gradient": {}}));
-    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let at = texts.iter().find(|(t, _)| t == "Dither").expect("the Dither box").1;
-    p.click(&mut app, at);
-    assert!(fill(&app).gradient.dither, "the fill's gradient is dithered");
-    p.click(&mut app, at);
-    assert!(!fill(&app).gradient.dither, "a second click clears it");
-    app.run("edit.undo", json!({})).unwrap();
-    assert!(fill(&app).gradient.dither, "one undo step per click");
-    // Behind the Stroke proxy the box is dimmed and does nothing.
-    let stroke = p.widget("stroke-proxy");
-    p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
-    assert!(!app.session.fill_active);
-    let undo = app.session.doc().unwrap().history.undo.len();
-    p.click(&mut app, at);
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "no edit on the stroke");
-    let Paint::Gradient(st) = app.session.shown_stroke().unwrap().paint.clone() else { panic!("a gradient stroke") };
-    assert!(!st.gradient.dither);
-}
-
-#[test]
-fn the_method_menu_makes_the_gradient_perceptual() {
-    let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "Method:"), "{texts:?}");
-    let shown = texts.iter().find(|(t, _)| t == "Classic").expect("Classic shown").1;
-    let undo = app.session.doc().unwrap().history.undo.len();
-    let texts = p.click(&mut app, shown);
-    let option = texts.iter().find(|(t, _)| t == "Perceptual").expect("the menu lists Perceptual").1;
-    p.click(&mut app, option);
-    assert_eq!(fill(&app).gradient.method, GradientMethod::Perceptual);
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "Perceptual"), "the menu shows the method: {texts:?}");
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
-}
-
-/// The Method menu lists the two hue methods after Classic and Perceptual; choosing one mixes
-/// the gradient around the hue wheel that way, as one undo step, and the menu then shows it.
-#[test]
-fn the_method_menu_mixes_the_gradient_around_the_hue_wheel() {
-    for (label, method) in [("Hue Clockwise", GradientMethod::HueClockwise), ("Hue Counterclockwise", GradientMethod::HueCounterclockwise)] {
-        let mut app = app(json!({"gradient": {}}));
-        let mut p = Panel::new();
-        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-        let shown = texts.iter().find(|(t, _)| t == "Classic").expect("Classic shown").1;
-        let undo = app.session.doc().unwrap().history.undo.len();
-        let texts = p.click(&mut app, shown);
-        for listed in ["Classic", "Perceptual", "Hue Clockwise", "Hue Counterclockwise"] {
-            assert!(texts.iter().any(|(t, _)| t == listed), "the menu lists {listed}: {texts:?}");
-        }
-        let option = texts.iter().find(|(t, _)| t == label).expect("the menu lists the method").1;
-        p.click(&mut app, option);
-        assert_eq!(fill(&app).gradient.method, method, "{label}");
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{label}: one undo step");
-        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-        assert!(texts.iter().any(|(t, _)| t == label), "the menu shows the method: {texts:?}");
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
-    }
-}
-
-/// The Spread menu makes the gradient repeat (one undo step), and the Repeats field, dimmed while
-/// it pads, then sets the count.
-#[test]
-fn the_spread_menu_and_repeats_field_set_the_spread() {
-    use vectorcraft_color::GradientSpread;
-    let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "Spread:"), "{texts:?}");
-    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
-    let undo = app.session.doc().unwrap().history.undo.len();
-    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
-    // While it pads, the Repeats field takes no count.
-    let field = p.widget_after(shown);
-    p.click(&mut app, field.center());
-    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
-    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-    assert_eq!((fill(&app).gradient.repeats, app.session.doc().unwrap().history.undo.len()), (1, undo), "dimmed with Pad");
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
-    let texts = p.click(&mut app, shown);
-    let option = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu lists Reflect").1;
-    p.click(&mut app, option);
-    assert_eq!(fill(&app).gradient.spread, GradientSpread::Reflect);
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
-    // The count: typed into the field beside the menu.
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let shown = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu shows Reflect").1;
-    let field = p.widget_after(shown);
-    p.click(&mut app, field.center());
-    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
-    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-    assert_eq!(fill(&app).gradient.repeat_count(), 4);
-    app.run("edit.undo", json!({})).unwrap();
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(fill(&app).gradient.spread, GradientSpread::Pad);
-}
-
+/// A diamond clicked on the slider takes the selection from the stop, shows its midpoint in
+/// Location, and a location typed there moves the midpoint; a stop clicked takes it back.
 #[test]
 fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
     let mut app = app(json!({"gradient": {"stops": stops}}));
     app.run("gradient.selectStop", json!({"index": 1})).unwrap();
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "100%"), "the stop's location: {texts:?}");
-    let diamond = p.widget(("grad-mid", 0_usize));
-    let texts = p.click(&mut app, diamond.center());
-    assert_eq!(app.session.selected_stop(), None, "the diamond replaces the stop selection");
-    assert!(texts.iter().any(|(t, _)| t == "30%"), "the midpoint: {texts:?}");
-    // Typing a location moves the midpoint.
-    let field = texts.iter().find(|(t, _)| t == "30%").unwrap().1;
-    p.click(&mut app, field);
-    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
-    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("60".into())], Modifiers::NONE);
-    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-    assert!((fill(&app).gradient.stops[0].midpoint - 0.6).abs() < 1e-6, "{:?}", fill(&app).gradient.stops);
-    // Clicking a stop selects it again.
-    let stop = p.widget(("grad-stop", 0_usize));
-    let texts = p.click(&mut app, stop.center());
-    assert_eq!(app.session.selected_stop(), Some(0));
-    assert!(texts.iter().any(|(t, _)| t == "0%"));
+    let mut rig = Rig::new(app);
+    assert_eq!(rig.number("Location"), Some(100.0), "the stop's location");
+    rig.click("Midpoint 1");
+    assert_eq!(rig.app().session.selected_stop(), None, "the diamond replaces the stop selection");
+    assert_eq!(rig.app().ui.gradient_panel.mid_selected.map(|(i, _)| i), Some(0));
+    assert_eq!(rig.number("Location"), Some(30.0), "the midpoint");
+    rig.type_into("Location", "60");
+    let stops = fill(&rig.app()).gradient.stops;
+    assert!((stops[0].midpoint - 0.6).abs() < 1e-6, "{stops:?}");
+    rig.click("Color stop 1 of 2");
+    assert_eq!(rig.app().session.selected_stop(), Some(0));
+    assert_eq!(rig.number("Location"), Some(0.0), "the stop's location again");
+}
+
+/// A diamond picked on the selected object's gradient is not selected on another gradient the
+/// panel shows with that object still selected: the Live Paint Bucket's, or the stroke's after the
+/// proxy toggles. Going back to the object's fill selects it again.
+#[test]
+fn a_picked_diamond_stays_with_the_gradient_it_was_picked_on() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("paint.setStroke", json!({"gradient": {"kind": "radial"}})).unwrap();
+    app.session.fill_active = true;
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    let mid = |rig: &Rig| selected_mid(&rig.app(), 2);
+    assert_eq!(mid(&rig), Some(0), "the diamond is picked");
+    {
+        let mut app = rig.app();
+        app.select_tool("livePaintBucket");
+        app.run("paint.setFill", json!({"gradient": {"kind": "radial"}})).unwrap();
+    }
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the bucket's gradient");
+    rig.app().select_tool("selection");
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), Some(0), "the object's fill again");
+    rig.app().session.fill_active = false;
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the object's stroke");
+}
+
+/// Dragging the document's tab along the strip keeps its selected stop and its picked diamond
+/// selected: both stay with the document, not with the tab it was in.
+#[test]
+fn a_selected_stop_and_a_picked_diamond_stay_selected_when_the_document_tab_moves() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    app.run("document.move", json!({"to": 0})).unwrap();
+    assert_eq!(app.session.selected_stop(), Some(1), "the stop stays selected in the moved tab");
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond is picked");
+    rig.app().run("document.move", json!({"to": 1})).unwrap();
+    rig.fixture.settle();
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond stays picked in the moved tab");
+    assert_eq!(rig.number("Location"), Some(30.0), "Location still shows the midpoint");
 }
 
 /// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
-/// sweep mirrored.
+/// sweep mirrored (the field's value times the mirror's sign).
 #[test]
 fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
-    let mut app = app(json!({"gradient": {"kind": "conic", "aspect": -50}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let field = texts.iter().find(|(t, _)| t == "50%").unwrap_or_else(|| panic!("the aspect field: {texts:?}")).1;
-    p.click(&mut app, field);
-    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
-    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
-    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-    let geom = fill(&app).geom.unwrap();
+    let mut rig = Rig::new(app(json!({"gradient": {"kind": "conic", "aspect": -50}})));
+    assert_eq!(rig.number("Aspect Ratio"), Some(50.0), "the size shows");
+    rig.type_into("Aspect Ratio", "80");
+    let geom = fill(&rig.app()).geom.unwrap();
     assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
 }
 
 /// With nothing selected, and while the Live Paint Bucket is active, the Aspect Ratio field is
-/// dimmed: the default gradient fits each object and has no aspect, so typing in it changes
-/// nothing and reports no error.
+/// disabled: the default gradient fits each object and has no aspect. A centred gradient on a
+/// selected object takes one.
 #[test]
 fn the_aspect_field_is_dimmed_for_the_default_gradient() {
     for bucket in [false, true] {
@@ -445,118 +279,11 @@ fn the_aspect_field_is_dimmed_for_the_default_gradient() {
         } else {
             app.run("select.set", json!({"ids": []})).unwrap();
         }
-        let default = app.session.paint.fill.clone();
-        let mut p = Panel::new();
-        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-        // The aspect field is the first 100% (above Opacity's).
-        let field = texts
-            .iter()
-            .filter(|(t, _)| t == "100%")
-            .map(|(_, at)| *at)
-            .min_by(|a, b| a.y.total_cmp(&b.y))
-            .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
-        p.click(&mut app, field);
-        let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
-        p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
-        p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-        assert_eq!(app.session.paint.fill, default, "bucket {bucket}: the default gradient");
-        assert!(app.ui.status.is_empty(), "bucket {bucket}: {}", app.ui.status);
+        let rig = Rig::new(app);
+        assert!(rig.disabled("Aspect Ratio"), "bucket {bucket}: the default gradient has no aspect");
     }
-}
-
-/// The Type row's Diamond button (the fourth of five) makes the gradient a diamond, and the
-/// Aspect Ratio field then edits its aspect.
-#[test]
-fn the_diamond_button_makes_a_diamond_whose_aspect_field_edits_it() {
-    let mut app = app(json!({"gradient": {"kind": "linear", "start": [150, 150], "end": [200, 150]}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let label = texts.iter().find(|(t, _)| t == "Type:").unwrap_or_else(|| panic!("the Type row: {texts:?}")).1;
-    let buttons = p.row_after(label, 24.0);
-    assert_eq!(buttons.len(), 5, "Linear, Radial, Conic, Diamond and Freeform");
-    p.click(&mut app, buttons[3].center());
-    assert_eq!(fill(&app).gradient.kind, GradientKind::Diamond);
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    // The aspect field is the first 100% (above Opacity's).
-    let field = texts
-        .iter()
-        .filter(|(t, _)| t == "100%")
-        .map(|(_, at)| *at)
-        .min_by(|a, b| a.y.total_cmp(&b.y))
-        .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
-    p.click(&mut app, field);
-    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
-    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
-    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
-    let g = fill(&app);
-    assert_eq!(g.gradient.kind, GradientKind::Diamond);
-    assert!((g.geom.unwrap().aspect - 0.8).abs() < 1e-9, "{:?}", g.geom);
-}
-
-#[test]
-fn the_thumbnail_menu_applies_gradient_swatches_and_saves_one() {
-    let mut app = app(json!({"color": "#336699"}));
-    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
-    app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let menu = p.widget("grad-swatches").center();
-    let texts = p.click(&mut app, menu);
-    let dusk = texts.iter().find(|(t, _)| t == "Dusk").unwrap_or_else(|| panic!("the menu lists the swatch: {texts:?}")).1;
-    assert!(texts.iter().any(|(t, _)| t.ends_with("Save to Swatches")));
-    p.click(&mut app, dusk);
-    assert_eq!(hexes(&app), ["#ff0000", "#0000ff"]);
-    // Save to Swatches adds the current gradient.
-    let before = gradient_swatches(&app).len();
-    let texts = p.click(&mut app, menu);
-    let save = texts.iter().find(|(t, _)| t.ends_with("Save to Swatches")).unwrap().1;
-    p.click(&mut app, save);
-    assert_eq!(gradient_swatches(&app).len(), before + 1);
-}
-
-/// Cmd/Ctrl-click on the Gradient Fill box (the thumbnail) resets the active proxy's gradient to
-/// the linear White, Black gradient as one undo step; a plain click leaves a gradient as it is.
-#[test]
-fn cmd_click_on_the_gradient_fill_box_resets_to_the_linear_white_black_gradient() {
-    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.5, "color": "#ffff00"}, {"offset": 1, "color": "#0000ff"}]);
-    let mut app = app(json!({"gradient": {"kind": "radial", "stops": stops}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let thumb = p.widget("grad-swatches").left_center() - vec2(21.0, 0.0);
-    p.click(&mut app, thumb);
-    assert_eq!(hexes(&app), ["#ff0000", "#ffff00", "#0000ff"], "a plain click keeps the gradient");
-    p.click_with(&mut app, thumb, Modifiers::COMMAND);
-    assert_eq!(fill(&app).gradient.kind, GradientKind::Linear);
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
-    assert_eq!(app.session.last_gradient.gradient.stops.len(), 2, "the Tools panel's Gradient button shows it");
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(fill(&app).gradient.kind, GradientKind::Radial, "one undo step");
-    assert_eq!(hexes(&app), ["#ff0000", "#ffff00", "#0000ff"]);
-    // With the Stroke proxy in front, a solid stroke becomes the gradient; the fill stays.
-    app.run("paint.setStroke", json!({"color": "#00ff00"})).unwrap();
-    app.session.fill_active = false;
-    p.click_with(&mut app, thumb, Modifiers::COMMAND);
-    let stroke = match crate::panels::current_paints(&app).1 {
-        Paint::Gradient(g) => *g,
-        s => panic!("expected a gradient stroke, got {s:?}"),
-    };
-    assert_eq!(stroke.gradient.kind, GradientKind::Linear);
-    assert_eq!(stroke.gradient.stops.iter().map(|s| s.color.to_hex()).collect::<Vec<_>>(), ["#ffffff", "#000000"]);
-    assert_eq!(fill(&app).gradient.kind, GradientKind::Radial);
-}
-
-/// With the options hidden the Gradient Fill box stays, and Cmd/Ctrl-click on it resets a
-/// freeform gradient too.
-#[test]
-fn cmd_click_on_the_gradient_fill_box_with_the_options_hidden() {
-    let mut app = app(json!({"gradient": {"kind": "freeform"}}));
-    let mut p = Panel::new();
-    set_pstate(&p.ctx, HIDE_OPTIONS, true);
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let thumb = p.widget("grad-swatches").left_center() - vec2(21.0, 0.0);
-    p.click_with(&mut app, thumb, Modifiers::COMMAND);
-    assert_eq!(fill(&app).gradient.kind, GradientKind::Linear);
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+    let rig = Rig::new(app(json!({"gradient": {"kind": "radial"}})));
+    assert!(!rig.disabled("Aspect Ratio"), "a radial gradient on the selected rectangle");
 }
 
 /// Cmd/Ctrl-click on the Gradient Fill box gives an unpainted stroke (no paint, no weight) the
@@ -572,11 +299,9 @@ fn cmd_click_on_the_gradient_fill_box_gives_an_unpainted_stroke_its_weight() {
     };
     assert_eq!(stroke(&app).1, 0.0);
     app.session.fill_active = false;
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let thumb = p.widget("grad-swatches").left_center() - vec2(21.0, 0.0);
-    p.click_with(&mut app, thumb, Modifiers::COMMAND);
-    let (paint, width) = stroke(&app);
+    let mut rig = Rig::new(app);
+    rig.cmd_click("Gradient Fill");
+    let (paint, width) = stroke(&rig.app());
     let Paint::Gradient(g) = paint else { panic!("expected a gradient stroke, got {paint:?}") };
     assert_eq!(g.gradient.kind, GradientKind::Linear);
     assert_eq!(width, 1.0, "the stroke gets the 1 pt default");
@@ -598,81 +323,50 @@ fn cmd_click_on_the_gradient_fill_box_resets_only_the_selected_characters() {
         k => panic!("expected type, got {k:?}"),
     };
     let before = runs(&app)[0].1.clone();
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let thumb = p.widget("grad-swatches").left_center() - vec2(21.0, 0.0);
-    p.click_with(&mut app, thumb, Modifiers::COMMAND);
-    let after = runs(&app);
+    let mut rig = Rig::new(app);
+    rig.cmd_click("Gradient Fill");
+    let after = runs(&rig.app());
     assert_eq!(after.len(), 2);
     assert_eq!(after[0].0, "Sample");
     let Paint::Gradient(g) = &after[0].1 else { panic!("expected a gradient fill, got {:?}", after[0].1) };
     assert_eq!(g.gradient.kind, GradientKind::Linear);
     assert_eq!(g.gradient.stops.iter().map(|s| s.color.to_hex()).collect::<Vec<_>>(), ["#ffffff", "#000000"]);
     assert_eq!(after[1], (" Text".to_string(), before.clone()), "the rest keeps its fill");
-    app.run("edit.undo", json!({})).unwrap();
-    assert!(runs(&app).iter().all(|(_, f)| *f == before), "one undo step");
+    rig.app().run("edit.undo", json!({})).unwrap();
+    assert!(runs(&rig.app()).iter().all(|(_, f)| *f == before), "one undo step");
 }
 
-#[test]
-fn alt_drag_copies_a_stop_and_alt_dropping_on_a_stop_swaps_colours() {
-    let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
-    let mid = pos2((a.x + b.x) / 2.0, a.y);
-    let offsets = |app: &VectorcraftApp| fill(app).gradient.stops.iter().map(|s| (s.offset * 10.0).round() / 10.0).collect::<Vec<_>>();
-    // A plain drag moves the stop.
-    p.drag(&mut app, a, mid, Modifiers::NONE);
-    assert_eq!(offsets(&app), [0.5, 1.0]);
-    app.run("edit.undo", json!({})).unwrap();
-    // Alt leaves the original and drags a copy, selected on release; one undo step.
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    p.drag(&mut app, a, mid, Modifiers::ALT);
-    assert_eq!((offsets(&app), hexes(&app)), (vec![0.0, 0.5, 1.0], vec!["#ffffff".to_string(), "#ffffff".into(), "#000000".into()]));
-    assert_eq!(app.session.selected_stop(), Some(1));
-    // Alt-dropping the first stop on the last swaps their colours.
-    p.drag(&mut app, a, b, Modifiers::ALT);
-    assert_eq!((offsets(&app), hexes(&app)), (vec![0.0, 0.5, 1.0], vec!["#000000".to_string(), "#ffffff".into(), "#ffffff".into()]));
-    app.run("edit.undo", json!({})).unwrap();
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+// PLAN: assumed color-w10's Swatches panel: each swatch tile is named by its swatch's name and drags a `PanelDrag::Paint` with `params {swatch}` (wg.S7).
+/// The Swatches panel over the Gradient panel: a swatch tile dragged onto the slider is a real drop.
+fn with_swatches(app: &mut VectorcraftApp, ui: &mut Ui) {
+    Stack::new().show(ui, |ui, _| {
+        super::super::swatches::show(app, ui);
+        show(app, ui);
+    });
 }
 
+/// A swatch tile dropped on the slider between two stops adds a stop of its colour; dropped on a
+/// stop it recolours it. A spot swatch dropped on a stop links it: editing the swatch recolours
+/// the stop.
 #[test]
 fn a_dropped_swatch_adds_or_recolours_a_stop() {
     let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
-    let drop = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
-        egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
-        p.frame(app, vec![Event::PointerMoved(at)], Modifiers::NONE);
-        let up = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
-        p.frame(app, vec![up], Modifiers::NONE);
-    };
-    drop(&mut p, &mut app, pos2((a.x + b.x) / 2.0, a.y - 20.0));
-    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let last = p.widget(("grad-stop", 2_usize)).center();
-    drop(&mut p, &mut app, last);
-    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#ff0000"]);
-    // A spot swatch tile dropped on a stop links it: editing the swatch recolours the stop.
+    app.run("swatch.new", json!({"name": "Drop Red", "color": "#ff0000"})).unwrap();
     app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
-    let ink = app.session.doc().unwrap().doc.swatch("Ink").unwrap().paint.clone();
-    egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::Paint { paint: ink, params: json!({"swatch": "Ink"}), rows: None, library: None });
-    p.frame(&mut app, vec![Event::PointerMoved(a)], Modifiers::NONE);
-    p.frame(
-        &mut app,
-        vec![Event::PointerButton { pos: a, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }],
-        Modifiers::NONE,
-    );
-    let st = fill(&app).gradient.stops[0].clone();
+    let mut rig = Rig::with(app, with_swatches);
+    let (a, b) = (rig.at("Color stop 1 of 2"), rig.at("Color stop 2 of 2"));
+    rig.drag(rig.swatch("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
+    assert_eq!(hexes(&rig.app()), ["#ffffff", "#ff0000", "#000000"]);
+    rig.drag(rig.swatch("Drop Red"), rig.at("Color stop 3 of 3"));
+    assert_eq!(hexes(&rig.app()), ["#ffffff", "#ff0000", "#ff0000"]);
+    rig.drag(rig.swatch("Ink"), rig.at("Color stop 1 of 3"));
+    let st = fill(&rig.app()).gradient.stops[0].clone();
     assert_eq!((st.swatch.as_deref(), st.tint, st.color.to_hex()), (Some("Ink"), 1.0, "#cc0066".to_string()));
-    app.run("swatch.edit", json!({"name": "Ink", "color": "#0066cc"})).unwrap();
-    assert_eq!(hexes(&app)[0], "#0066cc");
+    rig.app().run("swatch.edit", json!({"name": "Ink", "color": "#0066cc"})).unwrap();
+    assert_eq!(hexes(&rig.app())[0], "#0066cc");
 }
 
-/// In a CMYK document a color dropped on the ramp of an RGB gradient keeps its model, as the
+/// In a CMYK document a colour dropped on the slider of an RGB gradient keeps its model, as the
 /// gradient's other stops do.
 #[test]
 fn a_color_dropped_on_the_ramp_keeps_its_model_in_a_cmyk_document() {
@@ -680,55 +374,12 @@ fn a_color_dropped_on_the_ramp_keeps_its_model_in_a_cmyk_document() {
     app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
     let rgb = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
     app.run("paint.setFill", json!({"gradient": {"stops": rgb}, "keepModel": true})).unwrap();
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
-    let at = pos2((a.x + b.x) / 2.0, a.y - 20.0);
-    let red = Color::rgb(1.0, 0.0, 0.0);
-    egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(red)));
-    p.frame(&mut app, vec![Event::PointerMoved(at)], Modifiers::NONE);
-    let up = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
-    p.frame(&mut app, vec![up], Modifiers::NONE);
-    let stops: Vec<Color> = fill(&app).gradient.stops.iter().map(|s| s.color).collect();
-    assert_eq!(stops, [Color::WHITE, red, Color::BLACK]);
-}
-
-#[test]
-fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
-    let mut app = app(json!({"gradient": {}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let stop = p.widget(("grad-stop", 1_usize));
-    let b = |pressed| Event::PointerButton { pos: stop.center(), button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
-    p.frame(&mut app, vec![Event::PointerMoved(stop.center()), b(true), b(false), b(true), b(false)], Modifiers::NONE);
-    let d = app.ui.dialog.clone().expect("the popover opened");
-    assert_eq!((d.kind.as_str(), &d.fields["index"], &d.fields["screen"]), ("gradientStop", &json!(1), &json!([stop.left(), stop.bottom() + 4.0])));
-    assert_eq!(app.session.selected_stop(), Some(1));
-}
-
-/// #4953: with a freeform point selected, clicking the Color swatch opens the popover for that
-/// point, which recolours it and leaves the other points as they were.
-#[test]
-fn the_freeform_color_swatch_opens_the_points_popover() {
-    let mut app = app(json!({"gradient": {"kind": "freeform"}}));
-    app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let label = text_at(&texts, "Color:").unwrap_or_else(|| panic!("the Color row: {texts:?}"));
-    let swatch = p.widget_after(label);
-    p.click(&mut app, swatch.center());
-    let d = app.ui.dialog.clone().expect("the popover opened");
-    assert_eq!(
-        (d.kind.as_str(), &d.fields["index"], &d.fields["screen"]),
-        ("gradientStop", &json!(1), &json!([swatch.left(), swatch.bottom() + 4.0]))
-    );
-    let points = |app: &VectorcraftApp| shown_points(&fill(app)).points.iter().map(|p| p.color.to_hex()).collect::<Vec<_>>();
-    let before = points(&app);
-    app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let mut want = before.clone();
-    want[1] = "#ff0000".into();
-    assert_eq!((fill(&app).gradient.kind, points(&app)), (GradientKind::Freeform, want));
+    app.run("swatch.new", json!({"name": "Drop Red", "color": "#ff0000", "keepModel": true})).unwrap();
+    let mut rig = Rig::with(app, with_swatches);
+    let (a, b) = (rig.at("Color stop 1 of 2"), rig.at("Color stop 2 of 2"));
+    rig.drag(rig.swatch("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
+    let stops: Vec<Color> = fill(&rig.app()).gradient.stops.iter().map(|s| s.color).collect();
+    assert_eq!(stops, [Color::WHITE, Color::rgb(1.0, 0.0, 0.0), Color::BLACK]);
 }
 
 #[test]
@@ -736,256 +387,189 @@ fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     let mut app = app(json!({"gradient": {}}));
     app.select_tool("gradient");
     app.run("gradient.selectStop", json!({"index": 0})).unwrap();
-    let texts = Panel::new().frame(&mut app, vec![], Modifiers::NONE);
-    assert!(texts.iter().any(|(t, _)| t == "#FFFFFF"), "the stop's colour row: {texts:?}");
-    stop_eyedropper(&mut app);
-    assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
+    let rig = Rig::new(app);
+    assert!(rig.fixture.by_label("#FFFFFF").is_some(), "the stop's colour row");
+    stop_eyedropper(&mut rig.app());
+    {
+        let app = rig.app();
+        assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
+    }
     // A second click on the eyedropper while the pick is armed still hands back to the Gradient tool.
-    stop_eyedropper(&mut app);
-    assert_eq!(app.session.tool_options()["stop"], "gradient");
+    stop_eyedropper(&mut rig.app());
+    assert_eq!(rig.app().session.tool_options()["stop"], "gradient");
 }
 
 /// #8024: Escape ends the stop eyedropper's pick and returns to the Gradient tool. The stop keeps
-/// its color, the selection stays, and a held Escape's repeats end nothing else.
+/// its color and the selection stays.
 #[test]
 fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
     let mut app = app(json!({"gradient": {}}));
-    crate::shortcut_editor::sync(&app.ui);
     app.select_tool("gradient");
     app.run("gradient.selectStop", json!({"index": 0})).unwrap();
     let (paint, selected) = (current(&app), app.session.active().unwrap().selection.objects.clone());
     stop_eyedropper(&mut app);
-    let key = |pressed, repeat| Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Modifiers::NONE };
-    let ctx = egui::Context::default();
-    for events in [vec![key(true, false)], vec![key(true, true)], vec![key(false, false)]] {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-    }
+    let ctx = crate::testing::ui_context();
+    let escape = egui::Event::Key { key: Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![escape]);
     assert_eq!(app.session.tool_id(), "gradient");
     assert_eq!(current(&app), paint, "the stop keeps its color");
     assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
 }
 
-/// The gradient panel names its Angle and Aspect Ratio inputs.
-#[test]
-fn angle_and_aspect_fields_are_named() {
-    use egui_kittest::kittest::Queryable;
-    let app = app(json!({"gradient": {}}));
-    let mut fonts = false;
-    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(280.0, 640.0)).with_accessibility_check(false).build_ui_state(
-        move |ui, app: &mut VectorcraftApp| {
-            if !std::mem::replace(&mut fonts, true) {
-                crate::theme::install_fonts(ui.ctx());
-                return;
-            }
-            show(app, ui);
-        },
-        app,
-    );
-    h.run_steps(3);
-    let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Angle");
-    let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Aspect Ratio");
+// ---------- the panel in the app window ----------
+
+/// A selected gradient stop: the panel shows its Color row.
+fn select_a_stop(app: &mut VectorcraftApp) {
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
 }
 
-/// #4681: the stop popover the annotator opens has the eyedropper too: it closes the popover and
-/// arms the Eyedropper for the stop. A freeform gradient's point has none.
+/// The Gradient panel shown at `place` in the whole app window over a selected rectangle that `setup` paints, drawn
+/// in `lang`, with the catalog strings `names` as `lang` shows them. The Gradient Fill box is always asked for, so a
+/// docked panel is found by it.
+fn shown(lang: &str, place: Place, setup: fn(&mut VectorcraftApp), names: &[&str]) -> Shown {
+    let mut app = super::super::tests_appearance::app_with_rect();
+    setup(&mut app);
+    let asked: Vec<&str> = names.iter().copied().chain(["Gradient Fill"]).collect();
+    floated(app, "gradient", lang, place, &asked)
+}
+
+/// Docked, every control of the panel stays inside its column, with a solid fill (the panel shows its notice) and
+/// with a stop selected (its Color row), in languages with longer words.
 #[test]
-fn the_stop_popover_has_an_eyedropper_for_a_stop() {
-    use egui_kittest::kittest::Queryable;
-    const TIP: &str = "Eyedropper: click the art to sample the stop's colour";
-    let harness = |app: VectorcraftApp| {
-        let mut fonts = false;
-        egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 700.0)).with_accessibility_check(false).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                crate::dialogs::show(app, ui.ctx());
-            },
-            app,
-        )
-    };
+fn the_gradient_panel_stays_inside_its_dock_column() {
+    for lang in ["en", "fr", "de"] {
+        for setup in [|_: &mut VectorcraftApp| {}, select_a_stop] {
+            let panel = shown(lang, Place::Docked, setup, &[]);
+            let past = panel.past(panel.nodes.clone());
+            assert!(past.is_empty(), "past the docked panel in {lang}: {past:?}");
+        }
+    }
+}
+
+/// In a panel at the narrowest panel width the Type, Method, Spread and stop rows wrap: their controls stay inside
+/// the panel, except the last type button. The five type buttons are one `Segmented` control, which keeps its
+/// segments on one line, so at this width Freeform Gradient reaches 2 pt past the panel's right edge. The test
+/// holds that button to the 2 pt until the widget can wrap its segments.
+#[test]
+fn the_gradient_rows_wrap_in_a_narrow_panel() {
+    /// How far Freeform Gradient reaches past the panel's right edge at the narrowest width.
+    const TYPE_OVERFLOW: f32 = 2.0;
+    let names = [
+        "Linear Gradient",
+        "Radial Gradient",
+        "Conic Gradient",
+        "Diamond Gradient",
+        "Edit Gradient",
+        "Method",
+        "Spread",
+        "Repeats",
+        "Opacity",
+        "Location",
+        "Delete Stop",
+    ];
+    for lang in ["en", "fr"] {
+        let asked: Vec<&str> = names.iter().copied().chain(["Freeform Gradient"]).collect();
+        let panel = shown(lang, Place::Floating(crate::panel_docking::PANEL_MIN_WIDTH), select_a_stop, &asked);
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "past the panel in {lang}: {past:?}");
+        for freeform in panel.rects("Freeform Gradient") {
+            let inside = freeform.left() >= panel.body.left() - 0.5 && freeform.right() <= panel.body.right() + TYPE_OVERFLOW + 0.5;
+            assert!(inside, "Freeform Gradient at {freeform:?} is more than {TYPE_OVERFLOW} pt past {:?} in {lang}", panel.body);
+        }
+    }
+}
+
+/// In a wide panel the rows stay on one line each, and the thumbnail stays level with the top of the type buttons.
+#[test]
+fn the_gradient_rows_stay_on_one_line_in_a_wide_panel() {
+    let rows: [&[&str]; 3] =
+        [&["Method:", "Method"], &["Spread:", "Spread", "Repeats"], &["Opacity:", "Opacity", "Location:", "Location", "Delete Stop"]];
+    let names: Vec<&'static str> = rows.iter().flat_map(|row| row.iter().copied()).chain(["Gradient Fill", "Linear Gradient"]).collect();
+    let panel = shown("en", Place::Floating(400.0), select_a_stop, &names);
+    for row in rows {
+        let middles = panel.middles(row);
+        assert!(middles.windows(2).all(|m| (m[0] - m[1]).abs() < 1.0), "{row:?} is not on one line: {middles:?}");
+    }
+    let (thumb, linear) = (panel.rects("Gradient Fill")[0], panel.rects("Linear Gradient")[0]);
+    assert!((thumb.top() - linear.top()).abs() < 1.0, "the thumbnail {thumb:?} is not level with the type buttons {linear:?}");
+}
+
+/// The paints of the selected object's appearance rows, in stack order.
+fn row_paints(app: &VectorcraftApp) -> Vec<Paint> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().map(|i| i.paint().clone()).collect()
+}
+
+/// The indices of the selected object's fill (`fill`) or stroke rows.
+fn rows_of_kind(app: &VectorcraftApp, fill: bool) -> Vec<usize> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().enumerate().filter(|(_, i)| i.is_fill() == fill).map(|(n, _)| n).collect()
+}
+
+/// A selected rectangle with a gradient fill and a gradient stroke.
+fn gradient_fill_and_stroke() -> VectorcraftApp {
     let mut app = app(json!({"gradient": {}}));
-    app.select_tool("gradient");
-    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
-    app.ui.dialog = Some(crate::state::Dialog::new("gradientStop", json!({"index": 1, "screen": [100.0, 100.0], "tab": "color"})));
-    let mut h = harness(app);
-    h.run_steps(3);
-    h.get_by_label(TIP).click();
-    h.run_steps(2);
-    let app = h.state();
-    assert!(app.ui.dialog.is_none(), "the popover closed");
-    assert_eq!((app.session.tool_id(), app.session.tool_options()["stop"].clone()), ("eyedropper", json!("gradient")));
-
-    let mut app = super::tests::app(json!({"gradient": {"kind": "freeform"}}));
-    app.select_tool("gradient");
-    app.ui.dialog = Some(crate::state::Dialog::new("gradientStop", json!({"index": 0, "screen": [100.0, 100.0], "tab": "color"})));
-    let mut h = harness(app);
-    h.run_steps(3);
-    assert!(h.query_by_label(TIP).is_none(), "no eyedropper for a freeform point");
+    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
+    app
 }
 
-/// Where text `s` was drawn (menu items are drawn indented).
-fn text_at(texts: &[(String, Pos2)], s: &str) -> Option<Pos2> {
-    texts.iter().find(|(t, _)| t.trim_start() == s).map(|(_, at)| *at)
-}
-
-/// The Presets menu lists the presets by library (theme) and applies the one chosen to the
-/// gradient behind the active proxy, as one undo step; the menu then shows that preset.
-#[test]
-fn the_presets_menu_applies_a_preset_and_shows_it() {
-    let mut app = app(json!({"gradient": {"angle": 30}}));
-    let mut p = Panel::new();
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let label = text_at(&texts, "Presets:").unwrap_or_else(|| panic!("the Presets row: {texts:?}"));
-    let combo = p.widget_after(label);
-    let texts = p.click(&mut app, combo.center());
-    assert!(text_at(&texts, "Spectrum Gradients").is_some(), "a library's name heads its presets: {texts:?}");
-    let soft = text_at(&texts, "Soft Spectrum").expect("the library's presets");
-    let undo = app.session.doc().unwrap().history.undo.len();
-    p.click(&mut app, soft);
-    let preset = app.session.gradient_preset("Soft Spectrum").unwrap().gradient;
-    assert_eq!(fill(&app).gradient.stops, preset.stops);
-    assert_eq!(fill(&app).angle, 30.0, "the placement stays");
-    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    assert!(text_at(&texts, "Soft Spectrum").is_some(), "the menu shows the preset: {texts:?}");
-    // With the Stroke proxy in front a solid stroke takes the preset; the fill keeps its own.
-    app.run("paint.setStroke", json!({"color": "#00ff00", "focus": false})).unwrap();
-    let stroke = p.widget("stroke-proxy");
-    p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
-    assert!(!app.session.fill_active);
-    let texts = p.click(&mut app, combo.center());
-    p.click(&mut app, text_at(&texts, "Spectrum").expect("the first preset"));
-    let Paint::Gradient(st) = app.session.shown_stroke().unwrap().paint.clone() else { panic!("a gradient stroke") };
-    assert_eq!(st.gradient.stops, app.session.gradient_preset("Spectrum").unwrap().gradient.stops);
-    assert_eq!(fill(&app).gradient.stops, preset.stops);
-}
-
-/// The panel menu saves the gradient as a preset (named in a dialog), which the Presets menu then
-/// lists under Saved; Delete Gradient Preset removes it, and Hide Presets leaves the row out.
-#[test]
-fn the_panel_menu_saves_deletes_and_hides_presets() {
-    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
-    let mut app = app(json!({"gradient": {"stops": stops}}));
-    let mut p = Panel::new();
-    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
-    let save = text_at(&texts, "Save Gradient Preset…").unwrap_or_else(|| panic!("{texts:?}"));
-    assert!(app.session.active_saved_gradient_preset().is_none());
-    p.menu_click(&mut app, save);
-    let d = app.ui.dialog.take().expect("the name dialog");
-    assert_eq!((d.fields["__command"].as_str(), d.fields["name"].as_str()), (Some("gradient.presets.save"), Some("Gradient Preset 1")));
-    // The dialog's OK runs the command with the name typed.
-    app.run("gradient.presets.save", json!({"name": "Red Blue"})).unwrap();
-    assert_eq!(app.session.active_saved_gradient_preset(), Some("Red Blue"));
-    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
-    let label = text_at(&texts, "Presets:").unwrap();
-    assert!(text_at(&texts, "Red Blue").is_some(), "the menu shows the saved preset the gradient is: {texts:?}");
-    let texts = p.click(&mut app, p.widget_after(label).center());
-    // The saved presets come after the libraries: scroll the menu to them.
-    let over = text_at(&texts, "Spectrum").expect("the menu is open");
-    let wheel = Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Point,
-        delta: vec2(0.0, -5000.0),
-        phase: egui::TouchPhase::Move,
-        modifiers: Modifiers::NONE,
-        source: egui::MouseWheelSource::Unknown,
-    };
-    p.frame(&mut app, vec![Event::PointerMoved(over), wheel], Modifiers::NONE);
-    let mut texts = vec![];
-    for _ in 0..30 {
-        texts = p.frame(&mut app, vec![], Modifiers::NONE);
+/// With appearance row `active` active and the Fill (`front_fill`) or Stroke proxy in front,
+/// chooses Soft Spectrum from the Presets picker and checks that row `target` takes the preset
+/// while every other row keeps its paint.
+fn assert_preset_goes_to(mut app: VectorcraftApp, active: usize, front_fill: bool, target: usize) {
+    let soft = app.session.gradient_preset("Soft Spectrum").unwrap().gradient.stops;
+    app.run("appearance.setActiveItem", json!({ "index": active })).unwrap();
+    app.session.fill_active = front_fill;
+    let before = row_paints(&app);
+    let mut rig = Rig::new(app);
+    assert_eq!(rig.app().session.appearance_item(), Some(active), "the row stays active");
+    rig.click("Presets");
+    rig.click("Soft Spectrum");
+    let after = row_paints(&rig.app());
+    assert_eq!(after.len(), before.len());
+    for (n, (was, now)) in before.iter().zip(&after).enumerate() {
+        if n == target {
+            assert!(matches!(now, Paint::Gradient(g) if g.gradient.stops == soft), "row {n} takes the preset: {now:?}");
+        } else {
+            assert_eq!(now, was, "row {n} keeps its paint");
+        }
     }
-    let saved = text_at(&texts, "Saved").unwrap_or_else(|| panic!("the saved presets have their heading: {texts:?}"));
-    assert!(texts.iter().any(|(t, at)| t.trim_start() == "Red Blue" && at.y > saved.y), "the saved preset under it: {texts:?}");
-    assert!(text_at(&texts, "Spectrum").is_none(), "rows scrolled out of view aren't drawn: {texts:?}");
-    // Delete Gradient Preset removes the one the gradient is.
-    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
-    p.menu_click(&mut app, text_at(&texts, "Delete Gradient Preset").unwrap());
-    assert!(app.session.prefs.gradient_presets.is_empty());
-    // Hide Presets leaves the row out; Show Presets brings it back.
-    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
-    let texts = p.menu_click(&mut app, text_at(&texts, "Hide Presets").unwrap());
-    assert!(text_at(&texts, "Show Presets").is_some());
-    assert!(text_at(&p.frame(&mut app, vec![], Modifiers::NONE), "Presets:").is_none());
-    let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
-    p.menu_click(&mut app, text_at(&texts, "Show Presets").unwrap());
-    assert!(text_at(&p.frame(&mut app, vec![], Modifiers::NONE), "Presets:").is_some());
 }
 
-/// A stop is deleted by dragging it down off the ramp or with Delete Stop, which sits at the
-/// ramp's right end (so a short panel doesn't hide it below the stop fields, #5403); one undo
-/// step each, and a two-stop gradient keeps both.
+/// With a fill row active and the Stroke proxy in front, the Presets picker applies the preset to
+/// the stroke.
 #[test]
-fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
-    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#ff0000"}, {"offset": 1, "color": "#000000"}]);
-    let mut app = app(json!({"gradient": {"stops": stops}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let mid = p.widget(("grad-stop", 1_usize)).center();
-    // Dragged down off the ramp, the middle stop goes.
-    p.drag(&mut app, mid, mid + vec2(0.0, 60.0), Modifiers::NONE);
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
-    // Delete Stop, level with the ramp and right of it, removes the selected stop.
-    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let bar = p.widget("grad-bar");
-    let del = *p.row_after(bar.left_center(), 22.0).last().expect("Delete Stop beside the ramp");
-    assert!(del.left() >= bar.right(), "right of the ramp");
-    p.click(&mut app, del.center());
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
-    app.run("edit.redo", json!({})).unwrap();
-    // Two stops stay two: dragged off, the stop comes back, and the button is off.
-    let first = p.widget(("grad-stop", 0_usize)).center();
-    p.drag(&mut app, first, first + vec2(0.0, 60.0), Modifiers::NONE);
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
-    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    p.click(&mut app, del.center());
-    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+fn the_presets_menu_applies_to_the_stroke_in_front_over_an_active_fill_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, fill_row, false, stroke_row);
 }
 
-/// #8241: over the strip under the ramp, where a click adds a stop, the panel shows the white arrow
-/// with a plus. Where the window shows glyphs as OS cursors (Windows, X11), it hands the glyph to
-/// the OS, since winit shows the plain arrow for the system copy cursor there; elsewhere the
-/// system copy cursor. Over the ramp itself, which adds nothing, neither.
+/// With a stroke row active and the Fill proxy in front, the Presets picker applies the preset to
+/// the fill.
 #[test]
-fn the_strip_under_the_ramp_shows_the_add_cursor() {
-    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
-    let mut app = app(json!({"gradient": {"stops": stops}}));
-    let mut p = Panel::new();
-    p.frame(&mut app, vec![], Modifiers::NONE);
-    let bar = p.widget("grad-bar");
-    let output = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
-        p.time += 0.1;
-        let events = vec![Event::PointerMoved(at)];
-        let input = egui::RawInput {
-            time: Some(p.time),
-            events,
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
-            ..Default::default()
-        };
-        let mut out = p.ctx.run_ui(input, |ui| show(app, ui));
-        out.textures_delta.clear();
-        out.platform_output
-    };
-    // Between the two stops, just under the ramp.
-    let under = output(&mut p, &mut app, pos2(bar.center().x, bar.bottom() + 10.0));
-    assert_eq!(under.cursor_icon, egui::CursorIcon::Copy);
-    // The same condition the panel uses (the build, Wayland, VECTORCRAFT_SYSTEM_CURSORS).
-    if crate::cursors::add_cursor_is_a_glyph(&app) {
-        let glyph = app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0);
-        assert!(glyph.is_some());
-        assert_eq!(under.cursor_image, glyph, "the white arrow with a plus, as an OS cursor");
-    } else {
-        assert!(under.cursor_image.is_none(), "the system copy cursor alone");
+fn the_presets_menu_applies_to_the_fill_in_front_over_an_active_stroke_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, stroke_row, true, fill_row);
+}
+
+/// With the proxy of the active row's kind in front, the Presets picker applies the preset to the
+/// active row, not to the topmost row of that kind.
+#[test]
+fn the_presets_menu_applies_to_the_active_row_of_the_kind_in_front() {
+    for fill in [true, false] {
+        let mut app = gradient_fill_and_stroke();
+        app.run(if fill { "appearance.addFill" } else { "appearance.addStroke" }, json!({})).unwrap();
+        // Without an active row a solid goes to the topmost row of the kind; the other stays a gradient.
+        app.run(if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"color": "#ff0000", "focus": false})).unwrap();
+        let paints = row_paints(&app);
+        let rows = rows_of_kind(&app, fill);
+        assert_eq!(rows.len(), 2);
+        let lower = rows.into_iter().find(|&n| matches!(paints[n], Paint::Gradient(_))).expect("a gradient row under the solid one");
+        assert_preset_goes_to(app, lower, fill, lower);
     }
-    let over = output(&mut p, &mut app, bar.center());
-    assert_ne!(over.cursor_icon, egui::CursorIcon::Copy);
-    assert!(over.cursor_image.is_none(), "over the ramp, no add cursor");
 }

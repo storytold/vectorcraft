@@ -1,17 +1,19 @@
 //! Character Styles and Paragraph Styles panels (one implementation, two kinds).
 //!
-//! Click a style to apply it to the selected text (every frame of each selected threaded story) or
-//! the Type tool's selected characters; Alt-click applies it and clears overrides. Double-clicking a
-//! character style's row opens its Character Style Options (`ui.charStyleOptions`), as the panel
-//! menu does; a paragraph style's row opens its Paragraph Style Options (`ui.paraStyleOptions`).
-//! The style all of that text has is highlighted, with a "+" when some of the text overrides some
-//! of its attributes; text in several styles highlights none. New makes
-//! a style from the selected text; Alt-click on New first asks for its name (`ui.newCharStyle`,
-//! `ui.newParaStyle`).
+//! The framework's [`TextStylesPanel`] draws the list and footer and reports what the user asked for; this
+//! module runs it as commands on the document ([`run_action`]) and keeps what each panel highlights
+//! ([`StylesPanels`]). Alt on New first asks for the style's name (`ui.newCharStyle`, `ui.newParaStyle`).
 
 use std::cell::RefCell;
 
-use egui::{Color32, Sense, Ui, vec2};
+// PLAN: the framework import paths below are assumed from the crate names; adjust to the app's re-exports.
+use craft::behavior::Selection;
+use craft::host::{PickKind, PickRequest};
+use craft::text::ui::style_panel::{TextStyleAction, TextStyleKind, TextStyleRow, TextStylesPanel};
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::{fileio, textstyles};
@@ -19,10 +21,9 @@ use vectorcraft_engine::cmd::{fileio, textstyles};
 use super::character::{end_typing, shared, text_editing, text_style};
 use super::memo::Memo;
 use super::paragraph::shared_para;
-use super::{alt_held, pstate, selection_len, set_pstate};
+use super::selection_len;
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::file_asks::{self, Owner};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
@@ -38,67 +39,80 @@ impl Kind {
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
-    /// `what` in the UI language, for text shown to the user.
-    fn what_label(self) -> &'static str {
-        if self == Kind::Char { tl!("Character") } else { tl!("Paragraph") }
+    /// The framework panel's kind.
+    fn panel_kind(self) -> TextStyleKind {
+        if self == Kind::Char { TextStyleKind::Character } else { TextStyleKind::Paragraph }
     }
-    fn key(self) -> &'static str {
-        if self == Kind::Char { "char-style-sel" } else { "para-style-sel" }
+}
+
+/// What the two styles panels keep between frames.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct StylesPanels {
+    pub char: StylesPanel,
+    pub para: StylesPanel,
+    /// Pending new style highlights: document uid, paragraph-style flag, and name. Each document and style
+    /// kind has at most one pending highlight.
+    pub made: Vec<(u64, bool, String)>,
+}
+
+impl StylesPanels {
+    fn of(&mut self, kind: Kind) -> &mut StylesPanel {
+        if kind == Kind::Char { &mut self.char } else { &mut self.para }
     }
-    /// Panel state holding the styles highlighted together, with the style [`Kind::key`] held
-    /// when they were highlighted.
-    fn many_key(self) -> &'static str {
-        if self == Kind::Char { "char-style-many" } else { "para-style-many" }
-    }
-    /// Panel state holding the style a Shift-click extends the highlight from.
-    fn anchor_key(self) -> &'static str {
-        if self == Kind::Char { "char-style-anchor" } else { "para-style-anchor" }
-    }
+}
+
+/// One panel's highlight. Names are the stored form: row ids are list positions, rebuilt every pass.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct StylesPanel {
+    /// The uid of the document the highlight was made in.
+    document: Option<u64>,
+    /// Changes when the panel switches documents, so reopening a document cannot restore its old popup.
+    scope_generation: u64,
+    /// The highlighted styles, in the order they were picked.
+    highlight: Vec<String>,
+    /// The selection's lead style.
+    lead: Option<String>,
+    /// The style a Shift-click extends the highlight from.
+    anchor: Option<String>,
     /// The style row the panel scrolls into view the next time it draws.
-    fn scroll_key(self) -> &'static str {
-        if self == Kind::Char { "char-style-scroll" } else { "para-style-scroll" }
-    }
-    /// Panel state holding the `uid` of the document the highlight was made in.
-    fn document_key(self) -> &'static str {
-        if self == Kind::Char { "char-style-document" } else { "para-style-document" }
-    }
+    reveal: Option<String>,
 }
 
-/// The styles highlighted in the panel, in the order they were picked, among the styles `listed`:
-/// the styles a Shift-click, a Cmd/Ctrl-click or Select All Unused highlighted together while
-/// [`Kind::key`] still holds the style it held then, else the one style in [`Kind::key`].
-fn highlighted(app: &VectorcraftApp, ctx: &egui::Context, kind: Kind, listed: &[&str]) -> Vec<String> {
+/// The styles highlighted in the panel, in the order they were picked, among the styles `listed`; a
+/// highlight made in another document is dropped. A highlight made before the panel first read one (an
+/// action from the panel menu before the list drew) is the active document's.
+fn highlighted(app: &mut VectorcraftApp, kind: Kind, listed: &[&str]) -> Vec<String> {
     let document = app.session.active().map(|st| st.uid);
-    if pstate::<Option<u64>>(ctx, kind.document_key()) != document {
-        set_pstate(ctx, kind.document_key(), document);
-        set_highlighted(ctx, kind, vec![]);
-        set_pstate(ctx, kind.anchor_key(), String::new());
-        set_pstate::<Option<String>>(ctx, kind.scroll_key(), None);
+    let panel = app.ui.text_styles.of(kind);
+    if panel.document.is_some_and(|made| Some(made) != document) {
+        *panel = StylesPanel { scope_generation: panel.scope_generation.wrapping_add(1), ..StylesPanel::default() };
     }
-    let one: Option<String> = pstate(ctx, kind.key());
-    let (with, many): (Option<String>, Vec<String>) = pstate(ctx, kind.many_key());
-    let mut names = if with == one && !many.is_empty() { many } else { one.into_iter().collect() };
-    names.retain(|n| listed.contains(&n.as_str()));
-    names
+    panel.document = document;
+    panel.highlight.retain(|n| listed.contains(&n.as_str()));
+    panel.highlight.clone()
 }
 
-/// Highlights `names` in the panel: [`Kind::key`] holds the first of them.
-fn set_highlighted(ctx: &egui::Context, kind: Kind, names: Vec<String>) {
-    let one = names.first().cloned();
-    set_pstate(ctx, kind.key(), one.clone());
-    set_pstate(ctx, kind.many_key(), (one, names));
+/// Highlights `names` in the panel; the first of them leads.
+fn set_highlighted(app: &mut VectorcraftApp, kind: Kind, names: Vec<String>) {
+    let panel = app.ui.text_styles.of(kind);
+    panel.lead = names.first().cloned();
+    panel.anchor = panel.lead.clone();
+    panel.highlight = names;
 }
 
-/// Highlights the styles the panel just made and scrolls the first one's row into view the next
-/// time it draws.
-fn highlight_made(ctx: &egui::Context, kind: Kind, names: Vec<String>) {
-    set_pstate(ctx, kind.scroll_key(), names.first().cloned());
-    set_highlighted(ctx, kind, names);
+/// Highlights the styles the panel just made and scrolls the first one's row into view.
+fn highlight_made(app: &mut VectorcraftApp, kind: Kind, names: Vec<String>) {
+    let first = names.first().cloned();
+    set_highlighted(app, kind, names);
+    app.ui.text_styles.of(kind).reveal = first;
 }
 
 /// Duplicates the styles `names` (`charStyle.duplicate`, `paraStyle.duplicate`) in one undo step
-/// and highlights the copies.
-fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &[String]) {
+/// and highlights the copies; none runs nothing.
+fn duplicate(app: &mut VectorcraftApp, kind: Kind, names: &[String]) {
+    if names.is_empty() {
+        return;
+    }
     let p = kind.prefix();
     let made = if let [name] = names {
         app.run(&format!("{p}.duplicate"), json!({ "name": name })).map(|r| vec![r])
@@ -108,36 +122,8 @@ fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &
         app.run("command.batch", json!({ "label": label, "commands": commands })).map(|r| r["results"].as_array().cloned().unwrap_or_default())
     };
     if let Ok(made) = made {
-        highlight_made(ctx, kind, made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect());
+        highlight_made(app, kind, made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect());
     }
-}
-
-/// A row dragged in the list: the style's kind and name. Dropped on Create New Style it is
-/// duplicated (`charStyle.duplicate`, `paraStyle.duplicate`); dropped on Delete it is deleted
-/// (`charStyle.delete`, `paraStyle.delete`) unless it is Normal. A highlighted row carries every
-/// highlighted style with it. Each panel's buttons accept only rows of their own kind.
-#[derive(Clone)]
-struct RowDrag {
-    kind: Kind,
-    name: String,
-}
-
-/// The styles a row dragged from the list carries: every highlighted style (`sel`) in the order
-/// the panel lists them when the row is one of them, else the row's style alone.
-fn dragged(sel: &[String], listed: &[&str], name: &str) -> Vec<String> {
-    if sel.iter().any(|s| s == name) {
-        listed.iter().filter(|n| sel.iter().any(|s| s == *n)).map(|n| n.to_string()).collect()
-    } else {
-        vec![name.to_string()]
-    }
-}
-
-/// The style row of `kind` released on `button` this frame, if any; `button` is outlined while one
-/// is held over it. `take`: whether a row with that name may be dropped there.
-fn row_dropped(ui: &Ui, button: &egui::Response, kind: Kind, take: impl Fn(&str) -> bool) -> Option<String> {
-    let held = button.dnd_hover_payload::<RowDrag>().filter(|d| d.kind == kind && take(&d.name))?;
-    ui.painter().rect_stroke(button.rect, 3.0, egui::Stroke::new(1.5, Tokens::get(ui.ctx()).accent), egui::StrokeKind::Inside);
-    button.dnd_release_payload::<RowDrag>().map(|_| held.name.clone())
 }
 
 /// (name, attrs, uses) for every style, Normal first, listed once per document version.
@@ -234,19 +220,6 @@ pub(crate) fn open_new(app: &mut VectorcraftApp, kind: Kind) -> Result<Value, St
     crate::dialogs::new_text_style::open(app, kind == Kind::Para, t)
 }
 
-/// A style row's fill, and whether it gets an accent outline: the current style's row is filled
-/// with `row_selected` and outlined when it is also highlighted, so Cmd/Ctrl-clicking it shows.
-fn row_look(is_cur: bool, in_highlight: bool, hovered: bool, t: &Tokens) -> (Option<Color32>, bool) {
-    let fill = if is_cur {
-        Some(t.row_selected)
-    } else if in_highlight || hovered {
-        Some(t.hover)
-    } else {
-        None
-    };
-    (fill, is_cur && in_highlight)
-}
-
 /// Opens `name`'s options: Character Style Options for a character style, Paragraph Style Options
 /// for a paragraph style.
 fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
@@ -254,204 +227,163 @@ fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
     app.run(command, json!({ "name": name })).ok();
 }
 
-/// The style list and its New and Delete buttons. Shift-click highlights every style from the
-/// last one clicked without Shift through this one, and Cmd/Ctrl-click adds or removes one; both
-/// leave the text as it is. Delete deletes every highlighted style but the Normal style.
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
-    let t = Tokens::get(ui.ctx());
-    let all = styles(app, kind);
-    let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
-    let cur_name = current(app, kind).map(|n| n.unwrap_or_else(|| normal.clone()));
-    let mut clicked: Option<(String, egui::Modifiers)> = None;
-    // A double-clicked style's row, whose options open after the list is laid out.
-    let mut options: Option<String> = None;
-    // Set on a double-click's second click, which must not apply the style again.
-    let mut double_click = false;
-    let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
-    // A highlighted style that is no longer listed (renamed in Style Options, deleted by a command
-    // or undone) is no longer highlighted.
-    let mut sel = highlighted(app, ui.ctx(), kind, &listed);
-    // A style made by the New style dialog waits for this kind's panel on its own document.
-    app.ui.made_text_style.retain(|(uid, _, _)| app.session.documents().iter().any(|doc| doc.uid == *uid));
-    if let Some(index) = app
+/// Takes the style a New style dialog made for this kind's panel on its own document, and drops the entries of
+/// documents that have closed.
+fn take_made(app: &mut VectorcraftApp, kind: Kind) -> Option<String> {
+    app.ui.text_styles.made.retain(|(uid, _, _)| app.session.documents().iter().any(|doc| doc.uid == *uid));
+    let index = app
         .ui
-        .made_text_style
+        .text_styles
+        .made
         .iter()
-        .position(|(uid, para, _)| *para == (kind == Kind::Para) && app.session.active().is_some_and(|doc| doc.uid == *uid))
-    {
-        let (_, _, name) = app.ui.made_text_style.remove(index);
-        highlight_made(ui.ctx(), kind, vec![name]);
-        sel = highlighted(app, ui.ctx(), kind, &listed);
-    }
-    let scroll_to: Option<String> = pstate(ui.ctx(), kind.scroll_key());
-    widgets::list_box(ui, |ui| {
-        for (name, attrs, _) in &all {
-            let is_cur = cur_name.as_deref() == Some(name.as_str());
-            // Overrides: an attribute the style sets that some of the text doesn't match.
-            let overridden = is_cur && has_overrides(app, kind, attrs);
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-            if resp.drag_started_by(egui::PointerButton::Primary) {
-                egui::DragAndDrop::set_payload(ui.ctx(), RowDrag { kind, name: name.clone() });
-            }
-            if scroll_to.as_deref() == Some(name.as_str()) {
-                ui.scroll_to_rect(r, None);
-            }
-            let (fill, outline) = row_look(is_cur, sel.contains(name), resp.hovered(), &t);
-            if let Some(fill) = fill {
-                ui.painter().rect_filled(r, 0.0, fill);
-            }
-            if outline {
-                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
-            }
-            // The built-in "[Normal … Style]" (listed first) is translated where painted; other names
-            // are user data, brackets or not.
-            let shown = super::label_or_name(name, *name == normal);
-            let label = if overridden { format!("{shown}+") } else { shown.to_string() };
-            ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
-            if resp.clicked() {
-                clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
-            }
-            // A double-click on a user style opens its Character or Paragraph Style Options, as the
-            // panel menu's item does; with Shift, Cmd/Ctrl or Alt held it only follows the click
-            // rules. The second click never applies the style again, also on the Normal style,
-            // which has no options to open.
-            if resp.double_clicked() {
-                double_click = true;
-                let m = ui.input(|i| i.modifiers);
-                if *name != normal && !(m.shift || m.command || m.alt) {
-                    options = Some(name.clone());
-                }
-            }
-        }
-    });
-    if scroll_to.is_some() {
-        set_pstate::<Option<String>>(ui.ctx(), kind.scroll_key(), None);
-    }
-    let has_text = text_style(app).is_some();
-    if let Some((name, m)) = clicked {
-        sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
-        // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel. The second
-        // click of a double-click opens the options instead of applying the style again.
-        if has_text && !(m.shift || m.command) && options.is_none() && !double_click {
-            let p = apply_target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
-            app.run(&format!("{}.apply", kind.prefix()), p).ok();
-        }
-    }
-    if let Some(name) = options {
-        open_style_options(app, kind, &name);
-    }
-    set_highlighted(ui.ctx(), kind, sel.clone());
-    let doomed: Vec<&String> = sel.iter().filter(|s| **s != normal).collect();
-    let deletable = !doomed.is_empty();
-    widgets::bottom_bar(ui, |ui| {
-        ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        let new = widgets::icon_button_enabled(
-            ui,
-            "dc-new-item",
-            &crate::i18n::fmt(tl!("Create New {kind} Style"), &[("kind", kind.what_label())]),
-            false,
-            true,
-            24.0,
-        );
-        if let Some(name) = row_dropped(ui, &new, kind, |_| true) {
-            duplicate(app, ui.ctx(), kind, &dragged(&sel, &listed, &name));
-        } else if new.clicked() {
-            end_typing(app);
-            if alt_held(ui) {
-                app.run(if kind == Kind::Char { "ui.newCharStyle" } else { "ui.newParaStyle" }, json!({})).ok();
-            } else if let Ok(r) = app.run(&format!("{}.new", kind.prefix()), target(app, kind, json!({}))) {
-                highlight_made(ui.ctx(), kind, r["name"].as_str().map(str::to_string).into_iter().collect());
-            }
-        }
-        let delete = widgets::icon_button_enabled(
-            ui,
-            "trash-2",
-            &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]),
-            false,
-            deletable,
-            24.0,
-        );
-        let drop_names = |n: &str| dragged(&sel, &listed, n).into_iter().filter(|s| *s != normal).collect::<Vec<_>>();
-        if let Some(name) = row_dropped(ui, &delete, kind, |n| !drop_names(n).is_empty()) {
-            // Deleting the highlighted styles clears the highlight; a row dropped from outside it
-            // leaves it as it is.
-            if app.run(&format!("{}.delete", kind.prefix()), json!({ "names": drop_names(&name) })).is_ok() && sel.contains(&name) {
-                set_highlighted(ui.ctx(), kind, vec![]);
-            }
-        } else if delete.clicked() && app.run(&format!("{}.delete", kind.prefix()), json!({ "names": doomed })).is_ok() {
-            set_highlighted(ui.ctx(), kind, vec![]);
-        }
-    });
+        .position(|(uid, para, _)| *para == (kind == Kind::Para) && app.session.active().is_some_and(|doc| doc.uid == *uid))?;
+    Some(app.ui.text_styles.made.remove(index).2)
 }
 
-/// The panel menu. Select All Unused highlights the styles no text uses (`charStyle.unused`,
-/// `paraStyle.unused`), Duplicate copies every highlighted style and highlights the copies, and
-/// Delete deletes every highlighted style but the Normal style. Load Character Styles… (Load
-/// Paragraph Styles…) and Load All Styles… add the styles of a document picked in an open dialog
-/// ([`load`]); they are off without an open document or an open dialog.
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
+/// The style list and its footer: the framework panel over this document's styles. Shift-click and Cmd/Ctrl-click
+/// highlight several styles without touching the text; the footer's Delete deletes every highlighted style but
+/// the Normal style.
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let all = styles(app, kind);
     let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
-    let many = highlighted(app, ui.ctx(), kind, &listed);
-    // The items for one style act on the highlighted style while it is the only one.
-    let sel: Option<String> = if many.len() == 1 { many.first().cloned() } else { None };
-    let normal = if kind == Kind::Char { "[Normal Character Style]" } else { "[Normal Paragraph Style]" };
-    let user = sel.as_ref().is_some_and(|s| s != normal);
-    let doomed: Vec<&String> = many.iter().filter(|s| *s != normal).collect();
-    let has_text = text_style(app).is_some() || selection_len(app) > 0;
+    let id_of = |name: &str| listed.iter().position(|n| *n == name).map(|i| i as u64);
+    // Drops a highlight made in another document before the made style replaces it.
+    highlighted(app, kind, &listed);
+    if let Some(name) = take_made(app, kind) {
+        highlight_made(app, kind, vec![name]);
+    }
+    let names = highlighted(app, kind, &listed);
+    let panel = app.ui.text_styles.of(kind);
+    let (lead, anchor, reveal) = (panel.lead.clone(), panel.anchor.clone(), panel.reveal.take());
+    let scope = (panel.document, panel.scope_generation);
+    let mut sel = Selection::new(names.iter().filter_map(|n| id_of(n)).collect(), lead.as_deref().and_then(id_of), anchor.as_deref().and_then(id_of));
+    let rows: Vec<TextStyleRow> =
+        listed.iter().enumerate().map(|(i, name)| TextStyleRow::new(i as u64, super::label_or_name(name, i == 0))).collect();
+    let cur_id = current(app, kind).and_then(|n| match n {
+        None => Some(0),
+        Some(n) => id_of(&n),
+    });
+    let overridden = cur_id.and_then(|i| all.get(i as usize)).is_some_and(|s| has_overrides(app, kind, &s.1));
+    let label = if kind == Kind::Char { tl!("Character Styles") } else { tl!("Paragraph Styles") };
+    let mut list = TextStylesPanel::new(label, kind.panel_kind(), &rows, Bind::bound(&mut sel))
+        .current(cur_id, overridden)
+        .target(text_style(app).is_some() || selection_len(app) > 0)
+        // A character style has nothing to apply to at a bare caret; the panel then reports a status instead.
+        .text_selected(text_editing(app).is_none_or(|(_, a, b)| a != b))
+        .highlighting(true);
+    if let Some(id) = reveal.as_deref().and_then(id_of) {
+        list = list.reveal(id);
+    }
+    // The framework's row menu and footer drag use list indices that are local to this document.
+    let out = ui.push_id(("text-styles-document", kind.panel_kind(), scope), |ui| list.show(ui)).inner;
+    let name_of = |id: &u64| listed.get(*id as usize).map(|n| n.to_string());
+    let panel = app.ui.text_styles.of(kind);
+    panel.highlight = sel.items.iter().filter_map(name_of).collect();
+    panel.lead = sel.lead.as_ref().and_then(name_of);
+    panel.anchor = sel.anchor.as_ref().and_then(name_of);
+    if let Some(msg) = out.status {
+        app.status(msg.text.as_str());
+    }
+    if let Some(action) = out.action {
+        run_action(app, kind, action);
+    }
+}
+
+/// Runs what a styles panel asked for on the document.
+pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyleAction) {
+    let all = styles(app, kind);
+    let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
+    let name = |id: u64| listed.get(id as usize).map(|n| n.to_string());
+    let normal = listed.first().map(|n| n.to_string()).unwrap_or_default();
+    let current_name = current(app, kind).map(|n| n.unwrap_or_else(|| normal.clone()));
     let p = kind.prefix();
-    if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
-        // A later typing preview must not restore the document from before this capture.
-        end_typing(app);
-        if let Ok(r) = app.run(&format!("{p}.new"), target(app, kind, json!({}))) {
-            highlight_made(ui.ctx(), kind, r["name"].as_str().map(str::to_string).into_iter().collect());
-        }
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]), !many.is_empty(), false) {
-        let names: Vec<String> = listed.iter().filter(|n| many.iter().any(|s| s == *n)).map(|n| n.to_string()).collect();
-        duplicate(app, ui.ctx(), kind, &names);
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]), !doomed.is_empty(), false)
-        && app.run(&format!("{p}.delete"), json!({ "names": doomed })).is_ok()
-    {
-        set_highlighted(ui.ctx(), kind, vec![]);
-    }
-    if menu_item(ui, tl!("Select All Unused"), app.session.active().is_some(), false)
-        && let Ok(r) = app.run(&format!("{p}.unused"), json!({}))
-    {
-        set_highlighted(ui.ctx(), kind, serde_json::from_value(r["names"].clone()).unwrap_or_default());
-    }
-    ui.separator();
-    if menu_item(ui, tl!("Clear Overrides"), sel.is_some() && has_text, false)
-        && let Some(n) = &sel
-    {
-        app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]), sel.is_some() && has_text, false)
-        && let Some(n) = &sel
-    {
-        end_typing(app);
-        app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
-        && let Some(n) = &sel
-    {
-        open_style_options(app, kind, n);
-    }
-    ui.separator();
-    // As commands, so a file dialog shown off the UI thread loads the styles when it answers.
-    let can_load = app.session.active().is_some() && app.services.pick_open.is_some();
-    let one = if kind == Kind::Char {
-        (tl!("Load Character Styles…"), "ui.loadCharStyles")
-    } else {
-        (tl!("Load Paragraph Styles…"), "ui.loadParaStyles")
+    // The highlighted styles in list order, with or without Normal.
+    let marked = |app: &mut VectorcraftApp, with_normal: bool| -> Vec<String> {
+        let picked = highlighted(app, kind, &listed);
+        listed.iter().enumerate().filter(|(i, n)| (with_normal || *i != 0) && picked.iter().any(|s| s == *n)).map(|(_, n)| n.to_string()).collect()
     };
-    for (label, cmd) in [one, (tl!("Load All Styles…"), "ui.loadAllStyles")] {
-        if menu_item(ui, label, can_load, false)
-            && let Err(e) = app.run(cmd, json!({}))
-        {
-            app.status(e);
+    match action {
+        TextStyleAction::Apply { id, clear_overrides, .. } => {
+            if let Some(n) = name(id) {
+                app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": clear_overrides }))).ok();
+            }
         }
+        TextStyleAction::ClearOverride => {
+            if let Some(n) = current_name {
+                app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
+            }
+        }
+        TextStyleAction::Redefine(id) => {
+            if let Some(n) = name(id) {
+                end_typing(app);
+                app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
+            }
+        }
+        TextStyleAction::New { ask_name: true, .. } => {
+            open_new(app, kind).ok();
+        }
+        TextStyleAction::New { ask_name: false, .. } => {
+            end_typing(app);
+            if let Ok(r) = app.run(&format!("{p}.new"), target(app, kind, json!({}))) {
+                highlight_made(app, kind, r["name"].as_str().map(str::to_string).into_iter().collect());
+            }
+        }
+        TextStyleAction::Duplicate(id) => {
+            if let Some(n) = name(id) {
+                duplicate(app, kind, &[n]);
+            }
+        }
+        TextStyleAction::DuplicateHighlighted => {
+            let names = marked(app, true);
+            duplicate(app, kind, &names);
+        }
+        TextStyleAction::Delete(id) => {
+            if let Some(n) = name(id).filter(|_| id != 0)
+                && app.run(&format!("{p}.delete"), json!({ "names": [n] })).is_ok()
+            {
+                set_highlighted(app, kind, vec![]);
+            }
+        }
+        TextStyleAction::DeleteHighlighted => {
+            let names = marked(app, false);
+            if app.run(&format!("{p}.delete"), json!({ "names": names })).is_ok() {
+                set_highlighted(app, kind, vec![]);
+            }
+        }
+        // Normal has no options for either kind.
+        TextStyleAction::Options(id) => {
+            if let Some(n) = name(id).filter(|_| id != 0) {
+                open_style_options(app, kind, &n);
+            }
+        }
+        TextStyleAction::SelectUnused => {
+            if let Ok(r) = app.run(&format!("{p}.unused"), json!({})) {
+                set_highlighted(app, kind, serde_json::from_value(r["names"].clone()).unwrap_or_default());
+            }
+        }
+        // The panel offers no other action.
+        _ => {}
+    }
+}
+
+/// The load command ids of `kind`'s panel menu: its own styles, then every kind.
+fn load_commands(kind: Kind) -> [&'static str; 2] {
+    [if kind == Kind::Char { "ui.loadCharStyles" } else { "ui.loadParaStyles" }, "ui.loadAllStyles"]
+}
+
+/// The panel menu: the framework's rows, then the load commands.
+pub(crate) fn menu_rows(_app: &VectorcraftApp, kind: Kind) -> Vec<PanelRow> {
+    let mut rows = TextStylesPanel::panel_rows();
+    rows.push(PanelRow::Separator);
+    rows.extend(load_commands(kind).map(|id| PanelRow::Command(CommandRef::new(id))));
+    rows
+}
+
+/// Publishes the load rows' state; the framework's rows publish their own.
+pub(crate) fn menu_states(app: &VectorcraftApp, kind: Kind, states: &mut CommandStates) {
+    let can = app.session.active().is_some() && file_asks::can(app, PickKind::Open);
+    for id in load_commands(kind) {
+        states.set(id, CommandState::new().enabled(can));
     }
 }
 
@@ -460,15 +392,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
 /// `paraStyle.load`, `textStyle.loadAll`) on the document at `path`, else on one picked in an open
 /// dialog. A cancelled dialog loads nothing.
 pub(crate) fn load(app: &mut VectorcraftApp, load: &str, path: Option<String>) -> Result<Value, String> {
-    let path = match path {
-        Some(path) => path,
-        None => {
-            let pick = crate::FilePick { filters: crate::FilePick::filters(fileio::builtin_open_filters()), ..Default::default() };
-            let Some(path) = crate::picks::open(app, &pick) else { return Ok(Value::Null) };
-            path
-        }
-    };
-    app.run(load, json!({ "path": path }))
+    if let Some(path) = path {
+        return app.run(load, json!({ "path": path }));
+    }
+    let request = fileio::builtin_open_filters().fold(PickRequest::open("textStyles"), |r, (name, exts)| r.filter(name, exts));
+    let load = load.to_string();
+    Ok(file_asks::ask(app, request, Owner::Document, move |app, picked| match file_asks::open_params(&picked) {
+        Some(params) => app.run(&load, Value::Object(params)),
+        None => Ok(Value::Null),
+    }))
 }
 
 #[cfg(test)]

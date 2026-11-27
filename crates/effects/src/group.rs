@@ -66,7 +66,7 @@ pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=1
 /// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
 macro_rules! options_doc {
     () => {
-        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing, and a stored value that is not a number evaluates as 0.01; results are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together than precision / 10000 as one point, or than the tolerance for the art's size when that is larger), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
     };
 }
 
@@ -102,14 +102,21 @@ impl Default for PathfinderEffectOptions {
     }
 }
 
+/// The `precision` stored in a Pathfinder effect's parameters `p`, out of range or not, when it is a
+/// JSON number. A value of another type (`true`, `"1 pt"`) is not a precision.
+pub(crate) fn stored_precision(p: &Value) -> Option<f64> {
+    p.get("precision").and_then(Value::as_f64).filter(|v| v.is_finite())
+}
+
 impl PathfinderEffectOptions {
-    /// The options in `p`: a missing or non-numeric value takes its default and a precision out of
-    /// range its nearest bound, so a live effect always evaluates.
+    /// The options in `p`: a missing value, or one of the wrong type (a precision that is not a
+    /// number), takes its default, and a precision out of range its nearest bound, so a live effect
+    /// always evaluates.
     pub fn from_params(p: &Value) -> Self {
         let d = PathfinderEffectOptions::default();
         let (lo, hi) = (*PATHFINDER_EFFECT_PRECISION.start(), *PATHFINDER_EFFECT_PRECISION.end());
         PathfinderEffectOptions {
-            precision: crate::util::num(p, "precision", d.precision).clamp(lo, hi),
+            precision: stored_precision(p).unwrap_or(d.precision).clamp(lo, hi),
             remove_redundant_points: crate::util::flag(p, "removeRedundantPoints", d.remove_redundant_points),
             remove_unpainted: crate::util::flag(p, "removeUnpainted", d.remove_unpainted),
         }
@@ -583,9 +590,10 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
     let own_fill = has_visible_fill(group);
     // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
     // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
-    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice. The shape's
+    // strokes stay out: the shape's own appearance already strokes the result.
     let area_style = group.is_compound_shape().then(|| {
-        let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
+        let items = top_painting_fill(&group.appearance).cloned().into_iter().collect();
         Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
     });
     let style_of = |s: &Node| -> Option<Node> {
@@ -644,13 +652,19 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         // (style source, shape) per stack entry; keys index `sources`.
         let mut sources: Vec<Node> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
+        // Keys of the group operands whose art has no area left at the precision.
+        let mut collapsed: Vec<u64> = vec![];
         for mut lv in all {
             if shape_mode && lv.len() > 1 {
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(geometry).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
                 let key = sources.len() as u64;
                 if let Some(top) = lv.pop() {
-                    shapes.push(po::Shape::new(po::unite_all_with(&refs, options.precision), FillRule::NonZero, key));
+                    let united = po::unite_all_with(&refs, options.precision);
+                    if united.is_empty() && !parts.is_empty() {
+                        collapsed.push(key);
+                    }
+                    shapes.push(po::Shape::new(united, FillRule::NonZero, key));
                     sources.push(top);
                 }
             } else {
@@ -661,6 +675,18 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                     }
                 }
             }
+        }
+        // An operand with no area still takes part: Intersect, and Minus Front or Minus Back when
+        // it is the shape the others are cut from, then leave nothing.
+        let is_collapsed = |s: &po::Shape| collapsed.contains(&s.key);
+        let nothing_left = match op {
+            PathfinderOp::Intersect => shapes.iter().any(is_collapsed),
+            PathfinderOp::MinusFront => shapes.first().is_some_and(is_collapsed),
+            PathfinderOp::MinusBack => shapes.last().is_some_and(is_collapsed),
+            _ => false,
+        };
+        if nothing_left {
+            return Some(vec![]);
         }
         shapes.retain(|s| !s.path.is_empty() && s.path.subpaths.iter().all(|sp| sp.anchors.iter().all(|a| a.p.x.is_finite() && a.p.y.is_finite())));
         if shapes.is_empty() {

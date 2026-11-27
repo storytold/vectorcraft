@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end, both or neither: one alone is an error; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
             has_doc,
             super::flare::flare
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), anchors?: \"standard\"|\"points\" (default standard: four anchors at 0°, 90°, 180° and 270°; points: an anchor at each point and more between them so that no curve turns more than a quarter)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, three on one line, or a circle reaching past the canvas are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), center?: [x, y] (the circle's center; `points` then holds the one point its edge passes through, [[x, y]]), anchors?: \"standard\"|\"points\" (default standard: four anchors at 0°, 90°, 180° and 270°; points: an anchor at each point and more between them so that no curve turns more than a quarter)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, a point on `center`, three on one line, a circle reaching past the canvas, or one too small for its edges to differ at its coordinates are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Curvature Circle",
             [],
             None,
-            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
+            "{id, subpath?=0, segment, t: 0..1, convex?=false, constantRadius?=true, anchors?: \"standard\"|\"touch\" (default standard: a live ellipse with four anchors at 0°, 90°, 180° and 270°; touch: a path with an anchor where the circle touches the path and one every 90° from there)} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; with constantRadius, a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle, and with constantRadius false the cubic's own curvature at `t`; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
             has_doc,
             curvature_circle
         ),
@@ -449,9 +449,33 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
 /// Ellipse tool drag is.
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
-    let points = match p.get("points").filter(|v| !v.is_null()) {
-        Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
-        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
+    const SAME: &str = "no circle passes through these points: two are the same or all three lie on one line";
+    let (center, radius, points) = match p.get("center") {
+        // From a center: the circle at `center` whose edge passes through the one point. A null
+        // `center` is refused, as a null `points` with a center is.
+        Some(c) => {
+            let one = p.get("points").and_then(Value::as_array).and_then(|v| match v.as_slice() {
+                [q] => pair(q),
+                _ => None,
+            });
+            let (c, q) = pair(c).zip(one).ok_or_else(|| bad(C, "`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`"))?;
+            let r = c.distance(q);
+            if r == 0.0 {
+                return Err(bad(C, "the point in `points` is on `center`"));
+            }
+            if !r.is_finite() {
+                return Err(bad(C, "result would exceed the canvas (coordinates out of range)"));
+            }
+            (c, r, vec![q])
+        }
+        None => {
+            let points = match p.get("points").filter(|v| !v.is_null()) {
+                Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
+                None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
+            };
+            let (c, r) = shapes::circle_through_points(&points).ok_or_else(|| bad(C, SAME))?;
+            (c, r, points)
+        }
     };
     let key = "anchors";
     let at_points = match p.get(key).map(Value::as_str) {
@@ -459,13 +483,15 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Some("points")) => true,
         Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, points"))),
     };
-    let (center, radius) = shapes::circle_through_points(&points)
-        .ok_or_else(|| bad(C, "no circle passes through these points: two are the same or all three lie on one line"))?;
+    let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+    // A radius below the step between doubles at the center leaves opposite edges on one number.
+    if !(r.width() > 0.0 && r.height() > 0.0) {
+        return Err(bad(C, "the circle is too small to draw at these coordinates"));
+    }
     // Not pixel-aligned: the circle stays through the points.
     let mut out = if at_points {
         add_art_unaligned(s, "Ellipse", path_kind(shapes::circle_with_anchors_at(center, radius, &points), None))?
     } else {
-        let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
         let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
         add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?
     };
@@ -475,13 +501,17 @@ fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// The point an `[x, y]` pair of finite numbers gives.
+fn pair(v: &Value) -> Option<Point> {
+    match v.as_array().map(Vec::as_slice) {
+        Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
+        _ => None,
+    }
+}
+
 /// The two or three points `[[x, y], [x, y]]` or `[[x, y], [x, y], [x, y]]` holds, each pair two
 /// finite numbers.
 fn two_or_three_points(v: &Value) -> Option<Vec<Point>> {
-    let pair = |v: &Value| match v.as_array().map(Vec::as_slice) {
-        Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
-        _ => None,
-    };
     match v.as_array() {
         Some(pairs) if matches!(pairs.len(), 2 | 3) => pairs.iter().map(pair).collect(),
         _ => None,
@@ -518,7 +548,8 @@ fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
 }
 
 /// A live ellipse that touches a path at a point with the path's curvature there
-/// ([`curvature::curvature_circle_on`]). One undo step, named as an Ellipse tool drag is.
+/// ([`curvature::curvature_circle_on_with`]); with `anchors: "touch"`, a plain path with an anchor
+/// at the point it touches and one every 90° from there ([`shapes::circle_with_anchors_at`]). One undo step, named as an Ellipse tool drag is.
 fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.curvatureCircle";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
@@ -529,6 +560,13 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`t` must be from 0 to 1"));
     }
     let convex = switch_or(p, "convex", false, C)?;
+    let arcs = switch_or(p, "constantRadius", true, C)?;
+    let key = "anchors";
+    let at_touch = match p.get(key).map(Value::as_str) {
+        None | Some(Some("standard")) => false,
+        Some(Some("touch")) => true,
+        Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, touch"))),
+    };
     let found = {
         let st = s.doc()?;
         let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -540,7 +578,7 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
         if seg >= sp.segment_count() {
             return Err(bad(C, "no such segment"));
         }
-        curvature::curvature_circle_on(sp, seg, t, convex)
+        curvature::curvature_circle_on_with(sp, seg, t, convex, arcs)
     };
     let circle = found.map_err(|e| match e {
         NoCircle::Straight => bad(C, "the path is straight there, so no circle matches its curvature"),
@@ -549,12 +587,19 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     let (center, radius) = (circle.center, circle.radius);
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD) {
+    let (path, live) = if at_touch {
+        (shapes::circle_with_anchors_at(center, radius, &[circle.at]), None)
+    } else {
+        let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+        (live.to_path(), Some(live))
+    };
+    // The bounds of the path drawn: started where it touches, its cubics reach a little past the
+    // circle.
+    if path.bounds().is_none_or(|b| ![b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= MAX_COORD)) {
         return Err(bad(C, "the circle that matches the path there would reach past the canvas"));
     }
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
     // Not pixel-aligned: the circle stays on the path.
-    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    let mut out = add_art_unaligned(s, "Ellipse", path_kind(path, live))?;
     out["cx"] = json!(center.x);
     out["cy"] = json!(center.y);
     out["radius"] = json!(radius);

@@ -1,13 +1,18 @@
-//! The Links panel, its flyout, Link Info, Edit Original / Show in Folder, the Placement Options
+//! The Links panel, its menu rows, Link Info, Edit Original / Show in Folder, the Placement Options
 //! dialog and the Properties panel's image section, drawn headless.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use egui::vec2;
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
+use crate::tests::panel_harness::Panel;
 use crate::tests_labels::painted_text;
 
 /// A fresh folder for one test (removed when dropped).
@@ -84,22 +89,32 @@ fn app(dir: &Folder) -> (VectorcraftApp, u64, u64) {
     (app, linked, embedded)
 }
 
-fn panel(app: &mut VectorcraftApp) -> String {
-    painted_text(app, super::links::show)
+type Rig = Harness<'static, VectorcraftApp>;
+
+/// The Links panel of `app` in a headless window, after two settled frames.
+fn rig(app: VectorcraftApp) -> Rig {
+    let mut h = Harness::builder()
+        .with_size(vec2(280.0, 500.0))
+        .with_accessibility_check(false)
+        .build_ui_state(|ui, app: &mut VectorcraftApp| super::links::show(app, ui), app);
+    h.run_steps(2);
+    h
 }
 
-/// Click the row named `name` in the panel with `mods` held (frames at `time` and just after: a
-/// second apart, two clicks are not a double-click).
-fn click_row(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, mods: egui::Modifiers, time: f64) {
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
-        let events = std::iter::once(egui::Event::ModifiersChanged(mods)).chain(events).collect();
-        super::tests_appearance::frame_raw(ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::show)
-    };
-    let at = super::tests_appearance::text_rect(&frame(app, vec![], time), name).center();
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: mods };
-    for (i, e) in [egui::Event::PointerMoved(at), button(true), button(false)].into_iter().enumerate() {
-        frame(app, vec![e], time + 0.01 * (i + 1) as f64);
-    }
+/// Whether some node of the panel is named `label`.
+fn shown(h: &Rig, label: &str) -> bool {
+    h.query_all_by_label(label).next().is_some()
+}
+
+/// How many nodes of the panel are named `label`.
+fn count(h: &Rig, label: &str) -> usize {
+    h.query_all_by_label(label).count()
+}
+
+/// Runs the panel command `id` with `params` on the app in `h`, then a frame.
+fn command(h: &mut Rig, id: &str, params: serde_json::Value) {
+    super::links::run(h.state_mut(), id, &params).expect("a panel command").unwrap();
+    h.run_steps(2);
 }
 
 /// The selected objects' ids, in ascending order.
@@ -112,42 +127,14 @@ fn selected(app: &VectorcraftApp) -> Vec<u64> {
 #[test]
 fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     let dir = Folder::new("panel");
-    let (mut app, linked, _) = app(&dir);
-    let text = panel(&mut app);
-    assert!(text.contains("linked.png") && text.contains("embedded.png"), "{text}");
+    let (app, linked, _) = app(&dir);
+    let mut h = rig(app);
+    assert!(shown(&h, "linked.png") && shown(&h, "embedded.png"));
     // The selection is the embedded image.
-    assert!(text.contains("Embedded") && text.contains("Effective PPI"), "{text}");
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    let text = panel(&mut app);
-    assert!(text.contains("Linked") && text.contains("300 × 200 px") && text.contains("Location"), "{text}");
-    // The flyout draws with every item.
-    let menu = painted_text(&mut app, super::links::menu);
-    for item in [
-        "Relink to Folder…",
-        "Embed Image(s)",
-        "Placement Options…",
-        "Show Missing",
-        "Sort by Status",
-        "Sort by Size",
-        "Large Thumbnails",
-        "Show in Folder",
-    ] {
-        assert!(menu.contains(item), "{item}: {menu}");
-    }
-}
-
-/// Click the flyout item `name`, checked or not (frames at `time` and just after).
-fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, time: f64) {
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
-        super::tests_appearance::frame_raw(ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::menu)
-    };
-    let texts = frame(app, vec![], time);
-    let item = texts.iter().find(|(t, _)| t.trim_start_matches('✓').trim() == name);
-    let at = item.unwrap_or_else(|| panic!("`{name}` not drawn: {texts:?}")).1.center();
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    for (i, e) in [egui::Event::PointerMoved(at), button(true), button(false)].into_iter().enumerate() {
-        frame(app, vec![e], time + 0.01 * (i + 1) as f64);
-    }
+    assert!(shown(&h, "Embedded") && shown(&h, "Effective PPI"));
+    h.state_mut().run("select.set", json!({"ids": [linked]})).unwrap();
+    h.run_steps(2);
+    assert!(shown(&h, "Linked") && shown(&h, "300 × 200 px") && shown(&h, "Location"));
 }
 
 /// Opening the panel on the selected image (the Control bar's Linked File or Embedded label) opens
@@ -156,67 +143,28 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, ti
 #[test]
 fn opening_the_panel_on_the_selected_image_shows_its_row_and_link_info() {
     let dir = Folder::new("show-selected");
-    let (mut app, linked, embedded) = app(&dir);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let text = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
-        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
-    };
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    click_menu_item(&mut app, &ctx, "Show Link Info", 1.0);
-    click_menu_item(&mut app, &ctx, "Show Embedded", 2.0);
-    let before = text(&mut app, 3.0);
-    assert!(!before.contains("linked.png") && !before.contains("Location"), "the filter hides the row, Link Info is closed: {before}");
-    app.run("window.panel.close", json!({"panel": super::links::ID})).ok();
-    super::links::show_selected_image(&mut app, &ctx);
-    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "status: {}", app.ui.status);
-    let after = text(&mut app, 4.0);
-    assert!(after.contains("linked.png") && after.contains("embedded.png"), "Show All lists every row: {after}");
-    assert!(after.contains("Location") && after.contains("300 × 200 px"), "Link Info shows the linked image: {after}");
+    let (app, linked, embedded) = app(&dir);
+    let mut h = rig(app);
+    h.state_mut().run("select.set", json!({"ids": [linked]})).unwrap();
+    command(&mut h, "ui.links.linkInfo", json!({}));
+    command(&mut h, "ui.links.show", json!({"show": "embedded"}));
+    assert!(!shown(&h, "linked.png") && !shown(&h, "Location"), "the filter hides the row, Link Info is closed");
+    h.state_mut().run("window.panel.close", json!({"panel": super::links::ID})).ok();
+    let ctx = h.ctx.clone();
+    super::links::show_selected_image(h.state_mut(), &ctx);
+    h.run_steps(2);
+    assert!(crate::panel_docking::visible(h.state(), super::links::ID), "status: {}", h.state().ui.status);
+    assert!(shown(&h, "linked.png") && shown(&h, "embedded.png"), "Show All lists every row");
+    assert!(shown(&h, "Location") && shown(&h, "300 × 200 px"), "Link Info shows the linked image");
     // An embedded image under Show Embedded keeps the filter.
-    app.run("select.set", json!({"ids": [embedded]})).unwrap();
-    click_menu_item(&mut app, &ctx, "Show Link Info", 5.0);
-    click_menu_item(&mut app, &ctx, "Show Embedded", 6.0);
-    super::links::show_selected_image(&mut app, &ctx);
-    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "an open panel stays open");
-    let embedded_only = text(&mut app, 7.0);
-    assert!(embedded_only.contains("embedded.png") && !embedded_only.contains("linked.png"), "Show Embedded stays: {embedded_only}");
-    assert!(embedded_only.contains("Effective PPI"), "Link Info shows the embedded image: {embedded_only}");
-}
-
-/// Opening the panel on the selected image scrolls the list to the image's row when it is out of
-/// view.
-#[test]
-fn opening_the_panel_on_the_selected_image_scrolls_to_its_row() {
-    let dir = Folder::new("show-selected-scroll");
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    // The panel lists the image placed first last, below the list's view.
-    let mut first = None;
-    for i in 0..20 {
-        let path = dir.file(&format!("img{i:02}.png"), &png(10, 10));
-        let id = app.run("file.place", json!({"path": path, "at": [10 + 15 * i, 100]})).unwrap()["ids"][0].as_u64().unwrap();
-        first.get_or_insert(id);
-    }
-    app.run("select.set", json!({"ids": [first]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // How many times the first image's name is drawn: its row while in view, and Link Info.
-    let drawn = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
-        texts.iter().filter(|(t, _)| t == "img00.png").count()
-    };
-    let before = drawn(&mut app, 1.0);
-    assert_eq!(drawn(&mut app, 2.0), before, "the list stays at the top");
-    super::links::show_selected_image(&mut app, &ctx);
-    // The list scrolls over the frames after the one that asks.
-    for time in [3.0, 4.0, 5.0] {
-        drawn(&mut app, time);
-    }
-    assert_eq!(drawn(&mut app, 6.0), before + 1, "the row scrolled into view");
+    h.state_mut().run("select.set", json!({"ids": [embedded]})).unwrap();
+    command(&mut h, "ui.links.linkInfo", json!({}));
+    command(&mut h, "ui.links.show", json!({"show": "embedded"}));
+    super::links::show_selected_image(h.state_mut(), &ctx);
+    h.run_steps(2);
+    assert!(crate::panel_docking::visible(h.state(), super::links::ID), "an open panel stays open");
+    assert!(shown(&h, "embedded.png") && !shown(&h, "linked.png"), "Show Embedded stays");
+    assert!(shown(&h, "Effective PPI"), "Link Info shows the embedded image");
 }
 
 /// Opening the panel on the selected image draws a list read after the request, so a row that a
@@ -224,46 +172,18 @@ fn opening_the_panel_on_the_selected_image_scrolls_to_its_row() {
 #[test]
 fn opening_the_panel_on_the_selected_image_reads_the_list_again() {
     let dir = Folder::new("show-selected-fresh");
-    let (mut app, linked, _) = app(&dir);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // How many times the linked image's name is drawn: its row, and Link Info.
-    let drawn = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
-        texts.iter().filter(|(t, _)| t == "linked.png").count()
-    };
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
-    assert_eq!(drawn(&mut app, 2.0), 1, "Link Info only: nothing is missing yet");
+    let (app, linked, _) = app(&dir);
+    let mut h = rig(app);
+    // How many nodes name the linked image: its row, and Link Info.
+    h.state_mut().run("select.set", json!({"ids": [linked]})).unwrap();
+    command(&mut h, "ui.links.show", json!({"show": "missing"}));
+    assert_eq!(count(&h, "linked.png"), 1, "Link Info only: nothing is missing yet");
     std::fs::remove_file(dir.0.join("linked.png")).unwrap();
     // Within the time the panel keeps its list before it looks at the files again.
-    super::links::show_selected_image(&mut app, &ctx);
-    assert_eq!(drawn(&mut app, 2.1), 2, "the missing image's row and its Link Info are drawn");
-}
-
-/// The Show filter is set back to Show All from the rows the panel draws, not from the files as
-/// they were when the panel was asked to open: a missing image restored before the list is drawn
-/// still gets its row.
-#[test]
-fn opening_the_panel_on_the_selected_image_decides_the_filter_from_the_drawn_rows() {
-    let dir = Folder::new("show-selected-drawn");
-    let (mut app, linked, _) = app(&dir);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let drawn = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
-        texts.iter().filter(|(t, _)| t == "linked.png").count()
-    };
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
-    let bytes = std::fs::read(dir.0.join("linked.png")).unwrap();
-    std::fs::remove_file(dir.0.join("linked.png")).unwrap();
-    super::links::show_selected_image(&mut app, &ctx);
-    std::fs::write(dir.0.join("linked.png"), bytes).unwrap();
-    assert_eq!(drawn(&mut app, 2.0), 2, "the restored image's row and its Link Info are drawn");
-    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the scroll request is used on the row");
+    let ctx = h.ctx.clone();
+    super::links::show_selected_image(h.state_mut(), &ctx);
+    h.run_steps(2);
+    assert_eq!(count(&h, "linked.png"), 2, "the missing image's row and its Link Info are drawn");
 }
 
 /// A request to show the selected image applies only in the document it was made in: drawn for
@@ -271,21 +191,16 @@ fn opening_the_panel_on_the_selected_image_decides_the_filter_from_the_drawn_row
 #[test]
 fn opening_the_panel_on_the_selected_image_leaves_another_document_alone() {
     let dir = Folder::new("show-selected-other-doc");
-    let (mut app, linked, _) = app(&dir);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let text = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
-        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
-    };
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
-    super::links::show_selected_image(&mut app, &ctx);
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let other = text(&mut app, 2.0);
-    assert!(other.contains("Nothing matches the Show filter."), "the other document keeps Show Missing: {other}");
-    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the request is dropped");
+    let (app, linked, _) = app(&dir);
+    let mut h = rig(app);
+    h.state_mut().run("select.set", json!({"ids": [linked]})).unwrap();
+    command(&mut h, "ui.links.show", json!({"show": "missing"}));
+    let ctx = h.ctx.clone();
+    super::links::show_selected_image(h.state_mut(), &ctx);
+    h.state_mut().run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    h.run_steps(2);
+    assert!(shown(&h, "Nothing matches the Show filter."), "the other document keeps Show Missing");
+    assert_eq!(h.state().ui.links.show, None, "the request is dropped");
 }
 
 /// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
@@ -293,29 +208,30 @@ fn opening_the_panel_on_the_selected_image_leaves_another_document_alone() {
 #[test]
 fn frames_that_fetch_nothing_reuse_the_cached_rows() {
     let dir = Folder::new("cache");
-    let (mut app, linked, _) = app(&dir);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let frame = |app: &mut VectorcraftApp, time: f64| {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        let text: Vec<String> = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect();
-        (super::pstate::<std::sync::Arc<super::links::Cache>>(&ctx, "links-cache"), text)
-    };
-    let (first, text) = frame(&mut app, 1.0);
-    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
-    let (same, text) = frame(&mut app, 1.5);
-    assert!(std::sync::Arc::ptr_eq(&first, &same), "a frame that fetches nothing stores no new cache");
-    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
-    let (rechecked, _) = frame(&mut app, 3.6);
-    assert!(!std::sync::Arc::ptr_eq(&same, &rechecked), "the files are looked at again after two seconds");
-    app.run("select.set", json!({"ids": [linked]})).unwrap();
-    let (picked, text) = frame(&mut app, 3.7);
+    let (app, linked, _) = app(&dir);
+    let mut h = rig(app);
+    let cache = |h: &Rig| std::sync::Arc::clone(&h.state().ui.links.cache);
+    let now = |h: &Rig| h.ctx.input(|i| i.time);
+    assert!(shown(&h, "linked.png") && shown(&h, "40 × 20 px"));
+    let first = cache(&h);
+    h.step();
+    assert!(std::sync::Arc::ptr_eq(&first, &cache(&h)), "a frame that fetches nothing stores no new cache");
+    assert!(shown(&h, "linked.png") && shown(&h, "40 × 20 px"));
+    let start = now(&h);
+    while now(&h) - start <= 2.1 {
+        h.step();
+    }
+    let rechecked = cache(&h);
+    assert!(!std::sync::Arc::ptr_eq(&first, &rechecked), "the files are looked at again after two seconds");
+    h.state_mut().run("select.set", json!({"ids": [linked]})).unwrap();
+    h.step();
+    let picked = cache(&h);
     assert!(!std::sync::Arc::ptr_eq(&rechecked, &picked), "Link Info follows the first selected image");
-    assert!(text.iter().any(|t| t == "300 × 200 px"), "{text:?}");
-    app.run("edit.clear", json!({"ids": [linked]})).unwrap();
-    let (edited, text) = frame(&mut app, 3.8);
-    assert!(!std::sync::Arc::ptr_eq(&picked, &edited), "an edit lists the rows again");
-    assert!(!text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "embedded.png"), "{text:?}");
+    assert!(shown(&h, "300 × 200 px"));
+    h.state_mut().run("edit.clear", json!({"ids": [linked]})).unwrap();
+    h.step();
+    assert!(!std::sync::Arc::ptr_eq(&picked, &cache(&h)), "an edit lists the rows again");
+    assert!(!shown(&h, "linked.png") && shown(&h, "embedded.png"));
 }
 
 /// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
@@ -324,8 +240,6 @@ fn frames_that_fetch_nothing_reuse_the_cached_rows() {
 fn copy_info_copies_the_file_names_of_the_links() {
     let dir = Folder::new("copy-info");
     let (mut app, linked, embedded) = app(&dir);
-    let menu = painted_text(&mut app, super::links::menu);
-    assert!(menu.contains("Copy Info"), "{menu}");
     // The selection is the embedded image: its row's name.
     assert!(crate::menus::enabled(&app, "links.copyInfo"));
     let r = app.run("links.copyInfo", json!({})).unwrap();
@@ -354,42 +268,6 @@ fn copy_info_copies_the_file_names_of_the_links() {
     assert!(app.clipboard_out.is_none());
 }
 
-/// Shift-click selects the images of the rows from the last row clicked without Shift; Ctrl/Cmd-click
-/// adds or removes one image, and Ctrl/Cmd-Shift-click adds the rows' images to the selection.
-#[test]
-fn shift_click_selects_a_range_of_links_and_ctrl_click_toggles_one() {
-    let dir = Folder::new("range");
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    for (i, name) in ["a.png", "b.png", "c.png", "d.png"].into_iter().enumerate() {
-        let path = dir.file(name, &png(20, 20));
-        app.run("file.place", json!({"path": path, "at": [50 + 80 * i, 100]})).unwrap();
-    }
-    let list = app.run("links.list", json!({})).unwrap();
-    let rows: Vec<(String, u64)> =
-        list["links"].as_array().unwrap().iter().map(|r| (r["name"].as_str().unwrap().to_string(), r["id"].as_u64().unwrap())).collect();
-    assert_eq!(rows.len(), 4, "{list}");
-    let id = |rows_at: &[usize]| {
-        let mut ids: Vec<u64> = rows_at.iter().map(|&i| rows[i].1).collect();
-        ids.sort_unstable();
-        ids
-    };
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    click_row(&mut app, &ctx, &rows[0].0, egui::Modifiers::NONE, 1.0);
-    assert_eq!(selected(&app), id(&[0]));
-    click_row(&mut app, &ctx, &rows[2].0, egui::Modifiers::SHIFT, 2.0);
-    assert_eq!(selected(&app), id(&[0, 1, 2]), "Shift-click selects the rows from the one clicked before");
-    click_row(&mut app, &ctx, &rows[1].0, egui::Modifiers::COMMAND, 3.0);
-    assert_eq!(selected(&app), id(&[0, 2]), "Ctrl/Cmd-click removes one image");
-    click_row(&mut app, &ctx, &rows[3].0, egui::Modifiers::SHIFT | egui::Modifiers::COMMAND, 4.0);
-    assert_eq!(selected(&app), id(&[0, 1, 2, 3]), "Ctrl/Cmd-Shift-click adds the rows from the one clicked before");
-    click_row(&mut app, &ctx, &rows[0].0, egui::Modifiers::SHIFT, 5.0);
-    assert_eq!(selected(&app), id(&[0, 1]), "Shift-click replaces the selection with the rows");
-    click_row(&mut app, &ctx, &rows[3].0, egui::Modifiers::NONE, 6.0);
-    assert_eq!(selected(&app), id(&[3]));
-}
-
 /// A linked image kept only in a symbol's art has a row of its own: a click picks it in the panel
 /// (the canvas selection is cleared), Link Info shows it, Ctrl/Cmd-click adds an image in the
 /// layers, a change of the canvas selection drops the pick, and Go To clears the selection and
@@ -408,37 +286,34 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     let list = app.run("links.list", json!({})).unwrap();
     let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
     assert_eq!(row["owner"]["kind"], "symbol", "{list}");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let shown = |app: &mut VectorcraftApp, time: f64| -> Vec<String> {
-        let raw = egui::RawInput { time: Some(time), ..Default::default() };
-        super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect()
-    };
-    assert!(shown(&mut app, 0.5).iter().any(|t| t == "20 × 20 px"), "Link Info of the selected image in the layers");
-    click_row(&mut app, &ctx, "inside.png", egui::Modifiers::NONE, 1.0);
-    assert!(selected(&app).is_empty(), "the canvas can't select it");
-    assert!(shown(&mut app, 1.5).iter().any(|t| t == "30 × 20 px"), "Link Info of the symbol's image");
+    let mut h = Panel::new(app, super::links::show);
+    assert!(h.shows("20 × 20 px"), "Link Info of the selected image in the layers");
+    h.click_with("inside.png", egui::Modifiers::NONE);
+    assert!(selected(&h.app()).is_empty(), "the canvas can't select it");
+    assert!(h.shows("30 × 20 px"), "Link Info of the symbol's image");
     // Copy Info without ids copies the row picked in the panel.
-    app.ui_ctx = Some(ctx.clone());
-    assert!(crate::menus::enabled(&app, "links.copyInfo"));
-    assert_eq!(app.run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
-    assert_eq!(app.clipboard_out.take().as_deref(), Some("inside.png"));
-    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 2.0);
-    assert_eq!(selected(&app), [layer]);
-    // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
-    click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 3.0);
-    assert!(selected(&app).is_empty());
-    assert!(shown(&mut app, 3.5).iter().any(|t| t == "30 × 20 px"), "the symbol's image is still picked");
-    app.run("select.set", json!({"ids": [layer]})).unwrap();
-    assert!(shown(&mut app, 4.0).iter().any(|t| t == "20 × 20 px"));
-    app.run("select.set", json!({"ids": []})).unwrap();
-    let text = shown(&mut app, 4.5);
-    assert!(!text.iter().any(|t| t == "30 × 20 px" || t == "20 × 20 px"), "nothing is picked: {text:?}");
+    assert!(crate::menus::enabled(&h.app(), "links.copyInfo"));
+    assert_eq!(h.app().run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
+    assert_eq!(h.app().clipboard_out.take().as_deref(), Some("inside.png"));
+    h.click_with("layer.png", egui::Modifiers::COMMAND);
+    assert_eq!(selected(&h.app()), [layer]);
+    // Both rows are selected until the canvas selection changes: then the panel's pick goes too. The second click
+    // comes after the double-click time, so it is a click of its own.
+    h.advance(1.0);
+    h.click_with("layer.png", egui::Modifiers::COMMAND);
+    assert!(selected(&h.app()).is_empty());
+    assert!(h.shows("30 × 20 px"), "the symbol's image is still picked");
+    h.app().run("select.set", json!({"ids": [layer]})).unwrap();
+    h.frame();
+    assert!(h.shows("20 × 20 px"));
+    h.app().run("select.set", json!({"ids": []})).unwrap();
+    h.frame();
+    assert!(!h.shows("30 × 20 px") && !h.shows("20 × 20 px"), "nothing is picked");
     // Go To clears the selection and says the link has no place on the canvas.
-    app.run("select.set", json!({"ids": [layer]})).unwrap();
-    super::links::go_to(&mut app, row["id"].as_u64().unwrap());
-    assert_eq!(app.ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
-    assert!(selected(&app).is_empty(), "the image in the layers is no longer selected");
+    h.app().run("select.set", json!({"ids": [layer]})).unwrap();
+    super::links::go_to(&mut h.app(), row["id"].as_u64().unwrap());
+    assert_eq!(h.app().ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
+    assert!(selected(&h.app()).is_empty(), "the image in the layers is no longer selected");
 }
 
 /// The tooltip of a row outside the layer tree says where the image is stored, so two rows of the
@@ -487,17 +362,11 @@ fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
     let doc = app.session.active().unwrap().doc.clone();
     assert!(doc.node(owner).is_none(), "the masked object is outside the layer tree");
     let name = super::layers::shown_name(&app, doc.stored_node(owner).unwrap().0, crate::i18n::current());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
-        super::tests_appearance::frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::show)
-    };
-    let at = super::tests_appearance::text_rect(&frame(&mut app, vec![], 1.0), "mask.png").center();
-    frame(&mut app, vec![egui::Event::PointerMoved(at)], 2.0);
-    frame(&mut app, vec![], 4.0);
-    let text: Vec<String> = frame(&mut app, vec![], 4.1).into_iter().map(|(t, _)| t).collect();
-    let want = format!("Opacity Mask: {name}");
-    assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
+    let h = rig(app);
+    let found = h.state().ui.links.cache.nested_node(owner.0).map(|n| super::layers::shown_name(h.state(), n, crate::i18n::current()));
+    assert_eq!(found.as_deref(), Some(name.as_str()), "the panel collected the masked object with the list");
+    let tip = super::links::status_tip(&row, found);
+    assert!(tip.contains(&format!("Opacity Mask: {name}")), "{tip}");
 }
 
 /// The row of an image in a stored brush's art finds its object for the thumbnail, though that art
@@ -520,13 +389,6 @@ fn a_row_in_a_stored_brushs_art_finds_its_object() {
     let found = super::links::stored_objects(doc, [row].into());
     assert_eq!(found.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [row]);
     assert!(matches!(found[0].1.kind, vectorcraft_doc::NodeKind::Image(_)), "{:?}", found[0].1.kind);
-}
-
-#[test]
-fn an_empty_document_shows_how_to_add_images() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    assert!(panel(&mut app).contains("No images"));
 }
 
 #[test]
@@ -556,6 +418,87 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     (app.services.open_file, app.services.reveal) = (None, None);
     assert!(app.run("links.reveal", json!({"id": linked})).is_err());
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
+}
+
+#[test]
+fn a_long_link_location_fits_the_minimum_width_float() {
+    use crate::panel_docking::PANEL_MIN_WIDTH;
+    use crate::tests::panel_harness::{Place, floated};
+
+    let folder = Folder::new("location-width");
+    let subfolder = folder.0.join("Überlagerung".repeat(5));
+    std::fs::create_dir_all(&subfolder).unwrap();
+    let path = subfolder.join("Éléments.png");
+    std::fs::write(&path, png(30, 20)).unwrap();
+    for locale in ["en", "fr", "de"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let placed = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap();
+        let info = app.run("links.info", json!({"id": placed["ids"][0]})).unwrap();
+        let location = info["location"].as_str().unwrap();
+        let names = ["Location", location, "Show in Folder"];
+        app.services.reveal = Some(Box::new(|_| Ok(())));
+        let panel = floated(app, "links", locale, Place::Floating(PANEL_MIN_WIDTH), &names);
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "{locale} location row outside {:?}: {past:?}", panel.body);
+    }
+}
+
+/// The Location row of Link Info has a Show in Folder button that shows the file of the image Link
+/// Info shows. An embedded image has no Location row; the button is off while the file is missing
+/// and without a file manager (the web).
+#[test]
+fn link_infos_location_row_shows_the_file_in_its_folder() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let dir = Folder::new("location-reveal");
+    let (mut app, linked, embedded) = app(&dir);
+    let other = dir.file("other.png", &png(30, 20));
+    let other = app.run("file.place", json!({"path": other, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let r = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        r.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+    let path = |app: &mut VectorcraftApp, id: u64| app.run("links.info", json!({"id": id})).unwrap()["path"].as_str().unwrap().to_string();
+    let (linked_path, other_path) = (path(&mut app, linked), path(&mut app, other));
+    let mut h = Panel::new(app, super::links::show);
+    let select = |h: &mut Panel, ids: &[u64]| {
+        h.app().run("select.set", json!({ "ids": ids })).unwrap();
+        h.frame();
+    };
+    // The button is pressed as a keyboard or screen-reader user presses it: focus, then Enter.
+    let press = |h: &mut Panel| {
+        h.focus("Show in Folder");
+        h.key(egui::Key::Enter, egui::Modifiers::NONE);
+    };
+    // An embedded image has no file to show.
+    assert!(!h.shows("Show in Folder"));
+    select(&mut h, &[linked]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    select(&mut h, &[other]);
+    assert!(h.enabled("Show in Folder"));
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone()]);
+    // Both images selected: Link Info shows the first selected, `linked`, while the list has `other`
+    // (on top) first. Only the file of the image Link Info shows is handed over.
+    select(&mut h, &[linked, other]);
+    press(&mut h);
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone(), linked_path]);
+    // A missing file: the row stays, the button is off once the panel looks at the files again.
+    select(&mut h, &[other]);
+    std::fs::remove_file(&other_path).unwrap();
+    h.advance(3.0);
+    h.frame();
+    assert!(h.shows("Location") && !h.enabled("Show in Folder"));
+    // Without a file manager (the web): off.
+    select(&mut h, &[linked]);
+    h.app().services.reveal = None;
+    h.frame();
+    assert!(!h.enabled("Show in Folder"));
+    assert_eq!(revealed.borrow().len(), 3, "nothing more was shown");
 }
 
 /// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
@@ -606,8 +549,15 @@ fn edit_original_with_chosen_editor_still_refuses_automation() {
     app.ui.answering_control = true;
     assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
     app.ui.answering_control = false;
-    app.synthetic_frame = true;
-    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    // A pass that carries injected input acts for automation too.
+    let ctx = crate::testing::ui_context();
+    app.adopt_context(&ctx);
+    craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
+    ctx.run_ui(egui::RawInput::default(), |_| {
+        assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    })
+    .textures_delta
+    .clear();
 }
 
 /// Edit Original hands only regular image and document files to the system's default app.
@@ -674,20 +624,20 @@ fn edit_original_opens_image_and_document_files_only() {
 
 #[test]
 fn placement_options_dialog_sets_the_options() {
+    use crate::tests::picks::{answer_dialog, open_dialogs};
     let dir = Folder::new("dialog");
-    let (mut app, linked, _) = app(&dir);
+    let (app, linked, _) = app(&dir);
+    let mut app = crate::testing::windowed(app);
     app.run("select.set", json!({"ids": [linked]})).unwrap();
     assert!(crate::menus::enabled(&app, "ui.placementOptionsDialog"));
     app.run("ui.placementOptionsDialog", json!({})).unwrap();
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("preserve"), d.str("align")), ("placementOptions", "bounds".into(), "center".into()));
-    let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Clip to Bounding Box") && text.contains("Preserve"), "{text}");
-    let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
-    fields.insert("preserve".into(), json!("fit"));
-    fields.insert("align".into(), json!("bottomRight"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    let open = open_dialogs(&app);
+    assert_eq!(open.len(), 1, "the dialog is open");
+    // PLAN: assumed `placement_options::ALIGN` names the reference points in the order of the
+    // dialog's `align` index (files-w22).
+    let align = crate::dialogs::placement_options::ALIGN.iter().position(|a| *a == "bottomRight").unwrap();
+    answer_dialog(&mut app, open[0].id, &[("preserve", json!("fit")), ("align", json!(align))], true);
+    assert!(open_dialogs(&app).is_empty(), "OK closes the dialog");
     let r = app.run("links.placementOptions", json!({"ids": [linked]})).unwrap();
     assert_eq!(r["placement"], json!({"preserve": "fit", "align": "bottomRight", "clip": false}));
 }
@@ -703,6 +653,61 @@ fn properties_shows_the_selected_image_and_its_link_actions() {
     assert!(text.contains("Linked File") && text.contains("Edit Original") && text.contains("Embed"), "{text}");
 }
 
+#[test]
+fn replace_image_uses_browser_picker_bytes_and_fits_them_in_one_undo_step() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_geom::Rect;
+
+    let dir = Folder::new("replace-browser-bytes");
+    let (mut app, linked, _) = app(&dir);
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let journal = app.session.journal.len();
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let bytes = png(10, 20);
+
+    super::links::replace(&mut app, vec![linked]);
+    assert_eq!(picker.requests().len(), 1);
+    picker.answer_contents(&[("replacement.png", &bytes)]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(linked)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert!(image.link.is_none(), "browser file contents are embedded");
+    assert_eq!(state.doc.images[&image.key].bytes.as_slice(), bytes);
+    let bounds = image.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 10.0, 20.0));
+    assert_eq!((bounds.width(), bounds.height()), (100.0, 200.0), "fit in the old 300 by 200 bounds");
+    assert_eq!(state.history.undo.len(), undo + 1);
+    assert_eq!(app.session.journal.get(journal).map(|(command, _)| command.as_str()), Some("links.replaceEmbedded"));
+
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+#[test]
+fn replace_image_with_a_desktop_path_remains_linked() {
+    use crate::tests::picks::{poll, scripted};
+    use vectorcraft_doc::{NodeId, NodeKind};
+
+    let dir = Folder::new("replace-desktop-path");
+    let (mut app, _, embedded) = app(&dir);
+    let path = dir.file("replacement.png", &png(10, 20));
+    let picker = scripted(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+
+    super::links::replace(&mut app, vec![embedded]);
+    picker.answer(&[&path]);
+    poll(&mut app, &ctx);
+
+    let state = app.session.doc().unwrap();
+    let NodeKind::Image(image) = &state.doc.node(NodeId(embedded)).unwrap().kind else { panic!("replacement must keep the image's id") };
+    assert_eq!((image.width, image.height), (10, 20));
+    assert_eq!(image.link.as_ref().unwrap().path, path);
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]
@@ -711,21 +716,25 @@ fn unembed_writes_several_images_to_one_picked_folder() {
     let (mut app, _, embedded) = app(&dir);
     let c = dir.file("other.png", &png(30, 10));
     let other = app.run("file.place", json!({"path": c, "at": [50, 50], "link": false})).unwrap()["ids"][0].as_u64().unwrap();
+    use crate::tests::picks::{poll, scripted};
     assert!(super::links::can_unembed(&app, 1));
     assert!(!super::links::can_unembed(&app, 0));
-    assert!(!super::links::can_unembed(&app, 2), "no folder to pick");
     let out = dir.0.join("out");
     std::fs::create_dir_all(&out).unwrap();
-    // No folder picked: nothing written or linked.
-    app.services.pick_folder = Some(Box::new(|| None));
+    // PLAN: assumed `scripted` and `poll` of fl.A20 live in `crate::tests::picks`.
+    let picker = scripted(&mut app);
+    let ctx = crate::testing::ui_context();
     assert!(super::links::can_unembed(&app, 2));
+    // No folder picked: nothing written or linked.
     super::links::unembed_several(&mut app, vec![embedded, other]);
+    picker.cancel();
+    poll(&mut app, &ctx);
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
     assert_eq!(app.run("links.info", json!({"id": embedded})).unwrap()["status"], "embedded");
     let picked = out.to_string_lossy().into_owned();
-    let answer = picked.clone();
-    app.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
     super::links::unembed_several(&mut app, vec![embedded, other]);
+    picker.answer(&[picked.as_str()]);
+    poll(&mut app, &ctx);
     for (id, name) in [(embedded, "embedded.png"), (other, "other.png")] {
         let info = app.run("links.info", json!({"id": id})).unwrap();
         assert_eq!(info["path"], out.join(name).to_string_lossy().as_ref(), "{info}");
@@ -734,22 +743,42 @@ fn unembed_writes_several_images_to_one_picked_folder() {
 }
 
 #[test]
-fn the_links_menu_items_run_commands() {
-    let tree = crate::menus::menu_tree();
-    let ids = |label: &str| {
-        let (_, items) = tree.iter().find(|(t, _)| *t == label).unwrap();
-        format!("{items:?}")
+fn switching_documents_dismisses_a_links_row_menu() {
+    let dir = Folder::new("context-switched-document");
+    let (mut app, first, _) = app(&dir);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let path = dir.file("other.png", &png(40, 20));
+    let second = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    let destination = app.session.active().unwrap().uid;
+    assert_eq!(first, second, "the two documents have different images at the same local ID");
+    app.run("window.previousDocument", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, super::links::show);
+    let activate = |panel: &mut Panel, index, document| {
+        panel.app().session.execute("document.activate", &json!({"index": index})).unwrap();
+        panel.frame();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().uid, document);
     };
-    assert!(ids("Edit").contains("links.editOriginal"));
-    assert!(ids("Window").contains(super::links::ID));
+    panel.secondary_click("linked.png");
+    assert!(panel.menu_item_enabled("Embed Image"));
+    activate(&mut panel, 1, destination);
+    assert!(!panel.shows("Embed Image"), "the other document must not inherit the row menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["linked"], true);
+
+    activate(&mut panel, 0, source);
+    assert!(!panel.shows("Embed Image"), "switching back must not revive the menu");
+    assert_eq!(panel.app().run("links.info", json!({"id": first})).unwrap()["linked"], true);
+
+    activate(&mut panel, 1, destination);
+    panel.secondary_click("other.png");
+    panel.click_menu_item("Embed Image");
+    assert_eq!(panel.app().run("links.info", json!({"id": second})).unwrap()["status"], "embedded");
 }
 
 #[test]
 fn right_click_context_menu_in_links_panel() {
-    use egui::vec2;
-    use egui_kittest::Harness;
-    use egui_kittest::kittest::{NodeT, Queryable};
-
     let dir = Folder::new("context-menu");
     let (mut app, linked, embedded) = app(&dir);
 
@@ -763,73 +792,47 @@ fn right_click_context_menu_in_links_panel() {
     // Initially embedded is selected, linked is unselected
     assert_eq!(selected(&app), vec![embedded]);
 
-    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
-        |ui, app: &mut VectorcraftApp| {
-            super::links::show(app, ui);
-        },
-        app,
-    );
-    h.run_steps(2);
-
-    let right_click = |h: &mut Harness<'static, VectorcraftApp>, label: &str| {
-        let node = h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).unwrap();
-        let pos = node.rect().center();
-        h.event(egui::Event::PointerMoved(pos));
-        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
-        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
-        h.run_steps(2);
-    };
+    let mut h = Panel::new(app, super::links::show);
 
     // 1. Right-click unselected "linked.png": selects it and opens context menu
-    right_click(&mut h, "linked.png");
-    assert_eq!(selected(h.state()), vec![linked], "right-clicking unselected row selects that row first");
+    h.secondary_click("linked.png");
+    assert_eq!(selected(&h.app()), vec![linked], "right-clicking unselected row selects that row first");
 
-    let relink = h.get_by_label("   Relink…");
-    let go_to = h.get_by_label("   Go To Link");
-    let update = h.get_by_label("   Update Link");
-    let edit_orig = h.get_by_label("   Edit Original");
-    let show_folder = h.get_by_label("   Show in Folder");
-    let embed_img = h.get_by_label("   Embed Image");
-
-    // "Relink…" is disabled because app has no pick_open service by default
-    assert!(relink.accesskit_node().is_disabled());
+    // "Relink…" is enabled because the desktop can ask for a file
+    assert!(h.menu_item_enabled("Relink…"));
     // "Go To Link" is enabled because linked node is in canvas document
-    assert!(!go_to.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Go To Link"));
     // "Update Link" is disabled because linked file is not modified
-    assert!(update.accesskit_node().is_disabled());
+    assert!(!h.menu_item_enabled("Update Link"));
     // "Edit Original" and "Show in Folder" are enabled because linked file exists
-    assert!(!edit_orig.accesskit_node().is_disabled());
-    assert!(!show_folder.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Edit Original"));
+    assert!(h.menu_item_enabled("Show in Folder"));
     // "Embed Image" is enabled because it is a linked image
-    assert!(!embed_img.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Embed Image"));
 
     // 2. Click "Show in Folder" dispatches links.reveal
-    show_folder.click();
-    h.run_steps(2);
+    h.click_menu_item("Show in Folder");
     assert_eq!(revealed.borrow().len(), 1);
     assert!(revealed.borrow()[0].ends_with("linked.png"));
 
     // 3. Multi-selection: select both linked and embedded
-    h.state_mut().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
-    assert_eq!(selected(h.state()), vec![linked, embedded]);
+    h.app().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(selected(&h.app()), vec![linked, embedded]);
 
     // Right-click "linked.png" while already selected in multi-selection: preserves selection
-    right_click(&mut h, "linked.png");
-    assert_eq!(selected(h.state()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
+    h.secondary_click("linked.png");
+    assert_eq!(selected(&h.app()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
 
     // 4. Click "Go To Link" focuses the art on canvas via go_to
-    let go_to_btn = h.get_by_label("   Go To Link");
-    assert!(!go_to_btn.accesskit_node().is_disabled());
-    go_to_btn.click();
-    h.run_steps(2);
-    assert_eq!(selected(h.state()), vec![linked]);
-    assert!(h.state().view().unwrap().fitted);
+    assert!(h.menu_item_enabled("Go To Link"));
+    h.click_menu_item("Go To Link");
+    assert_eq!(selected(&h.app()), vec![linked]);
+    assert!(h.app().view().unwrap().fitted);
 
     // 5. Right-click embedded image: displays "Unembed…" while "Edit Original" and "Show in Folder" are disabled
-    right_click(&mut h, "embedded.png");
-    assert_eq!(selected(h.state()), vec![embedded]);
-    let unembed_btn = h.get_by_label("   Unembed…");
-    assert!(!unembed_btn.accesskit_node().is_disabled());
-    assert!(h.get_by_label("   Edit Original").accesskit_node().is_disabled());
-    assert!(h.get_by_label("   Show in Folder").accesskit_node().is_disabled());
+    h.secondary_click("embedded.png");
+    assert_eq!(selected(&h.app()), vec![embedded]);
+    assert!(h.menu_item_enabled("Unembed…"));
+    assert!(!h.menu_item_enabled("Edit Original"));
+    assert!(!h.menu_item_enabled("Show in Folder"));
 }

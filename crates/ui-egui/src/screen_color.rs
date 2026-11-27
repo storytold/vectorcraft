@@ -1,93 +1,85 @@
-//! Sample Color from Screen (`ui.sampleScreenColor`): the system's color sampler picks a color
-//! anywhere on the screen ([`crate::Services::screen_color`]: `NSColorSampler` on macOS, the XDG
-//! desktop portal's `PickColor` on Linux, a copy of the screen shown in a window of the app's own on
-//! Windows, the browser's EyeDropper where the browser has one). The command shows the sampler and
-//! answers at once. The color arrives in a later frame ([`poll`]) and becomes the fill or the
-//! stroke through `paint.setFill` / `paint.setStroke` (one undo step), or the open Color Picker's
-//! color. When the person cancels the sampler (Escape on macOS, Windows and in browsers), the
-//! colors stay as they were.
+//! Sample Color from Screen (`ui.sampleScreenColor`): the platform's screen capture
+//! (`craft::platform::screen`, through the framework's [`ScreenPick`]) picks a color anywhere on the
+//! screen. The command answers at once; the color arrives in a later frame ([`tick`]) and becomes
+//! the fill or the stroke through `paint.setFill` / `paint.setStroke` (one undo step), or the open
+//! Color Picker's color. When the person cancels, the colors stay as they were.
 //!
-//! The sampler answers in sRGB (macOS clips a color outside sRGB to it; Windows reads the screen's
-//! 8-bit colors as sRGB). [`sampled`] converts that
-//! into the working RGB space, so when the working space is not sRGB, a color inside sRGB looks as
-//! it did on the screen.
+//! The capture answers in sRGB. [`sampled`] converts that into the working RGB space, so when the
+//! working space is not sRGB, a color inside sRGB looks as it did on the screen.
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::hash::{Hash, Hasher};
 
+use craft::color_ui::ui::{ScreenColorPicker, ScreenPickGesture, ScreenPickerWords};
+use craft::theme::Srgba;
+use craft::ui::runtime::env::Env;
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms};
 
+use crate::VectorcraftApp;
 use crate::menus::opt_bool;
-use crate::{VectorcraftApp, widgets};
 
-/// What the sampler answers: the picked color's display sRGB components (0 to 1), `None` when the
-/// person canceled it, or an error.
-pub type Answer = Result<Option<[f32; 3]>, String>;
+/// The owner of a pick for the fill.
+const FILL: &str = "fill";
+/// The owner of a pick for the stroke.
+const STROKE: &str = "stroke";
 
-/// Shows the system's color sampler. The answer arrives on the receiver when the person picks a
-/// color or cancels, and the host then asks the UI for a frame. An error when the sampler can't be
-/// shown.
-pub type StartSampler = Box<dyn FnMut() -> Result<Receiver<Answer>, String>>;
-
-/// Where the sampled color goes.
-#[derive(Clone, Debug, PartialEq)]
-enum Target {
-    Fill,
-    Stroke,
-    /// The Color Picker that was open, known by its [`PICKER_ID`].
-    Picker(u64),
+/// The window a pick belongs to: a pick whose window changed is cancelled.
+pub(crate) fn target(ctx: &egui::Context) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    ctx.viewport_id().hash(&mut hasher);
+    hasher.finish()
 }
 
-/// The Color Picker's hidden field that holds a number unique to each Color Picker opened
-/// ([`picker_id`]). The sampled color goes only to the Color Picker the sampler was shown for.
-pub(crate) const PICKER_ID: &str = "__pickerId";
-
-/// A new number for a Color Picker's [`PICKER_ID`].
-pub(crate) fn picker_id() -> u64 {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    NEXT.fetch_add(1, Ordering::Relaxed)
+/// Where the document active when the pick started is kept until its color arrives.
+fn doc_key() -> egui::Id {
+    egui::Id::unique("screen-color-doc")
 }
 
-/// A sampler that is shown and has not answered yet.
-pub struct Waiting {
-    answer: Receiver<Answer>,
-    target: Target,
-    /// The document active when it was shown ([`vectorcraft_engine::DocState::uid`]).
-    doc: Option<u64>,
+fn remember_doc(app: &VectorcraftApp, ctx: &egui::Context) {
+    let uid = app.session.active().map(|d| d.uid);
+    ctx.data_mut(|d| d.insert_temp(doc_key(), uid));
 }
 
-/// The host can show a color sampler.
+/// The platform can capture the screen: the shell's capabilities say so and no capture has said it
+/// cannot. Without a window there is nothing to capture.
 pub fn available(app: &VectorcraftApp) -> bool {
-    app.services.screen_color.is_some()
+    let Some(ctx) = app.ui_ctx.as_ref() else { return false };
+    app.screen_pick.available(Env::of_root(ctx).view().shell().caps)
 }
 
-/// The open Color Picker dialog, as [`Target::Picker`] names it.
-fn open_picker(app: &VectorcraftApp) -> Option<Target> {
-    let d = app.ui.dialog.as_ref().filter(|d| crate::dialogs::DialogKind::of(&d.kind) == Some(crate::dialogs::DialogKind::ColorPicker))?;
-    d.fields.get(PICKER_ID).and_then(Value::as_u64).map(Target::Picker)
-}
-
-/// `ui.sampleScreenColor {stroke?, picker?}`: show the sampler for the fill, the stroke (default:
-/// the proxy in front) or, with `picker`, the open Color Picker.
+/// `ui.sampleScreenColor {stroke?, picker?}`: start a pick for the fill, the stroke (default: the
+/// proxy in front) or, with `picker`, the open Color Picker.
 pub fn start(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let stroke = opt_bool(p, "stroke")?.unwrap_or(!app.session.fill_active);
-    let target = if opt_bool(p, "picker")?.unwrap_or(false) {
-        open_picker(app).ok_or("the Color Picker is not open")?
-    } else if stroke {
-        Target::Stroke
+    let picker = if opt_bool(p, "picker")?.unwrap_or(false) {
+        Some(crate::dialogs::color_picker::open_picker(app).ok_or("the Color Picker is not open")?)
     } else {
-        Target::Fill
+        None
     };
-    if app.screen_sampler.is_some() {
+    if app.screen_pick.busy() {
         return Err("the screen color sampler is already open".into());
     }
-    let show = app.services.screen_color.as_mut().ok_or("this system has no screen color sampler")?;
-    let answer = show()?;
-    let doc = app.session.active().map(|d| d.uid);
-    app.screen_sampler = Some(Waiting { answer, target, doc });
+    if !available(app) {
+        return Err("this system has no screen color sampler".into());
+    }
+    if let Some(ctx) = app.ui_ctx.clone() {
+        remember_doc(app, &ctx);
+    }
+    match picker {
+        Some(id) => app.screen_pick.start(crate::dialogs::color_picker::owner(id)),
+        None => app.screen_pick.start(if stroke { STROKE } else { FILL }),
+    }
     Ok(Value::Null)
+}
+
+/// Follows a picker's pipette press for `owner`; the colour of a held drag or of a release inside
+/// the app comes back at once.
+pub(crate) fn hold(app: &mut VectorcraftApp, ctx: &egui::Context, owner: impl Hash, gesture: ScreenPickGesture) -> Option<Srgba> {
+    if !app.screen_pick.busy() {
+        remember_doc(app, ctx);
+    }
+    app.screen_pick.hold(ctx, owner, gesture)
 }
 
 /// The color a display sRGB value stands for in `cms`'s working RGB space: it shows as that sRGB
@@ -97,63 +89,43 @@ pub fn sampled(cms: &Cms, srgb: [f32; 3]) -> Color {
     Color::rgb(r, g, b)
 }
 
-/// The sRGB components of a sampler's hex answer (`#rrggbb` as the browser's EyeDropper gives
-/// `sRGBHex`; the Color panel's hex rules apply), or `None` when it is not hex.
-pub fn srgb_from_hex(hex: &str) -> Option<[f32; 3]> {
-    match crate::panels::color::parse_hex(hex)? {
-        Color::Rgb { r, g, b } => Some([r, g, b]),
-        _ => None,
-    }
-}
-
-/// Each frame: take the sampler's answer when it has arrived.
-pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(w) = &app.screen_sampler else { return };
-    let answer = match w.answer.try_recv() {
-        Ok(answer) => answer,
-        Err(TryRecvError::Empty) => {
-            // The host wakes the window when the sampler answers; this is in case it can't.
-            ctx.request_repaint_after(std::time::Duration::from_secs(1));
-            return;
-        }
-        // The sampler is gone without an answer: as canceled.
-        Err(TryRecvError::Disconnected) => Ok(None),
-    };
-    let Some(Waiting { target, doc, .. }) = app.screen_sampler.take() else { return };
-    let srgb = match answer {
-        Ok(Some(srgb)) => srgb,
-        Ok(None) => return,
-        Err(e) => return app.status(e),
-    };
+/// The color `owner` picked, once. One that arrives after another document became active is
+/// dropped, and the status line says why.
+pub(crate) fn take(app: &mut VectorcraftApp, ctx: &egui::Context, owner: impl Hash) -> Option<Srgba> {
+    let color = app.screen_pick.take(owner)?;
+    let doc = ctx.data(|d| d.get_temp::<Option<u64>>(doc_key())).flatten();
     if app.session.active().map(|d| d.uid) != doc {
-        return app.status(tl!("The active document changed while the screen color sampler was open"));
+        app.status(tl!("The active document changed while the screen color sampler was open"));
+        return None;
     }
-    let color = crate::panels::color_json(&sampled(&cms::active(), srgb));
-    let cmd = match target {
-        Target::Fill => "paint.setFill",
-        Target::Stroke => "paint.setStroke",
-        // The Color Picker previews it on the selection, as any pick. The color is dropped when the
-        // Color Picker the sampler was shown for is no longer open (it was closed meanwhile, or
-        // another Color Picker replaced it).
-        picker @ Target::Picker(_) => {
-            if open_picker(app) == Some(picker)
-                && let Some(d) = app.ui.dialog.as_mut()
-            {
-                d.fields.insert("color".into(), color);
-            }
-            return;
-        }
-    };
-    if let Err(e) = app.run(cmd, json!({ "color": color })) {
-        app.status(e);
-    }
+    Some(color)
 }
 
-/// The eyedropper button that starts the sampler (gray without one). Returns true when clicked.
-pub(crate) fn button(app: &VectorcraftApp, ui: &mut egui::Ui) -> bool {
-    let on = available(app);
-    let tip = if on { tl!("Sample Color from Screen") } else { tl!("This system has no screen color sampler") };
-    widgets::icon_button_enabled(ui, "pipette", tip, app.screen_sampler.is_some(), on, 24.0).clicked()
+/// Each pass after the UI: runs the pick and settles what finished.
+pub(crate) fn tick(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    app.screen_pick.tick(ctx, target(ctx));
+    settle(app, ctx);
+}
+
+/// The capture windows of a running pick; the last thing the app's UI shows in a pass.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    ScreenColorPicker::new(&mut app.screen_pick, "VectorCraft").show(ui);
+}
+
+/// Applies the fill's and the stroke's color, and reports a failed capture. A Color Picker takes
+/// its own in its pass ([`crate::dialogs::color_picker::pump`]).
+fn settle(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    for (owner, cmd) in [(FILL, "paint.setFill"), (STROKE, "paint.setStroke")] {
+        if let Some(c) = take(app, ctx, owner) {
+            let color = crate::panels::color_json(&sampled(&cms::active(), [c.r, c.g, c.b]));
+            if let Err(e) = app.run(cmd, json!({ "color": color })) {
+                app.status(e);
+            }
+        }
+    }
+    if let Some(message) = app.screen_pick.take_status(&ScreenPickerWords::default()) {
+        app.status(message.text.as_str().to_owned());
+    }
 }
 
 #[cfg(test)]

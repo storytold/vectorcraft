@@ -101,9 +101,13 @@ fn pixelated_rejects_non_images_and_invalid_values() {
     assert!(s.execute("object.setProps", &json!({"ids": [a.0, rect.0], "pixelated": true}),).is_err());
 
     // Invalid parameter types must also be rejected.
-    for value in [json!("true"), json!(1)] {
+    for value in [json!("true"), json!(1), json!([]), json!({})] {
         assert!(s.execute("object.setProps", &json!({"ids": [a.0, b.0], "pixelated": value}),).is_err());
     }
+
+    // An explicit null leaves this optional setting unchanged.
+    s.execute("object.setProps", &json!({"ids": [a.0, b.0], "pixelated": null})).unwrap();
+    s.execute("object.setProps", &json!({"id": rect.0, "pixelated": null})).unwrap();
 
     assert!(!pixelated(&s, a));
     assert!(!pixelated(&s, b));

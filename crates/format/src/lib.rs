@@ -55,6 +55,8 @@ use serde::{Deserializer, Serialize};
 use vectorcraft_brush::stored_art::StoredArt;
 use vectorcraft_doc::{Document, ImageBlob};
 
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub use atomic::sync_parent;
 #[cfg(not(target_arch = "wasm32"))]
 pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
 use craft_gzip::Gz;
@@ -586,7 +588,7 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     let mut doc = f.document;
     for (k, img) in f.images {
         let bytes = bytes_of(&img).ok_or_else(|| FormatError::BadImage(k.clone()))?;
-        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None };
+        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None, file_font: Default::default() };
         // Until the linked file is read, the preview stands in for it.
         if img.proxy {
             blob.proxy = Some(blob.bytes.clone());
@@ -637,8 +639,16 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
+    // Untrusted, and unset in a file saved after a dimension was pasted into a document that had
+    // none: the flag is set when some object is a dimension (after the depth limit too).
+    let mut dimensions = false;
+    doc.walk(|n| dimensions |= n.extras().dimension.is_some());
+    doc.dimensions = dimensions;
     // Untrusted: ruby ranges over the type's text, clamped to it (after the depth limit too).
     doc.fix_ruby();
+    // Untrusted: at most 64 tags an object, each name and value at most 64 KiB, with distinct ids
+    // (after the depth limit too).
+    doc.tidy_tags();
     // Untrusted: the raster effects resolution, within 1 to 2400 ppi (72 when it isn't finite).
     doc.raster_effects_ppi = Some(doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
     // Untrusted: the superscript, subscript and small caps proportions of the type, the graph

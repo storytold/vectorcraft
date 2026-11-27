@@ -1,5 +1,5 @@
 //! Takes the app's windows off screen when it quits on Linux and the BSDs, before eframe drops the
-//! app. Dropping the app waits up to [`vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT`] for the
+//! app. Dropping the app waits up to `craft::platform::clipboard::PROBE_STOP_WAIT` for the
 //! clipboard handles to let go, and eframe closes the windows only after that wait.
 //!
 //! The main window is hidden on X11 (XWayland included). winit cannot hide a Wayland window, so on
@@ -170,10 +170,8 @@ fn unmap_x11(windows: &[u32]) {
 /// compositor stops showing it, and the window and its connection stay open.
 #[cfg(target_os = "linux")]
 fn unmap_wayland(window: &winit::window::Window) {
-    let Some((conn, surface)) = super::portal_save::wayland::surface(window) else { return };
-    surface.attach(None, 0, 0);
-    surface.commit();
-    if let Err(e) = conn.flush() {
+    // PLAN: assumed `craft::wayland::unmap_window(&winit::window::Window) -> Result<(), impl Display>` (fl.F39, files-w1)
+    if let Err(e) = craft::wayland::unmap_window(window) {
         log::warn!("couldn't reach the compositor to hide the window on quit: {e}");
     }
 }

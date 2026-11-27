@@ -2,29 +2,33 @@
 //! ([`vectorcraft_engine::Session::attach_scripts_dir`]), each `.js` or `.jsx` file by its name
 //! without the extension and each subfolder as a submenu, above Check Script… and Other Script….
 //!
-//! The folder is read on another thread ([`vectorcraft_engine::script::folder::list`]: names only,
-//! within its limits), one read at a time: when the app starts, each time its window becomes the
-//! active one, and each time the File menu of the window's menu bar opens ([`refresh`]). The menus show the last finished
-//! listing ([`items`]), so a script added to the folder is listed without a restart.
+//! The folder is read by a job of the host's queue ([`vectorcraft_engine::script::folder::list`]:
+//! names only, within its limits), one read at a time: when the app starts, each time its window
+//! becomes the active one, and each time a menu of the window's menu bar opens ([`refresh`]). The
+//! menus show the last finished listing ([`items`]), so a script added to the folder is listed
+//! without a restart.
 //!
 //! Until the first read ends the menu shows [`LOADING`], and [`SLOW`] once that read has taken
-//! [`SLOW_SECS`]; a first read that cannot start or ends without a listing shows [`UNREADABLE`],
-//! and the next read tries again.
+//! [`SLOW_SECS`].
 //!
 //! `ui.runInstalledScript {path}` runs a listed script (`script.run`) without the warning Other
 //! Script… shows: the file was put in the folder to be run from the menu. The path is one a
-//! listing gave; a file that is no longer a plain script under the folder is not run.
+//! listing gave; a file that is no longer a plain script under the folder is not run. With General ›
+//! Run Startup Scripts on, the startup scripts run first (`script.startup.run`).
 
-use std::path::Path;
-use std::sync::mpsc::{Receiver, TryRecvError};
+// PLAN: needs craft-menu, craft-host and craft-platform in crates/ui-egui/Cargo.toml (shell owner).
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
+use craft::host::queue::{JobQueue, Priority, QueueOptions};
+use craft::host::{Host, Wake};
+use craft::menu::{CommandRef, Item, Node};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::NOT_LISTED;
 use vectorcraft_engine::script::folder::{Entry, Listing};
 
 use crate::VectorcraftApp;
-use crate::menus::Item;
 
 /// The command a listed script's menu item runs.
 pub const COMMAND: &str = "ui.runInstalledScript";
@@ -41,56 +45,56 @@ pub const LABELS: &[&str] = &[TRUNCATED, UNREADABLE, LOADING, SLOW];
 /// How long the first read runs before the menu shows [`SLOW`].
 pub const SLOW_SECS: f64 = 2.0;
 
+/// The command Other Script… runs, which only File › Scripts itself lists.
+const OTHER_SCRIPT: &str = "ui.runScript";
+
 #[derive(Default)]
 struct State {
+    /// The reads of the folder, keyed by the folder; built at the first read.
+    queue: Option<JobQueue<PathBuf, Listing>>,
     /// The last finished listing.
     listing: Arc<Listing>,
-    /// How many finished listings differed from the one before.
+    /// How many finished listings differed from the one before, and how often the note before the
+    /// first listing changed.
     revision: u64,
-    /// The listing being read on another thread.
-    reading: Option<Receiver<Listing>>,
-    /// Another read was asked for while one was under way; [`poll`] starts it when that one ends.
-    pending: bool,
-    /// A first read was asked for.
-    started: bool,
-    /// The window was the active one at the last [`poll`].
-    focused: bool,
     /// A listing has been taken in.
     loaded: bool,
-    /// When the first read started ([`crate::clock::now_secs`]), while it is under way.
+    /// When the first read started, in seconds of [`craft::platform::clock::monotonic_ms`], until a
+    /// listing comes.
     first_read: Option<f64>,
-    /// The first read has taken [`SLOW_SECS`].
-    slow: bool,
-    /// No listing yet, and the last read could not start or ended without one.
-    failed: bool,
 }
 
 impl State {
-    /// The note in place of a listing before the first one.
-    fn first_read_note(&self) -> Option<&'static str> {
+    /// The queue, built on the host's jobs; false without a host (no listing is read then).
+    fn ensure_queue(&mut self, ctx: &egui::Context) -> bool {
+        if self.queue.is_none() {
+            let Some(host) = Host::try_of_ctx(ctx) else { return false };
+            let wake = ctx.clone();
+            let wake = Wake::new(move || wake.request_repaint());
+            self.queue = Some(JobQueue::new(host.jobs_shared().clone(), wake, QueueOptions::default()));
+        }
+        true
+    }
+
+    /// The note in place of a listing before the first one, at `now` seconds.
+    fn note_at(&self, now: f64) -> Option<&'static str> {
         if self.loaded {
             return None;
         }
-        if self.reading.is_some() {
-            return Some(if self.slow { SLOW } else { LOADING });
-        }
-        self.failed.then_some(UNREADABLE)
+        let started = self.first_read?;
+        Some(if now - started >= SLOW_SECS { SLOW } else { LOADING })
     }
 
-    /// No listing yet, and the read under way ended without one or could not start.
-    fn first_read_failed(&mut self) {
-        if !self.loaded {
-            (self.first_read, self.slow, self.failed) = (None, false, true);
+    /// Show a finished listing; the first one also takes the place of the loading note.
+    fn take_in(&mut self, listing: Listing) {
+        let changed = *self.listing != listing;
+        if changed {
+            self.listing = Arc::new(listing);
+        }
+        if changed || !self.loaded {
             self.revision += 1;
         }
-    }
-
-    /// Show [`SLOW`] once the first read has run [`SLOW_SECS`] by `now`.
-    fn mark_slow(&mut self, now: f64) {
-        if !self.loaded && !self.slow && self.reading.is_some() && self.first_read.is_some_and(|t| now - t >= SLOW_SECS) {
-            self.slow = true;
-            self.revision += 1;
-        }
+        (self.loaded, self.first_read) = (true, None);
     }
 }
 
@@ -108,6 +112,11 @@ fn state() -> MutexGuard<'static, State> {
         S.with(|s| *s)
     };
     state.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The clock the notes follow, in seconds.
+fn now() -> f64 {
+    craft::platform::clock::monotonic_ms() / 1000.0
 }
 
 /// The most different names the menu shows in one session. Each is kept for the rest of the
@@ -139,193 +148,120 @@ pub(crate) fn intern(s: &str) -> Option<&'static str> {
     Some(v)
 }
 
-/// Changes whenever the menus' listing or the note before the first listing changes (the macOS
-/// menu bar follows it).
+/// Changes whenever the menus' listing or the note before the first listing changes, so the menus
+/// are laid out again. The low bit is the [`SLOW`] note, which the clock brings in.
 pub fn revision() -> u64 {
-    state().revision
+    let state = state();
+    state.revision * 2 + u64::from(state.note_at(now()) == Some(SLOW))
 }
 
-/// Read the Scripts folder again on another thread, unless the session has no folder (the web, and
-/// a run without preferences). While a read is under way, another read starts when it ends
-/// ([`poll`]). `ctx` is asked to draw when the read ends.
-pub fn refresh(app: &VectorcraftApp, ctx: Option<&egui::Context>) {
+/// Read the Scripts folder again, unless the session has no folder (the web, and a run without
+/// preferences) or the context has no host. A read asked for while one runs waits for it (the
+/// queue runs one job per folder). `ctx` is asked to draw when the read ends.
+pub fn refresh(app: &VectorcraftApp, ctx: &egui::Context) {
     let Some(root) = app.session.scripts_dir().map(Path::to_path_buf) else { return };
     let mut state = state();
-    if state.reading.is_some() {
-        state.pending = true;
+    if !state.ensure_queue(ctx) {
         return;
     }
-    let (tx, rx) = std::sync::mpsc::channel();
-    let worker_ctx = ctx.cloned();
-    let spawned = std::thread::Builder::new().name("vectorcraft-scripts".into()).spawn(move || {
+    if let Some(queue) = &state.queue {
+        let read = root.clone();
         // The app's own folder, read for the person at the keyboard.
-        let listing = vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&root));
-        if tx.send(listing).is_ok()
-            && let Some(ctx) = worker_ctx
-        {
-            ctx.request_repaint();
-        }
-    });
-    if spawned.is_err() {
-        state.first_read_failed();
-        return;
+        queue.submit(root, Priority::VISIBLE, move |_| {
+            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read))
+        });
     }
-    state.reading = Some(rx);
     if !state.loaded && state.first_read.is_none() {
         // The menus show the loading note, and a frame comes when it is due to change to SLOW.
-        state.first_read = Some(crate::clock::now_secs());
+        state.first_read = Some(now());
         state.revision += 1;
-        if let Some(ctx) = ctx {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f64(SLOW_SECS));
-        }
+        ctx.request_repaint_after(Duration::from_secs_f64(SLOW_SECS));
     }
 }
 
-/// Once per iteration: start a read on the first one and when the window becomes the active one,
-/// take in a read that ended, and then start a read asked for while it was under way.
+/// Once per pass: read the folder at the first pass and in a pass whose input says the window
+/// became the active one, then take in the reads that ended. Only the pass that receives the
+/// window event reads; a second pass of the frame just takes in.
 pub fn poll(app: &VectorcraftApp, ctx: &egui::Context) {
-    let focused = ctx.input(|i| i.focused);
-    let start = {
-        let mut state = state();
-        let start = !state.started || (focused && !state.focused);
-        (state.started, state.focused) = (true, focused);
-        start
-    };
-    if start {
-        refresh(app, Some(ctx));
+    let first = state().queue.is_none();
+    if first || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::WindowFocused(true)))) {
+        refresh(app, ctx);
     }
-    take(false);
-    state().mark_slow(crate::clock::now_secs());
-    let again = {
-        let mut state = state();
-        let again = state.pending && state.reading.is_none();
-        if again {
-            state.pending = false;
-        }
-        again
-    };
-    if again {
-        refresh(app, Some(ctx));
+    take();
+}
+
+/// Take in the reads that ended.
+fn take() {
+    let mut state = state();
+    let Some(queue) = &state.queue else { return };
+    let done: Vec<Listing> = std::iter::from_fn(|| queue.try_recv()).map(|done| done.result).collect();
+    for listing in done {
+        state.take_in(listing);
     }
 }
 
-/// Take in the read under way: when it has ended, or with `wait` once it ends.
-fn take(wait: bool) {
-    let mut state = state();
-    let Some(reading) = &state.reading else { return };
-    let listing = if wait { reading.recv().map_err(|_| TryRecvError::Disconnected) } else { reading.try_recv() };
-    match listing {
-        Ok(listing) => {
-            let changed = *state.listing != listing;
-            if changed {
-                state.listing = Arc::new(listing);
-            }
-            // The first listing also takes the place of the loading note.
-            if changed || !state.loaded {
-                state.revision += 1;
-            }
-            (state.loaded, state.first_read, state.slow, state.failed) = (true, None, false, false);
-            state.reading = None;
-        }
-        Err(TryRecvError::Empty) => {}
-        Err(TryRecvError::Disconnected) => {
-            state.reading = None;
-            state.first_read_failed();
+/// Wait for the reads under way and take them in.
+#[cfg(test)]
+pub(crate) fn finish() {
+    {
+        let state = state();
+        if let Some(queue) = &state.queue {
+            queue.finish(Duration::from_secs(10));
         }
     }
-}
-
-/// Wait for the read under way and take it in.
-#[cfg(test)]
-pub(crate) fn wait() {
-    take(true);
-}
-
-/// The read under way ends without a listing, as when its thread stops early.
-#[cfg(test)]
-pub(crate) fn lose_read() {
-    let mut state = state();
-    if state.reading.is_some() {
-        state.reading = Some(std::sync::mpsc::channel::<Listing>().1);
-    }
-}
-
-/// When the first read started, while it is under way.
-#[cfg(test)]
-pub(crate) fn first_read_started() -> Option<f64> {
-    state().first_read
-}
-
-/// What [`poll`] does about a slow first read, at `now` ([`crate::clock::now_secs`]).
-#[cfg(test)]
-pub(crate) fn check_slow(now: f64) {
-    state().mark_slow(now);
-}
-
-/// Wait for the read under way to end and leave its listing to be taken in, so the read is under
-/// way until the next [`poll`].
-#[cfg(test)]
-pub(crate) fn end_untaken() {
-    let mut state = state();
-    let Some(reading) = &state.reading else { return };
-    let (tx, rx) = std::sync::mpsc::channel();
-    if let Ok(listing) = reading.recv() {
-        let _ = tx.send(listing);
-    }
-    state.reading = Some(rx);
+    take();
 }
 
 /// File › Scripts' items: the listed scripts and subfolders, a note when some may be missing or
 /// the folder cannot be read, or one before the first listing, then Check Script… and Other
 /// Script….
-pub fn items() -> Vec<Item> {
-    // A row whose name is past [`MAX_NAMES`] is left out (`dropped`).
-    fn level(entries: &[Entry], dropped: &mut bool) -> Vec<Item> {
-        let mut items = Vec::with_capacity(entries.len());
-        for e in entries {
-            let item = match e {
-                Entry::Script { label, path } => intern(label).map(|l| Item::Cmd(l, COMMAND, json!({ "path": path.to_string_lossy() }))),
-                Entry::Folder { label, entries } => {
-                    let inner = level(entries, dropped);
-                    intern(label).filter(|_| !inner.is_empty()).map(|l| Item::Sub(l, inner))
+pub fn items() -> Vec<Node> {
+    items_at(now())
+}
+
+/// [`items`] with the notes as they are at `now` seconds.
+pub(crate) fn items_at(now: f64) -> Vec<Node> {
+    fn level(entries: &[Entry]) -> Vec<Node> {
+        entries
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Script { label, path } => {
+                    let command = CommandRef::with_params(COMMAND, json!({ "path": path.to_string_lossy() }));
+                    Some(Node::Item(Item::new(command, label.to_string())))
                 }
-            };
-            match item {
-                Some(item) => items.push(item),
-                None => *dropped = true,
-            }
-        }
-        items
+                Entry::Folder { label, entries } => {
+                    let inner = level(entries);
+                    (!inner.is_empty()).then(|| Node::submenu(label.to_string(), inner))
+                }
+            })
+            .collect()
     }
     let (listing, note) = {
         let state = state();
-        (state.listing.clone(), state.first_read_note())
+        (state.listing.clone(), state.note_at(now))
     };
-    let mut dropped = false;
-    let mut items = level(&listing.entries, &mut dropped);
-    if listing.truncated || dropped {
-        items.push(Item::Header(TRUNCATED));
+    let mut nodes = level(&listing.entries);
+    let notes = [listing.truncated.then_some(TRUNCATED), listing.unreadable.then_some(UNREADABLE), note];
+    nodes.extend(notes.into_iter().flatten().map(crate::menus::placeholder));
+    if !nodes.is_empty() {
+        nodes.push(Node::Separator);
     }
-    if listing.unreadable {
-        items.push(Item::Header(UNREADABLE));
-    }
-    items.extend(note.map(Item::Header));
-    if !items.is_empty() {
-        items.push(Item::Sep);
-    }
-    items.extend([Item::Cmd("Check Script…", "ui.checkScript", Value::Null), Item::Cmd("Other Script…", "ui.runScript", Value::Null)]);
-    items
+    nodes.extend([
+        Node::Item(Item::new(CommandRef::new("ui.checkScript"), "Check Script…")),
+        Node::Item(Item::new(CommandRef::new(OTHER_SCRIPT), "Other Script…")),
+    ]);
+    nodes
 }
 
 /// Is `children` a subfolder's submenu, named after the folder? Its first item is a listed script
 /// or another subfolder, and it has no Other Script…, which only File › Scripts itself has.
-pub fn is_folder(children: &[Item]) -> bool {
+pub fn is_folder(children: &[Node]) -> bool {
     let listed = match children.first() {
-        Some(Item::Cmd(_, id, _)) => *id == COMMAND,
-        Some(Item::Sub(_, inner)) => is_folder(inner),
+        Some(Node::Item(item)) => item.command.id == COMMAND,
+        Some(Node::Submenu { children, .. }) => is_folder(children),
         _ => false,
     };
-    listed && !children.iter().any(|c| matches!(c, Item::Cmd(_, "ui.runScript", _)))
+    listed && !children.iter().any(|c| matches!(c, Node::Item(item) if item.command.id == OTHER_SCRIPT))
 }
 
 /// May the request being served read the listed script `p` names? Under an automation read root
@@ -341,10 +277,16 @@ pub fn readable(p: &Value) -> bool {
 /// folder is read again.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
-    app.run("script.run", json!({ "path": path, "installed": true })).inspect_err(|e| {
-        if e == NOT_LISTED {
-            let ctx = app.ui_ctx.clone();
-            refresh(app, ctx.as_ref());
+    // With startup scripts to run first, a script no longer in the folder is found before they run.
+    let listed = match app.session.startup_skip() {
+        Some(_) => Ok(()),
+        None => app.session.installed_script(path).map(drop).map_err(|e| e.to_string()),
+    };
+    listed.and_then(|()| crate::script_runs::run_chosen(app, json!({ "path": path, "installed": true }))).inspect_err(|e| {
+        if e == NOT_LISTED
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            refresh(app, &ctx);
         }
     })
 }
