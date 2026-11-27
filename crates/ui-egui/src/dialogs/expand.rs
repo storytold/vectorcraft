@@ -10,7 +10,7 @@
 //! `object.expand.info`), `__canGradient` (Expand Gradient To applies) and `__canSteps` (it
 //! applies and makes objects). What only the art of symbol instances holds needs Object on.
 
-use craft::ui::contract::SaveKey;
+use craft::ui::contract::{Bind, SaveKey};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::memory::Lifetime;
 use serde_json::{Value, json};
@@ -152,7 +152,7 @@ fn dialog(app: &VectorcraftApp, info: ExpandInfo) -> Result<HostedParamDialog, S
     let rows = rows();
     Ok(HostedParamDialog::new(ctx, KIND, fields, move |fields| {
         refresh(info, fields);
-        ParamDialog::new(KIND, tl!("Expand"), rows.clone()).remember(REMEMBER).remember_for(Lifetime::Run)
+        ParamDialog::new(KIND, tl!("Expand"), rows.clone()).remember(REMEMBER).remember_for(Lifetime::Run).values(Bind::bound(fields))
     }))
 }
 
@@ -231,6 +231,77 @@ mod tests {
 
     fn app() -> VectorcraftApp {
         crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
+    }
+
+    #[test]
+    fn actual_fill_and_stroke_choices_leave_those_paints_unexpanded() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        let mut app = app();
+        gradient_rectangle(&mut app);
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(800.0, 600.0));
+        panel.app().run("ui.expandDialog", json!({})).unwrap();
+        panel.click_role("Fill", Role::CHECK_BOX);
+        panel.click_role("Stroke", Role::CHECK_BOX);
+        let edited = fields(&panel.app());
+        assert_eq!((edited.bool("fill"), edited.bool("stroke")), (Some(false), Some(false)));
+        assert_eq!(edited.bool("__canGradient"), Some(false));
+        assert!(!panel.enabled("Gradient Mesh"));
+        assert!(!panel.enabled("Objects"));
+        panel.click("OK");
+        assert!(!is_open(&panel.app()));
+        let app = panel.app();
+        let state = app.session.active().unwrap();
+        let node = state.doc.node(state.selection.objects[0]).unwrap();
+        assert!(matches!(node.kind, NodeKind::Path { .. }), "the object remains one path");
+        assert!(matches!(node.appearance.fill_paint(), vectorcraft_color::Paint::Gradient(_)), "unticked Fill keeps its gradient");
+        assert!(!node.appearance.stroke_paint().is_none(), "unticked Stroke keeps its stroke");
+        assert_eq!(state.history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn actual_gradient_controls_apply_and_remember_the_typed_object_count() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        let mut app = app();
+        gradient_rectangle(&mut app);
+        let original = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(800.0, 600.0));
+        panel.app().run("ui.expandDialog", json!({})).unwrap();
+        panel.click_role("Gradient Mesh", Role::RADIO_BUTTON);
+        assert_eq!(fields(&panel.app()).text("gradient"), Some("mesh"));
+        assert!(!panel.enabled("Objects"));
+        let specify = if panel.shows("Specify") { "Specify" } else { "Specify:" };
+        panel.click_role(specify, Role::RADIO_BUTTON);
+        assert!(panel.enabled("Objects"));
+        panel.click_role("Objects", Role::SPIN_BUTTON);
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text("4");
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        assert_eq!(fields(&panel.app()).number("steps"), Some(4.0));
+        panel.click("OK");
+        assert!(!is_open(&panel.app()));
+        {
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            let node = state.doc.node(state.selection.objects[0]).unwrap();
+            let NodeKind::Group { children, clip: true } = &node.kind else { panic!("a gradient clip group") };
+            assert_eq!(children.iter().filter(|child| matches!(child.kind, NodeKind::Path { clipping: false, .. })).count(), 4);
+            assert_eq!(state.history.undo.len(), undo + 1);
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.app().run("ui.expandDialog", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(fields(&panel.app()).number("steps"), Some(4.0), "a successful real edit is remembered");
+        panel.click("Cancel");
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
     }
 
     fn ctx(app: &VectorcraftApp) -> egui::Context {
