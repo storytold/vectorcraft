@@ -20,7 +20,7 @@ use craft::ui::runtime::requests::PathKind;
 use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 
-use super::confirm::ask;
+use super::confirm::{ask, ask_in_document};
 use crate::background::{self, Writer};
 use crate::{VectorcraftApp, file_asks, io};
 
@@ -46,7 +46,7 @@ fn downloads(app: &VectorcraftApp) -> bool {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let Some(path) = st.path.clone() else {
-        ask(
+        ask_in_document(
             app,
             tl!("Save the document first?"),
             tl!("Package collects a saved document with its linked files and fonts."),
