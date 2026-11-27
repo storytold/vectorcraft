@@ -16,17 +16,21 @@
 use std::sync::Arc;
 
 use craft::behavior::IconId;
-use craft::color_ui::ui::{ColorPanel, ColorPanelLayout, ColorPanelOutput, ColorPanelShown, ColorPanelState, DropperButton, SwatchPalette};
+use craft::color_ui::ui::{
+    ColorPanel, ColorPanelLayout, ColorPanelMode, ColorPanelOutput, ColorPanelShown, ColorPanelState, ColorPanelWords, DropperButton, SwatchPalette,
+};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, PopupKind, Show as _, ShowContainer as _, Trigger};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::notices::Notice;
 use craft::ui::popover::Popover;
-use craft::ui::runtime::env::{Label, UnitKind};
+use craft::ui::runtime::env::{Env, Label, UnitKind};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, vec2};
@@ -231,6 +235,8 @@ struct Filed {
     swatch: Option<(String, Color)>,
     eyedropper: bool,
     panels: Vec<ColorPanelOutput>,
+    /// Only an actual Shift-cycle changes this; an unchanged local snapshot must not overwrite a menu command.
+    mode: Option<ColorPanelMode>,
 }
 
 /// The gradient stop popover.
@@ -286,6 +292,9 @@ impl StackDialog for GradientStopPopover {
             .at_point(*at)
             .close_on_enter(true)
             .show(ui, |ui, _| body(ui, feed, tab, panel, filed));
+        if shown.inner == Some(true) {
+            return Some(DialogResult::Cancel);
+        }
         match shown.output.closed {
             Some(CloseReason::Enter) => self.confirm(ui.ctx()).map(DialogResult::Ok),
             Some(_) => Some(DialogResult::Cancel),
@@ -336,7 +345,8 @@ impl StackDialog for GradientStopPopover {
 
 /// The popover's body: the tabs and the eyedropper, the Color panel or the swatches, then opacity and location (a
 /// point: spread). What the user edits is filed in `filed`.
-fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) {
+fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) -> bool {
+    let mut outside = false;
     Stack::new().show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let tabs = [
@@ -349,16 +359,23 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
                 let tip = tl!("Eyedropper: click the art to sample the stop's colour").to_owned();
                 filed.eyedropper |= DropperButton::new(tip, Bind::given(false)).show(ui).edit.value() == Some(&true);
             }
+            if *tab == Tab::Color {
+                outside |= mode_menu(ui, &feed.shown, panel.mode);
+            }
         });
         match *tab {
             // The Color panel edits the selected stop (or point) of the active gradient.
             Tab::Color => {
+                let before = panel.mode;
                 filed.panels.push(
                     ColorPanel::new(Bind::bound(&mut *panel), [feed.current; 2])
                         .layout(ColorPanelLayout::FillStroke)
                         .shown(feed.shown.clone())
                         .show(ui),
                 );
+                if panel.mode != before {
+                    filed.mode = Some(panel.mode);
+                }
             }
             Tab::Swatches => swatches(ui, feed, filed),
         }
@@ -368,6 +385,26 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
             *amount = percent_field(ui, label.to_owned(), feed.amount).or(*amount);
         });
     });
+    outside
+}
+
+/// The Color panel's existing five mode commands. Native menu ownership keeps its parent popover
+/// open on a pick and gives the child the first Escape, including rows outside the parent bounds.
+fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> bool {
+    let words = Env::of(ui).words::<ColorPanelWords>();
+    let label = match shown {
+        ColorPanelShown::Mode(mode) => mode.label(&words),
+        ColorPanelShown::Tint(_) => words.tint.clone(),
+        _ => fallback.label(&words),
+    };
+    let button = Button::new(label).popup(PopupKind::Menu).show(ui);
+    let menu = Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+        for mode in ColorPanelMode::FILL_STROKE {
+            MenuItem::command(mode.command()).show(ui);
+        }
+    });
+    // The child absorbs an outside press before its parent sees it. Close both for that event only.
+    menu.output.closed == Some(CloseReason::Outside)
 }
 
 /// Document swatches as tiles: a pick gives the stop (or point) that colour.
@@ -454,6 +491,9 @@ fn refresh(app: &VectorcraftApp, ctx: &egui::Context, id: DialogId, target: &Tar
     dialogs.with(|host| {
         if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
             (popover.at, popover.feed) = (at, Some(feed));
+            popover.panel = app.ui.color_panel;
+            // This panel edits the active stop/point, never the other paint behind the proxy.
+            popover.panel.background = false;
         }
     });
 }
@@ -524,6 +564,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     for output in &filed.panels {
         // PLAN: assumed `panels::color::apply_output(app, &ColorPanelOutput)` (color-w9's decision).
         crate::panels::color::apply_output(app, output);
+    }
+    if let Some(mode) = filed.mode {
+        let target = crate::panels::color::target_now(app);
+        crate::panels::color::set_mode(app, &target, mode);
     }
     if filed.eyedropper {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
