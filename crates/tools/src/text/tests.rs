@@ -676,6 +676,39 @@ fn the_caret_is_an_overlay_of_its_own() {
 }
 
 #[test]
+fn split_caret_overlay_follows_the_active_run_and_the_object_transform() {
+    for text in ["aאבz", "aابz"] {
+        let (mut d, id, mut tool) = editing(text);
+        let xf = vectorcraft_geom::Affine::new([-1.0, 0.5, 0.25, 1.0, 40.0, 20.0]);
+        let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!("text fixture") };
+        t.xf = xf;
+        let (sel, p) = (Selection::default(), paint());
+        let c = cx(&d, &sel, &p);
+        let t = TypeTool::text(&c, id).unwrap();
+        let lay = vectorcraft_text::layout(FontDb::global(), t);
+        for byte in [1, text.len() - 1] {
+            tool.caret = byte;
+            tool.anchor = byte;
+            let split = vectorcraft_text::split_caret_position(&lay, byte).unwrap();
+            let (a, b) = split.primary;
+            let sign = if split.rtl { -1.0 } else { 1.0 };
+            let flag = Point::new(a.x + (b.y - a.y) * sign, a.y - (b.x - a.x) * sign);
+            let expected = Overlay::SplitCaret {
+                a: xf * a,
+                b: xf * b,
+                other_a: xf * split.alternate.0,
+                other_b: xf * split.alternate.1,
+                flag: xf * flag,
+            };
+            assert!(tool.overlays(&c).contains(&expected));
+            assert_eq!(tool.sel(), (byte, byte), "drawing does not change editing affinity");
+        }
+        tool.anchor = 0;
+        assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::SplitCaret { .. })), "selection has no caret");
+    }
+}
+
+#[test]
 fn drag_selects_and_overlay_highlights() {
     let (d, id, mut tool) = editing("Select me please");
     let (sel, p) = (Selection::default(), paint());

@@ -15,6 +15,8 @@ use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, 
 use egui::{Color32, CornerRadius, Pos2, Rect as ScreenRect, Response, Vec2};
 use vectorcraft_tools::Overlay;
 
+use crate::caches::CaretBlinkKey;
+
 use super::artboards::names_an_artboard;
 use super::{VectorcraftApp, tool_adapter};
 
@@ -108,12 +110,21 @@ pub(crate) fn caret_shown(elapsed: f64, focused: bool) -> bool {
     !focused || !elapsed.is_finite() || elapsed < 0.0 || ((elapsed / CARET_BLINK).floor() as u64).is_multiple_of(2)
 }
 
-/// `overlays` with the text caret blinking: `caret` (its ends' bits and when it got there) starts
+/// `overlays` with the text caret blinking: `caret` (both positions, direction and when it got there) starts
 /// over when the caret moves, and the caret is left out while it is off. Returns the overlays and
 /// the seconds until the caret next turns on or off (None: nothing to blink).
-pub(crate) fn blink_caret(caret: &mut Option<([u64; 4], f64)>, now: f64, focused: bool, mut overlays: Vec<Overlay>) -> (Vec<Overlay>, Option<f64>) {
+pub(crate) fn blink_caret(
+    caret: &mut Option<(CaretBlinkKey, f64)>,
+    now: f64,
+    focused: bool,
+    mut overlays: Vec<Overlay>,
+) -> (Vec<Overlay>, Option<f64>) {
     let shown = overlays.iter().find_map(|o| match o {
-        Overlay::Caret { a, b } => Some([a.x, a.y, b.x, b.y].map(f64::to_bits)),
+        Overlay::Caret { a, b } => Some(CaretBlinkKey { primary: [a.x, a.y, b.x, b.y].map(f64::to_bits), split: None }),
+        Overlay::SplitCaret { a, b, other_a, other_b, flag } => Some(CaretBlinkKey {
+            primary: [a.x, a.y, b.x, b.y].map(f64::to_bits),
+            split: Some([other_a.x, other_a.y, other_b.x, other_b.y, flag.x, flag.y].map(f64::to_bits)),
+        }),
         _ => None,
     });
     let Some(at) = shown else {
@@ -127,7 +138,7 @@ pub(crate) fn blink_caret(caret: &mut Option<([u64; 4], f64)>, now: f64, focused
     *caret = Some((at, since));
     let elapsed = (now - since).max(0.0);
     if !caret_shown(elapsed, focused) {
-        overlays.retain(|o| !matches!(o, Overlay::Caret { .. }));
+        overlays.retain(|o| !matches!(o, Overlay::Caret { .. } | Overlay::SplitCaret { .. }));
     }
     let next = focused.then(|| CARET_BLINK - elapsed % CARET_BLINK);
     (overlays, next)
@@ -135,7 +146,7 @@ pub(crate) fn blink_caret(caret: &mut Option<([u64; 4], f64)>, now: f64, focused
 
 /// `overlays` with the text caret on or off as it blinks ([`blink_caret`]), asking for the frame where it next
 /// turns on or off.
-pub(super) fn blinking(caret: &mut Option<([u64; 4], f64)>, ui: &egui::Ui, overlays: Vec<Overlay>) -> Vec<Overlay> {
+pub(super) fn blinking(caret: &mut Option<(CaretBlinkKey, f64)>, ui: &egui::Ui, overlays: Vec<Overlay>) -> Vec<Overlay> {
     let (now, focused) = ui.input(|i| (i.time, i.focused));
     let (overlays, toggle) = blink_caret(caret, now, focused, overlays);
     if let Some(secs) = toggle {
@@ -249,6 +260,19 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
             }
             Overlay::Caret { a, b } => {
                 stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data([0, 0, 0]));
+            }
+            Overlay::SplitCaret { a, b, other_a, other_b, flag } => {
+                stroke_run(
+                    draw,
+                    vec![view.to_screen(*other_a), view.to_screen(*other_b)],
+                    false,
+                    false,
+                    StrokeWidth::Thin,
+                    data_rgba([0, 0, 0, 128]),
+                );
+                let a = view.to_screen(*a);
+                let direction = (view.to_screen(*flag) - a).normalized();
+                stroke_run(draw, vec![view.to_screen(*b), a, a + direction * 4.0], false, false, StrokeWidth::Thin, data([0, 0, 0]));
             }
             Overlay::GridLine { a, b, color } => {
                 stroke_run(draw, vec![view.to_screen(*a), view.to_screen(*b)], false, false, StrokeWidth::Thin, data_rgba(*color));

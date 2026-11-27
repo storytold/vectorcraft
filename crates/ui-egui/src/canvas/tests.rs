@@ -6640,3 +6640,32 @@ fn the_text_caret_blinks_and_starts_over_when_it_moves() {
     let (o, next) = overlays::blink_caret(&mut state, 20.0, true, vec![guide.clone()]);
     assert_eq!((o.len(), next, state), (1, None, None), "no caret: nothing to blink");
 }
+
+#[test]
+fn split_caret_blinks_as_one_and_restarts_for_alternate_or_direction_changes() {
+    let split = |other: f64, direction: f64| Overlay::SplitCaret {
+        a: Point::ZERO,
+        b: Point::new(0.0, 10.0),
+        other_a: Point::new(other, 0.0),
+        other_b: Point::new(other, 10.0),
+        flag: Point::new(direction, 0.0),
+    };
+    let guide = Overlay::Line { a: Point::ZERO, b: Point::new(5.0, 5.0), color: [0, 0, 0], dashed: false };
+    let mut state = None;
+    let mut frame = |now, focused, other, direction| {
+        let caret = split(other, direction);
+        let (o, next) = overlays::blink_caret(&mut state, now, focused, vec![guide.clone(), caret.clone()]);
+        assert!(o.contains(&guide));
+        (o.contains(&caret), next)
+    };
+    let half = overlays::CARET_BLINK;
+    assert!(frame(0.0, true, 20.0, 1.0).0);
+    assert!(!frame(half * 1.25, true, 20.0, 1.0).0, "both strokes and the flag are off together");
+    assert!(frame(half * 1.5, true, 30.0, 1.0).0, "moving only the alternate starts on");
+    assert!(!frame(half * 2.75, true, 30.0, 1.0).0);
+    assert!(frame(half * 3.0, true, 30.0, -1.0).0, "changing only direction starts on");
+    assert!(!frame(half * 4.25, true, 30.0, -1.0).0);
+    assert_eq!(frame(half * 4.25, false, 30.0, -1.0), (true, None));
+    let (_, next) = overlays::blink_caret(&mut state, half * 5.0, true, vec![]);
+    assert_eq!((state, next), (None, None));
+}

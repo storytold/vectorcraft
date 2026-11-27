@@ -194,6 +194,51 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
     l
 }
 
+#[test]
+fn split_caret_uses_both_logical_neighbors_without_changing_the_primary() {
+    // Visual order of "aאבz": the RTL run's logical start is at its right edge.
+    let mut l = lines_of_clusters(&[&[(0, 1, 10.0), (3, 2, 10.0), (1, 2, 10.0), (5, 1, 10.0)]], false);
+    for g in &mut l.glyphs {
+        g.rtl = matches!(g.byte, 1 | 3);
+    }
+    for (byte, rtl) in [(1, true), (5, false)] {
+        let split = split_caret_position(&l, byte).unwrap();
+        assert_eq!(split.primary, caret_position(&l, byte));
+        assert_eq!(split.rtl, rtl);
+        assert!(split.alternate.0.x < split.primary.0.x, "the logical neighbors have distinct visual edges");
+        assert_eq!(split.primary.0.y, split.alternate.0.y);
+        assert_eq!(split.primary.1.y, split.alternate.1.y);
+    }
+    for byte in [0, 2, 3, 4, 6] {
+        assert!(split_caret_position(&l, byte).is_none(), "not an opposing-run boundary: {byte}");
+    }
+    // Mirroring the run order reverses which visual position is primary.
+    let mut rtl = lines_of_clusters(&[&[(5, 1, 10.0), (1, 2, 10.0), (3, 2, 10.0), (0, 1, 10.0)]], true);
+    for g in &mut rtl.glyphs {
+        g.rtl = matches!(g.byte, 0 | 5);
+    }
+    let split = split_caret_position(&rtl, 1).unwrap();
+    assert!(!split.rtl && split.primary.0.x < split.alternate.0.x);
+}
+
+#[test]
+fn split_caret_measures_the_whole_previous_cluster_and_stays_on_its_line() {
+    let mut l = lines_of_clusters(&[&[(0, 1, 3.0), (0, 1, 7.0), (3, 2, 10.0), (1, 2, 10.0)]], false);
+    for g in &mut l.glyphs {
+        g.rtl = g.byte != 0;
+    }
+    let split = split_caret_position(&l, 1).unwrap();
+    assert_eq!(split.alternate.0.x, l.glyphs[1].origin.x + l.glyphs[1].advance, "not the first glyph's trailing edge");
+    let mut wrapped = lines_of_clusters(&[&[(0, 1, 10.0)], &[(1, 2, 10.0)]], false);
+    wrapped.glyphs[1].rtl = true;
+    assert!(split_caret_position(&wrapped, 1).is_none(), "a line wrap is not a same-line bidi boundary");
+    l.vertical = true;
+    assert!(split_caret_position(&l, 1).is_none());
+    l.vertical = false;
+    l.on_path = true;
+    assert!(split_caret_position(&l, 1).is_none());
+}
+
 fn arrow_steps(l: &TextLayout, from: usize, right: bool, steps: usize) -> Vec<usize> {
     let mut caret = from;
     (0..steps)

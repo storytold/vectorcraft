@@ -92,6 +92,9 @@ pub enum Overlay {
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// The text caret, a black line from `a` to `b`, which the canvas blinks (#6406).
     Caret { a: Point, b: Point },
+    /// A bidi insertion boundary: solid primary `a`–`b`, dimmed alternate, and a flag pointing
+    /// from `a` towards `flag` in the active run's direction. All three blink together.
+    SplitCaret { a: Point, b: Point, other_a: Point, other_b: Point, flag: Point },
     /// An anchor square: filled = selected.
     Anchor { p: Point, color: [u8; 3], filled: bool, size: f32 },
     /// A Curvature tool point, drawn as a circle; filled = the last touched point.

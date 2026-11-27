@@ -639,8 +639,18 @@ impl Tool for TypeTool {
                 }
             }
         } else if a == b {
-            let (p, q) = vectorcraft_text::caret_position(&lay, self.caret.min(len));
-            o.push(Overlay::Caret { a: t.xf * p, b: t.xf * q });
+            let at = self.caret.min(len);
+            if let Some(split) = vectorcraft_text::split_caret_position(&lay, at) {
+                let ((p, q), (other_a, other_b)) = (split.primary, split.alternate);
+                // The flag follows the text's baseline through rotations, skews and reflections.
+                // Its final screen length is set by the canvas, independently of zoom.
+                let sign = if split.rtl { -1.0 } else { 1.0 };
+                let flag = Point::new(p.x + (q.y - p.y) * sign, p.y - (q.x - p.x) * sign);
+                o.push(Overlay::SplitCaret { a: t.xf * p, b: t.xf * q, other_a: t.xf * other_a, other_b: t.xf * other_b, flag: t.xf * flag });
+            } else {
+                let (p, q) = vectorcraft_text::caret_position(&lay, at);
+                o.push(Overlay::Caret { a: t.xf * p, b: t.xf * q });
+            }
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
