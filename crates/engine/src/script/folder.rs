@@ -237,7 +237,7 @@ fn hidden(entry: &std::fs::DirEntry) -> bool {
 
 /// Does Windows mark the file or folder of `m` hidden or system?
 #[cfg(windows)]
-fn hidden_meta(m: &std::fs::Metadata) -> bool {
+pub(super) fn hidden_meta(m: &std::fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt as _;
     const HIDDEN_OR_SYSTEM: u32 = 0x2 | 0x4;
     m.file_attributes() & HIDDEN_OR_SYSTEM != 0
@@ -245,13 +245,13 @@ fn hidden_meta(m: &std::fs::Metadata) -> bool {
 
 /// Elsewhere a hidden file is one whose name starts with a dot, which the listing leaves out by name.
 #[cfg(not(windows))]
-fn hidden_meta(_: &std::fs::Metadata) -> bool {
+pub(super) fn hidden_meta(_: &std::fs::Metadata) -> bool {
     false
 }
 
 /// Is `path` a folder (`folder`) or a file, and not a link? With `shown`, also not one Windows
 /// marks hidden or system, which a listing leaves out.
-fn plain(path: &Path, folder: bool, shown: bool) -> bool {
+pub(super) fn plain(path: &Path, folder: bool, shown: bool) -> bool {
     std::fs::symlink_metadata(path)
         .is_ok_and(|m| !m.file_type().is_symlink() && (if folder { m.is_dir() } else { m.is_file() }) && !(shown && hidden_meta(&m)))
 }

@@ -41,6 +41,8 @@ pub enum PanelDrag {
 /// panel order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwatchRows {
+    /// The document whose rows the drag started on.
+    pub document: u64,
     pub grabbed: String,
     pub names: Vec<String>,
     /// The names are colour groups.
