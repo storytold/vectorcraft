@@ -392,6 +392,59 @@ fn last_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::DialogId, Value) {
     (last.id, last.fields.as_ref().and_then(|f| f.get("name")).cloned().unwrap_or_default())
 }
 
+/// Enter a name through the real text field, then let the held OK run its library command.
+fn type_library_name(panel: &mut Harness, name: &str) {
+    panel.click("Name");
+    panel.key(Key::A, Modifiers::COMMAND);
+    panel.type_text(name);
+    panel.click("OK");
+    panel.frame();
+    panel.frame();
+}
+
+/// Every library naming action uses the same hosted form. Keyboard edits must reach its held
+/// answer, just as automation's explicit field updates do.
+#[test]
+fn typed_library_group_and_item_names_reach_the_library_commands() {
+    let mut panel = Harness::new(app(), crate::tests::picks::dialogs);
+    panel.app().run(CREATE, json!({})).unwrap();
+    type_library_name(&mut panel, "Brand");
+    let lib = panel.app().session.libraries.current().unwrap().to_string();
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "Brand");
+    assert!(open_dialogs(&panel.app()).is_empty());
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    type_library_name(&mut panel, "House");
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    panel.app().run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
+    ask_group_name(&mut panel.app(), &lib, None, json!([{"kind": "fillColor", "item": "Blue"}]));
+    type_library_name(&mut panel, "Cool");
+    assert_eq!(group_names(&mut panel.app()), [("Cool".to_string(), vec!["Blue".to_string()])]);
+    ask_group_name(&mut panel.app(), &lib, Some("Cool"), Value::Null);
+    type_library_name(&mut panel, "Cold");
+    assert_eq!(group_names(&mut panel.app()), [("Cold".to_string(), vec!["Blue".to_string()])]);
+    ask_item_name(&mut panel.app(), &lib, ItemKind::Color, "Blue");
+    type_library_name(&mut panel, "Ocean");
+    assert_eq!(group_names(&mut panel.app()), [("Cold".to_string(), vec!["Ocean".to_string()])]);
+    assert!(open_dialogs(&panel.app()).is_empty());
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    type_library_name(&mut panel, " ");
+    assert!(last_dialog(&panel.app()).1.as_str().unwrap().trim().is_empty(), "the refused edit stays in the dialog");
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    panel.click("Cancel");
+    panel.frame();
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    panel.click("Name");
+    panel.key(Key::A, Modifiers::COMMAND);
+    panel.type_text("Discarded");
+    panel.click("Cancel");
+    panel.frame();
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    assert!(open_dialogs(&panel.app()).is_empty());
+}
+
 fn group_dialogs_run_with_their_library_and_group() {
     let mut app = app();
     let lib = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();

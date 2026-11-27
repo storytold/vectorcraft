@@ -164,7 +164,7 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
 /// with the values it opened with. OK reaches [`ok`] once the dialog's own rows accept it.
 fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Option<&[&str]>) -> Result<Value, String> {
     let source = app.session.active().ok_or("no document open")?;
-    let document = source.uid;
+    let (document, reverts) = (source.uid, source.reverts);
     let ty = f.get("__type").and_then(Value::as_str).unwrap_or_default();
     let object = object_keys.is_some();
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
@@ -195,8 +195,12 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
     .held_ok();
     app.ui.brush_options = Some(
         host::open_held(app, dialog, move |app, result: &ParamResult| {
-            if !object && app.session.active().is_none_or(|st| st.uid != document) {
-                return Err(tl!("Return to the original drawing to edit its brush").into());
+            match app.session.active().filter(|st| st.uid == document) {
+                Some(source) if source.reverts != reverts => {
+                    return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+                }
+                None if !object => return Err(tl!("Return to the original drawing to edit its brush").into()),
+                _ => {}
             }
             ok(app, result)
         })
