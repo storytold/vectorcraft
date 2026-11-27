@@ -260,6 +260,7 @@ pub(crate) struct Open {
     /// The dialog on the window's host.
     pub id: DialogId,
     document: u64,
+    reverts: u64,
     /// The preview the pump runs and OK commits.
     pub preview: LivePreview,
     /// The selection snapshot identifies the interaction that ran the preview.
@@ -270,14 +271,17 @@ impl Open {
     fn owns_preview(&self, app: &VectorcraftApp) -> bool {
         let Some(selection) = &self.preview_selection else { return false };
         app.session.active().is_some_and(|state| {
-            state.uid == self.document
+            (state.uid, state.reverts) == (self.document, self.reverts)
                 && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
         })
     }
 
     fn problem(&self, app: &VectorcraftApp) -> Option<&'static str> {
-        if app.session.active().is_none_or(|state| state.uid != self.document) {
-            Some("Return to the document where Recolor Artwork opened.")
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else {
+            return Some("Return to the document where Recolor Artwork opened.");
+        };
+        if state.reverts != self.reverts {
+            Some("The document was reverted. Reopen this dialog to continue.")
         } else if app.session.in_interaction() && !self.owns_preview(app) {
             Some("Finish the active edit before applying Recolor Artwork.")
         } else {
@@ -338,7 +342,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     // A Recolor Artwork still open is replaced: its preview goes before the group's colours are read.
     cancel_open(app);
     let st = app.session.active().ok_or("no document open")?;
-    let document = st.uid;
+    let (document, reverts) = (st.uid, st.reverts);
     let group_colors: Option<Vec<Color>> = match group {
         Some(g) => {
             let g = st.doc.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| format!("no colour group `{g}`"))?;
@@ -377,7 +381,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let dialog = RecolorDialog::new(app, d);
     let options = HeldOptions { cancel: Some(Box::new(cancelled)), ..HeldOptions::default() };
     let id = open_held_with(app, dialog, confirm, options).ok_or("no window to show Recolor Artwork in")?;
-    app.color_dialogs.recolor = Some(Open { id, document, preview: LivePreview::default(), preview_selection: None });
+    app.color_dialogs.recolor = Some(Open { id, document, reverts, preview: LivePreview::default(), preview_selection: None });
     Ok(Value::Null)
 }
 
@@ -3279,6 +3283,51 @@ mod tests {
         assert!(group_hex(&rc.app(), "Shared").is_some(), "a refused action does not run after returning");
         rc.act("delete").unwrap();
         assert!(group_hex(&rc.app(), "Shared").is_none());
+    }
+
+    #[test]
+    fn recolor_after_file_revert_does_not_restart_the_discarded_preview() {
+        struct SavedFile(std::path::PathBuf);
+        impl Drop for SavedFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        let mut app = app(120);
+        let shape = square(&mut app, 10.0, "#ff0000");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-recolor-revert-{}.vectorcraft", std::process::id())));
+        app.run("file.saveAs", json!({"path": path.0})).unwrap();
+        assert!(path.0.is_file());
+        square(&mut app, 60.0, "#0000ff");
+        app.run("select.set", json!({"ids": [shape]})).unwrap();
+        let mut rc = opened(app, json!({}));
+        rc.set("method", json!(Method::Exact.id())).unwrap();
+        rc.frame();
+        rc.set("rows", json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}])).unwrap();
+        rc.frame();
+        assert_eq!(fill_hex(&rc, shape), "#00ff00", "the original preview is active");
+
+        {
+            let mut app = rc.app();
+            let state = app.session.active().unwrap();
+            let (uid, reverts) = (state.uid, state.reverts);
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            let state = app.session.active().unwrap();
+            assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+            assert!(state.doc.node(vectorcraft_doc::NodeId(shape)).is_some());
+            app.run("select.set", json!({"ids": [shape]})).unwrap();
+        }
+        assert_eq!(fill_hex(&rc, shape), "#ff0000");
+        let history = undo_len(&rc.app());
+        rc.frame();
+        assert_eq!(fill_hex(&rc, shape), "#ff0000", "an open preview must leave the saved red fill alone");
+        assert!(!rc.app().session.in_interaction());
+        assert!(rc.confirm().is_err() && rc.is_open(), "the old draft cannot be applied");
+        assert_eq!(fill_hex(&rc, shape), "#ff0000");
+        assert_eq!(undo_len(&rc.app()), history);
     }
 
     #[test]
