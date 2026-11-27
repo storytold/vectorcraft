@@ -529,11 +529,14 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         // not private state: Links applies FooterBar's first pick by toggling its existing info option.
         let layout = |out: &egui::FullOutput| {
             let nodes = &out.platform_output.accesskit_update.as_ref().expect("the actual floated Links tree").nodes;
-            let lists: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::List && n.label() == Some(vectorcraft_ui_egui::i18n::t("Links"))).collect();
+            let lists: Vec<_> =
+                nodes.iter().filter(|(_, n)| n.role() == Role::List && n.label() == Some(vectorcraft_ui_egui::i18n::t("Links"))).collect();
             assert_eq!(lists.len(), 1, "{locale}: the actual Links list has one allocation");
-            let infos: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::Group && n.label() == Some(vectorcraft_ui_egui::i18n::t("Link Info"))).collect();
+            let infos: Vec<_> =
+                nodes.iter().filter(|(_, n)| n.role() == Role::Group && n.label() == Some(vectorcraft_ui_egui::i18n::t("Link Info"))).collect();
             assert!(infos.len() <= 1, "{locale}: the live Link Info section is unambiguous");
-            let toggles: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show Link Info"))).collect();
+            let toggles: Vec<_> =
+                nodes.iter().filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show Link Info"))).collect();
             assert_eq!(toggles.len(), 1, "{locale}: the native Show Link Info footer action is unique");
             assert!(toggles[0].1.supports_action(Action::Click), "the actual footer button exposes activation");
             (location_node_rect(&lists[0].1), infos.first().map(|(_, n)| location_node_rect(n)), toggles[0].0)
@@ -541,11 +544,21 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         let before_toggle = a.snapshot();
         let (list_before, info_before, hide_info) = layout(&out);
         assert!(info_before.is_some(), "{locale}: Link Info starts shown");
-        a.frame(vec![Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: hide_info, target_tree: TreeId::ROOT, data: None })]);
+        a.frame(vec![Event::AccessKitActionRequest(ActionRequest {
+            action: Action::Click,
+            target_node: hide_info,
+            target_tree: TreeId::ROOT,
+            data: None,
+        })]);
         out = a.settle();
         let (list_off, info_off, show_info) = layout(&out);
         assert!(info_off.is_none(), "{locale}: the real footer action hides Link Info");
-        a.frame(vec![Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: show_info, target_tree: TreeId::ROOT, data: None })]);
+        a.frame(vec![Event::AccessKitActionRequest(ActionRequest {
+            action: Action::Click,
+            target_node: show_info,
+            target_tree: TreeId::ROOT,
+            data: None,
+        })]);
         out = a.settle();
         let (list_on, info_on, _) = layout(&out);
         assert!(info_on.is_some(), "{locale}: the real footer action restores Link Info before the original oracles");
