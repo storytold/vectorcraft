@@ -9,6 +9,7 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
 use craft::ui::pickers::{Select, SelectLook};
+use craft::ui::runtime::env::Env;
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
@@ -47,6 +48,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let busy = busy_labels(app);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
+    let mut invalid_zoom = None;
     // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
     // first, then the position, before the message.
     let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
@@ -73,8 +75,11 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
         // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
-        if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
-            zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(&view, app.ui_scaling()), print));
+        if let Some(zoom) = zoom.inner {
+            if let Some(view) = zoom.view.committed() {
+                zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(view, app.ui_scaling()), print));
+            }
+            invalid_zoom = zoom.invalid_zoom.map(|invalid| invalid.message(&Env::of(ui)));
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
@@ -155,6 +160,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
     {
         app.status(e);
+    }
+    if let Some(message) = invalid_zoom {
+        app.status(message);
     }
 }
 

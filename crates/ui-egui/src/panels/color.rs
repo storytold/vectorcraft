@@ -402,7 +402,7 @@ fn apply_tint(app: &mut VectorcraftApp, tgt: &Target, tint: &Tint, t: f32, phase
 
 /// Switch the panel to `mode`, converting the colour to its model (a tint becomes a process
 /// colour).
-fn set_mode(app: &mut VectorcraftApp, tgt: &Target, mode: ColorPanelMode) {
+pub(crate) fn set_mode(app: &mut VectorcraftApp, tgt: &Target, mode: ColorPanelMode) {
     app.ui.color_panel.mode = mode;
     if let Some(c) = tgt.color() {
         let conv = convert_to(mode, &c);

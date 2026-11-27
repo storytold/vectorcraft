@@ -38,7 +38,7 @@ const WRONG_DOCUMENT: &str = "Return to the original drawing to save the PDF or 
 /// What the Save PDF dialog was opened for; the preset editor has none.
 pub(crate) struct SavePdfJob {
     /// The drawing this job reads and writes.
-    document: u64,
+    pub(crate) document: u64,
     /// The file the PDF goes to; none: the write asks.
     pub(crate) path: Option<String>,
     /// The save command (`file.saveAs`, `file.saveCopy`) this PDF finishes; none: a plain PDF copy.

@@ -38,7 +38,7 @@ pub(crate) struct Open {
     /// The dialog on the host.
     pub id: DialogId,
     /// The drawing that owns the text IDs and the preview.
-    document: u64,
+    document: (u64, u64),
     /// The preview on the canvas.
     pub preview: LivePreview,
     /// The `ids`, `start` and `end` the dialog's `text.setFormat` acts on.
@@ -52,7 +52,7 @@ pub(crate) struct Open {
 
 impl Open {
     fn in_opening_document(&self, app: &VectorcraftApp) -> bool {
-        app.session.active().is_some_and(|st| st.uid == self.document)
+        app.session.active().is_some_and(|st| (st.uid, st.reverts) == self.document)
     }
 }
 
@@ -118,7 +118,8 @@ fn form(fields: &mut DialogFields) -> ParamDialog<'_> {
 /// Open Justification on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let active = app.session.active().ok_or("no document open")?;
+    let document = (active.uid, active.reverts);
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
     let mut story = None;
@@ -148,8 +149,13 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let id = super::host::open_held(app, dialog, |app, result| {
         let Some(open) = app.justification.take() else { return Ok(()) };
         if !open.in_opening_document(app) {
+            let message = if app.session.active().is_some_and(|st| st.uid == open.document.0) {
+                tl!("The document was reverted. Reopen this dialog to continue.")
+            } else {
+                tl!("This dialog was opened in a different document.")
+            };
             app.justification = Some(open);
-            return Err(tl!("This dialog was opened in a different document.").to_owned());
+            return Err(message.to_owned());
         }
         let p = params(app, &result.fields, &open);
         if !changes(&p) {
@@ -215,7 +221,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.justification.take() else { return };
     let shown =
         app.dialogs().and_then(|d| d.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
-    // A document switch ends that document's preview. The active drawing may have started a different one.
+    // A document switch or revert ends the opening preview. The active drawing may have started a different one.
     if !open.in_opening_document(app) {
         if shown.is_some() {
             open.preview = LivePreview::default();
@@ -603,5 +609,35 @@ mod tests {
         driver::cancel(&mut app);
         assert_eq!(paras(&app, id).0.justification.auto_leading, 190.0);
         assert!(app.session.in_interaction());
+    }
+
+    #[test]
+    fn justification_does_not_preview_or_apply_after_revert() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("justification-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("text.setFormat", json!({"ids": [id], "autoLeading": 145})).unwrap();
+        app.run("ui.justification", json!({})).unwrap();
+        driver::set(&mut app, "autoLeading", json!(180));
+        driver::set(&mut app, "preview", json!(true));
+        driver::pump(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 180.0);
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        driver::pump(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+        let dialog = craft::ui::dialog::dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+
+        driver::cancel(&mut app);
+        app.run("ui.justification", json!({})).unwrap();
+        driver::set(&mut app, "autoLeading", json!(180));
+        driver::ok(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 180.0);
     }
 }

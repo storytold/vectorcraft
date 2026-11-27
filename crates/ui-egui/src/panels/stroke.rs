@@ -24,11 +24,9 @@ use craft::ui::style::DataColor;
 use craft::ui::text::{LinkMode, LinkedFields};
 use craft::ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::{Rect, Ui, pos2};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, Node, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{Live, character, current_stroke, live_run, stroke_mixed};
@@ -171,11 +169,6 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
     (!mixed.weight).then(|| st.map_or(app.session.paint.stroke_width, |s| s.width))
 }
 
-/// A document enum as the editor's enum of the same name: both serialise as the same camelCase word.
-fn convert<A: Serialize, B: DeserializeOwned + Default>(a: A) -> B {
-    serde_json::to_value(a).ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default()
-}
-
 /// The style the stroke editor shows for `st` (the defaults without a stroke). Dashes count document units, so the
 /// pattern is the stroke's own numbers.
 pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
@@ -185,9 +178,21 @@ pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
         s.dash.as_ref().map_or((vec![], 0.0, false), |d| (d.pattern.iter().map(|v| *v as f32).collect(), d.offset, d.align_corners));
     draw::StrokeStyle {
         width: s.width as f32,
-        align: convert(s.align),
-        cap: convert(s.cap),
-        join: convert(s.join),
+        align: match s.align {
+            StrokeAlign::Center => draw::StrokeAlign::Center,
+            StrokeAlign::Inside => draw::StrokeAlign::Inside,
+            StrokeAlign::Outside => draw::StrokeAlign::Outside,
+        },
+        cap: match s.cap {
+            LineCap::Butt => draw::LineCap::Butt,
+            LineCap::Round => draw::LineCap::Round,
+            LineCap::Square => draw::LineCap::Square,
+        },
+        join: match s.join {
+            LineJoin::Miter => draw::LineJoin::Miter,
+            LineJoin::Round => draw::LineJoin::Round,
+            LineJoin::Bevel => draw::LineJoin::Bevel,
+        },
         miter_limit: s.miter_limit as f32,
         dashes,
         dash_offset: offset as f32,
@@ -212,13 +217,12 @@ fn num(v: f32) -> f64 {
 /// The `stroke.set` params of an edit of `field` that turned `old` into `new`: only what the field changes, so
 /// each selected stroke keeps its other options (its dash offset and alignment included).
 pub(crate) fn params_of(old: &draw::StrokeStyle, new: &draw::StrokeStyle, field: StrokeField) -> Value {
-    let word = |v: &dyn erased::Word| v.word();
     let dash = if new.dashes.is_empty() { Value::Null } else { json!(new.dashes.iter().map(|v| num(*v)).collect::<Vec<_>>()) };
     let corners = new.dash_align == draw::DashAlign::Corners;
     match field {
-        StrokeField::Align => json!({"align": word(&new.align)}),
-        StrokeField::Cap => json!({"cap": word(&new.cap)}),
-        StrokeField::Join => json!({"join": word(&new.join)}),
+        StrokeField::Align => json!({"align": new.align}),
+        StrokeField::Cap => json!({"cap": new.cap}),
+        StrokeField::Join => json!({"join": new.join}),
         StrokeField::MiterLimit => json!({"miterLimit": num(new.miter_limit)}),
         StrokeField::Dashed => json!({"dash": dash, "alignDashes": corners}),
         StrokeField::Dash(_) => json!({"dash": dash}),
@@ -228,24 +232,6 @@ pub(crate) fn params_of(old: &draw::StrokeStyle, new: &draw::StrokeStyle, field:
         StrokeField::Preset => json!({"dash": dash}),
         // The panel shows no opacity row.
         _ => json!({}),
-    }
-}
-
-/// The word `stroke.set` reads for an editor enum.
-mod erased {
-    use serde::Serialize;
-    use serde_json::Value;
-
-    /// An enum that serialises as its camelCase word.
-    pub trait Word {
-        /// The word.
-        fn word(&self) -> Value;
-    }
-
-    impl<T: Serialize> Word for T {
-        fn word(&self) -> Value {
-            serde_json::to_value(self).unwrap_or(Value::Null)
-        }
     }
 }
 
