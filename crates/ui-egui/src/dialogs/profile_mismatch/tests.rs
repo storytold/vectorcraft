@@ -320,6 +320,31 @@ fn paste_asked_before_another_document_is_active(app: &mut VectorcraftApp) {
     app.run("document.activate", json!({ "index": asked_in })).unwrap();
 }
 
+/// The destination still has a mismatch after reopening the saved contents. Its old approval is retired.
+fn paste_asked_before_its_drawing_is_reverted(app: &mut VectorcraftApp) {
+    let dir = vectorcraft_testkit::TempDir::new("immediate-profile-mismatch-revert");
+    let path = dir.join("destination.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+    assert_eq!(app.run("edit.paste", json!({})).unwrap(), json!({ "dialog": PASTE_KIND }));
+    let before = app.session.active().unwrap();
+    let (uid, reverts) = (before.uid, before.reverts);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    assert!(app.pending_paste.is_some(), "the old question is still waiting");
+    let saved = restored.doc.clone();
+    let undo = restored.history.undo.len();
+
+    answer_ok(app, paste_id_open());
+    let after = app.session.active().unwrap();
+    assert!(after.doc == saved, "the old profile approval must leave the restored drawing intact");
+    assert_eq!(after.history.undo.len(), undo);
+    assert!(app.pending_paste.is_none());
+}
+
 /// A drag of the art of the document assigned Display P3 into the active one asks as Paste does:
 /// Cancel drops nothing, and OK drops it as chosen. When the source document's profile changes while
 /// the question is open, OK drops nothing and asks again about the new profile. `count` counts the
@@ -467,6 +492,7 @@ fn opening_and_pasting_ask_about_profiles() {
     // Cancel pastes nothing; with the box off nothing asks.
     paste_canceled(&mut app, count);
     paste_asked_before_another_document_is_active(&mut app);
+    paste_asked_before_its_drawing_is_reverted(&mut app);
     drop_asks_as_paste_does(&mut app, count);
     let before = count(&app);
     app.run("edit.colorSettings", json!({"askMismatchPaste": false})).unwrap();

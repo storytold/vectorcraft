@@ -20,6 +20,7 @@ use crate::canvas::general_lengths;
 pub const KIND: &str = "perspectivePlane";
 
 const OPENING_DOCUMENT: &str = "__openingDocument";
+const OPENING_REVERTS: &str = "__openingReverts";
 
 /// What becomes of the objects on the plane: (`objects` value, label).
 const OBJECTS: [(&str, &str); 3] = [("none", "Do Not Move"), ("move", "Move All Objects"), ("copy", "Copy All Objects")];
@@ -50,7 +51,7 @@ fn build<'a>(title: &str, lengths: LengthUnits, _fields: &'a mut DialogFields) -
 /// Open the options of `plane` (`{plane}`; default the active plane), filled in with its location.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let state = app.session.active().ok_or("no document")?;
-    let document = state.uid;
+    let (document, reverts) = (state.uid, state.reverts);
     let g = PerspectiveGrid::current(&state.doc);
     let plane = match p.get("plane").and_then(Value::as_str) {
         Some(s) => Plane::parse(s).ok_or("plane must be left, right or ground")?,
@@ -66,13 +67,18 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut fields = form::fields_of(&params(lengths), &map);
     // The held answer carries the drawing and plane from the same opening.
     fields.set(OPENING_DOCUMENT, document.to_string());
+    fields.set(OPENING_REVERTS, reverts.to_string());
     let heading = title(plane);
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| build(&heading, lengths, f));
     // A refusal keeps the dialog open with the reason under its rows.
     let ok = |app: &mut VectorcraftApp, r: &ParamResult| {
         let document = r.fields.text(OPENING_DOCUMENT).and_then(|uid| uid.parse().ok());
-        if !app.session.active().is_some_and(|state| Some(state.uid) == document) {
+        let Some(active) = app.session.active().filter(|state| Some(state.uid) == document) else {
             return Err(tl!("Perspective Plane Options can only change the document where it was opened.").to_owned());
+        };
+        let reverts = r.fields.text(OPENING_REVERTS).and_then(|value| value.parse::<u64>().ok());
+        if reverts != Some(active.reverts) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         let plane = r.fields.text("plane").ok_or_else(|| tl!("The perspective plane is missing").to_owned())?;
         let objects = r.fields.text("objects").unwrap_or("none");
@@ -225,5 +231,36 @@ mod tests {
         let st = app.session.active().unwrap();
         let id = *st.selection.objects.first().unwrap();
         assert_eq!(vectorcraft_tools::distort::perspective::attachment(st.doc.node(id).unwrap()).map(|a| a.0), Some(Plane::Right));
+    }
+
+    #[test]
+    fn held_plane_options_cannot_move_or_copy_restored_artwork() {
+        let mut app = app();
+        right_plane_with_art(&mut app);
+        let dir = vectorcraft_testkit::TempDir::new("perspective-plane-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("perspective.plane.move", json!({"plane": "right", "offset": 10.0, "objects": "none"})).unwrap();
+        app.run("ui.perspectivePlane", json!({"plane": "right"})).unwrap();
+        set(&app, "location", json!(40.0));
+        set(&app, "objects", json!("copy"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = app.session.active().unwrap().doc.clone();
+        let (id, _) = the_dialog(&app);
+        pump_ok(&mut app);
+        assert!(matches!(host(&app, |h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+        assert_eq!(app.session.active().unwrap().doc, restored);
+
+        let ctx = app.ui_ctx.clone().unwrap();
+        host(&app, |h| h.cancel_by_id(&ctx, id));
+        app.run("ui.perspectivePlane", json!({"plane": "right"})).unwrap();
+        set(&app, "location", json!(40.0));
+        set(&app, "objects", json!("copy"));
+        ok(&mut app);
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(PerspectiveGrid::current(doc).right_offset, 40.0);
+        assert_eq!(doc.layers[0].children().unwrap().len(), 2);
     }
 }

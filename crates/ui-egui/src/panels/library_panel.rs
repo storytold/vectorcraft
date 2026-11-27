@@ -180,7 +180,6 @@ pub(crate) struct Kind {
     find: fn(&VectorcraftApp, &str) -> Found,
     path: fn(&VectorcraftApp, &str) -> Option<String>,
     neighbour: fn(&VectorcraftApp, &str, isize) -> Option<String>,
-    add: fn(&mut VectorcraftApp, &str, Vec<String>),
     add_label: &'static str,
     body: fn(&mut VectorcraftApp, &mut Ui, &str),
 }
@@ -195,7 +194,6 @@ fn kind_of<K: LibraryKind>() -> Kind {
         find: K::find,
         path: K::path,
         neighbour: neighbour::<K>,
-        add: K::add,
         add_label: K::ADD,
         body: body::<K>,
     }
@@ -211,6 +209,21 @@ fn kind(kind: &str) -> Option<Kind> {
     ]
     .into_iter()
     .find(|k| k.kind == kind)
+}
+
+/// The document command each library's Add action runs.
+fn add_command(kind: &str) -> Option<&'static str> {
+    match kind {
+        "swatches" => Some("swatch.library.add"),
+        "brushes" => Some("brush.addFromLibrary"),
+        "symbols" => Some("symbol.addFromLibrary"),
+        "graphicStyles" => Some("graphicStyle.addFromLibrary"),
+        _ => None,
+    }
+}
+
+fn can_add(app: &VectorcraftApp, kind: &str) -> bool {
+    add_command(kind).is_some_and(|command| crate::menus::enabled(app, command))
 }
 
 /// The id of the panel of library `id` of `kind` (`library:swatches:pastels`).
@@ -662,7 +675,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let title = library_name(id, &name).to_string();
     // The footer stays under the browser, which scrolls in the room left above it.
     let footer_out = RefCell::new(None);
-    let any = !selection.items.is_empty();
+    let any = !selection.items.is_empty() && can_add(app, K::KIND);
     let mut shown = Panel::new(title.clone())
         .collection_body()
         .footer(|ui, _| *footer_out.borrow_mut() = Some(footer_bar::<K>(any).show_footer(ui)))
@@ -703,8 +716,8 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     }
 }
 
-/// The panel's footer: the libraries menu, previous / next library, and Add to … , on while `any` item or folder is
-/// selected.
+/// The panel's footer: the libraries menu, previous / next library, and Add to … , on while items or folders are
+/// selected and the document can receive them.
 fn footer_bar<K: LibraryKind>(any: bool) -> FooterBar {
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
     FooterBar::actions([
@@ -782,7 +795,7 @@ fn menu_entries(app: &VectorcraftApp, panel: &str) -> Vec<MenuEntry> {
         params["panel"] = json!(panel);
         MenuEntry::Row { command: CommandRef::with_params(command, params), label, enabled, checked }
     };
-    let has_selection = !selected(app, panel).items.is_empty();
+    let has_selection = !selected(app, panel).items.is_empty() && can_add(app, k.kind);
     let mut out = vec![row("ui.libraryPanel.add", json!({}), k.add_label, has_selection, None), MenuEntry::Separator];
     out.extend(View::ALL.iter().map(|&(v, label)| row("ui.libraryPanel", json!({ "view": v }), label, true, Some(v == view))));
     out.extend([
@@ -831,7 +844,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, panel: &str, states: &mut Comman
 }
 
 /// Runs a library panel command that the engine does not know: `ui.libraryPanel.add {panel}` adds the
-/// panel's selection to the document.
+/// panel's selection to the document. A refused addition returns its command's error.
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<Value, String> {
     if id != "ui.libraryPanel.add" {
         return Err(format!("`{id}` isn't a library panel command"));
@@ -839,7 +852,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<
     let given = params.get("panel").and_then(Value::as_str).unwrap_or_default();
     let (k, lib) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
     let names: Vec<String> = selected(app, given).items.into_iter().map(|key| key.name).collect();
-    (k.add)(app, lib, names);
+    let command = add_command(k.kind).ok_or("this library cannot add items to a drawing")?;
+    app.run(command, json!({ "library": lib, "names": names }))?;
     Ok(Value::Null)
 }
 
