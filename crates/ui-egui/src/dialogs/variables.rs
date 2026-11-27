@@ -10,6 +10,7 @@
 //! already says, and its Name field renames the row. The data set dialogs stay open when OK
 //! fails, keeping what was typed.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
@@ -66,6 +67,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
         app.status(tl!("no document").to_string());
         return true;
     };
+    let document = st.uid;
     let vars = st.doc.variables.clone();
     let mut fields = DialogFields::new();
     match id {
@@ -126,20 +128,21 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
     let build_id = command.clone();
     let dialog = HostedParamDialog::new(&ctx, KEY, fields, move |fields| {
         let rows = params(&vars, &build_id, fields);
-        ParamDialog::command(KEY, Label::from(title.clone()), rows)
+        ParamDialog::command(KEY, Label::from(title.clone()), rows).values(Bind::bound(fields))
     });
-    crate::dialogs::host::open_held(app, dialog, move |app, result| ok(app, &command, result));
+    crate::dialogs::host::open_held(app, dialog, move |app, result| ok(app, document, &command, result));
     true
 }
 
 /// Runs `command` with what the confirmed `result` says. A data set dialog answers the error, which
 /// keeps it open with what was typed (a taken or empty name); any other command's error goes to the
 /// status line and the dialog closes.
-fn ok(app: &mut VectorcraftApp, command: &str, result: &ParamResult) -> Result<(), String> {
-    let Some(vars) = app.session.active().map(|st| st.doc.variables.clone()) else {
-        return Err(tl!("no document").to_string());
+fn ok(app: &mut VectorcraftApp, document: u64, command: &str, result: &ParamResult) -> Result<(), String> {
+    let Some(st) = app.session.active().filter(|st| st.uid == document) else {
+        return Err(tl!("These changes belong to the document this dialog was opened for.").to_owned());
     };
-    let Err(e) = app.run(command, params_of(command, result, &vars)) else { return Ok(()) };
+    let params = params_of(command, result, &st.doc.variables);
+    let Err(e) = app.run(command, params) else { return Ok(()) };
     if matches!(command, "dataset.new" | "dataset.set") {
         return Err(e);
     }
@@ -441,6 +444,37 @@ mod tests {
     }
 
     #[test]
+    fn a_data_set_edit_stays_with_the_drawing_that_opened_it() {
+        let mut app = app_with_variables();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Source"}})).unwrap();
+        app.run("file.new", json!({"width": 240, "height": 220})).unwrap();
+        app.run("variable.define", json!({"name": "Title", "kind": "text"})).unwrap();
+        app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Other"}})).unwrap();
+        let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+        let other = app.run("dataset.list", json!({})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        activate(&mut app, 0);
+        assert!(open(&mut app, "dataset.set", None));
+        set(&mut app, "name", json!("Revised"));
+        set(&mut app, &value_key("Title"), json!("New value"));
+        activate(&mut app, 1);
+        ok(&mut app);
+
+        assert_eq!(app.run("dataset.list", json!({})).unwrap(), other);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&app));
+        assert_eq!(fields(&app)[value_key("Title")], "New value");
+
+        activate(&mut app, 0);
+        ok(&mut app);
+        assert!(!is_open(&app));
+        let source = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(source["datasets"][0]["name"], "Revised");
+        assert_eq!(source["datasets"][0]["values"]["Title"], json!({"text": "New value"}));
+    }
+
+    #[test]
     fn edit_data_sets_name_field_renames_the_row_it_edits() {
         let mut app = app_with_variables();
         app.run("dataset.new", json!({"name": "Row 1", "values": {"Title": "Hello"}})).unwrap();
@@ -549,5 +583,62 @@ mod tests {
         set(&mut app, "newName", json!("Flag"));
         ok(&mut app);
         assert_eq!((kind_of(&app, "Flag"), kind_of(&app, "Badge")), (Some(VariableKind::Visibility), None));
+    }
+
+    fn type_in(panel: &mut crate::tests::panel_harness::Panel, label: &str, value: &str) {
+        panel.click_role(label, craft::ui::contract::Role::TEXT_INPUT);
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text(value);
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+    }
+
+    #[test]
+    fn the_typed_variable_name_renames_the_opening_variable() {
+        use crate::tests::panel_harness::Panel;
+
+        let mut panel = Panel::new(app_with_variables(), crate::tests::picks::dialogs);
+        assert!(open(&mut panel.app(), "variable.rename", Some("Badge")));
+        panel.frame();
+        type_in(&mut panel, "Name", "Logo");
+        panel.click("OK");
+        panel.frame();
+
+        let app = panel.app();
+        assert_eq!(kind_of(&app, "Logo"), Some(VariableKind::Visibility), "the typed name applies to the highlighted variable");
+        assert_eq!(kind_of(&app, "Badge"), None);
+        assert_eq!(kind_of(&app, "Title"), Some(VariableKind::Text));
+    }
+
+    #[test]
+    fn real_data_set_edits_keep_the_opening_row_and_preserve_cancel() {
+        use crate::tests::panel_harness::Panel;
+        use craft::behavior::Mixed;
+        use craft::ui::contract::Role;
+
+        let mut app = app_with_variables();
+        app.run("dataset.new", json!({"name": "First", "values": {"Title": "Unchanged", "Badge": true}})).unwrap();
+        app.run("dataset.new", json!({"name": "Second", "values": {"Title": "Original", "Badge": false}})).unwrap();
+        app.run("dataset.select", json!({"name": "Second"})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+
+        assert!(open(&mut panel.app(), "dataset.set", None));
+        panel.frame();
+        assert_eq!(panel.value_role("Title", Role::TEXT_INPUT).as_deref(), Some("Original"), "the editor displays the active row's text");
+        assert_eq!(panel.toggled("Badge"), Some(Mixed::Same(false)));
+        type_in(&mut panel, "Title", "Approved");
+        panel.click_role("Badge", Role::CHECK_BOX);
+        panel.click("OK");
+        panel.frame();
+        let accepted = panel.app().run("dataset.list", json!({})).unwrap();
+        assert_eq!(accepted["datasets"][0]["values"]["Title"], json!({"text": "Unchanged"}));
+        assert_eq!(accepted["datasets"][1]["values"]["Title"], json!({"text": "Approved"}));
+        assert_eq!(accepted["datasets"][1]["values"]["Badge"], json!({"visible": true}));
+
+        assert!(open(&mut panel.app(), "dataset.set", None));
+        panel.frame();
+        type_in(&mut panel, "Title", "Discarded");
+        panel.click("Cancel");
+        panel.frame();
+        assert_eq!(panel.app().run("dataset.list", json!({})).unwrap(), accepted);
     }
 }

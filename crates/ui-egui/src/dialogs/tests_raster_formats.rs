@@ -89,6 +89,62 @@ fn a_cmyk_document_exports_cmyk_by_default() {
     }
 }
 
+/// GIF and PNG-8 Options start with No Transparency Dither at amount 100 and send the chosen
+/// method and amount, which change the file of partly transparent art.
+#[test]
+fn palette_options_send_the_transparency_dither() {
+    let (mut app, written) = app(1);
+    app.run("transparency.set", json!({"opacity": 40})).unwrap();
+    let export = |app: &mut VectorcraftApp, format: &str, sets: &[(&str, serde_json::Value)]| {
+        app.run("file.exportAs", json!({"format": format})).unwrap();
+        confirm(app);
+        let d = fields(app);
+        assert_eq!((d.text("transparencyDither"), d.number("transparencyDitherAmount")), (Some("none"), Some(100.0)), "{format}");
+        for (k, v) in sets {
+            set(app, k, v.clone());
+        }
+        frame(app);
+        try_confirm(app).unwrap_or_else(|e| panic!("{format}: {e}"));
+        written.borrow().last().unwrap().1.clone()
+    };
+    for format in ["gif", "png8"] {
+        let none = export(&mut app, format, &[]);
+        let diffusion = export(&mut app, format, &[("transparencyDither", json!("diffusion")), ("transparencyDitherAmount", json!(100))]);
+        assert_ne!(diffusion, none, "{format}");
+        assert_eq!(export(&mut app, format, &[("transparencyDither", json!("diffusion")), ("transparencyDitherAmount", json!(0))]), none, "{format}");
+        assert_ne!(export(&mut app, format, &[("transparencyDither", json!("pattern"))]), none, "{format}");
+        // With Transparency off the rows keep their values and change nothing.
+        let opaque = export(&mut app, format, &[("transparency", json!(false))]);
+        assert_eq!(export(&mut app, format, &[("transparencyDither", json!("noise")), ("transparency", json!(false))]), opaque, "{format}");
+    }
+}
+
+/// The Transparency Dither row and Diffusion's amount row are named in the accessibility tree,
+/// the amount row shows only for Diffusion, and both are disabled while Transparency is off.
+#[test]
+fn palette_options_name_the_transparency_dither_controls() {
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png8"})).unwrap();
+    confirm(&mut app);
+    let names = |app: &mut VectorcraftApp| -> Vec<String> {
+        super::tests::settle(app);
+        let out = super::tests::frame(app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().filter(|(_, n)| n.role() != egui::accesskit::Role::Label).filter_map(|(_, n)| n.label().map(str::to_owned)).collect()
+    };
+    let named = |shown: &[String], name: &str| shown.iter().any(|n| n == name);
+    let shown = names(&mut app);
+    assert!(named(&shown, "Transparency Dither"), "{shown:?}");
+    assert!(!named(&shown, "Transparency Dither Amount"), "only Diffusion has an amount: {shown:?}");
+    set(&mut app, "transparencyDither", json!("diffusion"));
+    let shown = names(&mut app);
+    assert!(named(&shown, "Transparency Dither Amount"), "{shown:?}");
+    set(&mut app, "transparency", json!(false));
+    assert!(try_set(&mut app, "transparencyDither", json!("noise")).is_err(), "disabled without Transparency");
+    assert!(try_set(&mut app, "transparencyDitherAmount", json!(50)).is_err(), "disabled without Transparency");
+    assert_eq!(fields(&app).text("transparencyDither"), Some("diffusion"), "kept");
+}
+
 #[test]
 fn text_export_options_write_the_stories() {
     let (mut app, written) = app(1);

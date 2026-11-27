@@ -692,3 +692,59 @@ fn script_error_that_passes_through_a_finally_block_is_at_its_throw() {
     }
     let _ = std::fs::remove_dir_all(base);
 }
+
+#[test]
+fn a_js_script_has_promise_and_a_jsx_script_does_not() {
+    let base = folder("promise-realm");
+    let main = base.join("main/main.js");
+    write(&main, "vc.log(typeof Promise); Promise.resolve(2).then(function (v) { vc.log(v); }); vc.log(1);");
+    let r = Session::new().execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    assert_eq!(r["log"], json!(["function", 1, 2]));
+    assert!(r.get("unhandledRejections").is_none(), "{r}");
+    let r = run(&base, "vc.log(typeof Promise);").unwrap();
+    assert_eq!(r["log"], json!(["undefined"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn a_named_engine_gets_promise_at_its_first_js_run_and_keeps_it() {
+    let base = folder("promise-engine");
+    let jsx = base.join("main/a.jsx");
+    let js = base.join("main/b.js");
+    let mut s = Session::new();
+    let mut go = |path: &Path, text: &str| {
+        write(path, text);
+        s.execute("script.run", &json!({"path": path.to_string_lossy()})).unwrap()["log"].clone()
+    };
+    assert_eq!(go(&jsx, "#targetengine kept\nvar n = 1; vc.log(typeof Promise);"), json!(["undefined"]));
+    assert_eq!(
+        go(&js, "#targetengine kept\nvc.log(n); vc.log(typeof Promise); Promise.resolve(2).then(function (v) { vc.log(v); });"),
+        json!([1, "function", 2])
+    );
+    assert_eq!(go(&jsx, "#targetengine kept\nvc.log(typeof Promise);"), json!(["function"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn unhandled_rejections_reach_the_report_and_the_console_with_their_file_and_line() {
+    let base = folder("promise-rejections");
+    write(&base.join("main/lib.jsxinc"), "var x = 1;\nPromise.reject(new RangeError('in lib'));\n");
+    let main = base.join("main/main.js");
+    write(&main, "var a = 1;\nPromise.reject(new Error('lost'));\n#include \"lib.jsxinc\"\nPromise.reject(3).catch(function () {});\n");
+    let mut s = Session::new();
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    let got: Vec<(String, u64, Option<bool>)> = r["unhandledRejections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|j| (j["message"].as_str().unwrap().to_string(), j["line"].as_u64().unwrap(), j["file"].as_str().map(|f| f.ends_with("lib.jsxinc"))))
+        .collect();
+    assert_eq!(got, vec![("Error: lost".to_string(), 2, None), ("RangeError: in lib".to_string(), 2, Some(true))], "{r}");
+    assert_eq!(r["unhandledRejectionCount"], 2);
+    let c = s.execute("script.console", &json!({})).unwrap();
+    let errors: Vec<&str> = c["lines"].as_array().unwrap().iter().filter(|l| l["kind"] == "error").filter_map(|l| l["text"].as_str()).collect();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert!(errors[0].starts_with("main.js:2:") && errors[0].ends_with(": unhandled promise rejection: Error: lost"), "{errors:?}");
+    assert!(errors[1].contains("lib.jsxinc:2:"), "{errors:?}");
+    let _ = std::fs::remove_dir_all(base);
+}

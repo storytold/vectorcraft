@@ -1,6 +1,7 @@
 //! The Import PDF dialog: opening and placing multi-page and password-protected PDFs.
 
 use craft::ui::dialog::{HeldOk, StackDialog};
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
@@ -70,6 +71,50 @@ fn three_pages() -> Vec<u8> {
 
 fn artboard_widths(app: &VectorcraftApp) -> Vec<f64> {
     app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.width()).collect()
+}
+
+fn click_page_footer_ok(app: VectorcraftApp, dismiss: bool) -> egui_kittest::Harness<'static, VectorcraftApp> {
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::testing::install(ui.ctx());
+                return;
+            }
+            app.dialogs().unwrap().with(|host| host.run(ui));
+            super::import_pdf::pump(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    if dismiss {
+        h.get_by_label("OK").focus();
+        h.run_steps(2);
+        h.get_by_label("OK").click_accesskit();
+        h.input_mut().events.push(egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+    } else {
+        h.get_by_label("OK").click();
+    }
+    h.run_steps(4);
+    assert!(!is_open(h.state()));
+    h
+}
+
+#[test]
+fn pdf_page_footer_ok_opens_the_chosen_range() {
+    let mut app = app();
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+    set(&mut app, "allPages", json!(false));
+    set(&mut app, "range", json!("2-3"));
+
+    let h = click_page_footer_ok(app, false);
+    assert_eq!(artboard_widths(h.state()), [200.0, 300.0]);
 }
 
 #[test]
@@ -226,6 +271,24 @@ fn place(app: &mut VectorcraftApp, bytes: &[u8], extra: serde_json::Value) -> Re
         o.extend(e);
     }
     crate::place::run(app, &p)
+}
+
+#[test]
+fn pdf_page_footer_ok_places_the_chosen_page_unless_dismissed() {
+    for dismiss in [false, true] {
+        let mut app = app();
+        place(&mut app, &three_pages(), json!({"at": [100, 120], "link": false})).unwrap();
+        set(&mut app, "page", json!(2));
+        set(&mut app, "cropTo", json!("art"));
+
+        let h = click_page_footer_ok(app, dismiss);
+        if dismiss {
+            assert!(h.state().session.active().unwrap().selection.objects.is_empty());
+        } else {
+            let (_, bounds) = placed(h.state());
+            assert_eq!((bounds.width(), bounds.height()), (50.0, 60.0));
+        }
+    }
 }
 
 #[test]
@@ -491,6 +554,81 @@ fn the_text_choice_applies_to_embedded_places_only() {
     let placed = st.doc.node(st.selection.objects[0]).unwrap();
     assert!(!matches!(placed.kind, NodeKind::PlacedDocument(_)), "embedded: {:?}", placed.kind);
     assert_eq!(type_objects(&app), before, "placed as outlines");
+}
+
+/// `file.place` run as a command (MCP, scripts) without the dialog takes the PDF Text preference for
+/// an embedded PDF with no `textAs`, as a place by the user does; a `textAs` given and a linked
+/// place keep their own text.
+#[test]
+fn file_place_without_the_dialog_takes_the_pdf_text_preference() {
+    let mut app = app();
+    set_pdf_text(&mut app, "outlines");
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-text-at-once");
+    let path = dir.join("two.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, text_pages(2)).unwrap();
+    let embedded = json!({"path": path, "link": false, "showImportOptions": false});
+    crate::place::run(&mut app, &embedded).unwrap();
+    assert!(!is_open(&app), "no dialog");
+    assert_eq!(type_objects(&app), 0, "the preference: outlines");
+
+    let one = json!({"name": "one.pdf", "dataBase64": vectorcraft_format::base64_encode(&text_pages(1))});
+    crate::place::run(&mut app, &one).unwrap();
+    assert_eq!(type_objects(&app), 0, "one page from bytes: outlines");
+
+    let mut given = embedded.clone();
+    given["textAs"] = json!("text");
+    crate::place::run(&mut app, &given).unwrap();
+    assert_eq!(type_objects(&app), 1, "a textAs given is kept");
+
+    crate::place::run(&mut app, &json!({"path": path, "showImportOptions": false})).unwrap();
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "linked: {:?}", placed.kind);
+
+    // `file.place` reads an empty password as none, so the page stays linked.
+    crate::place::run(&mut app, &json!({"path": path, "password": "", "showImportOptions": false})).unwrap();
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "an empty password: linked: {:?}", placed.kind);
+
+    set_pdf_text(&mut app, "text");
+    crate::place::run(&mut app, &embedded).unwrap();
+    assert_eq!(type_objects(&app), 2, "Editable: page 1's type object");
+}
+
+/// PDF bytes placed without a `name`, or under another extension, are a PDF by their content, as
+/// `file.place` reads them, and take the PDF Text preference; under a `.ai` name they are placed as
+/// the file says.
+#[test]
+fn pdf_bytes_without_a_pdf_name_take_the_pdf_text_preference() {
+    let mut app = app();
+    set_pdf_text(&mut app, "outlines");
+    let data = vectorcraft_format::base64_encode(&text_pages(1));
+    crate::place::run(&mut app, &json!({"dataBase64": data, "showImportOptions": false})).unwrap();
+    assert!(!is_open(&app), "no dialog");
+    assert_eq!(type_objects(&app), 0, "unnamed bytes: outlines");
+
+    crate::place::run(&mut app, &json!({"name": "page.bin", "dataBase64": data, "showImportOptions": false})).unwrap();
+    assert_eq!(type_objects(&app), 0, "another extension: outlines");
+
+    crate::place::run(&mut app, &json!({"name": "page.ai", "dataBase64": data, "showImportOptions": false})).unwrap();
+    assert_eq!(type_objects(&app), 1, "a .ai file: its own text");
+}
+
+/// With Show Import Options off, an encrypted PDF placed with an empty `password` asks for its
+/// password, as one placed without a `password` does.
+#[test]
+fn an_empty_password_asks_for_the_password_of_an_encrypted_pdf() {
+    let mut app = app();
+    let bytes = pdf(&[PdfPage::new(120.0, 60.0, "1 0 0 rg 0 0 20 20 re f")], Some("pw"));
+    place(&mut app, &bytes, json!({"password": "", "showImportOptions": false})).unwrap();
+    assert_eq!((field(&app, "__locked"), field(&app, "__passwordOnly")), (json!(true), json!(true)));
+    set(&mut app, "password", json!("pw"));
+    confirm(&mut app).unwrap();
+    assert!(!is_open(&app));
+    let st = app.session.active().unwrap();
+    let b = st.doc.node(st.selection.objects[0]).and_then(|n| n.geometric_bounds()).unwrap();
+    assert!((b.width() - 120.0).abs() < 0.01, "placed once unlocked: {}", b.width());
 }
 
 /// `file.place` reads an empty or null `password` as none: a place from a path with Link on stays

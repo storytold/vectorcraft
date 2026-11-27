@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Curvature Circle",
             [],
             None,
-            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
+            "{id, subpath?=0, segment, t: 0..1, convex?=false, constantRadius?=true, anchors?: \"standard\"|\"touch\" (default standard: a live ellipse with four anchors at 0°, 90°, 180° and 270°; touch: a path with an anchor where the circle touches the path and one every 90° from there)} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; with constantRadius, a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle, and with constantRadius false the cubic's own curvature at `t`; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
             has_doc,
             curvature_circle
         ),
@@ -546,7 +546,8 @@ fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
 }
 
 /// A live ellipse that touches a path at a point with the path's curvature there
-/// ([`curvature::curvature_circle_on`]). One undo step, named as an Ellipse tool drag is.
+/// ([`curvature::curvature_circle_on_with`]); with `anchors: "touch"`, a plain path with an anchor
+/// at the point it touches and one every 90° from there ([`shapes::circle_with_anchors_at`]). One undo step, named as an Ellipse tool drag is.
 fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.curvatureCircle";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
@@ -557,6 +558,13 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`t` must be from 0 to 1"));
     }
     let convex = switch_or(p, "convex", false, C)?;
+    let arcs = switch_or(p, "constantRadius", true, C)?;
+    let key = "anchors";
+    let at_touch = match p.get(key).map(Value::as_str) {
+        None | Some(Some("standard")) => false,
+        Some(Some("touch")) => true,
+        Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, touch"))),
+    };
     let found = {
         let st = s.doc()?;
         let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -568,7 +576,7 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
         if seg >= sp.segment_count() {
             return Err(bad(C, "no such segment"));
         }
-        curvature::curvature_circle_on(sp, seg, t, convex)
+        curvature::curvature_circle_on_with(sp, seg, t, convex, arcs)
     };
     let circle = found.map_err(|e| match e {
         NoCircle::Straight => bad(C, "the path is straight there, so no circle matches its curvature"),
@@ -577,12 +585,19 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     let (center, radius) = (circle.center, circle.radius);
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD) {
+    let (path, live) = if at_touch {
+        (shapes::circle_with_anchors_at(center, radius, &[circle.at]), None)
+    } else {
+        let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+        (live.to_path(), Some(live))
+    };
+    // The bounds of the path drawn: started where it touches, its cubics reach a little past the
+    // circle.
+    if path.bounds().is_none_or(|b| ![b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= MAX_COORD)) {
         return Err(bad(C, "the circle that matches the path there would reach past the canvas"));
     }
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
     // Not pixel-aligned: the circle stays on the path.
-    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    let mut out = add_art_unaligned(s, "Ellipse", path_kind(path, live))?;
     out["cx"] = json!(center.x);
     out["cy"] = json!(center.y);
     out["radius"] = json!(radius);

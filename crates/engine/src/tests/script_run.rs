@@ -182,7 +182,7 @@ fn failed_script_report_keeps_message_and_adds_origin() {
         ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
         ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
         ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
-        ("throw 'ReferenceError: app is not defined';", "thrown", "ReferenceError: app is not defined", "script"),
+        ("throw 'ReferenceError: Window is not defined';", "thrown", "ReferenceError: Window is not defined", "script"),
         ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
         ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
         ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
@@ -390,6 +390,33 @@ fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() 
     }
     // Script text given without a file keeps the ExtendScript language.
     assert!(run(&mut s, "vc.log(null ?? 1);").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_runs_generators_and_a_jsx_script_does_not_read_them() {
+    let dir = fresh_folder("generators");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let source = "function* ids(n) { for (let i = 0; i < n; i++) yield `id${i}`; }\n\
+                  function* all() { yield* ids(2); yield* [vc.document ? 'doc' : 'none']; return 'end'; }\n\
+                  const it = all(); let s;\nwhile (!(s = it.next()).done) vc.log(s.value);\nvc.log(s.value);\n";
+    let r = s.execute("script.run", &path(&write("gen.js", source))).unwrap();
+    assert_eq!(r["log"], json!(["id0", "id1", "doc", "end"]), "{r}");
+    let e = s.execute("script.run", &path(&write("gen.jsx", "function* g() {}"))).unwrap_err().to_string();
+    assert!(e.contains("SyntaxError"), "{e}");
+    // `yield` stays a name in a `.jsx` script.
+    let r = s.execute("script.run", &path(&write("name.jsx", "var yield = 4; vc.log(yield);"))).unwrap();
+    assert_eq!(r["log"], json!([4]), "{r}");
+    // An engine a `.jsx` run made has no generator built-ins for a later `.js` run.
+    s.execute("script.run", &path(&write("keep.jsx", "#targetengine genkept\nvar a = 1;"))).unwrap();
+    let e = s.execute("script.run", &path(&write("keep.js", "#targetengine genkept\nfunction* g() {}\ng();"))).unwrap_err().to_string();
+    assert!(e.contains("TypeError"), "{e}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

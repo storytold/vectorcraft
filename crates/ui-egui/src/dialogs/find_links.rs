@@ -311,10 +311,11 @@ pub(super) fn from_missing_links(
     folder: &str,
 ) -> Result<(), String> {
     let mut find = dialog(app, missing.clone(), modified.clone(), true)?;
+    let document = find["document"].as_u64().ok_or("no document open")?;
     find.insert("notes".into(), json!(notes));
     start_search(app, &mut find, folder)?;
     open(app, find)?;
-    app.link_asks = Some(LinkAsk { missing, modified, notes, back: true });
+    app.link_asks = Some(LinkAsk { document, missing, modified, notes, back: true });
     Ok(())
 }
 

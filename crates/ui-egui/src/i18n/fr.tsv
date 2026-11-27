@@ -4900,6 +4900,14 @@ axis	Both	Les deux
 	The script asks to read and write a folder you choose, with everything in it.	Le script demande à lire et écrire un dossier que vous choisissez, avec tout son contenu.
 	Allow Once	Autoriser une fois
 	Always Allow This Script	Toujours autoriser ce script
+	No script has kept file access.	Aucun script n’a conservé d’accès aux fichiers.
+	Read file	Lire le fichier
+	Read and write file	Lire et écrire le fichier
+	Read and write folder	Lire et écrire le dossier
+	Revoke	Révoquer
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Révoquer supprime l’accès conservé pour chaque version du script. L’accès à un dossier couvre tout son contenu.
+@msg	Script file access revoked	Accès du script aux fichiers révoqué
+@msg	The script file access was already revoked	L’accès du script aux fichiers était déjà révoqué
 	Deny	Refuser
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
@@ -5074,6 +5082,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
 @msg	choose a file or folder first, or deny	choisissez d’abord un fichier ou un dossier, ou refusez
 @msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
+@msg	the script file permissions could not be read: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être lues : {e}
 @msg	this script's file access can be allowed only once	l’accès aux fichiers de ce script ne peut être autorisé qu’une fois
 @msg	Only the person at the keyboard can allow a script's file access	Seule la personne au clavier peut autoriser l’accès aux fichiers d’un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté
@@ -6906,6 +6915,8 @@ arrowhead	Feather	Empennage
 	VectorCraft Default	VectorCraft par défaut
 	VectorCraft Defaults	Valeurs par défaut de VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMJN générique VectorCraft (de type SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMJN couché VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMJN non couché VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Nuances VectorCraft (.vcswatches)
 	Vertical Align	Alignement vertical
 	Vertical Area Type	Texte captif vertical
@@ -7539,6 +7550,35 @@ axis	Y Axis	Axe Y
 @msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
 @msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	only a filter declares `writes`	seul un filtre déclare `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` désigne un type d’objet inconnu `{shown}` : utilisez type, image ou symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` mentionne `{shown}` deux fois
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` mentionne `{shown}`, que `inputs` ne mentionne pas
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` nécessite `api` {WRITES_API} ou plus
+@msg	`writes` needs the permission `doc.write`	`writes` nécessite l’autorisation `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} n’est ni du texte, ni une image, ni une instance de symbole
+@msg	the text of type given as `truncated` can't be changed	le texte d’un objet texte fourni comme `truncated` ne peut pas être modifié
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	doit être une liste d’au plus {MAX_INPUT_RUNS} entrées
+@msg	type needs at least one run	le texte doit compter au moins un segment
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} octets de texte (limite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraphes (limite {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	plus de {MAX_INPUT_TEXT_TOTAL} octets de texte sur l’ensemble de la sortie
+@msg	unknown key '{k}'	clé inconnue '{k}'
+@msg	must be a list of 6 numbers	doit être une liste de 6 nombres
+@msg	a number is out of range (limit ±{MAX_COORD})	un nombre est hors limites (limite ±{MAX_COORD})
+@msg	flattens the object to a line or a point	réduit l’objet à une ligne ou à un point
+@msg	an object flattened to a line or a point can't be placed again	un objet réduit à une ligne ou à un point ne peut pas être replacé
+@msg	must be a number from 0 to 1	doit être un nombre de 0 à 1
+@msg	must be the name of a symbol	doit être le nom d’un symbole
+@msg	'{shown}' is not a symbol in this document	'{shown}' n’est pas un symbole de ce document
+@msg	a run must be {{"text", "style", "inline"?}}	un segment doit être {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` contient le caractère d’un graphique incorporé
+@msg	inline graphics can't be added, removed, reordered or changed	les graphiques incorporés ne peuvent pas être ajoutés, supprimés, réordonnés ni modifiés
+@msg	the characters of threaded type can't be changed	les caractères d’un texte lié ne peuvent pas être modifiés
+@msg	the characters of type with ruby can't be changed	les caractères d’un texte avec ruby ne peuvent pas être modifiés
+@msg	expected {count} paragraph styles, one per paragraph	{count} styles de paragraphe attendus, un par paragraphe
+@msg	the document has no Kinsoku set named '{shown}'	le document n’a aucun jeu de kinsoku nommé '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	doit compter 1-{MAX_FAMILY} caractères imprimables
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lire les objets qui lui sont transmis, ainsi que les paramètres, les plans de travail, les calques et les nuances du document
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` doit lister des sections distinctes parmi settings, artboards, layers et swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` est réservé à un filtre, ou à un effet dynamique avec `commands`, avec `api` 3 ou plus et l’autorisation `doc.read`
@@ -7549,6 +7589,21 @@ axis	Y Axis	Axe Y
 @msg	time budget	budget de temps
 @msg	memory budget (the selection is too large to hand over)	budget mémoire (la sélection est trop grande pour être transmise)
 @msg	output size ({what} is {len} bytes, limit {max})	taille de sortie ({what} fait {len} octets, limite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} ligne {line}, colonne {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	budget mémoire
+@msg	call depth	profondeur d’appel
+@msg	run(input, params) returned no output object	run(input, params) n’a renvoyé aucun objet de sortie
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" a besoin de `script`, le nom du fichier .js du plug-in placé à côté du manifeste
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` doit être le nom d’un fichier .js dans le dossier du manifeste (1-128 octets, sans dossier, sans `:`, ne commençant pas par `.`)
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` est le texte du script, donné uniquement dans le JSON que prend le dataBase64 de plugin.install, et un fichier .vcplugin nomme son script dans `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	le manifeste d’un plug-in JavaScript indique `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" est réservé à un filtre d’objets (`kind` "filter"), pas à `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un plug-in JavaScript ne peut pas lister l’autorisation `{name}`, et parmi les autorisations de l’hôte, il peut lister `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	le manifeste d’un module WebAssembly omet `runtime`, car "js" est réservé à un plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	un plug-in JavaScript n’appelle aucune commande
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) prend deux nombres
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) prend un niveau, 0 (erreur), 1 (avertissement), 2 (information) ou 3 (débogage), et une chaîne
 @msg	the plug-in's grant can't be removed from the plug-in store	l’autorisation du plug-in ne peut pas être retirée du magasin de plug-ins
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
@@ -10798,6 +10853,11 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Fold Angle	Angle de pliage
+	Set Fold Angle…	Définir l’angle de pliage…
+	Set Fold Angle	Définir l’angle de pliage
+	Reset Fold Angle	Réinitialiser l’angle de pliage
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	sélectionnez une ligne de rainage, de découpe partielle ou de perforation qui n’est ni verrouillée ni masquée
 	Tap	Appui bref
 	Clear Hold	Effacer le maintien
 	Hold Shortcuts	Raccourcis de maintien

@@ -5509,6 +5509,66 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
 
+/// Point type that isn't aligned left is matched with the page's type where it draws: right-aligned
+/// type ends at its anchor and centered type lies round it, so the page's type there is theirs and
+/// nothing is noted as left out. (The box of type that isn't laid out yet runs right from its
+/// anchor, past the page's type.)
+#[test]
+fn right_aligned_and_centered_point_type_takes_the_pages_type_where_it_draws() {
+    // "Hi there" in 14 point Helvetica is about 49 points wide. The anchors are 90 and 50 across the
+    // art; the page draws the line so that it ends at the first and lies round the second.
+    for (align, anchor, at) in [(1, 8231.5, 41.0), (2, 8191.5, 25.5)] {
+        let doc = text_document(&[("Hi there\r", align, (anchor, 8180.0), (0.0, 0.0), 0.0)]);
+        let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+        let page = format!("0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont {at} 61.5 moveto (Hi there) show");
+        let r = import(&eps(&page, &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art"], "{align}: {:?}", r.warnings);
+        let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+        assert_eq!(texts, ["Hi there"], "{align}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| crate::is_loss(w)), "{align}: {:?}", r.warnings);
+    }
+}
+
+/// Centered point type at a heading's size, set tight, is matched with the page's type where it
+/// draws, round its anchor. (The box of type that isn't laid out yet runs right from the anchor and
+/// holds the right half of the line; with a leading under the type's size it ends at the baseline,
+/// so it holds less than the half of the page's type the match needs. At 14 points the 6 points
+/// round the box make up for it.)
+#[test]
+fn centered_point_type_at_a_heading_s_size_takes_the_pages_type_where_it_draws() {
+    // A 500 × 150 artboard, its centre (250, 75) the canvas centre 8191.5. "Hi there, hi" in 72 point
+    // Helvetica on a 58 point leading is about 348 points wide; its anchor is the artboard's middle,
+    // 86.5 points up.
+    let doc = text_document(&[("Hi there, hi\r", 2, (8191.5, 8180.0), (0.0, 0.0), 0.0)]).replacen("/1 14.0 /53", "/1 72.0 /4 false /5 58.0 /53", 1);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc).replace("0 0 100 100", "0 0 500 150").replacen(
+        "%AI3_TemplateBox: 50 50 50 50",
+        "%AI3_TemplateBox: 250 75 250 75",
+        1,
+    );
+    let page = "0 1 0 0 setcmykcolor /Helvetica findfont 72 scalefont setfont 76 86.5 moveto (Hi there, hi) show";
+    let file = String::from_utf8(eps(page, &art)).unwrap().replacen("%%BoundingBox: 0 0 100 100", "%%BoundingBox: 0 0 500 150", 1);
+    let r = import(file.as_bytes()).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["Hi there, hi"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| crate::is_loss(w)), "{:?}", r.warnings);
+}
+
+/// Right-aligned point type that the page draws in another colour differs from the page as type,
+/// where it draws, before its anchor: the layers are read and the note says the type differs.
+/// (Counted as art, away from the box of type that isn't laid out, it sent the file to its page.)
+#[test]
+fn right_aligned_point_type_that_differs_from_the_page_differs_as_type() {
+    let doc = text_document(&[("Hi there\r", 1, (8231.5, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &text_object(0)), &doc);
+    // The text document's type is magenta; the page draws it black, ending at the anchor.
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 41 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.starts_with("the type on the layers differs from the file's own page")), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.starts_with("the art on the layers differs")), "{:?}", r.warnings);
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.
