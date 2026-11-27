@@ -171,6 +171,51 @@ fn new_from_template_takes_bytes_from_agents() {
 }
 
 #[test]
+fn new_from_template_opens_browser_bytes_and_desktop_paths_as_untitled_copies() {
+    let folder = dir("new-from-template-pick");
+    let name = "Source Drawing.svg";
+    let bytes = br#"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="60"><rect width="20" height="10"/></svg>"#;
+    let path = folder.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    for browser in [false, true] {
+        let mut app = app();
+        if browser {
+            app.services.download = Some(Box::new(|_, _| Ok(())));
+        }
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        rect(&mut app);
+        let source = app.session.active().unwrap();
+        let source_uid = source.uid;
+        let source_undo = source.history.undo.len();
+        let picker = scripted(&mut app);
+        picks::asks(&mut app, "file.newFromTemplate");
+        assert_eq!(picker.requests()[0].purpose, "template");
+        if browser {
+            picker.answer_contents(&[(name, bytes)]);
+        } else {
+            picker.answer(&[path.to_str().unwrap()]);
+        }
+        poll(&mut app);
+
+        let opened = app.session.active().unwrap();
+        assert!(opened.title().starts_with("Untitled-"), "browser={browser}: the template copy was named {:?}", opened.title());
+        assert_eq!((app.session.documents().len(), app.views.len()), (2, 2));
+        assert_eq!((opened.path.as_deref(), opened.history.undo.len()), (None, 0));
+        assert_eq!(opened.doc.layers[0].children().unwrap().len(), 1);
+        let source = &app.session.documents()[0];
+        assert_eq!((source.uid, source.history.undo.len()), (source_uid, source_undo));
+        if browser {
+            picks::asks(&mut app, "file.newFromTemplate");
+            picker.answer_contents(&[(name, b"not a drawing")]);
+            poll(&mut app);
+            assert_eq!(app.session.documents().len(), 2, "an invalid template opens no document");
+            assert!(app.ui.status.contains("Couldn't open Source Drawing.svg"), "{}", app.ui.status);
+        }
+    }
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+#[test]
 fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     let shown = Rc::new(RefCell::new(vec![]));
     let s = shown.clone();
