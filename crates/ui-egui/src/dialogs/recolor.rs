@@ -2126,7 +2126,7 @@ fn assign_tab(
     let total: usize = rows.iter().map(|r| r["from"].as_array().map_or(0, Vec::len)).sum();
     // Reduction and the preserve rules apply to art (a colour group alone has a row per colour).
     if art {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             let counts: Vec<Entry<usize>> = std::iter::once(Entry::new(0, Label::from(tl!("Auto"))))
                 .chain((1..=total).map(|n| Entry::new(n, Label::from(n.to_string()))))
                 .collect();
