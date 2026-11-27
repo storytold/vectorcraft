@@ -99,7 +99,7 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     }
     ui.ctx().accesskit_node_builder(shown.id, |node| {
         // TEMPORARY diagnostic: MUST REMOVE before publication.
-        if value.contains("Überlagerung") {
+        if value.contains("Überlagerung") || value.contains("Éléments-originaux") {
             eprintln!(
                 "LINK_LOCATION_COPY_BEFORE id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
                 shown.id,
@@ -113,7 +113,7 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
         }
         node.set_description(tl!("Copy"));
         node.add_action(egui::accesskit::Action::Click);
-        if value.contains("Überlagerung") {
+        if value.contains("Überlagerung") || value.contains("Éléments-originaux") {
             eprintln!(
                 "LINK_LOCATION_COPY_AFTER id={:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
                 shown.id,

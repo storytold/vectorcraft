@@ -526,6 +526,19 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
             out = a.frame(vec![]);
         }
         let nodes = &out.platform_output.accesskit_update.as_ref().expect("the floated Links tree").nodes;
+        // TEMPORARY diagnostic: MUST REMOVE before publication. One final snapshot per locale, before the unchanged assertions.
+        eprintln!("LINK_LOCATION_INTEGRATION_FINAL locale={locale} node_count={}", nodes.len());
+        for (id, node) in nodes {
+            eprintln!(
+                "LINK_LOCATION_INTEGRATION_FINAL locale={locale} id={id:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
+                node.role(),
+                node.label(),
+                node.value(),
+                node.description(),
+                node.bounds(),
+                node.children()
+            );
+        }
         let body = nodes
             .iter()
             .filter(|(_, n)| n.role() == Role::TabPanel)
