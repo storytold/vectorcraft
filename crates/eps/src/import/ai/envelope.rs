@@ -220,14 +220,51 @@ const PAINTED_SLACK: f64 = 1e-4;
 /// applied, so a stroke a Transform effect moves counts where it is moved to), measured by its
 /// visual bounds. Those are exact for miter joins (a tip counts where the miter limit keeps it) and
 /// round joins, and an upper bound for bevel joins, miters the limit cuts, width profiles and
-/// square-capped dashes; a contour of zero length, which paints nothing, doesn't count. Effects on
-/// the type object itself are left out: VectorCraft applies them after the envelope bends the type.
-/// `None` when nothing in it has bounds.
+/// square-capped dashes; a contour of zero length, which paints nothing in the files' drawn art,
+/// doesn't count, even where VectorCraft draws it as the dot of a round or projecting cap. Effects
+/// on the type object itself are left out: VectorCraft applies them after the envelope bends the
+/// type. `None` when nothing in it has bounds.
 fn painted_outlines(outlines: &Node) -> Option<Rect> {
     outlines.children().into_iter().flatten().fold(None, |acc, piece| {
         let baked = vectorcraft_effects::bake_type_appearance(None, piece);
-        vectorcraft_geom::union_opt(acc, baked.as_ref().unwrap_or(piece).visual_bounds())
+        let baked = baked.as_ref().unwrap_or(piece);
+        let painted = without_zero_length_contours(baked);
+        vectorcraft_geom::union_opt(acc, painted.as_ref().unwrap_or(baked).visual_bounds())
     })
+}
+
+/// `n` with its paths, and the paths in its groups and compound paths, without their subpaths of
+/// one anchor (contours of zero length, which have no segment); a path with nothing else keeps
+/// them. `None` when nothing changes.
+fn without_zero_length_contours(n: &Node) -> Option<Node> {
+    if let Some(path) = n.path_data() {
+        let lone = |s: &vectorcraft_geom::SubPath| s.segment_count() == 0;
+        if !path.subpaths.iter().any(lone) || path.subpaths.iter().all(lone) {
+            return None;
+        }
+        let mut kept = n.clone();
+        if let Some(p) = kept.path_data_mut() {
+            p.subpaths.retain(|s| !lone(s));
+        }
+        return Some(kept);
+    }
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Compound { .. }) {
+        return None;
+    }
+    let members = n.children()?;
+    let changed: Vec<Option<Node>> = members.iter().map(|c| without_zero_length_contours(c)).collect();
+    if changed.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut kept = n.clone();
+    if let Some(children) = kept.children_mut() {
+        for (c, new) in children.iter_mut().zip(changed) {
+            if let Some(new) = new {
+                *c = Arc::new(new);
+            }
+        }
+    }
+    Some(kept)
 }
 
 /// The box of `content` an envelope of type with Distort Appearance may map from in a file besides

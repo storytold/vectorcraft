@@ -685,9 +685,21 @@ impl PathData {
         {
             return Some(Rect::from_points(a.p, a.p));
         }
+        Some(self.measured(|_| true).unwrap_or_default())
+    }
+    /// The box of what a stroke along the path draws, before the stroke's own reach: its segments,
+    /// as in [`PathData::bounds`], and the lone anchors a stroke draws. A lone anchor of an open
+    /// subpath draws nothing. A lone anchor of a closed subpath draws a dot when `dots` is set, as
+    /// a round or projecting cap does, and nothing otherwise. `None` when the path draws nothing.
+    pub fn drawn_bounds(&self, dots: bool) -> Option<Rect> {
+        self.measured(|sp| dots && sp.closed)
+    }
+    /// The box of the segments and of the lone anchors of the subpaths `lone` keeps.
+    fn measured(&self, lone: impl Fn(&SubPath) -> bool) -> Option<Rect> {
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
             if sp.segment_count() == 0
+                && lone(sp)
                 && let Some(a) = sp.anchors.first()
             {
                 let lone = Rect::from_points(a.p, a.p);
@@ -710,7 +722,7 @@ impl PathData {
                 bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
             }
         }
-        Some(bbox.unwrap_or_default())
+        bbox
     }
     /// Bounds including control handles (used for quick culling).
     pub fn control_bounds(&self) -> Option<Rect> {
@@ -916,6 +928,12 @@ mod tests {
         let both = beside.bounds().unwrap_or_default();
         assert!(both.x1 >= 20.0 && both.y0 <= -3.0, "{both:?} leaves out the lone anchor at (20, -3)");
         assert_eq!(both.union(segment_only), both, "{both:?} leaves out part of the segment's box {segment_only:?}");
+        // What a stroke draws leaves out the open lone anchor, and a closed one without dots.
+        assert_eq!(beside.drawn_bounds(true), Some(segment_only), "an open lone anchor draws nothing");
+        let dot = PathData::new(vec![beside.subpaths[0].clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], true)]);
+        assert_eq!(dot.drawn_bounds(true), dot.bounds(), "a closed lone anchor draws a dot");
+        assert_eq!(dot.drawn_bounds(false), Some(segment_only), "without dots, a closed lone anchor draws nothing");
+        assert_eq!(lone.drawn_bounds(false), None, "lone anchors alone draw nothing");
         // A NaN anchor differs from itself: kurbo closes such a subpath with a line of its own.
         let nan = Point::new(f64::NAN, 1.0);
         let closed = |pts: &[Point]| SubPath::polyline(pts, true);
