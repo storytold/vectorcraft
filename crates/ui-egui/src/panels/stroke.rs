@@ -561,11 +561,11 @@ struct ProfileKnot {
 
 const PROFILE_KNOT_SPACING: f64 = 1e-9;
 
-/// Extracts the knots to draw. Long profiles keep sharp changes and their adjacent knots over smooth detail.
+/// Extracts the knots to draw. Long profiles keep the largest steps and the knots furthest from
+/// the line between their neighbors, along with those neighbors.
 fn profile_knots(mut points: &[(f64, f64, f64)]) -> Vec<ProfileKnot> {
     const MAX_KNOTS: usize = 512;
-    let long = points.len() > MAX_KNOTS;
-    let mut groups = std::iter::from_fn(|| {
+    let knots: Vec<_> = std::iter::from_fn(|| {
         let (&(t, left, right), rest) = points.split_first()?;
         let joined = rest.iter().take_while(|point| point.0 - t <= PROFILE_KNOT_SPACING).count();
         let &(_, outgoing_left, outgoing_right) = &points[joined];
@@ -573,41 +573,43 @@ fn profile_knots(mut points: &[(f64, f64, f64)]) -> Vec<ProfileKnot> {
         Some(ProfileKnot { t, incoming: (left, right), outgoing: (outgoing_left, outgoing_right) })
     })
     .filter(|knot| (0.0..=1.0).contains(&knot.t))
-    .peekable();
-    let mut knots: Vec<ProfileKnot> = Vec::new();
-    let mut previous: Option<ProfileKnot> = None;
-    let mut keep_next = false;
-    let mut steps = 0;
-    let mut turning_points = 0;
-    while let Some(knot) = groups.next() {
-        let endpoint = knot.t == 0.0 || knot.t == 1.0;
-        let keep_step = long && !endpoint && knot.incoming != knot.outgoing && steps < MAX_KNOTS;
-        let choose_turn = |before: f64, middle: f64, after: f64| middle.total_cmp(&before) != after.total_cmp(&middle);
-        let keep_turn = long
-            && turning_points < MAX_KNOTS
-            && previous.zip(groups.peek()).is_some_and(|(before, after)| {
-                choose_turn(before.outgoing.0, knot.incoming.0, after.incoming.0) || choose_turn(before.outgoing.1, knot.incoming.1, after.incoming.1)
-            });
-        let shape_knot = keep_step || keep_turn;
-        if shape_knot
-            && let Some(before) = previous
-            && knots.last().is_none_or(|last| last.t < before.t)
-        {
-            knots.push(before);
-        }
-        if !long || endpoint || keep_next || shape_knot {
-            knots.push(knot);
-        }
-        if keep_step {
-            steps += 1;
-        }
-        if keep_turn && !keep_step && !endpoint {
-            turning_points += 1;
-        }
-        previous = Some(knot);
-        keep_next = shape_knot;
+    .collect();
+    if knots.len() <= MAX_KNOTS {
+        return knots;
     }
-    knots
+
+    let width_difference = |from: (f64, f64), to: (f64, f64)| (from.0 - to.0).abs().max((from.1 - to.1).abs());
+    let mut steps = Vec::new();
+    let mut bends = Vec::new();
+    for (i, knot) in knots.iter().enumerate() {
+        if knot.t == 0.0 || knot.t == 1.0 {
+            continue;
+        }
+        let step = width_difference(knot.incoming, knot.outgoing);
+        if step > 0.0 && step.is_finite() {
+            steps.push((i, step));
+        } else if let Some((before, after)) = i.checked_sub(1).and_then(|prev| knots.get(prev).zip(knots.get(i + 1))) {
+            let t = (knot.t - before.t) / (after.t - before.t);
+            let interpolate = |a: f64, b: f64| (1.0 - t) * a + t * b;
+            let line = (interpolate(before.outgoing.0, after.incoming.0), interpolate(before.outgoing.1, after.incoming.1));
+            let bend = width_difference(knot.incoming, line);
+            if bend > 0.0 && bend.is_finite() {
+                bends.push((i, bend));
+            }
+        }
+    }
+    let mut keep = vec![false; knots.len()];
+    for candidates in [&mut steps, &mut bends] {
+        if candidates.len() > MAX_KNOTS {
+            candidates.select_nth_unstable_by(MAX_KNOTS, |a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        }
+        for &(i, _) in candidates.iter().take(MAX_KNOTS) {
+            let first = i.saturating_sub(1);
+            let last = (i + 1).min(knots.len() - 1);
+            keep[first..=last].fill(true);
+        }
+    }
+    knots.into_iter().zip(keep).filter_map(|(knot, keep)| (keep || knot.t == 0.0 || knot.t == 1.0).then_some(knot)).collect()
 }
 
 /// Widest factor that occupies at least half a physical pixel in the piecewise-linear mesh.
@@ -962,6 +964,32 @@ mod tests {
         let collapsed = [(0.0, 1.0, 1.0), (0.48 - 2e-9, 1.0, 1.0), (0.48, 100.0, 100.0), (0.48 + 2e-9, 1.0, 1.0), (1.0, 1.0, 1.0)];
         let (top, _) = profile_outline(r, 1.0, Some(&collapsed));
         assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "a peak collapsed to one x cannot scale the thumbnail");
+    }
+
+    #[test]
+    fn width_profile_thumbnails_keep_a_late_peak() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let mut noisy: Vec<_> = (0..514)
+            .map(|i| {
+                let width = if i % 2 == 0 { 1.0 } else { 1.01 };
+                (f64::from(i) / 1200.0, width, width)
+            })
+            .collect();
+        noisy.extend([(0.474, 1.0, 1.0), (0.48, 10.0, 10.0), (0.486, 1.0, 1.0), (1.0, 1.0, 1.0)]);
+        let (top, _) = profile_outline(r, 1.0, Some(&noisy));
+        let peak_x = r.left() + 0.48 * r.width();
+        assert!(top.iter().any(|p| (p.x - peak_x).abs() < 1e-3 && p.y < r.top() + 2.0), "the later peak survives the earlier small turns");
+    }
+
+    #[test]
+    fn width_profile_thumbnails_do_not_widen_a_short_taper() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let flat = (0..514).map(|i| (f64::from(i) / 1200.0, 1.0, 1.0));
+        let short_taper: Vec<_> = flat
+            .chain([(0.47, 1.0, 1.0), (0.47, 10.0, 10.0), (0.47001, 9.999, 9.999), (0.4702, 1.1, 1.1), (0.49, 1.02, 1.02), (1.0, 1.0, 1.0)])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&short_taper));
+        assert!(top[0].y < r.top() + 3.0, "the short taper cannot shrink the baseline");
     }
 
     #[test]
