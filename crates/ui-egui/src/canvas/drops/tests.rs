@@ -202,6 +202,32 @@ fn a_drop_runs_the_effect_of_its_payload() {
     symbol_at(&app, empty);
 }
 
+#[test]
+fn a_foreign_brush_drop_never_applies_or_places_a_same_named_brush() {
+    let (mut app, ctx) = app_with_canvas();
+    let make_brush = |app: &mut VectorcraftApp, width| {
+        app.run("shape.rectangle", json!({"x": 15, "y": 15, "width": width, "height": 30})).unwrap();
+        app.run("brush.new", json!({"name": "Shared Brush", "type": "art"})).unwrap();
+    };
+    make_brush(&mut app, 30);
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    make_brush(&mut app, 60);
+    app.run("brush.setCurrent", json!({"name": null})).unwrap();
+    let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
+    frame(&mut app, &ctx, vec![]);
+
+    let brush_of = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(path).unwrap().appearance.stroke().and_then(|s| s.brush.clone());
+    let before = brush_of(&app);
+    assert!(before.is_none());
+    let history = undo_len(&app);
+    let payload = Payload::Brush(BrushKey { doc: document, name: "Shared Brush".into(), group: false });
+    drop_at(&mut app, payload.clone(), Point::new(200.0, 200.0), DropOperation::Move).unwrap();
+    assert_eq!(brush_of(&app), before, "the foreign drop leaves the path's stroke alone");
+    drop_at(&mut app, payload, Point::new(200.0, 260.0), DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), history, "no artwork is placed on empty canvas either");
+}
+
 /// A symbol of another document is added here and placed in one undo step, the source is unchanged, and a symbol of
 /// a closed document places nothing.
 #[test]
