@@ -988,9 +988,15 @@ impl Session {
             if now != self.packs_seen {
                 self.packs_seen = now;
                 for index in 0..self.docs.len() {
+                    // A document in the back is measured in its own composite fonts, lent for the
+                    // measuring, as `measure_back_document` does: the front document's are the
+                    // ones registered, and one of the same name may differ.
+                    let back_fonts = (self.active != Some(index)).then(|| self.docs.get(index).map(|st| st.doc.composite_fonts.clone())).flatten();
+                    let lent = back_fonts.as_ref().map(|fonts| vectorcraft_text::FontDb::global().lend_document_composite_fonts(fonts));
                     // Type in a language of its own may break its lines elsewhere now: it is
                     // measured again (not an edit), so its selection box and hits follow.
                     self.refresh_document_text_bounds(index, |t| t.runs.iter().any(|r| r.style.language.is_some()));
+                    drop(lent);
                     if let Some(st) = self.docs.get_mut(index) {
                         st.revision += 1;
                     }
