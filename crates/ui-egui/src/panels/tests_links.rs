@@ -708,6 +708,65 @@ fn replace_image_with_a_desktop_path_remains_linked() {
     assert_eq!(image.link.as_ref().unwrap().path, path);
 }
 
+/// The Properties panel and the Control bar, each drawn over `app` in a room wide enough for its
+/// image controls (a narrow Control bar drops its lower ranks).
+fn image_surfaces(app: impl Fn() -> VectorcraftApp) -> [(&'static str, Panel); 2] {
+    let mut bar = Panel::new(app(), crate::chrome::control_bar);
+    bar.room(vec2(2200.0, 200.0)).frame();
+    [("Properties", Panel::new(app(), super::properties::show)), ("Control bar", bar)]
+}
+
+/// Whether image `id` is embedded.
+fn is_embedded(app: &mut VectorcraftApp, id: u64) -> bool {
+    app.run("links.info", json!({"id": id})).unwrap()["status"] == "embedded"
+}
+
+/// With several linked images selected, the Properties panel's Quick Actions and the Control bar
+/// offer Embed, which embeds every one of them in one undo step.
+#[test]
+fn embed_takes_several_selected_linked_images() {
+    let dir = Folder::new("embed-several");
+    let placed = Cell::new(0);
+    let app = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        for i in 0..2 {
+            placed.set(placed.get() + 1);
+            let path = dir.file(&format!("linked-{}.png", placed.get()), &png(30, 20));
+            app.run("file.place", json!({"path": path, "at": [50 + 100 * i, 50]})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+        app
+    };
+    for (surface, mut h) in image_surfaces(app) {
+        let ids = selected(&h.app());
+        assert_eq!(ids.len(), 2, "{surface}");
+        assert!(!h.shows("Unembed…"), "{surface}: no image is embedded");
+        let undo = h.app().session.doc().unwrap().history.undo.len();
+        h.click("Embed");
+        let mut app = h.app();
+        assert!(ids.iter().all(|id| is_embedded(&mut app, *id)), "{surface}: every selected image is embedded");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{surface}: in one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(ids.iter().all(|id| !is_embedded(&mut app, *id)), "{surface}: one undo links them again");
+    }
+}
+
+/// With a linked and an embedded image selected, both surfaces offer Embed for the linked one and
+/// Unembed… for the embedded one.
+#[test]
+fn several_mixed_images_offer_embed_and_unembed() {
+    let dir = Folder::new("mixed-several");
+    let app = || {
+        let (mut app, linked, embedded) = app(&dir);
+        app.run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+        app
+    };
+    for (surface, h) in image_surfaces(app) {
+        assert!(h.shows("Embed") && h.shows("Unembed…"), "{surface}");
+    }
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]

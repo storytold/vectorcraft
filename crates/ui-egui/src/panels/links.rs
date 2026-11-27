@@ -903,7 +903,7 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
 }
 
 /// Embed images `ids` (`links.embed`).
-fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
+pub(crate) fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let r = app.run("links.embed", json!({ "ids": ids }));
     report(app, r, |v| {
         let missing = v["missing"].as_array().map_or(0, Vec::len);

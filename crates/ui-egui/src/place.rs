@@ -1112,12 +1112,78 @@ impl LinkAction {
     /// Runs the action for image `id`, named `name`.
     pub(crate) fn run(self, app: &mut VectorcraftApp, id: u64, name: &str) {
         match self {
-            LinkAction::Embed => {
-                app.run("links.embed", json!({ "ids": [id] })).ok();
-            }
+            LinkAction::Embed => crate::panels::links::embed_images(app, vec![id]),
             LinkAction::EditOriginal => crate::menus::invoke(app, "links.editOriginal", json!({ "id": id })),
             LinkAction::Unembed => crate::panels::links::unembed(app, id, name),
         }
+    }
+}
+
+/// Several selected objects that are all images: the ids of the linked ones and of the embedded
+/// ones, in selection order.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SeveralImages {
+    /// The linked images.
+    pub(crate) linked: Vec<u64>,
+    /// The embedded images.
+    pub(crate) embedded: Vec<u64>,
+}
+
+impl SeveralImages {
+    /// The selection as [`SeveralImages`], when two or more objects are selected and each is an
+    /// image.
+    pub(crate) fn selected(app: &VectorcraftApp) -> Option<SeveralImages> {
+        let st = app.session.active()?;
+        if st.selection.objects.len() < 2 {
+            return None;
+        }
+        let mut out = SeveralImages::default();
+        for id in &st.selection.objects {
+            let NodeKind::Image(im) = &st.doc.node(*id)?.kind else { return None };
+            if im.link.is_some() { out.linked.push(id.0) } else { out.embedded.push(id.0) }
+        }
+        Some(out)
+    }
+
+    /// The actions that apply to these images: Embed while one of them is linked, and Unembed…
+    /// while one is embedded and they can be written out. Edit Original opens one file, so the
+    /// surfaces offer it for one image only.
+    pub(crate) fn shown(&self, app: &VectorcraftApp) -> Vec<LinkAction> {
+        let mut shown = vec![];
+        if !self.linked.is_empty() {
+            shown.push(LinkAction::Embed);
+        }
+        if crate::panels::links::can_unembed(app, self.embedded.len()) {
+            shown.push(LinkAction::Unembed);
+        }
+        shown
+    }
+
+    /// Runs `action` on these images: Embed embeds every linked one, and Unembed… writes every
+    /// embedded one out, each in one undo step.
+    pub(crate) fn run(&self, app: &mut VectorcraftApp, action: LinkAction) {
+        match (action, &self.embedded[..]) {
+            (LinkAction::Embed, _) => crate::panels::links::embed_images(app, self.linked.clone()),
+            (LinkAction::EditOriginal, _) | (LinkAction::Unembed, []) => {}
+            (LinkAction::Unembed, [one]) => {
+                let info = app.session.execute("image.info", &json!({ "id": one })).unwrap_or_default();
+                let (name, _) = image_summary(&info);
+                crate::panels::links::unembed(app, *one, &name);
+            }
+            (LinkAction::Unembed, ids) => crate::panels::links::unembed_several(app, ids.to_vec()),
+        }
+    }
+}
+
+/// The Control bar for several selected images and nothing else: Embed and Unembed… for them
+/// ([`SeveralImages::shown`]), each a ranked row.
+fn control_bar_several(app: &mut VectorcraftApp, ui: &mut egui::Ui, images: &SeveralImages) {
+    for action in images.shown(app) {
+        Row::new().fit_rank(crate::chrome::rank::GROUP).show(ui, |ui, _| {
+            if clicked(&Button::new(action.label().to_string()).show(ui)) {
+                images.run(app, action);
+            }
+        });
     }
 }
 
@@ -1125,9 +1191,14 @@ impl LinkAction {
 /// resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask, Crop Image and
 /// Remove Background, each a ranked row that leaves a shrinking bar whole. While the Crop Image
 /// tool is in use, the bar shows the file name, colour mode and resolution only, and the tool's
-/// cropping options follow them. Whether one image is selected.
+/// cropping options follow them. For several selected images and nothing else, the bar shows
+/// their Embed and Unembed… ([`SeveralImages`]). Whether one image is selected.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     use crate::chrome::rank;
+    if let Some(images) = SeveralImages::selected(app) {
+        control_bar_several(app, ui, &images);
+        return false;
+    }
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
