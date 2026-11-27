@@ -17,7 +17,7 @@ use super::fileio::{absolute_path, read_file_head};
 use super::{CommandSpec, Result, Session, bad, cmd, has_doc, text_param};
 
 /// The largest SVG file Import SVG Filter reads.
-const MAX_IMPORT_BYTES: usize = 16 << 20;
+pub const MAX_IMPORT_BYTES: usize = 16 << 20;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import SVG Filter…",
             [],
             None,
-            "{path?|svg?} add the <filter> elements of an SVG file (at most 16 MB; not SVGZ; its first 256 filters) or of SVG text to the document's SVG filters, as one undo step; a filter whose name the document already has, and one svgFilter.define would refuse, is left out; objects whose effect names an added filter draw with it → {added: [names…], skipped: count, filters}",
+            "{path?|svg?|dataBase64?} add the <filter> elements of an SVG file (at most 16 MB; not SVGZ; its first 256 filters), SVG text or base64-encoded file bytes to the document's SVG filters, as one undo step; file bytes keep their UTF-8, BOM-marked UTF-16 or declared ISO 8859-1 encoding. A filter whose name the document already has, and one svgFilter.define would refuse, is left out; objects whose effect names an added filter draw with it → {added: [names…], skipped: count, filters}",
             has_doc,
             import
         ),
@@ -197,13 +197,19 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "filters": filters_json(&s.doc()?.doc) }))
 }
 
-/// The bytes of `p`'s `path` (an SVG file, read up to [`MAX_IMPORT_BYTES`]) or `svg`.
+/// The bytes of `p`'s `path`, `svg` text or `dataBase64`, up to [`MAX_IMPORT_BYTES`].
 fn import_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
-    let bytes = match (text_param(p, "path", cmd)?, text_param(p, "svg", cmd)?) {
+    let bytes = match (text_param(p, "path", cmd)?, text_param(p, "svg", cmd)?, text_param(p, "dataBase64", cmd)?) {
         // One byte past the cap is enough to refuse the file below.
-        (Some(path), _) => read_file_head(&absolute_path(path), MAX_IMPORT_BYTES + 1)?,
-        (None, Some(svg)) => svg.as_bytes().to_vec(),
-        _ => return Err(bad(cmd, "give `path`, an SVG file, or `svg`, SVG text")),
+        (Some(path), _, _) => read_file_head(&absolute_path(path), MAX_IMPORT_BYTES + 1)?,
+        (None, Some(svg), _) => svg.as_bytes().to_vec(),
+        (None, None, Some(encoded)) => {
+            if vectorcraft_format::base64_decoded_len(encoded) > MAX_IMPORT_BYTES as u64 {
+                return Err(bad(cmd, format!("the SVG file is larger than {MAX_IMPORT_BYTES} bytes")));
+            }
+            vectorcraft_format::base64_decode(encoded).ok_or_else(|| bad(cmd, "bad dataBase64"))?
+        }
+        _ => return Err(bad(cmd, "give `path`, an SVG file, `svg`, SVG text, or `dataBase64`, file bytes")),
     };
     if bytes.len() > MAX_IMPORT_BYTES {
         return Err(bad(cmd, format!("the SVG file is larger than {MAX_IMPORT_BYTES} bytes")));
