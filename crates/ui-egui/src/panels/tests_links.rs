@@ -838,6 +838,44 @@ fn several_images_leave_dcs_images_out_of_embed() {
     }
 }
 
+/// The Links panel's Embed and Break Link leave images placed from DCS files out: with a DCS image
+/// and a linked image selected, each embeds the linked one and leaves the DCS image linked; with
+/// only the DCS image selected, its row menu's Embed Image is unavailable.
+#[test]
+fn links_panel_leaves_dcs_images_out_of_embed() {
+    let dir = Folder::new("dcs-links-panel");
+    let placed = Cell::new(0);
+    let setup = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        placed.set(placed.get() + 1);
+        let dcs = dir.file(&format!("plates-{}.eps", placed.get()), &dcs_file());
+        let dcs = app.run("file.place", json!({"path": dcs, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+        let png = dir.file(&format!("other-{}.png", placed.get()), &png(30, 20));
+        let linked = app.run("file.place", json!({"path": png, "at": [200, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [dcs, linked]})).unwrap();
+        (app, dcs, linked)
+    };
+    for (how, act) in [("Embed", "ui.links.embed"), ("Break Link", "")] {
+        let (app, dcs, linked) = setup();
+        let mut h = Panel::new(app, super::links::show);
+        if act.is_empty() {
+            h.click(how);
+        } else {
+            super::links::run(&mut h.app(), act, &json!({})).expect("a panel command").unwrap();
+            h.frame();
+        }
+        let mut app = h.app();
+        assert!(is_embedded(&mut app, linked), "{how}: the linked image is embedded");
+        assert!(!is_embedded(&mut app, dcs), "{how}: the DCS image stays linked");
+    }
+    let (mut app, dcs, _) = setup();
+    app.run("select.set", json!({"ids": [dcs]})).unwrap();
+    let mut h = Panel::new(app, super::links::show);
+    h.secondary_click(&format!("plates-{}.eps", placed.get()));
+    assert!(!h.menu_item_enabled("Embed Image"), "one DCS image");
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]
