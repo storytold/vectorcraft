@@ -310,14 +310,23 @@ fn copy_long_link_value(a: &mut App) {
     let name = format!("{}.png", "Original linked-information fixture ".repeat(6));
     place_original_png(a, &name);
     let out = a.panel("links");
-    let label = painted(&out, "Name").0;
+    // Native Field may put its value below the caption. Anchor it to the real copy node.
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("actual Name accessibility tree").nodes;
+    let names: Vec<_> = nodes
+        .iter()
+        .filter(|(_, node)| node.label() == Some("Name") && node.value() == Some(name.as_str()))
+        .filter(|(_, node)| node.supports_action(egui::accesskit::Action::Click))
+        .collect();
+    assert_eq!(names.len(), 1, "one actual full-name copy readout");
+    assert_eq!(names[0].1.description(), Some("Copy"));
+    let area = location_node_rect(&names[0].1);
     let (value, clipped) = out
         .shapes
         .iter()
         .find_map(|s| {
             let t = text_shape(&s.shape, &name)?;
-            let r = t.galley.rect.translate(t.pos.to_vec2()).intersect(s.clip_rect);
-            (r.is_positive() && (r.center().y - label.center().y).abs() < 8.0).then_some((r, t.galley.elided || r.width() < t.galley.rect.width()))
+            let r = t.galley.rect.translate(t.pos.to_vec2()).intersect(s.clip_rect).intersect(area);
+            r.is_positive().then_some((r, t.galley.elided || r.width() < t.galley.rect.width()))
         })
         .expect("the actual selected image's Link Info Name value");
     assert!(clipped, "the framework really clips this long painted readout");
@@ -654,9 +663,14 @@ fn review_4714788866_readout_copy_requires_an_inside_primary_press() {
     assert_eq!(visible_text_count(&a.frame(vec![]), COPIED), 0);
     assert_eq!(a.snapshot(), before, "the rejected gesture preserves document, selection and history");
 
-    // The same inside position still copies on its first click, including a press/release in
-    // one raw frame. The deadline above lets the rejected pointer-wide click expire first.
-    let accepted = a.frame(vec![Event::PointerMoved(inside), button(inside, true), button(inside, false)]);
+    // The same inside position copies on its first click when both edges arrive together.
+    // Framework H0 holds the raw release until the next frame; preserve that actual input path.
+    let queued = a.frame(vec![Event::PointerMoved(inside), button(inside, true), button(inside, false)]);
+    assert!(copies(&queued).is_empty(), "a queued release has not copied yet");
+    assert!(!a.ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)));
+    assert_eq!(a.app.ui.status_sets, sets);
+    let accepted = a.frame(vec![]);
+    assert!(a.ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)), "the held release is now delivered");
     assert_eq!(copies(&accepted), [LENGTH]);
     assert_eq!(a.app.ui.status_sets, sets + 1);
     assert_eq!(visible_text_count(&accepted, COPIED), 1);

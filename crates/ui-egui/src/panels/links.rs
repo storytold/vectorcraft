@@ -26,7 +26,7 @@ use craft::behavior::{IconId, Selection, keyed};
 use craft::host::{PickKind, PickRequest, Picked};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{Bind, CollectionEvent, FieldLayout, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
@@ -977,8 +977,9 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
             // Show in Folder for the image shown here: off while its file is missing and without a
             // file manager (the web).
             let can_reveal = i["path"].is_string() && i["status"] != "missing" && app.services.reveal.is_some();
-            Field::new(tl!("Location")).value(l.to_string()).show(ui, |ui, _| {
-                Row::new().show(ui, |ui, _| {
+            // Keep the translated caption from taking the compound row's path width.
+            Field::new(tl!("Location")).layout(FieldLayout::Above).value(l.to_string()).show(ui, |ui, _| {
+                Row::new().fill_width().show(ui, |ui, _| {
                     if IconButton::new(IconId::new("folder-open")).label(tl!("Show in Folder")).enabled(can_reveal).show(ui).clicked() {
                         reveal = Some(id);
                     }
