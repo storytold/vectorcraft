@@ -433,6 +433,50 @@ pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<Strin
     Ok(pe.pattern)
 }
 
+/// Does the art on pattern editing mode's layer in `d` paint the pattern being edited, itself or
+/// through the symbols and patterns it uses? Done would then store a pattern painting its own
+/// tile, which draws without end and is refused as too deep ([`Document::too_deep`]).
+fn tile_paints_itself(d: &Document) -> bool {
+    let Some(pe) = &d.pattern_edit else { return false };
+    let Some(layer) = d.node(pe.layer) else { return false };
+    // Symbols (false) and patterns (true) already looked into, and the art left to look at.
+    let mut seen: HashSet<(bool, &str)> = HashSet::new();
+    let mut left: Vec<&Node> = vec![layer];
+    while let Some(n) = left.pop() {
+        let mut used = vec![];
+        walk_with_masks(n, &mut |c| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
+                used.push((false, symbol.as_str()));
+            }
+            for p in node_paints(c).chain(override_paints(c)) {
+                if let Paint::Pattern { pattern, .. } = p {
+                    used.push((true, pattern.as_str()));
+                }
+            }
+        });
+        for u in used {
+            if u == (true, pe.pattern.as_str()) {
+                return true;
+            }
+            if !seen.insert(u) {
+                continue;
+            }
+            match u {
+                (false, name) => left.extend(d.symbols.iter().find(|x| x.name == name).map(|x| &*x.art)),
+                (true, name) => left.extend(d.pattern(name).into_iter().flat_map(|x| x.art.iter().map(|a| &**a))),
+            }
+        }
+    }
+    false
+}
+
+/// Refuse an edit that leaves the tile art in pattern editing mode painting the pattern being
+/// edited when it didn't before (painting the tile with its own swatch, say): Done could not save
+/// it. Like a symbol, which can't hold an instance of itself.
+pub(crate) fn refuse_tile_painting_itself(before: &Document, d: &Document) -> Result<()> {
+    if tile_paints_itself(d) && !tile_paints_itself(before) { Err(EngineError::Other("a pattern can't paint its own tile".into())) } else { Ok(()) }
+}
+
 /// Give pattern `name` fresh-id copies of the selected art (or of `ids`) as its tile art, as one
 /// undo step (`object.pattern.replaceArt`). The pattern keeps its name, swatch, tile and options,
 /// and its tile fits the new art when its Size Tile to Art is on; paints refer to a pattern by

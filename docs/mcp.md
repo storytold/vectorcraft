@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: pattern editing refuses painting the tile with its own pattern (#7095); existing response shapes retained. Previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -6738,6 +6738,9 @@ In pattern editing mode the tile edge (`pattern.options {showTileEdge}`) and the
 {showSwatchBounds}`: the part of the tiling the swatch repeats, dashed) are drawn in the preference
 `patternTileEdgeColor`. There `object.exitIsolation` (the Exit Isolation Mode item of the canvas context menu and of the
 Layers panel menu) saves the tile art into the pattern and leaves the mode, as `object.pattern.done` does.
+An edit that makes the tile art paint the pattern being edited, directly or through another pattern or a symbol
+it uses (`paint.setFill {swatch}` with the pattern's own swatch, say), is refused with "a pattern can't paint its own
+tile": a pattern painting its own tile draws without end, and Done could not save it.
 
 `object.pattern.make {name?}`, `object.pattern.saveCopy {name?}` and `pattern.options {newName?}` trim the white space
 around the name they are given. The first two number a name that a pattern, a swatch or a color group has ("Dots 2"),
@@ -17025,6 +17028,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 | Date | Change |
 |---|---|
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
+| 2026-11-17 | Pattern editing refuses an edit that makes the tile art paint its own pattern (#7095); no response-shape change. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
 | 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
