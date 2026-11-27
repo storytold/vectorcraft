@@ -61,6 +61,51 @@ fn open(app: &mut VectorcraftApp) {
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
 }
 
+#[test]
+fn the_first_artboard_is_clickable_on_open_in_a_short_web_viewport() {
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "First audit board"})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(640.0, 500.0));
+        let mut time = 0.0;
+        let mut draw = |app: &mut VectorcraftApp, events| {
+            time += 0.2;
+            crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+        };
+        draw(&mut app, vec![]);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        for _ in 0..5 {
+            draw(&mut app, vec![]);
+        }
+        let out = draw(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+        let bounds = nodes
+            .iter()
+            .find_map(|(_, node)| {
+                if node.role() == Role::CheckBox && node.label().is_some_and(|label| label.contains("First audit board")) {
+                    node.bounds()
+                } else {
+                    None
+                }
+            })
+            .expect("the first artboard has a checkbox");
+        let pos = pos2(((bounds.x0 + bounds.x1) / 2.0) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32);
+
+        assert_eq!(field(&app, "boards"), json!([true, true]));
+        draw(&mut app, vec![Event::PointerMoved(pos)]);
+        for pressed in [true, false] {
+            draw(&mut app, vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        draw(&mut app, vec![]);
+        assert_eq!(field(&app, "boards"), json!([false, true]), "the first {view} checkbox should be clickable without scrolling");
+        assert!(log.borrow().is_empty());
+    }
+}
+
 /// Presses OK, which the dialog refuses or does not offer: it stays open.
 fn stays_open(app: &mut VectorcraftApp) {
     let _ = try_confirm(app);
