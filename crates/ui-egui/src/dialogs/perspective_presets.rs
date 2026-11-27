@@ -298,8 +298,9 @@ pub(super) fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Resul
         Action::Import => {
             let request = PickRequest::open(KIND).filter("Perspective grid presets", PRESET_EXTS);
             file_asks::ask(app, request, Owner::Free, |app, picked| {
-                let path = picked.first_path().ok_or("cancelled")?;
-                let r = app.run("perspective.presets.import", json!({ "path": path }))?;
+                let mut params = file_asks::open_params(&picked).ok_or("cancelled")?;
+                params.remove("name");
+                let r = app.run("perspective.presets.import", Value::Object(params))?;
                 if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
                     select(app, first);
                 }

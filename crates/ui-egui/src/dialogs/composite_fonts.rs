@@ -60,7 +60,7 @@ use vectorcraft_engine::cmd::compositefonts::{EXTS, file_bytes};
 use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
-use crate::file_asks::{Owner, ask, open_params, save};
+use crate::file_asks::{Owner, ask_while, open_params, save};
 use crate::font_menu::{PickerHold, family_picker, family_sets};
 
 mod sample;
@@ -156,6 +156,8 @@ pub struct CompositeFontsDialog {
     held: HeldAnswer<Vec<CompositeFont>>,
     /// The file dialog a Load…, Replace… or Save… asked for, which [`pump`] takes.
     file: Option<PresetFileRequest>,
+    /// Identifies the draft that opened a Load or Replace picker.
+    file_owner: Arc<()>,
     /// Why the last action on the fonts or sets was refused.
     refusal: Option<String>,
     /// The words of the file status line, kept from the last pass for [`pump`].
@@ -255,6 +257,7 @@ impl CompositeFontsDialog {
             hold,
             held: HeldAnswer::new(),
             file: None,
+            file_owner: Arc::new(()),
             refusal: None,
             words: None,
         }
@@ -848,25 +851,32 @@ impl StackDialog for CompositeFontsDialog {
 /// Runs once per frame after the shell pass: answers OK's held fonts with the command's result, and takes the
 /// file dialog a Load…, Replace… or Save… asked for.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
-    let Some((held, request)) = with_dialog(app, |d| (d.held.take(), d.file.take())) else { return };
+    let Some((held, request)) = with_dialog(app, |d| {
+        let held = d.held.take();
+        let request = d.file.take().map(|request| (request, Arc::clone(&d.file_owner)));
+        (held, request)
+    }) else {
+        return;
+    };
     if let Some(fonts) = held {
         // A name two fonts share or a value out of range keeps the dialog open with the reason.
         let answer = app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from);
         with_dialog(app, |d| d.held.answer(answer));
     }
-    if let Some(request) = request {
-        ask_file(app, request);
+    if let Some((request, owner)) = request {
+        ask_file(app, request, owner);
     }
 }
 
-/// Asks for the file `request` names; the answer reaches the dialog by [`with_dialog`].
-fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest) {
+/// Asks for the file `request` names. Open answers belong to the draft that requested them.
+fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest, owner: Arc<()>) {
     // The pick's answer comes back through the continuation, so the immediate `{pending}` value says nothing more.
     match request.clone() {
         PresetFileRequest::Open { purpose, filter, extensions, replace, .. } => {
             let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
             let pick = PickRequest::open(purpose).filter(filter, &exts);
-            ask(app, pick, Owner::Free, move |app, picked| load_file(app, &request, replace, &picked));
+            let current = move |app: &VectorcraftApp| with_dialog(app, |draft| Arc::ptr_eq(&draft.file_owner, &owner)).unwrap_or(false);
+            ask_while(app, pick, Owner::Free, current, move |app, picked| load_file(app, &request, replace, &picked));
         }
         PresetFileRequest::Save { purpose, filter, extensions, file_name, bytes, .. } => {
             let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();

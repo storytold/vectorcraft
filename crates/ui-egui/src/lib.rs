@@ -290,6 +290,8 @@ pub struct VectorcraftApp {
     pub(crate) export_dialogs: dialogs::export_host::ExportDialogs,
     /// The document and selection used by each open slice dialog.
     pub(crate) slice_dialogs: dialogs::slices::SliceDialogs,
+    /// The drawing the open Package dialog saves and collects.
+    pub(crate) package_document: Option<u64>,
     /// Save for Web's renders and colour table.
     pub(crate) web_export: dialogs::save_for_web::WebExport,
     /// The Flattener Preview panel's model.

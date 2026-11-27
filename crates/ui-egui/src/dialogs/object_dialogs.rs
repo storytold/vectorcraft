@@ -30,7 +30,7 @@ pub(crate) struct ObjectDialogs {
     /// The open Blend Options dialog's live preview.
     pub blend: Option<LivePreview>,
     /// The open Indexed Color dialog's live preview.
-    pub indexed: Option<LivePreview>,
+    pub indexed: Option<indexed_color::Open>,
     /// The open Gap Options dialog's live preview.
     pub gaps: Option<live_paint_gaps::Open>,
     /// The Properties section's pending colour pick: dialog id, field key and target dimension.
