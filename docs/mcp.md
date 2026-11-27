@@ -10689,6 +10689,8 @@ listed in `warnings`. ASCII and binary DXF files are read; DWG files answer an e
 
 ## Links panel
 
+`links.replaceEmbedded {ids, dataBase64}` uses raster file bytes to replace existing canvas images. It embeds the new pixels and keeps the image ids. The new aspect ratio fits inside the old bounds, and a distorted image keeps its corners. The command records one undo step and returns `{replaced: [ids]}`. The browser's Replace Image uses this operation with the file picker result.
+
 `links.list {show?: all|missing|modified|embedded, sort?: name|kind|status|size}` lists every image in the layers, top
 first, as the Links panel does (`sort: "size"`, the panel menu's Sort by Size, puts the smallest file first by the
 size Link Info shows; rows without one, embedded images and missing files whose size is not kept, come last, and equal
