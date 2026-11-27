@@ -129,6 +129,7 @@ pub(crate) struct Open {
 pub(crate) struct SplitOpen {
     id: DialogId,
     document: u64,
+    reverts: u64,
     preview: LivePreview,
     /// An interaction allocates its own selection snapshot, even when the selected objects did not change.
     preview_selection: Option<Weak<Selection>>,
@@ -139,12 +140,13 @@ impl SplitOpen {
         let Some(selection) = &self.preview_selection else { return false };
         app.session.active().is_some_and(|state| {
             state.uid == self.document
+                && state.reverts == self.reverts
                 && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
         })
     }
 
     fn update_preview(&mut self, app: &mut VectorcraftApp, on: bool, fields: &DialogFields) {
-        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else { return };
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document && state.reverts == self.reverts) else { return };
         if !self.owns_preview(app) {
             self.preview = LivePreview::default();
             self.preview_selection = None;
@@ -162,8 +164,11 @@ impl SplitOpen {
     }
 
     fn confirm(&mut self, app: &mut VectorcraftApp, fields: &DialogFields) -> Result<(), String> {
-        if app.session.active().is_none_or(|state| state.uid != self.document) {
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else {
             return Err(tl!("Split Into Grid can only change the document where it was opened.").to_owned());
+        };
+        if state.reverts != self.reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         if app.session.in_interaction() && !self.owns_preview(app) {
             return Err(tl!("Finish the active edit before applying Split Into Grid.").to_owned());
@@ -512,6 +517,7 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
         return;
     };
     let document = state.uid;
+    let reverts = state.reverts;
     let (width, height) = state.doc.bounds_of(&state.selection.objects, false).map_or((0.0, 0.0), |b| (b.width(), b.height()));
     let lengths = crate::canvas::general_lengths(app);
     let dialog = HostedParamDialog::new(&ctx, SPLIT_COMMAND, split_fields(width, height), move |f| {
@@ -525,7 +531,7 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
         old.cancel(app);
     }
     match open_held(app, dialog, ok) {
-        Some(id) => app.object_dialogs.split = Some(SplitOpen { id, document, preview: LivePreview::default(), preview_selection: None }),
+        Some(id) => app.object_dialogs.split = Some(SplitOpen { id, document, reverts, preview: LivePreview::default(), preview_selection: None }),
         None => app.status("There is no window to show the dialog in."),
     }
 }
@@ -618,6 +624,7 @@ pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
 
 #[cfg(test)]
 mod split_tests {
+    use craft::ui::dialog::HeldOk;
     use serde_json::json;
 
     use super::*;
@@ -631,6 +638,65 @@ mod split_tests {
     fn other_document(app: &mut VectorcraftApp) {
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         selected_rectangle(app, 150, 90);
+    }
+
+    fn grid_after_file_revert(hold_ok: bool) -> VectorcraftApp {
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let folder = vectorcraft_testkit::TempDir::new("split-into-grid-revert");
+        let path = folder.join("drawing.vectorcraft");
+        selected_rectangle(&mut app, 112, 62);
+        let original = app.session.active().unwrap().selection.objects[0];
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        selected_rectangle(&mut app, 50, 30);
+        app.run("select.set", json!({"ids": [original.0]})).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, generation) = (source.uid, source.reverts);
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        set(&mut app, "preview", json!(false));
+        if hold_ok {
+            let ctx = app.ui_ctx.clone().unwrap();
+            let id = app.object_dialogs.split.as_ref().unwrap().id;
+            assert!(!app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id)));
+        }
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reloaded = app.session.active().unwrap();
+        assert_eq!(reloaded.uid, uid);
+        assert_ne!(reloaded.reverts, generation);
+        app.run("select.set", json!({"ids": [original.0]})).unwrap();
+        app
+    }
+
+    #[test]
+    fn grid_revert_ignores_the_previous_generations_preview() {
+        let mut app = grid_after_file_revert(false);
+        let restored = app.session.active().unwrap().doc.clone();
+        set(&mut app, "preview", json!(true));
+        frame(&mut app, vec![]);
+        assert!(app.session.active().unwrap().doc == restored, "old grid preview reached the restored drawing");
+        assert!(!app.session.in_interaction());
+    }
+
+    #[test]
+    fn grid_revert_ignores_a_held_ok_and_accepts_a_fresh_opening() {
+        let mut app = grid_after_file_revert(true);
+        let restored = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let id = app.object_dialogs.split.as_ref().unwrap().id;
+        frame(&mut app, vec![]);
+        assert!(app.session.active().unwrap().doc == restored, "old grid OK reached the restored drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        let Some(HeldOk::Refused(message)) = app.dialogs().unwrap().with(|host| host.held_state(id)) else { panic!("expected a held refusal") };
+        assert_eq!(message.as_str(), "The document was reverted. Reopen this dialog to continue.");
+        assert!(cancel(&mut app));
+        open_split(&mut app);
+        set(&mut app, "columns", json!(3));
+        assert!(confirm(&mut app));
+        let active = app.session.active().unwrap();
+        assert_eq!(active.doc.layers[0].children().unwrap().len(), 6);
+        assert_eq!(active.history.undo.len(), undo + 1);
     }
 
     #[test]
