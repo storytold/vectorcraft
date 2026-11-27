@@ -781,7 +781,13 @@ fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
         [n] => crate::i18n::fmt(tl!("Delete the graphic style “{name}”?"), &[("name", n)]),
         _ => crate::i18n::tn(names.len() as u64, "Delete this {n} graphic style?", "Delete these {n} graphic styles?"),
     };
-    crate::dialogs::confirm::ask(app, &message, tl!("Objects using them keep their look but are no longer linked."), "graphicStyle.delete", params);
+    crate::dialogs::confirm::ask_in_document_contents(
+        app,
+        &message,
+        tl!("Objects using them keep their look but are no longer linked."),
+        "graphicStyle.delete",
+        params,
+    );
 }
 
 // ---------- the panel menu ----------
@@ -1170,6 +1176,58 @@ mod tests {
         // Alt deletes at once.
         on_event(&mut app, PresetEvent::Delete("Mine".into()), true);
         assert!(names(&app).is_empty() && confirm::open_question(&app).is_none());
+    }
+
+    #[test]
+    fn delete_confirmation_keeps_matching_styles_in_another_drawing() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let source = app.session.active().unwrap().uid;
+        on_event(&mut app, PresetEvent::Delete("Mine".into()), false);
+        assert!(asks_delete(&app));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        assert_ne!(app.session.active().unwrap().uid, source);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 25})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let before = names(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
+        assert_eq!(names(&app), before, "the other tab keeps its identically named style");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+        assert!(app.session.set_active(0));
+        assert!(doc(&app).graphic_style_index("Mine").is_some(), "the source style still needs a fresh confirmation");
+    }
+
+    #[test]
+    fn delete_confirmation_keeps_the_style_restored_by_revert() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        let file = std::env::temp_dir().join(format!("vectorcraft-style-delete-revert-{}.vectorcraft", std::process::id()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+        let saved = doc(&app);
+        let index = saved.graphic_style_index("Mine").unwrap();
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("paint.setFill", json!({"color": "#b32f5f"})).unwrap();
+        app.run("graphicStyle.redefine", json!({"name": "Mine"})).unwrap();
+        on_event(&mut app, PresetEvent::Delete("Mine".into()), false);
+        assert!(asks_delete(&app));
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(file);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+        assert_eq!(doc(&app).graphic_style_index("Mine"), Some(index));
+        let undo = st.history.undo.len();
+
+        answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
+        assert_eq!(doc(&app).graphic_style_index("Mine"), Some(index), "the restored style stays");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
     }
 
     #[test]
