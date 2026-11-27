@@ -525,7 +525,7 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         for _ in 0..4 {
             out = a.frame(vec![]);
         }
-        // TEMPORARY allocation control: MUST REMOVE traces before publication. Activate the real footer button,
+        // Hiding Link Info returns its space to the list. Activate the real footer button,
         // not private state: Links applies FooterBar's first pick by toggling its existing info option.
         let layout = |out: &egui::FullOutput| {
             let nodes = &out.platform_output.accesskit_update.as_ref().expect("the actual floated Links tree").nodes;
@@ -562,25 +562,12 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         out = a.settle();
         let (list_on, info_on, _) = layout(&out);
         assert!(info_on.is_some(), "{locale}: the real footer action restores Link Info before the original oracles");
-        eprintln!(
-            "LINK_LOCATION_ALLOCATION locale={locale} list_before={list_before:?} info_before={info_before:?} list_off={list_off:?} info_off={info_off:?} list_on={list_on:?} info_on={info_on:?} off_minus_on_height={}",
-            list_off.height() - list_on.height()
-        );
+        assert!(info_before.is_some(), "{locale}: Link Info starts visible before the real toggle control");
+        assert!(list_before.height() < list_off.height(), "{locale}: initially visible Link Info reserves list space");
+        assert!(list_on.height() < list_off.height(), "{locale}: showing Link Info reserves list space again");
+        assert!(list_on.height() > 0.0, "{locale}: the visible details leave room for the image list");
         assert_eq!(a.snapshot(), before_toggle, "showing and hiding link details leaves document, selection and history intact");
         let nodes = &out.platform_output.accesskit_update.as_ref().expect("the floated Links tree").nodes;
-        // TEMPORARY diagnostic: MUST REMOVE before publication. One final snapshot per locale, before the unchanged assertions.
-        eprintln!("LINK_LOCATION_INTEGRATION_FINAL locale={locale} node_count={}", nodes.len());
-        for (id, node) in nodes {
-            eprintln!(
-                "LINK_LOCATION_INTEGRATION_FINAL locale={locale} id={id:?} role={:?} label={:?} value={:?} description={:?} bounds={:?} children={:?}",
-                node.role(),
-                node.label(),
-                node.value(),
-                node.description(),
-                node.bounds(),
-                node.children()
-            );
-        }
         let body = nodes
             .iter()
             .filter(|(_, n)| n.role() == Role::TabPanel)

@@ -29,7 +29,7 @@ use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -768,10 +768,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     Panel::new(tl!("Links"))
         .collection_body()
         .footer(|ui, _| {
-            let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
-            let actions = std::iter::once(info)
-                .chain(FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))));
-            footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
+            Stack::new().fill_width().show(ui, |ui, _| {
+                if o.info {
+                    info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units, &mut info_copy);
+                }
+                let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
+                let actions = std::iter::once(info)
+                    .chain(FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))));
+                footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
+            });
         })
         .show(ui, |ui, _| {
             let empty = if o.show == "all" { tl!("No images") } else { tl!("Nothing matches the Show filter.") };
@@ -816,9 +821,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             if let Some(r) = menu_for.or(open_menu).and_then(|id| by_id.get(&id).copied()) {
                 row_act = show_row_menu(ui, &out.response, view, &facts, r);
-            }
-            if o.info {
-                info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units, &mut info_copy);
             }
         });
 
