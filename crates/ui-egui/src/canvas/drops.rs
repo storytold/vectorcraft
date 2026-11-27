@@ -353,7 +353,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Style(_) => Ok(()),
-        Payload::Panel(PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
+        Payload::Panel(PanelDrag::Paint { params, paint, rows, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
                 && let Some((id, points)) = selected_mesh_drop(app, at, zoom)
@@ -362,7 +362,14 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 return run(app, "object.mesh.setPointColor", params);
             }
             let Some(hit) = hit() else { return Ok(()) };
-            let mut params = params.clone();
+            let mut params = if let Some(rows) = rows.as_ref().filter(|rows| rows.unlinked_process_color)
+                && app.session.active().is_some_and(|st| st.uid != rows.document)
+                && let Some(color) = paint.color()
+            {
+                json!({"color": crate::panels::color_json(&color), "keepModel": true})
+            } else {
+                params.clone()
+            };
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);
