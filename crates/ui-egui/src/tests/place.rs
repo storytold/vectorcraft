@@ -340,6 +340,30 @@ fn a_dropped_png_is_placed_where_it_was_dropped() {
     assert!(matches!(&selected_image(&app).kind, NodeKind::Image(im) if im.link.is_none()));
 }
 
+#[test]
+fn a_mixed_canvas_drop_places_the_artwork_and_opens_the_palette() {
+    let mut app = app();
+    let ctx = window(&app);
+    let rect = laid_out(&mut app, &ctx);
+    let dir = Folder::new("ui-place-image-and-palette");
+    let palette = dir.file("mixed.gpl", b"GIMP Palette\nName: Mixed Drop\n#\n255   0   0\tRed\n");
+    let png = dir.file("artwork.png", &png(20, 10, 72.0));
+    let pos = rect.center() + vec2(60.0, -40.0);
+    let want = app.canvas_view().unwrap().to_doc(pos);
+
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&palette, &png], false);
+
+    let placed = selected_image(&app);
+    let center = placed.geometric_bounds().unwrap().center();
+    assert!((center.x - want.x).abs() < 1e-6 && (center.y - want.y).abs() < 1e-6, "{center:?} vs {want:?}");
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 1));
+    assert!(
+        crate::panels::library_panel::last_open(&app.ui).is_some_and(|library| library.id == format!("loaded/{palette}")),
+        "the same canvas drop must open the palette: {}",
+        app.ui.status
+    );
+}
+
 /// A document dropped where the platform gives no position opens as a new tab, not into the open
 /// document; the pictures dropped with it are placed in the document that was open, before it
 /// opens.

@@ -830,16 +830,15 @@ impl VectorcraftApp {
     }
 }
 
-/// Files held over, or dropped on, a canvas that would be placed there.
+/// A file drop that includes artwork for this canvas.
 pub struct CanvasDrop {
     files: Vec<OsFile>,
     at: Point,
 }
 
-/// The canvas as a target of files dragged from the OS: it takes those [`VectorcraftApp::drop_target`]
-/// places, and outlines the canvas while they hover. On the web the browser gives a hovered file's
-/// type but not its name, so any file is taken then, including libraries, presets, plug-ins and
-/// shortcut sets, which open when dropped.
+/// The canvas accepts a file drop when [`VectorcraftApp::drop_target`] would place any member and
+/// outlines the canvas while it hovers. The drop router places or opens each member of the batch.
+/// A file hovering without a name is also eligible until its name arrives.
 pub struct CanvasFiles<'a> {
     app: &'a VectorcraftApp,
     rect: egui::Rect,
@@ -859,13 +858,11 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     fn accept(&self, payload: &OsFiles, at: egui::Pos2, _op: DropOperation) -> Option<CanvasDrop> {
         let doc = self.view.to_doc(at);
         let at = Point::new(doc.x, doc.y);
-        let files: Vec<OsFile> = payload
+        let accepts = payload
             .files
             .iter()
-            .filter(|f| f.name.is_empty() || matches!(self.app.drop_target(&f.name, DropSpot::Canvas(at), false), DropTarget::Place(_)))
-            .cloned()
-            .collect();
-        (!files.is_empty()).then_some(CanvasDrop { files, at })
+            .any(|file| file.name.is_empty() || matches!(self.app.drop_target(&file.name, DropSpot::Canvas(at), false), DropTarget::Place(_)));
+        accepts.then(|| CanvasDrop { files: payload.files.clone(), at })
     }
 
     fn mark(&self, _: &CanvasDrop) -> DropMark {
@@ -878,7 +875,7 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     }
 }
 
-/// Files dropped on the canvas ([`CanvasFiles`]), placed where they landed; Shift embeds them.
+/// Route the whole canvas drop. Shift embeds its placed artwork.
 // PLAN: `DropOperation` has no Shift, so the held modifiers of the drop's frame are read here.
 pub fn canvas_drop(app: &mut VectorcraftApp, ctx: &egui::Context, dropped: CanvasDrop) {
     let shift = ctx.input(|i| i.modifiers.shift);
