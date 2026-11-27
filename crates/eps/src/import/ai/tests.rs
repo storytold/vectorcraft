@@ -4264,6 +4264,27 @@ fn legacy_type_in_a_cjk_font_decodes_by_its_cmap() {
     assert_ne!(texts[cases.len() + 1].runs[0].style.font_style, test.1, "`UniFoo` is not a character collection");
 }
 
+/// Strings in a plain Chinese system font whose `TZ` gives no encoding pairs are in the font's own
+/// encoding (#9375): GBK for SimSun and its kin, Big5 for MingLiU and its kin, with `TE`'s
+/// encoding left out and `\r` still ending a paragraph. Re-encoded by its `TZ`'s pairs, the font
+/// decodes byte by byte, as does a font that isn't Chinese.
+#[test]
+fn legacy_type_in_a_plain_chinese_font_decodes_by_the_font_s_own_encoding() {
+    let plain = |f: &str| format!("%AI3_BeginEncoding: _{f} {f}\n[/_{f}/{f} 0 0 0 TZ\n%AI3_EndEncoding TrueType\n");
+    let setup = ["[128/Adieresis\nTE\n".to_string(), plain("SimSun"), plain("MicrosoftYaHei"), plain("DFKaiShu-SB-Estd-BF"), plain("PMingLiU")]
+        .concat()
+        + "%AI3_BeginEncoding: _SimHei SimHei\n[ 214/Udieresis\n/_SimHei/SimHei 0 0 1 TZ\n%AI3_EndEncoding TrueType\n";
+    // 中文 is D6D0 CEC4 in GBK, A4A4 A4E5 in Big5.
+    assert_eq!(legacy_chars(&setup, &["_SimSun", "_MicrosoftYaHei"], "\\326\\320\\316\\304PET"), ["中文PET", "中文PET"]);
+    assert_eq!(legacy_chars(&setup, &["_DFKaiShu-SB-Estd-BF", "_PMingLiU"], "\\244\\244\\244\\345"), ["中文", "中文"]);
+    // Re-encoded by its pairs (0xD6 is Ü), or not Chinese: byte by byte, `TE`'s 128 included.
+    assert_eq!(legacy_chars(&setup, &["_SimHei", "_Helvetica"], "\\326'\\200"), ["Ü'Ä", "Ö'Ä"]);
+    let art = point_type("", "\\326\\320\\r\\316\\304").replace("/_Helvetica", "/_SimSun");
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", &format!("%%BeginSetup\n{}%%EndSetup", plain("SimSun")));
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    assert_eq!(texts.iter().map(|t| (t.plain_text(), t.paragraph_count())).collect::<Vec<_>>(), [("中\n文".to_string(), 2)]);
+}
+
 /// A font whose `TZ` gives encoding pairs is not a composite font, even when its name ends in a
 /// CMap name: its strings decode byte by byte, and the font keeps its whole name. A `TZ` without
 /// encoding pairs only names a composite font.
