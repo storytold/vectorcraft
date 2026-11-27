@@ -135,6 +135,8 @@ enum PartEdit {
 /// The Composite Fonts dialog on the dialog host. OK files the fonts for [`pump`], which runs
 /// [`COMMAND`] and answers whether the dialog may close.
 pub struct CompositeFontsDialog {
+    /// The document whose fonts the draft edits.
+    document: u64,
     fonts: Vec<CompositeFont>,
     /// The index of the font picked.
     selected: usize,
@@ -167,9 +169,9 @@ pub struct CompositeFontsDialog {
 /// Open Composite Fonts on the active document's composite fonts, the first one picked, with the
 /// custom character sets and the sample hidden and nothing typed.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let fonts = app.session.active().ok_or("no document open")?.doc.composite_fonts.to_vec();
+    let document = app.session.active().ok_or("no document open")?;
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
-    let dialog = CompositeFontsDialog::new(fonts, crate::font_menu::hold(app));
+    let dialog = CompositeFontsDialog::new(document.uid, document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -241,10 +243,11 @@ fn part_mut(f: &mut CompositeFont, at: usize) -> Option<&mut CompositePart> {
 
 impl CompositeFontsDialog {
     /// The dialog over `fonts`, the first picked.
-    fn new(fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
+    fn new(document: u64, fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
         let mut sample = Map::new();
         sample::defaults(&mut sample);
         CompositeFontsDialog {
+            document,
             fonts,
             selected: 0,
             set: 0,
@@ -852,15 +855,18 @@ impl StackDialog for CompositeFontsDialog {
 /// file dialog a Load…, Replace… or Save… asked for.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some((held, request)) = with_dialog(app, |d| {
-        let held = d.held.take();
+        let held = d.held.take().map(|fonts| (d.document, fonts));
         let request = d.file.take().map(|request| (request, Arc::clone(&d.file_owner)));
         (held, request)
     }) else {
         return;
     };
-    if let Some(fonts) = held {
-        // A name two fonts share or a value out of range keeps the dialog open with the reason.
-        let answer = app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from);
+    if let Some((document, fonts)) = held {
+        let answer = if app.session.active().is_some_and(|active| active.uid == document) {
+            app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from)
+        } else {
+            Err(Label::from(tl!("Composite Fonts can only change the document where it was opened.").to_owned()))
+        };
         with_dialog(app, |d| d.held.answer(answer));
     }
     if let Some((request, owner)) = request {
