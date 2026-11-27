@@ -1,8 +1,10 @@
+use craft::i18n::Folder as Language;
+use craft::ui::dialog::dialog_id;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use serde_json::{Value, json};
-use vectorcraft_engine::Session;
 
-use super::{COMMAND, KIND, choose_shown, message, refresh, shown, toggle};
-use crate::tests_labels::painted_text;
+use super::{COMMAND, KIND, LinkStatusDialog, STATUSES, choose_shown, message, refresh, shown, states, with_shift};
+use crate::addons::select::tests::{confirm, host, new_app, set};
 use crate::{VectorcraftApp, menus};
 
 /// A fresh folder for one test (removed when dropped).
@@ -31,16 +33,48 @@ impl Drop for Folder {
 /// A `w` × `h` red PNG.
 fn png(w: u32, h: u32) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 40, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba([200, 40, 40, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
 /// A document with `river.png` linked, `harbour.png` linked and then deleted (missing), and
 /// `stamp.png` embedded → (app, river, harbour, stamp).
 fn app(dir: &Folder) -> (VectorcraftApp, u64, u64, u64) {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let place = |app: &mut VectorcraftApp, path: &str, at: [u32; 2], link: bool| {
         app.run("file.place", json!({"path": path, "at": at, "link": link})).unwrap()["ids"][0].as_u64().unwrap()
@@ -80,21 +114,19 @@ fn the_list_filters_by_name_and_status_and_all_and_none_act_on_the_rows_shown() 
         json!({"id": 3, "name": "Stamp.png", "status": "embedded"}),
         json!({"id": 4, "name": "river-2.tif", "status": "modified"}),
     ];
+    let folder = Language::new("en");
     let ids = |v: Vec<&Value>| v.iter().map(|r| r["id"].as_u64().unwrap()).collect::<Vec<_>>();
-    assert_eq!(ids(shown(&rows, "", "all")), vec![1, 2, 3, 4]);
-    assert_eq!(ids(shown(&rows, " RIVER ", "all")), vec![1, 4]);
-    assert_eq!(ids(shown(&rows, "river", "linked")), vec![1], "ok is Linked");
-    assert_eq!(ids(shown(&rows, "", "missing")), vec![2]);
-    assert_eq!(ids(shown(&rows, "zzz", "all")), Vec::<u64>::new());
+    assert_eq!(ids(shown(&rows, "", "all", &folder)), vec![1, 2, 3, 4]);
+    assert_eq!(ids(shown(&rows, " RIVER ", "all", &folder)), vec![1, 4]);
+    assert_eq!(ids(shown(&rows, "river", "linked", &folder)), vec![1], "ok is Linked");
+    assert_eq!(ids(shown(&rows, "", "missing", &folder)), vec![2]);
+    assert_eq!(ids(shown(&rows, "zzz", "all", &folder)), Vec::<u64>::new());
     // Row 3 is chosen but hidden: neither All nor None touches it.
     let mut c = vec![3];
     choose_shown(&mut c, &[1, 4], true);
     assert_eq!(c, vec![3, 1, 4]);
     choose_shown(&mut c, &[1, 4], false);
     assert_eq!(c, vec![3]);
-    toggle(&mut c, 2);
-    toggle(&mut c, 3);
-    assert_eq!(c, vec![2]);
 }
 
 #[test]
@@ -109,43 +141,71 @@ fn menu_items_are_on_for_the_statuses_present_and_shift_adds() {
     {
         assert_eq!(item(label).enabled, on, "{label}");
     }
-    let run = |app: &mut VectorcraftApp, label: &str, shift: bool| {
-        let e = item(label);
-        let target = menus::click_target(&e.label, e.command.as_deref().unwrap(), &e.params);
-        let held = if shift { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
-        let (cmd, p) = menus::with_held_keys(target, held);
-        menus::invoke(app, &cmd, p);
+    // The Links panel's rows follow the statuses present, per status.
+    let enabled_of = |app: &VectorcraftApp| {
+        let mut all = CommandStates::new();
+        states(app, &mut all);
+        STATUSES.map(|(status, ..)| all.get(&CommandRef::with_params(COMMAND, json!({ "status": status }))).cloned())
     };
-    run(&mut app, "Select Missing", false);
+    let on = Some(CommandState::new().enabled(true));
+    assert_eq!(enabled_of(&app), [on.clone(), on.clone(), on.clone(), Some(CommandState::new().enabled(false))]);
+    // The item's params run as the menu runs them: Shift's alternate is `with_shift` of them.
+    let run = |app: &mut VectorcraftApp, status: &str, shift: bool| {
+        let p = json!({ "status": status });
+        menus::invoke(app, COMMAND, if shift { with_shift(p) } else { p });
+    };
+    run(&mut app, "missing", false);
     assert_eq!(selected(&app), vec![harbour]);
     assert_eq!(app.ui.status, "Selected 1 missing image");
-    run(&mut app, "Select Embedded", true);
+    run(&mut app, "embedded", true);
     assert_eq!(selected(&app), vec![harbour, stamp], "Shift adds");
-    run(&mut app, "Select Linked", false);
+    run(&mut app, "linked", false);
     assert_eq!(selected(&app), vec![river], "without Shift it replaces");
     // A hidden image is left out, and the status bar says so.
     app.run("object.setProps", json!({"ids": [river], "visible": false})).unwrap();
-    run(&mut app, "Select Linked", false);
+    run(&mut app, "linked", false);
     assert_eq!(selected(&app), Vec::<u64>::new());
     assert_eq!(app.ui.status, "Selected 0 linked images; 1 more is hidden or locked");
-    // The document changes: the items follow on the next refresh.
+    // The document changes: the states follow on the next refresh.
     app.run("select.set", json!({"ids": [harbour]})).unwrap();
     app.run("edit.clear", json!({})).unwrap();
     refresh(&mut app, 1.0);
+    let after = enabled_of(&app);
+    assert_eq!(after[2], Some(CommandState::new().enabled(false)), "no missing image is left");
+    assert_eq!(after[1], on, "the embedded one stays");
+}
+
+/// A missing link kept only in a symbol's art can't be selected: Select Missing stays off and
+/// the dialog does not list it.
+#[test]
+fn links_inside_a_symbol_are_left_out_of_selecting_by_status() {
+    let dir = Folder::new("symbol");
+    let mut app = new_app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let path = dir.file("inside.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": path, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({})).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    assert_eq!(list["missing"], 1, "{list}");
+    refresh(&mut app, 0.0);
     let entries = menus::menu_entries(&app);
-    let on = |label: &str| entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Selection Tools"] && e.label == label).unwrap().enabled;
-    assert!(!on("Select Missing"));
-    assert!(on("Select Embedded"));
+    let missing = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Selection Tools"] && e.label == "Select Missing").unwrap();
+    assert!(!missing.enabled);
+    menus::invoke(&mut app, COMMAND, Value::Null);
+    assert_eq!(host(&app, |h| h.get::<LinkStatusDialog>().map(|d| d.rows.len())), Some(0), "the dialog lists no row of the symbol");
 }
 
 #[test]
-fn the_links_panel_menu_lists_the_select_items() {
-    let dir = Folder::new("flyout");
-    let (mut app, ..) = app(&dir);
-    refresh(&mut app, 0.0);
-    let shown = painted_text(&mut app, crate::panels::links::menu);
-    for s in ["Select Linked", "Select Embedded", "Select Missing", "Select Modified"] {
-        assert!(shown.contains(s), "{s} in {shown}");
+fn the_dialog_draws_its_images_and_buttons() {
+    let dir = Folder::new("drawn");
+    let (app, ..) = app(&dir);
+    let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    menus::invoke(&mut p.app(), COMMAND, Value::Null);
+    p.frame();
+    for name in ["river.png", "harbour.png", "Select", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
     }
 }
 
@@ -153,49 +213,37 @@ fn the_links_panel_menu_lists_the_select_items() {
 fn the_dialog_lists_filters_and_selects_with_zoom() {
     let dir = Folder::new("dialog");
     let (mut app, river, harbour, stamp) = app(&dir);
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(560.0, 460.0)));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(560.0, 460.0));
     let zoom_before = app.view().unwrap().zoom;
     menus::invoke(&mut app, COMMAND, Value::Null);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), &d.fields["zoom"], &d.fields["show"]), (KIND, &json!(true), &json!("all")));
-    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in [
-        "Select by Link Status",
-        "river.png",
-        "harbour.png",
-        "stamp.png",
-        "Linked",
-        "Missing",
-        "Embedded",
-        "PNG",
-        "Zoom to Selection",
-        "Chosen: 0 of 3",
-        "All",
-        "None",
-        "Select",
-    ] {
-        assert!(shown.contains(s), "{s} in {shown}");
+    let id = dialog_id(KIND);
+    let (fields, names) = host(&app, |h| {
+        let d = h.get::<LinkStatusDialog>().unwrap();
+        let language = Language::new("en");
+        let names: Vec<String> = d.rows.iter().map(|r| r["name"].as_str().unwrap().to_owned()).collect();
+        let missing: Vec<String> = shown(&d.rows, "", "missing", &language).iter().map(|r| r["name"].as_str().unwrap().to_owned()).collect();
+        assert_eq!(missing, ["harbour.png"], "Show: Missing lists only the missing image");
+        (d.fields.clone(), names)
+    });
+    assert_eq!((fields.zoom, fields.show.as_str(), fields.ids.is_empty()), (true, "all", true), "Zoom on, Show All, nothing chosen");
+    assert_eq!(names.len(), 3);
+    for name in ["river.png", "harbour.png", "stamp.png"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
     }
-    assert!(!(super::SPEC.ok_enabled.unwrap())(&app, app.ui.dialog.as_ref().unwrap()), "Select is off with nothing chosen");
-    // Show: Missing lists only the missing image.
-    app.ui.dialog.as_mut().unwrap().fields.insert("show".into(), json!("missing"));
-    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(shown.contains("harbour.png") && !shown.contains("river.png") && !shown.contains("stamp.png"), "{shown}");
+    assert!(!confirm(&mut app, id), "Select is refused with nothing chosen");
     // Choose two and Select: they are selected and the view zooms to them.
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("ids".into(), json!([river, stamp]));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    set(&app, id, "ids", json!([river, stamp])).unwrap();
+    assert!(confirm(&mut app, id));
+    assert!(host(&app, |h| !h.is_open::<LinkStatusDialog>()));
     assert_eq!(selected(&app), vec![river, stamp]);
     assert_eq!(app.ui.status, "Selected 2 images");
     assert_ne!(app.view().unwrap().zoom, zoom_before, "zoomed to the selection");
     // Without Zoom to Selection the view stays.
     menus::invoke(&mut app, COMMAND, Value::Null);
     let zoom = app.view().unwrap().zoom;
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("ids".into(), json!([harbour]));
-    d.fields.insert("zoom".into(), json!(false));
-    crate::dialogs::confirm(&mut app).unwrap();
+    set(&app, id, "ids", json!([harbour])).unwrap();
+    set(&app, id, "zoom", json!(false)).unwrap();
+    assert!(confirm(&mut app, id));
     assert_eq!(selected(&app), vec![harbour]);
     assert_eq!(app.view().unwrap().zoom, zoom);
 }

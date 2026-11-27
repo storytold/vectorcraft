@@ -1,14 +1,22 @@
 //! Heavy plug-in filters in the app ([`crate::plugin_runs`]): installing one asks first, its dialog
 //! has no Preview, and it runs off the UI thread, its result applied as one undo step once it is
-//! done, unless the document changed meanwhile. Cancel stops it; its progress window shows it.
+//! done, unless the document changed meanwhile. Cancel stops it; its progress window shows it. A
+//! light filter that reports its progress runs there too.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use craft::host::{Host, ManualJobs};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
+use egui_kittest::Harness;
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::{registry, wat as tpl};
 
-use crate::{VectorcraftApp, dialogs, plugin_runs, theme};
+use super::plugins::{approve, window};
+use crate::dialogs::plugin::InstallPrompt;
+use crate::{VectorcraftApp, dialogs, export_progress, plugin_runs};
 
 /// An app with a new 200 × 200 pt document.
 fn app() -> VectorcraftApp {
@@ -16,6 +24,18 @@ fn app() -> VectorcraftApp {
     app.session.allow_plugin_grants_from_requests();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
+}
+
+/// The window of an [`app`] whose background work waits until the test runs it: a run that OK
+/// started is still running when the frame that started it ends. On threads a fast run could end
+/// before a later pass of that frame, which applies it. The app's clock stands still, so the
+/// progress window, which would hold the results back, opens only when a test moves the clock.
+fn held_window() -> (Harness<'static, VectorcraftApp>, Arc<ManualJobs>) {
+    let mut app = app();
+    app.now_override = Some(0.0);
+    let jobs = Arc::new(ManualJobs::new());
+    app.host = Arc::new(Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs.clone()).build());
+    (window(app), jobs)
 }
 
 /// A heavy test filter `id` (named "Test `id`") with `params` that counts `steps` down, then adds
@@ -42,74 +62,126 @@ fn wait(app: &mut VectorcraftApp) {
     assert!(app.plugin_runs.running.is_empty(), "still running");
 }
 
-/// One headless frame of the dialog layer.
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(Default::default(), |ui| dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
+/// The id of the dialog the host shows, if one is open.
+fn open_id(app: &VectorcraftApp) -> Option<DialogId> {
+    // PLAN: assumed `OpenDialog::id: DialogId`
+    app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().first().map(|o| o.id)))
 }
 
-/// Draws the progress window at `time` seconds → the texts it drew.
-fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| plugin_runs::show(app, ui.ctx()));
-    out.textures_delta.clear();
-    let mut texts = String::new();
-    for shape in out.shapes {
-        if let egui::epaint::Shape::Text(t) = shape.shape {
-            texts.push_str(t.galley.text());
-            texts.push('\n');
-        }
-    }
-    texts
+/// Whether the host shows no dialog.
+fn none_open(app: &VectorcraftApp) -> bool {
+    open_id(app).is_none()
+}
+
+/// Whether the install question is open.
+fn asking(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<InstallPrompt>()))
+}
+
+/// Whether the open filter dialog previews, `None` without one.
+fn previewing(app: &VectorcraftApp) -> Option<bool> {
+    app.dialogs().and_then(|d| d.with(|host| host.get::<HostedParamDialog>().map(HostedParamDialog::is_previewing)))
+}
+
+/// One whole app frame of the window, and the pump of the dialogs' answers.
+fn frame(h: &mut Harness<'static, VectorcraftApp>) {
+    super::plugins::app_step(h);
+    let ctx = h.state().ui_ctx.clone().unwrap();
+    dialogs::host::pump(h.state_mut(), &ctx);
+}
+
+/// Answers the open dialog: OK when `ok`, else Cancel; then a frame, so the pump acts on it.
+fn answer(h: &mut Harness<'static, VectorcraftApp>, ok: bool) {
+    let ctx = h.state().ui_ctx.clone().unwrap();
+    let id = open_id(h.state()).unwrap();
+    h.state().dialogs().unwrap().with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
+    frame(h);
+}
+
+/// Sets the Preview check box of the open dialog.
+fn set_preview(h: &mut Harness<'static, VectorcraftApp>, on: bool) {
+    let ctx = h.state().ui_ctx.clone().unwrap();
+    let id = open_id(h.state()).unwrap();
+    h.state().dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, "preview", json!(on))).unwrap();
+    frame(h);
 }
 
 /// Install Plug-in asks before it installs a filter that asks for a heavy budget, and OK installs
 /// it; File › Open of the `.wasm` asks too, and Cancel installs nothing.
 #[test]
 fn installing_a_heavy_filter_asks_first() {
-    let mut app = app();
+    let mut h = window(app());
     let id = "test.ui.heavy.install";
     let bytes = heavy(id, 1, "{}");
-    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "route.wasm"})).unwrap();
+    let r = h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "route.wasm"})).unwrap();
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
-    let pending = app.pending_plugin_install.as_ref().unwrap();
+    frame(&mut h);
+    assert!(asking(h.state()));
+    let pending = h.state().pending_plugin_install.as_ref().unwrap();
     assert_eq!(pending.message, format!("Install “Test {id}”, which asks for a heavy budget?"));
     assert!(pending.detail.contains("up to 5 minutes and do 20 times the work"), "{}", pending.detail);
     assert!(registry::get(id).is_none(), "not before the user agrees");
-    dialogs::confirm(&mut app).unwrap();
+    approve(&mut h);
+    frame(&mut h);
     assert_eq!(registry::get(id).map(|p| p.manifest().name.clone()), Some(format!("Test {id}")));
-    assert_eq!(app.ui.status, format!("Installed plug-in Test {id}"));
+    assert_eq!(h.state().ui.status, format!("Installed plug-in Test {id}"));
     // File › Open of the .wasm asks too, and Cancel installs nothing.
     registry::remove(id);
-    crate::io::open_bytes(&mut app, "route.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
-    dialogs::cancel(&mut app);
+    crate::io::open_bytes(h.state_mut(), "route.wasm", &bytes, None).unwrap();
+    frame(&mut h);
+    assert!(asking(h.state()));
+    answer(&mut h, false);
     assert!(registry::get(id).is_none());
+    assert!(h.state().pending_plugin_install.is_none());
 }
 
 /// The dialog has no Preview; OK closes it and the filter runs in the background, the status bar
 /// saying so, and its result is one undo step named after it, selected.
 #[test]
 fn a_heavy_filter_runs_off_the_ui_thread_and_applies_as_one_undo_step() {
-    let mut app = app();
+    let (mut h, jobs) = held_window();
     let id = "test.ui.heavy.run";
-    install(&mut app, id, 1000, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#);
-    app.run("plugin.dialog", json!({"id": id})).unwrap();
-    assert!(app.ui.dialog.as_ref().unwrap().fields.get("preview").is_none(), "no Preview: a run may take minutes");
-    frame(&mut app);
-    assert!(!app.session.in_interaction(), "nothing previewed");
-    let undo = app.session.doc().unwrap().history.undo.len();
-    dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    assert_eq!(app.plugin_runs.running.len(), 1);
-    assert_eq!(app.ui.status, format!("Running “Test {id}”…"));
-    wait(&mut app);
+    install(h.state_mut(), id, 1000, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#);
+    h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut h);
+    assert_eq!(previewing(h.state()), Some(false), "no Preview: a run may take minutes");
+    assert!(!h.state().session.in_interaction(), "nothing previewed");
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    answer(&mut h, true);
+    assert!(none_open(h.state()));
+    assert_eq!(h.state().plugin_runs.running.len(), 1);
+    assert_eq!(h.state().ui.status, format!("Running “Test {id}”…"));
+    let app = h.state_mut();
+    finish_held(app, &jobs);
     let st = app.session.doc().unwrap();
     assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
     assert_eq!(st.history.undo.last().unwrap().label, format!("Test {id}"));
     assert_eq!(st.selection.objects.len(), 1, "the triangle it added, selected");
     assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+}
+
+/// The progress window opens once the run is [`export_progress::DELAY`] old on the app's clock,
+/// however long the frames take; after Continue in Background closes it the result applies.
+#[test]
+fn the_progress_window_opens_by_the_app_clock() {
+    use egui_kittest::kittest::Queryable;
+    let (mut h, jobs) = held_window();
+    let id = "test.ui.heavy.clock";
+    install(h.state_mut(), id, 1, "{}");
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    assert_eq!(h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap()["background"], true);
+    // Only the progress window shows its step.
+    let step = "The plug-in is computing…";
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_none(), "not before the delay");
+    h.state_mut().now_override = Some(export_progress::DELAY);
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_some(), "the progress window, after the delay");
+    assert_eq!(h.state_mut().run("plugin.hideRuns", json!({})).unwrap(), json!({"hidden": 1}));
+    frame(&mut h);
+    assert!(h.query_by_label(step).is_none(), "Continue in Background closed it");
+    finish_held(h.state_mut(), &jobs);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
 }
 
 /// A document edited while the filter runs doesn't take its result: nothing changes, and the status
@@ -129,8 +201,71 @@ fn a_heavy_filter_s_result_needs_the_document_as_it_was() {
     assert_eq!(app.ui.status, format!("“Test {id}” finished, but the document or the plug-in changed meanwhile: run it again"));
 }
 
-/// The progress window opens after the delay, headed by the run; Cancel stops the run, which
-/// changes nothing, and the window closes.
+/// A heavy filter that writes type, run while typing is in progress with Real-time Drawing off:
+/// the typing is kept before the run starts, so the plug-in is given the typed text and its result
+/// applies once it is done. A run that can't start keeps no typing. Typing started with Real-time
+/// Drawing off while it runs isn't in what it was given: nothing changes, and the status bar says
+/// to run it again.
+#[test]
+fn a_heavy_filter_is_given_the_typing_in_progress() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    use vectorcraft_engine::ViewInfo;
+    use vectorcraft_engine::tools::{PointerEvent, PointerKind};
+    let id = "test.ui.heavy.typing";
+    let plain = |app: &VectorcraftApp, t: NodeId| match &app.session.doc().unwrap().doc.node(t).unwrap().kind {
+        NodeKind::Text(x) => x.plain_text(),
+        _ => panic!("type"),
+    };
+    // Clicks into the end of `t` with the Type tool and types `text`.
+    let type_into = |app: &mut VectorcraftApp, t: NodeId, text: &str| {
+        let v = ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        let b = app.session.doc().unwrap().doc.bounds_of(&[t], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        app.session.tool_text(text, v).unwrap();
+    };
+    let mut app = app();
+    app.session.prefs.real_time_drawing = false;
+    let t = NodeId(app.run("text.create", json!({"x": 100, "y": 100, "text": "A", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let style = match &app.session.doc().unwrap().doc.node(t).unwrap().kind {
+        NodeKind::Text(x) => serde_json::to_value(&x.runs[0].style).unwrap(),
+        _ => panic!("type"),
+    };
+    let retyped = |text: &str| json!({"objects": [{"id": t.0, "text": {"runs": [{"text": text, "style": style}]}}]}).to_string();
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","budget":"heavy","api":3,"permissions":["doc.read","doc.write"],"inputs":["type"],"writes":["type"]}}"#
+    );
+    // It adds "!" to the text it is given: "AB" or, given only "A", "A".
+    let src = tpl::when_given_else(&manifest, tpl::Given::Input, r#""AB""#, &retyped("AB!"), &retyped("A!"));
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "allowHeavy": true, "grant": ["doc.read", "doc.write"]})).unwrap();
+    type_into(&mut app, t, "B");
+    assert_eq!(plain(&app, t), "A", "Real-time Drawing off leaves the typing out of the document");
+    // A run that can't start leaves the typing in progress, out of the document.
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(plugin_runs::start(&mut app, json!({"id": "test.ui.heavy.missing", "ids": [t.0]})).is_err());
+    assert_eq!(plain(&app, t), "A", "a run that can't start keeps no typing");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    assert!(app.session.in_interaction(), "the typing is still in progress");
+    let p = json!({"id": id, "ids": [t.0]});
+    assert_eq!(plugin_runs::start(&mut app, p.clone()).unwrap()["background"], true);
+    assert_eq!(plain(&app, t), "AB", "the typing is kept before the run starts");
+    finish_runs(&mut app);
+    assert_eq!(plain(&app, t), "AB!", "{}", app.ui.status);
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    // Typing started while it runs, Real-time Drawing off.
+    plugin_runs::start(&mut app, p).unwrap();
+    type_into(&mut app, t, "C");
+    let doc = app.session.doc().unwrap().doc.clone();
+    finish_runs(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, doc, "nothing changed");
+    assert_eq!(app.ui.status, format!("“Test {id}” finished, but the document or the plug-in changed meanwhile: run it again"));
+}
+
+/// The progress window is the run's: headed by it, with Cancel and Continue in Background; Cancel
+/// stops the run, which changes nothing, and the window goes.
 #[test]
 fn cancel_stops_a_heavy_filter_shown_in_its_progress_window() {
     let mut app = app();
@@ -139,15 +274,11 @@ fn cancel_stops_a_heavy_filter_shown_in_its_progress_window() {
     install(&mut app, id, 1 << 40, "{}");
     let doc = app.session.doc().unwrap().doc.clone();
     app.run("plugin.dialog", json!({"id": id})).unwrap();
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    assert!(!progress(&mut app, &ctx, 0.0).contains("Running"), "not before the delay");
-    progress(&mut app, &ctx, 1.0); // a new window measures itself unseen first
-    let shown = progress(&mut app, &ctx, 1.1);
-    let heading = format!("Running “Test {id}”…");
-    assert!(shown.contains(&heading) && shown.contains("The plug-in is computing…") && shown.contains("Cancel"), "{shown}");
+    let shown = plugin_runs::shown(&app).expect("the run's window");
+    assert_eq!(shown.title, format!("Running “Test {id}”…"));
+    assert_eq!((shown.cancel, shown.hide), ("plugin.cancelRuns", Some("plugin.hideRuns")));
     assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
-    assert!(!progress(&mut app, &ctx, 2.0).contains(&heading), "a cancelled run isn't shown");
+    assert!(plugin_runs::shown(&app).is_none(), "a cancelled run isn't shown");
     wait(&mut app);
     assert_eq!(app.session.doc().unwrap().doc, doc);
     assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
@@ -160,14 +291,9 @@ fn continue_in_background_hides_the_progress_window() {
     let id = "test.ui.heavy.hide";
     install(&mut app, id, 1 << 40, "{}");
     app.run("plugin.dialog", json!({"id": id})).unwrap();
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    progress(&mut app, &ctx, 0.0);
-    progress(&mut app, &ctx, 1.0);
-    let heading = format!("Running “Test {id}”…");
-    assert!(progress(&mut app, &ctx, 1.1).contains(&heading));
+    assert!(plugin_runs::shown(&app).is_some());
     assert_eq!(app.run("plugin.hideRuns", json!({})).unwrap(), json!({"hidden": 1}));
-    assert!(!progress(&mut app, &ctx, 2.0).contains(&heading));
+    assert!(plugin_runs::shown(&app).is_none());
     assert!(app.plugin_runs.running.first().is_some_and(|r| r.hidden), "still running");
     assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap(), json!({"cancelled": 1}));
     wait(&mut app);
@@ -199,12 +325,7 @@ fn a_filter_that_reports_progress_shows_a_bar_and_sees_cancel() {
         }
     }
     assert_eq!(app.plugin_runs.running.first().map(|r| r.progress.counts()), Some((250, 1000)), "the second report, after the first was clamped");
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    progress(&mut app, &ctx, 0.0);
-    progress(&mut app, &ctx, 1.0);
-    let shown = progress(&mut app, &ctx, 1.1);
-    assert!(shown.contains("The plug-in is computing…") && shown.contains("25 %"), "{shown}");
+    assert_eq!(plugin_runs::shown(&app).and_then(|s| s.fraction), Some(0.25));
     assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
     while !app.plugin_runs.running.is_empty() {
         plugin_runs::poll(&mut app);
@@ -214,16 +335,120 @@ fn a_filter_that_reports_progress_shows_a_bar_and_sees_cancel() {
     assert_eq!(app.ui.status, vectorcraft_engine::EngineError::Cancelled.to_string());
 }
 
-/// `CRAFT_UI_HEAVY_FILTER_WASM=<folder>` writes a heavy test filter to install in the app
-/// (`order-paths-test-filter.wasm`): it computes until it is cancelled or its budget runs out, so
-/// its progress window stays up for a picture.
+/// The triangle the light test filters return.
+const TRIANGLE: &str = r#"{"objects":[{"path":{"subpaths":[{"anchors":[{"p":[0,0]},{"p":[30,0]},{"p":[15,20]}]}]}}]}"#;
+
+/// Installs a light filter `id` of plug-in API level 2 with `params` that returns [`TRIANGLE`],
+/// granted as the user would grant it. With `progress` it lists the `progress` permission, and its
+/// `vc_run` first runs `first`, which may report its progress.
+fn install_light(app: &mut VectorcraftApp, id: &str, progress: bool, params: &str, first: &str) {
+    let may: &[&str] = if progress { &["doc.read", "doc.write", "progress"] } else { &["doc.read", "doc.write"] };
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{},"params":{params}}}"#, json!(may));
+    // Without `progress` the module may not import the host functions.
+    let src = if progress { tpl::reporting(&manifest, first, TRIANGLE) } else { tpl::returning(&manifest, TRIANGLE) };
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "grant": may})).unwrap();
+}
+
+/// Applies the runs' results as the frames would, until none is left (each run ends: it returns,
+/// or its budget stops it).
+fn finish_runs(app: &mut VectorcraftApp) {
+    while !app.plugin_runs.running.is_empty() {
+        plugin_runs::poll(app);
+        std::thread::yield_now();
+    }
+}
+
+/// Runs the jobs [`held_window`] held, then applies the runs' results as the frames would.
+fn finish_held(app: &mut VectorcraftApp, jobs: &ManualJobs) {
+    jobs.run_all();
+    finish_runs(app);
+}
+
+/// A light filter that may report its progress runs off the UI thread when it runs at once, as a
+/// heavy one does: the status bar says so, and its result is one undo step named after it.
 #[test]
-fn heavy_test_filter_for_pictures() {
-    let Some(dir) = std::env::var_os("CRAFT_UI_HEAVY_FILTER_WASM") else { return };
-    let manifest = r#"{"id":"org.example.order","name":"Order Paths for Plotting (test plug-in)","version":"1","kind":"filter",
-        "budget":"heavy","description":"Orders the selected paths so the pen travels as little as possible between them.",
-        "params":{"passes":{"type":"int","min":1,"max":100,"default":20,"label":"Improvement passes"},
-        "start":{"type":"choice","options":["top left","nearest"],"default":"top left","label":"Start at"}}}"#;
-    let src = tpl::spinning(manifest, 1 << 40, r#"{"objects":[]}"#);
-    std::fs::write(std::path::PathBuf::from(dir).join("order-paths-test-filter.wasm"), wat::parse_str(src).unwrap()).unwrap();
+fn a_light_filter_that_reports_progress_runs_off_the_ui_thread() {
+    let mut app = app();
+    let id = "test.ui.light.progress.run";
+    install_light(&mut app, id, true, "{}", "(call $vc_progress (i64.const 1) (i64.const 2))");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let r = app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert_eq!(app.ui.status, format!("Running “Test {id}”…"));
+    finish_runs(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(st.history.undo.last().unwrap().label, format!("Test {id}"));
+    assert_eq!(st.selection.objects.len(), 1, "the triangle it added, selected");
+}
+
+/// In the dialog of a light filter that reports its progress, OK with Preview off runs it in the
+/// background, also right after Preview was turned off; with Preview on, OK keeps the previewed
+/// run, as for any light filter.
+#[test]
+fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
+    let (mut h, jobs) = held_window();
+    let id = "test.ui.light.progress.dialog";
+    install_light(h.state_mut(), id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "");
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut h);
+    set_preview(&mut h, false);
+    assert!(!h.state().session.in_interaction(), "nothing previewed");
+    answer(&mut h, true);
+    assert!(none_open(h.state()));
+    assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
+    finish_held(h.state_mut(), &jobs);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
+    // Preview on: OK keeps the previewed run, and nothing runs in the background.
+    h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut h);
+    assert_eq!(previewing(h.state()), Some(true));
+    assert!(h.state().session.in_interaction(), "previewed");
+    answer(&mut h, true);
+    assert!(h.state().plugin_runs.running.is_empty());
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 2);
+    // Preview turned off after a preview: the next frame rolls it back and OK goes to the background.
+    h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut h);
+    assert!(h.state().session.in_interaction(), "previewed");
+    set_preview(&mut h, false);
+    assert!(!h.state().session.in_interaction(), "the preview was rolled back");
+    answer(&mut h, true);
+    assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
+    finish_held(h.state_mut(), &jobs);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 3);
+}
+
+/// In the dialog of a light filter that reports its progress, a failed preview is not kept: OK
+/// rolls it back and runs the filter in the background instead of again on the UI thread.
+#[test]
+fn ok_after_a_failed_preview_runs_a_light_progress_filter_in_the_background() {
+    let (mut h, jobs) = held_window();
+    let id = "test.ui.light.progress.fails";
+    install_light(h.state_mut(), id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "(unreachable)");
+    let doc = h.state().session.doc().unwrap().doc.clone();
+    h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
+    frame(&mut h);
+    assert!(h.state().session.in_interaction(), "the preview's interaction");
+    answer(&mut h, true);
+    assert!(none_open(h.state()));
+    // Only a refused preview is not kept; a kept one would have committed and left no run.
+    assert!(!h.state().session.in_interaction(), "the failed preview was rolled back");
+    assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
+    finish_held(h.state_mut(), &jobs);
+    assert_eq!(h.state().session.doc().unwrap().doc, doc);
+}
+
+/// A light filter without the `progress` permission still runs at once, on the UI thread.
+#[test]
+fn a_light_filter_that_does_not_report_progress_runs_at_once() {
+    let mut app = app();
+    let id = "test.ui.light.plain";
+    install_light(&mut app, id, false, "{}", "");
+    let r = app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert!(r.get("background").is_none(), "{r}");
+    assert!(app.plugin_runs.running.is_empty());
+    assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1, "the triangle, added at once");
 }

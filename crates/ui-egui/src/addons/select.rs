@@ -4,15 +4,27 @@
 //! runs `addon.select.byArtboards` with the relation chosen; and Select by Link Status
 //! ([`link_status`], #5526).
 
-use egui::{Sense, Ui, vec2};
+use craft::behavior::{Selection, keyed};
+use craft::i18n::Folder;
+use craft::i18n::matcher::Matcher;
+use craft::menu::Node;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Entry, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id, serde_fields, set_serde_field};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::list::{List, ListRow};
+use craft::ui::patterns::form_dialogs::{FormDialog, FormOutput};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::text::TextField;
+use egui::Ui;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::dialogs::{DialogSpec, form};
-use crate::menus::Item;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets;
+use crate::menus::{Sep, cp};
 
 pub mod link_status;
 
@@ -21,142 +33,72 @@ pub const COMMAND: &str = "addon.select.byArtboards";
 pub const KIND: &str = "selectByArtboards";
 /// The relations the dialog offers: (value, label).
 const RELATIONS: [(&str, &str); 3] = [("overlap", "Overlapping"), ("inside", "Fully Inside"), ("outside", "Fully Outside")];
-const LABEL_W: f32 = 70.0;
-const ROW_H: f32 = 22.0;
-const NUMBER_W: f32 = 28.0;
-const LIST_H: f32 = 220.0;
+/// The rows the artboard list shows before it scrolls.
+const LIST_ROWS: u16 = 9;
 
 /// Object › Plug-ins › Selection Tools.
-pub fn menu() -> Vec<Item> {
-    let mut v = vec![Item::Cmd("Select by Artboards…", COMMAND, Value::Null), Item::Sep];
+pub fn menu() -> Vec<Node> {
+    let mut v = vec![cp("Select by Artboards…", COMMAND, Value::Null), Sep];
     v.extend(link_status::menu());
     v
 }
 
-/// The dialog's fields to start with: the active artboard chosen, Overlapping.
-pub(crate) fn fields(app: &VectorcraftApp) -> Value {
-    json!({ "artboards": [app.view().map_or(0, |v| v.artboard)], "relation": "overlap" })
+/// `text` (already in the interface language) as a label of a dialog: the form puts its own colon
+/// beside a control, so one the text ends with goes.
+pub(crate) fn label(text: &str) -> Label {
+    Label::from(text.trim_end_matches([':', '：']).trim_end().to_owned())
 }
 
-pub(crate) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Select by Artboards").to_string(),
-    body,
-    confirm,
-    min_width: 360.0,
-    ok_enabled: Some(|_, d| !chosen(d).is_empty()),
-    ..DialogSpec::FORM
-};
-
-/// The artboards chosen in dialog `d`, in order.
-fn chosen(d: &Dialog) -> Vec<usize> {
-    let mut v: Vec<usize> =
-        d.fields.get("artboards").and_then(Value::as_array).into_iter().flatten().filter_map(|i| usize::try_from(i.as_u64()?).ok()).collect();
-    v.sort_unstable();
-    v.dedup();
-    v
-}
-
-/// The indices of `names` whose name holds `query`, ignoring case (all of them for an empty query).
-pub(crate) fn shown(names: &[String], query: &str) -> Vec<usize> {
-    let q = query.trim().to_lowercase();
-    names.iter().enumerate().filter(|(_, n)| q.is_empty() || n.to_lowercase().contains(&q)).map(|(i, _)| i).collect()
-}
-
-/// A click on row `i` of the rows `shown`: alone it chooses only that artboard of those shown, with Cmd/Ctrl it
-/// toggles it, with Shift it adds the rows from the last one clicked (`anchor`) to it. Returns the
-/// new anchor.
-pub(crate) fn click(chosen: &mut Vec<usize>, anchor: Option<usize>, i: usize, shown: &[usize], shift: bool, command: bool) -> Option<usize> {
-    let at = |j: usize| shown.iter().position(|k| *k == j);
-    match (shift, anchor.and_then(at), at(i)) {
-        (true, Some(a), Some(b)) => {
-            chosen.extend(shown.iter().skip(a.min(b)).take(a.abs_diff(b) + 1));
-            chosen.sort_unstable();
-            chosen.dedup();
-            return anchor;
-        }
-        _ if command => match chosen.iter().position(|j| *j == i) {
-            Some(p) => {
-                chosen.remove(p);
-            }
-            None => chosen.push(i),
-        },
-        // Of the rows shown, only this one; rows the search hides keep their state.
-        _ => {
-            chosen.retain(|j| !shown.contains(j));
-            chosen.push(i);
-        }
+/// How a form dialog's pass ended, as the answer the host keeps: the values on OK, Cancel on any
+/// other close.
+pub(crate) fn finished<V>(shown: FormOutput<V>) -> Option<DialogResult<V>> {
+    match (shown.accepted, shown.closed) {
+        (Some(values), _) => Some(DialogResult::Ok(values)),
+        (None, Some(_)) => Some(DialogResult::Cancel),
+        (None, None) => None,
     }
-    chosen.sort_unstable();
-    Some(i)
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
+/// What the dialog's controls edit; its serde names are the field names automation sets.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Fields {
+    /// The artboards chosen, by index, sorted.
+    pub(crate) artboards: Vec<usize>,
+    /// How the objects relate to them: `overlap`, `inside` or `outside`.
+    pub(crate) relation: String,
+    /// The name search.
+    pub(crate) search: String,
+}
+
+/// Select by Artboards: the artboards with their name and size, the choice and the relation.
+pub(crate) struct ArtboardsDialog {
+    pub(crate) fields: Fields,
+    /// Each artboard's name and size text, read when the dialog opened.
+    rows: Vec<(String, String)>,
+    /// The artboard a double click asked to fit in the window, for [`pump`].
+    go_to: Option<usize>,
+}
+
+/// Opens the dialog on the active artboard chosen, Overlapping.
+pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let unit = app.session.general_unit();
-    let boards: Vec<(String, f64, f64)> = app
+    let rows: Vec<(String, String)> = app
         .session
         .active()
-        .map(|st| st.doc.artboards.iter().map(|a| (a.name.clone(), a.rect.width(), a.rect.height())).collect())
+        .map(|st| {
+            st.doc.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", unit.number(a.rect.width()), unit.format(a.rect.height())))).collect()
+        })
         .unwrap_or_default();
-    let names: Vec<String> = boards.iter().map(|b| b.0.clone()).collect();
-    let query = widgets::search_field(ui, ui.scope_id().with("select-by-artboards-search"), "Search artboards");
-    d.fields.insert("__search".into(), json!(query));
-    let rows = shown(&names, &query);
-    let picked = chosen(d);
-    let (mut clicked, mut double) = (None, None);
-    ui.add_space(4.0);
-    egui::ScrollArea::vertical().max_height(LIST_H).auto_shrink([false, true]).show(ui, |ui| {
-        if rows.is_empty() {
-            ui.label(egui::RichText::new(tl!("No artboards match.")).color(t.text_dim));
-        }
-        for &i in &rows {
-            let Some((name, w, h)) = boards.get(i) else { continue };
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
-            let on = picked.contains(&i);
-            if on {
-                ui.painter().rect_filled(r, 0.0, t.row_selected);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(r, 0.0, t.hover);
-            }
-            let font = egui::FontId::proportional(12.0);
-            let mid = r.left_center();
-            let p = ui.painter();
-            p.text(mid + vec2(6.0, 0.0), egui::Align2::LEFT_CENTER, (i + 1).to_string(), font.clone(), t.text_dim);
-            let size = format!("{} × {}", unit.number(*w), unit.format(*h));
-            let size_at = r.right_center() - vec2(6.0, 0.0);
-            p.text(size_at, egui::Align2::RIGHT_CENTER, &size, font.clone(), t.text_dim);
-            p.with_clip_rect(r.with_max_x(size_at.x - 80.0)).text(mid + vec2(NUMBER_W, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, true, on, format!("{} {name} {size}", i + 1)));
-            if resp.double_clicked() {
-                double = Some(i);
-            } else if resp.clicked() {
-                clicked = Some((i, ui.input(|inp| inp.modifiers)));
-            }
-        }
-    });
-    if let Some((i, m)) = clicked {
-        row_clicked(d, i, &rows, m);
-    }
-    if let Some(i) = double {
-        row_double_clicked(app, d, i);
-    }
-    let mut picked = chosen(d);
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        if widgets::flat_button_fit(ui, "Select All", 70.0).clicked() {
-            choose_shown(&mut picked, &rows, true);
-        }
-        if widgets::flat_button_fit(ui, "None", 50.0).clicked() {
-            choose_shown(&mut picked, &rows, false);
-        }
-        // Rows hidden by the search stay chosen: the count says how many are.
-        let count = crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &picked.len().to_string()), ("total", &boards.len().to_string())]);
-        ui.label(egui::RichText::new(count).color(t.text_dim));
-    });
-    d.fields.insert("artboards".into(), json!(picked));
-    ui.add_space(6.0);
-    form::choice(ui, d, "relation", tl!("Select:"), (LABEL_W, 160.0), &RELATIONS);
-    false
+    let fields = Fields { artboards: vec![app.view().map_or(0, |v| v.artboard)], relation: "overlap".into(), search: String::new() };
+    app.dialogs().ok_or("no window")?.with(|host| host.open(ArtboardsDialog { fields, rows, go_to: None }));
+    Ok(json!({ "dialog": KIND }))
+}
+
+/// The indices of `names` the search `query` finds, in the language `folder` folds for (all of them
+/// for an empty query).
+pub(crate) fn shown(names: &[String], query: &str, folder: &Folder) -> Vec<usize> {
+    let matcher = Matcher::new(folder, query);
+    names.iter().enumerate().filter(|(_, name)| matcher.score(name).is_some()).map(|(i, _)| i).collect()
 }
 
 /// Select All (`on`) or None: choose every row `shown`, or none of them. Rows the search hides
@@ -171,34 +113,117 @@ pub(crate) fn choose_shown(chosen: &mut Vec<usize>, shown: &[usize], on: bool) {
     }
 }
 
-/// A click on row `i` of the rows `shown`, with modifier keys `m`: [`click`] on dialog `d`'s
-/// chosen artboards.
-pub(crate) fn row_clicked(d: &mut Dialog, i: usize, shown: &[usize], m: egui::Modifiers) {
-    let mut picked = chosen(d);
-    // What a double-click's first click changed, for its second to put back.
-    d.fields.insert("__before".into(), json!(picked));
-    let anchor = d.fields.get("__anchor").and_then(Value::as_u64).and_then(|a| usize::try_from(a).ok());
-    if let Some(a) = click(&mut picked, anchor, i, shown, m.shift, m.command) {
-        d.fields.insert("__anchor".into(), json!(a));
-    }
-    d.fields.insert("artboards".into(), json!(picked));
+/// The artboards chosen once the list reports `selected` of the rows `shown`: those chosen and
+/// hidden by the search stay, the shown ones are the list's.
+pub(crate) fn merge_chosen(chosen: &[usize], shown: &[usize], selected: &[usize]) -> Vec<usize> {
+    let mut merged: Vec<usize> = chosen.iter().copied().filter(|i| !shown.contains(i)).chain(selected.iter().copied()).collect();
+    merged.sort_unstable();
+    merged.dedup();
+    merged
 }
 
-/// A double-click on row `i`: artboard `i` becomes active and fits in the window, as a
-/// double-click on its number in the Artboards panel does (`view.goToArtboard`). The dialog stays
-/// open, and the artboards chosen are those chosen before the double-click.
-pub(crate) fn row_double_clicked(app: &mut VectorcraftApp, d: &mut Dialog, i: usize) {
-    if let Some(before) = d.fields.remove("__before") {
-        d.fields.insert("artboards".into(), before);
-    }
-    // An artboard the list showed a frame ago can't be missing, and a failure only leaves the view.
-    app.run("view.goToArtboard", json!({ "index": i })).ok();
+/// The command's params for the dialog's `fields`.
+fn params(fields: &Fields) -> Value {
+    json!({ "artboards": fields.artboards, "relation": fields.relation })
 }
 
-/// OK: select the objects and close.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    app.ui.dialog = None;
-    app.run(COMMAND, form::params(d))
+impl StackDialog for ArtboardsDialog {
+    type Result = Fields;
+
+    fn id(&self) -> DialogId {
+        dialog_id(KIND)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Fields>> {
+        let ArtboardsDialog { fields, rows, go_to } = self;
+        let can = !fields.artboards.is_empty();
+        let shown = FormDialog::new(label(tl!("Select by Artboards")), Bind::bound(fields)).ok_enabled(can).show(ui, |ui, _, fields| {
+            body(ui, fields, rows, go_to);
+            !fields.artboards.is_empty()
+        });
+        finished(shown)
+    }
+
+    fn confirm(&mut self, _: &egui::Context) -> Option<Fields> {
+        (!self.fields.artboards.is_empty()).then(|| self.fields.clone())
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        serde_fields(&self.fields)
+    }
+
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        set_serde_field(&mut self.fields, field, value)
+    }
+}
+
+/// The dialog's rows: the search, the artboards, Select All / None with the count, and the relation.
+fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut Option<usize>) {
+    let names: Vec<String> = rows.iter().map(|(name, _)| name.clone()).collect();
+    TextField::search(label(tl!("Search artboards")), Bind::bound(&mut fields.search)).show(ui);
+    let visible = shown(&names, &fields.search, &Env::of(ui).folder());
+    let on: Vec<usize> = fields.artboards.iter().copied().filter(|i| visible.contains(i)).collect();
+    let lead = on.last().copied();
+    let mut selection = Selection::new(on, lead, lead);
+    let widest = rows.len().to_string();
+    let source = keyed(&visible, |i| *i);
+    let out = List::<usize>::new(label(tl!("Select by Artboards")))
+        .select(SelectMode::Multi)
+        .allow_empty(true)
+        .activate(ActivateOn::DoubleClick)
+        .empty(label(tl!("No artboards match.")))
+        .max_rows(LIST_ROWS)
+        .selection(Bind::bound(&mut selection))
+        .show_items(ui, &source, &mut |&i, item| match rows.get(i) {
+            Some((name, size)) => {
+                ListRow::new(name.clone()).lead_text((i + 1).to_string(), widest.clone()).trailing(size.clone()).state(item.row.clone())
+            }
+            None => ListRow::new(""),
+        });
+    for event in out.events {
+        if let CollectionEvent::Activate(i) = event {
+            *go_to = Some(i);
+        }
+    }
+    fields.artboards = merge_chosen(&fields.artboards, &visible, &selection.items);
+    Row::new().show(ui, |ui, _| {
+        if Button::new(label(tl!("Select All"))).show(ui).clicked() {
+            choose_shown(&mut fields.artboards, &visible, true);
+        }
+        if Button::new(label(tl!("None"))).show(ui).clicked() {
+            choose_shown(&mut fields.artboards, &visible, false);
+        }
+        // Rows hidden by the search stay chosen: the count says how many are.
+        let count =
+            crate::i18n::fmt(tl!("Chosen: {n} of {total}"), &[("n", &fields.artboards.len().to_string()), ("total", &rows.len().to_string())]);
+        Text::new(Label::from(count.to_string())).shade(Shade::Muted).show(ui);
+    });
+    let relations: Vec<Entry<String>> = RELATIONS.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
+    Field::new(label(tl!("Select:"))).show(ui, |ui, _| {
+        let picked = Select::new(label(tl!("Select:")), Bind::given(fields.relation.clone()), &relations).show(ui).value().cloned();
+        if let Some(relation) = picked {
+            fields.relation = relation;
+        }
+    });
+}
+
+/// Each frame: runs what the dialog asked for. A double click fits that artboard in the window
+/// (`view.goToArtboard`, as a double-click on its number in the Artboards panel does) and the dialog
+/// stays open; OK selects the objects, after the dialog closed.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let id = dialog_id(KIND);
+    let (answer, go_to) =
+        dialogs.with(|host| (host.take_by_id::<ArtboardsDialog>(id), host.get_mut_by_id::<ArtboardsDialog>(id).and_then(|d| d.go_to.take())));
+    if let Some(index) = go_to {
+        // An artboard the list showed a frame ago can't be missing, and a failure only leaves the view.
+        app.run("view.goToArtboard", json!({ "index": index })).ok();
+    }
+    if let Some(DialogResult::Ok(fields)) = answer
+        && let Err(e) = app.run(COMMAND, params(&fields))
+    {
+        app.status(e);
+    }
 }
 
 #[cfg(test)]

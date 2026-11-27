@@ -1,7 +1,7 @@
 //! Synthetic XML 1.0/SVG round trips: https://www.w3.org/TR/xml/#AVNormalize
 //! https://www.w3.org/TR/xml/#NT-NameChar https://www.w3.org/TR/xml/#charsets
+use craft_svg::tree::usvg::roxmltree;
 use std::collections::HashSet;
-use usvg::roxmltree;
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_svg::{Encoding, ExportOptions, ObjectIds, Output, Styling, export, export_full, import};
 
@@ -32,10 +32,10 @@ fn native_data(raw: &str) -> Document {
 }
 #[test]
 fn imported_decimal_whitespace_references_survive_export() {
-    let doc = import(&svg(r#"<rect id="shape" width="20" height="20" data-value="a&#10;b" data-tab="a&#9;b" data-cr="a&#13;b"/>"#)).unwrap();
+    let doc = import(&svg(r#"<rect id="shape" width="20" height="20" data-value="a&#10;b" data-tab="a&#9;b" data-cr="a&#13;b" data-mixed="a&#9;&quot;&apos;&lt;&gt;&amp;&#13;&#10;雲"/>"#)).unwrap();
     assert_eq!(
         named(&doc, "shape").extras().attrs.as_deref().unwrap().data,
-        [("value".into(), "a\nb".into()), ("tab".into(), "a\tb".into()), ("cr".into(), "a\rb".into())]
+        [("value".into(), "a\nb".into()), ("tab".into(), "a\tb".into()), ("cr".into(), "a\rb".into()), ("mixed".into(), "a\t\"'<>&\r\n雲".into()),]
     );
     for styling in styles() {
         for minify in [false, true] {
@@ -45,6 +45,8 @@ fn imported_decimal_whitespace_references_survive_export() {
             for (key, value) in [("data-value", "a\nb"), ("data-tab", "a\tb"), ("data-cr", "a\rb")] {
                 assert_eq!(n.attribute(key), Some(value));
             }
+            assert_eq!(n.attribute("data-mixed"), Some("a\t\"'<>&\r\n雲"));
+            assert!(text.contains(r#"data-mixed="a&#9;&quot;&apos;&lt;&gt;&amp;&#13;&#10;雲""#));
             let back = import(&text).unwrap();
             assert_eq!(named(&back, "shape").extras().attrs.as_deref().unwrap().data, named(&doc, "shape").extras().attrs.as_deref().unwrap().data);
         }
@@ -98,7 +100,7 @@ fn unicode_data_names_survive_each_encoding() {
                 }
                 if encoding == Encoding::Latin1 {
                     assert_eq!(out.encoding, Encoding::Utf8, "XML names cannot use character references");
-                    assert!(!out.warnings.is_empty());
+                    assert!(!out.setting_notes.is_empty());
                     assert!(!out.svg.contains("ISO-8859-1"));
                 } else {
                     assert_eq!(out.encoding, encoding);

@@ -331,9 +331,15 @@ fn hidden_and_guides_omitted() {
 
 #[test]
 fn image_roundtrip() {
-    let mut png = Vec::new();
-    let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]));
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        4,
+        2,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [255u8, 0, 0, 255].repeat(8),
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let mut d = Document::new(200.0, 200.0);
     let id = d.alloc_id();
     let n = Node::new(
@@ -476,6 +482,31 @@ fn aligned_text_on_path_anchors_within_its_span() {
             assert!(close_rect(drawn(t), before, 0.5), "{justify:?}: {:?} {before:?}", drawn(t));
         }
     }
+}
+
+/// Type on an open path that starts before the path is written with a negative `startOffset` and
+/// reads back starting there, with the same characters drawn.
+#[test]
+fn text_on_an_open_path_starting_before_it_round_trips() {
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 100.0));
+    line.line_to((200.0, 100.0));
+    let mut d = Document::new(200.0, 200.0);
+    let mut t = TextObject::point(Point::ZERO, "Before", CharStyle { size: 14.0, ..CharStyle::default() });
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.1, end: None };
+    let shown = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect::<Vec<_>>()
+    };
+    let before = shown(&t);
+    assert!(before.contains(&true) && before.contains(&false), "{before:?}");
+    let id = d.alloc_id();
+    let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+    assert!(svg.contains("startOffset=\"-10%\""), "{svg}");
+    let r = import(&svg).unwrap();
+    let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+    let TextKind::OnPath { start, .. } = &t.kind else { panic!("not type on a path: {:?}", t.kind) };
+    assert!((start + 0.1).abs() < 1e-6, "start {start}");
+    assert_eq!(shown(t), before);
 }
 
 /// An end bracket, Align to Path or Spacing, which `<textPath>` can't express, keep their look as
@@ -907,6 +938,22 @@ fn import_tspan_far_below_is_bounded() {
     assert!(text.ends_with("far"), "{text:?}");
     let breaks = text.matches('\n').count();
     assert!(breaks <= 10_002, "{breaks} line breaks");
+}
+
+#[test]
+fn import_many_tspans_far_apart_are_bounded_together() {
+    // Each tspan 9,999 lines (auto leading 14.4 pt) below the last: each within the limit of one gap,
+    // two hundred of them were two million line breaks.
+    let spans: String = (1..=200).map(|i| format!(r#"<tspan x="5" y="{}">{i}</tspan>"#, 20.0 + 14.4 * 9_999.0 * i as f64)).collect();
+    let d = import_art(&format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="5" y="20" font-size="12">a{spans}</text></svg>"#
+    ));
+    let a = art(&d);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    let text = t.plain_text();
+    assert!(text.ends_with("200"), "{}", &text[text.len().saturating_sub(20)..]);
+    let breaks = text.matches('\n').count();
+    assert!(breaks <= 10_200, "{breaks} line breaks");
 }
 
 #[test]

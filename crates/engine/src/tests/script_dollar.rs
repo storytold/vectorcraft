@@ -1,10 +1,11 @@
-//! The `$` object's members besides `$.write` and `$.writeln`, the global `localize` and
-//! `toSource`, and what of them one run keeps to itself.
+//! The `$` object's members besides `$.write` and `$.writeln`, the global `localize`, `toSource`
+//! and `UnitValue`, and what of them one run keeps to itself.
 
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
+use crate::cancel::{self, CancelToken};
 use crate::script::{TEST_ELAPSED, TEST_NO_CLOCK};
 use crate::*;
 
@@ -62,7 +63,7 @@ fn each_member_has_its_value() {
         ("$.memCache", json!(0)),
         ("$.os", json!(os)),
         ("$.screens.length", json!(0)),
-        ("$.stack", json!("[global]:1\n")),
+        ("$.stack", json!("[t.js]\n[global]@t.js:1\n")),
         ("$.strict", json!(false)),
         ("$.version", json!(version)),
         ("typeof $.getenv + typeof $.setenv + typeof $.sleep", json!("functionfunctionfunction")),
@@ -140,6 +141,15 @@ fn to_source_writes_plain_data() {
 }
 
 #[test]
+fn unit_values_convert_and_calculate_in_a_run() {
+    let mut s = Session::new();
+    assert_eq!(value(&mut s, "UnitValue('1 in').as('pt')"), json!(72));
+    assert_eq!(value(&mut s, "String(new UnitValue(1, 'm') + new UnitValue(10, 'cm'))"), json!("1.1 m"));
+    assert_eq!(value(&mut s, "[UnitValue(98, 'cm') < UnitValue(1, 'm'), UnitValue(98, 'cm') == 98]"), json!([true, true]));
+    assert!(thrown(&mut s, "UnitValue(1, 'in').as('furlong')").starts_with("Error"));
+}
+
+#[test]
 fn getenv_reads_only_its_names_and_setenv_changes_only_the_run() {
     let mut s = Session::new();
     for name in ["HOME", "PATH", "USERPROFILE", "TEMP", "lang", ""] {
@@ -164,8 +174,29 @@ fn getenv_reads_only_its_names_and_setenv_changes_only_the_run() {
 fn error_line_and_stack_follow_the_running_code() {
     let mut s = Session::new();
     let source = "try { null.x; } catch (e) {}\nfunction where() {\n  return [$.line, $.stack, $.error instanceof TypeError];\n}\nvc.log(where());";
-    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]:5\nwhere:3\n", true]));
+    assert_eq!(logged(&mut s, source)[0], json!([3, "[t.js]\n[global]@t.js:5\nwhere@t.js:3\n", true]));
     assert_eq!(value(&mut s, "$.error"), json!(null), "each run starts without one");
+}
+
+/// `$.stack`'s first line is the run's name in square brackets, the name `script.run` reports,
+/// in a function as at the top level.
+#[test]
+fn the_stack_starts_with_the_runs_name() {
+    let mut s = Session::new();
+    let first = |s: &mut Session, params: Value| {
+        let r = s.execute("script.run", &params).unwrap_or_else(|e| panic!("{params}: {e}"));
+        let line = r["log"][0].as_str().unwrap_or_default().to_string();
+        (line, r["name"].clone())
+    };
+    let top = "vc.log($.stack.split('\\n')[0]);";
+    let (line, name) = first(&mut s, json!({"source": top, "name": "Marks.jsx"}));
+    assert_eq!((line.as_str(), name), ("[Marks.jsx]", json!("Marks.jsx")));
+    let inner = "function f() { return $.stack.split('\\n')[0]; }\nvc.log(f());";
+    assert_eq!(first(&mut s, json!({"source": inner, "name": "Marks.jsx"})).0, "[Marks.jsx]");
+    let (line, name) = first(&mut s, json!({"source": format!("#script \"Named\"\n{top}")}));
+    assert_eq!((line.as_str(), name), ("[Named]", json!("Named")), "a #script line names the run");
+    let (line, name) = first(&mut s, json!({"source": top}));
+    assert_eq!(format!("[{}]", name.as_str().unwrap_or_default()), line, "a run given no name");
 }
 
 #[test]
@@ -202,6 +233,36 @@ fn a_sleeping_run_stops_when_asked() {
     assert!(s.script_pump().unwrap().is_err());
     assert_eq!(s.script_report().unwrap()["kind"], "stopped");
     TEST_ELAPSED.set(None);
+}
+
+#[test]
+fn a_sleeping_run_stops_at_the_next_slice_once_its_work_is_canceled() {
+    for (asleep_until, when) in
+        [(None, "before its first slice"), (Some(Duration::ZERO), "while it sleeps"), (Some(Duration::from_secs(1)), "at its wake time")]
+    {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let before = (format!("{:?}", s.documents()[0].doc.layers), s.documents()[0].history.undo.len());
+        s.script_frames = true;
+        TEST_ELAPSED.set(Some(Duration::ZERO));
+        let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 5, height: 5}); $.sleep(1000); vc.log('woke'); \
+                      vc.run('shape.rectangle', {x: 9, y: 0, width: 5, height: 5});";
+        s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+        let token = CancelToken::new();
+        if let Some(at) = asleep_until {
+            assert!(cancel::scope(&token, None, || s.script_pump()).is_none(), "{when}");
+            assert_eq!(s.script_sleep_left(), Some(Duration::from_secs(1)), "{when}");
+            TEST_ELAPSED.set(Some(at));
+        }
+        token.cancel();
+        let ended = cancel::scope(&token, None, || s.script_pump());
+        TEST_ELAPSED.set(None);
+        assert!(ended.unwrap_or_else(|| panic!("{when}: the run goes on waiting")).is_err(), "{when}");
+        let report = s.script_report().unwrap();
+        assert_eq!((report["kind"].as_str(), &report["log"]), (Some("stopped"), &json!([])), "{when}: {report}");
+        assert!(!s.script_running(), "{when}");
+        assert_eq!((format!("{:?}", s.documents()[0].doc.layers), s.documents()[0].history.undo.len()), before, "{when}");
+    }
 }
 
 #[test]

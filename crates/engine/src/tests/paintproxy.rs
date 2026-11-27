@@ -706,3 +706,16 @@ fn a_marker_designs_art_in_a_series_keeps_its_paint() {
     s.execute("addon.color.fillToStroke", &json!({"ids": [series.id.0]})).unwrap();
     assert_eq!(design_strokes(&s), before, "the design's art keeps its paint");
 }
+
+/// Invert given a member of a compound path inverts the compound path's fill, which the member stands for.
+#[test]
+fn invert_of_a_compound_member_inverts_the_compound_path() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s), rect(&mut s));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let comp = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [comp.0], "color": "#ff0000"})).unwrap();
+    let member = node(&s, comp).children().into_iter().flatten().next().unwrap().id;
+    s.execute("paint.invert", &json!({"ids": [member.0]})).unwrap();
+    assert_eq!(node(&s, comp).appearance.fill_paint().color().unwrap().to_hex(), "#00ffff");
+}

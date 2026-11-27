@@ -1,12 +1,17 @@
-use egui::{Color32, Event, PointerButton, RawInput};
+use egui::{Event, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
 use vectorcraft_engine::Session;
 
 use super::*;
 
 /// Tall enough for the whole Basic toolbar and the whole drawer.
 const SCREEN: egui::Vec2 = vec2(1000.0, 4000.0);
-/// A toolbar tool button.
-const BUTTON: egui::Vec2 = vec2(36.0, 29.0);
+/// The rail's Edit Toolbar button, by its access name.
+const EDIT: &str = "Edit Toolbar"; // PLAN: assumed `RailWords::edit_toolbar` in English
+/// The + button of a toolbar made with New Toolbar.
+const ADD: &str = "Add Tool…";
+
+/// What a frame drew, by access name: (name, bounds).
+type Nodes = Vec<(String, Rect)>;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -23,73 +28,82 @@ fn slot_of(app: &VectorcraftApp, tool: &str) -> Option<usize> {
     slots(app).iter().position(|s| s.contains(&tool))
 }
 
-/// One headless frame of the toolbar, its keys handled first as in the app; returns the texts
-/// painted: (text, a point inside it, colour).
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<(String, Pos2, Color32)> {
-    fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2, Color32)>) {
-        match s {
-            egui::Shape::Text(t) => {
-                let color = t.galley.job.sections.first().map_or(t.fallback_color, |s| s.format.color);
-                out.push((t.galley.text().to_string(), t.pos + vec2(4.0, t.galley.size().y / 2.0), color));
-            }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
-    let mut out = ctx.run_ui(input, |ui| {
-        crate::shortcuts::handle(app, ui.ctx());
-        crate::toolbar::show(app, ui);
-    });
-    out.textures_delta.clear();
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    shown
+fn ctx() -> egui::Context {
+    let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
+    ctx
 }
 
-fn ctx() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::theme::apply(&ctx, Default::default());
-    ctx
+/// One whole app frame at `time`; returns the named nodes it drew.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Nodes {
+    let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
+    let out = crate::testing::app_frame(app, ctx, input);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    nodes
+        .into_iter()
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            Some((n.label()?.to_string(), Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))))
+        })
+        .collect()
+}
+
+/// Two frames, so a drawer or menu opened by the first has its size and is drawn.
+fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> Nodes {
+    frame(app, ctx, time, vec![]);
+    frame(app, ctx, time + 0.05, vec![])
+}
+
+/// The bounds of the nodes called `name`, top first.
+fn named(nodes: &Nodes, name: &str) -> Vec<Rect> {
+    let mut at: Vec<Rect> = nodes.iter().filter(|(n, _)| n.trim() == name).map(|(_, r)| *r).collect();
+    at.sort_by(|a, b| a.top().total_cmp(&b.top()).then(a.left().total_cmp(&b.left())));
+    at
+}
+
+/// The first node called `name`.
+fn one(nodes: &Nodes, name: &str) -> Rect {
+    named(nodes, name).first().copied().unwrap_or_else(|| panic!("no `{name}` drawn"))
+}
+
+/// The first node called `name` that lies inside `within`.
+fn inside(nodes: &Nodes, name: &str, within: Rect) -> Rect {
+    named(nodes, name).into_iter().find(|r| within.contains(r.center())).unwrap_or_else(|| panic!("no `{name}` inside {within:?}"))
+}
+
+/// The open drawer: the Edit Toolbar node that holds its cells, larger than the ••• buttons of that name.
+fn drawer(nodes: &Nodes) -> Rect {
+    named(nodes, EDIT).into_iter().max_by(|a, b| a.area().total_cmp(&b.area())).expect("the drawer is open")
+}
+
+/// The toolbar button of `tool`: the rail names a tool by its label (its shortcut is in its tip).
+fn button_name(tool: &str) -> String {
+    tl!(tool_info(tool).unwrap().label).to_string()
 }
 
 fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) {
+fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) -> Nodes {
     frame(app, ctx, time, vec![Event::PointerMoved(at), button(at, true)]);
     frame(app, ctx, time + 0.05, vec![button(at, false)]);
-    frame(app, ctx, time + 0.1, vec![]);
+    settle(app, ctx, time + 0.1)
 }
 
 /// A press at `from` dragged to `to` in steps, one frame each, then released there.
-fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, from: Pos2, to: Pos2) {
+fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, from: Pos2, to: Pos2) -> Nodes {
     frame(app, ctx, time, vec![Event::PointerMoved(from), button(from, true)]);
     for k in 1..=6 {
         frame(app, ctx, time + 0.05 * f64::from(k), vec![Event::PointerMoved(from + (to - from) * (k as f32 / 6.0))]);
     }
     frame(app, ctx, time + 0.4, vec![button(to, false)]);
-    frame(app, ctx, time + 0.45, vec![]);
+    settle(app, ctx, time + 0.45)
 }
 
-fn drawer_rect(ctx: &egui::Context) -> Option<Rect> {
-    ctx.memory(|m| m.area_rect(drawer_id()))
-}
-
-fn drawer_shown(ctx: &egui::Context) -> bool {
-    ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Foreground, drawer_id())))
-}
-
-/// A point inside the drawer's row of the tool named `name` (as the drawer shows it), and the
-/// colour of its name.
-fn cell_at(shown: &[(String, Pos2, Color32)], drawer: Rect, name: &str) -> (Pos2, Color32) {
-    shown
-        .iter()
-        .find(|(s, p, _)| s == name && drawer.contains(*p))
-        .map(|(_, p, c)| (*p, *c))
-        .unwrap_or_else(|| panic!("no {name} in the drawer {drawer:?}"))
+/// The tools of the toolbar made with New Toolbar called `name`.
+fn held(app: &VectorcraftApp, name: &str) -> Vec<Vec<String>> {
+    crate::custom_toolbars::find(&app.ui, name).unwrap().slots.clone()
 }
 
 /// The drawer frames each flyout group whole, under the heading most of its tools have: every
@@ -142,17 +156,114 @@ fn every_tool_is_listed_once_under_a_heading() {
     assert!(!heads.contains(&"More"), "every tool has a named heading: {heads:?}");
 }
 
+/// A toolbar edited and saved before the Enclosing Lasso Tool joined the Lasso group keeps its
+/// saved layout: the tool stays in the drawer until Reset Toolbar or a drag adds it.
 #[test]
-fn enclosing_lasso_is_an_optional_addon_tool() {
+fn a_saved_toolbar_without_enclosing_lasso_keeps_its_layout() {
     let mut app = app();
     let id = vectorcraft_tools::addons::enclosing_lasso::ID;
-    assert_eq!(heading(id), "Enclosing Lasso");
+    let saved = ToolbarCategory { name: Some("Select".into()), slots: vec![["lasso", "magicWand"].iter().map(|t| t.to_string()).collect()] };
+    app.ui.toolbar_edits = ToolbarEdits { basic: Some(vec![saved]), advanced: None };
+    app.ui = std::mem::take(&mut app.ui).sanitized();
+    assert_eq!(slots(&app), [["lasso", "magicWand"]]);
     assert!(slot_of(&app, id).is_none());
-    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
-    assert!(slot_of(&app, id).is_some());
-    app.run("tool.select", json!({"tool": id})).unwrap();
     app.run("toolbar.reset", json!({})).unwrap();
-    assert!(slot_of(&app, id).is_none());
+    let slot = slot_of(&app, "lasso").map(|i| slots(&app)[i].clone());
+    assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it");
+}
+
+/// The Smart Pen Tool is in the Pen tool's flyout in both toolbars, after the Pen family's own
+/// tools, once in the All Tools drawer (under Draw) and in Keyboard Shortcuts' list, with no
+/// shortcut; its button's tip names it; Reset Toolbar keeps it there.
+#[test]
+fn smart_pen_is_in_the_pen_flyout() {
+    let mut app = app();
+    let id = vectorcraft_tools::addons::smart_pen::ID;
+    for advanced in [false, true] {
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        let s = slots(&app);
+        let slot = slot_of(&app, "pen").map(|i| s[i].clone()).expect("a Pen slot");
+        assert_eq!(slot.first(), Some(&"pen"), "advanced: {advanced}");
+        assert_eq!(slot[slot.len().saturating_sub(2)..], ["quickPen", id], "advanced: {advanced}");
+        assert_eq!(s.iter().filter(|ids| ids.contains(&id)).count(), 1, "advanced: {advanced}");
+    }
+    assert_eq!(heading(id), "Draw");
+    assert_eq!(sections().iter().flat_map(|(_, tools)| tools.iter()).filter(|t| t.id == id).count(), 1, "listed once in the drawer");
+    // Keyboard Shortcuts lists the window's commands once it has drawn a frame.
+    let ctx = ctx();
+    settle(&mut app, &ctx, 0.0);
+    let rows = app.run("shortcuts.list", json!({"query": id})).unwrap();
+    let rows: Vec<_> = rows.as_array().unwrap().iter().filter(|r| r["id"] == format!("tool:{id}")).collect();
+    assert_eq!(rows.len(), 1, "listed once in Keyboard Shortcuts");
+    assert_eq!((&rows[0]["group"], &rows[0]["shortcut"]), (&json!("Tools"), &Value::Null));
+    let info = vectorcraft_tools::tool_info(id).expect("catalogued");
+    assert_eq!((info.label, info.shortcut), ("Smart Pen Tool", None));
+    assert_eq!(crate::toolbar::tip(&ctx, info), "Smart Pen Tool");
+    app.run("tool.select", json!({"tool": id})).unwrap();
+    assert_eq!(app.session.tool_id(), id);
+    let shown = slot_of(&app, id).map(|i| crate::toolbar::shown_tool(&app, &slots(&app)[i]));
+    assert_eq!(shown, Some(id), "the slot's button shows the tool once chosen");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_none(), "it can be taken out");
+    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_some(), "the drawer adds it back");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    app.run("toolbar.reset", json!({})).unwrap();
+    let after_reset = slot_of(&app, "pen").map(|i| slots(&app)[i].contains(&id));
+    assert_eq!(after_reset, Some(true), "Reset Toolbar puts it back");
+}
+
+/// A toolbar edited and saved before the Smart Pen Tool joined the Pen group keeps its saved
+/// layout, in both toolbars: the tool stays in the drawer until Reset Toolbar or a drag adds it,
+/// and a toolbar that already had it in a slot of its own keeps it there, once.
+#[test]
+fn a_saved_toolbar_without_smart_pen_keeps_its_layout() {
+    let id = vectorcraft_tools::addons::smart_pen::ID;
+    let category = |slots: &[&[&str]]| ToolbarCategory {
+        name: Some("Draw".into()),
+        slots: slots.iter().map(|s| s.iter().map(|t| t.to_string()).collect()).collect(),
+    };
+    for advanced in [false, true] {
+        let edits = |saved: Vec<ToolbarCategory>| {
+            if advanced { ToolbarEdits { basic: None, advanced: Some(saved) } } else { ToolbarEdits { basic: Some(saved), advanced: None } }
+        };
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.ui.toolbar_edits = edits(vec![category(&[&["pen", "addAnchor"]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [["pen", "addAnchor"]], "advanced: {advanced}");
+        assert!(slot_of(&app, id).is_none(), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        let slot = slot_of(&app, "pen").map(|i| slots(&app)[i].clone());
+        assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it; advanced: {advanced}");
+        app.ui.toolbar_edits = edits(vec![category(&[&["pen", "addAnchor"], &[id]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [vec!["pen", "addAnchor"], vec![id]], "advanced: {advanced}");
+    }
+}
+
+/// The Pen group torn off the Tools panel shows the Smart Pen Tool last, in both toolbars, and
+/// shows it again after Reset Toolbar puts it back.
+#[test]
+fn a_torn_off_pen_group_shows_smart_pen() {
+    let id = vectorcraft_tools::addons::smart_pen::ID;
+    for advanced in [false, true] {
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.run("window.floatTools", json!({"tool": "pen", "floating": true})).unwrap();
+        let pen = |app: &VectorcraftApp| crate::toolbar::strips(app, None).into_iter().find(|g| g.first() == Some(&"pen"));
+        assert_eq!(pen(&app).and_then(|g| g.last().copied()), Some(id), "advanced: {advanced}");
+        app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+        assert!(pen(&app).is_some_and(|g| !g.contains(&id)), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        assert_eq!(pen(&app).and_then(|g| g.last().copied()), Some(id), "advanced: {advanced}");
+    }
 }
 
 #[test]
@@ -166,13 +277,13 @@ fn the_commands_add_move_remove_and_reset_tools() {
     // Before the first slot, moved out of its group.
     app.run("toolbar.addTool", json!({"tool": "magicWand", "slot": 0})).unwrap();
     assert_eq!(&slots(&app)[..3], [&["magicWand"][..], &["selection"], &["directSelection", "groupSelection"]]);
-    assert_eq!(slots(&app)[3], ["lasso"]);
+    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso"]);
     // After a slot, and into a group (last), moved out of the Rectangle group.
     app.run("toolbar.addTool", json!({"tool": "slice", "slot": 1, "place": "after"})).unwrap();
     assert_eq!(slots(&app)[2], ["slice"]);
     let ellipse = slot_of(&app, "ellipse").unwrap();
     app.run("toolbar.addTool", json!({"tool": "star", "slot": ellipse, "place": "group"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "star"]);
     assert!(!slots(&app)[slot_of(&app, "rectangle").unwrap()].contains(&"star"));
     // Onto its own group: nothing changes.
     let before = slots(&app);
@@ -182,7 +293,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(crate::toolbar::slots(&app)[0].0, Some("Select"));
     // Out: one tool, or its whole group; an emptied slot goes.
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["star"]);
+    assert_eq!(slots(&app)[ellipse], ["circle", "curvatureCircle", "star"]);
     app.run("toolbar.removeTool", json!({"tool": "addAnchor", "group": true})).unwrap();
     assert!(slot_of(&app, "pen").is_none() && slot_of(&app, "addAnchor").is_none());
     // Bad params change nothing.
@@ -252,216 +363,108 @@ fn the_edited_toolbar_is_saved_and_loads_sanitized() {
     assert!(!ui.tools_drawer, "the drawer starts closed");
 }
 
-/// #1018: the ••• button opens the drawer beside the toolbar, by the button, not a centred
-/// dialog; Escape, a click outside and the button close it, a click in the toolbar doesn't.
-#[test]
-fn edit_toolbar_opens_a_drawer_beside_the_toolbar() {
-    let mut app = app();
-    let ctx = ctx();
-    frame(&mut app, &ctx, 0.0, vec![]);
-    let edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).last().copied().unwrap();
-    click(&mut app, &ctx, 1.0, edit.center());
-    frame(&mut app, &ctx, 1.2, vec![]);
-    assert!(app.ui.tools_drawer && app.ui.dialog.is_none());
-    assert_eq!(crate::menus::checked(&app, "window.editToolbar", &json!({})), Some(true));
-    let drawer = drawer_rect(&ctx).expect("the drawer is shown");
-    let bar = ctx.data(|d| d.get_temp::<Rect>(toolbar_id())).unwrap();
-    assert!((drawer.left() - bar.right() - GAP).abs() < 1.0, "beside the toolbar: {drawer:?} {bar:?}");
-    assert!((drawer.top() - edit.top()).abs() < 1.0 || drawer.bottom() >= SCREEN.y - GAP - 1.0, "by the button: {drawer:?} {edit:?}");
-    assert!(drawer.top() >= bar.top() - 0.5, "never above the toolbar (the title bar's there): {drawer:?} {bar:?}");
-    assert!(drawer.y_range().contains(edit.center().y), "by the button: {drawer:?} {edit:?}");
-    assert!(drawer.width() < WIDTH + 24.0, "one row of tools wide: {drawer:?}");
-    // A click on a toolbar tool picks it and leaves the drawer open.
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    let ellipse = tools[slot_of(&app, "ellipse").unwrap()].center();
-    click(&mut app, &ctx, 2.0, ellipse);
-    assert!(app.ui.tools_drawer && app.session.tool_id() == "ellipse");
-    // Escape closes it.
-    let esc = |pressed| Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    frame(&mut app, &ctx, 3.0, vec![esc(true), esc(false)]);
-    assert!(!app.ui.tools_drawer);
-    frame(&mut app, &ctx, 3.1, vec![]);
-    assert!(!drawer_shown(&ctx));
-    // A click outside closes it, and so does the ••• button.
-    app.run("window.editToolbar", json!({"open": true})).unwrap();
-    frame(&mut app, &ctx, 4.0, vec![]);
-    click(&mut app, &ctx, 4.5, pos2(SCREEN.x - 20.0, 300.0));
-    assert!(!app.ui.tools_drawer);
-    click(&mut app, &ctx, 5.0, edit.center());
-    assert!(app.ui.tools_drawer);
-    click(&mut app, &ctx, 6.0, edit.center());
-    assert!(!app.ui.tools_drawer);
-    // Picking a tool in the drawer selects it and closes the drawer.
-    app.run("window.editToolbar", json!({})).unwrap();
-    frame(&mut app, &ctx, 7.0, vec![]);
-    let shown = frame(&mut app, &ctx, 7.1, vec![]);
-    let (at, _) = cell_at(&shown, drawer_rect(&ctx).unwrap(), "Artboard Tool");
-    click(&mut app, &ctx, 8.0, at);
-    assert!(!app.ui.tools_drawer && app.session.tool_id() == "artboard");
-}
-
-/// The drawer dims the tools the toolbar holds.
-#[test]
-fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
-    let mut app = app();
-    let ctx = ctx();
-    app.run("window.editToolbar", json!({"open": true})).unwrap();
-    frame(&mut app, &ctx, 0.0, vec![]);
-    let shown = frame(&mut app, &ctx, 0.1, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    let dim = Tokens::get(&ctx).text_disabled;
-    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
-    assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
-    app.run("toolbar.addTool", json!({"tool": "artboard"})).unwrap();
-    app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    let shown = frame(&mut app, &ctx, 0.2, vec![]);
-    assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
-    assert_eq!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
-}
-
-/// #1018: tools drag from the drawer onto the toolbar (between two tools, or onto one to join
-/// its group), from the toolbar into the drawer, and within the toolbar, only while the drawer
-/// is open.
-#[test]
-fn tools_drag_between_the_drawer_and_the_toolbar() {
-    let mut app = app();
-    let ctx = ctx();
-    app.run("window.editToolbar", json!({"open": true})).unwrap();
-    frame(&mut app, &ctx, 0.0, vec![]);
-    let shown = frame(&mut app, &ctx, 0.1, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    // Onto the divider under the Selection tool: its own slot, second.
-    let (artboard, _) = cell_at(&shown, drawer, "Artboard Tool");
-    drag(&mut app, &ctx, 1.0, artboard, tools[0].center_bottom() - vec2(0.0, 3.0));
-    assert_eq!(&slots(&app)[..2], [&["selection"][..], &["artboard"]]);
-    assert!(app.ui.tools_drawer, "the drawer stays open");
-    // Onto the middle of the Ellipse tool: into its group.
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    let ellipse = slot_of(&app, "ellipse").unwrap();
-    // The drawer moves with the ••• button the new slot pushed down: read it again.
-    let shown = frame(&mut app, &ctx, 1.9, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
-    drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "slice"]);
-    // A dimmed tool (in the toolbar already) doesn't drag.
-    let before = slots(&app);
-    let shown = frame(&mut app, &ctx, 2.9, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    let (rectangle, _) = cell_at(&shown, drawer, "Rectangle Tool");
-    drag(&mut app, &ctx, 3.0, rectangle, tools[0].center_bottom() - vec2(0.0, 3.0));
-    assert_eq!(slots(&app), before);
-    // From the toolbar into the drawer: out of the toolbar.
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    drag(&mut app, &ctx, 4.0, tools[1].center(), drawer.center());
-    assert!(slot_of(&app, "artboard").is_none(), "{:?}", slots(&app));
-    // Within the toolbar: Selection onto the divider over the Lasso.
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    drag(&mut app, &ctx, 5.0, tools[0].center(), tools[2].center_top() + vec2(0.0, 3.0));
-    assert_eq!(&slots(&app)[..3], [&["directSelection", "groupSelection"][..], &["selection"], &["lasso", "magicWand"]]);
-    // The drawer closed, the toolbar is locked: the same drag moves nothing.
-    app.run("window.editToolbar", json!({"open": false})).unwrap();
-    frame(&mut app, &ctx, 6.0, vec![]);
-    let before = slots(&app);
-    let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
-    drag(&mut app, &ctx, 7.0, tools[0].center(), tools[2].center_bottom() - vec2(0.0, 3.0));
-    assert_eq!(slots(&app), before);
-}
-
 /// A toolbar made with New Toolbar floats blank; its ••• button opens the drawer beside it, and
-/// tools dragged from the drawer fill it, leaving the Tools panel's toolbar as it was.
+/// tools dragged from the drawer fill it, leaving the Tools panel's toolbar as it was. A drop on the
+/// blank toolbar adds a slot; on the lower third of a tool, a slot of its own after it; on the middle
+/// of a tool, into its group.
 #[test]
 fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     let mut app = app();
     let ctx = ctx();
     let shipped = slots(&app);
     app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
-    frame(&mut app, &ctx, 0.0, vec![]);
-    frame(&mut app, &ctx, 0.1, vec![]);
-    let area = || ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
-    let bar = area();
-    let edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).expect("its ••• button");
-    // Open beside the Tools panel's toolbar, the drawer moves to this one on its ••• click.
-    app.run("window.editToolbar", json!({})).unwrap();
-    frame(&mut app, &ctx, 0.5, vec![]);
+    let nodes = settle(&mut app, &ctx, 0.0);
+    let edit = inside(&nodes, EDIT, one(&nodes, "Mine"));
     click(&mut app, &ctx, 1.0, edit.center());
-    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.as_deref() == Some("Mine"));
+    assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui) == Some("Mine"));
     assert_eq!(crate::menus::checked(&app, "window.editToolbar", &json!({"toolbar": "Mine"})), Some(true));
     assert_eq!(crate::menus::checked(&app, "window.editToolbar", &json!({})), Some(false));
-    let shown = frame(&mut app, &ctx, 1.2, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    assert!((drawer.left() - bar.right() - GAP).abs() < 2.0, "beside the new toolbar: {drawer:?} {bar:?}");
-    // The Tools panel's tools aren't dimmed: they aren't in this toolbar. The Show section, for
-    // the controls under the Tools panel's tools, is left out.
-    assert!(!shown.iter().any(|(s, p, _)| s == "Show:" && drawer.contains(*p)));
-    let dim = Tokens::get(&ctx).text_disabled;
-    assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     // Dragged onto the blank toolbar, a tool is added to it.
-    let (ellipse, _) = cell_at(&shown, drawer, "Ellipse Tool");
-    drag(&mut app, &ctx, 2.0, ellipse, bar.center());
-    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["ellipse"]]);
+    let nodes = settle(&mut app, &ctx, 2.0);
+    let bar = one(&nodes, "Mine");
+    drag(&mut app, &ctx, 3.0, inside(&nodes, "Ellipse Tool", drawer(&nodes)).center(), bar.center());
+    assert_eq!(held(&app, "Mine"), [["ellipse"]]);
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
-    let shown = frame(&mut app, &ctx, 2.9, vec![]);
-    let drawer = drawer_rect(&ctx).unwrap();
-    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim, "now in the toolbar the drawer edits");
-    // A second one, below the first.
-    let tools: Vec<Rect> = crate::toolbar::tests::widget_rects(&ctx, BUTTON).into_iter().filter(|r| area().contains(r.center())).collect();
-    let (artboard, _) = cell_at(&shown, drawer, "Artboard Tool");
-    drag(&mut app, &ctx, 3.0, artboard, tools[0].center_bottom() - vec2(0.0, 3.0));
-    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["ellipse"], ["artboard"]]);
-    // A click on its tool picks it; the drawer stays open.
-    let tools: Vec<Rect> = crate::toolbar::tests::widget_rects(&ctx, BUTTON).into_iter().filter(|r| area().contains(r.center())).collect();
-    click(&mut app, &ctx, 4.0, tools[1].center());
+    // Onto the lower third of its tool: a slot of its own after it.
+    let nodes = settle(&mut app, &ctx, 4.0);
+    let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
+    drag(&mut app, &ctx, 5.0, inside(&nodes, "Artboard Tool", drawer(&nodes)).center(), pos2(tool.center().x, tool.top() + 0.85 * tool.height()));
+    assert_eq!(held(&app, "Mine"), [["ellipse"], ["artboard"]]);
+    // Onto the middle of the first tool: into its group.
+    let nodes = settle(&mut app, &ctx, 6.0);
+    let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
+    drag(&mut app, &ctx, 7.0, inside(&nodes, "Slice Tool", drawer(&nodes)).center(), tool.center());
+    assert_eq!(held(&app, "Mine"), [vec!["ellipse", "slice"], vec!["artboard"]]);
+    // A click on a tool picks it; the drawer stays open.
+    let nodes = settle(&mut app, &ctx, 8.0);
+    let artboard = inside(&nodes, &button_name("artboard"), one(&nodes, "Mine"));
+    let nodes = click(&mut app, &ctx, 9.0, artboard.center());
     assert_eq!(app.session.tool_id(), "artboard");
     assert!(app.ui.tools_drawer);
-    // Dragged from it into the drawer, a tool leaves it.
-    drag(&mut app, &ctx, 5.0, tools[0].center(), drawer.center());
-    assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["artboard"]]);
+    // Dragged from the toolbar into the drawer, a tool leaves it.
+    let artboard = inside(&nodes, &button_name("artboard"), one(&nodes, "Mine"));
+    drag(&mut app, &ctx, 10.0, artboard.center(), inside(&nodes, "Ellipse Tool", drawer(&nodes)).center());
+    assert_eq!(held(&app, "Mine"), [["ellipse", "slice"]]);
+    assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     // The Tools panel's ••• button takes the drawer back beside its toolbar.
-    let main_edit = crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().rfind(|r| r.right() < 60.0).unwrap();
-    click(&mut app, &ctx, 5.5, main_edit.center());
-    assert!(app.ui.tools_drawer && app.ui.drawer_toolbar.is_none());
-    // The drawer closed, a drag on the grip bar moves the toolbar.
-    app.run("window.editToolbar", json!({"open": false})).unwrap();
-    frame(&mut app, &ctx, 6.0, vec![]);
-    let grip = ctx.viewport(|vp| vp.prev_pass.widgets.get(crate::custom_toolbars::area_id("Mine").with("grip")).map(|w| w.sense));
-    assert!(grip.is_some_and(|s| s.senses_drag() && !s.is_focusable()), "only the pointer drags the grip, so Tab does not stop on it: {grip:?}");
-    let before = area();
-    drag(&mut app, &ctx, 7.0, before.center_top() + vec2(0.0, 5.0), before.center_top() + vec2(120.0, 205.0));
-    frame(&mut app, &ctx, 7.5, vec![]);
-    let after = area();
-    assert!((after.min - before.min - vec2(120.0, 200.0)).length() < 2.0, "{before:?} {after:?}");
-    // Hidden, it isn't drawn.
-    app.run("window.toolbar.custom", json!({"name": "Mine", "show": false})).unwrap();
-    frame(&mut app, &ctx, 8.0, vec![]);
-    frame(&mut app, &ctx, 8.1, vec![]);
-    assert!(!ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Middle, crate::custom_toolbars::area_id("Mine")))));
+    let nodes = settle(&mut app, &ctx, 11.0);
+    let bar = one(&nodes, "Mine");
+    // The drawer and its title are named like the ••• buttons: the button is in neither Mine nor the drawer.
+    let open = drawer(&nodes);
+    let main_edit =
+        named(&nodes, EDIT).into_iter().find(|r| !bar.contains(r.center()) && !open.contains(r.center())).expect("the Tools panel's ••• button");
+    click(&mut app, &ctx, 12.0, main_edit.center());
+    assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui).is_none());
 }
 
-/// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.
+/// The + menu of a toolbar made with New Toolbar: a tool not held is enabled and picking it adds it at
+/// the end of this toolbar alone, without the drawer; a held tool is disabled under its heading and
+/// listed under Remove Tool, where picking it takes it out again.
 #[test]
-fn new_toolbar_in_the_drawer_menu_asks_for_a_name() {
+fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     let mut app = app();
     let ctx = ctx();
-    app.run("window.editToolbar", json!({"open": true})).unwrap();
-    frame(&mut app, &ctx, 0.0, vec![]);
-    frame(&mut app, &ctx, 0.1, vec![]);
-    let drawer = drawer_rect(&ctx).expect("the drawer is open");
-    let menu = crate::toolbar::tests::widget_rects(&ctx, vec2(18.0, 18.0))
-        .into_iter()
-        .find(|r| drawer.contains(r.center()))
-        .expect("the drawer menu button");
-    click(&mut app, &ctx, 1.0, menu.center());
-    // The menu is sized in its first frame and drawn from the second.
-    frame(&mut app, &ctx, 1.2, vec![]);
-    let shown = frame(&mut app, &ctx, 1.3, vec![]);
-    // A menu item's label is indented where a checked item has its ✓.
-    let item = shown.iter().find(|(s, ..)| s.trim() == "New Toolbar…").map(|(_, p, _)| *p).expect("New Toolbar… in the drawer menu");
-    assert!(app.ui.dialog.is_none());
-    click(&mut app, &ctx, 2.0, item);
-    let d = app.ui.dialog.clone().expect("the dialog asks for a name");
-    assert_eq!((d.kind.as_str(), d.str("name").as_str()), (crate::custom_toolbars::KIND, "Toolbar 1"));
+    let shipped = slots(&app);
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    // The menu's items called `name`, top first: inside the menu, the Add Tool… node larger than the + button.
+    let items = |nodes: &Nodes, name: &str| -> Vec<Rect> {
+        let menu = named(nodes, ADD).into_iter().max_by(|a, b| a.area().total_cmp(&b.area())).expect("the menu is open");
+        named(nodes, name).into_iter().filter(|r| menu.contains(r.center())).collect()
+    };
+    // The menu at `time`, opened with a click on the + button unless it is open.
+    let open = |app: &mut VectorcraftApp, time: f64| -> Nodes {
+        let nodes = settle(app, &ctx, time);
+        if !named(&nodes, "Select:").is_empty() {
+            return nodes;
+        }
+        let plus = inside(&nodes, ADD, one(&nodes, "Mine"));
+        click(app, &ctx, time + 0.2, plus.center());
+        settle(app, &ctx, time + 0.5)
+    };
+    let nodes = open(&mut app, 0.0);
+    assert!(named(&nodes, "Remove Tool:").is_empty(), "nothing to take out of a blank toolbar");
+    let lasso = items(&nodes, "Lasso Tool");
+    assert_eq!(lasso.len(), 1, "listed once, under Select");
+    click(&mut app, &ctx, 1.0, lasso[0].center());
+    assert_eq!(held(&app, "Mine"), [["lasso"]]);
+    assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
+    assert!(!app.ui.tools_drawer, "no drawer opened");
+    // A second tool goes after the first.
+    let nodes = open(&mut app, 10.0);
+    click(&mut app, &ctx, 11.0, items(&nodes, "Magic Wand Tool")[0].center());
+    assert_eq!(held(&app, "Mine"), [["lasso"], ["magicWand"]]);
+    // A held tool is listed under Remove Tool, then dimmed under its heading, where a click adds nothing.
+    let nodes = open(&mut app, 20.0);
+    assert_eq!(named(&nodes, "Remove Tool:").len(), 1);
+    let lasso = items(&nodes, "Lasso Tool");
+    assert_eq!(lasso.len(), 2, "under Remove Tool, then under Select");
+    click(&mut app, &ctx, 21.0, lasso[1].center());
+    assert_eq!(held(&app, "Mine"), [["lasso"], ["magicWand"]]);
+    // Under Remove Tool, a click takes it out.
+    let nodes = open(&mut app, 30.0);
+    click(&mut app, &ctx, 31.0, items(&nodes, "Lasso Tool")[0].center());
+    assert_eq!(held(&app, "Mine"), [["magicWand"]]);
+    assert_eq!(slots(&app), shipped);
 }
 
 /// A click on another toolbar's ••• button takes the drawer there, whichever was made first.
@@ -472,17 +475,13 @@ fn the_drawer_moves_between_new_toolbars() {
     for name in ["A", "B"] {
         app.run("window.toolbar.new", json!({"name": name})).unwrap();
     }
-    app.ui.custom_toolbars[1].pos = [600.0, 900.0];
-    frame(&mut app, &ctx, 0.0, vec![]);
-    frame(&mut app, &ctx, 0.1, vec![]);
-    let edit_of = |name: &str| {
-        let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id(name))).unwrap();
-        crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).unwrap()
-    };
-    let (a, b) = (edit_of("A"), edit_of("B"));
-    for (k, (button, name)) in [(b, "B"), (a, "A"), (b, "B")].into_iter().enumerate() {
-        click(&mut app, &ctx, 1.0 + k as f64, button.center());
-        frame(&mut app, &ctx, 1.5 + k as f64, vec![]);
+    // B away from A, which the cascade puts it over.
+    let b = crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&app.ui, "B").unwrap().id);
+    crate::panel_docking::place_floating(&mut app, &b, pos2(600.0, 900.0), 0.0).unwrap();
+    for (k, name) in ["B", "A", "B"].into_iter().enumerate() {
+        let nodes = settle(&mut app, &ctx, 1.0 + 2.0 * k as f64);
+        let edit = inside(&nodes, EDIT, one(&nodes, name));
+        click(&mut app, &ctx, 2.0 + 2.0 * k as f64, edit.center());
         assert_eq!(crate::custom_toolbars::drawer_target(&app.ui), Some(name), "after the click on {name}'s ••• button");
     }
 }
@@ -498,39 +497,40 @@ fn basic_or_advanced_takes_the_drawer_to_the_tools_panel() {
     app.run("window.toolbar", json!({})).unwrap();
     for advanced in [false, true] {
         app.run("window.editToolbar", json!({"toolbar": "Mine", "open": true})).unwrap();
-        pick_layout(&mut app, advanced).unwrap();
+        crate::menus::invoke(&mut app, "window.toolbarAdvanced", json!({ "advanced": advanced }));
         assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui).is_none(), "{advanced}");
         assert_eq!(app.ui.toolbar_advanced, advanced);
-        assert!(app.ui.toolbar, "the Tools panel shows beside the drawer");
+        assert!(crate::toolbar::shown(&app.ui), "the Tools panel shows beside the drawer");
     }
     assert_eq!(crate::custom_toolbars::find(&app.ui, "Mine").unwrap().slots, [["pen"]], "Mine as it was");
 }
 
+/// A toolbar edited and saved before the Trim at Crossings Tool joined the Scissors group keeps
+/// its saved layout: the tool stays in the drawer until Reset Toolbar or a drag adds it.
 #[test]
-fn drop_targets_follow_the_buttons_edges() {
-    let r = |y: f32| Rect::from_min_size(pos2(6.0, y), BUTTON);
-    let one = [(0, r(0.0)), (1, r(30.0))];
-    assert_eq!(drop_target(&one, pos2(20.0, 2.0), 1), (Some(0), Place::Before));
-    assert_eq!(drop_target(&one, pos2(20.0, 14.0), 1), (Some(0), Place::Group));
-    assert_eq!(drop_target(&one, pos2(20.0, 27.0), 1), (Some(0), Place::After));
-    // Past the last button, or beside them: next to the nearest one.
-    assert_eq!(drop_target(&one, pos2(20.0, 200.0), 1), (Some(1), Place::After));
-    assert_eq!(drop_target(&one, pos2(44.5, 40.0), 1), (Some(1), Place::After));
-    // Two columns: the left and right edges.
-    let two = [(0, Rect::from_min_size(pos2(2.0, 0.0), BUTTON)), (1, Rect::from_min_size(pos2(38.0, 0.0), BUTTON))];
-    assert_eq!(drop_target(&two, pos2(40.0, 10.0), 2), (Some(1), Place::Before));
-    assert_eq!(drop_target(&two, pos2(36.0, 10.0), 2), (Some(0), Place::After));
-    assert_eq!(drop_target(&[], pos2(0.0, 0.0), 1), (None, Place::Before));
+fn a_saved_toolbar_without_trim_at_crossings_keeps_its_layout() {
+    let mut app = app();
+    let trim = vectorcraft_tools::addons::trim::ID;
+    let saved = ToolbarCategory { name: Some("Draw".into()), slots: vec![["eraser", "scissors", "knife"].iter().map(|id| id.to_string()).collect()] };
+    app.ui.toolbar_edits = ToolbarEdits { basic: Some(vec![saved]), advanced: None };
+    app.ui = std::mem::take(&mut app.ui).sanitized();
+    assert_eq!(slots(&app), [["eraser", "scissors", "knife"]]);
+    assert!(slot_of(&app, trim).is_none());
+    app.run("toolbar.reset", json!({})).unwrap();
+    let slot = slot_of(&app, "scissors").map(|i| slots(&app)[i].clone());
+    assert!(slot.is_some_and(|s| s.contains(&trim)), "Reset Toolbar adds it");
 }
 
-/// The add-ons' tools are in neither toolbar as they ship: the drawer lists them under their
-/// add-on's heading, and they can be added from there.
+/// The add-ons' tools are in neither toolbar as they ship (the Trim at Crossings Tool, in the
+/// Scissors tool's group, the Enclosing Lasso Tool, in the Lasso tool's group, and the Smart Pen
+/// Tool, in the Pen tool's group, aside): the drawer lists them under their add-on's heading, and
+/// they can be added from there.
 #[test]
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
-    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
     let contour = vectorcraft_tools::addons::contour::ID;
     let box3d = vectorcraft_tools::addons::box3d::ID;
+    let polygonal = vectorcraft_tools::addons::polygonal_lasso::ID;
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
     assert_eq!(
         addon,
@@ -542,10 +542,10 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "cornerTool",
             "slideAnchor",
             "sharedEdge",
-            "smartPen",
-            enclosing,
+            "tangentCircle",
             contour,
-            box3d
+            box3d,
+            polygonal
         ]
     );
     for advanced in [false, true] {
@@ -557,12 +557,11 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let listed = |id: &str| {
         sections().iter().find(|(_, tools)| tools.iter().any(|t| t.id == id)).map(|(h, tools)| (*h, tools.iter().map(|t| t.id).collect::<Vec<_>>()))
     };
-    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
-    assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
-    assert_eq!(listed(enclosing), Some(("Enclosing Lasso", vec![enclosing])));
+    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));
-    for tool in ["extendPath", "smartPen", enclosing, contour, box3d] {
+    assert_eq!(listed(polygonal), Some(("Polygonal Lasso", vec![polygonal])));
+    for tool in ["extendPath", contour, box3d, polygonal] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }

@@ -3,8 +3,6 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft-cli");
-
 /// Returns the path of `name` in `vectorcraft-cli-test-<pid>` in the temp folder. The first call removes
 /// that folder and creates it again empty.
 fn tmp(name: &str) -> std::path::PathBuf {
@@ -27,7 +25,12 @@ fn approval_param_needs_the_start_up_flag(key: &str, value: Value) {
     std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, key: value}}]).to_string()).unwrap();
     let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-{key}-{}", std::process::id())));
     let run = |extra: &[&str]| {
-        Command::new(BIN).env("VECTORCRAFT_CONFIG_DIR", &config).args(["run", "--commands", steps.to_str().unwrap()]).args(extra).output().unwrap()
+        Command::new(crate::bin())
+            .env("VECTORCRAFT_CONFIG_DIR", &config)
+            .args(["run", "--commands", steps.to_str().unwrap()])
+            .args(extra)
+            .output()
+            .unwrap()
     };
     let out = run(&[]);
     assert!(!out.status.success());
@@ -38,7 +41,7 @@ fn approval_param_needs_the_start_up_flag(key: &str, value: Value) {
 
     let mcp_config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-mcp-{key}-{}", std::process::id())));
     let mcp_install = |extra: &[&str]| -> Value {
-        let mut child = Command::new(BIN)
+        let mut child = Command::new(crate::bin())
             .env("VECTORCRAFT_CONFIG_DIR", &mcp_config)
             .args(["mcp", "--headless"])
             .args(extra)
@@ -77,22 +80,23 @@ fn plugin_grants_need_the_start_up_flag() {
     approval_param_needs_the_start_up_flag("grant", json!(["doc.read"]));
     approval_param_needs_the_start_up_flag("allowHeavy", json!(true));
 
-    let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants applies to the headless server"));
     let root = std::env::temp_dir();
     for flag in ["--automation-read-root", "--automation-write-root"] {
-        let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", flag, root.to_str().unwrap()]).stdin(Stdio::null()).output().unwrap();
+        let out =
+            Command::new(crate::bin()).args(["mcp", "--allow-plugin-grants", flag, root.to_str().unwrap()]).stdin(Stdio::null()).output().unwrap();
         assert!(!out.status.success(), "{flag}");
         assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants can't be used with"), "{flag}");
     }
-    let usage = Command::new(BIN).arg("help").output().unwrap();
+    let usage = Command::new(crate::bin()).arg("help").output().unwrap();
     assert!(String::from_utf8_lossy(&usage.stdout).contains("--allow-plugin-grants lets plugin.install's grant and allowHeavy take effect"));
 }
 
 #[test]
 fn commands_prints_catalogue() {
-    let out = Command::new(BIN).arg("commands").output().unwrap();
+    let out = Command::new(crate::bin()).arg("commands").output().unwrap();
     assert!(out.status.success());
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     let ids: Vec<&str> = v.as_array().unwrap().iter().filter_map(|c| c["id"].as_str()).collect();
@@ -104,7 +108,7 @@ fn run_batch_exports() {
     let svg = tmp("batch.svg");
     let png = tmp("batch.png");
     let dc = tmp("batch.vectorcraft");
-    let out = Command::new(BIN)
+    let out = Command::new(crate::bin())
         .args(["run", "--cmd", "file.new", "--params", r#"{"width":200,"height":100}"#])
         .args(["--cmd", "shape.ellipse", "--params", r#"{"x":10,"y":10,"width":80,"height":60}"#])
         .args(["--cmd", "paint.setFill", "--params", r##"{"color":"#3366ff"}"##])
@@ -121,7 +125,7 @@ fn run_batch_exports() {
     assert_eq!(u32::from_be_bytes(png_bytes[16..20].try_into().unwrap()), 400);
 
     // Re-open the native file and inspect.
-    let out = Command::new(BIN).args(["run", "--in", dc.to_str().unwrap(), "--cmd", "document.inspect"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["run", "--in", dc.to_str().unwrap(), "--cmd", "document.inspect"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let last: Value = serde_json::from_str(String::from_utf8(out.stdout).unwrap().lines().last().unwrap()).unwrap();
     assert_eq!(last["result"]["artboards"][0]["width"], 200.0);
@@ -137,7 +141,7 @@ fn scale_sizes_raster_exports_only() {
     let svg = svg.to_str().unwrap();
     let (plain, scaled, png) = (tmp("plain.dxf"), tmp("scaled.dxf"), tmp("scaled.png"));
     let ok = |args: &[&str]| {
-        let out = Command::new(BIN).args(args).output().unwrap();
+        let out = Command::new(crate::bin()).args(args).output().unwrap();
         assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
     };
     ok(&["convert", svg, plain.to_str().unwrap()]);
@@ -151,11 +155,11 @@ fn scale_sizes_raster_exports_only() {
 
 #[test]
 fn run_reports_errors() {
-    let out = Command::new(BIN).args(["run", "--cmd", "nope.nothing"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["run", "--cmd", "nope.nothing"]).output().unwrap();
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(stderr.contains("step 0 (nope.nothing)"), "{stderr}");
-    let out = Command::new(BIN).args(["run", "--params", "{}"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["run", "--params", "{}"]).output().unwrap();
     assert!(!out.status.success());
 }
 
@@ -184,7 +188,7 @@ fn run_reads_steps_from_a_commands_file() {
         {"id": "object.setProps", "params": {"id": "$2.ids.0", "name": "barcode"}},
     ]);
     std::fs::write(&steps, serde_json::to_string_pretty(&file).unwrap()).unwrap();
-    let out = Command::new(BIN)
+    let out = Command::new(crate::bin())
         .args(["run", "--cmd", "file.new", "--params", r#"{"width":200,"height":100}"#, "--commands", steps.to_str().unwrap()])
         .args(["--cmd", "document.node", "--params", r#"{"id":"$2.ids.0"}"#, "--export", svg.to_str().unwrap()])
         .output()
@@ -204,7 +208,7 @@ fn run_reads_steps_from_a_commands_file() {
 #[test]
 fn run_reads_json_lines_from_standard_input() {
     let svg = tmp("stdin.svg");
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(["run", "--commands", "-", "--export", svg.to_str().unwrap()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -227,7 +231,7 @@ fn run_reads_json_lines_from_standard_input() {
 #[test]
 fn run_refuses_malformed_commands_naming_the_step() {
     let fails = |args: &[&str]| {
-        let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
+        let out = Command::new(crate::bin()).args(args).stdin(Stdio::null()).output().unwrap();
         assert!(!out.status.success(), "{args:?}");
         (String::from_utf8_lossy(&out.stderr).to_string(), json_lines(&out.stdout).len())
     };
@@ -275,11 +279,11 @@ fn run_refuses_malformed_commands_naming_the_step() {
 /// `--help` and `-h` right after a subcommand print the usage that `vectorcraft-cli help` prints.
 #[test]
 fn help_after_a_subcommand_prints_the_usage() {
-    let usage = Command::new(BIN).arg("help").output().unwrap();
+    let usage = Command::new(crate::bin()).arg("help").output().unwrap();
     assert!(usage.status.success() && String::from_utf8_lossy(&usage.stdout).contains("USAGE:"));
     for sub in ["mcp", "run", "commands", "convert", "info", "bench", "perf"] {
         for flag in ["--help", "-h"] {
-            let out = Command::new(BIN).args([sub, flag]).stdin(Stdio::null()).output().unwrap();
+            let out = Command::new(crate::bin()).args([sub, flag]).stdin(Stdio::null()).output().unwrap();
             assert!(out.status.success(), "{sub} {flag}: {}", String::from_utf8_lossy(&out.stderr));
             assert!(out.stdout == usage.stdout, "{sub} {flag}: {}", String::from_utf8_lossy(&out.stdout));
         }
@@ -290,7 +294,7 @@ fn help_after_a_subcommand_prints_the_usage() {
 /// with them.
 #[test]
 fn help_later_in_the_line_prints_the_usage() {
-    let usage = Command::new(BIN).arg("help").output().unwrap();
+    let usage = Command::new(crate::bin()).arg("help").output().unwrap();
     let mut wrong = vec![];
     for args in [
         &["mcp", "--headless", "--help"][..],
@@ -311,7 +315,7 @@ fn help_later_in_the_line_prints_the_usage() {
         &["perf", "--paths", "many", "-h"],
         &["convert", "--decimals", "many", "--help"],
     ] {
-        let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
+        let out = Command::new(crate::bin()).args(args).stdin(Stdio::null()).output().unwrap();
         if !out.status.success() || out.stdout != usage.stdout {
             wrong.push(format!("{args:?}: {}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout)));
         }
@@ -322,17 +326,18 @@ fn help_later_in_the_line_prints_the_usage() {
 /// Further along the line, `-h` is the value of the option before it.
 #[test]
 fn help_as_an_option_value_goes_to_the_option() {
-    let out = Command::new(BIN).args(["run", "--cmd", "-h"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["run", "--cmd", "-h"]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success() && err.contains("vectorcraft-cli: step 0 (-h):") && out.stdout.is_empty(), "{err}");
-    let out = Command::new(BIN).args(["convert", "in.svg", "--range", "-h"]).output().unwrap();
+    let out = Command::new(crate::bin()).args(["convert", "in.svg", "--range", "-h"]).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success() && err.contains("convert needs IN and OUT") && out.stdout.is_empty(), "{err}");
 }
 
 #[test]
 fn mcp_headless_over_stdio() {
-    let mut child = Command::new(BIN).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+    let mut child =
+        Command::new(crate::bin()).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
     {
         let mut stdin = child.stdin.take().unwrap();
         for m in [
@@ -359,13 +364,13 @@ fn mcp_headless_over_stdio() {
 /// plug-ins.
 #[test]
 fn safe_mode_mcp_does_not_connect_to_a_running_app() {
-    let out = Command::new(BIN).args(["--safe-mode", "mcp", "--connect", "127.0.0.1:9"]).env("VECTORCRAFT_NO_PREFS", "1").output().unwrap();
+    let out = Command::new(crate::bin()).args(["--safe-mode", "mcp", "--connect", "127.0.0.1:9"]).env("VECTORCRAFT_NO_PREFS", "1").output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success() && err.contains("--safe-mode runs a headless session"), "{err}");
     // Something listening on the default address, as a running app does; a running app or another
     // program already holding it serves as well.
     let _app = std::net::TcpListener::bind(vectorcraft_mcp::DEFAULT_ADDR);
-    let out = Command::new(BIN).args(["--safe-mode", "mcp"]).env("VECTORCRAFT_NO_PREFS", "1").stdin(Stdio::null()).output().unwrap();
+    let out = Command::new(crate::bin()).args(["--safe-mode", "mcp"]).env("VECTORCRAFT_NO_PREFS", "1").stdin(Stdio::null()).output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success() && err.contains("MCP server on stdio (headless)"), "{err}");
 }
@@ -402,7 +407,7 @@ fn mcp_automation_roots_take_several_folders() {
     }
     let dir = |d: &str| base.join(d).to_string_lossy().into_owned();
     let file = |d: &str, f: &str| base.join(d).join(f).to_string_lossy().into_owned();
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(["mcp", "--automation-read-root", &dir("in"), &format!("--automation-read-root={}", dir("in2"))])
         .args(["--automation-write-root", &dir("out"), "--automation-write-root", &dir("out2")])
         .stdin(Stdio::piped())
@@ -457,7 +462,7 @@ fn automation_roots(base: &std::path::Path) {
     }
     let dir = |d: &str| base.join(d).to_string_lossy().into_owned();
     let fails = |args: &[&str], why: &str| {
-        let out = Command::new(BIN).args(args).stdin(Stdio::null()).output().unwrap();
+        let out = Command::new(crate::bin()).args(args).stdin(Stdio::null()).output().unwrap();
         let err = String::from_utf8_lossy(&out.stderr);
         assert!(!out.status.success() && err.contains(why), "{args:?}: {err}");
     };
@@ -469,7 +474,7 @@ fn automation_roots(base: &std::path::Path) {
         "a running app enforces its own roots: start it with `vectorcraft --control <port>",
     );
 
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(["mcp", "--automation-read-root", &dir("in"), &format!("--automation-write-root={}", dir("out"))])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -530,7 +535,7 @@ fn automation_roots(base: &std::path::Path) {
 fn mcp_protocol_over_stdio() {
     use std::io::{BufRead, BufReader};
     let mut child =
-        Command::new(BIN).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        Command::new(crate::bin()).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     let mut stdin = child.stdin.take().unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let mut notes = vec![];
@@ -711,7 +716,7 @@ fn run_command(id: u64, command: &str, params: Value) -> Value {
 #[test]
 fn closed_stdout_ends_quietly() {
     use std::io::Read;
-    let mut child = Command::new(BIN).arg("commands").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(crate::bin()).arg("commands").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     let mut first = [0u8; 16];
     child.stdout.as_mut().unwrap().read_exact(&mut first).unwrap();
     drop(child.stdout.take());
@@ -728,13 +733,13 @@ fn run_with_a_closed_stdout_ends_quietly_and_finishes_the_batch() {
     let _ = std::fs::remove_file(&svg);
     let rect = r#"{"x":1,"y":1,"width":5,"height":5}"#;
     let args = ["run", "--cmd", "document.json", "--cmd", "shape.rectangle", "--params", rect, "--export", svg.to_str().unwrap()];
-    let mut child = Command::new(BIN).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(crate::bin()).args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     drop(child.stdout.take());
     let out = child.wait_with_output().unwrap();
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success() && err.is_empty(), "{:?}: {err}", out.status);
     assert!(svg.is_file(), "the export after the closed reader still ran");
-    let out = Command::new(BIN).args(["run", "--cmd", "not-a-command"]).stdout(Stdio::null()).output().unwrap();
+    let out = Command::new(crate::bin()).args(["run", "--cmd", "not-a-command"]).stdout(Stdio::null()).output().unwrap();
     assert!(!out.status.success());
 }
 
@@ -749,7 +754,7 @@ fn config_dir(name: &str) -> std::path::PathBuf {
 /// One `vectorcraft-cli run` with `steps` ((command, params)) against the settings folder `config`;
 /// the result of each step.
 fn run_in(config: &std::path::Path, steps: &[(&str, Value)]) -> Vec<Value> {
-    let mut cmd = Command::new(BIN);
+    let mut cmd = Command::new(crate::bin());
     cmd.arg("run").env("VECTORCRAFT_CONFIG_DIR", config).env_remove("VECTORCRAFT_NO_PREFS");
     for (id, params) in steps {
         cmd.args(["--cmd", id, "--params", &params.to_string()]);
@@ -820,7 +825,7 @@ fn saved_pdf_presets_and_loaded_profiles_survive_a_restart() {
 #[test]
 fn runs_without_preferences_remember_nothing() {
     let config = config_dir("noprefs");
-    let out = Command::new(BIN)
+    let out = Command::new(crate::bin())
         .args(["run", "--cmd", "pdf.preset.save", "--params", r#"{"name":"Press"}"#])
         .env("VECTORCRAFT_CONFIG_DIR", &config)
         .env("VECTORCRAFT_NO_PREFS", "1")

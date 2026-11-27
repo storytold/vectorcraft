@@ -15,9 +15,12 @@ mod cmykblend;
 mod cmykimages;
 mod colorize;
 mod compression;
+mod conic;
 mod dashalign;
+mod diamond;
 mod editing;
 mod encrypt;
+mod file_fonts;
 mod file_info;
 mod focal;
 mod fx;
@@ -36,13 +39,14 @@ mod mesh_export;
 mod output;
 mod pdf13;
 mod pdfx;
-mod presets;
 mod print;
 mod printadvanced;
 mod reader_compat;
 mod reader_streaming;
 mod realtext;
+mod reshaped;
 mod settings;
+mod spread;
 pub(super) mod stroke;
 mod strokeout;
 mod text_placement;
@@ -94,7 +98,7 @@ fn uncompressed(d: &Document) -> String {
 }
 
 fn page_count(bytes: &[u8]) -> usize {
-    craft_pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
+    craft::pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
 }
 
 #[test]
@@ -146,7 +150,7 @@ fn one_page_per_artboard_with_sizes() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     let sizes: Vec<(f32, f32)> = pdf.pages().iter().map(|p| p.render_dimensions()).collect();
     assert_eq!(sizes, vec![(200.0, 100.0), (100.0, 400.0), (612.0, 792.0)]);
 }
@@ -167,7 +171,7 @@ fn artboard_range_and_bad_index() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     assert_eq!(pdf.pages().len(), 1);
     assert_eq!(pdf.pages()[0].render_dimensions(), (100.0, 400.0));
     assert_eq!(export(&d, &PdfOptions { artboards: Some(vec![5]), ..Default::default() }), Err(PdfError::BadArtboard(5)));
@@ -219,6 +223,60 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), with an instance of
+/// "Mark" at (25, 25) and, in a knockout group above a green square, a half-opaque one at (70, 70).
+/// With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = doc(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(Rect::new(-10.0, -10.0, 10.0, 10.0), color);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) }));
+    let green = rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::rgb(0.0, 1.0, 0.0));
+    let mut above = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    above.opacity = 0.5;
+    let mut group = Node::group(NodeId(0), vec![Arc::new(green), Arc::new(above)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same bytes
+/// as when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let d = marks("Mark");
+    assert!(uncompressed(&d) == uncompressed(&marks("Other")), "the files differ");
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && !fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        add(&mut d, n);
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &PdfOptions::default()).expect("export");
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 #[test]
 fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt stroke painted by a 20 pt round
@@ -240,6 +298,97 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     let l = leaves(&out);
     assert_eq!(l.len(), 1, "the nib's art");
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
+}
+
+/// A 200 × 100 pt document whose 3 pt. Round brush paints a 20 pt round nib.
+fn doc_with_wide_nib() -> Document {
+    let mut d = doc(200.0, 100.0);
+    let mut lib = vectorcraft_brush::library(&d);
+    let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+        panic!("the 3 pt. Round brush")
+    };
+    c.size = 20.0;
+    vectorcraft_brush::store(&mut d, &lib);
+    d
+}
+
+/// A line from (`x`, 40) to (`x`, 60) with a 1 pt black stroke, painted by the 3 pt. Round brush
+/// when `brushed`.
+fn nib_line(x: f64, brushed: bool) -> Node {
+    let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    if brushed {
+        stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    }
+    Node::path(NodeId(0), shapes::line((x, 40.0).into(), (x, 60.0).into()), stroke)
+}
+
+#[test]
+fn a_path_whose_brush_art_reaches_the_page_is_written() {
+    // The line at x = -5 lies left of the page, and the 20 pt nib paints 10 pt either side of it,
+    // onto the page: alone, in a group, in a knockout group and as a compound path.
+    let compound = |n: Node| {
+        let mut c = Node::new(NodeId(0), NodeKind::Compound { children: vec![Arc::new(nib_line(-5.0, false))], rule: FillRule::NonZero });
+        c.appearance = n.appearance;
+        c
+    };
+    let knockout = |n: Node| {
+        let mut g = Node::group(NodeId(0), vec![Arc::new(n), Arc::new(rect_node(Rect::new(150.0, 10.0, 170.0, 30.0), Color::rgb(0.0, 0.0, 1.0)))]);
+        g.knockout = vectorcraft_doc::Knockout::On;
+        g
+    };
+    let group = |n: Node| Node::group(NodeId(0), vec![Arc::new(n)]);
+    let wraps: [(&str, &dyn Fn(Node) -> Node); 4] =
+        [("path", &|n| n), ("group", &group), ("knockout group", &knockout), ("compound path", &compound)];
+    for (what, wrap) in wraps {
+        let mut d = doc_with_wide_nib();
+        add(&mut d, wrap(nib_line(-5.0, true)));
+        let out = roundtrip(&d);
+        let nib: Vec<Rect> = leaves(&out).iter().filter_map(|n| n.geometric_bounds()).filter(|b| b.x1 < 100.0).collect();
+        assert_eq!(nib.len(), 1, "{what}: the nib's art, {nib:?}");
+        assert!(close(nib[0], Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{what}: {nib:?}");
+    }
+    // Without its brush, or 100 pt left of the page, where the nib does not reach it, the line is
+    // left out.
+    for line in [nib_line(-5.0, false), nib_line(-100.0, true)] {
+        let mut d = doc_with_wide_nib();
+        add(&mut d, line);
+        assert!(leaves(&roundtrip(&d)).is_empty());
+    }
+    // A clipping path left of the page keeps the nib's art off it.
+    let mut d = doc_with_wide_nib();
+    let clip = Node::new(
+        NodeId(0),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(-30.0, 0.0, -2.0, 100.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: true,
+            guide: false,
+        },
+    );
+    add(&mut d, Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(nib_line(-5.0, true))], clip: true }));
+    let out = roundtrip(&d);
+    assert!(leaves(&out).is_empty(), "{:?}", leaves(&out));
+}
+
+/// The live effects in a symbol's art apply where the instance places the art, as on the canvas:
+/// the symbol's square at (10, 40), which a Transform effect moves 100 pt right, is written at
+/// (110, 40).
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    let mut d = doc(200.0, 100.0);
+    let mut square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    square.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(square) });
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY }));
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
 }
 
 /// An instance of a symbol with 9-slice guides, scaled to 200 × 150, is written as the canvas
@@ -265,6 +414,96 @@ fn a_scaled_nine_slice_instance_keeps_its_corners() {
     assert!(close(boxes[0], Rect::new(20.0, 20.0, 220.0, 170.0), 0.01), "{boxes:?}");
     assert!(close(boxes[1], Rect::new(20.0, 20.0, 30.0, 30.0), 0.01), "{boxes:?}");
     assert!(close(boxes[2], Rect::new(105.0, 85.0, 135.0, 105.0), 0.01), "{boxes:?}");
+}
+
+/// An instance of symbol `name` placed by `xf`, its fill red at `opacity` (shown when `visible`).
+fn stained_instance(name: &str, xf: Affine, opacity: f32, visible: bool) -> Node {
+    let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf });
+    n.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    n.appearance.items.retain(AppearanceItem::is_fill);
+    if let AppearanceItem::Fill(f) = &mut n.appearance.items[0] {
+        (f.opacity, f.visible) = (opacity, visible);
+    }
+    n
+}
+
+/// The fill colors of `d`'s leaves, in paint order.
+fn leaf_fills(d: &Document) -> Vec<String> {
+    leaves(d).iter().filter_map(|n| n.appearance.fill_paint().color()).map(|c| c.to_hex()).collect()
+}
+
+/// A stained instance is written in the colors the canvas draws it in
+/// ([`vectorcraft_brush::instance_art`]): on its own, with a Transform effect that moves it, inside
+/// a group, after a dynamic symbol's own fill change, and placed through 9-slice guides. A hidden
+/// fill or one at 0% opacity leaves the art's colors as they are.
+#[test]
+fn a_stained_instance_keeps_its_stain() {
+    let blue = Color::rgb8(30, 90, 220);
+    let art = || Node::group(NodeId(0), vec![Arc::new(rect_node(Rect::new(0.0, 0.0, 100.0, 100.0), blue))]);
+    let canvas = |n: &Node| leaf_fills_of(&vectorcraft_brush::instance_art(&art(), n));
+    fn leaf_fills_of(n: &Node) -> Vec<String> {
+        let mut d = doc(10.0, 10.0);
+        add(&mut d, n.clone());
+        leaf_fills(&d)
+    }
+    let write = |n: Node, nine_slice: bool| {
+        let mut d = doc(300.0, 200.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Panel".into(), art: Arc::new(art()) });
+        if nine_slice {
+            d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        }
+        add(&mut d, n);
+        leaf_fills(&roundtrip(&d))
+    };
+    let half = stained_instance("Panel", Affine::translate((20.0, 20.0)), 0.5, true);
+    let want = canvas(&half);
+    assert_ne!(want, [blue.to_hex()], "the stain changes the color");
+    assert_eq!(write(half.clone(), false), want, "on its own");
+    let mut moved = half.clone();
+    moved.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 30.0}),
+        visible: true,
+    });
+    assert_eq!(write(moved, false), want, "with a geometry effect");
+    assert_eq!(write(Node::group(NodeId(0), vec![Arc::new(half.clone())]), false), want, "in a group");
+    let mut scaled = half.clone();
+    scaled.kind = NodeKind::SymbolInstance { symbol: "Panel".into(), xf: Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5) };
+    assert_eq!(write(scaled, true), want, "through 9-slice guides");
+    let mut changed = half.clone();
+    changed.extras_mut().symbol_overrides =
+        vec![vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(Paint::solid(Color::rgb(0.0, 1.0, 0.0))), ..Default::default() }];
+    let changed_want = canvas(&changed);
+    assert_ne!(changed_want, want, "the part's own fill is stained");
+    assert_eq!(write(changed, false), changed_want, "after a dynamic symbol's change");
+    for (opacity, visible) in [(0.0, true), (0.5, false)] {
+        assert_eq!(write(stained_instance("Panel", Affine::IDENTITY, opacity, visible), false), [blue.to_hex()], "unstained");
+    }
+}
+
+/// A stained instance of a symbol whose art has a live effect is written in its stained colors,
+/// where the effect draws the art.
+#[test]
+fn a_stained_instance_keeps_its_stain_when_its_art_has_effects() {
+    let blue = Color::rgb8(30, 90, 220);
+    let square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), blue);
+    let half = stained_instance("Moved", Affine::IDENTITY, 0.5, true);
+    let want = vectorcraft_brush::instance_art(&square, &half).appearance.fill_paint().color().unwrap().to_hex();
+    assert_ne!(want, blue.to_hex(), "the stain changes the color");
+    let mut art = square;
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    let mut d = doc(200.0, 100.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    add(&mut d, half);
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
+    assert_eq!(leaf_fills(&out), [want]);
 }
 
 /// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`
@@ -649,7 +888,41 @@ fn tiny_png() -> Vec<u8> {
         *p = image::Rgba([if x < 2 { 255 } else { 0 }, 0, 0, 255]);
     }
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -674,7 +947,24 @@ fn image_roundtrip() {
     assert_eq!((im.width, im.height), (4, 2));
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 60.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
     let blob = &out.images[&im.key];
-    let decoded = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
+    let decoded = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(decoded.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
 }
@@ -706,9 +996,42 @@ fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
 
 /// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its
 /// header reads, and its pixel data can't be decoded.
-fn cut_image(format: image::ImageFormat, tag: &[u8], keep: usize) -> Vec<u8> {
+fn cut_image(format: craft_image_codecs::Format, tag: &[u8], keep: usize) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     let at = out.windows(tag.len()).position(|w| w == tag).expect("tag");
     out.truncate(at + tag.len() + keep);
     out
@@ -723,10 +1046,10 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
     let mut d = doc(200.0, 300.0);
     let blobs = [
         ("good", ImageBlob::new("image/png", tiny_png())),
-        ("png", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 4))),
-        ("png2", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 6))),
-        ("gif", ImageBlob::new("image/gif", cut_image(image::ImageFormat::Gif, b"GIF89a", 7))),
-        ("webp", ImageBlob::new("image/webp", cut_image(image::ImageFormat::WebP, b"VP8L", 9))),
+        ("png", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 4))),
+        ("png2", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 6))),
+        ("gif", ImageBlob::new("image/gif", cut_image(craft_image_codecs::Format::Gif, b"GIF89a", 7))),
+        ("webp", ImageBlob::new("image/webp", cut_image(craft_image_codecs::Format::WebP, b"VP8L", 9))),
     ];
     for (i, (key, blob)) in blobs.into_iter().enumerate() {
         d.images.insert(key.into(), blob);
@@ -1124,6 +1447,41 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     }
     assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
     assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
+}
+
+/// The text of the `/Lang` entry of the catalog of `pdf` (a literal string), if any.
+fn catalog_lang(pdf: &[u8]) -> Option<String> {
+    let xref = crate::patch::Xref::read(pdf).expect("a cross-reference table");
+    let root = xref.trailer_ref(pdf, b"/Root").expect("a catalog");
+    let (start, end) = xref.dict(pdf, root).expect("the catalog's dictionary");
+    let catalog = String::from_utf8_lossy(&pdf[start..end]).into_owned();
+    let at = catalog.find("/Lang")? + "/Lang".len();
+    let rest = catalog[at..].trim_start().strip_prefix('(').expect("a literal string");
+    Some(rest[..rest.find(')').expect("a closed string")].to_string())
+}
+
+/// The catalog gives the document language chosen in Document Setup as its BCP 47 tag, in
+/// exported and printed PDFs, and the XMP packet says it too (#3644).
+#[test]
+fn the_catalog_gives_the_document_language() {
+    let mut d = doc(100.0, 100.0);
+    for (language, tag) in [(None, "en-US"), (Some("French"), "fr"), (Some("German: Swiss"), "de-CH")] {
+        if let Some(language) = language {
+            d.setup.language = language.into();
+        }
+        for opts in [PdfOptions::uncompressed(), PdfOptions::default()] {
+            let bytes = export(&d, &opts).unwrap();
+            assert_eq!(catalog_lang(&bytes).as_deref(), Some(tag), "{language:?}");
+        }
+        // Print to PDF writes its file with the same writer.
+        let printed = print(&d, &PrintOptions { created: Some(1_700_000_000), ..Default::default() }).unwrap();
+        assert_eq!(catalog_lang(&printed.bytes).as_deref(), Some(tag), "{language:?}: printed");
+        let s = uncompressed(&d);
+        assert!(s.contains(&format!("<dc:language><rdf:Bag><rdf:li>{tag}</rdf:li></rdf:Bag></dc:language>")), "{language:?}: {s}");
+    }
+    // A language without a tag (from a file) writes none rather than a guess.
+    d.setup.language = "Klingon".into();
+    assert_eq!(catalog_lang(&export(&d, &PdfOptions::uncompressed()).unwrap()), None);
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by

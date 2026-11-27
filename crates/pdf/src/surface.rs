@@ -9,7 +9,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::blend::BlendMode;
 use krilla::geom::{Path, Transform};
 use krilla::mask::Mask;
@@ -79,6 +79,11 @@ impl<'a> Surface<'a> {
 
     pub fn push_isolated(&mut self) {
         self.group(|s| s.push_isolated());
+    }
+
+    /// A transparency group with `options` (isolated, knockout), as [`Self::push_isolated`].
+    pub fn push_group(&mut self, options: krilla::blend::GroupOptions) {
+        self.group(|s| s.push_group(options));
     }
 
     /// The mask's stream is already in [`Self::group_transform`]'s space, like the group's art.

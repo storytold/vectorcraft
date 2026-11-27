@@ -1,6 +1,7 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    unsupported,
 };
 
 /// One option a format's encoder reads from the export params.
@@ -194,6 +195,20 @@ const TRANSPARENCY: FormatOption = FormatOption {
     description: "pixels under half opacity become one transparent entry (false: everything is blended over the matte)",
 };
 
+const TRANSPARENCY_DITHER: FormatOption = FormatOption {
+    name: "transparencyDither",
+    ty: "string",
+    default: "\"none\"",
+    description: "with transparency, how partly transparent pixels are split between the transparent entry and their color: none (cut at half opacity), diffusion, pattern (8×8 ordered) or noise",
+};
+
+const TRANSPARENCY_DITHER_AMOUNT: FormatOption = FormatOption {
+    name: "transparencyDitherAmount",
+    ty: "integer",
+    default: "100",
+    description: "the diffusion transparency dither's strength 0–100 (0 cuts at half opacity; more than 100 is refused)",
+};
+
 const MATTE: FormatOption = FormatOption {
     name: "matte",
     ty: "string",
@@ -205,11 +220,15 @@ const LOSSLESS: FormatOption = FormatOption {
     name: "lossless",
     ty: "boolean",
     default: "true",
-    description: "lossless WebP; false asks for lossy, which isn't available yet (written lossless, with a warning)",
+    description: "lossless WebP (every pixel kept exactly); false writes lossy WebP at quality: a smaller file that loses some detail",
 };
 
-const WEBP_QUALITY: FormatOption =
-    FormatOption { name: "quality", ty: "integer", default: "90", description: "lossy quality 0–100 (for when lossy WebP is available)" };
+const WEBP_QUALITY: FormatOption = FormatOption {
+    name: "quality",
+    ty: "integer",
+    default: "90",
+    description: "lossy WebP quality 0–100 (with lossless false; higher keeps more detail in a larger file; more than 100 is refused)",
+};
 
 /// The options of the palette formats (PNG-8, GIF).
 const PALETTE_OPTIONS: &[FormatOption] = &[
@@ -230,6 +249,8 @@ const PALETTE_OPTIONS: &[FormatOption] = &[
     DITHER,
     DITHER_AMOUNT,
     TRANSPARENCY,
+    TRANSPARENCY_DITHER,
+    TRANSPARENCY_DITHER_AMOUNT,
     MATTE,
 ];
 
@@ -307,7 +328,7 @@ const PSD_LAYERS: FormatOption = FormatOption {
     name: "layers",
     ty: "boolean",
     default: "true",
-    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent",
+    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent. The user and object slices are written either way",
 };
 
 const MAX_EDITABILITY: FormatOption = FormatOption {
@@ -315,6 +336,13 @@ const MAX_EDITABILITY: FormatOption = FormatOption {
     ty: "boolean",
     default: "false",
     description: "with layers: layers and sublayers become groups and every object a layer of its own, named as the Layers panel names it (text by its text); clipping, masked or knockout layers stay one layer",
+};
+
+const PRESERVE_TEXT: FormatOption = FormatOption {
+    name: "preserveText",
+    ty: "boolean",
+    default: "false",
+    description: "with layers: horizontal and vertical point type in solid colors, with left-to-right paragraphs that set only their alignment, without strokes, effects or an appearance of its own, becomes editable type layers (with their pixels); a layer holding such type becomes a group of its type layers and pixel layers of the art between them, unless other art in it blends in a mode other than normal; refused with layers: false",
 };
 
 const PSD_HIDDEN_LAYERS: FormatOption = FormatOption {
@@ -338,6 +366,7 @@ const PSD_OPTIONS: &[FormatOption] = &[
     ANTI_ALIAS,
     COLOR_MODEL,
     PSD_LAYERS,
+    PRESERVE_TEXT,
     MAX_EDITABILITY,
     PSD_HIDDEN_LAYERS,
     EMBED_ICC,
@@ -479,6 +508,17 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
+    // HP-GL/2 plot files, read by `vectorcraft_cad::hpgl` into paths and written as pen moves.
+    Format {
+        id: "hpgl",
+        label: "HP-GL",
+        extensions: &["plt", "hpgl", "hgl", "hpg"],
+        mime: "application/vnd.hp-hpgl",
+        read: true,
+        write: true,
+        raster: false,
+        options: hpgl::OPTIONS,
+    },
     Format {
         id: "tga",
         label: "Targa",
@@ -493,7 +533,8 @@ pub const FORMATS: &[Format] = &[
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
     reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/x-affinity", false),
-    // Photoshop's large document format: read like a PSD (its merged image), never written.
+    // The large document form of PSD: read like a PSD (its layers, or its merged image), never
+    // written.
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
     // PostScript programs, read as EPS files are; Print to PostScript writes them, exports don't.
     reader("ps", "PostScript", &["ps"], "application/postscript", false),
@@ -507,6 +548,16 @@ pub const FORMATS: &[Format] = &[
     reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
     // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
     reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
+    // `.cdr` drawings of versions 1 to 27 (`WL` files, RIFF files from version 3, and the ZIP packages of 14 on), read by
+    // `craft-cdr`; a `.cdt` template opens as a new untitled document. Exports don't write
+    // them.
+    reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
+    // them.
+    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
+    // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
+    reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -551,22 +602,33 @@ pub const OPEN_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "pct",
+    "pic",
+    "pict",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL, `.cdr` or `.cmx` type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
+/// The packaging declares no type for HP-GL plot files or PICT pictures either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl",
+    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -640,12 +702,22 @@ pub const PLACE_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "pct",
+    "pic",
+    "pict",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
     "txt",
     "rtf",
     "docx",
@@ -681,11 +753,26 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Whether a file named `name` can only be read by an importer plug-in: an installed importer lists
-/// its extension and File › Place does not read that extension.
+/// Whether a file named `name` can only be opened, by an importer plug-in: an installed importer lists
+/// its extension, File › Place does not read that extension, and no installed importer that places
+/// its files lists it ([`places_with_importer`]).
 pub fn opens_with_importer(name: &str) -> bool {
     let ext = extension(name);
-    !ext.is_empty() && !PLACE_EXTS.contains(&ext.as_str()) && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+    !ext.is_empty()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+        && !places_with_importer(name)
+}
+
+/// Whether File › Place places a file named `name` with an importer plug-in when no built-in format
+/// reads its content: no built-in format reads its extension, and an installed importer whose manifest
+/// sets `place` lists it.
+pub fn places_with_importer(name: &str) -> bool {
+    let ext = extension(name);
+    !ext.is_empty()
+        && readable_format(&ext).is_none()
+        && !PLACE_EXTS.contains(&ext.as_str())
+        && !vectorcraft_plugins::import::placing(&ext).is_empty()
 }
 
 /// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
@@ -760,9 +847,9 @@ pub fn open_extensions() -> &'static [&'static str] {
 
 /// File › Open's filters: "All readable files" first, then one per readable format, then one per
 /// importer plug-in (under its name, with the extensions [`open_extensions`] takes from it), then
-/// swatch libraries (which open in the library panel), Libraries panel libraries, flattener, PDF,
-/// print and export presets (imported), scripts (checked without running them) and plug-ins
-/// (installed).
+/// swatch and graphic style libraries (which open in their library panels), Libraries panel
+/// libraries, flattener, PDF, print, perspective grid and export presets and composite fonts
+/// (imported), shortcut sets, scripts (checked without running them) and plug-ins (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     let (all, importers) = importer_open_part();
     std::iter::once(("All readable files", all)).chain(format_filters()).chain(importers).chain(other_open_filters())
@@ -775,14 +862,17 @@ pub fn builtin_open_filters() -> impl Iterator<Item = (&'static str, &'static [&
     std::iter::once(("All readable files", OPEN_EXTS)).chain(format_filters()).chain(other_open_filters())
 }
 
-/// The open-dialog filters after the document formats: swatch libraries, Libraries panel
-/// libraries, presets, composite fonts, shortcut sets, scripts and plug-ins.
+/// The open-dialog filters after the document formats: swatch and graphic style libraries,
+/// Libraries panel libraries, presets (perspective grid presets among them), composite fonts,
+/// shortcut sets, scripts and plug-ins.
 fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS))
+        .chain(std::iter::once(("Graphic Style Libraries", std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT))))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", crate::cmd::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Perspective grid presets", crate::cmd::perspgrid::PRESET_EXTS)))
         .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
         .chain(std::iter::once(("Composite fonts", crate::cmd::compositefonts::EXTS)))
         .chain(std::iter::once(("Shortcut sets", crate::cmd::shortcutset::EXTS)))
@@ -793,13 +883,13 @@ fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'stati
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`builtin_open_filters`] so a document can be picked for its swatches or graphic
-/// styles.
+/// filters as [`builtin_open_filters`], without a second filter of that label, so a document
+/// can be picked for its swatches or graphic styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(builtin_open_filters())
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| f.0 != library_label))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
@@ -810,6 +900,53 @@ pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static
         .chain(std::iter::once(("Text", TEXT_EXTS)))
         .chain(std::iter::once(("RTF", RTF_EXTS)))
         .chain(std::iter::once(("Word", WORD_EXTS)))
+}
+
+/// File › Place's part for the installed importer plug-ins whose manifests set `place`: the
+/// extensions of "All placeable files" ([`PLACE_EXTS`], then theirs in plug-in id order) and one
+/// filter per such importer that has extensions left, under its name. An importer's extensions leave
+/// out those a built-in format reads, which File › Place reads with that format. Made once for each
+/// set of installed plug-ins, so it lives as long as the dialogs that hold it.
+fn importer_place_part() -> ImporterPart {
+    use vectorcraft_plugins::{import, registry};
+    static MADE: std::sync::Mutex<Option<(u64, ImporterPart)>> = std::sync::Mutex::new(None);
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let revision = registry::revision();
+    if let Some((r, part)) = made.as_ref()
+        && *r == revision
+    {
+        return part.clone();
+    }
+    let mut exts: Vec<&'static str> = PLACE_EXTS.to_vec();
+    let mut filters = Vec::new();
+    for p in import::installed().into_iter().filter(|p| p.manifest().place) {
+        let m = p.manifest();
+        let own: Vec<&'static str> =
+            m.extensions.iter().filter(|e| readable_format(e).is_none() && !PLACE_EXTS.contains(&e.as_str())).map(|e| registry::intern(e)).collect();
+        if own.is_empty() {
+            continue;
+        }
+        for &e in &own {
+            if !exts.contains(&e) {
+                exts.push(e);
+            }
+        }
+        let own: &'static [&'static str] = Box::leak(own.into_boxed_slice());
+        filters.push((registry::intern(&m.name), own));
+    }
+    let exts: &'static [&'static str] = if exts.len() == PLACE_EXTS.len() { PLACE_EXTS } else { Box::leak(exts.into_boxed_slice()) };
+    let part = (exts, filters);
+    *made = Some((revision, part.clone()));
+    part
+}
+
+/// File › Place's own dialog filters: [`place_filters`], with the extensions of the installed
+/// importer plug-ins that place their files in "All placeable files" and one filter per such
+/// importer after the others, under its name ([`places_with_importer`]). Pickers that relink an
+/// image use [`place_filters`].
+pub fn place_dialog_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    let (all, importers) = importer_place_part();
+    std::iter::once(("All placeable files", all)).chain(place_filters().skip(1)).chain(importers)
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
@@ -908,13 +1045,20 @@ pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
 /// (the title PDF, PNG and SVG metadata carry). A title of its own stays, and native files keep
 /// the stored title.
 pub fn has_own_title(doc: &vectorcraft_doc::Document) -> bool {
-    !doc.title.trim().is_empty() && !doc.title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    is_own_title(doc.info_title())
+}
+
+/// Is `title` one a person or a file gave, not blank and not the Untitled-N name New gives?
+pub(crate) fn is_own_title(title: &str) -> bool {
+    !title.trim().is_empty() && !title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub fn titled_for_export(doc: &vectorcraft_doc::Document, path: Option<&str>, format: &str) -> Option<vectorcraft_doc::Document> {
     let path = path.filter(|_| !has_own_title(doc) && !matches!(format, "vectorcraft" | "template" | "ai"))?;
     let mut d = doc.clone();
     d.title = file_stem(path);
+    // A File Info title that is no title of its own (blank, or an Untitled-N name) would hide it.
+    d.metadata.title = None;
     Some(d)
 }
 
@@ -955,6 +1099,9 @@ pub(super) fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         let mut v = f.to_json();
         if let Some(id) = vectorcraft_plugins::export::plugin_id(f.id) {
             v["plugin"] = json!(id);
+            if vectorcraft_plugins::import::by_format(f.id).is_some_and(|p| p.manifest().place) {
+                v["place"] = json!(true);
+            }
         }
         v
     };

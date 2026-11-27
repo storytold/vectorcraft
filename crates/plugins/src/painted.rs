@@ -7,8 +7,9 @@
 //! An effect on a fill may return only `fills`, one on a stroke only `strokes`.
 //!
 //! The result is checked whole before any of it is used ([`decode`]): every number finite and in
-//! range (nothing is clamped), every key known, and every swatch and pattern a paint names in the
-//! document ([`check_references`]). One fault refuses the whole result, naming the field.
+//! range (nothing is clamped), every key known, a gradient stop's `plates` only on a stop linked to
+//! a spot swatch, and every swatch and pattern a paint names in the document ([`check_references`]).
+//! One fault refuses the whole result, naming the field.
 
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
@@ -46,8 +47,8 @@ pub enum Scope {
 }
 
 /// Parses and checks a painted result: `{"objects": [...]}`, or `{"error": "message"}` when the
-/// plug-in declined. `rule` is the fill rule a piece without `fillRule` takes. Any other top-level
-/// key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
+/// plug-in declined. `rule` is the fill rule a piece without `fillRule` takes. A top-level `notice`
+/// is ignored. Any other top-level key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
 /// range or a paint of the wrong form refuses the whole result, naming the field.
 pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| out_err("output", format!("not JSON: {e}")))?;
@@ -55,8 +56,8 @@ pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> 
         return Err(e);
     }
     let top = v.as_object().ok_or_else(|| out_err("output", "expected {\"objects\": [...]}"))?;
-    if let Some(k) = top.keys().find(|k| !matches!(k.as_str(), "objects" | "error")) {
-        return Err(out_err(k, "a painted live effect returns only `objects`"));
+    if let Some(k) = top.keys().find(|k| !matches!(k.as_str(), "objects" | "error" | "notice")) {
+        return Err(out_err(k, "a painted live effect returns only `objects` and `notice`"));
     }
     let objects = top.get("objects").and_then(Value::as_array).ok_or_else(|| out_err("objects", "expected {\"objects\": [...]}"))?;
     if objects.len() > MAX_OBJECTS {
@@ -236,7 +237,8 @@ fn paint_keys(v: &Value, at: &str) -> Result<()> {
 }
 
 /// A paint as the filter form has it (`null`: none), checked rather than clamped: colors, tints,
-/// stops, opacities, midpoints and placements in range.
+/// stops, opacities, midpoints and placements in range, and a gradient stop's `plates` only on a
+/// stop linked to a swatch ([`check_references`] checks that the swatch is a spot swatch).
 fn paint(v: &Value, at: &str) -> Result<Paint> {
     if v.is_null() {
         return Ok(Paint::None);
@@ -264,6 +266,11 @@ fn paint(v: &Value, at: &str) -> Result<Paint> {
                 color(&s.color, &format!("{at}.color"))?;
                 for x in s.plates.iter().flatten() {
                     unit(*x, &format!("{at}.plates"), "a plate")?;
+                }
+                // Plates print beside the tint of the spot swatch the stop itself links to; a
+                // gradient's own `swatch` does not link its stops.
+                if s.plates.is_some() && s.swatch.is_none() {
+                    return Err(out_err(&format!("{at}.plates"), "`plates` requires a stop linked to a spot swatch"));
                 }
             }
             if stops.windows(2).any(|w| w[1].offset < w[0].offset) {
@@ -308,8 +315,9 @@ fn paint(v: &Value, at: &str) -> Result<Paint> {
 }
 
 /// Checks that every swatch a solid paint, gradient or gradient stop of `pieces` links to is a
-/// swatch of `doc`, and every pattern a pattern paint names is one of its patterns. Without a
-/// document (`None`), any swatch or pattern a piece names is refused.
+/// swatch of `doc`, that a gradient stop with `plates` links to a spot swatch, and every pattern a
+/// pattern paint names is one of its patterns. Without a document (`None`), any swatch or pattern a
+/// piece names is refused.
 pub fn check_references(pieces: &[Piece], doc: Option<&Document>) -> Result<()> {
     let swatch = |name: &Option<String>, at: &str| match name {
         Some(n) if doc.and_then(|d| d.swatch(n)).is_none() => Err(out_err(at, format!("the document has no swatch {n:?}"))),
@@ -321,7 +329,16 @@ pub fn check_references(pieces: &[Piece], doc: Option<&Document>) -> Result<()> 
             Paint::Solid { swatch: s, .. } => swatch(s, &format!("{at}.swatch")),
             Paint::Gradient(g) => {
                 swatch(&g.swatch, &format!("{at}.swatch"))?;
-                g.gradient.stops.iter().enumerate().try_for_each(|(i, s)| swatch(&s.swatch, &format!("{at}.gradient.stops[{i}].swatch")))
+                g.gradient.stops.iter().enumerate().try_for_each(|(i, s)| {
+                    let at = format!("{at}.gradient.stops[{i}]");
+                    swatch(&s.swatch, &format!("{at}.swatch"))?;
+                    match s.swatch.as_deref().and_then(|n| doc.and_then(|d| d.swatch(n))) {
+                        Some(w) if s.plates.is_some() && !w.spot => {
+                            Err(out_err(&format!("{at}.plates"), "`plates` requires a stop linked to a spot swatch"))
+                        }
+                        _ => Ok(()),
+                    }
+                })
             }
             Paint::Pattern { pattern, .. } if doc.and_then(|d| d.pattern(pattern)).is_none() => {
                 Err(out_err(&format!("{at}.pattern"), format!("the document has no pattern {pattern:?}")))

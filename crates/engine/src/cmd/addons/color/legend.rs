@@ -137,7 +137,7 @@ fn legend(s: &mut Session, p: &Value) -> Result<Value> {
     let parent = st.target_parent()?;
     let text_size = (size / 7.0).clamp(4.0, 12.0);
     let pad = (size / 12.0).clamp(1.0, 8.0);
-    let style = super::super::super::create::new_type_style(s, &json!({ "size": text_size }));
+    let style = super::super::super::create::new_type_style(s, &json!({ "size": text_size }), C)?;
     let count = swatches.len();
     // Each chip's fill links to its swatch, as paint.setFill {swatch} links art: editing a global or
     // spot swatch then recolours the legend too.

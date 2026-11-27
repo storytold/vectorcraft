@@ -56,9 +56,10 @@ pub(crate) fn object_bounds_transform(s: &Session, p: &Value, id: NodeId) -> Res
 /// direct-selected anchors are what changes ([`Bounds::Anchors`]).
 fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchors: bool) -> Result<Bounds> {
     check_numbers(p, &["x", "y", "width", "height", "reference"], "object.setBounds")?;
+    let refi = reference_index(p)?;
     let st = s.doc()?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.setBounds")?;
-    check_switches(p, &["proportional"], "object.setBounds")?;
+    check_switches(p, &["proportional", "interpolate"], "object.setBounds")?;
     let how = s.bounds_measure();
     if anchors
         && transforms_objects(p)
@@ -90,7 +91,6 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     let margins = |b: Rect| [g.x0 - b.x0, g.y0 - b.y0, b.x1 - g.x1, b.y1 - g.y1];
     let (m, all) = (margins(vs), margins(v));
     let fixed = [all[0] - m[0], all[1] - m[1], all[2] - m[2], all[3] - m[3]];
-    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4).min(8) as usize;
     let rp = vectorcraft_geom::reference_point(v, refi);
     let (w, h) = wanted_size(p, v);
     // The geometric scale that gives the visual size: margins grow by the strokes' scale `f`. It is
@@ -133,16 +133,16 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     // the objects differ, the members of groups and the objects in symbols' art included, and with
     // strokes that scale, when the sizes are out of proportion. The objects are then measured one
     // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects,
-    // objects with a butt-capped stroke along a segment at a slant, whose margins change with the
-    // segment's direction, and type measured by its glyphs, are measured as drawn after each scale
-    // tried instead ([`refit_drawn`]).
+    // objects with a stroke that stops at the corners of a segment at a slant (butt caps, bevel and
+    // miter joins), whose margins change with the segment's direction, and type measured by its
+    // glyphs, are measured as drawn after each scale tried instead ([`refit_drawn`]).
     let to_local = frame.to_doc().inverse();
     let drawn = || {
         by_glyphs
             || ids
                 .iter()
                 .filter_map(|id| d.node(*id))
-                .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_butt_stroke(&symbols, to_local))
+                .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_stroke_corners(&symbols, to_local))
     };
     // Without Use Preview Bounds the box has no margins (`v`, `vs` and `g` are one box, glyph ink
     // included), so the scales above are exact and nothing is refitted.
@@ -262,7 +262,7 @@ fn wanted_size(p: &Value, b: Rect) -> (f64, f64) {
 /// `b`, the box around the anchors (and the objects selected whole) square to the page, and only
 /// the anchors, their handles with them, and those objects move or scale.
 fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> Result<Value> {
-    let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4).min(8) as usize;
+    let refi = reference_index(p)?;
     let rp = vectorcraft_geom::reference_point(b, refi);
     let (w, h) = wanted_size(p, b);
     // A single anchor, or anchors in a line, have no size to scale on that side.
@@ -270,6 +270,14 @@ fn set_anchor_bounds(s: &mut Session, p: &Value, ids: Vec<NodeId>, b: Rect) -> R
     let scale = about(rp, Affine::scale_non_uniform(ratio(w, b.width()), ratio(h, b.height())));
     let to = Point::new(f64_or(p, "x", rp.x), f64_or(p, "y", rp.y));
     apply_transform(s, "Transform", ids, Affine::translate(to - rp) * scale, p, true)
+}
+
+fn reference_index(p: &Value) -> Result<usize> {
+    let reference = crate::cmd::number_or(p, "reference", 4.0, "object.setBounds")?;
+    if !reference.is_finite() || reference < 0.0 || reference.fract() != 0.0 {
+        return Err(crate::cmd::bad("object.setBounds", "`reference` must be a whole number"));
+    }
+    Ok(reference.min(8.0) as usize)
 }
 
 /// The visual box of `ids` square to `frame`, as [`Document::oriented_bounds`] measures it, with

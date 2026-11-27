@@ -16,8 +16,13 @@
 //!   the `JSINCLUDE` environment variable. A later `#includepath` replaces the list.
 //! - Files are read through the script's [`ScriptScope`]: a refused path ends the run, except a
 //!   `JSINCLUDE` folder outside the scope, which is passed over.
-//! - `#target` takes any value and changes nothing. `#targetengine` and `#engine` are refused as
-//!   unsupported, and any other `#name` as unknown; `//@name` with another name stays a comment.
+//! - `#target` takes any value and changes nothing. `#engine` is refused as unsupported, and any
+//!   other `#name` as unknown; `//@name` with another name stays a comment.
+//! - `#targetengine name` names the engine the script runs in ([`Expanded::engine`]). Only the
+//!   script itself may have one, at most once, and only before its first code or `#include` line:
+//!   blanks, comments and the other preprocessor lines may come before it. The name is an unquoted
+//!   name of ASCII letters, digits and `_` that does not start with a digit, or a quoted one of 1 to
+//!   [`MAX_ENGINE_NAME_BYTES`] bytes without control characters, compared as written.
 //! - The last `#strict on` or `#strict off` of the script and the files it includes sets the checks
 //!   for the whole run; without one they are off. A write to a property that has only a getter is
 //!   checked as a read-only one, the objects that take no new properties are those that are not
@@ -50,6 +55,8 @@ pub const MAX_TOTAL_BYTES: usize = 32 << 20;
 pub const MAX_PROBES: usize = 1024;
 /// The longest value a preprocessor line may have, in bytes.
 const MAX_VALUE_BYTES: usize = 4096;
+/// The longest name `#targetengine` may give, in bytes of UTF-8.
+pub const MAX_ENGINE_NAME_BYTES: usize = 64;
 
 /// Where the lines of an expanded source came from: file 0 is the file expanded, the others the
 /// files it included.
@@ -81,6 +88,13 @@ impl SourceMap {
         let name = self.files.get(seg.file).cloned().unwrap_or_else(|| Arc::from(""));
         (seg.file, name, seg.line.saturating_add(line - seg.out_line), column)
     }
+
+    /// The memory the map holds, in bytes: its lists and its file names, each name counted in full
+    /// even when another map shares it.
+    pub(crate) fn bytes(&self) -> usize {
+        let names: usize = self.files.iter().map(|f| f.len() + 2 * size_of::<usize>()).sum();
+        self.files.capacity() * size_of::<Arc<str>>() + self.segments.capacity() * size_of::<Segment>() + names
+    }
 }
 
 /// How a preprocessor failure ends the run.
@@ -107,12 +121,78 @@ pub(crate) struct Failure {
 }
 
 /// A source with its preprocessor lines read: the text to run, where its lines came from, the
-/// name its `#script` line gave, and what its last `#strict` line set (`None` without one).
+/// name its `#script` line gave, what its last `#strict` line set (`None` without one), and the
+/// engine its `#targetengine` line named, with that line's line and column.
 pub(crate) struct Expanded {
     pub source: String,
     pub map: SourceMap,
     pub name: Option<String>,
     pub strict: Option<bool>,
+    pub engine: Option<(String, u32, u32)>,
+}
+
+/// What the preprocessor lines of a file have named so far: its `#script` name and its engine, and
+/// whether code or an `#include` line has come before.
+#[derive(Default)]
+struct Named {
+    name: Option<String>,
+    engine: Option<(String, u32, u32)>,
+    code_seen: bool,
+}
+
+/// Are `units` only blanks and comments?
+fn only_blanks_and_comments(units: &[u16]) -> bool {
+    let mut i = 0;
+    while let Some(&u) = units.get(i) {
+        match u {
+            0x2F if units.get(i + 1) == Some(&0x2F) => {
+                while units.get(i).is_some_and(|&c| !matches!(c, 0x0A | 0x0D | 0x2028 | 0x2029)) {
+                    i += 1;
+                }
+            }
+            0x2F if units.get(i + 1) == Some(&0x2A) => {
+                let Some(end) = units.get(i + 2..).and_then(|rest| rest.windows(2).position(|w| w == [0x2A, 0x2F])) else { return false };
+                i += end + 4;
+            }
+            0xFEFF => i += 1,
+            u if char::from_u32(u32::from(u)).is_some_and(char::is_whitespace) => i += 1,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// The engine name of a `#targetengine` line's value `value` (as written, quotes included), or what
+/// is wrong with it.
+fn engine_name(value: &str) -> Result<String, &'static str> {
+    let name = match value.chars().next() {
+        None => return Err("needs a name"),
+        Some(q @ ('"' | '\'')) => {
+            let inner = value.get(1..).and_then(|v| v.strip_suffix(q)).ok_or("needs a closing quote after the name")?;
+            if inner.contains(q) {
+                return Err("takes one name");
+            }
+            if inner.chars().any(char::is_control) {
+                return Err("needs a name without control characters");
+            }
+            inner
+        }
+        _ => {
+            let mut chars = value.chars();
+            let first_ok = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+            if !first_ok || !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return Err("needs a name of letters, digits and _, or a quoted name");
+            }
+            value
+        }
+    };
+    if name.is_empty() {
+        return Err("needs a name");
+    }
+    if name.len() > MAX_ENGINE_NAME_BYTES {
+        return Err("needs a name of at most 64 bytes");
+    }
+    Ok(name.to_string())
 }
 
 /// A file being run: its name for people and the folder its relative paths start from (none for a
@@ -137,6 +217,15 @@ pub(crate) struct Files {
     levels: usize,
     /// The files `$.evalFile` is running, the script first.
     frames: Vec<Frame>,
+    /// The run reads ECMAScript 2015 ([`es2015_script`]): its files are parsed that way.
+    es2015: bool,
+}
+
+/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
+/// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
+/// ECMAScript 5.1 with the ExtendScript extensions.
+pub(crate) fn es2015_script(path: Option<&str>) -> bool {
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js"))
 }
 
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
@@ -215,12 +304,14 @@ fn display(path: &Path) -> Arc<str> {
 
 impl Files {
     /// The files of a run of the script at `path` (`None` for a script given as text), with the
-    /// `JSINCLUDE` folders `jsinclude`.
-    pub(crate) fn new(path: Option<&str>, jsinclude: Vec<PathBuf>) -> Self {
-        let real = path.and_then(|p| std::fs::canonicalize(p).ok());
+    /// `JSINCLUDE` folders `jsinclude`. `checked` is the script's real path when the read of its text
+    /// found it, which the run's folder then comes from; without it, `path` is looked up.
+    pub(crate) fn new(path: Option<&str>, checked: Option<PathBuf>, jsinclude: Vec<PathBuf>) -> Self {
+        let scope_of_checked = checked.as_deref().and_then(Path::parent).map(|d| ScriptScope::of_real_folder(d.to_path_buf()));
+        let real = checked.or_else(|| path.and_then(|p| std::fs::canonicalize(p).ok()));
         let dir = real.as_deref().and_then(folder_of);
         Self {
-            scope: dir.as_deref().map(ScriptScope::of_folder).unwrap_or_default(),
+            scope: scope_of_checked.or_else(|| dir.as_deref().map(ScriptScope::of_folder)).unwrap_or_default(),
             jsinclude,
             include_path: Vec::new(),
             files: 0,
@@ -229,7 +320,13 @@ impl Files {
             chain: real.into_iter().collect(),
             levels: 0,
             frames: vec![Frame { shown: Arc::from(path.unwrap_or_default()), dir }],
+            es2015: es2015_script(path),
         }
+    }
+
+    /// The options a file of this run is parsed with, preprocessor lines aside.
+    pub(crate) fn options(&self) -> Options {
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, e4x: true, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.
@@ -241,7 +338,8 @@ impl Files {
         std::env::var("JSINCLUDE").map(|v| v.split(';').map(str::trim).filter(|p| !p.is_empty()).map(PathBuf::from).collect()).unwrap_or_default()
     }
 
-    /// The file being run now, as `$.fileName` gives it (empty for a script given as text).
+    /// The file being run now: the script, or the file `$.evalFile` is running (empty for a script
+    /// given as text). `$.fileName` gives it to code that `eval` or `Function` compiled.
     pub(crate) fn file_name(&self) -> String {
         self.frames.last().map(|f| f.shown.to_string()).unwrap_or_default()
     }
@@ -249,6 +347,11 @@ impl Files {
     /// The `#includepath` list, as `$.includePath` gives it.
     pub(crate) fn include_path(&self) -> String {
         self.include_path.join(";")
+    }
+
+    /// The folders the run's own files are read from.
+    pub(crate) fn scope(&self) -> &ScriptScope {
+        &self.scope
     }
 
     /// The script's own text, `text`, with its preprocessor lines read.
@@ -342,8 +445,8 @@ impl Files {
     /// its `#script` line names the run.
     fn expand(&mut self, shown: Arc<str>, dir: Option<PathBuf>, text: &str, script: bool) -> Result<Expanded, Failure> {
         let mut out = Out { units: Vec::with_capacity(text.len()), line: 1, column: 0, after_cr: false, map: SourceMap::default(), strict: None };
-        let mut name = None;
-        self.file(&mut out, shown, dir.as_deref(), text, script, &mut name)?;
+        let mut named = Named::default();
+        self.file(&mut out, shown, dir.as_deref(), text, script, &mut named)?;
         let source = String::from_utf16(&out.units).map_err(|_| Failure {
             kind: FailKind::Syntax,
             message: "the script is not valid text".into(),
@@ -352,20 +455,12 @@ impl Files {
             line: 0,
             column: 0,
         })?;
-        Ok(Expanded { source, map: out.map, name, strict: out.strict })
+        Ok(Expanded { source, map: out.map, name: named.name, strict: out.strict, engine: named.engine })
     }
 
     /// Adds file `shown` (in folder `dir`, with text `text`) to `out`, its included files in place
     /// of their lines.
-    fn file(
-        &mut self,
-        out: &mut Out,
-        shown: Arc<str>,
-        dir: Option<&Path>,
-        text: &str,
-        script: bool,
-        name: &mut Option<String>,
-    ) -> Result<(), Failure> {
+    fn file(&mut self, out: &mut Out, shown: Arc<str>, dir: Option<&Path>, text: &str, script: bool, named: &mut Named) -> Result<(), Failure> {
         let index = out.map.files.len();
         out.map.files.push(shown.clone());
         let units: Vec<u16> = text.encode_utf16().collect();
@@ -376,7 +471,7 @@ impl Files {
             return Ok(());
         }
         let fail = |kind, message: String, line, column| Failure { kind, message, index, file: shown.clone(), line, column };
-        let options = Options { preprocessor_lines: true, max_source_units: MAX_TOTAL_BYTES, ..Options::default() };
+        let options = Options { preprocessor_lines: true, ..self.options() };
         let program = vectorcraft_js::parse_utf16(&units, &options).map_err(|e| fail(FailKind::Syntax, e.message, e.line, e.column))?;
         let mut cursor = 0usize;
         for d in &program.directives {
@@ -385,7 +480,11 @@ impl Files {
                 units.get(..start).and_then(|u| u.iter().rposition(|&c| matches!(c, 0x0A | 0x0D | 0x2028 | 0x2029))).map_or(0, |i| i + 1);
             let column = u32::try_from(start - line_start + 1).unwrap_or(u32::MAX);
             let at = |kind, message: String| fail(kind, message, d.line, column);
-            out.emit(units.get(cursor..start).unwrap_or_default());
+            let before = units.get(cursor..start).unwrap_or_default();
+            if !named.code_seen && !only_blanks_and_comments(before) {
+                named.code_seen = true;
+            }
+            out.emit(before);
             cursor = end;
             let label = format!("{}{}", d.form, d.name);
             if d.value.len() > MAX_VALUE_BYTES {
@@ -397,11 +496,12 @@ impl Files {
                     if value.is_empty() {
                         return Err(at(FailKind::Syntax, format!("{label} needs a file name")));
                     }
+                    named.code_seen = true;
                     let (real, bytes) = self.open(value, dir, true).map_err(|(kind, message)| at(kind, message))?;
                     let included = self.admit(&real, bytes, value).map_err(|(kind, message)| at(kind, message))?;
                     self.chain.push(real.clone());
                     self.levels += 1;
-                    let r = self.file(out, display(&real), folder_of(&real).as_deref(), &included, false, name);
+                    let r = self.file(out, display(&real), folder_of(&real).as_deref(), &included, false, named);
                     self.chain.pop();
                     self.levels -= 1;
                     r?;
@@ -416,7 +516,7 @@ impl Files {
                         return Err(at(FailKind::Syntax, format!("{label} needs a name")));
                     }
                     if script && index == 0 {
-                        *name = Some(value.to_string());
+                        named.name = Some(value.to_string());
                     }
                 }
                 Some(DirectiveName::Target) => {
@@ -429,7 +529,19 @@ impl Files {
                     "on" => out.strict = Some(true),
                     _ => return Err(at(FailKind::Syntax, format!("{label} takes on or off"))),
                 },
-                Some(DirectiveName::TargetEngine) => return Err(at(FailKind::Syntax, format!("unsupported script directive: {label}"))),
+                Some(DirectiveName::TargetEngine) => {
+                    if !script || index > 0 {
+                        return Err(at(FailKind::Syntax, format!("{label} may only be in the script itself, not in a file it runs")));
+                    }
+                    if named.engine.is_some() {
+                        return Err(at(FailKind::Syntax, format!("the script has more than one {label} line")));
+                    }
+                    if named.code_seen {
+                        return Err(at(FailKind::Syntax, format!("{label} must come before the script's code and #include lines")));
+                    }
+                    let engine = engine_name(&d.value).map_err(|why| at(FailKind::Syntax, format!("{label} {why}")))?;
+                    named.engine = Some((engine, d.line, column));
+                }
                 None if d.name.eq_ignore_ascii_case("engine") => {
                     return Err(at(FailKind::Syntax, format!("unsupported script directive: {label}")));
                 }

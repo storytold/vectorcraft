@@ -51,6 +51,53 @@ fn sample_color_with_a_stop_recolours_that_stop_in_one_undo_step() {
     );
 }
 
+/// With `stop` and objects in `ids`, the stop is recolored in the first object's gradient, not in
+/// the gradient behind the proxy: the selection's, or the Live Paint Bucket's while it is active.
+#[test]
+fn sample_color_with_a_stop_and_ids_recolours_the_first_given_objects_gradient() {
+    let mut s = session();
+    let target = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
+    let three = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#888888"}, {"offset": 1, "color": "#000000"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": three}})).unwrap();
+    let selected = rect(&mut s, 200.0, 10.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    s.execute("paint.sampleColor", &json!({"color": "#ff0000", "stop": 2, "ids": [target.0]})).unwrap();
+    assert_eq!(stop_hexes(&s, target, false), ["#ffffff", "#888888", "#ff0000"], "the given object's three stops");
+    assert_eq!(stop_hexes(&s, selected, false), ["#ffffff", "#000000"], "the selection");
+    // The bucket's solid fill, and then a two-stop gradient of its own.
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("paint.sampleColor", &json!({"color": "#0000ff", "stop": 0, "ids": [target.0]})).unwrap();
+    assert_eq!(stop_hexes(&s, target, false), ["#0000ff", "#888888", "#ff0000"], "under the bucket's solid fill");
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    s.execute("paint.sampleColor", &json!({"color": "#00ffff", "stop": 1, "ids": [target.0]})).unwrap();
+    assert_eq!(stop_hexes(&s, target, false), ["#0000ff", "#00ffff", "#ff0000"], "under the bucket's gradient");
+    // A given object without a gradient has no stop to recolor.
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [selected.0]})).unwrap();
+    let err = s.execute("paint.sampleColor", &json!({"color": "#0000ff", "stop": 0, "ids": [selected.0]})).unwrap_err();
+    assert!(err.to_string().contains("not a gradient"), "{err}");
+    // A member of a compound path: the compound path's gradient, which the edit changes.
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let (a, b) = (rect(&mut s, 10.0, 300.0, 50.0, 50.0), rect(&mut s, 100.0, 300.0, 50.0, 50.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = s.doc().unwrap().selection.objects[0];
+    s.execute("paint.setFill", &json!({"gradient": {"stops": three}, "ids": [compound.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
+    s.execute("paint.sampleColor", &json!({"color": "#ff0000", "stop": 2, "ids": [a.0]})).unwrap();
+    assert_eq!(stop_hexes(&s, compound, false), ["#ffffff", "#888888", "#ff0000"], "the compound path's three stops");
+    // A group: the stops of its first painted object, which every painted object of the group takes.
+    let (c, d) = (rect(&mut s, 10.0, 400.0, 50.0, 50.0), rect(&mut s, 100.0, 400.0, 50.0, 50.0));
+    s.execute("paint.setFill", &json!({"gradient": {"stops": three}, "ids": [c.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [d.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [c.0, d.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
+    s.execute("paint.sampleColor", &json!({"color": "#0000ff", "stop": 0, "ids": [group.0]})).unwrap();
+    assert_eq!(stop_hexes(&s, c, false), ["#0000ff", "#888888", "#000000"], "the group's first object");
+    assert_eq!(stop_hexes(&s, d, false), ["#0000ff", "#888888", "#000000"], "the group's other object");
+}
+
 fn fill_geom(s: &Session, id: NodeId) -> Option<GradientGeom> {
     match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
         Paint::Gradient(g) => g.geom,
@@ -130,6 +177,44 @@ fn graphic_styles_keep_gradients_relative_to_the_bounds() {
     .unwrap();
     s.execute("graphicStyle.apply", &json!({"name": "Old"})).unwrap();
     assert!(close(fill_geom(&s, dst).unwrap().start, Point::new(0.2, 0.5)), "legacy styles are applied as stored");
+}
+
+/// Applying a style with a placed gradient to objects of different sizes gives each its own
+/// appearance with the gradient on its own bounds, through undo and redo; a style from an older
+/// file applies the same stored gradient to each, as one shared appearance.
+#[test]
+fn a_style_places_its_gradient_on_each_object() {
+    let (mut s, src, dst) = source_and_target();
+    let other = rect(&mut s, 100.0, 300.0, 50.0, 200.0);
+    s.execute("select.set", &json!({"ids": [src.0]})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Glow"})).unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Glow", "ids": [dst.0, other.0]})).unwrap();
+    let placed = |s: &Session| {
+        let (g, h) = (fill_geom(s, dst).unwrap(), fill_geom(s, other).unwrap());
+        close(g.start, Point::new(540.0, 60.0))
+            && close(g.end, Point::new(660.0, 60.0))
+            && close(h.start, Point::new(110.0, 400.0))
+            && close(h.end, Point::new(140.0, 400.0))
+    };
+    let shared = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        vectorcraft_doc::Shared::ptr_eq(&d.node(dst).unwrap().appearance, &d.node(other).unwrap().appearance)
+    };
+    assert!(placed(&s) && !shared(&s));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(placed(&s) && !shared(&s));
+
+    let glow = s.doc().unwrap().doc.graphic_styles.iter().find(|g| g.name == "Glow").cloned().unwrap();
+    let legacy = vectorcraft_doc::GraphicStyle { name: "Old".into(), id: 0, unit_box: false, ..glow };
+    s.edit("Add", |d, _| {
+        d.graphic_styles.push(legacy);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Old", "ids": [dst.0, other.0]})).unwrap();
+    assert!(shared(&s));
+    assert!(close(fill_geom(&s, other).unwrap().start, Point::new(0.2, 0.5)), "legacy styles are applied as stored");
 }
 
 #[test]

@@ -78,7 +78,7 @@ fn native_versions_and_compression_keep_the_origin_and_old_files_default_to_zero
         assert_eq!(back.ruler_origin_for(0), doc.ruler_origin_for(0), "v{version}, compression {compress}");
         assert_eq!((back.rulers, &back.artboard_ruler_origins), (doc.rulers, &doc.artboard_ruler_origins), "v{version}, compression {compress}");
         assert_eq!(back.layers, doc.layers);
-        assert_eq!(back.guides, doc.guides);
+        assert_eq!(back.ruler_guides(), doc.ruler_guides());
     }
 }
 

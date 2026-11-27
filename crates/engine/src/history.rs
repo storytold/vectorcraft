@@ -25,12 +25,19 @@ pub struct HistoryEntry {
     next: usize,
     /// The template and name `label` was made from ([`Session::edit_named`]).
     pub(crate) named: Option<NamedStep>,
+    /// The built-in effect the step applied or edited, when the step is named after it
+    /// ([`Session::edit_effect`]).
+    pub(crate) effect: Option<&'static str>,
     /// A number no other step takes ([`History::step`]).
     serial: u64,
-    /// Original and converted new-art colors, only for steps that change document color mode.
+    /// Original and changed new-art paints, only for steps that change them: a document color mode
+    /// change, and a pattern Cancel, Delete or rename that clears or renames a pattern paint.
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
     /// Owned new-art snapshots included in both directional estimates.
     color_mode_bytes: usize,
+    /// The state that changes without an undo step as the next state had it: undo and redo compare
+    /// it with `doc` to tell what the step changed.
+    pub(crate) unrecorded: Arc<crate::cmd::Unrecorded>,
 }
 
 impl Clone for HistoryEntry {
@@ -45,9 +52,11 @@ impl Clone for HistoryEntry {
             next_bytes: self.next_bytes,
             next: self.next,
             named: self.named.clone(),
+            effect: self.effect,
             serial: self.serial,
             color_mode_paints: self.color_mode_paints.clone(),
             color_mode_bytes: self.color_mode_bytes,
+            unrecorded: self.unrecorded.clone(),
         }
     }
 }
@@ -56,6 +65,12 @@ impl Clone for HistoryEntry {
 fn next_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The name of the undo step that applies or edits built-in effect `id`: its menu label without
+/// the ellipsis. `None` for an id no built-in effect has.
+pub(crate) fn effect_step_label(id: &str) -> Option<&'static str> {
+    vectorcraft_render::effects::built_in_effect(id).map(|(_, label)| label.trim_end_matches('…'))
 }
 
 /// A step name made by filling the `{name}` placeholder of a template with a name
@@ -90,9 +105,11 @@ impl HistoryEntry {
             next_bytes,
             next: std::ptr::from_ref(next) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(next)),
         }
     }
 
@@ -101,6 +118,13 @@ impl HistoryEntry {
     /// since it was recorded.
     pub fn named(&self) -> Option<&NamedStep> {
         self.named.as_ref().filter(|n| n.label() == self.label)
+    }
+
+    /// The id of the built-in effect the step applied or edited, while the step's label is still
+    /// the effect's name: `None` for any other step, and for one whose label was changed since it
+    /// was recorded.
+    pub fn effect(&self) -> Option<&'static str> {
+        self.effect.filter(|id| effect_step_label(id) == Some(self.label.as_str()))
     }
 
     /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
@@ -122,9 +146,11 @@ impl HistoryEntry {
             next_bytes: costs.bytes,
             next: Arc::as_ptr(now) as usize,
             named: None,
+            effect: None,
             serial: next_serial(),
             color_mode_paints: None,
             color_mode_bytes: 0,
+            unrecorded: Arc::new(crate::cmd::Unrecorded::of(now)),
         }
     }
 
@@ -241,7 +267,7 @@ impl History {
 
     /// The document at row `row` of the History panel, `now` being the document now: the rows before
     /// it are the undo steps, oldest first, and the rows after it the redo steps, nearest first.
-    pub(crate) fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
+    pub fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
         let current = self.undo.len();
         match row.cmp(&current) {
             std::cmp::Ordering::Less => self.undo.get(row).map(|e| &e.doc),
@@ -336,6 +362,7 @@ impl History {
             e.next_bytes = after.saturating_add(e.color_mode_bytes);
             e.next = std::ptr::from_ref(now) as usize;
             e.serial = next_serial();
+            e.unrecorded = Arc::new(crate::cmd::Unrecorded::of(now));
         }
     }
 }

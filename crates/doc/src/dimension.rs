@@ -112,6 +112,66 @@ pub enum ArrowStyle {
     None,
 }
 
+impl ArrowStyle {
+    /// The stroke arrowhead drawn at each end of the dimension line, or None for no head.
+    pub fn arrowhead(self) -> Option<crate::Arrowhead> {
+        match self {
+            Self::Filled => Some(crate::Arrowhead::Triangle),
+            Self::Open => Some(crate::Arrowhead::TriangleOpen),
+            Self::Tick => Some(crate::Arrowhead::Slash),
+            Self::None => None,
+        }
+    }
+}
+
+/// `arrowHead`: null, or a built-in stroke arrowhead by its name (`Barbed`, as `stroke.set` takes
+/// it). A custom arrowhead and an unknown name are refused.
+mod arrow_head {
+    use crate::Arrowhead;
+    use serde::de::{Error, IntoDeserializer, Visitor};
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Arrowhead>, D::Error> {
+        deserializer.deserialize_option(Name)
+    }
+
+    /// Reads the name where it is, without a copy of its own.
+    struct Name;
+
+    impl<'de> Visitor<'de> for Name {
+        type Value = Option<Arrowhead>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a built-in stroke arrowhead name or null")
+        }
+
+        fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+            deserializer.deserialize_str(self)
+        }
+
+        fn visit_str<E: Error>(self, name: &str) -> Result<Self::Value, E> {
+            // No built-in name is this long, so a longer one is refused without parsing it.
+            let parsed: Result<Arrowhead, serde::de::value::Error> =
+                if name.len() > 64 { Err(serde::de::value::Error::custom("too long")) } else { Arrowhead::deserialize(name.into_deserializer()) };
+            match parsed {
+                Ok(head) if !matches!(head, Arrowhead::Custom(_)) => Ok(Some(head)),
+                _ => {
+                    let shown: String = name.chars().take(64).collect();
+                    Err(E::custom(format!("Unknown arrowhead {shown}: a built-in stroke arrowhead name or null")))
+                }
+            }
+        }
+    }
+}
+
 /// Where the label sits across the dimension line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -145,6 +205,12 @@ pub struct DimensionOptions {
     pub line_type: LineType,
     pub line_color: [u8; 3],
     pub arrow_style: ArrowStyle,
+    /// A built-in stroke arrowhead drawn at both ends in place of `arrow_style`'s head. Versions
+    /// that have the stroke arrowhead but do not read this keep the saved arrows until they draw
+    /// the dimension again, and then draw `arrow_style`. Versions without the stroke arrowhead do
+    /// not open the file.
+    #[serde(deserialize_with = "arrow_head::deserialize", skip_serializing_if = "Option::is_none")]
+    pub arrow_head: Option<crate::Arrowhead>,
     pub arrow_scale: f64,
     pub extension_weight: f64,
     pub extension_type: LineType,
@@ -174,6 +240,7 @@ impl Default for DimensionOptions {
             line_type: LineType::Solid,
             line_color: [0, 0, 0],
             arrow_style: ArrowStyle::Filled,
+            arrow_head: None,
             arrow_scale: 100.0,
             extension_weight: 0.5,
             extension_type: LineType::Solid,
@@ -197,7 +264,8 @@ impl DimensionOptions {
     /// tolerantly so a newer version's options don't stop a document opening.
     pub fn from_params(v: serde_json::Value) -> Result<Self, String> {
         if let (Some(given), Ok(serde_json::Value::Object(known))) = (v.as_object(), serde_json::to_value(Self::default()))
-            && let Some(k) = given.keys().find(|k| !known.contains_key(*k))
+            // `arrowHead` is left out of the saved options when it is null.
+            && let Some(k) = given.keys().find(|k| !known.contains_key(*k) && k.as_str() != "arrowHead")
         {
             return Err(format!("Unknown dimension option {k}"));
         }
@@ -216,8 +284,16 @@ impl DimensionOptions {
         }
         Ok(f)
     }
+    /// The stroke arrowhead drawn at each end of the dimension line: `arrow_head`, or else the
+    /// arrow style's head.
+    pub fn arrowhead(&self) -> Option<crate::Arrowhead> {
+        self.arrow_head.clone().or_else(|| self.arrow_style.arrowhead())
+    }
     pub fn validate(&self) -> Result<(), String> {
         self.factor()?;
+        if matches!(self.arrow_head, Some(crate::Arrowhead::Custom(_))) {
+            return Err("A dimension's arrowhead is a built-in stroke arrowhead".into());
+        }
         if self.precision > 6 {
             return Err("Choose a precision from 0 to 6".into());
         }
@@ -313,6 +389,12 @@ pub enum DimensionSource {
         #[serde(default, rename = "freeB", skip_serializing_if = "Option::is_none")]
         free_b: Option<FreePoint>,
     },
+    /// A whole path, measured between its outermost points ([`extent`]): the leftmost and the
+    /// rightmost while the dimension is horizontal or aligned, the topmost and the bottommost while
+    /// it is vertical. Versions without this source do not open the file.
+    Extent {
+        node: NodeId,
+    },
 }
 
 impl DimensionSource {
@@ -320,7 +402,7 @@ impl DimensionSource {
         match self {
             Self::Segment { edge } | Self::Arc { edge } => vec![edge.node],
             Self::Angle { first, second } => vec![first.node, second.node],
-            Self::Circle { node } => vec![*node],
+            Self::Circle { node } | Self::Extent { node } => vec![*node],
             Self::Points { a, b, vertex, free_a, free_b } => [a, b, vertex]
                 .into_iter()
                 .filter_map(|p| p.as_ref().map(|r| r.node))
@@ -331,7 +413,7 @@ impl DimensionSource {
     /// Anchor indexes cannot safely follow a topology replacement. Ordinary moves and handle
     /// edits keep their topology and remain linked.
     pub fn topology_changed(&self, before: &Document, after: &Document) -> bool {
-        if matches!(self, Self::Circle { .. }) {
+        if matches!(self, Self::Circle { .. } | Self::Extent { .. }) {
             return false;
         }
         self.nodes().iter().any(|id| {
@@ -342,9 +424,19 @@ impl DimensionSource {
             old.is_some() && old != counts(after)
         })
     }
+    /// Whether a path it measures differs between `before` and `after`, or is in only one of them.
+    /// A node without a path, or missing from both, counts as changed.
+    pub fn art_changed(&self, before: &Document, after: &Document) -> bool {
+        self.nodes().into_iter().any(|id| match (before.node(id), after.node(id)) {
+            (Some(old), Some(new)) => old.path_data().is_none() || (!std::ptr::eq(old, new) && old.path_data() != new.path_data()),
+            _ => true,
+        })
+    }
     /// The map that took the measured art from `before` to `after`, when every path it measures
     /// went through one [`art_transform`] that reflects it (a negative determinant). None when a
-    /// measured path is unchanged, or when two of them went through different maps.
+    /// measured path is unchanged, or when two of them went through different maps. None for a
+    /// dimension of a whole path whose path's box through its outermost points stays where it
+    /// was, as after its direction is reversed.
     pub fn reflection(&self, before: &Document, after: &Document) -> Option<Affine> {
         let mut first: Option<Affine> = None;
         for id in self.nodes() {
@@ -353,6 +445,9 @@ impl DimensionSource {
                 return None;
             }
             let xf = fitted(before, after, id, |xf| xf.determinant() < 0.0)?;
+            if matches!(self, Self::Extent { .. }) && same_extents(before, after, id) {
+                return None;
+            }
             match first {
                 None => first = Some(xf),
                 Some(f) => {
@@ -683,19 +778,22 @@ impl Dimension {
     /// outside them as it was, on the same side: the gap is measured from the outermost point
     /// on the line's side, so the line stays clear of art that turns. A line that lay between
     /// the two points keeps its distance from the first point.
-    pub fn keep_gap(&mut self, old: &Dimension) {
+    /// With `docs`, the documents `old` and this dimension were read from, the gap of a dimension of
+    /// a whole path is measured from the whole path ([`Self::span`]), also when only parts of the
+    /// path other than its measured points moved, and also when the dimension is aligned (each
+    /// along its own normal).
+    pub fn keep_gap(&mut self, old: &Dimension, docs: Option<(&Document, &Document)>) {
+        let whole = docs.is_some() && matches!(self.source, Some(DimensionSource::Extent { .. }));
         if self.mode != DimensionMode::Linear
-            || self.orientation == Orientation::Aligned
+            || (self.orientation == Orientation::Aligned && !whole)
             || old.orientation != self.orientation
-            || (self.a, self.b) == (old.a, old.b)
+            || ((self.a, self.b) == (old.a, old.b) && !whole)
         {
             return;
         }
-        let n = self.normal();
-        let across = |p: Point| p.to_vec2().dot(n);
-        let line = across(old.a) + old.offset;
-        let (low, high) = (across(old.a).min(across(old.b)), across(old.a).max(across(old.b)));
-        let (new_low, new_high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let line = old.a.to_vec2().dot(old.normal()) + old.offset;
+        let (low, high) = old.span(docs.map(|(before, _)| before));
+        let (new_low, new_high) = self.span(docs.map(|(_, after)| after));
         let at = if line >= high {
             new_high + (line - high)
         } else if line <= low {
@@ -703,7 +801,7 @@ impl Dimension {
         } else {
             return;
         };
-        let offset = at - across(self.a);
+        let offset = at - self.a.to_vec2().dot(self.normal());
         if offset.is_finite() && offset.abs() <= 1e6 {
             self.offset = offset;
         }
@@ -711,8 +809,9 @@ impl Dimension {
     /// A linear dimension whose art was reflected, its points now moved from `old`'s: its line goes
     /// to the side of the points that `image` (where the reflection put `old`'s line) is on, as far
     /// past the outermost point on that side as `old`'s line was. A line that lay between the two
-    /// points is left as it is.
-    pub fn mirror_line(&mut self, old: &Dimension, image: Point) {
+    /// points is left as it is. With `docs`, as in [`Self::keep_gap`], a dimension of a whole path
+    /// measures from the whole path.
+    pub fn mirror_line(&mut self, old: &Dimension, image: Point, docs: Option<(&Document, &Document)>) {
         if self.mode != DimensionMode::Linear || old.mode != DimensionMode::Linear {
             return;
         }
@@ -720,7 +819,7 @@ impl Dimension {
             let n = old.normal();
             let across = |p: Point| p.to_vec2().dot(n);
             let line = across(old.a) + old.offset;
-            let (low, high) = (across(old.a).min(across(old.b)), across(old.a).max(across(old.b)));
+            let (low, high) = old.span(docs.map(|(before, _)| before));
             if line >= high {
                 line - high
             } else if line <= low {
@@ -731,11 +830,23 @@ impl Dimension {
         };
         let n = self.normal();
         let across = |p: Point| p.to_vec2().dot(n);
-        let (low, high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
+        let (low, high) = self.span(docs.map(|(_, after)| after));
         let at = if 2.0 * across(image) >= low + high { high + gap } else { low - gap };
         let offset = at - across(self.a);
         if offset.is_finite() && offset.abs() <= 1e6 {
             self.offset = offset;
+        }
+    }
+    /// Where a linear dimension's art lies along its normal, lowest and highest: its two points,
+    /// or, for a dimension of a whole path read from `doc`, the whole path ([`reach`]), so that
+    /// the whole path is on one side of a line outside the span.
+    fn span(&self, doc: Option<&Document>) -> (f64, f64) {
+        let n = self.normal();
+        let (a, b) = (self.a.to_vec2().dot(n), self.b.to_vec2().dot(n));
+        let (low, high) = (a.min(b), a.max(b));
+        match (doc, &self.source) {
+            (Some(doc), Some(DimensionSource::Extent { node })) => reach(doc, *node, n).map_or((low, high), |(l, h)| (low.min(l), high.max(h))),
+            _ => (low, high),
         }
     }
     /// Whether a linear dimension's line lies strictly between its two points along the normal.
@@ -748,30 +859,67 @@ impl Dimension {
     /// Makes a linear dimension measure in `orientation`, with its line on the side of the points
     /// it was on. The line goes through the middle of the old line when that point lies outside
     /// the two points along the new normal; otherwise it lies as far past the outermost point on
-    /// that side as the old line lay from its points.
-    pub fn set_orientation(&mut self, orientation: Orientation) {
+    /// that side as the old line lay from its points. A dimension of a whole path
+    /// ([`DimensionSource::Extent`]) first reads from `doc` the outermost points it measures in the
+    /// new orientation, and its line keeps its distance from the whole path ([`Self::span`]), on
+    /// the side the middle of the old line is on. A line that lay across the path goes as far past
+    /// the path as it lay from its first point. For such a dimension it is an error when the path
+    /// no longer exists, or when the line would lie more than 1,000,000 pt from its first point,
+    /// and the dimension is then left as it was.
+    pub fn set_orientation(&mut self, orientation: Orientation, doc: &Document) -> Result<(), String> {
         if self.mode != DimensionMode::Linear || self.orientation == orientation {
             self.orientation = orientation;
-            return;
+            return Ok(());
         }
-        let (handle, gap) = (self.handle(), self.offset.abs());
-        self.orientation = orientation;
-        let n = self.normal();
-        let across = |p: Point| p.to_vec2().dot(n);
-        let (low, high) = (across(self.a).min(across(self.b)), across(self.a).max(across(self.b)));
-        let h = across(handle);
-        let at = if h >= high || h <= low {
+        let mut next = self.clone();
+        let (handle, mut gap) = (next.handle(), next.offset.abs());
+        if let Some(DimensionSource::Extent { .. }) = &next.source {
+            // Measured from the whole path, relative to the first point, which the line is
+            // `offset` from. A line on the path's edge, to within the rounding of the
+            // projections, is outside it.
+            let n = next.normal();
+            let base = next.a.to_vec2().dot(n);
+            let (low, high) = next.span(Some(doc));
+            let eps = 8.0 * f64::EPSILON * ((next.a.x * n.x).abs() + (next.a.y * n.y).abs() + low.abs() + high.abs());
+            let (low, high, line) = (low - base, high - base, next.offset);
+            gap = if line >= high - eps {
+                (line - high).max(0.0)
+            } else if line <= low + eps {
+                (low - line).max(0.0)
+            } else {
+                gap
+            };
+        }
+        next.orientation = orientation;
+        if let Some(DimensionSource::Extent { node }) = &next.source {
+            (next.a, next.b) = extent(doc, *node, orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
+        }
+        // Along the new normal, relative to the new first point, so that the result is the offset.
+        let n = next.normal();
+        let base = next.a.to_vec2().dot(n);
+        let (low, high) = next.span(Some(doc));
+        let (low, high, h) = (low - base, high - base, handle.to_vec2().dot(n) - base);
+        let whole = matches!(next.source, Some(DimensionSource::Extent { .. }));
+        let at = if whole && h >= high {
+            high + gap
+        } else if whole && h <= low {
+            low - gap
+        } else if h >= high || h <= low {
             h
         } else if 2.0 * h >= low + high {
             high + gap
         } else {
             low - gap
         };
-        let offset = at - across(self.a);
-        if offset.is_finite() && offset.abs() <= 1e6 {
-            self.offset = offset;
+        if at.is_finite() && at.abs() <= 1e6 {
+            next.offset = at;
+        } else if whole {
+            // The old offset would put the line across the path.
+            return Err("Invalid dimension offset".into());
         }
-        self.length = self.measured();
+        next.length = next.measured();
+        *self = next;
+        Ok(())
     }
     fn bisector(&self) -> Vec2 {
         let start = (self.a - self.vertex).atan2();
@@ -813,8 +961,12 @@ impl Dimension {
                 self.offset = offset;
             }
             if self.line_between_points() && !old.line_between_points() {
-                self.keep_gap(&old);
+                self.keep_gap(&old, None);
             }
+        } else if self.mode == DimensionMode::Linear && xf.determinant() < 0.0 && (self.b - self.a).hypot() > 1e-9 {
+            // A reflection turns the left normal of a → b to the other side, so an aligned
+            // dimension's line stays on the reflected side of its points.
+            self.offset = -self.offset;
         }
         if self.mode == DimensionMode::Linear {
             self.length = self.measured();
@@ -867,6 +1019,12 @@ impl Dimension {
             Some(DimensionSource::Arc { edge }) => {
                 let (center, radius) = arc(doc, edge).ok_or("Choose a circle or a perfect arc")?;
                 self.set_radial(center, radius);
+            }
+            Some(DimensionSource::Extent { node }) => {
+                let (a, b) = extent(doc, *node, self.orientation == Orientation::Vertical).ok_or("Measured path no longer exists")?;
+                self.a = a;
+                self.b = b;
+                self.length = self.measured();
             }
             None => {}
         }
@@ -966,6 +1124,87 @@ pub fn arc(doc: &Document, edge: &SegmentRef) -> Option<(Point, f64)> {
         }
     }
     Some((center, radius))
+}
+
+/// The outermost points of a path's outline, read from its segments (an anchor that starts no
+/// segment is not part of it): the leftmost and the rightmost, then the topmost and the
+/// bottommost. Of points level with each other, the first point is the topmost or leftmost of
+/// them and the second the bottommost or rightmost, so a straight vertical line has two points
+/// across its width too. None for a node without a path or without segments.
+pub fn extents(doc: &Document, id: NodeId) -> Option<[(Point, Point); 2]> {
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveExtrema};
+    let path = doc.node(id)?.path_data()?;
+    let before = |p: Point, q: Point, vertical: bool| {
+        let key = |p: Point| if vertical { (p.y, p.x) } else { (p.x, p.y) };
+        let (a, b) = (key(p), key(q));
+        a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)).is_lt()
+    };
+    let mut ends: Option<[(Point, Point); 2]> = None;
+    let mut take = |p: Point| {
+        let ends = ends.get_or_insert([(p, p); 2]);
+        for (axis, (low, high)) in ends.iter_mut().enumerate() {
+            if before(p, *low, axis == 1) {
+                *low = p;
+            }
+            if before(*high, p, axis == 1) {
+                *high = p;
+            }
+        }
+    };
+    for sp in &path.subpaths {
+        for i in 0..sp.segment_count() {
+            let seg = sp.segment(i);
+            take(seg.p0);
+            take(seg.p3);
+            for t in seg.extrema() {
+                take(seg.eval(t));
+            }
+        }
+    }
+    ends
+}
+
+/// Whether the box through a path's outermost points ([`extents`]) is where it was in `before`,
+/// each side to within rounding against the larger coordinate on its axis.
+fn same_extents(before: &Document, after: &Document, id: NodeId) -> bool {
+    let sides = |doc: &Document| extents(doc, id).map(|[(left, right), (top, bottom)]| [left.x, right.x, top.y, bottom.y]);
+    let (Some(old), Some(new)) = (sides(before), sides(after)) else { return false };
+    [0, 2].into_iter().all(|i| {
+        let scale = old[i].abs().max(old[i + 1].abs()).max(1.0);
+        (i..i + 2).all(|j| (old[j] - new[j]).abs() <= 1e-12 * scale)
+    })
+}
+
+/// [`extents`] along one axis: the leftmost and the rightmost points, or with `vertical` the
+/// topmost and the bottommost.
+pub fn extent(doc: &Document, id: NodeId, vertical: bool) -> Option<(Point, Point)> {
+    extents(doc, id).map(|ends| ends[usize::from(vertical)])
+}
+
+/// How far a path's outline reaches along the unit direction `u`: the lowest and the highest
+/// `p · u` over the points of its segments. None for a node without a path or without segments.
+pub fn reach(doc: &Document, id: NodeId, u: Vec2) -> Option<(f64, f64)> {
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveExtrema};
+    let path = doc.node(id)?.path_data()?;
+    // Turns `u` onto the x axis, so the turned curve's extrema include those along `u`.
+    let turn = Affine::new([u.x, -u.y, u.y, u.x, 0.0, 0.0]);
+    let mut span: Option<(f64, f64)> = None;
+    let mut take = |p: Point| {
+        let v = p.to_vec2().dot(u);
+        let (low, high) = span.get_or_insert((v, v));
+        (*low, *high) = (low.min(v), high.max(v));
+    };
+    for sp in &path.subpaths {
+        for i in 0..sp.segment_count() {
+            let seg = sp.segment(i);
+            take(seg.p0);
+            take(seg.p3);
+            for t in (turn * seg).extrema() {
+                take(seg.eval(t));
+            }
+        }
+    }
+    span
 }
 
 /// The two straight segments that meet at a corner anchor, if both are straight.

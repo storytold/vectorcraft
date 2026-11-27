@@ -11,7 +11,7 @@ use vectorcraft_doc::Node;
 use vectorcraft_render::effects::addons::halftone::{DotShape, Halftone, art_outline, dot_nodes};
 
 use super::edit::selected_roots;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, color_value, f64_or, has_selection, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, color_value, has_selection, number_or, switch_or, text_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![cmd!(
@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Vector Halftone…",
         ["Object"],
         None,
-        "{shape?: \"circle\"|\"ellipse\"|\"square\"|\"diamond\"|\"line\" (circle), frequency?: lines per inch 1–300 (20), angle?: deg (45; CMYK: the black screen's, cyan −30°, magenta +30°, yellow −45° from it), mode?: \"mono\"|\"cmyk\" (mono), color?: mono dot colour (\"#000000\"; #rrggbbaa and #rgba are refused), invert?: bool (dots for light tones), clip?: true (clip the dots to the art's outline), keepOriginal?: false} the selection as vector halftone dots sized by its tone, a group of one path per screen (CMYK screens multiply), as one undo step → {id, dots, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+        "{shape?: \"circle\"|\"ellipse\"|\"square\"|\"diamond\"|\"line\" (circle), frequency?: lines per inch 1–300 (20), angle?: deg clockwise (45; 0: level rows of dots; CMYK: the black screen's, cyan −30°, magenta +30°, yellow −45° from it), mode?: \"mono\"|\"cmyk\" (mono), color?: mono dot colour (\"#000000\"; #rrggbbaa and #rgba are refused), invert?: bool (dots for light tones), clip?: true (clip the dots to the art's outline), keepOriginal?: false} the selection as vector halftone dots sized by its tone, a group of one path per screen (CMYK screens multiply), as one undo step → {id, dots, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
         has_selection,
         halftone
     )]
@@ -27,28 +27,28 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn halftone(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.vectorHalftone";
-    let shape = match str_param(p, "shape") {
+    let shape = match text_param(p, "shape", C)? {
         Some(v) => DotShape::parse(v).ok_or_else(|| bad(C, format!("unknown shape `{v}` (circle|ellipse|square|diamond|line)")))?,
         None => DotShape::Circle,
     };
-    let frequency = f64_or(p, "frequency", 20.0);
+    let frequency = number_or(p, "frequency", 20.0, C)?;
     if !(1.0..=300.0).contains(&frequency) {
         return Err(bad(C, "frequency must be between 1 and 300 lines per inch"));
     }
-    let angle = f64_or(p, "angle", 45.0);
+    let angle = number_or(p, "angle", 45.0, C)?;
     if !angle.is_finite() {
         return Err(bad(C, "invalid angle"));
     }
-    let mono = match str_param(p, "mode").unwrap_or("mono") {
+    let mono = match text_param(p, "mode", C)?.unwrap_or("mono") {
         "mono" => true,
         "cmyk" => false,
         other => return Err(bad(C, format!("unknown mode `{other}` (mono|cmyk)"))),
     };
     let color = match p.get("color") {
+        None | Some(Value::Null) => Color::BLACK,
         Some(v) => color_value(v).ok_or_else(|| bad(C, "invalid color"))?,
-        None => Color::BLACK,
     };
-    let (invert, clip, keep) = (bool_or(p, "invert", false), bool_or(p, "clip", true), bool_or(p, "keepOriginal", false));
+    let (invert, clip, keep) = (switch_or(p, "invert", false, C)?, switch_or(p, "clip", true, C)?, switch_or(p, "keepOriginal", false, C)?);
     let ht = Halftone { shape, frequency, angle, mono, color, from_art: false, invert, clip };
 
     let roots = selected_roots(s)?;

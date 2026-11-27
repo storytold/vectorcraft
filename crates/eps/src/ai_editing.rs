@@ -118,9 +118,16 @@
 //!   `%AI24_EndSymbolList`); each instance as `/SymbolInstance :`, `(name) /SymbolRef ,`, the
 //!   matrix taking the art to art space as `a b c d tx ty /RTransformMatrix`, `;`, then its name
 //!   and opacity mask and a state block as a group's with its opacity and blending mode (an
-//!   instance with isolation, knockout or knockout shape of its own is written as its art). The
+//!   instance with isolation, knockout or knockout shape of its own is written as its art). A
+//!   dynamic symbol's art dictionary also holds `VectorCraftDynamicSymbol` (`/Int`, 1), and the
+//!   dictionary of an instance with changes of its own (`symbol_overrides`) holds
+//!   `VectorCraftSymbolOverrides`, a `/String` of the changes as hex-coded JSON: the format's own
+//!   entries, as other apps' editing data is not documented, read back by this reader and left out by
+//!   others. The
 //!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
-//!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//!   a gradient's take the art to the canvas's space turned y up about art space's origin there,
+//!   and a gradient mesh's corners are in that space; an envelope's contents in its dictionary are
+//!   in the canvas's space with y down.
 //! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
 //!   group with live effects or linked to a graphic style is written as its drawn look (`u`, its
 //!   vector art as its geometry effects leave it, without shadows, glows or feathers, `U`, its
@@ -133,6 +140,33 @@
 //!   A fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that
 //!   fills by the even-odd rule is written as its drawn look. A style is written only when the
 //!   reader reads it back as the object's appearance (or the graphic style's).
+//! - Brushes, as the reader reads them (`brush.rs`, `style.rs`): the Brushes panel's brushes as
+//!   plug-in objects in a non-printing block after the symbols (`%AI8_BeginPluginObject`, the
+//!   plug-in's name, the brush's name, its parameters in strings that `-` continues and `.` ends),
+//!   after the brush manager's order of them; the art of Scatter and Art brushes in a non-printing
+//!   block before the symbols (`%AI8_BeginBrushPattern`, its name, a group of an unpainted frame at
+//!   the art's bounds and the art, or the art alone when it has no width or height), when the
+//!   document has brushes of its own or an object is written with one.
+//!   A path or compound path with a brush the reader reads live is written with an art style whose
+//!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
+//!   it back with its settings.
+//! - Graphs, as the reader reads them (`read/graph.rs`): a graph on the layers whose records the
+//!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
+//!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
+//!   any other graph, and a graph with art left out, as its art, with a warning.
+//! - Gradient meshes, as the reader reads them (`mesh.rs`): `/Mesh X!`, `2 /Version`, the grid's type
+//!   and size, `/Data` (the reader passes over the version and `/Data`), and each patch's place, color
+//!   space and four corners (color, opacity, point and handles) as `X#` entries on `%_` lines,
+//!   `/End X!`; the mesh's transparency before it, its name and opacity mask after it
+//!   (`writer::meshes`). A mesh is written as it is only when the reader reads it back so, when every
+//!   patch turns the same way (a reflected mesh's columns are written in reverse order), and outside
+//!   pattern tiles, art cut to a clipping object and a large canvas.
+//! - Blends, as the reader reads them (`blend.rs`): the blend's key objects and spine as a group on
+//!   `%_` lines, each key's `/ArtDictionary` naming it a key and its id and the spine's naming it the
+//!   spine (written when the blend has a spine of its own); its steps drawn, a group;
+//!   the blend plugin's `1 0 n XP` line and the blend's record of its spacing, orientation and keys as hex
+//!   on `%` lines; its name and transparency as a group's after its end (`writer::blends`). A blend is
+//!   written live only when the reader reads it back with its settings.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -144,8 +178,9 @@
 //! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
-//! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
-//! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
+//! (gradients that dither are written without dither's noise, Perceptual gradients and gradients
+//! mixed around the hue wheel as the stops on their curve in process colors, at most 256, and
+//! gradient stops linked to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
 //! the tile or is painted with patterns, and pattern fills in symbols, as their tiles cut
 //! to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
@@ -161,20 +196,25 @@
 //! and instances of
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
-//! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
-//! strokes a plain line can't draw
+//! guides, export types left out, gradient meshes the reader wouldn't read back as
+//! they are, folded meshes, meshes in pattern tiles and in art cut to a clipping object and every mesh
+//! on a large canvas as their drawn look, blends the reader wouldn't read back live as
+//! their steps, other live objects (placed documents included) as their art,
+//! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
 //! layers and opacity masks nested too deep, and, on objects written without an art style, live
 //! effects other than geometry effects left out; graphic styles the reader wouldn't read, links to
-//! graphic styles on objects not written with them, and every art style on a large canvas, are left
-//! out; art past [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads),
-//! counted as the reader counts them, is left out.
+//! graphic styles on objects not written with them, brushes the reader wouldn't read back, and every
+//! art style and brush on a large canvas, are left out; art past
+//! [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads), counted as the
+//! reader counts them, is left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
 
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -185,6 +225,7 @@ use vectorcraft_pdf::PrivateData;
 use crate::ps;
 
 mod writer;
+pub(crate) use writer::{DYNAMIC_KEY, OVERRIDES_KEY, hex_decode};
 
 use writer::Writer;
 
@@ -216,8 +257,9 @@ const GRID_GRAY: f64 = 200.0 / 255.0;
 
 /// `%%Creator`: the creator line VectorCraft writes in the header of the editing data. It names
 /// VectorCraft and the format's app, and holds no version number; the version is written on its
-/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
-const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
+/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]). The reader reads the symbols of data with
+/// this creator at their own size, as [`export_ai_editing`] writes them on a large canvas.
+pub(crate) const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
 
 /// The first line of a PostScript file (the DSC version comment).
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment
@@ -248,6 +290,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
 
 /// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
 fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
+    export_held(doc, o, max_objects, true)
+}
+
+/// [`export_within`]; with `keep_wraps`, wrapped area type the reader wraps the same is written as
+/// type ([`writer::wraps_held`]). When such type is written and art is left out at the object
+/// limit, the wrap objects above it may be among what is left out, and the document is written
+/// again with that type as its outlines.
+fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep_wraps: bool) -> Result<AiEditingOutput, String> {
+    let doc = source;
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
@@ -257,8 +308,13 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     // The objects that may keep their effects in an art style, as they are before baking (not on
     // a large canvas, whose scale the styles' strokes and effects would need).
     let styled = writer::styled_objects(doc);
+    let (symbol_styled, pattern_styled) = writer::styled_definitions(doc);
     let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
     let links = writer::style_links(doc);
+    // Before baking, which leaves the wrap objects that may be written as they are unchanged.
+    let wraps_held = if keep_wraps { writer::wraps_held(doc, &styled) } else { HashSet::new() };
+    // The blends baking leaves as they are, which may be written live.
+    let unbaked_blends = writer::unbaked_blends(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -288,26 +344,38 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     let mut w = Writer::new(doc, to_art, origin);
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
+    w.brushes_live = scale == 1.0;
+    w.meshes_live = scale == 1.0;
+    w.blends_live = scale == 1.0;
+    w.unbaked_blends = unbaked_blends;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
+    w.wraps_held = wraps_held;
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;
+        (w.symbol_styled, w.pattern_styled) = (symbol_styled, pattern_styled);
         w.panel_styles();
-    } else if !styled.is_empty() || own_styles || links > 0 {
+    } else if !styled.is_empty() || !symbol_styled.is_empty() || !pattern_styled.is_empty() || own_styles || links > 0 {
         w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
     }
     for layer in &doc.layers {
         w.layer(layer);
     }
-    if scale == 1.0 {
-        w.lost_links(links);
+    if w.wrapped_type_cut() {
+        return export_held(source, o, max_objects, false);
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();
+    // The brushes, once the layers have said whether an object is written with one.
+    let (brush_art, brush_objects) = w.brush_blocks();
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
+    // Once every definition is written: their opacity masks' art keeps links too.
+    if scale == 1.0 {
+        w.lost_links(links);
+    }
     let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
@@ -323,7 +391,9 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     let mut s = header.clone();
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
     w.definitions(&mut s);
+    s.push_str(&brush_art);
     w.symbol_definitions(&mut s);
+    s.push_str(&brush_objects);
     w.art_styles(&mut s);
     s.push_str(&palette);
     w.art_style_list(&mut s);
@@ -369,9 +439,15 @@ fn splice(text: &[u8], payloads: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// `doc` with its geometry effects and group paint baked ([`vectorcraft_effects::bake_document`]),
-/// in its symbols' art and its patterns' tile art too (which instances and pattern fills are
-/// written as); `None` when nothing changes.
+/// in its symbols' art, its patterns' tile art (which instances and pattern fills are written as)
+/// and its opacity masks' art too ([`baked_masks`]); `None` when nothing changes.
 fn baked(doc: &Document) -> Option<Document> {
+    let art = baked_art(doc);
+    baked_masks(art.as_ref().unwrap_or(doc)).or(art)
+}
+
+/// [`baked`] for the layers, symbols and patterns, leaving opacity masks' art as it is.
+fn baked_art(doc: &Document) -> Option<Document> {
     let baked = vectorcraft_effects::bake_document(doc);
     let d = baked.as_ref().unwrap_or(doc);
     let needs = vectorcraft_effects::needs_bake;
@@ -398,6 +474,100 @@ fn baked(doc: &Document) -> Option<Document> {
         }
     }
     Some(out)
+}
+
+/// `doc` with the art of the opacity masks in its layers', symbols' and patterns' art baked as
+/// [`baked_art`] bakes the layers. Each round bakes the art of the outermost masks whose art needs
+/// it, and the next round the masks inside that art, at most [`writer::MAX_NEST`] rounds (the
+/// writer leaves masks nested deeper out). Baked art keeps its id, by which the writer finds the
+/// art as it was before baking ([`writer::styled_objects`]). `None` when no mask's art needs baking.
+fn baked_masks(doc: &Document) -> Option<Document> {
+    let mut out: Option<Document> = None;
+    // The masks' art baked so far, by id: it isn't baked again.
+    let mut done = HashSet::new();
+    for _ in 0..writer::MAX_NEST {
+        let d = out.as_ref().unwrap_or(doc);
+        let roots = || d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.patterns.iter().flat_map(|p| p.art.iter()));
+        let mut arts = vec![];
+        for n in roots() {
+            mask_arts(n, &done, &mut arts);
+        }
+        if arts.is_empty() {
+            break;
+        }
+        // Each art baked as a layer of a copy of the document, as [`baked_art`] bakes symbols.
+        let mut copy = d.clone();
+        copy.layers = arts.iter().map(|a| Arc::new(Node::group(vectorcraft_doc::NodeId(0), vec![a.clone()]))).collect();
+        let Some(mut next) = vectorcraft_effects::bake_document(&copy) else { break };
+        let layers = std::mem::replace(&mut next.layers, d.layers.clone());
+        let mut baked = layers.iter().map(|l| l.children().and_then(|c| c.first().cloned()));
+        for l in next.layers.iter_mut() {
+            if let Some(n) = with_baked_masks(l, &done, &mut baked) {
+                *l = n;
+            }
+        }
+        for s in next.symbols.iter_mut() {
+            if let Some(n) = with_baked_masks(&s.art, &done, &mut baked) {
+                s.art = n;
+            }
+        }
+        for p in next.patterns.iter_mut() {
+            for a in p.art.iter_mut() {
+                if let Some(n) = with_baked_masks(a, &done, &mut baked) {
+                    *a = n;
+                }
+            }
+        }
+        done.extend(arts.iter().map(|a| a.id));
+        out = Some(next);
+    }
+    out
+}
+
+/// Does [`baked_masks`] bake the art of mask `m` in this round?
+fn bakes_mask_art(m: &vectorcraft_doc::OpacityMask, done: &HashSet<vectorcraft_doc::NodeId>) -> bool {
+    !done.contains(&m.art.id) && vectorcraft_effects::needs_bake(&m.art)
+}
+
+/// The art of the opacity masks in `n` that [`baked_masks`] bakes in this round, in the order
+/// [`with_baked_masks`] puts them back: a mask's art before the object's members, and the masks
+/// inside art that isn't baked.
+fn mask_arts(n: &Node, done: &HashSet<vectorcraft_doc::NodeId>, out: &mut Vec<Arc<Node>>) {
+    if let Some(m) = n.extras().mask.as_ref() {
+        if bakes_mask_art(m, done) {
+            out.push(m.art.clone());
+        } else {
+            mask_arts(&m.art, done, out);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        mask_arts(c, done, out);
+    }
+}
+
+/// `n` with the art of its opacity masks taken from `baked` in the order [`mask_arts`] lists it;
+/// `None` when nothing in it changes.
+fn with_baked_masks(n: &Arc<Node>, done: &HashSet<vectorcraft_doc::NodeId>, baked: &mut dyn Iterator<Item = Option<Arc<Node>>>) -> Option<Arc<Node>> {
+    let art =
+        n.extras().mask.as_ref().and_then(|m| if bakes_mask_art(m, done) { baked.next().flatten() } else { with_baked_masks(&m.art, done, baked) });
+    let members: Vec<Option<Arc<Node>>> = n.children().map(|c| c.iter().map(|c| with_baked_masks(c, done, baked)).collect()).unwrap_or_default();
+    if art.is_none() && members.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut m = (**n).clone();
+    if let Some(a) = art
+        && let Some(mask) = m.extras_if_any().and_then(|e| e.mask.as_mut())
+    {
+        mask.art = a;
+    }
+    if let Some(children) = m.children_mut() {
+        for (c, new) in children.iter_mut().zip(members) {
+            if let Some(new) = new {
+                *c = new;
+            }
+        }
+    }
+    Some(Arc::new(m))
 }
 
 /// The editing data of `doc` as a `.ai` file's pages carry it: the program compressed with

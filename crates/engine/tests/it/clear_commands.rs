@@ -1,7 +1,10 @@
 //! Clear deletes its exact targets, including compound members (#786).
 
+use std::collections::BTreeSet;
+use std::time::{Duration, Instant};
+
 use serde_json::json;
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_engine::{EngineError, Session};
 
 fn compound() -> (Session, NodeId, NodeId, NodeId) {
@@ -177,12 +180,12 @@ fn clear_guides_and_empty_explicit_targets_keep_their_separate_behavior() {
     s.execute("edit.clear", &json!({"ids": []})).unwrap();
     assert_eq!(s.active().unwrap().history.undo.len(), history);
     assert_eq!(s.active().unwrap().selection, selection);
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
     s.execute("edit.clear", &json!({})).unwrap();
-    assert!(s.active().unwrap().doc.guides.is_empty());
+    assert!(s.active().unwrap().doc.ruler_guides().is_empty());
     assert!(s.active().unwrap().doc.node(a).is_some());
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
 }
 
 #[test]
@@ -224,4 +227,169 @@ fn clear_explicit_ids_preserves_unrelated_selection() {
     s.execute("edit.clear", &json!({})).unwrap();
     assert!(s.active().unwrap().doc.node(r2).is_none());
     assert!(s.active().unwrap().selection.is_empty());
+}
+
+fn rectangles(s: &mut Session, n: i64) -> Vec<NodeId> {
+    (0..n)
+        .map(|i| {
+            NodeId(s.execute("shape.rectangle", &json!({"x": 10 + 40 * i, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap())
+        })
+        .collect()
+}
+
+/// Clear with `ids` leaves the selection that removing each id on its own leaves: the other objects
+/// in their order, their anchor and segment picks, a key object or key anchor that is not removed,
+/// and the selected guides. Undo brings back the document and the selection, and Redo the result.
+#[test]
+fn clear_explicit_ids_leaves_what_removing_each_id_leaves() {
+    for key_anchor in [false, true] {
+        for removed in [[1, 4, 1, 6], [0, 2, 2, 6]] {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({})).unwrap();
+            let r = rectangles(&mut s, 7);
+            s.execute("guide.add", &json!({"vertical": true, "pos": 10})).unwrap();
+            let guide = s.active().unwrap().doc.ruler_guides()[0].id.unwrap();
+            let sel = &mut s.active_mut().unwrap().selection;
+            // The seventh rectangle is not selected: Clear removes it from the document only.
+            sel.set(r[..6].iter().copied());
+            sel.guides = vec![guide];
+            for (id, anchor) in [(r[1], (0, 1)), (r[2], (0, 2)), (r[4], (0, 0)), (r[5], (0, 2))] {
+                sel.anchors.insert(id, BTreeSet::from([anchor, (0, 1)]));
+            }
+            for id in [r[2], r[5]] {
+                sel.segments.insert(id, BTreeSet::from([(0, 1)]));
+            }
+            if key_anchor {
+                sel.key_anchor = Some((r[4], (0, 0)));
+            } else {
+                sel.key = Some(r[4]);
+            }
+            let before = sel.clone();
+            // The selection is one that `prune` keeps as it is, so Undo can restore it unchanged.
+            let mut pruned = before.clone();
+            pruned.prune(&s.active().unwrap().doc);
+            assert_eq!(pruned, before);
+            let doc_before = s.active().unwrap().doc.clone();
+            let ids: Vec<NodeId> = removed.iter().map(|i| r[*i]).collect();
+            s.execute("edit.clear", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+            let st = s.active().unwrap();
+            let mut expected = before.clone();
+            for id in &ids {
+                expected.remove(*id);
+            }
+            expected.prune(&st.doc);
+            assert_eq!(st.selection, expected, "key anchor {key_anchor}, removed {removed:?}");
+            assert_eq!(st.selection.guides, vec![guide]);
+            assert!(ids.iter().all(|id| st.doc.node(*id).is_none()));
+            let doc_after = st.doc.clone();
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.active().unwrap().doc, doc_before);
+            assert_eq!(s.active().unwrap().selection, before);
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert_eq!(s.active().unwrap().doc, doc_after);
+            assert_eq!(s.active().unwrap().selection, expected);
+        }
+    }
+}
+
+/// Cut of many selected objects puts each of them on the clipboard in paint order, removes them and
+/// the selected guide, and leaves nothing selected. One Undo brings all of it back.
+#[test]
+fn cut_of_many_objects_takes_them_all_out_of_the_selection() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let r = rectangles(&mut s, 40);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 10})).unwrap();
+    let guide = s.active().unwrap().doc.ruler_guides()[0].id.unwrap();
+    let ids: Vec<u64> = r.iter().rev().map(|id| id.0).collect();
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let sel = &mut s.active_mut().unwrap().selection;
+    sel.guides = vec![guide];
+    sel.key = Some(r[7]);
+    let before = sel.clone();
+    let doc_before = s.active().unwrap().doc.clone();
+    s.execute("edit.cut", &json!({})).unwrap();
+    assert_eq!(s.clipboard.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), r);
+    let st = s.active().unwrap();
+    assert!(r.iter().all(|id| st.doc.node(*id).is_none()));
+    assert!(st.doc.ruler_guides().is_empty());
+    assert_eq!(st.selection, Selection::default());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.active().unwrap().doc, doc_before);
+    assert_eq!(s.active().unwrap().selection, before);
+}
+
+/// Timings of taking the cut objects out of a selection of 2,000, 20,000 and 50,000 objects: one
+/// [`Selection::remove`] per id, as Clear with `ids` did before, against one
+/// [`Selection::remove_all`], for all of the objects and for every other one. The two run in turn
+/// in one process, 7 times each, and the two results are compared field by field. It also times
+/// Cut of every object, with Undo between the runs. Ignored by default; it prints its timings and
+/// sets no bound on them:
+/// `cargo test --release -p vectorcraft-engine --test it clear_selection_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn clear_selection_perf() {
+    fn ms(d: &[Duration]) -> String {
+        d.iter().map(|d| format!("{:.3}", d.as_secs_f64() * 1000.0)).collect::<Vec<_>>().join(" ")
+    }
+    fn median(d: &mut [Duration]) -> f64 {
+        d.sort();
+        d[d.len() / 2].as_secs_f64() * 1000.0
+    }
+    for n in [2_000_i64, 20_000, 50_000] {
+        let mut b = vectorcraft_testkit::fixtures::DocBuilder::new(4000.0, 4000.0);
+        let r: Vec<NodeId> = (0..n)
+            .map(|i| {
+                let (x, y) = ((i % 400) as f64 * 10.0, (i / 400) as f64 * 10.0);
+                b.rect(vectorcraft_geom::Rect::new(x, y, x + 8.0, y + 8.0), vectorcraft_color::Color::rgb(0.2, 0.4, 0.6), |_| {})
+            })
+            .collect();
+        let doc = b.build();
+        let mut sel = Selection::default();
+        sel.set(r.iter().copied());
+        for id in r.iter().step_by(10) {
+            sel.anchors.insert(*id, BTreeSet::from([(0, 0)]));
+        }
+        sel.key = Some(r[r.len() / 2]);
+        for (what, ids) in [("all", r.clone()), ("every other", r.iter().copied().step_by(2).collect::<Vec<_>>())] {
+            let (mut each, mut all) = (Vec::new(), Vec::new());
+            for _ in 0..7 {
+                let mut one_by_one = sel.clone();
+                let start = Instant::now();
+                for id in &ids {
+                    one_by_one.remove(*id);
+                }
+                one_by_one.prune(&doc);
+                each.push(start.elapsed());
+                let mut at_once = sel.clone();
+                let start = Instant::now();
+                at_once.remove_all(ids.iter().copied());
+                at_once.prune(&doc);
+                all.push(start.elapsed());
+                assert_eq!(at_once, one_by_one);
+            }
+            eprintln!("clear_selection_perf: {n} selected, {what} ({} ids), remove each ms: {}", ids.len(), ms(&each));
+            eprintln!("clear_selection_perf: {n} selected, {what} ({} ids), remove_all ms:  {}", ids.len(), ms(&all));
+            eprintln!(
+                "clear_selection_perf: {n} selected, {what}: median remove each {:.3} ms, remove_all {:.3} ms",
+                median(&mut each),
+                median(&mut all)
+            );
+        }
+        let mut s = Session::new();
+        let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&doc, false));
+        s.execute("document.open", &json!({"name": "perf.vectorcraft", "dataBase64": data})).unwrap();
+        s.execute("select.all", &json!({})).unwrap();
+        let mut cut = Vec::new();
+        for _ in 0..7 {
+            let start = Instant::now();
+            s.execute("edit.cut", &json!({})).unwrap();
+            cut.push(start.elapsed());
+            assert!(s.active().unwrap().selection.objects.is_empty());
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.active().unwrap().selection.objects.len(), r.len());
+        }
+        eprintln!("clear_selection_perf: {n} selected, edit.cut ms: {}", ms(&cut));
+        eprintln!("clear_selection_perf: {n} selected, edit.cut median {:.3} ms", median(&mut cut));
+    }
 }

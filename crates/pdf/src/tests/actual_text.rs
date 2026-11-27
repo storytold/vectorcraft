@@ -121,6 +121,31 @@ fn actual_text_empty_and_nested_owners() {
     }
 }
 
+/// Glyphs in a span whose ActualText is empty have no text, but they still draw: they stay on the
+/// page as outlines in their paint, filled and stroked as the text rendering mode says (#6971).
+#[test]
+fn empty_actual_text_keeps_the_glyphs_art() {
+    let outlines = |report: &ImportReport| {
+        let mut found = vec![];
+        report.document.walk(|node| {
+            if matches!(node.kind, NodeKind::Path { .. }) {
+                found.push((node.appearance.fill().is_some(), node.appearance.stroke().is_some(), node.geometric_bounds()));
+            }
+        });
+        found
+    };
+    for (mode, fill, stroke) in [("0", true, false), ("1", false, true), ("2", true, true)] {
+        let content = format!("/Span << /ActualText () >> BDC 1 0 0 rg 0 0 1 RG 3 w {mode} Tr (Halo) Tj 0 Tr EMC 0 0 0 rg (C) Tj");
+        let report = open(&content);
+        assert_eq!(plain(&report), "C", "mode {mode}: the span adds no text");
+        let found = outlines(&report);
+        assert!(found.iter().any(|(f, _, _)| *f == fill) && found.iter().any(|(_, s, _)| *s == stroke), "mode {mode}: the glyphs' art: {found:?}");
+        let ink = found.iter().filter_map(|(_, _, b)| *b).fold(None, |acc: Option<kurbo::Rect>, b| Some(acc.map_or(b, |a| a.union(b))));
+        let ink = ink.unwrap_or_else(|| panic!("mode {mode}: no outlines"));
+        assert!(ink.x0 >= 15.0 && ink.x1 > 40.0 && ink.y0 > 50.0 && ink.y1 < 140.0, "mode {mode}: where the word is set: {ink:?}");
+    }
+}
+
 #[test]
 fn actual_text_decodes_pdf_strings_and_preserves_authored_order() {
     for (encoded, expected) in [

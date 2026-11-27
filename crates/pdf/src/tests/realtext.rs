@@ -304,6 +304,26 @@ fn real_text_lands_within_half_a_point_of_the_outlines() {
     }
 }
 
+/// Type on an open path that starts before the path writes only the characters drawn on the path,
+/// as text and as outlines.
+#[test]
+fn type_starting_before_its_open_path_writes_only_what_is_drawn() {
+    let mut line = BezPath::new();
+    line.move_to((20.0, 150.0));
+    line.line_to((380.0, 150.0));
+    let mut t = TextObject::point(Point::ZERO, "A C DEF", style(20.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    let laid = vectorcraft_text::layout(FontDb::global(), &t);
+    // Four glyphs, two of them spaces, and a little more before the start: "DEF" is drawn.
+    let lead: f64 = laid.glyphs.iter().take(4).map(|g| g.advance).sum::<f64>() + 1.0;
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -lead / 360.0, end: None };
+    let d = doc(vec![t]);
+    assert_eq!(texts(&import_as(&pdf(&d, false).bytes, TextAs::Text)).concat(), "DEF");
+    let outlined = ink(&import_as(&pdf(&d, true).bytes, TextAs::Outlines));
+    assert!(outlined.x0 > 20.0 - 1e-6, "{outlined:?}");
+}
+
 /// Area type 200 points wide holding `text`, its paragraphs in lists `lists`, with an 18 pt
 /// hanging indent.
 fn listed(text: &str, lists: &[Option<ParaList>]) -> TextObject {
@@ -689,7 +709,7 @@ fn subset_thresholds_below_100_percent_are_accepted_with_a_warning() {
     let d = doc(vec![TextObject::point(Point::new(20.0, 60.0), "Subset", style(24.0))]);
     let settings: PdfSettings = serde_json::from_value(json!({"advanced": {"outlineText": false, "fontSubsetPercent": 40}})).unwrap();
     let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap();
-    assert!(r.warnings.iter().any(|w| w.contains("subset")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("subset")), "{:?}", r.setting_notes);
     assert_eq!(texts(&import_as(&r.bytes, TextAs::Text)), ["Subset"]);
 }
 
@@ -976,7 +996,10 @@ fn dithered_type_keeps_its_resolution_when_scaled_and_stays_searchable() {
 
 /// Exact craft-fonts face: a substituted Arabic font would miss Noto's dot decomposition.
 fn mark_text(text: &str) -> Option<TextObject> {
-    let face = FontDb::global().face("Noto Sans Arabic", "Regular").filter(|f| f.family == "Noto Sans Arabic");
+    // The craft-fonts build of the face: a system font of the same family (Linux distributions
+    // install one) can lack the Latin and digit glyphs these fixtures shape with it.
+    let bundled = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.family == "Noto Sans Arabic" && f.style == "Regular");
+    let face = FontDb::global().face("Noto Sans Arabic", "Regular").filter(|f| bundled && f.family == "Noto Sans Arabic");
     let Some(face) = face else {
         assert!(std::env::var("CRAFT_FONTS_REQUIRED").as_deref() != Ok("1"), "Noto Sans Arabic is required");
         eprintln!("SKIPPED: PDF mark-text regression needs craft-fonts Noto Sans Arabic");
@@ -989,7 +1012,7 @@ fn mark_text(text: &str) -> Option<TextObject> {
 /// CIDs otherwise resolve through the active font's ToUnicode. A shared mark glyph can only
 /// carry one ToUnicode value; its other clusters must still occur exactly once via ActualText.
 fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
-    use craft_pdf::syntax::{
+    use craft::pdf::syntax::{
         Pdf,
         content::UntypedIter,
         object::{Dict, Object, Stream},
@@ -1031,7 +1054,7 @@ fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
             b"BMC" | b"BDC" => {
                 let replacement = op.operands().find_map(|operand| {
                     if let Object::Dict(d) = operand {
-                        d.get::<craft_pdf::syntax::object::String<'_>>(b"ActualText").map(|s| crate::import_scan::text_string(s.as_bytes()))
+                        d.get::<craft::pdf::syntax::object::String<'_>>(b"ActualText").map(|s| crate::import_scan::text_string(s.as_bytes()))
                     } else {
                         None
                     }
@@ -1051,7 +1074,7 @@ fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
                     .operands()
                     .flat_map(|o| match o {
                         Object::String(s) => vec![s.clone()],
-                        Object::Array(a) => a.iter::<craft_pdf::syntax::object::String<'_>>().collect(),
+                        Object::Array(a) => a.iter::<craft::pdf::syntax::object::String<'_>>().collect(),
                         _ => vec![],
                     })
                     .collect();

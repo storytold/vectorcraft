@@ -77,6 +77,31 @@ fn script_missing_include_reports_origin() {
     assert!(report["message"].as_str().unwrap().contains("include file not found: nope.jsxinc"), "{report}");
     assert_eq!(report["log"], json!([]), "nothing ran before the include was read");
     assert!(report.get("file").is_none(), "the line is the script's own");
+    assert_eq!(report["messageOrigin"], "built-in");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error in an included file keeps where its message came from: a value the file threw is the
+/// script's own text, and an error the app raised for it, or for a file `$.evalFile` could not run, is not.
+#[test]
+fn script_include_errors_keep_their_message_origin() {
+    let base = folder("origin");
+    write(&base.join("main/lib.jsxinc"), "var a = 1;\n  throw new RangeError('invalid array length');");
+    write(&base.join("main/native.jsxinc"), "var a = 1;\n  new Array(-1);");
+    for (text, message, origin) in [
+        ("#include \"lib.jsxinc\"", "RangeError: invalid array length", "script"),
+        ("#include \"native.jsxinc\"", "RangeError: invalid array length", "built-in"),
+        ("try {\n#include \"native.jsxinc\"\n} catch (e) { throw e; }", "RangeError: invalid array length", "built-in"),
+        ("try {\n#include \"native.jsxinc\"\n} catch (e) { throw e.message; }", "invalid array length", "script"),
+    ] {
+        let report = failed(&base, text);
+        assert_eq!((report["message"].as_str(), report["messageOrigin"].as_str()), (Some(message), Some(origin)), "{text}: {report}");
+    }
+    let report = failed(&base, "#include \"lib.jsxinc\"");
+    let file = report["file"].as_str().map(|f| Path::new(f).ends_with("lib.jsxinc"));
+    assert_eq!((file, report["line"].as_u64(), report["column"].as_u64()), (Some(true), Some(2), Some(3)), "{report}");
+    let report = failed(&base, "$.evalFile('nope.jsx');");
+    assert_eq!(report["messageOrigin"], "built-in", "{report}");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -192,7 +217,7 @@ fn script_target_other_app_does_not_route() {
     assert_eq!(r["log"], json!([1]));
     for (source, message) in [
         ("#target\nvc.log(1);", "#target needs a value"),
-        ("#targetengine \"session\"", "unsupported script directive: #targetengine"),
+        ("#targetengine \"session\"", "#targetengine must come before the script's code and #include lines"),
         ("#engine \"main\"", "unsupported script directive: #engine"),
         ("#strict maybe", "#strict takes on or off"),
         ("#frobnicate 1", "unknown script directive: #frobnicate"),
@@ -374,6 +399,48 @@ fn script_eval_file_returns_last_value_and_shares_globals() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `$.fileName` names the file the code reading it is in: a function `$.evalFile` gave names its
+/// file after the file has returned, through nested files, and code an included file inserted names
+/// that file. Code that `eval` compiled names the file being run.
+#[test]
+fn script_file_name_names_the_file_of_the_code_that_reads_it() {
+    let base = folder("filename");
+    write(&base.join("main/inc.jsxinc"), "function fromInclude() { return $.fileName; }\nvar includedTop = $.fileName;");
+    write(
+        &base.join("main/sub/outer.jsx"),
+        "function fromOuter() { return $.fileName; }\nvar before = $.fileName;\n$.evalFile('inner.jsx');\nvar after = $.fileName;\nfromInner();",
+    );
+    write(&base.join("main/sub/inner.jsx"), "function fromInner() { return $.fileName; }\n$.fileName;");
+    let r = run(
+        &base,
+        "#include \"inc.jsxinc\"\nvar nested = $.evalFile('sub/outer.jsx');\n\
+         vc.log([fromInclude(), includedTop, before, after, nested, fromOuter(), fromInner(), $.fileName, eval('$.fileName')]);",
+    )
+    .unwrap();
+    let names: Vec<String> = r["log"][0].as_array().unwrap().iter().map(|v| v.as_str().unwrap().replace('\\', "/")).collect();
+    let ends = [
+        "main/inc.jsxinc",
+        "main/inc.jsxinc",
+        "sub/outer.jsx",
+        "sub/outer.jsx",
+        "sub/inner.jsx",
+        "sub/outer.jsx",
+        "sub/inner.jsx",
+        "main/main.jsx",
+        "main/main.jsx",
+    ];
+    assert_eq!(names.len(), ends.len(), "{names:?}");
+    for (name, end) in names.iter().zip(ends) {
+        assert!(name.ends_with(end), "{name} ends with {end}: {names:?}");
+    }
+    // A script given as text has no name, and neither have the functions it defines.
+    let r = Session::new()
+        .execute("script.run", &json!({"source": "function f() { return $.fileName; }\nvc.log([f(), $.fileName]);", "name": "t.js"}))
+        .unwrap();
+    assert_eq!(r["log"], json!([["", ""]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn script_eval_file_outside_scope_refused() {
     let base = folder("evaloutside");
@@ -451,6 +518,52 @@ fn script_included_error_has_local_file_and_line() {
     let console = s.execute("script.console", &json!({})).unwrap();
     let error = console["lines"].as_array().unwrap().iter().find(|l| l["kind"] == "error").unwrap()["text"].as_str().unwrap().to_string();
     assert!(error.starts_with("main.jsx: ") && error.contains("lib.jsxinc:3:5: Error: boom"), "{error}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `$.stack`'s text with each frame's file cut to its name. The first line is the run's name
+/// (`[script name]`) and is kept as written; each line after it is `function@name:line`.
+pub(crate) fn short_stack(stack: &Value) -> String {
+    let stack = stack.as_str().unwrap_or_else(|| panic!("a stack: {stack}"));
+    stack
+        .lines()
+        .enumerate()
+        .map(|(i, frame)| match (frame.split_once('@'), frame.rsplit_once(':')) {
+            _ if i == 0 => format!("{frame}\n"),
+            (Some((name, _)), Some((place, line))) => {
+                let file = place.split_once('@').map_or(place, |(_, f)| f).rsplit(['/', '\\']).next().unwrap_or_default();
+                format!("{name}@{file}:{line}\n")
+            }
+            _ => format!("{frame}\n"),
+        })
+        .collect()
+}
+
+/// `$.line` and `$.stack` give the line of the file the running code is in: the script, a file it
+/// included (and a file that one included) or a file `$.evalFile` gave and the files it included,
+/// whatever lines come before it in the run's expanded source.
+#[test]
+fn script_line_and_stack_are_at_the_line_of_each_file() {
+    let base = folder("line-stack");
+    write(
+        &base.join("main/lib.jsxinc"),
+        "\nfunction libWhere() {\n  return [$.line, $.stack];\n}\nvar libLine = $.line;\n#include \"deep.jsxinc\"\n",
+    );
+    write(&base.join("main/deep.jsxinc"), "\n\nvar deepLine = $.line;\nfunction deepStack() {\n  return $.stack;\n}");
+    write(&base.join("main/sub/ev.jsx"), "#include \"inc.jsxinc\"\nfunction evWhere() {\n  return incWhere();\n}\nevWhere();");
+    write(&base.join("main/sub/inc.jsxinc"), "\n\nfunction incWhere() {\n  return [$.line, $.stack];\n}");
+    let text = "var a = 1;\nvar b = 2;\n#include \"lib.jsxinc\"\nvar mainLine = $.line;\nvc.log([libLine, deepLine, mainLine]);\n\
+                vc.log(libWhere());\nvc.log(deepStack());\nvc.log($.evalFile('sub/ev.jsx'));";
+    let log = run(&base, text).unwrap()["log"].clone();
+    assert_eq!(log[0], json!([5, 3, 4]), "{log}");
+    assert_eq!(log[1][0], 3, "{log}");
+    assert_eq!(short_stack(&log[1][1]), "[main.jsx]\n[global]@main.jsx:6\nlibWhere@lib.jsxinc:3\n");
+    assert_eq!(short_stack(&log[2]), "[main.jsx]\n[global]@main.jsx:7\ndeepStack@deep.jsxinc:5\n");
+    assert_eq!(log[3][0], 4, "{log}");
+    assert_eq!(short_stack(&log[3][1]), "[main.jsx]\n[global]@main.jsx:8\n[global]@ev.jsx:5\nevWhere@ev.jsx:3\nincWhere@inc.jsxinc:4\n");
+    // The file a frame names is the one `$.fileName` gives while that file runs.
+    let log = run(&base, "vc.log($.stack.split('\\n')[1].slice(9, -2) === $.fileName);").unwrap()["log"].clone();
+    assert_eq!(log, json!([true]));
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -561,5 +674,77 @@ fn script_eval_file_error_caught_and_thrown_again_is_at_the_new_throw() {
         };
         assert!(error.starts_with("main.jsx") && error.contains(&at), "{error}");
     }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn script_error_that_passes_through_a_finally_block_is_at_its_throw() {
+    let base = folder("finally");
+    let main = base.join("main/main.jsx");
+    let mut s = Session::new();
+    for text in ["try {\n  throw new Error('x');\n} finally {\n  var z=1;\n}", "try {\n  null();\n} finally {\n  var z=1;\n}"] {
+        write(&main, text);
+        assert!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).is_err(), "{text}");
+        let report = s.script_report().unwrap().clone();
+        let (l, c, f, error) = place(&report);
+        assert_eq!((report["kind"].as_str(), l, c, f), (Some("thrown"), 2, 3, None), "{text}\n{report}");
+        assert!(error.contains("main.jsx:2:3: "), "{error}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn a_js_script_has_promise_and_a_jsx_script_does_not() {
+    let base = folder("promise-realm");
+    let main = base.join("main/main.js");
+    write(&main, "vc.log(typeof Promise); Promise.resolve(2).then(function (v) { vc.log(v); }); vc.log(1);");
+    let r = Session::new().execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    assert_eq!(r["log"], json!(["function", 1, 2]));
+    assert!(r.get("unhandledRejections").is_none(), "{r}");
+    let r = run(&base, "vc.log(typeof Promise);").unwrap();
+    assert_eq!(r["log"], json!(["undefined"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn a_named_engine_gets_promise_at_its_first_js_run_and_keeps_it() {
+    let base = folder("promise-engine");
+    let jsx = base.join("main/a.jsx");
+    let js = base.join("main/b.js");
+    let mut s = Session::new();
+    let mut go = |path: &Path, text: &str| {
+        write(path, text);
+        s.execute("script.run", &json!({"path": path.to_string_lossy()})).unwrap()["log"].clone()
+    };
+    assert_eq!(go(&jsx, "#targetengine kept\nvar n = 1; vc.log(typeof Promise);"), json!(["undefined"]));
+    assert_eq!(
+        go(&js, "#targetengine kept\nvc.log(n); vc.log(typeof Promise); Promise.resolve(2).then(function (v) { vc.log(v); });"),
+        json!([1, "function", 2])
+    );
+    assert_eq!(go(&jsx, "#targetengine kept\nvc.log(typeof Promise);"), json!(["function"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn unhandled_rejections_reach_the_report_and_the_console_with_their_file_and_line() {
+    let base = folder("promise-rejections");
+    write(&base.join("main/lib.jsxinc"), "var x = 1;\nPromise.reject(new RangeError('in lib'));\n");
+    let main = base.join("main/main.js");
+    write(&main, "var a = 1;\nPromise.reject(new Error('lost'));\n#include \"lib.jsxinc\"\nPromise.reject(3).catch(function () {});\n");
+    let mut s = Session::new();
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    let got: Vec<(String, u64, Option<bool>)> = r["unhandledRejections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|j| (j["message"].as_str().unwrap().to_string(), j["line"].as_u64().unwrap(), j["file"].as_str().map(|f| f.ends_with("lib.jsxinc"))))
+        .collect();
+    assert_eq!(got, vec![("Error: lost".to_string(), 2, None), ("RangeError: in lib".to_string(), 2, Some(true))], "{r}");
+    assert_eq!(r["unhandledRejectionCount"], 2);
+    let c = s.execute("script.console", &json!({})).unwrap();
+    let errors: Vec<&str> = c["lines"].as_array().unwrap().iter().filter(|l| l["kind"] == "error").filter_map(|l| l["text"].as_str()).collect();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert!(errors[0].starts_with("main.js:2:") && errors[0].ends_with(": unhandled promise rejection: Error: lost"), "{errors:?}");
+    assert!(errors[1].contains("lib.jsxinc:2:"), "{errors:?}");
     let _ = std::fs::remove_dir_all(base);
 }

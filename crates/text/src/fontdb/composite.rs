@@ -1,15 +1,77 @@
 //! Composite fonts (Type › Composite Fonts…) in the font database: each is listed first in the
 //! font menus and resolves to its base (Kanji) font, and layout sets each character of type in one
-//! in the font of the character's class ([`FontDb::composite_split`]).
+//! in the font of the custom character set that lists it, else of its class
+//! ([`FontDb::composite_split`]).
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::marker::PhantomData;
+use std::sync::Weak;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use unicode_segmentation::UnicodeSegmentation;
-use vectorcraft_doc::{CharClass, CompositeFont, TextObject, TextRun};
+use vectorcraft_doc::text::CompositeClasses;
+use vectorcraft_doc::{CharClass, CompositeClass, CompositeFont, CompositePart, TextObject, TextRun};
 
 use super::face::FALLBACK_FAMILY;
 use super::{Arc, FontDb, FontFace, FontMatch};
 
 /// A face [`FontDb::resolve`] found and how it matched.
 type Resolved = Option<(Arc<FontFace>, FontMatch)>;
+
+/// The base class: type without characters and anything no part names takes its part.
+const KANJI: CompositeClass = CompositeClass::Fixed(CharClass::Kanji);
+
+/// Lookups of the custom character sets of composite fonts, by the address of the font's `Arc`,
+/// each with a weak reference that tells when that font has gone and the address may be reused.
+pub(super) type CustomClasses = HashMap<usize, (Weak<CompositeFont>, Arc<CompositeClasses>)>;
+
+thread_local! {
+    /// The composite fonts the guards of this thread lend ([`FontDb::lend_composite_fonts`]), the
+    /// latest loan last. Only the latest loan of a database is looked in.
+    static LENT: RefCell<Vec<Loan>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The number of the next loan.
+static NEXT_LOAN: AtomicU64 = AtomicU64::new(1);
+
+/// The composite fonts one guard lends, on the thread that made it.
+struct Loan {
+    /// The lending database's [`FontDb::id`].
+    db: u64,
+    /// Tells this loan from the others.
+    number: u64,
+    /// The fonts, by lowercased name.
+    fonts: HashMap<String, Arc<CompositeFont>>,
+    /// The database's generation when they were lent, when they were then exactly the fonts the
+    /// database holds: each the font it holds by its name, and none it holds left out.
+    same_at: Option<u64>,
+    /// A number for the definitions lent: loans of the same definitions have the same one.
+    print: u64,
+}
+
+/// Feed composite font `f`'s name, parts and custom character sets to `h`.
+fn hash_font(f: &CompositeFont, h: &mut DefaultHasher) {
+    f.name.hash(h);
+    let p = &f.parts;
+    for part in [&p.kanji, &p.kana, &p.punctuation, &p.symbols, &p.roman, &p.numerals] {
+        hash_part(part, h);
+    }
+    f.custom.len().hash(h);
+    for s in &f.custom {
+        (&s.name, &s.characters).hash(h);
+        hash_part(&s.part, h);
+    }
+}
+
+/// Feed part `part`'s font and values to `h`.
+fn hash_part(part: &CompositePart, h: &mut DefaultHasher) {
+    (&part.font, &part.style, part.scale_at_center).hash(h);
+    for v in [part.size, part.baseline, part.h_scale, part.v_scale] {
+        v.to_bits().hash(h);
+    }
+}
 
 /// How a composite font draws some text ([`FontDb::composite_coverage`]).
 #[derive(Clone, Debug)]
@@ -25,19 +87,15 @@ pub struct CompositeCoverage {
 impl FontDb {
     /// Make `font` available by its name, in place of a composite font of that name (any case).
     /// The font menus and anything else that lists fonts change only when the definition does.
-    /// Whether it did.
+    /// Whether it did. While a guard lends composite fonts ([`FontDb::lend_composite_fonts`]), the
+    /// guard's thread uses the fonts it lends and not this one.
     pub fn set_composite_font(&self, font: &CompositeFont) -> bool {
         let key = font.name.to_lowercase();
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         {
             let mut map = self.composites.write().unwrap_or_else(|e| e.into_inner());
             if map.get(&key).is_some_and(|f| **f == *font) {
-                // The same definition a guard lends: it stays when the guard drops.
-                let mut loans = self.composite_loans.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(loan) = loans.get_mut(&key)
-                    && map.get(&key).is_some_and(|have| Arc::ptr_eq(have, &loan.font))
-                {
-                    loan.adopted = true;
-                }
                 return false;
             }
             map.insert(key, Arc::new(font.clone()));
@@ -48,6 +106,8 @@ impl FontDb {
 
     /// Forget the composite font named `name` (any case). Whether there was one.
     pub fn remove_composite_font(&self, name: &str) -> bool {
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         let removed = self.composites.write().unwrap_or_else(|e| e.into_inner()).remove(&name.to_lowercase()).is_some();
         if removed {
             self.changed();
@@ -55,8 +115,14 @@ impl FontDb {
         removed
     }
 
-    /// The composite font named `name` (any case).
+    /// The composite font named `name` (any case). While a guard of this thread lends a document's
+    /// composite fonts ([`FontDb::lend_composite_fonts`]), the one the latest such guard lends, and
+    /// `None` when that document does not define the name, also when the database or an earlier
+    /// guard holds one of that name. Otherwise the one the database holds.
     pub fn composite_font(&self, name: &str) -> Option<Arc<CompositeFont>> {
+        if self.lends() {
+            return self.lent_font(&name.to_lowercase());
+        }
         let map = self.composites.read().unwrap_or_else(|e| e.into_inner());
         if map.is_empty() {
             return None;
@@ -64,8 +130,38 @@ impl FontDb {
         map.get(&name.to_lowercase()).cloned()
     }
 
-    /// The face composite font `name` sets character `c` in (its class's part's), and whether
-    /// that part's font is missing. `None` when `name` is no composite font.
+    /// Whether a guard of this thread lends composite fonts of this database.
+    fn lends(&self) -> bool {
+        LENT.try_with(|l| l.borrow().iter().any(|loan| loan.db == self.id)).unwrap_or(false)
+    }
+
+    /// The composite font named `key` (lowercased) that the latest guard of this thread lending
+    /// composite fonts of this database lends.
+    fn lent_font(&self, key: &str) -> Option<Arc<CompositeFont>> {
+        LENT.try_with(|l| l.borrow().iter().rev().find(|loan| loan.db == self.id).and_then(|loan| loan.fonts.get(key).cloned())).ok().flatten()
+    }
+
+    /// [`FontDb::generation`] on this thread, from the database's own generation `g`: `g` while no
+    /// guard of this thread lends composite fonts of this database, or while the latest one lends
+    /// exactly the fonts the database held when it was lent and the database has not changed since,
+    /// else a number made from `g` and the definitions lent, so what was laid out in one document's
+    /// definitions is not taken for another's.
+    pub(super) fn lent_generation(&self, g: u64) -> u64 {
+        LENT.try_with(|l| match l.borrow().iter().rev().find(|loan| loan.db == self.id) {
+            Some(loan) if loan.same_at != Some(g) => {
+                let mut h = DefaultHasher::new();
+                g.hash(&mut h);
+                loan.print.hash(&mut h);
+                // The database's generations count up from 0 and never reach the top bit.
+                h.finish() | 1 << 63
+            }
+            _ => g,
+        })
+        .unwrap_or(g)
+    }
+
+    /// The face composite font `name` sets character `c` in (its custom set's or its class's
+    /// part's), and whether that part's font is missing. `None` when `name` is no composite font.
     pub fn composite_face(&self, name: &str, c: char) -> Option<(bool, u32)> {
         self.composite_resolve(name, c).map(|(face, m)| (m == FontMatch::Missing, face.id()))
     }
@@ -77,13 +173,40 @@ impl FontDb {
         self.composite_resolve(name, first)
     }
 
-    /// The face composite font `name` sets character `c` in (its class's part's), and how that
-    /// part's font matched ([`FontDb::resolve`]). `None` when `name` is no composite font, or no
-    /// font at all is loaded.
+    /// The face composite font `name` sets character `c` in (its custom set's or its class's
+    /// part's), and how that part's font matched ([`FontDb::resolve`]). `None` when `name` is no
+    /// composite font, or no font at all is loaded.
     pub fn composite_resolve(&self, name: &str, c: char) -> Option<(Arc<FontFace>, FontMatch)> {
         let f = self.composite_font(name)?;
-        let (family, style) = self.part_font(&f, CharClass::of(c));
+        let (family, style) = self.part_font(&f, self.composite_class(&f, c));
         self.resolve(&family, &style)
+    }
+
+    /// Where composite font `f` sets character `c`: the last custom set that lists it, else its
+    /// class. The lookup of `f`'s sets is built once and kept while `f` lives.
+    fn composite_class(&self, f: &Arc<CompositeFont>, c: char) -> CompositeClass {
+        if f.custom.is_empty() {
+            return CompositeClass::Fixed(CharClass::of(c));
+        }
+        self.custom_lookup(f).of(c)
+    }
+
+    /// The lookup of composite font `f`'s custom character sets, built when first asked for.
+    fn custom_lookup(&self, f: &Arc<CompositeFont>) -> Arc<CompositeClasses> {
+        if f.custom.is_empty() {
+            return Arc::default();
+        }
+        let key = Arc::as_ptr(f) as usize;
+        let mut cache = self.custom_classes.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((font, lookup)) = cache.get(&key)
+            && font.upgrade().is_some_and(|g| Arc::ptr_eq(&g, f))
+        {
+            return lookup.clone();
+        }
+        cache.retain(|_, (font, _)| font.strong_count() > 0);
+        let lookup = Arc::new(f.classes());
+        cache.insert(key, (Arc::downgrade(f), lookup.clone()));
+        lookup
     }
 
     /// The fonts (family, style) composite font `name` sets `text` in: those of the parts its
@@ -92,15 +215,16 @@ impl FontDb {
     /// no composite font.
     pub fn composite_fonts_for(&self, name: &str, text: &str) -> Option<Vec<(String, String)>> {
         let f = self.composite_font(name)?;
-        let mut classes: Vec<CharClass> = Vec::new();
+        let lookup = self.custom_lookup(&f);
+        let mut classes: Vec<CompositeClass> = Vec::new();
         for g in text.graphemes(true) {
-            let c = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+            let c = g.chars().next().map_or(KANJI, |c| lookup.of(c));
             if !classes.contains(&c) {
                 classes.push(c);
             }
         }
         if classes.is_empty() {
-            classes.push(CharClass::Kanji);
+            classes.push(KANJI);
         }
         let mut fonts: Vec<(String, String)> = Vec::with_capacity(classes.len());
         for c in classes {
@@ -124,8 +248,9 @@ impl FontDb {
             FontMatch::Style => 1,
             FontMatch::Missing => 2,
         };
-        let mut faces: Vec<(CharClass, Resolved)> = Vec::new();
-        let mut face_of = |class: CharClass| {
+        let lookup = self.custom_lookup(&f);
+        let mut faces: Vec<(CompositeClass, Resolved)> = Vec::new();
+        let mut face_of = |class: CompositeClass| {
             if let Some((_, found)) = faces.iter().find(|(c, _)| *c == class) {
                 return found.clone();
             }
@@ -141,7 +266,7 @@ impl FontDb {
             graphemes.push("");
         }
         for g in graphemes {
-            let class = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+            let class = g.chars().next().map_or(KANJI, |c| lookup.of(c));
             let found = face_of(class);
             let m = found.as_ref().map_or(FontMatch::Missing, |(_, m)| *m);
             if worst.as_ref().is_none_or(|(w, _)| rank(m) > rank(*w)) {
@@ -168,58 +293,82 @@ impl FontDb {
         }
     }
 
-    /// Make each of the composite fonts `fonts` available while the returned guard lives, in place
-    /// of a composite font of the same name that the database holds. An app's session registers
-    /// the composite fonts of its front document; with the guard, a document exported without a
-    /// session, or one that is not in front, draws its type in its own. Dropping the guard puts
-    /// back the font each one replaced, or forgets it, unless another guard still lends the same
-    /// definition or a font of that name has been set since. While one guard lends a font, another
-    /// guard's different definition of that name is not lent.
+    /// Make the composite fonts `fonts` (a document's) the only ones available on this thread while
+    /// the returned guard lives: type naming a composite font they do not define is set as in a
+    /// missing font, also when the database or an earlier guard of this thread holds one of that
+    /// name. An app's session registers the composite fonts of its front document; with the guard, a
+    /// document exported without a session, one that is not in front, or one placed in another
+    /// document draws its type in its own, also while another thread draws another document that
+    /// defines the same name differently, or the session registers another document's. Of fonts
+    /// that share a name (in any case), the first is lent. When none of `fonts` is usable and no
+    /// guard of this thread lends composite fonts of the database, the guard lends none: type naming
+    /// any composite font is set as in a missing font while it lives. When none is usable inside
+    /// another guard (a temporary document drawn while a document draws), nothing is lent and that
+    /// guard's fonts stay in use; [`FontDb::lend_document_composite_fonts`] lends none there too.
+    /// Other threads, and the fonts the database holds and lists, are left as they are. The guard
+    /// stays on its thread and ends its loan when it drops, also when the thread unwinds. With no
+    /// guard (type laid out on its own), the fonts the database holds are used.
     pub fn lend_composite_fonts(&self, fonts: &[CompositeFont]) -> LentCompositeFonts<'_> {
-        let mut lent = Vec::new();
-        let mut changed = false;
+        self.lend(fonts, false)
+    }
+
+    /// [`FontDb::lend_composite_fonts`] for a document that is drawn or measured as itself, also
+    /// inside another document's guard (a document placed in another): when it defines no usable
+    /// composite font, type naming any composite font is set as in a missing font while the guard
+    /// lives.
+    pub fn lend_document_composite_fonts(&self, fonts: &[CompositeFont]) -> LentCompositeFonts<'_> {
+        self.lend(fonts, true)
+    }
+
+    /// Lend the usable fonts of `fonts`. With none, lend an empty set when `always` or when no
+    /// guard of this thread lends fonts of this database (and the database holds some), else
+    /// nothing.
+    fn lend(&self, fonts: &[CompositeFont], always: bool) -> LentCompositeFonts<'_> {
         // A font a document can't use (its name an installed family's, or a value out of range)
         // is not lent: an app leaves it out when it opens the document.
         let usable: Vec<&CompositeFont> = fonts.iter().filter(|f| f.check().is_ok() && !self.has_installed_family(&f.name)).collect();
-        if !usable.is_empty() {
-            let mut map = self.composites.write().unwrap_or_else(|e| e.into_inner());
-            let mut loans = self.composite_loans.lock().unwrap_or_else(|e| e.into_inner());
+        if usable.is_empty() && !always && (self.lends() || self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty()) {
+            return LentCompositeFonts { number: None, thread: PhantomData };
+        }
+        let mut lent: HashMap<String, Arc<CompositeFont>> = HashMap::with_capacity(usable.len());
+        let mut h = DefaultHasher::new();
+        let mut same = true;
+        let generation = {
+            let map = self.composites.read().unwrap_or_else(|e| e.into_inner());
             for f in usable {
                 let key = f.name.to_lowercase();
-                // A loan still in force: lend the same definition again, and leave another as it is.
-                if let Some(loan) = loans.get_mut(&key)
-                    && map.get(&key).is_some_and(|have| Arc::ptr_eq(have, &loan.font))
-                {
-                    if *loan.font == *f {
-                        loan.guards += 1;
-                        lent.push((key, loan.font.clone()));
+                if lent.contains_key(&key) {
+                    continue;
+                }
+                hash_font(f, &mut h);
+                let font = match map.get(&key) {
+                    Some(have) if **have == *f => have.clone(),
+                    _ => {
+                        same = false;
+                        Arc::new(f.clone())
                     }
-                    continue;
-                }
-                if map.get(&key).is_some_and(|have| **have == *f) {
-                    continue;
-                }
-                let font = Arc::new((*f).clone());
-                let previous = map.insert(key.clone(), font.clone());
-                loans.insert(key.clone(), CompositeLoan { font: font.clone(), previous, guards: 1, adopted: false });
-                lent.push((key, font));
-                changed = true;
+                };
+                lent.insert(key, font);
             }
-        }
-        if changed {
-            self.changed();
-        }
-        LentCompositeFonts { db: self, lent }
+            // Each lent font is the database's; with as many, none it holds is left out.
+            same &= lent.len() == map.len();
+            self.own_generation()
+        };
+        let number = NEXT_LOAN.fetch_add(1, Ordering::Relaxed);
+        let loan = Loan { db: self.id, number, fonts: lent, same_at: same.then_some(generation), print: h.finish() };
+        let pushed = LENT.try_with(|l| l.borrow_mut().push(loan)).is_ok();
+        LentCompositeFonts { number: pushed.then_some(number), thread: PhantomData }
     }
 
-    /// The family and style composite font `f` sets characters of `class` in: its part's, or the
-    /// fallback font's when that part names a composite font.
-    fn part_font(&self, f: &CompositeFont, class: CharClass) -> (String, String) {
-        let p = f.parts.get(class);
+    /// The family and style composite font `f` sets characters of `class` in: its part's (the
+    /// Kanji part's for a custom set it doesn't have), or the fallback font's when that part names
+    /// a composite font.
+    fn part_font(&self, f: &CompositeFont, class: CompositeClass) -> (String, String) {
+        let p = f.part(class).unwrap_or(&f.parts.kanji);
         if self.composite_font(&p.font).is_some() { (FALLBACK_FAMILY.to_string(), "Regular".to_string()) } else { (p.font.clone(), p.style.clone()) }
     }
 
-    /// The names of the composite fonts, sorted.
+    /// The names of the composite fonts the database holds (not those guards lend), sorted.
     pub fn composite_font_names(&self) -> Vec<String> {
         let mut v: Vec<String> = self.composites.read().unwrap_or_else(|e| e.into_inner()).values().map(|f| f.name.clone()).collect();
         v.sort_by_key(|n| n.to_lowercase());
@@ -231,21 +380,26 @@ impl FontDb {
     /// names a composite font too. `None` when `name` is no composite font.
     pub(super) fn composite_base(&self, name: &str) -> Option<(String, String)> {
         let f = self.composite_font(name)?;
-        Some(self.part_font(&f, CharClass::Kanji))
+        Some(self.part_font(&f, KANJI))
     }
 
-    /// `t` with each run set in a composite font split into runs of one [`CharClass`] each, set in
-    /// that class's font: its size and baseline shift from the part's size and baseline (in
+    /// `t` with each run set in a composite font split into runs of one custom character set or
+    /// [`CharClass`] each (a set listing a character takes it ahead of its class, the font's last
+    /// such set when several do), set in that set's or class's font: its size and baseline shift
+    /// from the part's size and baseline (in
     /// percent of the run's size), its scales multiplied by the part's, and Kana scaled at the
     /// center raised so the em box's center stays where it was. Each grapheme cluster goes with
     /// its first character. Also the index of the run of `t` each run came from. `None` when no run
     /// is set in a composite font.
     pub fn composite_split(&self, t: &TextObject) -> Option<(TextObject, Vec<usize>)> {
-        if self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
+        if !self.lends() && self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
             return None;
         }
-        let fonts: Vec<Option<Arc<CompositeFont>>> =
-            t.runs.iter().map(|r| if r.inline.is_some() { None } else { self.composite_font(&r.style.font_family) }).collect();
+        let fonts: Vec<Option<Arc<CompositeFont>>> = t
+            .runs
+            .iter()
+            .map(|r| if r.inline.is_some() || r.style.file_font_id.is_some() { None } else { self.composite_font(&r.style.font_family) })
+            .collect();
         if fonts.iter().all(Option::is_none) {
             return None;
         }
@@ -257,10 +411,11 @@ impl FontDb {
                 from.push(i);
                 continue;
             };
+            let lookup = self.custom_lookup(font);
             let mut start = 0;
             let mut class = None;
             for (at, g) in r.text.grapheme_indices(true) {
-                let c = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+                let c = g.chars().next().map_or(KANJI, |c| lookup.of(c));
                 if let Some(k) = class
                     && k != c
                 {
@@ -270,16 +425,16 @@ impl FontDb {
                 }
                 class = Some(c);
             }
-            runs.push(self.composite_run(r.text.get(start..).unwrap_or_default(), r, font, class.unwrap_or(CharClass::Kanji)));
+            runs.push(self.composite_run(r.text.get(start..).unwrap_or_default(), r, font, class.unwrap_or(KANJI)));
             from.push(i);
         }
         Some((TextObject { runs, ..t.clone() }, from))
     }
 
-    /// Characters `text` of run `r` (set in composite font `font`), all of class `class`, as a run
-    /// set in that class's part.
-    fn composite_run(&self, text: &str, r: &TextRun, font: &CompositeFont, class: CharClass) -> TextRun {
-        let p = font.parts.get(class);
+    /// Characters `text` of run `r` (set in composite font `font`), all of class or set `class`,
+    /// as a run set in that class's or set's part.
+    fn composite_run(&self, text: &str, r: &TextRun, font: &CompositeFont, class: CompositeClass) -> TextRun {
+        let p = font.part(class).unwrap_or(&font.parts.kanji);
         let mut st = r.style.clone();
         let base = st.size;
         let (family, style) = self.part_font(font, class);
@@ -291,7 +446,7 @@ impl FontDb {
         st.baseline_shift += base * p.baseline / 100.0;
         st.h_scale *= p.h_scale / 100.0;
         st.v_scale *= p.v_scale / 100.0;
-        if class == CharClass::Kana && p.scale_at_center && p.v_scale != 100.0 {
+        if class == CompositeClass::Fixed(CharClass::Kana) && p.scale_at_center && p.v_scale != 100.0 {
             let centre = self.style_face(&st).map_or(0.38, |f| f.ideographic_centre());
             st.baseline_shift += st.size * centre * (1.0 - p.v_scale / 100.0);
         }
@@ -299,59 +454,24 @@ impl FontDb {
     }
 }
 
-/// A composite font [`FontDb::lend_composite_fonts`] put in the database.
-pub(super) struct CompositeLoan {
-    /// The font lent.
-    font: Arc<CompositeFont>,
-    /// The font of that name it replaced, put back when the last guard lending it drops.
-    previous: Option<Arc<CompositeFont>>,
-    /// How many guards lend it.
-    guards: usize,
-    /// Whether [`FontDb::set_composite_font`] set the same definition while it was lent: the last
-    /// guard to drop then leaves it in place.
-    adopted: bool,
-}
-
-/// The composite fonts [`FontDb::lend_composite_fonts`] made available, given back when it drops.
+/// The composite fonts [`FontDb::lend_composite_fonts`] made available on its thread, until it
+/// drops. It is neither `Send` nor `Sync`: the loan belongs to the thread that made it.
 #[must_use = "the fonts are given back when the guard drops"]
 pub struct LentCompositeFonts<'a> {
-    db: &'a FontDb,
-    /// The lowercased names this guard lends, each with the font lent.
-    lent: Vec<(String, Arc<CompositeFont>)>,
+    /// The loan's number, when it lends any font.
+    number: Option<u64>,
+    thread: PhantomData<(&'a FontDb, *const ())>,
 }
 
 impl Drop for LentCompositeFonts<'_> {
     fn drop(&mut self) {
-        if self.lent.is_empty() {
-            return;
-        }
-        let mut changed = false;
-        {
-            let mut map = self.db.composites.write().unwrap_or_else(|e| e.into_inner());
-            let mut loans = self.db.composite_loans.lock().unwrap_or_else(|e| e.into_inner());
-            for (key, font) in &self.lent {
-                // A later loan of that name is another guard's.
-                let Some(loan) = loans.get_mut(key).filter(|l| Arc::ptr_eq(&l.font, font)) else { continue };
-                loan.guards -= 1;
-                if loan.guards > 0 {
-                    continue;
-                }
-                let previous = loan.previous.take();
-                let adopted = loan.adopted;
-                loans.remove(key);
-                // Given back unless a font of that name has been set (the same definition included)
-                // or removed since.
-                if !adopted && map.get(key).is_some_and(|have| Arc::ptr_eq(have, font)) {
-                    match previous {
-                        Some(p) => map.insert(key.clone(), p),
-                        None => map.remove(key),
-                    };
-                    changed = true;
-                }
+        let Some(number) = self.number else { return };
+        // Fails only while the thread's own storage is being destroyed, which drops the loans.
+        let _ = LENT.try_with(|l| {
+            let mut l = l.borrow_mut();
+            if let Some(at) = l.iter().rposition(|loan| loan.number == number) {
+                l.remove(at);
             }
-        }
-        if changed {
-            self.db.changed();
-        }
+        });
     }
 }
