@@ -195,10 +195,12 @@ fn merge(into: &mut Value, extra: Value) {
 #[cfg(test)]
 mod document_tests {
     use craft::ui::dialog::dialog_id;
+    use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
 
-    use super::super::tests_warp::{accept, set, windowed};
+    use super::super::tests_warp::{accept, dismiss, set, windowed};
     use super::*;
+    use crate::tests::picks::answer_dialog;
 
     #[test]
     fn editing_symbol_options_does_not_rename_another_drawings_symbol() {
@@ -224,5 +226,68 @@ mod document_tests {
         activate(&mut app, 0);
         accept(&mut app, id);
         assert!(app.session.active().unwrap().doc.symbols.iter().any(|symbol| symbol.name == "Source badge"));
+    }
+
+    #[test]
+    fn new_symbol_does_not_replace_art_selected_after_opening() {
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let original = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        open(&mut app, false).unwrap();
+        let id = dialog_id(KIND);
+        set(&app, id, "name", json!("Badge"));
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        answer_dialog(&mut app, id, &[], true);
+        assert_eq!(app.session.active().unwrap().doc, before, "OK cannot turn the later selection into a symbol");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        answer_dialog(&mut app, id, &[], true);
+        let symbols = app.run("symbol.list", json!({})).unwrap();
+        assert_eq!(symbols["symbols"][0]["name"], "Badge");
+        assert_eq!(symbols["symbols"][0]["size"], json!([30.0, 30.0]), "the original art becomes the symbol");
+        assert!(app.session.active().unwrap().doc.node(NodeId(other)).is_some(), "the unrelated rectangle remains");
+    }
+
+    #[test]
+    fn editing_symbol_options_keeps_the_definition_restored_by_revert() {
+        let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Badge"})).unwrap();
+        let file = std::env::temp_dir().join(format!("vectorcraft-symbol-options-revert-{}.vectorcraft", std::process::id()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+        let st = app.session.active().unwrap();
+        let (uid, reverts) = (st.uid, st.reverts);
+
+        app.run("symbol.options", json!({"name": "Badge", "registration": 0})).unwrap();
+        open_edit(&mut app, Some("Badge")).unwrap();
+        let id = dialog_id(KIND);
+        set(&app, id, "name", json!("Edited badge"));
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(file);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+        assert_eq!(st.doc.symbol_registration("Badge").0, 4);
+        let restored = st.doc.clone();
+        let undo = st.history.undo.len();
+
+        answer_dialog(&mut app, id, &[], true);
+        assert_eq!(app.session.active().unwrap().doc.symbols[0].name, "Badge", "the restored symbol keeps its name");
+        assert_eq!(app.session.active().unwrap().doc, restored);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        dismiss(&mut app, id);
+        open_edit(&mut app, Some("Badge")).unwrap();
+        set(&app, id, "name", json!("New badge"));
+        accept(&mut app, id);
+        assert_eq!(app.session.active().unwrap().doc.symbols[0].name, "New badge");
     }
 }
