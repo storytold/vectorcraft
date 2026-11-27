@@ -55,10 +55,12 @@ type Info = Map<String, Value>;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields = app.session.execute("file.info", &json!({})).map_err(|e| e.to_string())?;
     let fields = fields.as_object().cloned().ok_or("file.info gave no fields")?;
-    let document = app.session.active().ok_or("no document")?.uid;
-    let ok = |app: &mut VectorcraftApp, (document, fields): &(u64, Info)| {
-        if !app.session.active().is_some_and(|active| active.uid == *document) {
-            return Err(tl!("File Info can only change the document it was opened for.").to_owned());
+    let source = app.session.active().ok_or("no document")?;
+    let document = (source.uid, source.reverts);
+    let ok = |app: &mut VectorcraftApp, ((uid, generation), fields): &((u64, u64), Info)| {
+        let source = app.session.active().filter(|st| st.uid == *uid).ok_or(tl!("File Info can only change the document it was opened for."))?;
+        if source.reverts != *generation {
+            return Err(tl!("Reopen File Info after reverting the drawing").into());
         }
         app.run("file.info", Value::Object(fields.clone())).map(|_| ())
     };
@@ -232,7 +234,7 @@ impl Templates {
 /// The File Info dialog: a form over the fields `file.info` reports, whose OK is held for the app.
 pub(crate) struct FileInfoDialog {
     id: DialogId,
-    document: u64,
+    document: (u64, u64),
     open: bool,
     /// OK files its answer for the app instead of closing ([`HoldsOk::held_ok`]).
     hold: bool,
@@ -248,7 +250,7 @@ pub(crate) struct FileInfoDialog {
 }
 
 impl FileInfoDialog {
-    fn new(document: u64, value: Info) -> Self {
+    fn new(document: (u64, u64), value: Info) -> Self {
         FileInfoDialog {
             id: dialog_id(KEY),
             document,
@@ -390,7 +392,7 @@ fn import_options(ui: &mut egui::Ui, mode: &mut &'static str) -> Option<bool> {
 }
 
 impl HoldsOk for FileInfoDialog {
-    type Answer = (u64, Info);
+    type Answer = ((u64, u64), Info);
 
     fn held_ok(mut self) -> Self {
         self.hold = true;
@@ -650,6 +652,42 @@ mod tests {
     fn set(app: &VectorcraftApp, field: &str, value: serde_json::Value) -> Result<(), String> {
         let ctx = app.ui_ctx.clone().unwrap_or_default();
         app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, dialog_id(KEY), field, value))
+    }
+
+    #[test]
+    fn stale_file_info_cannot_replace_metadata_restored_by_revert() {
+        let mut app = windowed();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("file-info-metadata-revert");
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.info", json!({"title": "Saved Title"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("metadata.vectorcraft")})).unwrap();
+        let saved = &app.session.active().unwrap().doc;
+        let (saved_title, saved_metadata) = (saved.info_title().to_owned(), saved.metadata.clone());
+        app.run("file.info", json!({"title": "Unsaved Title"})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        set(&app, "title", json!("Old Draft")).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, generation) = (source.uid, source.reverts);
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reverted = app.session.active().unwrap();
+        assert_eq!(reverted.uid, uid);
+        assert_ne!(reverted.reverts, generation);
+        assert_eq!(reverted.doc.info_title(), saved_title);
+        assert_eq!(reverted.doc.metadata, saved_metadata);
+        let undo = reverted.history.undo.len();
+        crate::tests::picks::answer_dialog(&mut app, dialog_id(KEY), &[], true);
+        let reverted = app.session.active().unwrap();
+        assert_eq!(reverted.doc.info_title(), saved_title);
+        assert_eq!(reverted.doc.metadata, saved_metadata);
+        assert_eq!(reverted.history.undo.len(), undo);
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog_id(KEY))), Some(HeldOk::Refused(_))));
+
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        crate::tests::picks::answer_dialog(&mut app, dialog_id(KEY), &[("title", json!("Fresh Title"))], true);
+        assert_eq!(app.run("file.info", json!({})).unwrap()["title"], json!("Fresh Title"));
     }
 
     /// Presses OK: the dialog files its fields, and the frames after it run the app's OK and close an accepted dialog
