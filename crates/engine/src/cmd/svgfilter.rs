@@ -8,6 +8,8 @@
 //! editing one adds a copy to the document under the default's name, and from then on that copy is
 //! the filter of that name. Deleting the copy lists the default again.
 
+use std::borrow::Cow;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, Document, SvgFilter};
 use vectorcraft_render::effects::svg_filter::defaults::{DEFAULT_FILTERS, default_filter};
@@ -197,17 +199,17 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "filters": filters_json(&s.doc()?.doc) }))
 }
 
-/// The bytes of `p`'s `path`, `svg` text or `dataBase64`, up to [`MAX_IMPORT_BYTES`].
-fn import_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
+/// The bytes of `p`'s `path`, `svg` text or `dataBase64`, up to [`MAX_IMPORT_BYTES`]. Inline SVG borrows its UTF-8 bytes.
+fn import_bytes<'a>(p: &'a Value, cmd: &str) -> Result<Cow<'a, [u8]>> {
     let bytes = match (text_param(p, "path", cmd)?, text_param(p, "svg", cmd)?, text_param(p, "dataBase64", cmd)?) {
         // One byte past the cap is enough to refuse the file below.
-        (Some(path), _, _) => read_file_head(&absolute_path(path), MAX_IMPORT_BYTES + 1)?,
-        (None, Some(svg), _) => svg.as_bytes().to_vec(),
+        (Some(path), _, _) => Cow::Owned(read_file_head(&absolute_path(path), MAX_IMPORT_BYTES + 1)?),
+        (None, Some(svg), _) => Cow::Borrowed(svg.as_bytes()),
         (None, None, Some(encoded)) => {
             if vectorcraft_format::base64_decoded_len(encoded) > MAX_IMPORT_BYTES as u64 {
                 return Err(bad(cmd, format!("the SVG file is larger than {MAX_IMPORT_BYTES} bytes")));
             }
-            vectorcraft_format::base64_decode(encoded).ok_or_else(|| bad(cmd, "bad dataBase64"))?
+            Cow::Owned(vectorcraft_format::base64_decode(encoded).ok_or_else(|| bad(cmd, "bad dataBase64"))?)
         }
         _ => return Err(bad(cmd, "give `path`, an SVG file, `svg`, SVG text, or `dataBase64`, file bytes")),
     };

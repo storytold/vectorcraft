@@ -55,6 +55,11 @@ fn byte_import_refuses_invalid_oversized_and_compressed_files_without_an_edit() 
     let mut s = session();
     assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": "!"})).contains("dataBase64"));
     assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": 3})).contains("must be a string"));
+    let mut inline = "é".repeat(8 << 20);
+    inline.push(' ');
+    assert!(err(&mut s, "svgFilter.import", json!({"svg": inline})).contains("larger than 16777216 bytes"));
+    assert!(names(&mut s).is_empty());
+    assert_eq!(steps(&s), 0);
     for bytes in [vec![0xff], vec![b' '; (16 << 20) + 1], vectorcraft_svg::compress("<svg/>")] {
         assert!(s.execute("svgFilter.import", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).is_err());
         assert!(names(&mut s).is_empty());
