@@ -3,10 +3,12 @@
 //! as one undo step through `paint.setFill` / `paint.setStroke` and makes the colour the Color
 //! Guide's base colour; Cancel puts the art back. Opened for an artboard (Properties › Artboards ›
 //! Fill), it shows the colour on the artboard's paper and OK keeps it through
-//! `artboard.setProps {index, color}`.
+//! `artboard.setProps {index, color}`. Preview and OK require the opening document to be active.
 //!
 //! A command dialog's colour row raises a `ColorRequest`; [`pump`] opens a picker over that dialog
-//! and answers the row with its OK.
+//! and answers the row with its OK. Every picker has the Color Swatches view; one over Recolor
+//! Artwork shows the library that Limit to Library limits to. The OK for a Save for Web colour table cell shifts the cell's
+//! colour in the table instead ([`super::save_for_web::take_palette_pick`]).
 //!
 //! Fields agents set with `ui.dialog.set`: the framework picker's (`color`, `mode`, `webColors`,
 //! `swatches`, `library`). `stroke`, `artboard` and `color` come from the opener.
@@ -41,9 +43,24 @@ pub(crate) enum Target {
     /// The stroke proxy.
     Stroke,
     /// The background colour of this artboard.
-    Artboard(usize),
+    Artboard { document: u64, reverts: u64, index: usize },
     /// A colour row `key` of the open dialog `parent`.
     Answer { parent: DialogId, key: String },
+}
+
+impl Target {
+    fn in_active_document(&self, app: &VectorcraftApp) -> bool {
+        self.document_problem(app).is_none()
+    }
+
+    fn document_problem(&self, app: &VectorcraftApp) -> Option<&'static str> {
+        let Self::Artboard { document, reverts, .. } = self else { return None };
+        match app.session.active() {
+            Some(st) if st.uid == *document && st.reverts == *reverts => None,
+            Some(st) if st.uid == *document => Some(tl!("The document was reverted. Reopen this dialog to continue.")),
+            _ => Some(tl!("The active document changed while the Color Picker was open")),
+        }
+    }
 }
 
 /// One open Color Picker: what the dialog itself does not know.
@@ -103,7 +120,7 @@ pub(crate) fn open_picker(app: &VectorcraftApp) -> Option<DialogId> {
 
 /// The document's swatches and the swatch libraries as the picker's Color Swatches view: solid
 /// colours only, tints as their colour.
-fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
+pub(crate) fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
     let solid = |swatches: &[vectorcraft_color::Swatch]| -> Vec<(Label, Srgba)> {
         swatches.iter().filter_map(|s| Some((Label::from(s.name.clone()), srgba(&s.paint.color()?)))).collect()
     };
@@ -123,6 +140,15 @@ fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
     PickerSwatches::new(libraries, tl!("Open a document to see its swatches."))
 }
 
+/// The index in [`swatch_view`]'s libraries of the library a Limit to Library key names
+/// (`"document"` or a library id); `None` when the view does not list it.
+fn library_index(app: &VectorcraftApp, limit: &str) -> Option<usize> {
+    if limit == swatchlib::DOCUMENT_SWATCHES {
+        return Some(0);
+    }
+    colour_libraries(app).iter().position(|lib| lib.id == limit).map(|i| i + 1)
+}
+
 /// The working CMYK profile as the picker's CMYK converter, so its CMYK fields follow the document's
 /// inks; `None` (the picker's built-in coated CMYK) when the profile can't link to sRGB.
 fn working_cmyk() -> Option<CmykConverter> {
@@ -139,14 +165,17 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         None | Some(Value::Null) => None,
         Some(v) => {
             let index = v.as_u64().and_then(|i| usize::try_from(i).ok());
-            let found = index.and_then(|i| Some((i, app.session.active()?.doc.artboards.get(i)?.color)));
-            let (i, color) = found.ok_or("no such artboard")?;
-            Some((i, color.unwrap_or(Color::WHITE)))
+            let found = index.and_then(|i| {
+                let st = app.session.active()?;
+                let color = st.doc.artboards.get(i)?.color.unwrap_or(Color::WHITE);
+                Some((st.uid, st.reverts, i, color))
+            });
+            Some(found.ok_or("no such artboard")?)
         }
     };
     let color = match (p.get("color"), artboard) {
         (Some(v), _) => color_value(v).ok_or_else(|| format!("bad color {v}"))?,
-        (None, Some((_, c))) => c,
+        (None, Some((_, _, _, c))) => c,
         (None, None) => proxy_color(app, stroke),
     };
     let dialogs = app.dialogs().ok_or("no window")?;
@@ -173,19 +202,20 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if matches!(color, Color::Cmyk { .. } | Color::Lab { .. }) {
         dialog = dialog.kept(model_values(&color));
     }
-    // PLAN: assumed the dialog's own `instance` keeps artboards apart; the host replaces a picker only for the same target.
-    if let Some((i, _)) = artboard {
-        dialog = dialog.instance(i);
+    // The host replaces a picker only for the same document and artboard.
+    if let Some((document, _, index, _)) = artboard {
+        dialog = dialog.instance((document, index));
     }
     let id = dialogs.with(|h| h.open(dialog));
     // A picker the open replaced leaves its preview behind: end it.
-    let before = app.color_dialogs.pickers.len();
-    app.color_dialogs.pickers.retain(|o| o.id != id);
-    if app.color_dialogs.pickers.len() != before {
-        let _ = app.session.cancel_interaction();
+    if let Some(at) = app.color_dialogs.pickers.iter().position(|open| open.id == id) {
+        let retired = app.color_dialogs.pickers.remove(at);
+        if retired.target.in_active_document(app) {
+            let _ = app.session.cancel_interaction();
+        }
     }
     let target = match artboard {
-        Some((i, _)) => Target::Artboard(i),
+        Some((document, reverts, index, _)) => Target::Artboard { document, reverts, index },
         None if stroke => Target::Stroke,
         None => Target::Fill,
     };
@@ -203,8 +233,20 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     while let Some((parent, request)) = dialogs.with(|h| h.take_color_request()) {
         let start = request.color.unwrap_or(Srgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 });
         let key = request.key.clone();
-        let child = ColorPickerDialog::from_request(request).eyedropper(true).add_to_swatches(false).gamut(gamut(app)).working_rgb(WorkingRgb);
+        let library = super::recolor::limit_to(&dialogs, parent).and_then(|limit| library_index(app, &limit));
+        let child = ColorPickerDialog::from_request(request)
+            .eyedropper(true)
+            .add_to_swatches(false)
+            .gamut(gamut(app))
+            .working_rgb(WorkingRgb)
+            .swatch_view(swatch_view(app));
         let id = dialogs.with(|h| h.open_child(child, parent));
+        // Over Recolor Artwork, the swatches view shows the library that Limit to Library limits to.
+        if let Some(i) = library
+            && let Err(e) = dialogs.with(|h| h.set_json_field(ctx, id, "library", json!(i)))
+        {
+            app.status(e);
+        }
         app.color_dialogs.pickers.push(Open { id, target: Target::Answer { parent, key }, start, keep: false, preview: LivePreview::default() });
     }
     let busy = app.screen_pick.busy();
@@ -251,9 +293,20 @@ fn finish(
     open: &mut Open,
     result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>,
 ) {
+    // Switching or restoring a drawing ends the preview belonging to its old contents.
+    if let Some(reason) = open.target.document_problem(app) {
+        if matches!(result, Some(DialogResult::Ok(_))) {
+            app.status(reason);
+        }
+        return;
+    }
     let preview = std::mem::take(&mut open.preview);
     match (result, &open.target) {
-        (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => dialogs.with(|h| h.answer_color(*parent, key, r.picked.color)),
+        (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => {
+            if !super::save_for_web::take_palette_pick(app, *parent, key, open.start, r.picked.color) {
+                dialogs.with(|h| h.answer_color(*parent, key, r.picked.color));
+            }
+        }
         (Some(DialogResult::Ok(r)), _) => {
             if let Err(e) = commit(app, open, preview, &r.picked) {
                 app.status(e);
@@ -266,7 +319,7 @@ fn finish(
 /// The command that applies colour `c` to the picker's target, and its params.
 fn paint_command(target: &Target, c: Color) -> (&'static str, Value) {
     match target {
-        Target::Artboard(i) => ("artboard.setProps", json!({ "index": i, "color": color_json(&c) })),
+        Target::Artboard { index, .. } => ("artboard.setProps", json!({ "index": index, "color": color_json(&c) })),
         Target::Stroke => ("paint.setStroke", json!({ "color": color_json(&c) })),
         Target::Fill | Target::Answer { .. } => ("paint.setFill", json!({ "color": color_json(&c) })),
     }
@@ -287,18 +340,18 @@ fn in_document_model(app: &VectorcraftApp, c: Color) -> Color {
 /// then only becomes the default paint, on OK). An artboard shows it with or without a selection.
 fn preview(app: &mut VectorcraftApp, open: &mut Open, picked: &PickedColor) {
     // A picker over a command dialog only fills a row; the dialog previews it.
-    if matches!(open.target, Target::Answer { .. }) {
+    if matches!(open.target, Target::Answer { .. }) || !open.target.in_active_document(app) {
         return;
     }
     let (cmd, params) = paint_command(&open.target, in_document_model(app, color_of(picked)));
     let untouched = !app.session.in_interaction() && picked.color == open.start;
-    let artboard = matches!(open.target, Target::Artboard(_));
+    let artboard = matches!(open.target, Target::Artboard { .. });
     let selected = artboard || app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
     if untouched || !selected {
         return;
     }
     let label = match open.target {
-        Target::Artboard(_) => "Artboard Options",
+        Target::Artboard { .. } => "Artboard Options",
         Target::Stroke => "Stroke Color",
         _ => "Fill Color",
     };
@@ -315,7 +368,7 @@ fn commit(app: &mut VectorcraftApp, open: &Open, preview: LivePreview, picked: &
     let (cmd, params) = paint_command(&open.target, c);
     preview.commit(app, cmd, params)?;
     // A color picked for the fill or stroke also becomes the Color Guide's base color.
-    if !matches!(open.target, Target::Artboard(_)) {
+    if !matches!(open.target, Target::Artboard { .. }) {
         crate::panels::color_guide::choose_base(app, c);
     }
     Ok(())

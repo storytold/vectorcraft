@@ -477,6 +477,92 @@ fn set_changes_the_numbers_in_one_step_and_nothing_without_a_change() {
 }
 
 #[test]
+fn set_keeps_the_reference_point_of_the_bounding_box_in_place() {
+    let mut s = session();
+    let corner = |s: &Session, id: NodeId, i: usize| s.transform_box(&[id]).unwrap().reference_point(i);
+    // (kind, its own rotation, a turn with object.rotate, which turns its bounding box too)
+    for (kind, rotation, turn) in [
+        ("rectangle", 0.0, 0.0),
+        ("rectangle", 30.0, 0.0),
+        ("rectangle", 180.0, 0.0),
+        ("rectangle", 0.0, 30.0),
+        ("star", 0.0, 0.0),
+        ("heart", 0.0, 0.0),
+    ] {
+        let r = s.execute("addon.pathtools.shape.create", &json!({"kind": kind, "center": [200, 150], "rotation": rotation})).unwrap();
+        let id = id_of(&r);
+        if turn != 0.0 {
+            s.execute("object.rotate", &json!({"angle": turn, "origin": [200, 150]})).unwrap();
+            assert!(s.transform_box(&[id]).unwrap().angle != 0.0, "the box turns with the object");
+        }
+        // Each of the 9 points of the box the Transform panel shows stays where it was while the
+        // width and then the height change, as `object.setBounds` keeps it.
+        for refi in 0..9 {
+            for key in ["width", "height"] {
+                let (before, was) = (shape_of(&s, id).unwrap(), corner(&s, id, refi));
+                let grown = if key == "width" { before.width } else { before.height } + 10.0;
+                s.execute("addon.pathtools.shape.set", &json!({"id": id.0, key: grown, "reference": refi})).unwrap();
+                let moved = corner(&s, id, refi).distance(was);
+                assert!(moved < 1e-6, "{kind} at {rotation}°, reference {refi}, {key}: the point moved {moved} pt");
+                let after = shape_of(&s, id).unwrap();
+                assert!((if key == "width" { after.width } else { after.height } - grown).abs() < 1e-9, "{kind}, {key}: the new size");
+            }
+        }
+        // Without a reference point, and with an explicit center, the old rules hold.
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 80})).unwrap();
+        let c = shape_of(&s, id).unwrap().center;
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 120})).unwrap();
+        assert!(shape_of(&s, id).unwrap().center.distance(c) < 1e-9, "the center stays by default");
+        s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 60, "center": [10, 20], "reference": 0})).unwrap();
+        assert!(shape_of(&s, id).unwrap().center.distance(Point::new(10.0, 20.0)) < 1e-9, "a center given wins");
+    }
+    let id = star(&mut s);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[
+            json!({"id": id.0, "width": 50, "reference": -1}),
+            json!({"id": id.0, "width": 50, "reference": 1.5}),
+            json!({"id": id.0, "width": 50, "reference": 9}),
+            json!({"id": id.0, "width": 50, "reference": 9.0}),
+        ],
+    );
+    // A whole number written with a decimal point picks the same point.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 50, "reference": 8.0})).unwrap();
+    let written_whole = shape_of(&s, id).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 50, "reference": 8})).unwrap();
+    assert!(shape_of(&s, id).unwrap().center.distance(written_whole.center) < 1e-9, "`8.0` and `8` pick the same point");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // With Use Preview Bounds the point is on the box as drawn: a star's stroked tips reach past
+    // its anchors by more as the star is stretched, so the drawn box and the anchors' box move apart.
+    s.prefs.use_preview_bounds = true;
+    let stroked = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": "star", "center": [300, 300], "count": 5})).unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "color": "#000000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [stroked.0], "weight": 12})).unwrap();
+    let geometric = |s: &Session, i: usize| s.doc().unwrap().doc.oriented_bounds(&[stroked], false).unwrap().reference_point(i);
+    for refi in [0, 2, 6, 8] {
+        let (was, anchors_were) = (corner(&s, stroked, refi), geometric(&s, refi));
+        let wide = shape_of(&s, stroked).unwrap().width * 2.5;
+        s.execute("addon.pathtools.shape.set", &json!({"id": stroked.0, "width": wide, "reference": refi})).unwrap();
+        let moved = corner(&s, stroked, refi).distance(was);
+        assert!(moved < 1e-6, "stroked star, reference {refi}: the drawn box's point moved {moved} pt");
+        assert!(geometric(&s, refi).distance(anchors_were) > 1e-3, "reference {refi}: the anchors' box is not the one kept");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    s.prefs.use_preview_bounds = false;
+    // A shape set by id, not selected, that the edit would take past the coordinate limit.
+    let edge = id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": "rectangle", "center": [3_999_900, 100]})).unwrap());
+    select(&mut s, &[]);
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({"id": edge.0, "width": 180, "reference": 0}), json!({"id": edge.0, "center": [3_999_990, 100]})],
+    );
+    s.execute("addon.pathtools.shape.set", &json!({"id": edge.0, "width": 180, "reference": 2})).unwrap();
+}
+
+#[test]
 fn bad_shape_params_are_refused() {
     let mut s = session();
     let id = star(&mut s);
@@ -1084,6 +1170,64 @@ fn the_tangent_circle_tool_keeps_its_first_segment_when_drawing_fails() {
     at(&mut s, PointerKind::Up, 200.0, 139.0).unwrap();
     assert_eq!(steps(&s), n + 1, "one undo step");
     assert!(!shown(&mut s), "the first segment is forgotten once the circle is drawn");
+}
+
+/// With Add Points to Existing Paths on, the Tangent Circle tool's circle and an anchor point where
+/// it touches each line are one undo step; the lines keep their shape, and one Undo takes all of it
+/// back.
+#[test]
+fn the_tangent_circle_tool_adds_points_where_the_circle_touches_in_one_step() {
+    let mut s = session();
+    let a = line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    let b = line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    s.set_tool_option("addPoints", &json!(true));
+    let n = steps(&s);
+    for (kind, x, y) in
+        [(PointerKind::Down, 150.0, 101.0), (PointerKind::Up, 150.0, 101.0), (PointerKind::Down, 200.0, 139.0), (PointerKind::Up, 200.0, 139.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    let points = |s: &Session, id| path(s, id).subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>();
+    let near = |got: Vec<(f64, f64)>, want: &[(f64, f64)]| {
+        got.len() == want.len() && got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6)
+    };
+    assert!(near(points(&s, a), &[(100.0, 100.0), (150.0, 100.0), (300.0, 100.0)]), "{:?}", points(&s, a));
+    assert!(near(points(&s, b), &[(100.0, 140.0), (150.0, 140.0), (300.0, 140.0)]), "{:?}", points(&s, b));
+    let st = s.doc().unwrap();
+    let [circle] = st.selection.objects[..] else { panic!("{:?}", st.selection.objects) };
+    let r = st.doc.node(circle).and_then(|c| c.path_data()).and_then(|pd| pd.bounds()).unwrap();
+    assert!((r.x0 - 130.0).abs() < 1e-6 && (r.y0 - 100.0).abs() < 1e-6 && (r.width() - 40.0).abs() < 1e-6, "{r:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((steps(&s), points(&s, a).len(), points(&s, b).len()), (n, 2, 2));
+    assert!(s.doc().unwrap().doc.node(circle).is_none(), "the circle is gone too");
+}
+
+/// In Draw Behind, the Tangent Circle tool's circle goes behind the object selected before the
+/// clicks, also when Add Points to Existing Paths adds anchors to lines that were not selected.
+#[test]
+fn the_tangent_circle_tool_adding_points_draws_behind_the_selection() {
+    let mut s = session();
+    line(&mut s, &[(100.0, 100.0), (300.0, 100.0)], false);
+    line(&mut s, &[(100.0, 140.0), (300.0, 140.0)], false);
+    let other = line(&mut s, &[(100.0, 400.0), (300.0, 400.0)], false);
+    select(&mut s, &[other]);
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let view = ViewInfo { smart_guides: false, ..ViewInfo::default() };
+    s.select_tool("tangentCircle", view).unwrap();
+    s.set_tool_option("addPoints", &json!(true));
+    for (kind, x, y) in
+        [(PointerKind::Down, 150.0, 101.0), (PointerKind::Up, 150.0, 101.0), (PointerKind::Down, 200.0, 139.0), (PointerKind::Up, 200.0, 139.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+    let st = s.doc().unwrap();
+    let [circle] = st.selection.objects[..] else { panic!("{:?}", st.selection.objects) };
+    let at = |id| st.doc.position(id).map(|(parent, index, _)| (parent, index));
+    let (Some((p, c)), Some((q, o))) = (at(circle), at(other)) else { panic!("not placed") };
+    assert!(p == q && c + 1 == o, "the circle is right behind the selected line: {c} and {o}");
 }
 
 fn ids(v: &Value) -> Vec<NodeId> {

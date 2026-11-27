@@ -389,3 +389,16 @@ fn the_automation_read_root_keeps_an_agent_out_of_the_scripts_folder() {
     });
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_startup_listing_over_the_script_limit_keeps_the_first_names_in_order() {
+    let dir = vectorcraft_testkit::TempDir::new("startup-limit");
+    for name in ["d.jsx", "b.jsx", "e.jsx", "a.jsx", "c.jsx"] {
+        touch(&dir, name);
+    }
+    let limits = Limits { scripts: 3, ..Limits::default() };
+    let listing = crate::script::startup::list_with(&dir, &limits, &mut || Duration::ZERO);
+    let names: Vec<_> = listing.scripts.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, ["a.jsx", "b.jsx", "c.jsx"]);
+    assert!(listing.truncated);
+}

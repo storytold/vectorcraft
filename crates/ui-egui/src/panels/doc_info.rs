@@ -31,13 +31,41 @@ pub struct DocInfoView {
 }
 
 /// A `label: value` row. `label` is shown as given: translate an interface label first, a name
-/// stays as it is.
-pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
-    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+/// stays as it is. Whether the value was clicked to copy it: a click with no key held, other than
+/// the second or third click of a double or triple click.
+pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
+    let mut clicked = false;
+    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
-        // The value can be selected and copied (#8432).
-        SelectableText::new(label.to_string(), &value).show(ui);
+        // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
+        // and a Shift-click extends the selection, so neither copies.
+        let shown = SelectableText::new(label.to_string(), value).show(ui);
+        // The click's own position and keys: a move or a key change after the release in the same
+        // frame leaves the pointer and the held keys elsewhere. A frame with more than one release
+        // copies nothing, since the click flags below do not say which release they describe.
+        let area = shown.interact_rect.intersect(ui.clip_rect());
+        let primary = egui::PointerButton::Primary;
+        let release = ui.input(|i| {
+            let mut releases = i.events.iter().filter_map(|e| match e {
+                egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
+                _ => None,
+            });
+            let release = releases.next().filter(|_| releases.next().is_none());
+            let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
+            release.filter(|_| single)
+        });
+        clicked = release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
     });
+    clicked
+}
+
+/// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
+/// `document.info` lists them under Document whatever this says.
+fn no_artwork_selected(app: &VectorcraftApp) -> bool {
+    match app.session.active() {
+        Some(st) => st.selection.objects.is_empty(),
+        None => true,
+    }
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
@@ -64,7 +92,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let DocInfoView { selection_only: sel_only, category } = app.ui.doc_info.clone();
+    let mut copy = None;
     Stack::new().show(ui, |ui, _| {
+        if sel_only && no_artwork_selected(app) {
+            Text::new(tl!("(No artwork selected)").to_string()).shade(Shade::Muted).show(ui);
+        }
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
         for (n, s) in shown.enumerate() {
@@ -92,11 +124,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
                 } else {
                     let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
-                    row(ui, super::label_or_name(label, !named.contains(&k)), shown);
+                    if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
+                        copy = Some(shown);
+                    }
                 }
             }
         }
     });
+    if let Some(text) = copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
+    }
 }
 
 /// A Brushes row's value in the interface language: the brush's type (`Art Brush`), or that the
@@ -892,5 +930,80 @@ mod tests {
         // A full grid shows its rows and columns alone; an unknown kind is shown as `document.info` gives it.
         assert_eq!(in_lang("de", &json!({"type": "grid", "rows": 1, "cols": 3, "instances": 3})), "Rasterwiederholung, 1 Zeile × 3 Spalten");
         assert_eq!(repeat_value(&json!({"type": "spiral", "instances": 2})), None);
+    }
+
+    /// Objects rows the panel paints with Selection Only `on`, the Objects category shown.
+    fn objects_panel(app: &mut VectorcraftApp, on: bool) -> String {
+        app.ui.doc_info.selection_only = on;
+        app.ui.doc_info.category = "objects".to_string();
+        crate::tests_labels::painted_text(app, show)
+    }
+
+    /// With Selection Only off, Objects counts every object in the document.
+    #[test]
+    fn test_doc_info_counts_entire_document() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 80, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Hi"})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let text = objects_panel(&mut app, false);
+        assert!(text.contains("Paths\n2\n") && text.contains("Text Objects\n1\n"), "{text}");
+        assert!(!text.contains("(No artwork selected)"), "{text}");
+    }
+
+    /// Selection Only counts the selected object and what it holds, and an empty selection says so.
+    #[test]
+    fn test_doc_info_selection_only_toggles_and_filters_counts() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let path = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].clone();
+        let text_id = app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Hi"})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [text_id]})).unwrap();
+        let text = objects_panel(&mut app, true);
+        assert!(text.contains("Text Objects\n1\n") && !text.contains("Paths\n"), "the selected type only: {text}");
+        app.session.execute("select.set", &json!({"ids": [path]})).unwrap();
+        let path_only = objects_panel(&mut app, true);
+        assert!(path_only.contains("Paths\n1\n") && !path_only.contains("Text Objects\n"), "the selected path only: {path_only}");
+        app.session.execute("select.none", &json!({})).unwrap();
+        let empty = objects_panel(&mut app, true);
+        assert!(empty.contains("(No artwork selected)") && !empty.contains("Paths\n") && !empty.contains("Text Objects\n"), "{empty}");
+    }
+
+    /// With Selection Only on, an artboard the Artboard tool has selected still shows under
+    /// Document when no artwork is selected, and the empty-state message speaks of artwork only.
+    #[test]
+    fn test_doc_info_selection_only_keeps_selected_artboard() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([1]));
+        app.ui.doc_info.selection_only = true;
+        app.ui.doc_info.category = "document".to_string();
+        let text = crate::tests_labels::painted_text(&mut app, show);
+        assert!(text.contains("Back"), "the selected artboard: {text}");
+        assert!(!text.contains("(No selection)"), "no generic empty state: {text}");
+        assert!(text.contains("(No artwork selected)"), "{text}");
+    }
+
+    /// The panel menu's Selection Only item toggles `selection_only` and updates its checked state.
+    #[test]
+    fn test_doc_info_panel_menu_toggles_state() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let check = |app: &VectorcraftApp| {
+            let mut states = CommandStates::default();
+            menu_states(app, &mut states);
+            states.get(&CommandRef::new("ui.docInfo.selectionOnly")).and_then(CommandState::is_checked)
+        };
+        assert_eq!(check(&app), Some(false));
+        run(&mut app, "ui.docInfo.selectionOnly", &json!({})).unwrap().unwrap();
+        assert_eq!(check(&app), Some(true));
+        run(&mut app, "ui.docInfo.selectionOnly", &json!({})).unwrap().unwrap();
+        assert_eq!(check(&app), Some(false));
     }
 }

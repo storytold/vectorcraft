@@ -16,6 +16,15 @@
 | `crates/text/patterns/hyph-or.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex | MIT (selected option) | Unmodified; full license in file |
 | `crates/text/patterns/hyph-as.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex | MIT (selected option) | Unmodified; full license in file |
 
+## Printing-condition characterization data
+
+Fogra's terms (https://fogra.org/en/downloads/work-tools/characterisation-data): "Free use and redistribution of the Fogra characterisation data is permitted, including redistribution as part of commercial and non-commercial software, provided that the data are distributed unmodified and Fogra is identified as the source. The designation FOGRAxx may be used solely to identify the respective reference data. Such use does not imply certification, approval or endorsement by Fogra." VectorCraft computes its Coated CMYK (FOGRA51) and Uncoated CMYK (FOGRA52) working spaces from these files at run time; the files themselves are not changed.
+
+| Asset | Author | Source | Licence | Notes |
+|---|---|---|---|---|
+| `crates/color/data/FOGRA51.txt` | Fogra Forschungsgesellschaft Druck e.V. (www.fogra.org) | https://fogra.org/fileadmin/files/7_downloads/Charakterisierungsdaten/F51-52.zip | Fogra characterization data terms (above): redistribution of the unmodified data with Fogra named as the source | Unmodified, byte for byte (SHA-256 `ad472a1c0bdafd558597ff93eeda5175805086565af814cb6346e910e2f25aa5`, checked by a test) |
+| `crates/color/data/FOGRA52.txt` | Fogra Forschungsgesellschaft Druck e.V. (www.fogra.org) | https://fogra.org/fileadmin/files/7_downloads/Charakterisierungsdaten/F51-52.zip | Fogra characterization data terms (above): redistribution of the unmodified data with Fogra named as the source | Unmodified, byte for byte (SHA-256 `be4f0732328ed62ade63ec7f317d3b9e9dad6bbe2430fefddaf0f901d5ba13d6`, checked by a test) |
+
 Every non-code asset in this repository (icons, images, fonts, example art, colour profiles, presets) is listed here with its author, source and licence. `cargo xtask assets` (part of `cargo xtask ci`) fails if an asset file is missing from this table.
 
 **Policy (mandatory):** VectorCraft contains **no Adobe iconography, images, artwork, presets, swatch/brush/symbol/pattern libraries or ICC profiles**. Every asset is either original work by VectorCraft contributors, or third-party material under an open licence (OSI open source, public domain / CC0, or Creative Commons that allows redistribution), and it is attributed below. Screenshots of Adobe software are never committed. The one exception is the ArtCraft name, wordmark and logos in `docs/brand/`: ArtCraft trademarks, not open source, usable only under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
@@ -51,6 +60,10 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/app-icon/hicolor/scalable/apps/ai.storyteller.vectorcraft.svg` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
 | `assets/app-icon/vectorcraft-1024.png` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
 | `assets/app-icon/vectorcraft-macos-512.png` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
+| `assets/app-icon/vectorcraft-nightly-1024.png` | Project owner (ArtCraft team) | Recoloured from the stable app tile by `packaging/nightly-icons.py`, original artwork drawn in ArtCraft for VectorCraft | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | Nightly `.app` master: the full tile with Apple's margin, 1024 px |
+| `assets/app-icon/vectorcraft-nightly.icns` | Project owner (ArtCraft team) | Recoloured from the stable app tile by `packaging/nightly-icons.py`, original artwork drawn in ArtCraft for VectorCraft | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | Nightly macOS icon set, 16 to 1024 px |
+| `assets/app-icon/vectorcraft-nightly.ico` | Project owner (ArtCraft team) | Recoloured from the stable app tile by `packaging/nightly-icons.py`, original artwork drawn in ArtCraft for VectorCraft | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | Nightly Windows icons, 16 to 256 px |
+| `assets/app-icon/vectorcraft-nightly.png` | Project owner (ArtCraft team) | Recoloured from the stable app tile by `packaging/nightly-icons.py`, original artwork drawn in ArtCraft for VectorCraft | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | Nightly feed art and window icon, 1024 px |
 | `assets/app-icon/vectorcraft-small.svg` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
 | `assets/app-icon/vectorcraft.icns` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
 | `assets/app-icon/vectorcraft.ico` | Project owner (ArtCraft team) | Original artwork drawn in ArtCraft for VectorCraft, vectorised and rendered by `packaging/icons.sh` | MIT OR Apache-2.0 (`assets/app-icon/LICENSE.txt`) | App icon (engraved dragon) |
@@ -137,14 +150,18 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-arrow-down.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-extend.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-fill.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | The Selection and Direct Selection arrows' fill, painted black or white under their outline |
+| `assets/icons/dc-arrow-left.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-arrow-right.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-tip.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-arrow-up.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-artboard.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-artboard-options.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-artboards.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-blend.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-blend-align-page.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/icons/dc-blend-align-path.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 | |
 | `assets/icons/dc-bloat.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-blob-brush.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-cap-butt.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-cap-round.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-cap-square.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -207,6 +224,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-graphic-styles.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grid-view.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-group-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-horizontal.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler down the left with a line across) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-guide-vertical.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a ruler along the top with a line down) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-help.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a question mark in a circle) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-bevel.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-miter.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -223,6 +242,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-live-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-mask-none.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-measure.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-measure-inspect.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-mesh.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-mirror-cut.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-new-fill.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -241,6 +261,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-para-numbers.svg` | VectorCraft contributors | Original work, drawn for VectorCraft: the digits 1, 2 and 3, each before a line | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-para-right.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-para-rtl.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-parametric-shape.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-path-eraser.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-pathfinder.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-perspective-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -258,32 +279,38 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-place-symbol.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-polar-grid.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-polygon.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-print-tiling.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-pucker.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-puppet.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-quick-pen.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a line and a half circle with a dot at each point) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rearrange.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-recolor-arrow.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a right arrow, a Recolor Artwork row that is recolored) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-recolor-arrow-off.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a dashed line without a head, a Recolor Artwork row that is excluded) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-rect.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-cut.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-grid.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-reference-point.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-remove-brush.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-reshape.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-reverse.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-rotate.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rotate-view.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rounded-rect.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rule-evenodd.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rule-nonzero.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-scale.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-scallop.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-screen-mode.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-selection.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-shape-builder.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-shaper.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-shared-edge.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-shear.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-slice-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-slice.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-slide-anchor.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-smooth.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-spiral.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-stroke-center.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-stroke-inside.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-stroke-outside.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -301,6 +328,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-symbol-sprayer.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-symbol-stainer.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-symbol-styler.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-tangent-circle.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-touch-type.svg` | VectorCraft contributors (designed by ham9zah) | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-transform-panel.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-transparency.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -311,6 +339,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-type-vertical.svg` | VectorCraft contributors (designed by ham9zah) | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-type-vertical-area.svg` | VectorCraft contributors (designed by ham9zah) | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-type-vertical-path.svg` | VectorCraft contributors (designed by ham9zah) | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-warp.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-width-profile.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-width.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-wrinkle.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |

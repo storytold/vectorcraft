@@ -85,6 +85,16 @@ impl<T> PropMap<T> {
         }
     }
 
+    /// Sets the value under `k` like [`Self::insert`], but puts a new `k` right after `after`
+    /// when that is there.
+    pub(crate) fn insert_after(&mut self, after: &[u16], k: Key, v: T) {
+        let Some(at) = self.position(after).filter(|_| !self.contains(&k)) else { return self.insert(k, v) };
+        self.entries.insert(at + 1, Some((k, v)));
+        self.live += 1;
+        self.index = None;
+        self.rebuild_index();
+    }
+
     pub(crate) fn remove(&mut self, k: &[u16]) -> Option<T> {
         let i = self.position(k)?;
         let (_, v) = self.entries.get_mut(i)?.take()?;
@@ -171,6 +181,8 @@ pub(crate) enum NativeKind {
     Apply,
     /// The global `eval`: a call to it by that name is a direct eval.
     Eval,
+    /// `%GeneratorPrototype%`'s `next`, `return` or `throw`.
+    Resume(crate::generator::ResumeMode),
 }
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
@@ -178,11 +190,12 @@ pub(crate) enum NativeKind {
 /// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
 /// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
 /// is called when that code ends. `Pausable` is a built-in that may ask the host for a value the
-/// run to wait for ([`crate::interp::Pause`]).
+/// run to wait for ([`crate::interp::Pause`]). A `Native`'s `prefix` is `get ` or `set ` for a
+/// built-in accessor's function and empty otherwise; its ECMAScript 2015 `name` starts with it.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
-    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
+    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str, prefix: &'static str },
     Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
@@ -227,6 +240,15 @@ pub(crate) enum Class {
     RegExp(Rc<crate::regexp_vm::Regex>),
     /// A `Date` object and its time value.
     Date(f64),
+    /// A Symbol object made by ToObject, with its Symbol (ECMA-262 11th edition, section 19.4).
+    Symbol(crate::symbol::Sym),
+    /// An Array Iterator or a String Iterator and how far it has gone (sections 22.1.5 and 21.1.5).
+    Iterator(Box<crate::builtins::iterator::IterState>),
+    /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
+    /// operand stack only.
+    IterRecord(Box<crate::iteration::IterRecord>),
+    /// A generator object and its state (ECMA-262 11th edition, section 25.4).
+    Generator(Box<crate::generator::GenState>),
     ForIn(Box<ForIn>),
     /// The `Math` object (section 15.8).
     Math,
@@ -246,8 +268,18 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An `XMPMeta` object and its metadata ([`crate::xmp_classes`]).
+    Xmp(Box<crate::xmp::Meta>),
+    /// An object the `XMPFile` constructor made ([`crate::xmp_classes`]).
+    XmpFile(Box<PropMap<Value>>),
+    /// An object of a class a host defined ([`crate::host_classes`]).
+    Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
     UnitValue(Box<crate::unit_value::Measure>),
+    /// A promise (ECMA-262 11th edition, section 25.6) and its state.
+    Promise(Box<crate::builtins::promise::PromiseData>),
+    /// The state that the functions a promise operation makes share; scripts never see it.
+    PromiseRecord(Box<crate::builtins::promise::Record>),
 }
 
 /// What an XML value is.
@@ -311,10 +343,17 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) => "Object",
+            Class::XmlFilter(_) | Class::Xmp(_) | Class::XmpFile(_) | Class::PromiseRecord(_) => "Object",
+            Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) => "Object",
+            Class::Ordinary
+            | Class::ForIn(_)
+            | Class::Host(_)
+            | Class::Symbol(_)
+            | Class::Iterator(_)
+            | Class::IterRecord(_)
+            | Class::Generator(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -334,11 +373,13 @@ pub(crate) struct Object {
     pub(crate) proto: Option<ObjId>,
     pub(crate) extensible: bool,
     pub(crate) props: PropMap<Prop>,
+    /// The properties whose keys are Symbols, once the object has one.
+    pub(crate) syms: Option<Box<crate::symbol::SymProps>>,
 }
 
 impl Object {
     pub(crate) fn new(class: Class, proto: Option<ObjId>) -> Self {
-        Self { class, proto, extensible: true, props: PropMap::default() }
+        Self { class, proto, extensible: true, props: PropMap::default(), syms: None }
     }
 }
 
@@ -418,6 +459,8 @@ pub(crate) const XML_LIST_BYTES: usize = 96;
 pub(crate) const XML_REF_BYTES: usize = 8;
 /// The estimated bytes of a namespace an XML node holds.
 pub(crate) const XML_NS_BYTES: usize = 48;
+/// The estimated bytes of a Symbol without its description.
+pub(crate) const SYMBOL_BYTES: usize = 48;
 /// The estimated bytes of the measurement a `UnitValue` object holds.
 pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
@@ -490,6 +533,22 @@ impl Heap {
         match self.cells.get_mut(id.0 as usize) {
             Some(Cell::Env(e)) => Some(e),
             _ => None,
+        }
+    }
+
+    /// The objects in the heap, in the order of their cells.
+    pub(crate) fn object_ids(&self) -> Vec<ObjId> {
+        let ids = self.cells.iter().enumerate().filter(|(_, c)| matches!(c, Cell::Object(_)));
+        ids.filter_map(|(i, _)| u32::try_from(i).ok().map(ObjId)).collect()
+    }
+
+    pub(crate) fn reset_xmp_files(&mut self) {
+        for cell in &mut self.cells {
+            if let Cell::Object(object) = cell
+                && let Class::XmpFile(fields) = &mut object.class
+            {
+                crate::xmp_classes::reset_file_state(fields);
+            }
         }
     }
 
@@ -582,13 +641,31 @@ impl StringSizes {
             self.bytes += string_bytes(k.len());
         }
     }
+
+    /// Adds a Symbol and its description, once however many values and keys share it.
+    fn add_symbol(&mut self, s: &crate::symbol::Sym) {
+        if self.seen.insert(s.addr()) {
+            self.bytes += SYMBOL_BYTES;
+            if let Some(d) = s.description() {
+                self.add(d);
+            }
+        }
+    }
 }
 
 fn mark_value(v: &Value, work: &mut Vec<u32>, strings: &mut StringSizes) {
     match v {
         Value::Object(o) => work.push(o.0),
         Value::String(s) => strings.add(s),
+        Value::Symbol(s) => strings.add_symbol(s),
         _ => {}
+    }
+}
+
+fn mark_prop(prop: &Prop, work: &mut Vec<u32>, strings: &mut StringSizes) {
+    match prop {
+        Prop::Data { value, .. } => mark_value(value, work, strings),
+        Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
     }
 }
 
@@ -620,6 +697,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.names.len()
             + code.functions.len()
             + code.params.len()
+            + code.pattern_names.len()
             + code.vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
@@ -639,7 +717,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.pattern_names).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }
@@ -659,10 +737,12 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
     }
     for (k, prop) in o.props.iter() {
         strings.add_key(k);
-        match prop {
-            Prop::Data { value, .. } => mark_value(value, work, strings),
-            Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
-        }
+        mark_prop(prop, work, strings);
+    }
+    let syms = o.syms.as_ref().map_or(0, |m| m.len());
+    for (k, prop) in o.syms.iter().flat_map(|m| m.iter()) {
+        strings.add_symbol(k);
+        mark_prop(prop, work, strings);
     }
     let mut extra = 0;
     match &o.class {
@@ -689,6 +769,38 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.object.iter().map(|o| o.0));
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         }
+        Class::Symbol(s) => strings.add_symbol(s),
+        Class::IterRecord(r) => {
+            mark_value(&r.iterator, work, strings);
+            mark_value(&r.next, work, strings);
+            match &r.walk {
+                Some(crate::iteration::Walk::Array(a, _)) => work.push(a.0),
+                Some(crate::iteration::Walk::String(s, _)) => strings.add(s),
+                None => {}
+            }
+        }
+        Class::Iterator(state) => match &**state {
+            crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
+            crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),
+        },
+        Class::Generator(state) => {
+            if let Some(saved) = state.saved() {
+                work.push(saved.env.0);
+                work.push(saved.var_env.0);
+                work.extend(saved.callee.iter().map(|o| o.0));
+                work.extend(saved.marks.iter().map(|&(id, _, _)| id.0));
+                mark_value(&saved.this, work, strings);
+                mark_value(&saved.completion, work, strings);
+                for v in &saved.stack {
+                    mark_value(v, work, strings);
+                }
+                mark_code(&saved.code, strings);
+                for ((code, _), _) in &saved.sites {
+                    mark_code(code, strings);
+                }
+                extra = crate::generator::saved_bytes(saved);
+            }
+        }
         Class::Xml(node) => {
             work.extend(node.parent.iter().chain(&node.attrs).chain(&node.children).map(|o| o.0));
             strings.add(&node.value);
@@ -713,10 +825,33 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::Xmp(meta) => extra = meta.heap_bytes(),
+        Class::XmpFile(fields) => {
+            for (name, value) in fields.iter() {
+                strings.add_key(name);
+                mark_value(value, work, strings);
+            }
+            extra = std::mem::size_of::<PropMap<Value>>() + PROP_BYTES * fields.len();
+        }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Promise(p) => {
+            for v in p.values() {
+                mark_value(&v, work, strings);
+            }
+            if let Some((code, _)) = &p.site {
+                mark_code(code, strings);
+            }
+            extra = p.bytes();
+        }
+        Class::PromiseRecord(r) => {
+            for v in r.values() {
+                mark_value(&v, work, strings);
+            }
+            extra = crate::builtins::promise::RECORD_BYTES;
+        }
         _ => {}
     }
-    OBJECT_BYTES + PROP_BYTES * o.props.len() + extra
+    OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra
 }
 
 fn add_name(name: &XmlName, strings: &mut StringSizes) {
@@ -762,6 +897,28 @@ mod tests {
         let id = heap.alloc_object(object);
         heap.collect(&Roots { objects: vec![id], ..Roots::default() });
         assert_eq!(heap.bytes, OBJECT_BYTES + 2 * PROP_BYTES + string_bytes(1000) + string_bytes(5));
+    }
+
+    #[test]
+    fn xmp_file_buffers_are_traced_and_released_at_the_file_run_boundary() {
+        let mut heap = Heap::default();
+        let pending = heap.alloc_object(Object::new(Class::Ordinary, None));
+        let mut fields = PropMap::default();
+        fields.insert(key("__vcXmpPacket"), Value::str(&"p".repeat(8192)));
+        fields.insert(key("__vcXmpPending"), Value::Object(pending));
+        fields.insert(key("__vcXmpPath"), Value::str("kept.xmp"));
+        let file = heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), None));
+        let roots = Roots { objects: vec![file], ..Roots::default() };
+        heap.collect(&roots);
+        assert!(heap.object(pending).is_some(), "native values keep their objects reachable");
+        let before = heap.bytes;
+        assert!(before >= string_bytes(8192), "native packet strings count toward the heap limit");
+        heap.reset_xmp_files();
+        heap.collect(&roots);
+        assert!(heap.object(pending).is_none(), "the prior run's pending value is released");
+        assert!(before - heap.bytes >= string_bytes(8192), "the prior run's packet is released");
+        let Class::XmpFile(fields) = &heap.object(file).unwrap().class else { panic!("native file") };
+        assert!(matches!(fields.get(&key("__vcXmpPath")), Some(Value::String(path)) if path.to_rust_string() == "kept.xmp"));
     }
 
     #[test]

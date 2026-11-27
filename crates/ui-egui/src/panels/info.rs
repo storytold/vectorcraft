@@ -3,10 +3,11 @@
 //! drag, the Zoom tool's magnification, the Paintbrush's brush) and the selection's fill and
 //! stroke colour values.
 
+use craft::behavior::ColumnWidth;
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Picture, Shade, Text};
-use craft::ui::layout_components::{Row, Stack};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -89,8 +90,10 @@ fn mono(ui: &mut Ui, s: &str) {
     Text::new(s.to_string()).role(TypeRole::Mono).show(ui);
 }
 
-/// One paint's row: its tile, its values and its note. A mixed paint keeps the tile's room empty.
+/// One paint's tile and readout. A solid tint's name sits below its channel values.
+/// A mixed paint keeps the tile's room empty.
 fn paint_block(ui: &mut Ui, p: &PaintLines) {
+    let (inline_note, tint_name) = if p.values.is_empty() { (p.note.as_ref(), None) } else { (None, p.note.as_ref()) };
     Row::new().show(ui, |ui, _| {
         Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
             if !p.mixed {
@@ -101,10 +104,13 @@ fn paint_block(ui: &mut Ui, p: &PaintLines) {
         for v in &p.values {
             mono(ui, v);
         }
-        if let Some(note) = &p.note {
+        if let Some(note) = inline_note {
             Text::new(note.clone()).shade(Shade::Muted).show(ui);
         }
     });
+    if let Some(name) = tint_name {
+        Text::new(name.clone()).shade(Shade::Muted).show(ui);
+    }
 }
 
 /// What the panel reads from the document and the tool for its rows of numbers ([`Rows::of`]).
@@ -207,8 +213,7 @@ pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines 
     });
     let zoom = (app.session.tool_id() == "zoom").then(|| {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        // PLAN: assumed `crate::state::zoom_label(zoom: f64, print: bool) -> String`, kept by hub-w1.
-        format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size))
+        format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.print_ppi()))
     });
     let brush = if let Some(Readout::Brush { name }) = readout { name } else { None };
     let (f, s) = current_paints(app);
@@ -231,9 +236,13 @@ pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines 
     }
 }
 
+/// The panel's two columns of numbers: two equal halves of its width.
+const HALVES: &[ColumnWidth] = &[ColumnWidth::fill(1.0); 2];
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let l = lines(app, ui.ctx());
-    Row::new().show(ui, |ui, _| {
+    // Two equal halves of the panel, as the reference app's columns were.
+    let _ = Grid::new(HALVES).show(ui, |ui, _| {
         for column in [&l.left, &l.right] {
             Stack::new().show(ui, |ui, _| {
                 for s in column {
@@ -403,5 +412,30 @@ mod tests {
         assert_eq!(paint_name(&Paint::Gradient(Box::new(g.clone()))), None);
         g.swatch = Some("Sunset".into());
         assert_eq!(paint_name(&Paint::Gradient(Box::new(g))), Some("Sunset".into()));
+    }
+
+    #[test]
+    fn a_solid_tint_and_its_channels_fit_in_the_narrowest_info_panel() {
+        use crate::panel_docking::PANEL_MIN_WIDTH;
+        use crate::tests::panel_harness::{Place, floated};
+
+        const SWATCH: &str = "Signal Red Coated";
+        const TINT: &str = "Signal Red Coated 40%";
+        let mut app = app_with_rect();
+        let color = json!({"model": "cmyk", "c": 0.1, "m": 0.8, "y": 0.6, "k": 0.2});
+        run(&mut app, "swatch.new", json!({"name": SWATCH, "color": color, "spot": true}));
+        run(&mut app, "paint.setFill", json!({"swatch": SWATCH, "tint": 40}));
+        let paint = lines(&mut app, &crate::testing::ui_context()).fill;
+        assert_eq!(paint.note.as_deref(), Some(TINT));
+        assert_eq!(paint.values.len(), 4, "the fixture has four CMYK channels");
+        let names: Vec<_> = paint.values.iter().map(String::as_str).chain([TINT]).collect();
+        let panel = floated(app, "info", "en", Place::Floating(PANEL_MIN_WIDTH), &names);
+        assert!((panel.body.width() - PANEL_MIN_WIDTH).abs() < 1.0, "the Info panel is at its minimum width");
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "the readout extends past the Info panel: {past:?}");
+        let tint = panel.rects(TINT)[0];
+        for name in &paint.values {
+            assert!(panel.rects(name)[0].center().y < tint.top(), "the tint follows the color channels on its own line");
+        }
     }
 }

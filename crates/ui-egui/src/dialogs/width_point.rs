@@ -33,7 +33,8 @@
 //! `outSide2`, `outTotalWidth` and `outLinked`.
 //!
 //! OK and Delete on existing points, one or several, are refused when those points changed since
-//! the dialog opened or another document is active; the dialog stays open and says why.
+//! the dialog opened (their place, their widths, or which of them pair as a discontinuous point) or
+//! another document is active; the dialog stays open and says why.
 
 // PLAN: the app's manifest depends on `craft-ui`, not on the `craft` facade, so the `craft::` paths below need hub-w2's manifest change.
 use craft::behavior::Mixed;
@@ -208,6 +209,14 @@ fn pairs(points: &[(f64, f64, f64)]) -> Vec<Option<usize>> {
         .collect()
 }
 
+/// The sets of side widths that edit width point `i`, `[incoming, outgoing]`, with the points
+/// paired as `pairs` pairs them: an outgoing half is not edited by the incoming set, and an
+/// incoming half not by the outgoing set.
+fn sets(pairs: &[Option<usize>], i: usize) -> [bool; 2] {
+    let outgoing = i.checked_sub(1).is_some_and(|a| pairs[a] == Some(i));
+    [!outgoing, pairs[i].is_none()]
+}
+
 /// The width points `indices` of `id` names, each discontinuous point's two halves together.
 fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Resolved, String> {
     const NONE: &str = "no such width point";
@@ -238,7 +247,7 @@ fn target(app: &VectorcraftApp, id: u64, indices: &Value) -> Result<Resolved, St
     let half = st.width / 2.0;
     let entry = |i: usize| {
         let (t, l, r) = points[i];
-        Entry { index: i, t, left: l * half, right: r * half, sets: [!outgoing(i), pairs[i].is_none()] }
+        Entry { index: i, t, left: l * half, right: r * half, sets: sets(&pairs, i) }
     };
     Ok(Resolved::Several(picked.into_iter().map(entry).collect()))
 }
@@ -345,8 +354,8 @@ impl Target {
 struct Form {
     /// The path whose stroke carries the points.
     path: u64,
-    /// The uid of the document the dialog opened in.
-    doc: Option<u64>,
+    /// The document's UID and revert count when the dialog opened.
+    doc: Option<(u64, u64)>,
     /// Adjust Adjoining Width Points.
     adjust: bool,
     target: Target,
@@ -675,8 +684,9 @@ impl StackDialog for WidthPointDialog {
 /// Adjoining adjustment defaults to false. Either half of a discontinuous point opens both.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_u64).ok_or("give the path `id`")?;
-    let doc = &app.session.active().ok_or("no document")?.doc;
-    let id = vectorcraft_tools::distort::stroke_owner(doc, NodeId(id)).0;
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
+    let id = vectorcraft_tools::distort::stroke_owner(&active.doc, NodeId(id)).0;
     let given = |key: &str| p.get(key).is_some_and(|v| !v.is_null());
     let mut index = match p.get("index").filter(|v| !v.is_null()) {
         Some(v) => Some(v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or("no such width point")?),
@@ -686,7 +696,6 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         return Err("give only one of `index`, `indices` and `t`".into());
     }
     let adjust = p.get("adjustAdjoining").and_then(Value::as_bool).unwrap_or(false);
-    let uid = app.session.active().map(|st| st.uid);
     let mut several = None;
     if let Some(indices) = p.get("indices").filter(|v| !v.is_null()) {
         match target(app, id, indices)? {
@@ -702,7 +711,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         None => one_point(app, id, index, p)?,
     };
-    let dialog = WidthPointDialog::new(Form { path: id, doc: uid, adjust, target }, stroke_lengths(app));
+    let dialog = WidthPointDialog::new(Form { path: id, doc: Some(document), adjust, target }, stroke_lengths(app));
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -740,10 +749,11 @@ fn one_point(app: &VectorcraftApp, id: u64, index: Option<usize>, p: &Value) -> 
     Ok(Target::One { index, t, at, sides: Sides::of(l, r), out, single: Single::None })
 }
 
-/// Whether the document the dialog opened in (`doc`) is still the active one.
-fn same_document(app: &VectorcraftApp, doc: Option<u64>) -> Result<(), String> {
+/// Whether the document the dialog opened in is active and has not been reloaded by Revert.
+fn same_document(app: &VectorcraftApp, doc: Option<(u64, u64)>) -> Result<(), String> {
     match (doc, app.session.active()) {
-        (Some(uid), Some(st)) if st.uid == uid => Ok(()),
+        (Some((uid, reverts)), Some(st)) if (st.uid, st.reverts) == (uid, reverts) => Ok(()),
+        (Some((uid, _)), Some(st)) if st.uid == uid => Err(tl!("The document was reverted. Reopen Width Point Edit.").to_owned()),
         _ => Err("no such width point".into()),
     }
 }
@@ -767,6 +777,12 @@ fn opened_profile(app: &VectorcraftApp, id: u64, open: &[Entry]) -> Result<(Widt
         if t != o.t || l * half != o.left || r * half != o.right {
             return Err(NONE.into());
         }
+    }
+    // Each point is still a continuous point or the same half of a discontinuous one: a point added
+    // at the place of one would leave it changing only one half.
+    let pairs = pairs(&profile.points);
+    if open.iter().any(|o| o.sets != sets(&pairs, o.index)) {
+        return Err(NONE.into());
     }
     Ok((profile, half))
 }

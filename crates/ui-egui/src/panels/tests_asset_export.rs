@@ -56,6 +56,56 @@ fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
     app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
 }
 
+/// Draws a row carrying the selected artwork's payload above the Asset Export panel.
+fn art_and_assets(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    use craft::ui::contract::{ListDrag, ShowCollection as _};
+    use craft::ui::list::{List, ListRow};
+
+    let st = app.session.active().unwrap();
+    let payload = crate::panel_drag::PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+    ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+        let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+        List::<usize>::new("Artwork")
+            .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+            .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+    });
+    super::asset_export::show(app, ui);
+}
+
+#[test]
+fn asset_export_accepts_artwork_only_from_its_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let mut rectangle = |x| {
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let first = rectangle(10);
+    let second = rectangle(70);
+    assert_eq!(first, second, "the two documents have different artwork with the same local ID");
+    assert!(app.session.set_active(0));
+    let source = app.session.active().unwrap().uid;
+
+    let mut p = Panel::new(app, art_and_assets);
+    let from = p.rect("Dragged artwork").center();
+    let to = p.rect("No assets").center();
+    p.drag_hold_role("Dragged artwork", craft::ui::contract::Role::LIST_ITEM, to - from);
+    let drag = craft::ui::runtime::drag::active::<crate::panel_drag::PanelDrag>(p.ctx());
+    assert!(matches!(drag.as_deref(), Some(crate::panel_drag::PanelDrag::Art { document, .. }) if *document == source));
+    assert!(craft::ui::runtime::drag::mark(p.ctx()).is_some(), "Asset Export accepts the artwork before switching documents");
+    assert!(p.app().session.set_active(1));
+    p.frame();
+    let drag = craft::ui::runtime::drag::active::<crate::panel_drag::PanelDrag>(p.ctx());
+    assert!(matches!(drag.as_deref(), Some(crate::panel_drag::PanelDrag::Art { document, .. }) if *document == source));
+    assert!(craft::ui::runtime::drag::mark(p.ctx()).is_none(), "Asset Export withdraws the drop indicator when the artwork is foreign");
+    p.release();
+    assert!(assets(&mut p.app()).is_empty(), "the foreign drag must never collect the active document's same-ID artwork");
+
+    p.drag("Dragged artwork", "No assets", egui::Modifiers::NONE);
+    let list = assets(&mut p.app());
+    assert_eq!(list.len(), 1, "dropping artwork from the active document still collects it");
+    assert_eq!(list[0]["nodes"], json!([second]));
+}
+
 /// The document's export settings, which the panel and Export for Screens share.
 fn settings(p: &Panel) -> Value {
     run(p, "document.exportSettings", json!({}))["settings"].clone()
@@ -935,6 +985,35 @@ fn tile_menu_rename_opens_the_clicked_assets_inline_field() {
     p.type_text("Renamed");
     p.key(egui::Key::Enter, egui::Modifiers::NONE);
     assert_eq!(assets(&mut p.app())[0]["name"], "Renamed");
+}
+
+/// In a panel narrower than the scale row's fields at their full length, the row's Scale, Suffix, Format and Remove
+/// share the panel's width, and the Save As Preset row under them stays inside it too.
+#[test]
+fn the_scale_row_fits_the_panel_width() {
+    use craft::ui::contract::Role;
+    for width in [300.0, 440.0] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a, b]})).unwrap();
+        let mut p = panel(app);
+        p.room(egui::vec2(width, 1600.0));
+        p.frame();
+        run(&p, "ui.assetExport.savePresetAs", json!({}));
+        p.frame();
+        let controls = [
+            ("Scale", p.rect_role("Scale", Role::COMBO_BOX)),
+            ("Suffix", p.rect("Suffix")),
+            ("Format", p.rect_role("Format", Role::COMBO_BOX)),
+            ("Remove", p.rect("Remove")),
+            ("Name:", p.rect_role("Name:", Role::TEXT_INPUT)),
+            ("Cancel", p.rect("Cancel")),
+        ];
+        // The four controls of the scale row are on one line.
+        assert_eq!(controls[0].1.center().y, controls[3].1.center().y, "one row at {width}");
+        for (name, rect) in controls {
+            assert!(rect.left() >= -0.5 && rect.right() <= width + 0.5, "{name} at {rect:?} is outside a {width} pt panel");
+        }
+    }
 }
 
 /// The menu adds the selected artwork as one asset or one per object (an object that is an asset already keeps its

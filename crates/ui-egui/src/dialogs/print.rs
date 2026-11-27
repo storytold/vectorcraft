@@ -35,7 +35,7 @@ use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::shell::WindowDialogs;
-use craft::ui::text::{LinkMode, LinkedFields, NumberField};
+use craft::ui::text::{LinkMode, LinkedFields, NumberField, SelectableText};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
@@ -100,6 +100,7 @@ pub(crate) struct PrintDialogs {
 struct Open {
     id: DialogId,
     mode: PrintMode,
+    document: Option<u64>,
     /// The preset the settings were loaded from last (the Print Preset row's selection).
     preset: String,
     /// The saved preset the editor edits (empty: a new one).
@@ -157,7 +158,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
     let preset = app.session.prefs.print_presets.iter().find(|p| p.settings == saved).map_or(DEFAULT_PRESET, |p| p.name.as_str()).to_string();
     let fields = fields_of(&saved)?;
-    start(app, PrintMode::Print, fields, preset, Default::default())
+    let document = st.uid;
+    start(app, PrintMode::Print, Some(document), fields, preset, Default::default())
 }
 
 /// Open the preset editor on the saved preset `name`, or on a new preset starting from `preset`
@@ -173,7 +175,7 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         None => (s("preset").unwrap_or(DEFAULT_PRESET).to_string(), app.session.new_print_preset_name(), String::new()),
     };
     let set = app.session.print_preset_settings(&base).ok_or_else(|| format!("no print preset named `{base}`"))?;
-    start(app, PrintMode::PresetEditor, fields_of(&set)?, base, (editing, name))
+    start(app, PrintMode::PresetEditor, None, fields_of(&set)?, base, (editing, name))
 }
 
 /// Host the dialog over the settings `fields`; the preset editor edits the saved preset `editing` (empty: a new one)
@@ -181,6 +183,7 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
 fn start(
     app: &mut VectorcraftApp,
     mode: PrintMode,
+    document: Option<u64>,
     fields: DialogFields,
     preset: String,
     (editing, name): (String, String),
@@ -217,7 +220,7 @@ fn start(
         hosted.set_json_field(&ctx, "name", json!(name))?;
     }
     let id = dialogs.with(|h| h.open(hosted));
-    app.print_dialog.open = Some(Open { id, mode, preset, editing, art: None, preview: None, driver });
+    app.print_dialog.open = Some(Open { id, mode, document, preset, editing, art: None, preview: None, driver });
     Ok(Value::Null)
 }
 
@@ -366,6 +369,30 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
         let _ = dialogs.with(|h| h.take_by_id::<HostedPrint>(open.id));
         return false;
     };
+    for event in std::mem::take(&mut d.events) {
+        apply_preset_event(app, dialogs, open, &mut d.settings, event);
+    }
+    if open.mode == PrintMode::Print {
+        let same = serde_json::from_value::<PrintSettings>(d.settings.clone())
+            .ok()
+            .is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
+        let held = same.then(|| open.preset.clone());
+        let rows: Vec<PresetRow<String>> = std::iter::once(PresetRow::item(DEFAULT_PRESET.to_string(), tl!(DEFAULT_PRESET), 0))
+            .chain(app.session.prefs.print_presets.iter().map(|p| PresetRow::item(p.name.clone(), p.name.clone(), 0)))
+            .collect();
+        on(dialogs, |p| p.set_presets(rows, held, vec![DEFAULT_PRESET.to_string()]));
+    }
+    if open.document.is_some_and(|document| app.session.active().is_none_or(|st| st.uid != document)) {
+        let message = tl!("Return to the original drawing to print it");
+        on(dialogs, |p| {
+            p.set_sheet(None);
+            p.set_message(Some(message.into()));
+            if d.ok.is_some() {
+                p.answer_ok(Err(message.into()));
+            }
+        });
+        return true;
+    }
     // The row was drawn this frame with the controls of the printer before: the next frame shows the new ones.
     if d.driver != open.driver {
         open.driver = d.driver;
@@ -382,9 +409,6 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
         && let Err(e) = app.run("print.printerSetup", json!({ "printer": printer }))
     {
         app.status(e);
-    }
-    for event in std::mem::take(&mut d.events) {
-        apply_preset_event(app, dialogs, open, &mut d.settings, event);
     }
     let doc = app.session.active().map_or((0, 0), |s| (s.uid, s.revision));
     let stamp = (d.settings.to_string(), doc);
@@ -424,16 +448,6 @@ fn serve(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &WindowDialogs,
             p.set_field("__summary.warnings", warnings.into());
             p.set_field("__inks", FieldValue::Json(inks));
         });
-    }
-    if open.mode == PrintMode::Print {
-        let same = serde_json::from_value::<PrintSettings>(d.settings.clone())
-            .ok()
-            .is_some_and(|s| app.session.print_preset_settings(&open.preset) == Some(s));
-        let held = same.then(|| open.preset.clone());
-        let rows: Vec<PresetRow<String>> = std::iter::once(PresetRow::item(DEFAULT_PRESET.to_string(), tl!(DEFAULT_PRESET), 0))
-            .chain(app.session.prefs.print_presets.iter().map(|p| PresetRow::item(p.name.clone(), p.name.clone(), 0)))
-            .collect();
-        on(dialogs, |p| p.set_presets(rows, held, vec![DEFAULT_PRESET.to_string()]));
     }
     if let Some(answer) = d.ok {
         let result = accept(app, open, &answer, &d.name);
@@ -669,9 +683,9 @@ fn scaling_ids(tiles: bool) -> Vec<&'static str> {
     PrintScaling::ALL.iter().filter(|s| s.tiles() == tiles).map(|s| s.id()).collect()
 }
 
-/// A summary line that the pump fills (`key` is a `__` companion of the fields).
-fn shown(key: &'static str) -> Param {
-    Param::custom(key, "", move |ui, fields, _| ui.label(fields.text(key).unwrap_or_default()))
+/// A summary line that the pump fills (`key` is a `__` companion of the fields), selectable and named `label`.
+fn shown(key: &'static str, label: &'static str) -> Param {
+    Param::custom(key, "", move |ui, fields, _| SelectableText::new(label, fields.text(key).unwrap_or_default()).multiline().show(ui))
 }
 
 /// The sections of the dialog, with the rows of each.
@@ -827,11 +841,11 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
     ];
     let summary = vec![
         Param::section(tl!("Pages")),
-        shown("__summary.pages"),
+        shown("__summary.pages", tl!("Pages")),
         Param::section(tl!("Options")),
-        shown("__summary.options"),
+        shown("__summary.options", tl!("Options")),
         Param::section(tl!("Warnings")),
-        shown("__summary.warnings"),
+        shown("__summary.warnings", tl!("Warnings")),
     ];
     [general, marks, output, graphics, color, advanced, summary]
         .into_iter()

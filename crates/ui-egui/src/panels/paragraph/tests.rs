@@ -25,6 +25,120 @@ fn editing_text(text: &str) -> (VectorcraftApp, Value) {
     (app, id)
 }
 
+/// The minimum-width Paragraph dock keeps translated alignment and spacing controls usable.
+#[test]
+fn compact_paragraph_dock_keeps_localized_alignment_and_spacing_usable() {
+    use craft::behavior::dock::{DockEdge, Node, Workspace};
+    use egui::accesskit::Role;
+    use egui::{Event, Key, Modifiers, PointerButton, Pos2, pos2};
+    use std::sync::Arc;
+
+    let width = crate::panel_docking::PANEL_MIN_WIDTH;
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0));
+    let mut untranslated = Vec::new();
+    for lang in ["en", "de", "fr", "pt-br"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.prefs.interface_language = lang.into();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let id =
+            app.run("text.create", json!({"x": 20, "y": 50, "text": "First\nSecond", "area": {"width": 180, "height": 100}})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("window.panel", json!({"panel": "paragraph"})).unwrap();
+        app.run("window.panel.dock", json!({"panel": "paragraph", "column": true})).unwrap();
+        app.run("window.panel.activate", json!({"panel": "paragraph"})).unwrap();
+
+        let ws = &app.ui.dock_workspace;
+        let mut layout = ws.layout().clone();
+        let path = layout.dock_path(DockEdge::End).unwrap();
+        let mut node = layout.root.as_mut().unwrap();
+        for second_child in path {
+            let Node::Split { first, second, .. } = node else { panic!("end dock path") };
+            node = if second_child { second } else { first };
+        }
+        let Node::Dock { columns, .. } = node else { panic!("end dock") };
+        let column = columns.iter_mut().find(|column| column.groups.iter().any(|group| group.panels.iter().any(|p| p == "paragraph"))).unwrap();
+        assert!(!column.iconic);
+        column.width = Some(width);
+        let next = Workspace::from_parts(layout, ws.hidden().to_vec(), ws.floated().to_vec());
+        Arc::make_mut(&mut app.ui.dock_workspace).replace(next);
+
+        let ctx = crate::testing::ui_context();
+        ctx.enable_accesskit();
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, mut events: Vec<Event>, modifiers| {
+            time += 0.05;
+            events.insert(0, Event::ModifiersChanged(modifiers));
+            let input = egui::RawInput { time: Some(time), events, screen_rect: Some(screen), ..Default::default() };
+            crate::testing::app_frame(app, &ctx, input).platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes)
+        };
+        for _ in 0..7 {
+            frame(&mut app, Vec::new(), Modifiers::NONE);
+        }
+        let nodes = frame(&mut app, Vec::new(), Modifiers::NONE);
+        let rect =
+            |node: &egui::accesskit::Node| node.bounds().map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)));
+        let title = crate::i18n::t("Paragraph");
+        let (_, body_node) = nodes.iter().find(|(_, node)| node.role() == Role::TabPanel && node.label() == Some(title)).unwrap();
+        let body = rect(body_node).unwrap();
+        assert!((body.width() - width).abs() < 1.0, "{lang}: {body:?}");
+
+        let mut descendants = Vec::new();
+        let mut todo = body_node.children().to_vec();
+        while let Some(id) = todo.pop() {
+            let Some((_, node)) = nodes.iter().find(|(key, _)| *key == id) else { continue };
+            todo.extend(node.children());
+            if let (Some(label), Some(bounds)) = (node.label(), rect(node)) {
+                descendants.push((label, node.role(), bounds));
+            }
+        }
+        let mut control = |names: [&str; 2], role: Option<Role>| {
+            let (label, _, bounds) = descendants
+                .iter()
+                .find(|(label, kind, _)| {
+                    role.is_none_or(|expected| *kind == expected) && names.iter().any(|name| *label == *name || *label == crate::i18n::t(name))
+                })
+                .unwrap_or_else(|| panic!("{lang}: no {names:?} with role {role:?}"));
+            assert!(bounds.is_positive() && body.expand(0.5).contains_rect(*bounds), "{lang}: {label} {bounds:?} outside {body:?}");
+            let expected = crate::i18n::t(names[1]);
+            if expected != names[1] && *label != expected {
+                untranslated.push(format!("{lang}: {label:?}, expected {expected:?}"));
+            }
+            bounds.center()
+        };
+        for names in [
+            ["Left align text", "Align left"],
+            ["Right align text", "Align right"],
+            ["Justify last left", "Justify with last line aligned left"],
+            ["Justify last centered", "Justify with last line aligned center"],
+            ["Justify last right", "Justify with last line aligned right"],
+            ["Justify all", "Justify all lines"],
+        ] {
+            control(names, None);
+        }
+        let center = control(["Center text", "Align center"], None);
+        let before = control(["Add space before paragraph", "Space Before Paragraph"], Some(Role::SpinButton));
+        let after = control(["Add space after paragraph", "Space After Paragraph"], Some(Role::SpinButton));
+        let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        let key = |key, modifiers, pressed| Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+        frame(&mut app, vec![Event::PointerMoved(center), button(center, true)], Modifiers::NONE);
+        frame(&mut app, vec![button(center, false)], Modifiers::NONE);
+        frame(&mut app, Vec::new(), Modifiers::NONE);
+        assert_eq!(selected(&app), [Justify::Center], "{lang}: pointer changed alignment");
+        for (at, input) in [(before, "12"), (after, "18")] {
+            frame(&mut app, vec![Event::PointerMoved(at), button(at, true)], Modifiers::NONE);
+            frame(&mut app, vec![button(at, false)], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::A, Modifiers::COMMAND, true)], Modifiers::COMMAND);
+            frame(&mut app, vec![key(Key::A, Modifiers::COMMAND, false), Event::Text(input.to_owned())], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::Enter, Modifiers::NONE, true)], Modifiers::NONE);
+            frame(&mut app, vec![key(Key::Enter, Modifiers::NONE, false)], Modifiers::NONE);
+        }
+        assert_eq!(shared_para_field(&app, |p| p.space_before), Some(12.0), "{lang}: keyboard updated before");
+        assert_eq!(shared_para_field(&app, |p| p.space_after), Some(18.0), "{lang}: keyboard updated after");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+    assert!(untranslated.is_empty(), "lost Paragraph translations: {untranslated:?}");
+}
+
 fn select_range(app: &mut VectorcraftApp, start: usize, end: usize) {
     app.session.set_tool_option("select", &json!({"start": start, "end": end}));
 }
@@ -558,6 +672,24 @@ fn more_options_opens_bullets_and_numbering_on_its_tab() {
     assert!(shown_tab(&app).is_some());
 }
 
+/// Bullets and Numbering draws every preset of each tab, and its buttons.
+#[test]
+fn bullets_and_numbering_draws_every_preset_and_its_buttons() {
+    use vectorcraft_doc::text::NumberStyle;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (app, _) = editing_text("One\nTwo");
+    let mut p = crate::tests::panel_harness::Panel::new(crate::testing::windowed(app), crate::tests::picks::dialogs);
+    select_range(&mut p.app(), 0, 0);
+    let last_number = NumberStyle::ALL.last().map(|&style| crate::panels::paragraph::number_sample(style, 3)).unwrap_or_default();
+    for (tab, last) in [("bullets", "Filled Square".to_owned()), ("numbers", last_number)] {
+        p.app().run("ui.bulletsAndNumbering", json!({ "tab": tab })).unwrap();
+        p.frame();
+        for name in ["None", last.as_str(), "OK", "Cancel"] {
+            assert!(p.shows(name), "{name} is drawn on {tab}");
+        }
+    }
+}
+
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the
 /// paragraphs the Type tool's selection touches: their numbers become characters of the text
 /// and their list goes, while the other paragraphs stay in the list, and the Type tool's caret
@@ -733,7 +865,6 @@ fn bar_names(app: &mut VectorcraftApp) -> Vec<String> {
 /// #5372: with type selected the Control bar shows a Paragraph section: the Paragraph: link and the
 /// Align left, Align center and Align right buttons (the justifying four are in the panel the link
 /// opens); with no type selected it shows none of them.
-// PLAN: the trimming order as the bar narrows (toggles out before the link, ch.K30) is chrome-w16's `Row::fit_rank` and is tested with its fixture.
 #[test]
 fn the_control_bar_shows_its_paragraph_section_for_selected_type_only() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

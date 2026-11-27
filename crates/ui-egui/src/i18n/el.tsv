@@ -1587,6 +1587,17 @@ font-technology	Variable	Μεταβλητές
 	Graphic Styles	Στυλ γραφικών
 	Graphic Styles Options	Επιλογές στυλ γραφικών
 	Graphics	Γραφικά
+	Show Contrast	Εμφάνιση αντίθεσης
+	Contrast For	Αντίθεση για
+	Normal Text	Κανονικό κείμενο
+	Large Text	Μεγάλο κείμενο
+	Contrast Background	Φόντο αντίθεσης
+	Behind Selection	Πίσω από την επιλογή
+	Current Color	Τρέχον χρώμα
+	Pass	Επιτυχία
+	Fail	Αποτυχία
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Ελάχιστη αντίθεση κατά WCAG 2.2: κανονικό κείμενο AA 4.5:1 (1.4.3) και AAA 7:1 (1.4.6), μεγάλο κείμενο AA 3:1 και AAA 4.5:1, γραφικά και στοιχεία ελέγχου AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Το φόντο διαβάζεται στο κέντρο της επιλογής.
 	Graphics Processor	Επεξεργαστής γραφικών
 	Graphics: {adapter}	Γραφικά: {adapter}
 	Gravity	Βαρύτητα
@@ -2628,6 +2639,14 @@ axis	Both	Και τα δύο
 	The script asks to read and write a folder you choose, with everything in it.	Το σενάριο ζητά να διαβάσει και να γράψει έναν φάκελο που θα επιλέξετε, με όλο το περιεχόμενό του.
 	Allow Once	Να επιτραπεί μία φορά
 	Always Allow This Script	Να επιτρέπεται πάντα αυτό το σενάριο
+	No script has kept file access.	Κανένα σενάριο δεν έχει αποθηκευμένη πρόσβαση σε αρχεία.
+	Read file	Ανάγνωση αρχείου
+	Read and write file	Ανάγνωση και εγγραφή αρχείου
+	Read and write folder	Ανάγνωση και εγγραφή φακέλου
+	Revoke	Ανάκληση
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Η ανάκληση αφαιρεί την πρόσβαση που έχει αποθηκευτεί για κάθε έκδοση του σεναρίου. Η πρόσβαση σε φάκελο καλύπτει όλο το περιεχόμενό του.
+@msg	Script file access revoked	Η πρόσβαση του σεναρίου σε αρχεία ανακλήθηκε
+@msg	The script file access was already revoked	Η πρόσβαση του σεναρίου σε αρχεία είχε ήδη ανακληθεί
 	Deny	Άρνηση
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
@@ -2826,6 +2845,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	το `answer` για το παράθυρο διαλόγου αρχείων ενός σεναρίου πρέπει να είναι ένα από: once, always, deny, stop
 @msg	choose a file or folder first, or deny	επιλέξτε πρώτα ένα αρχείο ή έναν φάκελο, ή απορρίψτε
 @msg	the script file permissions could not be saved: {e}	δεν ήταν δυνατή η αποθήκευση των αδειών αρχείων των σεναρίων: {e}
+@msg	the script file permissions could not be read: {e}	δεν ήταν δυνατή η ανάγνωση των αδειών αρχείων των σεναρίων: {e}
 @msg	this script's file access can be allowed only once	η πρόσβαση αυτού του σεναρίου σε αρχεία μπορεί να επιτραπεί μόνο μία φορά
 @msg	Only the person at the keyboard can allow a script's file access	Μόνο το άτομο στο πληκτρολόγιο μπορεί να επιτρέψει την πρόσβαση ενός σεναρίου σε αρχεία
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ένα σενάριο λαμβάνει το πολύ 2.048 αρχεία: τα αρχεία που επιλέχθηκαν μετά από αυτά παραλείφθηκαν
@@ -3219,6 +3239,9 @@ file-filter	Flattener presets	Προεπιλογές ισοπέδωσης
 file-filter	PDF presets	Προεπιλογές PDF
 file-filter	PDF-compatible .ai	.ai συμβατό με PDF
 file-filter	Print presets	Προεπιλογές εκτύπωσης
+file-filter	Tracing presets	Προεπιλογές ανίχνευσης περιγραμμάτων
+file-filter	Action sets	Σύνολα ενεργειών
+file-filter	Composite fonts	Σύνθετες γραμματοσειρές
 file-filter	Preferences	Προτιμήσεις
 file-filter	Export presets	Προκαθορισμένα εξαγωγής
 file-filter	SVG Compressed	Συμπιεσμένο SVG
@@ -4144,7 +4167,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Τα Επιλογή › Ίδιο › Χρώμα γεμίσματος, Χρώμα περιγράμματος και Γέμισμα και περίγραμμα βρίσκουν μόνο την ίδια απόχρωση ενός καθολικού ή σημειακού δείγματος, όχι οποιαδήποτε απόχρωσή του.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Εμφανίζει την αρχική οθόνη όταν δεν είναι ανοιχτό κανένα έγγραφο· όταν είναι ανενεργό, το παράθυρο μένει κενό μέχρι να κάνετε κλικ στην Αρχική οθόνη.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Μετρά τα αντικείμενα μαζί με τα περιγράμματα και τα εφέ που αλλάζουν το σχήμα τους για μέγεθος, θέση και στοίχιση· οι σκιές, οι λάμψεις και οι θολώσεις δεν μετρώνται.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Σε ζουμ 100%, μία ίντσα του εγγράφου καταλαμβάνει 96 στιγμές οθόνης αντί για 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Σε ζουμ 100%, μία ίντσα του εγγράφου γεμίζει μία ίντσα της οθόνης, ή 96 στιγμές οθόνης όταν το σύστημα δεν αναφέρει χρησιμοποιήσιμο μέγεθος οθόνης.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Το διπλό κλικ σε ομάδα, διαδρομή ή εικόνα με το εργαλείο Επιλογή την ανοίγει σε λειτουργία απομόνωσης.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Τα γεμίσματα και τα περιγράμματα μοτίβου μετασχηματίζονται μαζί με το γραφικό, εκτός αν ένας μετασχηματισμός ή το μενού του πλαισίου Μετασχηματισμός επιλέξει κάτι άλλο.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Οι ακτίνες των δυναμικών γωνιών κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
@@ -5526,6 +5549,12 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
 @msg	nothing encoded	δεν κωδικοποιήθηκε τίποτα
 @msg	nothing selected	δεν έχει επιλεγεί τίποτα
+@msg	`{key}` must be a color or {_1}	το `{key}` πρέπει να είναι χρώμα ή {_1}
+@msg	the selected objects' colors differ: give `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	τα χρώματα των επιλεγμένων αντικειμένων διαφέρουν: δώστε `opacity` ή `color`
+@msg	the active fill or stroke has no color: give `color`	το ενεργό γέμισμα ή η πινελιά δεν έχει χρώμα: δώστε `color`
+@msg	the active fill or stroke is hidden: give `color`	το ενεργό γέμισμα ή η πινελιά είναι κρυφό: δώστε `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	το ενεργό γέμισμα ή η πινελιά σχεδιάζεται μέσα από μάσκα αδιαφάνειας: δώστε `color`
 @msg	nothing selected is in a group	τίποτα από τα επιλεγμένα δεν βρίσκεται σε ομάδα
 @msg	nothing to align	δεν υπάρχει τίποτα για στοίχιση
 @msg	nothing to distort	δεν υπάρχει τίποτα για παραμόρφωση
@@ -6605,6 +6634,8 @@ arrowhead	Feather	Φτερό
 	VectorCraft Default	Προεπιλογή VectorCraft
 	VectorCraft Defaults	Προεπιλογές VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Γενικό CMYK του VectorCraft (τύπου SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK επιχρισμένου χαρτιού του VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK μη επιχρισμένου χαρτιού του VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Δείγματα χρωμάτων VectorCraft (.vcswatches)
 	Vertical Align	Κατακόρυφη στοίχιση
 	Vertical Area Type	Κατακόρυφο κείμενο περιοχής
@@ -7300,6 +7331,8 @@ axis	Y Axis	Άξονας Y
 	Cancel Plug-in Run	Ακύρωση εκτέλεσης προσθέτου
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	Το {_1} ολοκληρώθηκε, αλλά το έγγραφο ή το πρόσθετο άλλαξε στο μεταξύ: εκτελέστε το ξανά
 @msg	Running “{name}”…	Εκτέλεση του «{name}»…
+@msg	Plug-in “{name}”: {notice}	Πρόσθετο «{name}»: {notice}
+@msg	`notice` must be a string with visible text	το `notice` πρέπει να είναι συμβολοσειρά με ορατό κείμενο
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): πρέπει να το εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `allowHeavy: true` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
@@ -7345,6 +7378,10 @@ axis	Y Axis	Άξονας Y
 @msg	vc_alloc returned 0 (out of memory)	η vc_alloc επέστρεψε 0 (η μνήμη εξαντλήθηκε)
 @msg	vc_alloc returned a block outside memory	η vc_alloc επέστρεψε ένα μπλοκ εκτός μνήμης
 @msg	vc_run returned error code {packed}	η vc_run επέστρεψε τον κωδικό σφάλματος {packed}
+@msg	did not finish loading within {secs} s	δεν ολοκλήρωσε τη φόρτωση μέσα σε {secs} s
+@msg	no thread was left to load it	δεν έμεινε νήμα για να το φορτώσει
+@msg	panicked while loading	κατέρρευσε κατά τη φόρτωση
+@msg	panicked while loading: {what}	κατέρρευσε κατά τη φόρτωση: {what}
 @msg	{_1} is not a file	το {_1} δεν είναι αρχείο
 @msg	{_1} is {_2} bytes (limit {_3})	το {_1} έχει {_2} byte (όριο {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} αντικείμενα (όριο {MAX_OBJECTS})
@@ -7388,7 +7425,7 @@ axis	Y Axis	Άξονας Y
 @msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
 @msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
 @msg	a number	αριθμός
-@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect returns only `objects` and `notice`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects` και `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
@@ -7493,6 +7530,8 @@ axis	Y Axis	Άξονας Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
 @msg	`paintOutput` may only be true	Το `paintOutput` μπορεί να είναι μόνο true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	το `paintOutput` ισχύει μόνο για ζωντανό εφέ (`kind` "effect") με `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	το `place` ισχύει μόνο για εισαγωγέα (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	το «{shown}» ανοίγει αρχεία αλλά δεν τα τοποθετεί: το manifest του δεν ορίζει `place`
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`
@@ -7504,12 +7543,60 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	only a filter declares `writes`	μόνο ένα φίλτρο δηλώνει `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `writes` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`writes` lists `{shown}` twice	το `writes` αναφέρει το `{shown}` δύο φορές
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	το `writes` αναφέρει το `{shown}`, το οποίο δεν αναφέρει το `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	το `writes` απαιτεί `api` {WRITES_API} ή νεότερο
+@msg	`writes` needs the permission `doc.write`	το `writes` απαιτεί το δικαίωμα `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	το {_1} δεν είναι κείμενο, εικόνα ή στιγμιότυπο συμβόλου
+@msg	the text of type given as `truncated` can't be changed	το κείμενο ενός αντικειμένου κειμένου που δόθηκε ως `truncated` δεν μπορεί να αλλάξει
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	πρέπει να είναι λίστα με έως {MAX_INPUT_RUNS} στοιχεία
+@msg	type needs at least one run	το κείμενο χρειάζεται τουλάχιστον ένα τμήμα
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte κειμένου (όριο {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} παράγραφοι (όριο {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	περισσότερα από {MAX_INPUT_TEXT_TOTAL} byte κειμένου σε όλη την έξοδο
+@msg	unknown key '{k}'	άγνωστο κλειδί '{k}'
+@msg	must be a list of 6 numbers	πρέπει να είναι λίστα 6 αριθμών
+@msg	a number is out of range (limit ±{MAX_COORD})	ένας αριθμός είναι εκτός εύρους (όριο ±{MAX_COORD})
+@msg	flattens the object to a line or a point	συμπιέζει το αντικείμενο σε γραμμή ή σημείο
+@msg	an object flattened to a line or a point can't be placed again	ένα αντικείμενο που συμπιέστηκε σε γραμμή ή σημείο δεν μπορεί να τοποθετηθεί ξανά
+@msg	must be a number from 0 to 1	πρέπει να είναι αριθμός από 0 έως 1
+@msg	must be the name of a symbol	πρέπει να είναι το όνομα ενός συμβόλου
+@msg	'{shown}' is not a symbol in this document	το '{shown}' δεν είναι σύμβολο σε αυτό το έγγραφο
+@msg	a run must be {{"text", "style", "inline"?}}	ένα τμήμα πρέπει να είναι {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	το `text` περιέχει τον χαρακτήρα ενός ενσωματωμένου γραφικού
+@msg	inline graphics can't be added, removed, reordered or changed	τα ενσωματωμένα γραφικά δεν μπορούν να προστεθούν, να αφαιρεθούν, να αναδιαταχθούν ή να αλλάξουν
+@msg	the characters of threaded type can't be changed	οι χαρακτήρες συνδεδεμένου κειμένου δεν μπορούν να αλλάξουν
+@msg	the characters of type with ruby can't be changed	οι χαρακτήρες κειμένου με ruby δεν μπορούν να αλλάξουν
+@msg	expected {count} paragraph styles, one per paragraph	αναμένονταν {count} στυλ παραγράφων, ένα ανά παράγραφο
+@msg	the document has no Kinsoku set named '{shown}'	το έγγραφο δεν έχει σύνολο Kinsoku με όνομα '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	πρέπει να έχει 1-{MAX_FAMILY} εκτυπώσιμους χαρακτήρες
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	οι πληροφορίες εγγράφου που ζητά το πρόσθετο είναι πολύ μεγάλες για να παραδοθούν: το πολύ {MAX_CONTEXT_ITEMS} πίνακες σχεδίασης, επίπεδα και δείγματα χρωμάτων σε {MAX_CONTEXT_BYTES} byte
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
 @msg	instruction budget	προϋπολογισμός εντολών
 @msg	time budget	χρονικός προϋπολογισμός
 @msg	memory budget (the selection is too large to hand over)	προϋπολογισμός μνήμης (η επιλογή είναι πολύ μεγάλη για να παραδοθεί)
 @msg	output size ({what} is {len} bytes, limit {max})	μέγεθος εξόδου ({what}: {len} byte, όριο {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} γραμμή {line}, στήλη {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	προϋπολογισμός μνήμης
+@msg	call depth	βάθος κλήσεων
+@msg	run(input, params) returned no output object	η run(input, params) δεν επέστρεψε αντικείμενο εξόδου
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	το `runtime` "js" χρειάζεται `script`: το όνομα του αρχείου .js του προσθέτου, δίπλα στο αρχείο δηλώσεων
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	το `script` πρέπει να είναι το όνομα ενός αρχείου .js στον φάκελο του αρχείου δηλώσεων: 1-128 byte, χωρίς φάκελο, χωρίς `:`, χωρίς να αρχίζει με `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	το `source` είναι το κείμενο του σεναρίου και δίνεται μόνο στο JSON που δέχεται το dataBase64 της plugin.install: ένα αρχείο .vcplugin ονομάζει το σενάριό του στο `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	το αρχείο δηλώσεων ενός προσθέτου JavaScript δίνει `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	το `runtime` "js" είναι για φίλτρο αντικειμένων (`kind` "filter"), όχι για `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ένα πρόσθετο JavaScript δεν μπορεί να δηλώσει την άδεια `{name}`: από τις άδειες του κεντρικού υπολογιστή μπορεί να δηλώσει την `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	το αρχείο δηλώσεων μιας μονάδας WebAssembly παραλείπει το `runtime`: το "js" είναι για πρόσθετο JavaScript
+@msg	a JavaScript plug-in makes no command calls	ένα πρόσθετο JavaScript δεν καλεί εντολές
+@msg	vc.progress(done, total) takes two numbers	η vc.progress(done, total) δέχεται δύο αριθμούς
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	η vc.log(level, text) δέχεται ένα επίπεδο, 0 (σφάλμα), 1 (προειδοποίηση), 2 (πληροφορία) ή 3 (εντοπισμός σφαλμάτων), και μια συμβολοσειρά
 @msg	the plug-in's grant can't be removed from the plug-in store	η άδεια του πρόσθετου δεν μπορεί να αφαιρεθεί από τον χώρο αποθήκευσης πρόσθετων
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
@@ -8805,6 +8892,18 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	το `spacing` πρέπει να είναι μεγαλύτερο από 0 και το πολύ {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	το `{key}` πρέπει να είναι από 0 έως {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	το `{key}` πρέπει να είναι από 0,01 έως 1000 pt
+@msg	select the banner, or mark every artboard	επιλέξτε το πανό ή σημειώστε όλους τους πίνακες σχεδίασης
+@msg	the banner has no width or height	το πανό δεν έχει πλάτος ή ύψος
+@msg	the grommet inset is too large for the banner	η απόσταση των τρουκς από την άκρη είναι πολύ μεγάλη για το πανό
+@msg	the hem is too deep for the banner	το στρίφωμα είναι πολύ βαθύ για το πανό
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	το διάστημα δημιουργεί περισσότερα από {MAX_GROMMETS} τρουκς
+@msg	there is no banner to mark	δεν υπάρχει πανό για σήμανση
+@msg	turn on at least one side	ενεργοποιήστε τουλάχιστον μία πλευρά
+@msg	with no hem and no grommets there is nothing to mark	χωρίς στρίφωμα και χωρίς τρουκς δεν υπάρχει τίποτα για σήμανση
+@msg	{saving} failed: {e}	{saving}: απέτυχε: {e}
 	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
 	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
 	Hem	Στρίφωμα
@@ -8949,6 +9048,11 @@ breakText	Glyphs	Γλύφοι
 	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
+	Fold Angle	Γωνία δίπλωσης
+	Set Fold Angle…	Ορισμός γωνίας δίπλωσης…
+	Set Fold Angle	Ορισμός γωνίας δίπλωσης
+	Reset Fold Angle	Επαναφορά γωνίας δίπλωσης
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	επιλέξτε μια γραμμή πτύχωσης, μερικής κοπής ή διάτρησης που δεν είναι κλειδωμένη ούτε κρυφή
 	Check	Έλεγχος
 	Check Fold Lines	Έλεγχος γραμμών δίπλωσης
 @msg	No cut lines are in the selection.	Η επιλογή δεν περιέχει γραμμές κοπής.

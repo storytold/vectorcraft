@@ -324,10 +324,18 @@ pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
 /// isn't selected becomes the only selected one, and the menu's facts are measured.
 pub(crate) fn right_click(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
     let Some(st) = app.session.active() else { return };
-    let (uid, n, hit) = (st.uid, st.doc.artboards.len(), st.doc.artboard_at(p));
+    let (n, hit) = (st.doc.artboards.len(), st.doc.artboard_at(p));
     if let Some(i) = hit.filter(|i| !picked(app, n).contains(i)) {
         select(app, i);
     }
+    measure_menu(app, p);
+}
+
+/// The canvas menu's facts for the selected artboards, with the menu opened at `p` (a right-click, or the Menu key or
+/// Shift+F10, which select nothing).
+pub(crate) fn measure_menu(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
+    let Some(st) = app.session.active() else { return };
+    let (uid, n) = (st.uid, st.doc.artboards.len());
     let all = picked(app, n);
     let any_empty = vectorcraft_engine::find_command("artboard.deleteEmpty").is_some_and(|c| (c.enabled)(&app.session).is_ok());
     let any_art = fit_has_art(app, &all);
@@ -428,10 +436,11 @@ pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
 }
 
 /// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the list has
-/// key focus and the Artboard tool is in use. The list keeps the keys only while its window draws it in every pass, so
-/// a closed panel gives them back to the art; the fired commands run after the frame, a pass after the list's last.
+/// key focus and the Artboard tool is in use. Fired commands run a pass after the list's last draw.
+/// A detached window's pass counter stops when it closes, so the panel must still be visible.
 pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.session.tool_id() == "artboard"
+        && crate::panel_docking::visible(app, "artboards")
         && app.ui.artboards_ui.focused_pass.is_some_and(|(window, pass)| ctx.cumulative_pass_nr_for(window) <= pass + 1)
 }
 

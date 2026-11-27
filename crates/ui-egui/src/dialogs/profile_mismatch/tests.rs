@@ -198,6 +198,49 @@ fn files_opened_together_ask_in_turn(app: &mut VectorcraftApp, tagged: &[u8]) {
     assert!(!is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_none());
 }
 
+/// A file opened while another dialog is open (a message here) waits for it to close and then asks
+/// its question; the other dialog stays. `tagged` asks with the settings in force.
+fn a_question_waits_for_an_open_dialog(app: &mut VectorcraftApp, tagged: &[u8]) {
+    let docs = app.session.documents().len();
+    crate::dialogs::confirm::tell(app, "Waiting", "");
+    let r = crate::io::open_bytes(app, "tagged.vectorcraft", tagged, None).unwrap();
+    assert_eq!(r, json!({ "dialog": OPEN_KIND, "queued": true }));
+    assert!(is_open::<crate::dialogs::confirm::Message>(app), "the message stays");
+    assert!(!is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_none());
+    let id = open_id::<crate::dialogs::confirm::Message>(app);
+    answer_cancel(app, id);
+    assert!(is_open::<ProfileMismatchDialog>(app) && app.pending_profile_open.is_some(), "then it asks");
+    let id = open_id::<ProfileMismatchDialog>(app);
+    answer_ok(app, id);
+    assert_eq!(app.session.documents().len(), docs + 1);
+}
+
+/// A file read off the UI thread waits for another file's question, and Color Settings change so
+/// that it has none any more: once the first question closes, the rest of its read is done off the
+/// UI thread too, and it opens when that is done. `tagged` asks with the settings in force, which
+/// Ask When Opening for a mismatch is one of.
+fn a_background_open_whose_question_is_gone_finishes_off_the_ui_thread(app: &mut VectorcraftApp, tagged: &[u8]) {
+    let docs = app.session.documents().len();
+    assert_eq!(crate::io::open_bytes(app, "first.vectorcraft", tagged, None).unwrap(), json!({ "dialog": OPEN_KIND }));
+    let path = "/tmp/background.vectorcraft".to_string();
+    let file = fileio::read_for_open_asking("background.vectorcraft", tagged, Some(path.clone()), &json!({}), false, false, true).unwrap();
+    assert!(file.read_left());
+    let r = open_or_ask(app, file, Some(path.clone()), true).unwrap();
+    assert_eq!(r, json!({ "dialog": OPEN_KIND, "queued": true }));
+    app.run("edit.colorSettings", json!({"askMismatchOpen": false})).unwrap();
+    let id = open_id::<ProfileMismatchDialog>(app);
+    crate::opening::tests::with_threads(|| {
+        answer_cancel(app, id);
+        assert!(app.queued_profile_opens.is_empty());
+        assert_eq!(app.opening.pending.len(), 1, "read off the UI thread");
+        assert_eq!(app.session.documents().len(), docs, "not open before its read is done");
+        crate::opening::tests::open_ready(app);
+    });
+    assert_eq!(app.session.documents().len(), docs + 1);
+    assert_eq!(app.ui.recent_files.first(), Some(&path));
+    app.run("edit.colorSettings", json!({"askMismatchOpen": true})).unwrap();
+}
+
 /// Color Settings change the open question while it is open: OK asks the question as it is now
 /// (another working space) instead of opening, and opens by the policy once there is no question
 /// (the working space is the file's profile). `tagged` (Wide Gamut RGB) asks with the settings in
@@ -275,6 +318,31 @@ fn paste_asked_before_another_document_is_active(app: &mut VectorcraftApp) {
     assert!(app.pending_paste.is_none());
     assert_eq!(counts(app), before, "nothing pasted into any document");
     app.run("document.activate", json!({ "index": asked_in })).unwrap();
+}
+
+/// The destination still has a mismatch after reopening the saved contents. Its old approval is retired.
+fn paste_asked_before_its_drawing_is_reverted(app: &mut VectorcraftApp) {
+    let dir = vectorcraft_testkit::TempDir::new("immediate-profile-mismatch-revert");
+    let path = dir.join("destination.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+    assert_eq!(app.run("edit.paste", json!({})).unwrap(), json!({ "dialog": PASTE_KIND }));
+    let before = app.session.active().unwrap();
+    let (uid, reverts) = (before.uid, before.reverts);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    assert!(app.pending_paste.is_some(), "the old question is still waiting");
+    let saved = restored.doc.clone();
+    let undo = restored.history.undo.len();
+
+    answer_ok(app, paste_id_open());
+    let after = app.session.active().unwrap();
+    assert!(after.doc == saved, "the old profile approval must leave the restored drawing intact");
+    assert_eq!(after.history.undo.len(), undo);
+    assert!(app.pending_paste.is_none());
 }
 
 /// A drag of the art of the document assigned Display P3 into the active one asks as Paste does:
@@ -391,6 +459,8 @@ fn opening_and_pasting_ask_about_profiles() {
     open_confirmed_under_roots(&mut app, &tagged);
     links_read_under_the_roots_of_the_open(&mut app);
     files_opened_together_ask_in_turn(&mut app, &tagged);
+    a_question_waits_for_an_open_dialog(&mut app, &tagged);
+    a_background_open_whose_question_is_gone_finishes_off_the_ui_thread(&mut app, &tagged);
 
     // Missing Profiles: Ask When Opening, and a profile the list doesn't offer.
     app.run("edit.colorSettings", json!({"askMismatchOpen": false, "askMissingOpen": true, "rgbPolicy": "preserveEmbedded"})).unwrap();
@@ -422,6 +492,7 @@ fn opening_and_pasting_ask_about_profiles() {
     // Cancel pastes nothing; with the box off nothing asks.
     paste_canceled(&mut app, count);
     paste_asked_before_another_document_is_active(&mut app);
+    paste_asked_before_its_drawing_is_reverted(&mut app);
     drop_asks_as_paste_does(&mut app, count);
     let before = count(&app);
     app.run("edit.colorSettings", json!({"askMismatchPaste": false})).unwrap();
@@ -430,6 +501,7 @@ fn opening_and_pasting_ask_about_profiles() {
     assert_eq!(count(&app), before + 1);
     swatch_conflicts_are_asked_again_when_they_change(&mut app);
     all_artboards_leaves_backgrounds_out(&mut app);
+    all_artboards_asks_no_swatch_conflict_for_backgrounds(&mut app);
     // It changes the working space: last.
     app.run("edit.colorSettings", json!({"askMismatchOpen": true})).unwrap();
     an_answer_waits_for_the_question_it_answers(&mut app, &tagged);
@@ -454,4 +526,28 @@ fn all_artboards_leaves_backgrounds_out(app: &mut VectorcraftApp) {
     let listed = |app: &mut VectorcraftApp, command: &str| paste_mismatches(app, command, &json!({})).map(|m| m.len());
     assert_eq!(listed(app, "edit.paste"), Some(1), "the background is RGB");
     assert_eq!(listed(app, ALL_ARTBOARDS), Some(0));
+}
+
+/// Swatch Conflict for Paste on All Artboards asks about the colors it brings, without the
+/// backgrounds of copied artboards: pasting back into the document the art came from, where only
+/// the RGB background now has another profile, converts nothing, so the edited CMYK swatch is no
+/// conflict and the paste runs. A plain paste converts the background and asks.
+fn all_artboards_asks_no_swatch_conflict_for_backgrounds(app: &mut VectorcraftApp) {
+    use super::super::swatch_conflict;
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("swatch.new", json!({"name": "Brand", "color": {"c": 20, "m": 40, "y": 60, "k": 10}, "global": true})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.run("paint.setFill", json!({"swatch": "Brand"})).unwrap();
+    app.run("paint.setStroke", json!({"none": true})).unwrap();
+    app.run("artboard.setProps", json!({"index": 0, "color": "#3366cc"})).unwrap();
+    app.run("edit.assignProfile", json!({ "rgb": cms::WIDE_GAMUT_RGB })).unwrap();
+    app.run("artboard.copy", json!({"index": 0})).unwrap();
+    app.run("edit.assignProfile", json!({ "rgb": null })).unwrap();
+    app.run("swatch.edit", json!({"name": "Brand", "color": {"c": 60, "m": 40, "y": 20, "k": 0}})).unwrap();
+    let r = app.run("edit.paste", json!({"profileMismatch": "convert"})).unwrap();
+    assert_eq!(r["dialog"], swatch_conflict::KIND, "{r}");
+    answer_cancel(app, swatch_conflict::id(app).expect("Swatch Conflict is open"));
+    let r = app.run(ALL_ARTBOARDS, json!({"profileMismatch": "convert"})).unwrap();
+    assert!(r.get("dialog").is_none() && r["ids"].as_array().is_some_and(|ids| !ids.is_empty()), "{r}");
+    assert!(swatch_conflict::id(app).is_none());
 }

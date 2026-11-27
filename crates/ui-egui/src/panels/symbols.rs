@@ -1037,9 +1037,7 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// Other Library…: load the symbols of the document at `path`, else of one picked in an open
 /// dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SymbolLibraries::KIND), |app, path| {
-        load_library(app, json!({ "path": path }))
-    })
+    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SymbolLibraries::KIND), load_library)
 }
 
 /// The id prefix of the Window → Symbol Libraries → User Defined slots.

@@ -27,7 +27,7 @@ use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
-use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
+use craft::ui::notices::{Notice, NoticeAction, NoticeIcon, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::textures::{Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
@@ -127,8 +127,8 @@ fn ask_item_name(app: &mut VectorcraftApp, library: &str, kind: ItemKind, item: 
 fn ask(app: &mut VectorcraftApp, command: &'static str, title: &'static str, name: String, fixed: Value) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let fields = DialogFields::from_pairs([("name", name.clone())]);
-    let dialog = HostedParamDialog::command(&ctx, command, fields, move |_| {
-        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))])
+    let dialog = HostedParamDialog::command(&ctx, command, fields, move |fields| {
+        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))]).values(Bind::bound(fields))
     });
     let opened = crate::dialogs::host::open_held(app, dialog, move |app, answer| {
         let mut params = fixed.clone();
@@ -162,21 +162,6 @@ enum Grab {
     New(ItemKind, Value),
 }
 
-/// The item of library `library` that `drag` holds, or what it would add, if anything.
-fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
-    match drag {
-        PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
-        PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
-        PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
-        PanelDrag::Art { ids, .. } => {
-            let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
-            Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
-        }
-        PanelDrag::Paint { .. } => swatch_add(drag, library).map(|(kind, add)| Grab::New(kind, add)),
-        _ => None,
-    }
-}
-
 /// The kind and `library.add` params of what `drag` holds, to add to library `library`: a color
 /// (not one of that library's own; a spot colour with its swatch's name), or a gradient or pattern
 /// swatch, by its name.
@@ -205,6 +190,7 @@ fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
 /// which keep their test, can read it: what a drop into a group, or out of every group, does.
 struct Membership {
     library: String,
+    active_document: Option<u64>,
     /// The group of each grouped item, by its index in the library's groups.
     index: HashMap<(ItemKind, String), usize>,
     /// The groups' names, in the library's order.
@@ -212,9 +198,25 @@ struct Membership {
 }
 
 impl Membership {
-    fn of(library: &str, lib: &Library) -> Self {
+    fn of(library: &str, lib: &Library, active_document: Option<u64>) -> Self {
         let index = lib.group_index().into_iter().map(|((kind, item), group)| ((kind, item.to_string()), group)).collect();
-        Membership { library: library.to_string(), index, names: lib.groups.iter().map(|g| g.name.clone()).collect() }
+        Membership { library: library.to_string(), active_document, index, names: lib.groups.iter().map(|g| g.name.clone()).collect() }
+    }
+
+    /// The item of this library that `drag` holds, or what it would add. `library.add` reads object IDs in the current document.
+    fn grabbed(&self, drag: &PanelDrag) -> Option<Grab> {
+        let library = &self.library;
+        match drag {
+            PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
+            PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
+            PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
+            PanelDrag::Art { document, ids } if Some(*document) == self.active_document => {
+                let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+                Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
+            }
+            PanelDrag::Paint { .. } => swatch_add(drag, library).map(|(kind, add)| Grab::New(kind, add)),
+            _ => None,
+        }
     }
 
     fn group_of(&self, kind: ItemKind, key: &str) -> Option<usize> {
@@ -232,7 +234,7 @@ impl Membership {
     /// another group moves in, art or a swatch is added there. `None` when nothing would change,
     /// as for an item dropped on its own group, so that the target does not take it.
     fn landing(&self, drag: &PanelDrag, group: Option<usize>) -> Option<Act> {
-        let (cmd, mut params) = match grabbed(drag, &self.library)? {
+        let (cmd, mut params) = match self.grabbed(drag)? {
             Grab::Item(kind, item) if self.group_of(kind, &item) != group => ("library.moveItem", json!({ "kind": kind_param(kind), "item": item })),
             Grab::New(_, add) => ("library.add", add),
             Grab::Item(..) => return None,
@@ -303,8 +305,8 @@ struct View<'a> {
 }
 
 impl<'a> View<'a> {
-    fn new(library: &'a str, lib: &'a Library, query: &str, list: bool, fill_active: bool, has_doc: bool, can_apply: bool) -> Self {
-        let membership = Membership::of(library, lib);
+    fn new(library: &'a str, lib: &'a Library, query: &str, list: bool, fill_active: bool, active_document: Option<u64>, can_apply: bool) -> Self {
+        let membership = Membership::of(library, lib, active_document);
         let query = query.trim().to_lowercase();
         let searching = !query.is_empty();
         let items: Vec<Shown<'a>> = lib
@@ -319,7 +321,20 @@ impl<'a> View<'a> {
             }
         }
         let empty = lib.items().next().is_none() && lib.groups.is_empty();
-        View { library, lib, membership: Arc::new(membership), items, counts, query, searching, empty, list, fill_active, has_doc, can_apply }
+        View {
+            library,
+            lib,
+            membership: Arc::new(membership),
+            items,
+            counts,
+            query,
+            searching,
+            empty,
+            list,
+            fill_active,
+            has_doc: active_document.is_some(),
+            can_apply,
+        }
     }
 
     /// The list: the ungrouped items, then the groups as sections. A drop anywhere on it away from
@@ -387,7 +402,7 @@ impl<'a> View<'a> {
     /// Whether the drag in progress holds an item of one of this library's groups.
     fn dragging_grouped(&self, ui: &Ui) -> bool {
         craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).is_some_and(
-            |drag| matches!(grabbed(&drag, self.library), Some(Grab::Item(kind, item)) if self.membership.group_of(kind, &item).is_some()),
+            |drag| matches!(self.membership.grabbed(&drag), Some(Grab::Item(kind, item)) if self.membership.group_of(kind, &item).is_some()),
         )
     }
 
@@ -476,7 +491,7 @@ impl<'a> View<'a> {
         let source = keyed(shown, |item: &&Shown<'a>| item.key.to_string());
         let takes = DropKind::new::<PanelDrag>(
             DropPlace::Between,
-            move |drag: &PanelDrag, _: &DropAt<String>| matches!(grabbed(drag, self.library), Some(Grab::Item(k, _) | Grab::New(k, _)) if k == kind),
+            move |drag: &PanelDrag, _: &DropAt<String>| matches!(self.membership.grabbed(drag), Some(Grab::Item(k, _) | Grab::New(k, _)) if k == kind),
         );
         // A graphic is placed by a double click; every other item is used by a click.
         let activate = if kind == ItemKind::Graphic { ActivateOn::DoubleClick } else { ActivateOn::Click };
@@ -565,7 +580,7 @@ impl<'a> View<'a> {
     /// `kind` moves there, art or a swatch of that kind is added there. Nothing for an item dropped
     /// beside itself.
     fn dropped(&self, drag: &PanelDrag, kind: ItemKind, at: Option<(&'static str, &str)>, group: Option<usize>) -> Option<Act> {
-        match grabbed(drag, self.library)? {
+        match self.membership.grabbed(drag)? {
             Grab::Item(k, item) if k == kind => (at.is_none_or(|(_, key)| key != item)).then(|| self.moved(kind, &item, at, group)),
             Grab::New(k, mut params) if k == kind => {
                 if let Some((side, key)) = at {
@@ -761,7 +776,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let acts = RefCell::new(Vec::new());
-    let has_doc = app.session.active().is_some();
+    let active_document = app.session.active().map(|st| st.uid);
+    let has_doc = active_document.is_some();
     {
         // PLAN: assumed `UiState::{libraries_list_view: bool, library_search: String, library_groups_closed: HashSet<(String, String)>}` (ap.AS17, hub-w1).
         let (session, state) = (&app.session, &mut app.ui);
@@ -769,7 +785,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Whether a character style's Apply Character Style is enabled (looked up only when the library has one).
         let can_apply =
             has_doc && !lib.char_styles.is_empty() && vectorcraft_engine::cmd::textstyles::target_style_attrs(session, &json!({}), false).is_some();
-        let view = View::new(&lib_id, lib, &state.library_search, state.libraries_list_view, session.fill_active, has_doc, can_apply);
+        let view = View::new(&lib_id, lib, &state.library_search, state.libraries_list_view, session.fill_active, active_document, can_apply);
         Panel::new(tl!("Libraries")).footer(|ui, _| footer(ui, has_doc, &acts)).show(ui, |ui, _| {
             let search = (!view.empty).then_some(&mut state.library_search);
             header(ui, &session.libraries, &lib_id, &mut state.libraries_list_view, search, &acts);
@@ -791,6 +807,7 @@ fn no_library(ui: &mut Ui) -> bool {
             ),
         )
         .title(tl!("Local Libraries"))
+        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
         .layout(NoticeLayout::Centred)
         .action(NoticeAction::new(tl!("Create New Library")))
         .show(ui)
