@@ -368,6 +368,88 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 mod tests {
     use super::*;
 
+    struct SavedFile(std::path::PathBuf);
+
+    impl Drop for SavedFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn saved_names_drafts_do_not_edit_a_reverted_drawing() {
+        for is_view in [false, true] {
+            let path = SavedFile(std::env::temp_dir().join(format!("vc-saved-names-revert-{}-{is_view}.vectorcraft", std::process::id())));
+            let services = crate::Services {
+                read: Some(Box::new(|path: &str| std::fs::read(path).map_err(|e| e.to_string()))),
+                write: Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string()))),
+                ..Default::default()
+            };
+            let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), services));
+            let add_shape = |app: &mut VectorcraftApp, x| {
+                app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
+            };
+            let names = |app: &mut VectorcraftApp| {
+                if is_view {
+                    let views = &app.session.active().unwrap().doc.views;
+                    json!(views.iter().map(|view| &view.name).collect::<Vec<_>>())
+                } else {
+                    app.run("select.savedList", json!({})).unwrap()
+                }
+            };
+            let open = |app: &mut VectorcraftApp| {
+                if is_view {
+                    crate::dialogs::edit_views::open(app).unwrap();
+                    crate::dialogs::edit_views::KIND
+                } else {
+                    crate::dialogs::edit_selection::open(app).unwrap();
+                    crate::dialogs::edit_selection::KIND
+                }
+            };
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            add_shape(&mut app, 10);
+            for name in ["Shared", "Spare"] {
+                app.run(if is_view { "view.saved.new" } else { "select.save" }, json!({"name": name})).unwrap();
+            }
+            app.run("file.saveAs", json!({"path": path.0})).unwrap();
+            assert!(path.0.is_file());
+            add_shape(&mut app, 40);
+            let old = app.session.active().unwrap();
+            let (document, reverts) = (old.uid, old.reverts);
+            let kind = open(&mut app);
+            let id = id_of(kind);
+            let ctx = app.ui_ctx.clone().unwrap();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| {
+                host.set_json_field(&ctx, id, "name0", json!("Stale")).unwrap();
+                host.set_json_field(&ctx, id, "deleted1", json!(true)).unwrap();
+                assert!(!host.confirm_by_id(&ctx, id));
+                assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+            });
+
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            let active = app.session.active().unwrap();
+            assert_eq!((active.uid, active.reverts), (document, reverts + 1), "Revert preserves the tab's UID");
+            assert_eq!(names(&mut app), json!(["Shared", "Spare"]));
+            let undo = app.session.active().unwrap().history.undo.len();
+            pump(&mut app, &ctx);
+
+            assert_eq!(names(&mut app), json!(["Shared", "Spare"]), "{kind} cannot apply its old draft to the reloaded drawing");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+            assert!(dialogs.with(|host| host.cancel_by_id(&ctx, id)));
+            assert_eq!(open(&mut app), kind);
+            dialogs.with(|host| {
+                host.set_json_field(&ctx, id, "name0", json!("Revised")).unwrap();
+                host.confirm_by_id(&ctx, id);
+            });
+            pump(&mut app, &ctx);
+            assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Accepted)));
+            assert_eq!(names(&mut app), json!(["Revised", "Spare"]));
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        }
+    }
+
     #[test]
     fn saved_names_edits_stay_with_their_document() {
         for is_view in [false, true] {
