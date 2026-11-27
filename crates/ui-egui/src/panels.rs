@@ -530,8 +530,7 @@ static PANEL_MENUS: &[PanelMenuSource] = &[
         },
         run: |app, id, _| {
             let command = HarmonyCommand::from_ref(&CommandRef::new(id))?;
-            color_guide::run(app, command);
-            Some(Ok(Value::Null))
+            Some(color_guide::run(app, command).map(|()| Value::Null))
         },
     },
     menu!("stroke", stroke),
