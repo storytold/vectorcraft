@@ -5088,6 +5088,61 @@ fn kinsoku_settings_come_back_on_each_paragraph() {
     assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
 }
 
+/// Type in spot inks (CMYK, RGB and Lab) and a global process color, as its fill and as its
+/// stroke, at full strength and at a tint: each color reads back linked to its swatch at its tint, with no warning, as key 5
+/// of the run's paint names an art style of one paint that holds the link. A link to a process
+/// swatch that isn't global still warns: the editing data can't hold it.
+#[test]
+fn type_in_spot_and_global_colors_reads_back_linked_at_its_tint() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut doc = Document::new(300.0, 200.0);
+    doc.swatches = vec![
+        Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false },
+        Swatch { name: "White Ink".into(), paint: solid(white), global: true, spot: true },
+        Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true },
+        Swatch { name: "Sky".into(), paint: solid(SKY), global: true, spot: true },
+        Swatch { name: "Mint".into(), paint: solid(MINT), global: true, spot: true },
+        Swatch { name: "Brand".into(), paint: solid(BRAND), global: true, spot: false },
+        Swatch { name: "Ink".into(), paint: solid(GOLD), global: false, spot: false },
+    ]
+    .into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let stroked = |fill: Paint, stroke: Paint| CharStyle { size: 24.0, fill, stroke, stroke_width: 1.0, ..CharStyle::default() };
+    let mut t = TextObject::point(Point::new(20.0, 60.0), "", style(24.0, Color::BLACK));
+    t.runs = vec![
+        TextRun::new("WHITE ", stroked(linked("White Ink", white, 1.0), Paint::None)),
+        TextRun::new("RED ", stroked(linked("Red Ink", red, 0.4), linked("Brand", BRAND, 0.6))),
+        TextRun::new("SKY ", stroked(linked("Sky", SKY, 0.75), linked("Red Ink", red, 1.0))),
+        TextRun::new("MINT ", stroked(linked("Mint", MINT, 0.3), Paint::None)),
+        TextRun::new("BRAND", stroked(linked("Brand", BRAND, 1.0), linked("White Ink", white, 0.5))),
+    ];
+    let n = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let runs = |d: &Document| {
+        let mut all = vec![];
+        paths(&d.layers, &mut all);
+        all.iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.runs.iter().map(|r| (r.text.clone(), paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(runs(&read_back(&doc)), runs(&doc));
+    let mut process = doc.clone();
+    let id = process.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = process.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.fill = linked("Ink", GOLD, 1.0);
+    }
+    assert_eq!(export_ai_editing(&process, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();

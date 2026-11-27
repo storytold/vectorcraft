@@ -31,7 +31,7 @@ use vectorcraft_geom::{Affine, PathData, Point};
 use crate::{ai_ops, ps};
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors other than to spot colors, global process colors and Registration, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -177,15 +177,32 @@ fn set(resources: Vec<V>, display: bool) -> V {
 
 /// A paint: kind 0 gray (`[alpha, lightness]`), 1 RGB, 2 CMYK, as the reader's `paint` reads them.
 /// RGB values are an RGB color's own (in the working RGB space) and a Lab color's converted into
-/// the working RGB space ([`ai_ops::rgb_values`]).
-fn paint(c: &Color) -> V {
+/// the working RGB space ([`ai_ops::rgb_values`]). With `style`, the art style that links the color
+/// to its swatch (key 5, [`TextDoc::link`]): the reader takes the style's color, at its tint, in
+/// place of these values.
+fn paint(c: &Color, style: Option<&str>) -> V {
     let (kind, values) = match *c {
         Color::Gray { k } => (0, vec![1.0 - f64::from(k.clamp(0.0, 1.0))]),
         Color::Cmyk { c, m, y, k } => (2, [c, m, y, k].iter().map(|v| f64::from(v.clamp(0.0, 1.0))).collect()),
         Color::Rgb { .. } | Color::Lab { .. } => (1, ai_ops::rgb_values(*c).iter().map(|v| f64::from(*v)).collect()),
     };
     let values: Vec<f64> = std::iter::once(1.0).chain(values).collect();
-    dict(vec![(99, V::Name("SimplePaint")), (0, dict(vec![(0, V::Int(kind)), (1, reals(&values))]))])
+    let color = dict(vec![(0, V::Int(kind)), (1, reals(&values))]);
+    match style {
+        Some(name) => dict(vec![(99, V::Name("CAITextPaint")), (5, V::Str(name.to_owned())), (0, color)]),
+        None => dict(vec![(99, V::Name("SimplePaint")), (0, color)]),
+    }
+}
+
+/// A color linked to a swatch, by the swatch's name and its tint ([`TextDoc::links`]).
+pub(in crate::ai_editing) type LinkKey = (String, u32);
+
+/// The swatch and tint paint `p` is linked to, if it is.
+pub(in crate::ai_editing) fn link_key(p: &Paint) -> Option<LinkKey> {
+    match p {
+        Paint::Solid { swatch: Some(name), tint, .. } => Some((name.clone(), tint.to_bits())),
+        _ => None,
+    }
 }
 
 /// The color of paint `p` when the text document can hold it (a solid color or none).
@@ -447,14 +464,16 @@ fn held_aki(v: f64) -> f64 {
 
 /// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])? `fonts` holds the
 /// fonts already resolved.
-fn loses(t: &TextObject, fonts: &mut ResolvedFonts) -> bool {
+fn loses(t: &TextObject, fonts: &mut ResolvedFonts, links: &HashMap<LinkKey, Option<String>>) -> bool {
     // Small capitals are read back at Document Setup's default size.
     let default_small_caps = vectorcraft_doc::DocSetup::default().small_caps_size;
+    // Is paint `p` held with its swatch link, by an art style ([`TextDoc::link`])?
+    let linked = |p: &Paint| link_key(p).is_some_and(|k| matches!(links.get(&k), Some(Some(_))));
     // A run's style as the text document holds it: every other attribute at its default. A color
-    // is held without its swatch link.
+    // is held without its swatch link, unless an art style holds the link.
     let held_char = |s: &CharStyle| {
         let unlinked = |p: &Paint| match p {
-            Paint::Solid { color, .. } => Paint::solid(*color),
+            Paint::Solid { color, .. } if !linked(p) => Paint::solid(*color),
             other => other.clone(),
         };
         let stroked = !s.stroke.is_none();
@@ -500,8 +519,8 @@ fn loses(t: &TextObject, fonts: &mut ResolvedFonts) -> bool {
                 ..s.clone()
             }
         };
-        // A Lab color is written as RGB.
-        let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
+        // A Lab color is written as RGB, unless an art style holds it with its link.
+        let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. }) && !linked(p);
         s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !fonts.kept(&s)
     };
     // A paragraph's style as the text document holds it, and its text: aligned to the start of
@@ -842,6 +861,10 @@ pub(in crate::ai_editing) struct TextDoc {
     doc_values: usize,
     /// The fonts of the styles written so far, as they resolve.
     resolved: ResolvedFonts,
+    /// The swatch links of type's colors looked at so far, by swatch and tint: the art style that
+    /// holds each (a style of one paint, the color with its swatch, which key 5 of a run's paint
+    /// names), `None` when the editing data can't hold it ([`super::Writer::link_type_colors`]).
+    links: HashMap<LinkKey, Option<String>>,
 }
 
 impl TextDoc {
@@ -851,7 +874,31 @@ impl TextDoc {
 
     /// Has type `t` attributes the text document leaves out ([`loses`])?
     pub(in crate::ai_editing) fn loses(&mut self, t: &TextObject) -> bool {
-        loses(t, &mut self.resolved)
+        loses(t, &mut self.resolved, &self.links)
+    }
+
+    /// The colors of type whose swatch links are still to be looked at: the fills and strokes of
+    /// `texts`' runs that are linked to a swatch and not in [`Self::links`] yet, each once.
+    pub(in crate::ai_editing) fn unlooked_links<'t>(&self, texts: &[&'t TextObject]) -> Vec<&'t Paint> {
+        let mut seen = HashSet::new();
+        texts
+            .iter()
+            .flat_map(|t| t.runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke]))
+            .filter(|p| link_key(p).is_some_and(|k| !self.links.contains_key(&k) && seen.insert(k)))
+            .collect()
+    }
+
+    /// Record the art style `style` that holds the swatch link of colors linked as `p` is, or
+    /// `None` when none does ([`Self::links`]).
+    pub(in crate::ai_editing) fn set_link(&mut self, p: &Paint, style: Option<String>) {
+        if let Some(k) = link_key(p) {
+            self.links.insert(k, style);
+        }
+    }
+
+    /// The art style that holds the swatch link of `p`, if one does.
+    fn link(&self, p: &Paint) -> Option<&str> {
+        self.links.get(&link_key(p)?)?.as_deref()
     }
 
     /// The index of the font of `st` in the font set.
@@ -909,11 +956,13 @@ impl TextDoc {
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
+        // A color linked to a swatch names the art style that holds the link, the fill's for a
+        // stroke too (the reader's `Texts::with_paints`).
         if let Some(c) = &fill {
-            d.push((53, paint(c)));
+            d.push((53, paint(c, self.link(&st.fill))));
         }
         if let Some(c) = &stroke {
-            d.push((54, paint(c)));
+            d.push((54, paint(c, self.link(&st.stroke))));
         }
         d.extend([(56, V::Bool(fill.is_some())), (57, V::Bool(stroke.is_some()))]);
         if stroke.is_some() {
@@ -1243,7 +1292,7 @@ impl TextDoc {
                 if !whole.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace())) || !self.room(&whole, texts.len()) {
                     return None;
                 }
-                let lost = split_differs || texts.iter().any(|t| loses(t, &mut self.resolved));
+                let lost = split_differs || texts.iter().any(|t| loses(t, &mut self.resolved, &self.links));
                 let frames: Vec<usize> = texts.iter().map(|t| self.frame(t, canvas, scale)).collect();
                 let story = self.story(&whole, &frames, scale);
                 if !self.fits(mark) {
@@ -1357,7 +1406,7 @@ impl TextDoc {
             (12, V::Int(0)),
             // Every run writes its own key 35, so this only sets where new type starts: Standard (1).
             (35, V::Int(1)),
-            (53, paint(&Color::gray(1.0))),
+            (53, paint(&Color::gray(1.0), None)),
             (56, V::Bool(true)),
             (57, V::Bool(false)),
             (63, real(1.0)),

@@ -335,6 +335,31 @@ impl Writer<'_> {
         std::mem::replace(&mut self.body, saved)
     }
 
+    /// Look at the swatch links of the colors of type `texts` ([`super::texts::TextDoc::set_link`]):
+    /// each is held by an art style of one paint, its color with its swatch at its tint, which key 5
+    /// of a run's paint names ([`Self::type_color_style`]), or by none.
+    pub(super) fn link_type_colors(&mut self, texts: &[&vectorcraft_doc::TextObject]) {
+        for p in self.texts.unlooked_links(texts) {
+            let style = self.type_color_style(p);
+            self.texts.set_link(p, style);
+        }
+    }
+
+    /// The name of the art style that holds the swatch link of type colored `p`: a style of one
+    /// paint, its fill alone on (`0 1 Xd`), whose paint is `p` as a path's fill writes it (a spot or
+    /// global process color by its name and tint, Registration). The reader gives type whose paint
+    /// names that style the style's color at its tint, linked to its swatch
+    /// ([`crate::import::parsed_type_color`]); `None`, and no style, when it wouldn't give the same
+    /// swatch and tint (a swatch that is neither spot nor global, for one).
+    fn type_color_style(&mut self, p: &Paint) -> Option<String> {
+        let Paint::Solid { swatch: Some(name), tint, .. } = p else { return None };
+        let ops = self.color_ops(p, false);
+        let text = format!("/SimpleStyle :\n0 O\n{ops}0 1 0 0 0 Xy\n{NO_LINE}0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n");
+        let back = self.styles.parsed.get(&text).and_then(crate::import::parsed_type_color);
+        let same = matches!(back, Some(Paint::Solid { swatch: Some(n), tint: t, .. }) if n == name && (t - tint).abs() <= 1e-4);
+        same.then(|| self.styles.object_style(text))
+    }
+
     /// A fill style holding a color, as an effect's entry `key` or a fill's own.
     fn fill_style(&mut self, s: &mut String, color: vectorcraft_color::Color, key: &str) {
         let ops = self.color_ops(&Paint::solid(color), false);
