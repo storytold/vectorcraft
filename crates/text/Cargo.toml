@@ -44,7 +44,7 @@ vello_cpu = { workspace = true }
 # Builds the fonts files carried for their type (`file_font`: a PDF's embedded fonts, from the
 # glyphs it drew) and a small variable font for tests (`test_fonts`; no font file is committed).
 # MIT OR Apache-2.0, already in the build through subsetter.
-write-fonts = "0.48"
+write-fonts = "0.56"
 # The craft-fonts face types of the tables `build.rs` writes (`CRAFT_FONTS`, and `SERVED_FONTS` on the web).
 craft-fonts-build = { workspace = true }
 
