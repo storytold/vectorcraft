@@ -670,7 +670,11 @@ fn on_footer(app: &mut VectorcraftApp, out: &FooterOutput) {
         }
         None => match out.picked {
             Some(AT_BREAK_LINK) => run_status(app, "graphicStyle.breakLink", json!({})),
-            Some(AT_NEW) => new_style(app, out.mods.alt),
+            Some(AT_NEW) => {
+                if let Err(error) = new_style(app, out.mods.alt) {
+                    app.status(error);
+                }
+            }
             Some(AT_DELETE) => {
                 let names = doomed(&selected(app));
                 if !names.is_empty() {
@@ -736,12 +740,9 @@ fn linked_face(thumbs: StyleThumbs<'_>, doc: &Arc<Document>, looks: &Arc<Vec<u64
 }
 
 /// A new style from the selection, first asking for its name (`ask`) in Graphic Style Options.
-fn new_style(app: &mut VectorcraftApp, ask: bool) {
-    if ask {
-        app.run("ui.graphicStyleOptions", json!({})).ok();
-    } else {
-        app.run("graphicStyle.new", json!({})).ok();
-    }
+fn new_style(app: &mut VectorcraftApp, ask: bool) -> Result<(), String> {
+    let command = if ask { "ui.graphicStyleOptions" } else { "graphicStyle.new" };
+    app.run(command, json!({})).map(|_| ())
 }
 
 /// The styles a style dragged from the panel carries: every highlighted style (`sel`) in panel
@@ -870,7 +871,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Result<Value, String> {
     let sel = selected(app);
     match id.strip_prefix(ROW).and_then(|row| row.strip_prefix('.')) {
-        Some("new") => new_style(app, true),
+        Some("new") => new_style(app, true)?,
         Some("duplicate") => duplicate(app, &sel),
         // Merged in panel order, which `selected` keeps.
         Some("merge") => return app.run("ui.mergeGraphicStyles", json!({ "names": sel })),
@@ -1097,6 +1098,27 @@ mod tests {
 
     fn names(app: &VectorcraftApp) -> Vec<String> {
         app.session.active().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect()
+    }
+
+    #[test]
+    fn new_graphic_style_reports_when_no_drawing_can_open_its_dialog() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        for _ in 0..2 {
+            let error = app.run("ui.graphicStyles.new", json!({})).unwrap_err();
+            assert!(error.contains("no document"));
+            assert!(open_dialog(&app, graphic_style_options::KIND).is_none());
+            app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+            let before = names(&app);
+            let steps = app.session.active().unwrap().history.undo.len();
+            assert_eq!(app.run("ui.graphicStyles.new", json!({})).unwrap(), Value::Null);
+            let dialog = open_dialog(&app, graphic_style_options::KIND).expect("a reopened drawing can name a new style");
+            assert_eq!(names(&app), before, "opening the name dialog creates no style");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+            let ctx = app.ui_ctx.clone().unwrap();
+            app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog));
+            app.session.execute("file.close", &json!({"index": 0})).unwrap();
+        }
     }
 
     #[test]
