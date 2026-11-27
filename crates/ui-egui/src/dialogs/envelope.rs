@@ -197,7 +197,7 @@ fn open_dialog(app: &mut VectorcraftApp, kind: &'static str, values: Map<String,
     let fields = fields_of(&params(kind, &DialogFields::new()), &values);
     let dialog = HostedParamDialog::command(&ctx, kind, fields, move |fields| {
         let reset = fields.bool("reset").unwrap_or(false);
-        ParamDialog::command(kind, heading(kind, reset), params(kind, fields)).previews(kind != OPTIONS || envelope)
+        ParamDialog::command(kind, heading(kind, reset), params(kind, fields)).previews(kind != OPTIONS || envelope).values(Bind::bound(fields))
     });
     let generation = OPENED.fetch_add(1, Ordering::Relaxed);
     let cancel = Box::new(move |app: &mut VectorcraftApp| {
@@ -448,6 +448,114 @@ mod tests {
     /// The open envelope dialog.
     fn dialog(app: &VectorcraftApp) -> DialogId {
         app.effect_dialogs.envelope.as_ref().map(|open| open.id).expect("an open envelope dialog")
+    }
+
+    fn type_count(panel: &mut crate::tests::panel_harness::Panel, name: &str, text: &str) {
+        panel.click(name);
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text(text);
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        panel.frame();
+    }
+
+    #[test]
+    fn real_warp_choice_radio_and_slider_edits_reach_the_preview_and_ok() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        let (app, _) = app_with_rect();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        let before = panel.app().session.doc().unwrap().history.undo.len();
+        crate::menus::invoke(&mut panel.app(), MAKE_WARP, json!({}));
+        panel.frame();
+        let opening_bounds = envelope(&panel.app()).1.geometric_bounds();
+        panel.click_role("Style", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        panel.click("Vertical");
+        panel.click_role("Bend", Role::SLIDER);
+        panel.key(egui::Key::ArrowLeft, egui::Modifiers::NONE);
+        panel.frame();
+        let id = dialog(&panel.app());
+        let fields = json_fields(&panel.app(), id);
+        assert_ne!(fields["style"], "arc");
+        assert_ne!(fields["bend"], 50.0);
+        let preview = envelope(&panel.app()).1;
+        let NodeKind::Envelope { ref kind, .. } = preview.kind else { panic!("an envelope preview") };
+        let EnvelopeKind::Warp { style, bend, horizontal, .. } = &**kind else { panic!("a warp") };
+        assert_eq!(style.as_str(), fields["style"].as_str().unwrap());
+        assert_eq!(*bend, fields["bend"].as_f64().unwrap());
+        assert!(!*horizontal);
+        let bounds = preview.geometric_bounds();
+        assert_ne!(bounds, opening_bounds, "the nondefault warp changes the preview geometry");
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        assert!(open_ids(&panel.app()).is_empty());
+        assert_eq!(envelope(&panel.app()).1.geometric_bounds(), bounds);
+        assert_eq!(panel.app().session.doc().unwrap().history.undo.len(), before + 1);
+    }
+
+    #[test]
+    fn real_mesh_counts_and_reset_maintain_shape_edits_reach_the_model() {
+        use crate::tests::panel_harness::Panel;
+
+        let (app, _) = app_with_rect();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        crate::menus::invoke(&mut panel.app(), MAKE_MESH, json!({}));
+        type_count(&mut panel, "Rows", "2");
+        type_count(&mut panel, "Columns", "3");
+        assert!(
+            matches!(envelope(&panel.app()).1.kind, NodeKind::Envelope { ref kind, .. } if matches!(**kind, EnvelopeKind::Mesh { rows: 2, cols: 3, .. }))
+        );
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        let confirmed = envelope(&panel.app()).1;
+        crate::menus::invoke(&mut panel.app(), MAKE_MESH, json!({}));
+        panel.frame();
+        assert!(panel.shows("Maintain Envelope Shape"));
+        panel.click("Maintain Envelope Shape");
+        type_count(&mut panel, "Rows", "1");
+        let id = dialog(&panel.app());
+        assert_eq!(json_fields(&panel.app(), id)["maintainShape"], false);
+        assert!(
+            matches!(envelope(&panel.app()).1.kind, NodeKind::Envelope { ref kind, .. } if matches!(**kind, EnvelopeKind::Mesh { rows: 1, cols: 3, .. }))
+        );
+        panel.click("Cancel");
+        panel.frame();
+        assert_eq!(envelope(&panel.app()).1, confirmed);
+    }
+
+    #[test]
+    fn real_options_controls_enable_dependents_and_confirm_defaults_without_preview() {
+        use crate::tests::panel_harness::Panel;
+
+        let (mut app, _) = app_with_rect();
+        app.run(OPTIONS_CMD, json!({"distortAppearance": false, "distortLinearGradients": false})).unwrap();
+        let initial = app.session.execute("object.envelope.info", &json!({})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        crate::menus::invoke(&mut panel.app(), OPTIONS_CMD, json!({}));
+        panel.frame();
+        assert!(!panel.enabled("Distort Linear Gradients"));
+        panel.click("Distort Appearance");
+        assert!(panel.enabled("Distort Linear Gradients"));
+        panel.click("Distort Linear Gradients");
+        panel.click("Anti-Alias");
+        assert!(!panel.app().session.in_interaction(), "defaults have no artwork preview");
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        let info = panel.app().session.execute("object.envelope.info", &json!({})).unwrap();
+        assert_eq!(info["distortAppearance"], true);
+        assert_eq!(info["distortLinearGradients"], true);
+        assert_eq!(info["antiAlias"].as_bool(), initial["antiAlias"].as_bool().map(|on| !on));
+        crate::menus::invoke(&mut panel.app(), OPTIONS_CMD, json!({}));
+        panel.frame();
+        panel.click("Anti-Alias");
+        panel.click("Cancel");
+        panel.frame();
+        assert_eq!(panel.app().session.execute("object.envelope.info", &json!({})).unwrap(), info);
     }
 
     #[test]
