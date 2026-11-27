@@ -899,6 +899,48 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     assert!(outlined(&mut app), "OK brings ordinary outlines back on the applied dots");
 }
 
+#[test]
+fn halftone_waits_for_the_drawing_that_opened_the_preview() {
+    use crate::dialogs::{halftone, host};
+
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let draw = |app: &mut VectorcraftApp, x| {
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": x, "y": 40, "width": 60, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    };
+    draw(&mut app, 40);
+    let first = app.session.doc().unwrap().doc.clone();
+    draw(&mut app, 200);
+    let second = app.session.doc().unwrap().doc.clone();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("ui.menuDialog", json!({"command": halftone::CMD})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    let id = app.effect_dialogs.halftone.as_ref().unwrap().id;
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Other drawing's edit").unwrap();
+    let dialogs = app.dialogs().unwrap();
+    dialogs.with(|h| h.set_json_field(&ctx, id, "frequency", json!(25))).unwrap();
+    host::pump(&mut app, &ctx);
+    assert_eq!(app.session.doc().unwrap().doc, second);
+    assert_eq!(app.session.doc().unwrap().interaction.as_ref().unwrap().label, "Other drawing's edit");
+    dialogs.with(|h| h.confirm_by_id(&ctx, id));
+    host::pump(&mut app, &ctx);
+    assert!(app.any_dialog_open());
+    assert_eq!(app.session.doc().unwrap().doc, second);
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+    assert!(!app.any_dialog_open());
+    assert_ne!(app.session.doc().unwrap().doc, first);
+    assert_eq!(app.session.documents()[1].doc, second);
+}
+
 // One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.
 fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
     let (shapes, mut delta) = frame_output(app, ctx);
