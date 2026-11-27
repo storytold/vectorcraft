@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use craft::behavior::{IconId, Selection, SelectionModel};
-use craft::host::{PickRequest, Picked};
+use craft::host::PickRequest;
 use craft::theme::variant::Tone;
 use craft::ui::contract::{Bind, MemoKey, MemoProps, SelectMode, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
@@ -113,7 +113,7 @@ pub(crate) trait LibraryKind {
     const OPEN: &'static str;
     /// The engine command listing the libraries, for error messages.
     const LIST: &'static str;
-    /// The engine command loading a library from a file (`{path}` → `{library}`).
+    /// The engine command loading a library by path or by file name and contents (`{library}`).
     const LOAD: &'static str;
     /// The libraries menu's tooltip ("Swatch Libraries Menu").
     const MENU: &'static str;
@@ -502,13 +502,13 @@ pub(crate) fn locate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Strin
     }
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
     let panel = given.to_string();
-    pick_library_file(app, path, library_pick_filters(k.kind), move |app, path| located(app, &panel, &path))
+    pick_library_file(app, path, library_pick_filters(k.kind), move |app, params| located(app, &panel, params))
 }
 
-/// Locate Library… answered with the file at `path` for missing library panel `given`.
-fn located(app: &mut VectorcraftApp, given: &str, path: &str) -> Result<Value, String> {
+/// Locate Library… answered with the chosen file for missing library panel `given`.
+fn located(app: &mut VectorcraftApp, given: &str, params: Value) -> Result<Value, String> {
     let (k, id) = parse(given).ok_or_else(|| format!("`{given}` isn't a library panel (see window.swatchLibrary)"))?;
-    let r = app.run(k.load, json!({ "path": path }))?;
+    let r = app.run(k.load, params)?;
     let next = r["library"].as_str().unwrap_or_default().to_string();
     let to = panel_id(k.kind, &next);
     if to != given && is_open(&app.ui, &to) {
@@ -543,25 +543,21 @@ pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&
     }
 }
 
-/// Other Library… and Locate Library…: `then` loads the library file at `path`, else one picked in
-/// an open dialog. The pick is asked of the app (`file_asks`) and answers on a later pass, which
-/// runs `then` with the picked file; until then this returns what `file_asks::ask` returns.
+/// Other Library… and Locate Library…: `then` gets the load command parameters for the file at
+/// `path`, or for the picked file. A browser pick supplies the name and contents.
 pub(crate) fn pick_library_file(
     app: &mut VectorcraftApp,
     path: Option<String>,
     filters: Vec<(&'static str, &'static [&'static str])>,
-    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Value) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
     if let Some(path) = path {
-        return then(app, path);
+        return then(app, json!({ "path": path }));
     }
     let request = filters.into_iter().fold(PickRequest::open("library"), |r, (name, exts)| r.filter(name, exts));
-    Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| match picked {
-        Picked::Paths(paths) => match paths.into_iter().next() {
-            Some(path) => then(app, path.to_string_lossy().into_owned()),
-            None => Ok(Value::Null),
-        },
-        _ => Ok(Value::Null),
+    Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| match file_asks::open_params(&picked) {
+        Some(params) => then(app, Value::Object(params)),
+        None => Ok(Value::Null),
     }))
 }
 

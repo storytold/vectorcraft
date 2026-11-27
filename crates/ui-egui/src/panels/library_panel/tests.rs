@@ -247,6 +247,45 @@ fn saving_to_a_file_and_opening_a_palette_file() {
     assert!(!builtin_library(&open.id) && builtin_library(vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES));
 }
 
+fn browser_library<K: LibraryKind>(filename: &str, bytes: &[u8], entry: &str) -> Option<String> {
+    let mut app = app();
+    app.services.download = Some(Box::new(|_, _| Ok(())));
+    let picker = scripted(&mut app);
+    let undo = undo_len(&app);
+    crate::tests::picks::asks(&mut app, &format!("{}.other", K::OPEN));
+    picker.answer_contents(&[(filename, bytes)]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+    assert_eq!((app.session.documents().len(), undo_len(&app)), (1, undo), "loading a library does not change the drawing");
+    let open = last_open(&app.ui)?;
+    assert_eq!(open.kind, K::KIND);
+    assert!(is_open(&app.ui, &open.panel()));
+    let (name, library) = K::get(&app, &open.id)?;
+    assert!(K::rows(&library, &open.id).iter().any(|row| row.name == entry && row.item.is_some()), "{entry} is in the {name} library");
+    Some(name)
+}
+
+#[test]
+fn other_library_opens_browser_pick_contents_for_each_panel_kind() {
+    use crate::panels::{brushes::BrushLibraries, graphic_styles::GraphicStyleLibraries, symbols::SymbolLibraries};
+
+    let mut source = app();
+    source.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    source.run("graphicStyle.new", json!({"name": "Studio Style"})).unwrap();
+    source.run("symbol.new", json!({"name": "Studio Symbol"})).unwrap();
+    source.run("brush.new", json!({"type": "bristle", "name": "Studio Brush"})).unwrap();
+    let encoded = source.run("document.serialize", json!({})).unwrap();
+    let document = vectorcraft_format::base64_decode(encoded["dataBase64"].as_str().unwrap()).unwrap();
+    let palette = b"GIMP Palette\nName: Browser Palette\n#\n255   0   0\tBrowser Red\n";
+    let loaded = [
+        browser_library::<SwatchLibraries>("Browser Palette.gpl", palette, "Browser Red"),
+        browser_library::<BrushLibraries>("Browser Studio.vectorcraft", &document, "Studio Brush"),
+        browser_library::<SymbolLibraries>("Browser Studio.vectorcraft", &document, "Studio Symbol"),
+        browser_library::<GraphicStyleLibraries>("Browser Studio.vectorcraft", &document, "Studio Style"),
+    ];
+    assert_eq!(loaded.map(|name| name.unwrap_or_default()), ["Browser Palette", "Browser Studio", "Browser Studio", "Browser Studio"]);
+}
+
 #[test]
 fn the_save_dialog_writes_swatch_exchange_files() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
@@ -486,6 +525,32 @@ fn a_persistent_panel_whose_file_is_gone_is_listed_as_missing_until_located() {
     let last = restarted(&next);
     assert!(is_open(&last.ui, &located) && last.ui.status.is_empty(), "{}", last.ui.status);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn locate_library_loads_browser_contents_into_the_missing_panel() {
+    let path = std::env::temp_dir().join(format!("vc-browser-locate-{}.gpl", std::process::id()));
+    let palette = b"GIMP Palette\nName: Replacement\n#\n255   0   0\tNew Red\n";
+    std::fs::write(&path, palette).unwrap();
+    let mut app = app();
+    let missing = panel_of(app.run("window.swatchLibrary.other", json!({"path": path})).unwrap());
+    app.run("ui.libraryPanel", json!({"panel": missing, "persistent": true, "view": "smallList"})).unwrap();
+    std::fs::remove_file(&path).unwrap();
+
+    let mut app = restarted(&app);
+    tidy(&mut app);
+    app.services.download = Some(Box::new(|_, _| Ok(())));
+    let picker = scripted(&mut app);
+    assert_eq!(app.run("ui.libraryPanel.locate", json!({"panel": missing})), Ok(json!({"pending": "fileDialog"})));
+    picker.answer_contents(&[("Replacement.gpl", palette)]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(!is_open(&app.ui, &missing), "the missing panel has been recovered");
+    let panel = last_open(&app.ui).unwrap();
+    assert!(is_open(&app.ui, &panel.panel()));
+    assert_eq!((panel.persistent, panel.view), (true, Some(View::SmallList)));
+    assert!(SwatchLibraries::get(&app, &panel.id).is_some_and(|(_, lib)| lib.swatch("New Red").is_some()));
 }
 
 #[test]
