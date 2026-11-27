@@ -217,7 +217,8 @@ pub(super) struct ArtStyle {
     pub simple_pattern: Option<StyleItem>,
     /// A style that is one paint, when that paint is a colour with a swatch (a spot ink or a
     /// global process colour, `x`, `Xx`, `Xk`; Registration): the paint at its tint, linked to the
-    /// swatch, with the named colour that makes the swatch (none for Registration). A text
+    /// swatch, with the named colour that makes the swatch (none for Registration). Only when the
+    /// style's fill alone is on (`0 1 Xd`) and it sets no stroke colour or pattern, before or after. A text
     /// document's characters name such styles for their fills and strokes (`ate`), and keep only
     /// the colour's process values themselves. `None` for any other paint or style.
     pub simple_color: Option<(Paint, Option<paint::Named>)>,
@@ -491,7 +492,11 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
         if let Some(name) = name {
             // Only a style that is one paint holds a pattern or a swatch colour for type: one with
             // filters as well paints with more than that.
-            let SimplePaint { pattern, color } = if filters.is_empty() { simple } else { SimplePaint::default() };
+            let SimplePaint { pattern, color, stroke_painted } = if filters.is_empty() { simple } else { SimplePaint::default() };
+            // The colour is the style's one paint: only its fill is on (`0 1 Xd`) and nothing sets a
+            // stroke's colour or pattern.
+            let filled = one_paint.as_ref().is_some_and(|one| one.xd && one.paint.paints == (false, true));
+            let color = color.filter(|_| filled && !stroke_painted);
             let mut st = ArtStyle { simple_pattern: pattern, simple_color: color, ..style(filters) };
             if let Some(one) = one_paint.filter(|_| filters.is_empty()) {
                 if let Some((mode, opacity)) = one.paint.xy {
@@ -949,23 +954,29 @@ impl OnePaint {
 struct SimplePaint {
     pattern: Option<StyleItem>,
     color: Option<(Paint, Option<paint::Named>)>,
+    /// A stroke's colour or pattern was set, before or after the fill's: the style isn't one
+    /// colour, so it holds none for type (its pattern is kept as before).
+    stroke_painted: bool,
 }
 
 /// A paint operator of a style that is one paint: a pattern (`p`) is kept as its
 /// [`StyleItem::Pattern`] and a fill colour that has a swatch as its paint and named colour. Any
 /// other paint after one of them (a colour, a stroke's colour or pattern, a gradient) leaves the
-/// style without it.
+/// style without it, and a stroke's colour or pattern anywhere is remembered
+/// ([`SimplePaint::stroke_painted`]).
 fn simple_paint_op(simple: &mut SimplePaint, op: &str, vals: &[V], names: &mut Names) {
+    let stroke_painted = simple.stroke_painted;
     match op {
         "p" => {
             let pattern = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls });
-            *simple = SimplePaint { pattern, color: None };
+            *simple = SimplePaint { pattern, color: None, stroke_painted };
         }
         "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
             let color = paint::color_op_in(op, vals, names).filter(|(p, _)| matches!(p, Paint::Solid { swatch: Some(_), .. }));
-            *simple = SimplePaint { pattern: None, color };
+            *simple = SimplePaint { pattern: None, color, stroke_painted };
         }
-        "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "P" | "Bg" => *simple = SimplePaint::default(),
+        "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "P" => *simple = SimplePaint { stroke_painted: true, ..SimplePaint::default() },
+        "Bg" => *simple = SimplePaint { stroke_painted, ..SimplePaint::default() },
         _ => {}
     }
 }

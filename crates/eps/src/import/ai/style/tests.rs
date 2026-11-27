@@ -1550,10 +1550,12 @@ fn only_a_style_of_one_pattern_paint_holds_a_pattern_for_type() {
 
 /// A style that is one paint holds a swatch colour for type when its paint is a fill colour with a
 /// swatch: the paint at its tint and the named colour that makes the swatch. A process colour,
-/// another paint after the colour, or filters beside it give none.
+/// another paint after the colour, a stroke's colour before it, a fill that is off, or filters
+/// beside it give none.
 #[test]
 fn only_a_style_of_one_swatch_colour_holds_it_for_type() {
-    let simple = |paint: &str| format!("/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n");
+    let painted = |paint: &str, xd: &str| format!("/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n{xd}/Paint ;\n");
+    let simple = |paint: &str| painted(paint, "0 1 Xd\n");
     let active = "/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n1 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
         /FillStyle : 0 O\n1 0 0 0 k\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
@@ -1577,6 +1579,14 @@ fn only_a_style_of_one_swatch_colour_holds_it_for_type() {
         simple(&format!("{ink}\n{dots}")),
         simple(&format!("{ink}\n0 0 0 1 K")),
         simple(&format!("{ink}\n0 1 1 0 k")),
+        // The order of the paints doesn't matter: a stroke's colour before the fill's.
+        simple(&format!("0 0 0 1 K\n{ink}")),
+        simple(&format!("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n{ink}")),
+        // The fill is off, both are off, the stroke is on too, or nothing says which is on.
+        painted(ink, "1 0 Xd\n"),
+        painted(ink, "0 0 Xd\n"),
+        painted(ink, "1 1 Xd\n"),
+        painted(ink, ""),
         format!("{}{active}", simple(ink)),
         format!("{active}{}", simple(ink)),
     ] {
