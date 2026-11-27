@@ -15,6 +15,9 @@ craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0", default-features = false, features = ["interpret", "write"] }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }
 craft-proof = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }
+# Language packs: the Craft apps' shared font store installs them (#4936).
+craft-font-store = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }
 # The `.vectorcraft` envelope: its members, version, embedded images and the data after the JSON.
 craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }
 craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0" }

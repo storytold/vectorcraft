@@ -974,6 +974,30 @@ impl Session {
         self.plugin_loads_in_background = on;
     }
 
+    /// Lays every document out again when the installed Language packs changed since the last
+    /// call (an install in the background ended, or a pack was removed), since spelling and
+    /// hyphenation in their languages change → whether an install or index fetch is still running,
+    /// so the app looks again. The app calls it as its frames go by.
+    pub fn poll_language_packs(&mut self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let now = crate::packs::generation();
+            if now != self.packs_seen {
+                self.packs_seen = now;
+                for st in &mut self.docs {
+                    st.revision += 1;
+                }
+            }
+            crate::packs::busy()
+        }
+        // The web build has no packs.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = self.packs_seen;
+            false
+        }
+    }
+
     /// Installs what the plug-in loads have loaded so far, in the order the loads started and each
     /// load's file-name order, up to the first module still loading, without waiting → whether
     /// some are still loading. A load starts once the loads before it are done. When another

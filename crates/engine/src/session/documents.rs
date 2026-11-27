@@ -110,6 +110,7 @@ impl Session {
             plugin_dir: None,
             plugin_loads: Default::default(),
             plugin_loads_in_background: false,
+            packs_seen: 0,
             scripts_dir: None,
             startup_scripts_dir: None,
             metadata_templates_dir: None,

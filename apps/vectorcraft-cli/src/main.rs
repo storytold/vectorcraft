@@ -201,6 +201,9 @@ fn main() -> ExitCode {
     #[cfg(target_os = "macos")]
     mac_fonts::install();
     prefs_dir::install_fonts();
+    // The Language packs installed in the shared font store; `proof.installPack` returns once
+    // installed.
+    prefs_dir::use_language_packs();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     // Before any subcommand attaches the plug-in folder.
     let safe_mode = args.first().is_some_and(|a| a == "--safe-mode");

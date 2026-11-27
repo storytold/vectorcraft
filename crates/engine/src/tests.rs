@@ -127,6 +127,8 @@ mod outlineobject;
 pub(super) mod outlinestroke;
 mod overprint;
 mod package;
+#[cfg(not(target_arch = "wasm32"))]
+mod packs;
 mod paintopacity;
 mod paintproxy;
 mod panelcmds;

@@ -325,10 +325,11 @@ pub fn misspellings_from(t: &TextObject, ignored: &BTreeSet<String>, from: usize
 /// not, since a save takes in the words another window saved), and a dictionary file attached.
 static DICTIONARY_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-/// The custom dictionary's generation: what [`misspellings`] found before it last changed may be
-/// out of date (Auto Spell Check checks the type again).
+/// The dictionaries' generation: what [`misspellings`] found before it last changed may be out of
+/// date (Auto Spell Check checks the type again). It moves on with the custom dictionary and with
+/// craft-proof's own dictionaries, which change when a Language pack is installed or removed.
 pub fn dictionary_generation() -> u64 {
-    DICTIONARY_GENERATION.load(Ordering::Relaxed)
+    DICTIONARY_GENERATION.load(Ordering::Relaxed).wrapping_add(craft_proof::dictionary_generation())
 }
 
 fn dictionary_changed() {

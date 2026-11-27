@@ -92,6 +92,8 @@ pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;
 pub mod spelling;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod packs;
 mod stroke;
 mod style;
 pub use style::styled_node;
@@ -381,6 +383,9 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(tags::specs());
         v.extend(interactivity::specs());
         v.extend(spelling::specs());
+        // Language packs need a font store, which the web build has none of.
+        #[cfg(not(target_arch = "wasm32"))]
+        v.extend(packs::specs());
         v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
