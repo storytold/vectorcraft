@@ -525,6 +525,35 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
         for _ in 0..4 {
             out = a.frame(vec![]);
         }
+        // TEMPORARY allocation control: MUST REMOVE traces before publication. Activate the real footer button,
+        // not private state: Links applies FooterBar's first pick by toggling its existing info option.
+        let layout = |out: &egui::FullOutput| {
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("the actual floated Links tree").nodes;
+            let lists: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::List && n.label() == Some(vectorcraft_ui_egui::i18n::t("Links"))).collect();
+            assert_eq!(lists.len(), 1, "{locale}: the actual Links list has one allocation");
+            let infos: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::Group && n.label() == Some(vectorcraft_ui_egui::i18n::t("Link Info"))).collect();
+            assert!(infos.len() <= 1, "{locale}: the live Link Info section is unambiguous");
+            let toggles: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::Button && n.label() == Some(vectorcraft_ui_egui::i18n::t("Show Link Info"))).collect();
+            assert_eq!(toggles.len(), 1, "{locale}: the native Show Link Info footer action is unique");
+            assert!(toggles[0].1.supports_action(Action::Click), "the actual footer button exposes activation");
+            (location_node_rect(&lists[0].1), infos.first().map(|(_, n)| location_node_rect(n)), toggles[0].0)
+        };
+        let before_toggle = a.snapshot();
+        let (list_before, info_before, hide_info) = layout(&out);
+        assert!(info_before.is_some(), "{locale}: Link Info starts shown");
+        a.frame(vec![Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: hide_info, target_tree: TreeId::ROOT, data: None })]);
+        out = a.settle();
+        let (list_off, info_off, show_info) = layout(&out);
+        assert!(info_off.is_none(), "{locale}: the real footer action hides Link Info");
+        a.frame(vec![Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: show_info, target_tree: TreeId::ROOT, data: None })]);
+        out = a.settle();
+        let (list_on, info_on, _) = layout(&out);
+        assert!(info_on.is_some(), "{locale}: the real footer action restores Link Info before the original oracles");
+        eprintln!(
+            "LINK_LOCATION_ALLOCATION locale={locale} list_before={list_before:?} info_before={info_before:?} list_off={list_off:?} info_off={info_off:?} list_on={list_on:?} info_on={info_on:?} off_minus_on_height={}",
+            list_off.height() - list_on.height()
+        );
+        assert_eq!(a.snapshot(), before_toggle, "showing and hiding link details leaves document, selection and history intact");
         let nodes = &out.platform_output.accesskit_update.as_ref().expect("the floated Links tree").nodes;
         // TEMPORARY diagnostic: MUST REMOVE before publication. One final snapshot per locale, before the unchanged assertions.
         eprintln!("LINK_LOCATION_INTEGRATION_FINAL locale={locale} node_count={}", nodes.len());
