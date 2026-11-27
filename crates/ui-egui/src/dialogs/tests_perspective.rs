@@ -105,6 +105,39 @@ fn define_grid_opens_on_the_grid_and_applies_its_fields() {
 }
 
 #[test]
+fn define_grid_applies_only_to_the_document_where_it_opened() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let destination = app.session.active().unwrap();
+    let destination_uid = destination.uid;
+    let destination_undo = destination.history.undo.len();
+    let destination_grid = grid(&app);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let source_uid = app.session.active().unwrap().uid;
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "rightColor", json!("#112233")).unwrap();
+    let ctx = window(&app);
+    let id = dialog_id(super::perspective_grid::KIND);
+    host(&app, |h| {
+        assert!(!h.confirm_by_id(&ctx, id));
+        assert_eq!(h.held_state(id), Some(HeldOk::Waiting));
+    });
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    super::perspective_grid::pump(&mut app, &ctx);
+    assert_eq!(app.session.active().unwrap().uid, destination_uid);
+    assert_eq!(grid(&app), destination_grid, "the first document's draft leaves the active grid alone");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), destination_undo);
+    assert!(matches!(host(&app, |h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source_uid);
+    ok(&mut app);
+    assert_eq!(kind(&app), None);
+    assert_eq!(grid(&app).right_color.hex(), "#112233");
+}
+
+#[test]
 fn define_grid_loads_and_saves_presets() {
     let mut app = app();
     app.run("ui.perspectiveGridDialog", json!({})).unwrap();
@@ -147,6 +180,46 @@ fn define_grid_loads_and_saves_presets() {
     assert_eq!(app.session.prefs.perspective_presets.len(), 2);
 }
 
+/// Enter pressed in the field that has the focus, then the passes that run the filed answer and close the dialog.
+fn enter(app: &mut VectorcraftApp) {
+    let ctx = window(app);
+    let key = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    crate::tests::synthetic::key_frame(app, &ctx, vec![key(true)]);
+    crate::tests::synthetic::key_frame(app, &ctx, vec![key(false)]);
+    frame(app);
+    frame(app);
+}
+
+#[test]
+fn enter_is_ok_in_define_grid_and_save_grid_as_preset() {
+    let mut app = app();
+    // Define Grid: Enter in the focused field defines the grid and closes the dialog.
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    set(&mut app, "angle", json!(30)).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    assert!(window(&app).memory(|m| m.focused()).is_some(), "a field of the dialog has the focus");
+    enter(&mut app);
+    assert_eq!(kind(&app), None, "Enter closes Define Grid");
+    assert!((grid(&app).viewing_angle() - 30.0).abs() < 1e-9, "Enter defines the grid");
+    // Save Grid as Preset: Enter in the name field saves the preset and closes the dialog.
+    app.run("ui.savePerspectivePreset", json!({})).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    assert!(window(&app).memory(|m| m.focused()).is_some(), "a field of the dialog has the focus");
+    enter(&mut app);
+    assert_eq!(kind(&app), None, "Enter closes Save Grid as Preset");
+    assert_eq!(app.session.prefs.perspective_presets.len(), 1, "Enter saves the preset");
+    // A name the presets refuse: Enter files it, the refusal shows, and the dialog stays.
+    app.run("ui.savePerspectivePreset", json!({})).unwrap();
+    set(&mut app, "name", json!("[2P-Normal View]")).unwrap();
+    frame(&mut app);
+    frame(&mut app);
+    enter(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some(super::perspective_grid::KIND), "a refused name keeps the dialog open");
+    assert_eq!(app.session.prefs.perspective_presets.len(), 1);
+}
+
 #[test]
 fn the_presets_manager_creates_edits_and_deletes_presets() {
     use super::perspective_presets::{self, Action};
@@ -185,6 +258,23 @@ fn the_presets_manager_creates_edits_and_deletes_presets() {
     assert!(app.session.prefs.perspective_presets.is_empty());
     assert_eq!(field(&app, "selected"), json!("[3P-Low View]"));
     assert!(app.run("ui.perspectiveUserPreset3.1", json!({})).is_err());
+}
+
+/// Export… suggests the selected preset's name as the file name, a built-in one's without its brackets.
+#[test]
+fn the_presets_manager_exports_to_a_file_named_after_the_preset() {
+    use super::perspective_presets::{self, Action};
+    let mut app = app();
+    let picker = crate::tests_picks::scripted(&mut app);
+    app.run("perspective.presets.save", json!({"name": "Street"})).unwrap();
+    app.run("ui.perspectivePresetsDialog", json!({"selected": "Street"})).unwrap();
+    frame(&mut app);
+    for (preset, file) in [("Street", "Street.vcperspective"), ("[2P-High View]", "2P-High View.vcperspective")] {
+        perspective_presets::run(&mut app, Action::Export, preset).unwrap();
+        assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some(file), "{preset}");
+        picker.cancel();
+        frame(&mut app);
+    }
 }
 
 #[test]

@@ -2,7 +2,7 @@ use super::run::{normalize_panel, toolbar_double, toolbar_panel};
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::{Brightness, Value, VectorcraftApp};
 use crate::i18n::LangExt as _;
-use craft::keymap::Chord;
+use craft::keymap::{Chord, CommandRef};
 use craft::ui::runtime::commands;
 
 /// Checked state for toggle items.
@@ -190,17 +190,33 @@ pub fn plugin_revision() -> u64 {
 /// the window's keymap, under the user's set in use (Edit → Keyboard Shortcuts). `None` before the
 /// window's first frame.
 pub fn shortcut_of(app: &VectorcraftApp, key: &str) -> Option<Chord> {
-    let ctx = app.ui_ctx.as_ref()?;
-    let command = crate::keymap::command_of(key);
-    let window = commands::keymap(ctx)?;
-    let (now, built) = (&*app.shortcut_overrides, window.overrides());
-    if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
-        return commands::chord(ctx, &command);
-    }
+    command_shortcuts(app)(&crate::keymap::command_of(key))
+}
+
+/// The shortcut each command shows, as [`shortcut_of`] reads it, for a caller that asks for many: the
+/// keymap is read once. `None` for every command before the window's first frame.
+pub(crate) fn command_shortcuts(app: &VectorcraftApp) -> impl Fn(&CommandRef) -> Option<Chord> + '_ {
+    let ctx = app.ui_ctx.as_ref();
+    let window = ctx.and_then(commands::keymap);
     // The window's keymap takes a change of the set (`shortcuts.set`) from its next frame; the set is read until then.
-    let mut keymap = (*window).clone();
-    keymap.set_overrides(now.clone());
-    keymap.bindings(&command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
+    let pending = window.as_ref().and_then(|window| {
+        let (now, built) = (&*app.shortcut_overrides, window.overrides());
+        if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
+            return None;
+        }
+        let mut keymap = (**window).clone();
+        keymap.set_overrides(now.clone());
+        Some(keymap)
+    });
+    move |command| {
+        let ctx = ctx.filter(|_| window.is_some())?;
+        match &pending {
+            None => commands::chord(ctx, command),
+            Some(keymap) => {
+                keymap.bindings(command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
+            }
+        }
+    }
 }
 
 /// Is a command currently enabled?
@@ -235,8 +251,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
 }
 
 /// Why command `id` can't run now ([`enabled`]): `None` while it can, else `Some` with the
-/// engine's reason when the engine's check of an engine command fails. The engine's check runs at
-/// most once.
+/// engine's reason when the engine's check of an engine command fails, and with the reason of
+/// [`crate::panels::align::why_off`] for an Align panel button. The engine's check runs at most
+/// once.
 pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> {
     if waits_for_ime(app, id) {
         return Some(None);
@@ -249,6 +266,9 @@ pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> 
         && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
     {
         return (!facts.any_empty).then_some(None);
+    }
+    if let Some(b) = crate::panels::align::button(id) {
+        return crate::panels::align::why_off(app, &b);
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return match (c.enabled)(&app.session) {
@@ -279,7 +299,6 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
-        id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::button_enabled(app, &b) && enabled(app, b.command_now(app)),
         id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
@@ -291,6 +310,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
         "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
+        "retype.cancelSearch" => crate::retype_runs::any_running(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -382,6 +402,10 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        // A filter may take no objects and add new ones, so no selection is needed.
+        crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
+            app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()
+        }
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()

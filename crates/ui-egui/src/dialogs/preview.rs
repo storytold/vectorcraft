@@ -48,20 +48,28 @@ impl LivePreview {
         Some(answer)
     }
 
-    /// OK: keeps the previewed `cmd` as one undo step (or runs it when no preview runs); the command's warning shows
-    /// in the status bar either way. On an error the dialog stays open.
+    /// OK: keeps the previewed `cmd` as one undo step (or runs it when no preview runs); the command's warning, or a
+    /// plug-in run's notice, shows in the status bar either way. On an error the dialog stays open.
     pub(crate) fn commit(self, app: &mut VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
         if !app.session.in_interaction() {
             return app.run(cmd, params);
         }
-        let v = app.session.preview(cmd, &params).map_err(|e| e.to_string())?;
-        let r = app.session.commit_interaction().map(|_| Value::Null).map_err(|e| e.to_string());
-        if r.is_ok()
-            && let Some(w) = v.get("warning").and_then(Value::as_str)
-        {
-            app.status(w.to_string());
+        let result = app.session.preview(cmd, &params).and_then(|answer| {
+            app.session.commit_interaction()?;
+            Ok(answer)
+        });
+        let answer = match result {
+            Ok(answer) => answer,
+            Err(error) => {
+                self.cancel(app);
+                return Err(error.to_string());
+            }
+        };
+        if let Some(warning) = answer.get("warning").and_then(Value::as_str) {
+            app.status(warning.to_string());
         }
-        r
+        crate::plugin_runs::show_notice(app, cmd, &answer);
+        Ok(Value::Null)
     }
 
     /// Cancel: rolls a shown preview back.
@@ -101,6 +109,31 @@ mod tests {
             vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
             _ => panic!("not text"),
         }
+    }
+
+    #[test]
+    fn refused_confirmation_restores_the_art_and_ends_the_preview() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        let original = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+
+        let mut preview = LivePreview::default();
+        let fill = json!({"color": "#00a000"});
+        assert!(matches!(preview.run(&mut app, true, "Fill Color", "paint.setFill", &fill), Some(Ok(_))));
+        assert_ne!(app.session.doc().unwrap().doc, original);
+        assert!(preview.commit(&mut app, "paint.setFill", json!({"color": true})).is_err());
+        assert!(!app.session.in_interaction(), "the refused edit left no open interaction");
+        assert_eq!(app.session.doc().unwrap().doc, original);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+
+        let mut next = LivePreview::default();
+        assert!(matches!(next.run(&mut app, true, "Next Fill", "paint.setFill", &fill), Some(Ok(_))));
+        next.commit(&mut app, "paint.setFill", fill).unwrap();
+        let history = &app.session.doc().unwrap().history;
+        assert_eq!(history.undo.len(), undo + 1);
+        assert_eq!(history.undo.last().unwrap().label, "Next Fill");
     }
 
     /// A dialog's preview while typing is in progress keeps the typing as its own step and starts

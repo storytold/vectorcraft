@@ -3,9 +3,11 @@ use std::rc::Rc;
 
 use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, Pos2, pos2, vec2};
+use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::tests::panel_harness::{Place, Shown, floated};
 
 #[test]
 fn dropped_colours_recolour_or_add_an_opaque_stop() {
@@ -36,6 +38,34 @@ fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
     assert!(recolor_selected(&mut app, orange, &json!({"swatch": "Screen"})));
     let Paint::Gradient(g) = active_paint(&app) else { panic!("a gradient fill") };
     assert_eq!(g.freeform.map(|f| f.points[1].color), Some(orange));
+}
+
+/// While the Shape Builder paints with a freeform fill, which lies on no object, the panel shows
+/// that fill's stops, and a swatch color recolors the selected stop instead of a point. Lines
+/// mode gives the fill a freeform state without points, which the stops edit keeps.
+#[test]
+fn the_shape_builders_freeform_fill_is_edited_by_its_stops() {
+    let mut app = app(json!({"color": "#000000"}));
+    app.select_tool("shapeBuilder");
+    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform", "mode": "lines"})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.editGradient", json!({"stroke": false, "stops": stops})).unwrap();
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.freeform.as_ref().map(|f| (f.points.len(), f.mode)), Some((0, FreeformMode::Lines)));
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0), "the stops edit keeps the supplied stops");
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    let orange = Color::rgb8(255, 128, 0);
+    assert!(recolor_selected(&mut app, orange, &json!({})), "the selected stop takes the color");
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.gradient.kind, GradientKind::Freeform);
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0));
+    assert_eq!(g.gradient.stops[1].color, orange);
+    assert_eq!(g.freeform.map(|f| f.mode), Some(FreeformMode::Lines));
+    let rig = Rig::new(app);
+    for label in ["Draw", "Location", "Opacity", "Delete Stop"] {
+        let _ = rig.target(label);
+    }
+    assert!(rig.fixture.by_label("Delete Point").is_none(), "no point controls for the tool's fill");
 }
 
 /// In a CMYK document Add to Swatches and Save to Swatches keep the gradient's RGB stops RGB.
@@ -174,6 +204,56 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     rig.click("Color stop 1 of 2");
     assert_eq!(rig.app().session.selected_stop(), Some(0));
     assert_eq!(rig.number("Location"), Some(0.0), "the stop's location again");
+}
+
+/// A diamond picked on the selected object's gradient is not selected on another gradient the
+/// panel shows with that object still selected: the Live Paint Bucket's, or the stroke's after the
+/// proxy toggles. Going back to the object's fill selects it again.
+#[test]
+fn a_picked_diamond_stays_with_the_gradient_it_was_picked_on() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("paint.setStroke", json!({"gradient": {"kind": "radial"}})).unwrap();
+    app.session.fill_active = true;
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    let mid = |rig: &Rig| selected_mid(&rig.app(), 2);
+    assert_eq!(mid(&rig), Some(0), "the diamond is picked");
+    {
+        let mut app = rig.app();
+        app.select_tool("livePaintBucket");
+        app.run("paint.setFill", json!({"gradient": {"kind": "radial"}})).unwrap();
+    }
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the bucket's gradient");
+    rig.app().select_tool("selection");
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), Some(0), "the object's fill again");
+    rig.app().session.fill_active = false;
+    rig.fixture.settle();
+    assert_eq!(mid(&rig), None, "the object's stroke");
+}
+
+/// Dragging the document's tab along the strip keeps its selected stop and its picked diamond
+/// selected: both stay with the document, not with the tab it was in.
+#[test]
+fn a_selected_stop_and_a_picked_diamond_stay_selected_when_the_document_tab_moves() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": stops}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    app.run("document.move", json!({"to": 0})).unwrap();
+    assert_eq!(app.session.selected_stop(), Some(1), "the stop stays selected in the moved tab");
+    let mut rig = Rig::new(app);
+    rig.click("Midpoint 1");
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond is picked");
+    rig.app().run("document.move", json!({"to": 1})).unwrap();
+    rig.fixture.settle();
+    assert_eq!(selected_mid(&rig.app(), 2), Some(0), "the diamond stays picked in the moved tab");
+    assert_eq!(rig.number("Location"), Some(30.0), "Location still shows the midpoint");
 }
 
 /// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
@@ -334,4 +414,162 @@ fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
     assert_eq!(app.session.tool_id(), "gradient");
     assert_eq!(current(&app), paint, "the stop keeps its color");
     assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
+}
+
+// ---------- the panel in the app window ----------
+
+/// A selected gradient stop: the panel shows its Color row.
+fn select_a_stop(app: &mut VectorcraftApp) {
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+}
+
+/// The Gradient panel shown at `place` in the whole app window over a selected rectangle that `setup` paints, drawn
+/// in `lang`, with the catalog strings `names` as `lang` shows them. The Gradient Fill box is always asked for, so a
+/// docked panel is found by it.
+fn shown(lang: &str, place: Place, setup: fn(&mut VectorcraftApp), names: &[&str]) -> Shown {
+    let mut app = super::super::tests_appearance::app_with_rect();
+    setup(&mut app);
+    let asked: Vec<&str> = names.iter().copied().chain(["Gradient Fill"]).collect();
+    floated(app, "gradient", lang, place, &asked)
+}
+
+/// Docked, every control of the panel stays inside its column, with a solid fill (the panel shows its notice) and
+/// with a stop selected (its Color row), in languages with longer words.
+#[test]
+fn the_gradient_panel_stays_inside_its_dock_column() {
+    for lang in ["en", "fr", "de"] {
+        for setup in [|_: &mut VectorcraftApp| {}, select_a_stop] {
+            let panel = shown(lang, Place::Docked, setup, &[]);
+            let past = panel.past(panel.nodes.clone());
+            assert!(past.is_empty(), "past the docked panel in {lang}: {past:?}");
+        }
+    }
+}
+
+/// In a panel at the narrowest panel width the Type, Method, Spread and stop rows wrap: their controls stay inside
+/// the panel, except the last type button. The five type buttons are one `Segmented` control, which keeps its
+/// segments on one line, so at this width Freeform Gradient reaches 2 pt past the panel's right edge. The test
+/// holds that button to the 2 pt until the widget can wrap its segments.
+#[test]
+fn the_gradient_rows_wrap_in_a_narrow_panel() {
+    /// How far Freeform Gradient reaches past the panel's right edge at the narrowest width.
+    const TYPE_OVERFLOW: f32 = 2.0;
+    let names = [
+        "Linear Gradient",
+        "Radial Gradient",
+        "Conic Gradient",
+        "Diamond Gradient",
+        "Edit Gradient",
+        "Method",
+        "Spread",
+        "Repeats",
+        "Opacity",
+        "Location",
+        "Delete Stop",
+    ];
+    for lang in ["en", "fr"] {
+        let asked: Vec<&str> = names.iter().copied().chain(["Freeform Gradient"]).collect();
+        let panel = shown(lang, Place::Floating(crate::panel_docking::PANEL_MIN_WIDTH), select_a_stop, &asked);
+        let past = panel.past_named(&names);
+        assert!(past.is_empty(), "past the panel in {lang}: {past:?}");
+        for freeform in panel.rects("Freeform Gradient") {
+            let inside = freeform.left() >= panel.body.left() - 0.5 && freeform.right() <= panel.body.right() + TYPE_OVERFLOW + 0.5;
+            assert!(inside, "Freeform Gradient at {freeform:?} is more than {TYPE_OVERFLOW} pt past {:?} in {lang}", panel.body);
+        }
+    }
+}
+
+/// In a wide panel the rows stay on one line each, and the thumbnail stays level with the top of the type buttons.
+#[test]
+fn the_gradient_rows_stay_on_one_line_in_a_wide_panel() {
+    let rows: [&[&str]; 3] =
+        [&["Method:", "Method"], &["Spread:", "Spread", "Repeats"], &["Opacity:", "Opacity", "Location:", "Location", "Delete Stop"]];
+    let names: Vec<&'static str> = rows.iter().flat_map(|row| row.iter().copied()).chain(["Gradient Fill", "Linear Gradient"]).collect();
+    let panel = shown("en", Place::Floating(400.0), select_a_stop, &names);
+    for row in rows {
+        let middles = panel.middles(row);
+        assert!(middles.windows(2).all(|m| (m[0] - m[1]).abs() < 1.0), "{row:?} is not on one line: {middles:?}");
+    }
+    let (thumb, linear) = (panel.rects("Gradient Fill")[0], panel.rects("Linear Gradient")[0]);
+    assert!((thumb.top() - linear.top()).abs() < 1.0, "the thumbnail {thumb:?} is not level with the type buttons {linear:?}");
+}
+
+/// The paints of the selected object's appearance rows, in stack order.
+fn row_paints(app: &VectorcraftApp) -> Vec<Paint> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().map(|i| i.paint().clone()).collect()
+}
+
+/// The indices of the selected object's fill (`fill`) or stroke rows.
+fn rows_of_kind(app: &VectorcraftApp, fill: bool) -> Vec<usize> {
+    let st = app.session.active().unwrap();
+    let node = st.doc.node(st.selection.subjects()[0]).unwrap();
+    node.appearance.items.iter().enumerate().filter(|(_, i)| i.is_fill() == fill).map(|(n, _)| n).collect()
+}
+
+/// A selected rectangle with a gradient fill and a gradient stroke.
+fn gradient_fill_and_stroke() -> VectorcraftApp {
+    let mut app = app(json!({"gradient": {}}));
+    app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
+    app
+}
+
+/// With appearance row `active` active and the Fill (`front_fill`) or Stroke proxy in front,
+/// chooses Soft Spectrum from the Presets picker and checks that row `target` takes the preset
+/// while every other row keeps its paint.
+fn assert_preset_goes_to(mut app: VectorcraftApp, active: usize, front_fill: bool, target: usize) {
+    let soft = app.session.gradient_preset("Soft Spectrum").unwrap().gradient.stops;
+    app.run("appearance.setActiveItem", json!({ "index": active })).unwrap();
+    app.session.fill_active = front_fill;
+    let before = row_paints(&app);
+    let mut rig = Rig::new(app);
+    assert_eq!(rig.app().session.appearance_item(), Some(active), "the row stays active");
+    rig.click("Presets");
+    rig.click("Soft Spectrum");
+    let after = row_paints(&rig.app());
+    assert_eq!(after.len(), before.len());
+    for (n, (was, now)) in before.iter().zip(&after).enumerate() {
+        if n == target {
+            assert!(matches!(now, Paint::Gradient(g) if g.gradient.stops == soft), "row {n} takes the preset: {now:?}");
+        } else {
+            assert_eq!(now, was, "row {n} keeps its paint");
+        }
+    }
+}
+
+/// With a fill row active and the Stroke proxy in front, the Presets picker applies the preset to
+/// the stroke.
+#[test]
+fn the_presets_menu_applies_to_the_stroke_in_front_over_an_active_fill_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, fill_row, false, stroke_row);
+}
+
+/// With a stroke row active and the Fill proxy in front, the Presets picker applies the preset to
+/// the fill.
+#[test]
+fn the_presets_menu_applies_to_the_fill_in_front_over_an_active_stroke_row() {
+    let app = gradient_fill_and_stroke();
+    let (fill_row, stroke_row) = (rows_of_kind(&app, true)[0], rows_of_kind(&app, false)[0]);
+    assert_preset_goes_to(app, stroke_row, true, fill_row);
+}
+
+/// With the proxy of the active row's kind in front, the Presets picker applies the preset to the
+/// active row, not to the topmost row of that kind.
+#[test]
+fn the_presets_menu_applies_to_the_active_row_of_the_kind_in_front() {
+    for fill in [true, false] {
+        let mut app = gradient_fill_and_stroke();
+        app.run(if fill { "appearance.addFill" } else { "appearance.addStroke" }, json!({})).unwrap();
+        // Without an active row a solid goes to the topmost row of the kind; the other stays a gradient.
+        app.run(if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"color": "#ff0000", "focus": false})).unwrap();
+        let paints = row_paints(&app);
+        let rows = rows_of_kind(&app, fill);
+        assert_eq!(rows.len(), 2);
+        let lower = rows.into_iter().find(|&n| matches!(paints[n], Paint::Gradient(_))).expect("a gradient row under the solid one");
+        assert_preset_goes_to(app, lower, fill, lower);
+    }
 }

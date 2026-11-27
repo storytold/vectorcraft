@@ -7,6 +7,7 @@
 use craft::ui::dialog::{Alert, DialogHost, DialogId, DialogResult, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage};
 use egui::Context;
 use serde_json::{Value, json};
+use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
 
@@ -81,16 +82,25 @@ macro_rules! wrapped_dialog {
 }
 pub(crate) use wrapped_dialog;
 
-/// A confirmation: its tag is the command OK runs and that command's params.
+/// A confirmation: its tag is an [`Asked`].
 pub(crate) struct Question(StandardPrompt);
+
+/// The tag of a confirmation ([`ask`]): the command OK runs, and the access it runs under.
+struct Asked {
+    command: String,
+    params: Value,
+    /// The automation roots in force when asked: the command runs under them.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs as automation.
+    automated: bool,
+}
 wrapped_dialog!(Question, StandardPrompt, KIND);
 
 /// A message with a Close button.
 pub(crate) struct Message(HostedAlert);
 wrapped_dialog!(Message, HostedAlert, MESSAGE);
 
-/// The Type tool's question whether to edit type set in fonts that aren't available; its tag is the
-/// tool's edit token.
+/// The Type tool's question whether to edit type set in fonts that aren't available.
 pub(crate) struct MissingFontQuestion(StandardPrompt);
 wrapped_dialog!(MissingFontQuestion, StandardPrompt, MISSING_FONT_EDIT);
 
@@ -110,6 +120,10 @@ pub(crate) struct ReplaceFiles {
     pub(crate) command: String,
     /// Its params.
     pub(crate) params: Value,
+    /// The automation roots in force when asked: the command runs again under them.
+    pub(crate) scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs again as automation.
+    pub(crate) automated: bool,
 }
 
 /// Ask `message` (with an optional `detail` line), both in the UI language; OK runs `command`
@@ -123,7 +137,8 @@ pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str,
     if !detail.is_empty() {
         prompt = prompt.paragraph(detail.to_string());
     }
-    let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag((command.to_string(), params));
+    let asked = Asked { command: command.to_string(), params, scope: ScopeHandle::capture(), automated: app.automation_asked() };
+    let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag(asked);
     dialogs.with(|host| host.open(Question(prompt)));
 }
 
@@ -184,6 +199,8 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
         allowed: allowed.to_vec(),
         command: command.to_string(),
         params,
+        scope: ScopeHandle::capture(),
+        automated: app.automation_asked(),
     });
     // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
     // (however many messages wait: the save or export needs the answer).
@@ -197,13 +214,15 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
 /// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
 /// stays and the Type tool forgets the edit, as Cancel would.
 pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
-    let token = p.get("token").cloned().unwrap_or(Value::Null);
+    let Some(token) = p.get("token").and_then(Value::as_u64) else {
+        return;
+    };
     let Some(dialogs) = app.dialogs() else {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     };
     if app.any_dialog_open() && !dialogs.with(|host| host.is_open::<MissingFontQuestion>()) {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     }
     let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
@@ -216,14 +235,18 @@ pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
     let prompt = StandardPrompt::custom(tl!("Edit type set in fonts that aren't available?"))
         .paragraph(detail)
         .button(PromptChoice::Proceed, tl!("OK"))
-        .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(token);
-    dialogs.with(|host| host.open(MissingFontQuestion(prompt)));
+        .button(PromptChoice::Cancel, tl!("Cancel"));
+    dialogs.with(|host| {
+        host.open(MissingFontQuestion(prompt));
+        // Replacing a prompt leaves its Cancel in the host. The tool is already waiting on the new token.
+        let _ = host.take::<MissingFontQuestion>();
+    });
+    app.missing_font_edit_token = Some(token);
 }
 
 /// Give the Type tool the answer to [`ask_missing_font_edit`]'s question about the edit `token`
 /// names: with `ok` the edit starts at once; without, the tool forgets it.
-pub(crate) fn answer_missing_font_edit(app: &mut VectorcraftApp, token: &Value, ok: bool) {
+fn answer_missing_font_edit(app: &mut VectorcraftApp, token: u64, ok: bool) {
     app.session.set_tool_option("missingFontEdit", &json!({"token": token, "ok": ok}));
     if ok {
         let r = app.session.tool_poll(app.view_info(), false);
@@ -240,8 +263,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     };
     if let Some(DialogResult::Ok(mut answer)) = dialogs.with(|host| host.take::<Question>())
         && answer.choice == PromptChoice::Proceed
-        && let Some((command, params)) = answer.take_tag::<(String, Value)>()
-        && let Err(e) = app.run(&command, params)
+        && let Some(Asked { command, params, scope, automated }) = answer.take_tag::<Asked>()
+        && let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params)))
     {
         app.status(e);
     }
@@ -259,13 +282,12 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(dialogs) = app.dialogs() else {
         return;
     };
-    let (ok, token) = match dialogs.with(|host| host.take::<MissingFontQuestion>()) {
-        None => return,
-        Some(DialogResult::Ok(mut answer)) => (answer.choice == PromptChoice::Proceed, answer.take_tag::<Value>()),
-        // PLAN: a question the host cancelled carries no tag, so the tool's token is unknown here.
-        Some(_) => (false, None),
-    };
-    answer_missing_font_edit(app, &token.unwrap_or(Value::Null), ok);
+    if let Some(result) = dialogs.with(|host| host.take::<MissingFontQuestion>())
+        && let Some(token) = app.missing_font_edit_token.take()
+    {
+        let ok = matches!(result, DialogResult::Ok(answer) if answer.choice == PromptChoice::Proceed);
+        answer_missing_font_edit(app, token, ok);
+    }
 }
 
 /// The confirmation open now, if one is: its message and detail as shown, and the command OK runs.
@@ -273,8 +295,8 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
 pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, String, String)> {
     app.dialogs()?.with(|host| {
         let prompt = &host.get::<Question>()?.0;
-        let (command, _) = prompt.tag_as::<(String, Value)>()?;
-        Some((prompt.shown_message(&app.host), prompt.shown_paragraphs(&app.host).join("\n"), command.clone()))
+        let asked = prompt.tag_as::<Asked>()?;
+        Some((prompt.shown_message(&app.host), prompt.shown_paragraphs(&app.host).join("\n"), asked.command.clone()))
     })
 }
 
@@ -289,4 +311,14 @@ pub(crate) fn open_message(app: &VectorcraftApp) -> Option<(String, String)> {
 #[cfg(test)]
 pub(crate) fn open_replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
     app.dialogs()?.with(|host| host.get::<ReplaceFilesPrompt>().and_then(|q| q.0.tag_as::<ReplaceFiles>().map(|tag| tag.files.clone())))
+}
+
+/// Whether the open question about replacing files runs its command confined to automation roots,
+/// and whether as automation, while it is open.
+#[cfg(test)]
+pub(crate) fn open_replace_files_access(app: &VectorcraftApp) -> Option<(bool, bool)> {
+    app.dialogs()?.with(|host| {
+        let tag = host.get::<ReplaceFilesPrompt>()?.0.tag_as::<ReplaceFiles>()?;
+        Some((tag.scope.clone().run(vectorcraft_engine::file_access::current).is_some(), tag.automated))
+    })
 }

@@ -200,6 +200,29 @@ impl Session {
         Ok(v)
     }
 
+    /// Run `f`, an edit that applies or edits built-in effect `effect`. The undo step it records,
+    /// when named after the effect, keeps the effect's id ([`crate::HistoryEntry::effect`]), so a
+    /// frontend names it as the Effect menu names the effect. Run as an interaction's preview
+    /// itself, not as one command of a batch the preview runs, the step the interaction records
+    /// keeps it instead, while that preview is the last one. A later edit of an undo group keeps
+    /// none.
+    pub(crate) fn edit_effect<T>(&mut self, effect: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let id = vectorcraft_render::effects::built_in_effect(effect).map(|(id, _)| id);
+        let previewed = self.previewing && self.depth == 1;
+        let outer = std::mem::replace(&mut self.doc_mut()?.effect_step, id);
+        let v = f(self);
+        if let Ok(st) = self.doc_mut() {
+            st.effect_step = outer;
+            if v.is_ok()
+                && previewed
+                && let Some(it) = &mut st.interaction
+            {
+                it.effect = id;
+            }
+        }
+        v
+    }
+
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.revealing(|s| s.select_unwatched(f))
@@ -510,6 +533,7 @@ impl Session {
         }
         st.interaction = Some(Interaction {
             label: label.to_string(),
+            effect: None,
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
@@ -518,6 +542,7 @@ impl Session {
             used_defaults_only: false,
             preview_paint: None,
             color_mode_paints: None,
+            tool_paints: false,
             deferred_color_mode: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
@@ -538,10 +563,11 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
-        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
-        // each preview starts from the colors the interaction began with; so does a preview with
+        // While the active tool paints with the chosen fill or stroke (the Live Paint Bucket, the
+        // Shape Builder), paint previews of that kind change only the colors it paints with, so each
+        // preview starts from the colors the interaction began with; so does a preview with
         // `defaultsOnly: true`, and one after it.
-        let bucket = self.bucket_paints();
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -556,7 +582,8 @@ impl Session {
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
             it.used_defaults_only |= cmd::asks_defaults_only(params);
-            let restore_paint = bucket
+            it.tool_paints |= tool_paints;
+            let restore_paint = it.tool_paints
                 || cmd == "command.batch"
                 || it.used_defaults_only
                 || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
@@ -566,6 +593,8 @@ impl Session {
             it.color_mode_paints = None;
             it.deferred_color_mode = None;
             it.plane_placed = false;
+            // The effect the preview below applies or edits marks the step, not an earlier one's.
+            it.effect = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
@@ -720,15 +749,17 @@ impl Session {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
-        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
-        // cancel puts back as well, as it does a color previewed with `defaultsOnly: true`.
-        let bucket = self.bucket_paints();
+        // A color previewed while the active tool painted with the chosen fill or stroke is the
+        // tool's color, which the cancel puts back as well, also after another tool was chosen, as
+        // it does a color previewed with `defaultsOnly: true`.
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
         let used_defaults_only = self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.used_defaults_only);
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
             .filter(|it| {
-                bucket
+                tool_paints
+                    || it.tool_paints
                     || it.used_defaults_only
                     || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                     || it.color_mode_paints.is_some()

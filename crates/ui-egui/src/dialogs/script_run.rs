@@ -4,7 +4,8 @@
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
-//! External Script Warning off, the chosen script runs at once. The warning (kind `scriptRun`) is a
+//! External Script Warning off, the chosen script runs at once. With General › Run Startup Scripts
+//! on, the startup scripts run first (`script.startup.run`). The warning (kind `scriptRun`) is a
 //! prompt: its `choice` field (`proceed` runs, `cancel` does not) and `skip` (true: turn the
 //! warning off). The growth question (`scriptGrowth`) and the question quitting asks
 //! (`scriptClose`) have the `choice` field alone.
@@ -32,16 +33,18 @@ use std::path::Path;
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Outcome as _, Show as _};
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
+use craft::ui::layout_components::Stack;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
+use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
@@ -65,6 +68,8 @@ pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a 
 
 /// The note the file dialog shows when the person picked more files than a script is given.
 const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files picked after them were left out";
+/// The height of the Script File Access prompt's list of picked files before it scrolls, in points.
+const PICKED_LIST_HEIGHT: f32 = 120.0;
 
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
@@ -82,6 +87,11 @@ crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KI
 /// The tag of the warning: the params `script.run` takes once the warning is answered.
 struct RunWarning {
     params: Value,
+    /// The automation roots in force when asked: the script runs under them, and under any in force
+    /// when the warning is answered.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the script runs as automation.
+    automated: bool,
 }
 
 /// What a script's `alert`, `confirm` or `prompt` dialog answers with.
@@ -353,7 +363,12 @@ impl StackDialog for ScriptFiles {
             }
             let rows = |ui: &mut Ui| paths.iter().for_each(|path| drop(Text::new(shown_text(path, false)).show(ui)));
             if paths.len() > 1 {
-                egui::ScrollArea::vertical().id_salt("script-picked").max_height(120.0).show(ui, rows);
+                Stack::new()
+                    .label(tl!("Picked files"))
+                    .scroll(Scroll::vertical())
+                    .room_height(PICKED_LIST_HEIGHT)
+                    .id_salt("script-picked")
+                    .show(ui, |ui, _| rows(ui));
             } else {
                 rows(ui);
             }
@@ -405,6 +420,11 @@ fn picker_request(kind: &PickerKind) -> &'static str {
 pub(crate) fn with_host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost, &egui::Context) -> R) -> Option<R> {
     let ctx = app.ui_ctx.clone()?;
     Some(app.dialogs()?.with(|host| f(host, &ctx)))
+}
+
+/// Whether the question asked on quitting with a script running is open.
+pub(crate) fn asking_to_close(app: &VectorcraftApp) -> bool {
+    with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false)
 }
 
 /// Whether a dialog is open or waits to open: a script's dialog opens only over nothing.
@@ -463,7 +483,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         return Err("Choose a .js or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
-        return app.run("script.run", params);
+        return crate::script_runs::run_chosen(app, params);
     }
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     // The script's name is the message: it is what the person reads first.
@@ -473,7 +493,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         .dont_show_again()
         .button(PromptChoice::Proceed, tl!("Run"))
         .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(RunWarning { params });
+        .tag(RunWarning { params, scope: ScopeHandle::capture(), automated: app.automation_asked() });
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
 }
@@ -560,10 +580,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        if let Err(e) = stored.and_then(|()| app.run("script.run", params).map(drop)) {
+        let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
+        let automated = automated || app.automation_asked();
+        if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
             app.status(e);
         }
     }
@@ -577,18 +599,41 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         None => {}
     }
+    answer_close(app, close);
+    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
+        choose(app);
+    }
+}
+
+/// Takes the answer to the quit question given between two queued runs, before the next run
+/// starts. True when it stopped the runs.
+pub(crate) fn answer_close_between_runs(app: &mut VectorcraftApp) -> bool {
+    let Some(close) = with_host(app, |host, _| host.take::<CloseQuestion>()).flatten() else {
+        return false;
+    };
+    answer_close(app, Some(close));
+    !app.session.script_running()
+}
+
+/// With Stop as the answer to the quit question, stops the run, or between two queued runs, the
+/// runs not yet started.
+fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuestion as StackDialog>::Result>>) {
+    let startup = app.session.startup_script_running();
+    // Between two queued runs: none runs, and the report is the last run's.
+    let between = app.session.script_running() && app.session.script_name().is_none();
     if let Some(DialogResult::Ok(answer)) = close
         && answer.choice == PromptChoice::Proceed
         && app.session.script_abandon()
     {
-        let error = app.session.script_failure_text().unwrap_or_default();
-        crate::script_runs::failed(app, error);
+        if between {
+            crate::script_runs::stopped_between_runs(app);
+        } else {
+            let error = app.session.script_failure_text().unwrap_or_default();
+            crate::script_runs::ended_with_error(app, startup, error);
+        }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
         app.sync_views();
-    }
-    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
-        choose(app);
     }
 }
 

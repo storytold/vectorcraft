@@ -22,7 +22,13 @@ pub struct PropertiesUi {
     pub global_edit_open: bool,
     /// The panel's More Options popover is open.
     pub more_options_open: bool,
+    /// The cache of `appearance_section::edited_strokes_profiled`, keyed by (document uid, revision,
+    /// active Appearance row).
+    pub edited_profiled: Option<(ProfiledKey, bool)>,
 }
+
+/// The key of [`PropertiesUi::edited_profiled`]: (document uid, revision, active Appearance row).
+type ProfiledKey = (u64, u64, Option<usize>);
 
 /// Two equal columns: the Quick Actions and the paired buttons of the sections.
 const HALVES: [ColumnWidth; 2] = [ColumnWidth::fill(1.0); 2];

@@ -10,6 +10,7 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use craft::imaging::ui::filter_gallery::{
     EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGallerySession, FilterIndex, FilterTree,
@@ -117,7 +118,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
     let shown = dialogs.with(|host| {
         host.get_mut_by_id::<EffectGalleryDialog>(id).map(|dialog| {
             let visible = dialog.entries(true);
-            (dialog.preview_on && !visible.is_empty(), stack_batch_params(&visible), dialog.asked.take())
+            let asked = dialog.asked.take().map(|layer| (Arc::clone(&dialog.opening), layer));
+            (dialog.preview_on && !visible.is_empty(), stack_batch_params(&visible), asked)
         })
     });
     let Some((on, batch, asked)) = shown else {
@@ -127,18 +129,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
     // `run` reports a failed preview itself.
     let _ = open.preview.run(app, on, LABEL, COMMAND, &batch);
     app.effect_dialogs.gallery = Some(open);
-    if let Some(layer) = asked {
-        ask_texture(app, id, layer);
+    if let Some((opening, layer)) = asked {
+        ask_texture(app, id, opening, layer);
     }
 }
 
-/// Asks for the image Load Texture reads into the layer `layer`. The answer finds the layer by its own id, wherever
-/// it moved, and is dropped for a layer deleted since or a gallery that closed (a layer id is never used twice).
-fn ask_texture(app: &mut VectorcraftApp, id: DialogId, layer: LayerId) {
+/// Load Texture follows `layer` within its gallery opening and drops the reply when either is gone.
+fn ask_texture(app: &mut VectorcraftApp, id: DialogId, opening: Arc<()>, layer: LayerId) {
     effect::pick_texture(app, Owner::Free, move |app, _, fields| {
         let Some(dialogs) = app.dialogs() else { return };
         dialogs.with(|host| {
-            if let Some(dialog) = host.get_mut_by_id::<EffectGalleryDialog>(id) {
+            if let Some(dialog) = host.get_mut_by_id::<EffectGalleryDialog>(id).filter(|dialog| Arc::ptr_eq(&opening, &dialog.opening)) {
                 dialog.answer_texture(layer, fields);
             }
         });
@@ -234,6 +235,8 @@ fn entries_of(layers: &[EffectLayer], index: &FilterIndex, visible_only: bool) -
 /// [`FilterGallerySession`], with a preview of the visible layers and OK held for [`commit`].
 pub(crate) struct EffectGalleryDialog {
     id: DialogId,
+    /// Dialog IDs and layer IDs can both be reused when the gallery opens again.
+    opening: Arc<()>,
     open: bool,
     catalog: Catalog,
     index: FilterIndex,
@@ -255,6 +258,7 @@ impl EffectGalleryDialog {
         let session = FilterGallerySession::new(&first, &catalog);
         EffectGalleryDialog {
             id: dialog_id(KEY),
+            opening: Arc::new(()),
             open: true,
             catalog,
             index,
@@ -456,7 +460,7 @@ fn stack_batch_params(stack: &[StackEntry]) -> Value {
 }
 
 fn effect_label(id: &str) -> String {
-    vectorcraft_effects::effect_info(id).map(|e| tl!(e.label).trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string())
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or_else(|| id.to_string())
 }
 
 /// Where the preview rasters sit: one document point per pixel, origin at the top-left.
@@ -652,8 +656,7 @@ mod tests {
         assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
     }
 
-    /// Load Texture… in the Settings, answered after the stack changed: the image goes into the layer that asked
-    /// wherever it moved, and an answer for a deleted layer is dropped.
+    /// A delayed Load Texture… reply follows its layer when it moves and is dropped when the layer or its gallery closes.
     #[test]
     fn settings_load_texture_answers_into_the_gallery() {
         use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
@@ -677,10 +680,13 @@ mod tests {
                 })
                 .collect()
         };
-        // Selects `row`, presses Browse of its Texture row, and lets `meanwhile` change the stack before the answer.
-        let ask = |app: &mut VectorcraftApp, row: usize, meanwhile: &dyn Fn(&VectorcraftApp)| {
+        let rough_pastels = || {
             let layer = json!({ "filter": "artistic.roughPastels", "visible": true, "params": {} });
-            set(app, &ctx, "effects", json!([layer, layer]));
+            json!([layer, layer])
+        };
+        // Selects `row`, presses Browse of its Texture row, and lets `meanwhile` change the gallery before the answer.
+        let ask = |app: &mut VectorcraftApp, row: usize, meanwhile: &dyn Fn(&mut VectorcraftApp)| {
+            set(app, &ctx, "effects", rough_pastels());
             set(app, &ctx, "select", json!(row));
             // The Texture row's Browse press, as the dialog's pass records it.
             app.dialogs().unwrap().with(|host| {
@@ -696,6 +702,18 @@ mod tests {
         assert_eq!(ask(&mut app, 1, &|_| {}), [false, true], "the selected layer asked");
         assert_eq!(ask(&mut app, 0, &|app| set(app, &ctx, "move", json!({"from": 0, "to": 1}))), [false, true], "the layer that asked moved");
         assert_eq!(ask(&mut app, 1, &|app| set(app, &ctx, "delete", json!(true))), [false], "the layer that asked was deleted");
+        let reopen = |app: &mut VectorcraftApp| {
+            assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id())));
+            frame(app, &ctx);
+            super::open(app, &json!({})).unwrap();
+        };
+        // Both openings start with identical stacks, which gives their corresponding layers the same session-local IDs.
+        reopen(&mut app);
+        let answers = ask(&mut app, 0, &|app| {
+            reopen(app);
+            set(app, &ctx, "effects", rough_pastels());
+        });
+        assert_eq!(answers, [false, false], "a reopened gallery keeps its own textures");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

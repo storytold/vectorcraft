@@ -15,12 +15,14 @@
 //! Behavior reference: the help page
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html>.
 
+use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Politeness, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
+use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::presets::{
     NameCheck, NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
 };
@@ -359,10 +361,11 @@ impl KinsokuDialog {
         let rows: Vec<PresetRow<String>> = list.iter().map(|s| PresetRow::item(name_of(s).to_owned(), name_of(s), 0)).collect();
         let mut value = list.get(self.index(list.len())).map(|s| name_of(s).to_owned());
         let suggestion = new_name(&list, &self.opened);
-        // PLAN: PresetPicker has no placeholder: an empty list shows an empty name field, not "None".
         let source = PresetSource::listed(&rows);
         let refuses = |typed: &str| name_problem(&list, typed);
-        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker)).field(PickerField::Name);
+        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker))
+            .field(PickerField::Name)
+            .placeholder(tl!("None"));
         let out = NamedPresetRow::new(tl!("Kinsoku Set"), picker).suggest_name(suggestion).check_name(NameCheck::of_host(&refuses)).show(ui);
         self.apply(out.events);
 
@@ -408,9 +411,8 @@ impl KinsokuDialog {
     }
 
     fn show_problem(&self, ui: &mut Ui) {
-        // PLAN: craft_ui does not re-export `Tone`, which `Notice` needs, so the reason shows as plain text.
         if let Some(problem) = &self.problem {
-            Text::new(problem.clone()).show(ui);
+            Notice::new(Tone::Bad, problem.clone()).layout(NoticeLayout::Inline).announce(Politeness::Assertive).show(ui);
         }
     }
 }

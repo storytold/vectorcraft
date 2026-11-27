@@ -67,6 +67,36 @@ fn stays_open(app: &mut VectorcraftApp) {
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
 }
 
+#[test]
+fn a_queued_export_requires_fresh_confirmation_after_switching_documents() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    let (mut app, log) = app(1, true);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 40, "height": 30})).unwrap();
+    app.run("artboard.rename", json!({"indices": [0], "name": "Destination"})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+    open(&mut app);
+
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    dialogs.with(|host| {
+        assert!(!host.confirm_by_id(&ctx, id));
+        assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+    });
+    app.run("window.nextDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    export_for_screens::pump(&mut app, &ctx);
+
+    assert!(log.borrow().is_empty(), "the earlier OK cannot download from the destination tab");
+    assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Destination.png"]);
+}
+
 fn temp_folder(tag: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("vc-efs-{tag}-{}", std::process::id()))
 }
@@ -837,18 +867,25 @@ fn big_tiff_tags(bytes: &[u8]) -> Vec<(u16, u16, u32, u16)> {
 }
 
 /// Frames of the app's own window (`app.ui_ctx`, where its dialogs are) with the accessibility
-/// tree, input events and a clock; each frame runs the dialog layer's pump after it.
+/// tree, input events and a clock; each frame runs the dialog layer's pump after it. The window is
+/// 1280 by 900 unless `sized` gives another size.
 #[derive(Default)]
 pub(super) struct Window {
     time: f64,
+    size: Option<egui::Vec2>,
 }
 
 impl Window {
+    /// A window of `size` instead of the default 1280 by 900.
+    fn sized(size: egui::Vec2) -> Self {
+        Self { size: Some(size), ..Self::default() }
+    }
+
     fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
         let ctx = app.ui_ctx.clone().expect("a test app has a window");
         ctx.enable_accesskit();
         self.time += 0.1;
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, self.size.unwrap_or(egui::vec2(1280.0, 900.0)));
         let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
         // The window's frame with the app's frame input, as the hosts run it: the controls' commands reach the app.
         let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
@@ -1428,4 +1465,83 @@ fn an_artboard_name_stays_with_its_document() {
     assert_eq!(names(&app, 0), ["Artboard 1", "Artboard 2"]);
     assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
     assert!(log.borrow().is_empty(), "renaming must not export");
+}
+
+/// In a window of the default size and in one of the app's least size, every control of the dialog stays between its
+/// sides, the format rows stay in the right column, and in the default window the Formats heading's buttons end at
+/// the column's right edge.
+#[test]
+fn the_format_rows_fit_the_right_column_at_the_default_and_least_window_sizes() {
+    let rows = json!([
+        {"scale": "1x", "suffix": "", "format": "png"},
+        {"scale": "2x", "suffix": "@2x-long-suffix", "format": "jpg", "quality": 100},
+        {"scale": "100w", "format": "pdf"},
+    ]);
+    // The default window, then the least size the desktop app's window takes.
+    for (size, default) in [(egui::vec2(1280.0, 900.0), true), (egui::vec2(800.0, 500.0), false)] {
+        let (mut app, _) = app(2, false);
+        let mut w = Window::sized(size);
+        w.run(&mut app, vec![]);
+        open(&mut app);
+        set(&mut app, "formats", rows.clone());
+        w.run(&mut app, vec![]);
+        let out = w.run(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let rect = |n: &egui::accesskit::Node| {
+            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        };
+        let find = |label: &str, role: Role| {
+            nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some(label) && n.role() == role)
+                .and_then(|(_, n)| rect(n))
+                .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+        };
+        let Some((dialog_id, dialog)) = nodes.iter().find(|(_, n)| n.role() == Role::Dialog) else { panic!("no dialog at {size:?}") };
+        let dialog = rect(dialog).expect("the dialog's bounds");
+        // The Export to: section spans the right column.
+        let column = find("Export to:", Role::Group);
+        let by_id: std::collections::HashMap<_, _> = nodes.iter().map(|(id, n)| (*id, n)).collect();
+        let mut under = vec![*dialog_id];
+        while let Some(id) = under.pop() {
+            let Some(n) = by_id.get(&id) else { continue };
+            under.extend(n.children().iter().copied());
+            if let Some(r) = rect(n) {
+                assert!(
+                    r.left() >= dialog.left() - 0.5 && r.right() <= dialog.right() + 0.5,
+                    "{:?} {:?} at {r:?} is outside the dialog at {dialog:?} in a {size:?} window",
+                    n.role(),
+                    n.label()
+                );
+            }
+        }
+        // Each control with how many of it the three rows show.
+        let format_rows = [
+            ("Formats:", Role::Label, 1),
+            ("iOS", Role::Button, 1),
+            ("Android", Role::Button, 1),
+            ("Format Presets", Role::Button, 1),
+            ("Format Settings", Role::Button, 1),
+            ("Scale", Role::ComboBox, 3),
+            ("Suffix", Role::TextInput, 3),
+            ("Format", Role::ComboBox, 3),
+            ("Remove", Role::Button, 3),
+            ("+ Add Scale", Role::Button, 1),
+        ];
+        for (label, role, count) in format_rows {
+            let shown: Vec<_> = nodes.iter().filter(|(_, n)| n.label() == Some(label) && n.role() == role).collect();
+            assert_eq!(shown.len(), count, "{role:?} {label:?} in a {size:?} window");
+            for (_, n) in shown {
+                let r = rect(n).expect("bounds");
+                assert!(
+                    r.left() >= column.left() - 0.5 && r.right() <= column.right() + 0.5,
+                    "{label} at {r:?} is outside the column at {column:?} in a {size:?} window"
+                );
+            }
+        }
+        if default {
+            let gear = find("Format Settings", Role::Button);
+            assert!((gear.right() - column.right()).abs() <= 0.5, "the gear at {gear:?} ends at the column's edge {column:?}");
+        }
+    }
 }

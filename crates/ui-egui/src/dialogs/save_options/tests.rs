@@ -247,6 +247,33 @@ fn legacy_ai_saves_the_artboards_checked_in_its_picker() {
     assert_eq!(boards_in(&dialog(&mut app)), Some(vec![true, false, true, false]));
 }
 
+/// The legacy picker's note, grid name and count are announced. The count follows the checks and
+/// the grid name follows the interface language.
+#[test]
+fn legacy_ai_announces_its_note_grid_name_and_artboard_count() {
+    let (mut app, _, _) = desktop("art.ai");
+    app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 80})).unwrap();
+    save_as(&mut app, "file.saveAs");
+    set(&mut app, "aiVersion", json!("7"));
+    let labels = |app: &mut VectorcraftApp, role: Option<egui::accesskit::Role>| -> Vec<String> {
+        frame(app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let out = crate::testing::app_frame(app, &ctx, egui::RawInput::default());
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().filter(|(_, node)| role.is_none_or(|role| node.role() == role)).filter_map(|(_, node)| node.label()).map(str::to_owned).collect()
+    };
+    let shown = labels(&mut app, None);
+    assert!(shown.iter().any(|l| l.starts_with("A legacy .ai file holds one artboard")), "{shown:?}");
+    assert!(shown.iter().any(|l| l == "2 of 2 artboards"), "{shown:?}");
+    set(&mut app, "boards", json!([true, false]));
+    let shown = labels(&mut app, None);
+    assert!(shown.iter().any(|l| l == "1 of 2 artboards") && !shown.iter().any(|l| l == "2 of 2 artboards"), "{shown:?}");
+
+    app.session.prefs.interface_language = "fr".into();
+    let shown = labels(&mut app, Some(egui::accesskit::Role::ListBox));
+    assert!(shown.iter().any(|label| label == "Plans de travail"), "{shown:?}");
+}
+
 #[test]
 fn save_a_copy_and_template_suggest_their_names() {
     let (mut app, written, picks) = desktop("copy.vectorcraft");

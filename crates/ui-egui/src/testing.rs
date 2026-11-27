@@ -14,7 +14,9 @@ pub(crate) fn install(ctx: &egui::Context) {
     if embed::install(ctx, craft::ui::testing::install_spec(), &fonts).is_err() {
         fonts.install(ctx);
     }
-    set_input(ctx, FrameInput::new(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)));
+    let prefs = vectorcraft_engine::Prefs::default();
+    let print = crate::state::print_ppi(prefs.display_print_size, None);
+    set_input(ctx, FrameInput::new(crate::app::root_env(&prefs, 1.0, print)));
 }
 
 /// `app` shown in a window of its own: its context is the one every frame of the test runs on, so its dialogs open on
@@ -50,15 +52,27 @@ pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, ra
 pub(crate) fn part_frame(
     app: &mut crate::VectorcraftApp,
     ctx: &egui::Context,
+    raw: egui::RawInput,
+    draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
+) -> egui::FullOutput {
+    let mut out = part_frame_uploads(app, ctx, raw, draw);
+    out.textures_delta.clear();
+    out
+}
+
+/// [`part_frame`] with the frame's texture uploads kept in the output, for a test that reads them. The test clears
+/// `textures_delta` once it has read it.
+pub(crate) fn part_frame_uploads(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
     mut raw: egui::RawInput,
     mut draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
 ) -> egui::FullOutput {
     app.adopt_context(ctx);
     app.raw_input(ctx, &mut raw);
     embed::before_input(ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
+    let out = ctx.run_ui(raw, |ui| draw(app, ui));
     run_fired(app, ctx);
-    out.textures_delta.clear();
     out
 }
 
