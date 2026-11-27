@@ -12,6 +12,8 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 /// One loaded file.
 #[derive(Clone, Debug, PartialEq)]
 struct Entry {
+    /// Its position in the original load, retained when other entries are discarded.
+    source_index: usize,
     /// `file.place` params (the file and its options).
     params: Value,
     name: String,
@@ -141,12 +143,13 @@ impl Tool for PlaceTool {
         Cursor::Crosshair
     }
 
-    /// `{count, current, name, width, height, names}`: what the cursor holds (no file data).
+    /// `{count, current, sourceIndex, name, width, height, names}`: what the cursor holds (no file data).
     fn options(&self) -> Value {
         let e = self.entry();
         json!({
             "count": self.entries.len(),
             "current": self.current,
+            "sourceIndex": e.map(|e| e.source_index),
             "name": e.map(|e| &e.name),
             "width": e.map(|e| e.width),
             "height": e.map(|e| e.height),
@@ -163,8 +166,10 @@ impl Tool for PlaceTool {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .filter_map(|e| {
+                    .enumerate()
+                    .filter_map(|(source_index, e)| {
                         Some(Entry {
+                            source_index,
                             params: e.get("params").filter(|p| p.is_object())?.clone(),
                             name: e["name"].as_str().unwrap_or_default().to_string(),
                             width: e["width"].as_f64().filter(|v| v.is_finite())?,
@@ -358,5 +363,24 @@ mod tests {
         assert_eq!(t.options()["names"], json!(["f1.png", "f2.png"]));
         t.key(&c, ToolKey::Escape, Mods::default());
         assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::SwitchTool("pen".into())]);
+    }
+
+    #[test]
+    fn source_indices_survive_removal_and_never_enter_place_params() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Default::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = loaded(3);
+        t.key(&c, ToolKey::Right, Mods::default());
+        assert_eq!(t.options()["sourceIndex"], 1);
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert_eq!((t.options()["current"].clone(), t.options()["sourceIndex"].clone()), (json!(1), json!(2)));
+        t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0));
+        let acts = t.pointer(&c, &ev(PointerKind::Up, 0.0, 0.0));
+        assert_eq!(acts, vec![Action::Exec("file.place".into(), json!({"path": "f2.png", "rect": [0.0, 0.0, 40.0, 20.0]}))]);
+        assert_eq!(t.options()["sourceIndex"], 0);
+        assert!(t.check_option("sourceIndex", &json!(0)).is_err(), "the source identity is read only");
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert_eq!(t.options()["sourceIndex"], Value::Null);
     }
 }

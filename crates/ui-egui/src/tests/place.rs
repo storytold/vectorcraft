@@ -134,11 +134,12 @@ fn cancelling_browser_place_releases_the_picked_file_buffers() {
         crate::file_asks::poll(&mut app);
         assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
         assert_eq!(app.place.picked.len(), 1);
+        let source = app.place.picked[0].0.clone();
         // Cancelling a replacement file picker leaves the existing Place selection usable.
         app.run("file.place", json!({})).unwrap();
         picker.cancel();
         crate::file_asks::poll(&mut app);
-        assert_eq!(app.place.picked[0].0, name);
+        assert_eq!(app.place.picked[0].0, source);
         dismiss(&mut app);
         crate::place::pump(&mut app, &ctx);
         assert!(app.place.picked.is_empty(), "a cancelled Place selection no longer owns file bytes");
@@ -210,7 +211,7 @@ fn an_old_place_ok_cannot_consume_a_newer_dialogs_browser_bytes() {
     assert_eq!(app.ui.status, "new selection", "the retired OK reports no stale error");
     assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
     assert_eq!(app.place.picked.len(), 1);
-    assert_eq!(app.place.picked[0].0, "new.png");
+    assert_eq!(app.place.picked[0].1.as_slice(), bytes.as_slice());
     assert!(app.session.active().unwrap().doc.layers[0].children().unwrap().is_empty());
     answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
     assert!(app.place.picked.is_empty());
@@ -234,7 +235,7 @@ fn an_old_place_cancellation_keeps_a_newer_dialogs_browser_bytes() {
     crate::place::pump(&mut app, &ctx);
     assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
     assert_eq!(app.place.picked.len(), 1, "the replacement owns only its own source bytes");
-    assert_eq!(app.place.picked[0].0, "new.png");
+    assert_eq!(app.place.picked[0].1.as_slice(), bytes.as_slice());
     answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
     assert!(app.place.picked.is_empty(), "confirmation transfers the bytes out of the dialog cache");
     assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1, "the newer file still places");
@@ -321,6 +322,96 @@ fn selected_image(app: &VectorcraftApp) -> vectorcraft_doc::Node {
     let n = st.doc.node(st.selection.objects[0]).unwrap().clone();
     assert!(matches!(n.kind, NodeKind::Image(_)), "{:?}", n.kind);
     n
+}
+
+/// Browser file names are labels, not unique source identities. Both the bytes and the cursor
+/// thumbnail must follow each selection through cycling, placement and discarding another file.
+#[test]
+fn browser_place_keeps_same_named_files_and_their_cursor_thumbnails_distinct() {
+    let mut app = app();
+    let ctx = window(&app);
+    let picker = scripted(&mut app);
+    let (a, b) = (png(8, 5, 72.0), png(3, 2, 72.0));
+    let load = |app: &mut VectorcraftApp| {
+        app.run("file.place", json!({})).unwrap();
+        picker.answer_contents(&[("same.png", &a), ("same.png", &b)]);
+        poll(app, &ctx);
+        assert_eq!(
+            fields(app)["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect::<Vec<_>>(),
+            ["same.png", "same.png"]
+        );
+        answer(app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
+        assert_eq!(app.session.tool_options()["count"], 2);
+    };
+    let thumbnail = |app: &VectorcraftApp| {
+        let options = app.session.tool_options();
+        let (source, image) = app.place.cursor_thumbnail(&options).expect("the selected entry has its own thumbnail");
+        (source, image.size)
+    };
+    let placed = |app: &VectorcraftApp, size| {
+        let node = selected_image(app);
+        assert_eq!(node.name.as_deref(), Some("same.png"));
+        let NodeKind::Image(image) = node.kind else { panic!("Place selects the raster just placed") };
+        assert_eq!((image.width, image.height), size);
+    };
+    load(&mut app);
+    let first = thumbnail(&app);
+    tool_key(&mut app, vectorcraft_tools::ToolKey::Right);
+    let second = thumbnail(&app);
+    assert_eq!((first.0, second.0), (0, 1));
+    assert_ne!(first.1, second.1, "the distinct image proportions have distinct thumbnails");
+    tool_key(&mut app, vectorcraft_tools::ToolKey::Left);
+    click(&mut app);
+    placed(&app, (8, 5));
+    assert_eq!(thumbnail(&app), second, "removing the first entry must not shift the thumbnail identity");
+    click(&mut app);
+    placed(&app, (3, 2));
+
+    load(&mut app);
+    tool_key(&mut app, vectorcraft_tools::ToolKey::Escape);
+    assert_eq!(thumbnail(&app), second, "discarding the first entry preserves the second thumbnail");
+    click(&mut app);
+    placed(&app, (3, 2));
+}
+
+/// Each browser selection places its own bytes, in selection order, with its original name.
+#[test]
+fn browser_place_keeps_same_named_file_bytes_in_order() {
+    let mut app = app();
+    let ctx = window(&app);
+    let picker = scripted(&mut app);
+    let (a, b) = (png(8, 5, 72.0), png(3, 2, 72.0));
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("same.png", &a), ("same.png", &b)]);
+    poll(&mut app, &ctx);
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
+    for size in [(8, 5), (3, 2)] {
+        click(&mut app);
+        let node = selected_image(&app);
+        assert_eq!(node.name.as_deref(), Some("same.png"));
+        let NodeKind::Image(image) = node.kind else { panic!("Place selects the raster just placed") };
+        assert_eq!((image.width, image.height), size);
+    }
+}
+
+/// Automation already supplies each file's bytes directly; the same names retain their order too.
+#[test]
+fn an_automated_place_queue_keeps_same_named_file_bytes_in_order() {
+    let mut app = app();
+    let (a, b) = (png(8, 5, 72.0), png(3, 2, 72.0));
+    app.run(
+        "file.place.queue",
+        json!({"link": false, "files": [
+            {"name": "same.png", "dataBase64": vectorcraft_format::base64_encode(&a)},
+            {"name": "same.png", "dataBase64": vectorcraft_format::base64_encode(&b)}
+        ]}),
+    )
+    .unwrap();
+    for size in [(8, 5), (3, 2)] {
+        click(&mut app);
+        let NodeKind::Image(image) = selected_image(&app).kind else { panic!("Place selects the raster just placed") };
+        assert_eq!((image.width, image.height), size);
+    }
 }
 
 /// A tiny SVG document.
