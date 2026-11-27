@@ -896,6 +896,28 @@ impl TextDoc {
         }
     }
 
+    /// The art styles the stories written name for their runs' colors (key 5 of a paint).
+    pub(in crate::ai_editing) fn named_styles(&self) -> HashSet<&str> {
+        fn walk<'v>(v: &'v V, out: &mut HashSet<&'v str>) {
+            match v {
+                V::Dict(d) => {
+                    if d.iter().any(|(k, v)| *k == 99 && matches!(v, V::Name("CAITextPaint"))) {
+                        out.extend(d.iter().filter_map(|(k, v)| match (k, v) {
+                            (5, V::Str(s)) => Some(s.as_str()),
+                            _ => None,
+                        }));
+                    }
+                    d.iter().for_each(|(_, v)| walk(v, out));
+                }
+                V::List(l) => l.iter().for_each(|v| walk(v, out)),
+                _ => {}
+            }
+        }
+        let mut out = HashSet::new();
+        self.stories.iter().for_each(|v| walk(v, &mut out));
+        out
+    }
+
     /// The art style that holds the swatch link of `p`, if one does.
     fn link(&self, p: &Paint) -> Option<&str> {
         self.links.get(&link_key(p)?)?.as_deref()

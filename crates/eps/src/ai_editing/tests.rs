@@ -5143,6 +5143,34 @@ fn type_in_spot_and_global_colors_reads_back_linked_at_its_tint() {
     assert_eq!(export_ai_editing(&process, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
 }
 
+/// Type whose story isn't written (a thread the text document can't hold, written as outlines)
+/// leaves no art style for its colors behind.
+#[test]
+fn type_written_as_outlines_leaves_no_style_for_its_colors() {
+    use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut doc = Document::new(300.0, 200.0);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true });
+    doc.swatches = swatches.into();
+    let inked = CharStyle { size: 12.0, fill: linked("Red Ink", red, 1.0), ..CharStyle::default() };
+    let mut first = TextObject::point(Point::ZERO, "A story in a spot ink that runs on.", inked.clone());
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 20.0, 120.0, 60.0)) };
+    first.xf = Affine::IDENTITY;
+    // Point type can't be a frame of a thread: the text document doesn't hold the thread.
+    let mut second = TextObject::point(Point::new(20.0, 120.0), "", inked.clone());
+    second.runs = vec![TextRun::new("", inked)];
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("%AI11_BeginTextDocument"), "the thread was written as type");
+    assert!(!text.contains("/SimpleStyle"), "{text}");
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -8177,11 +8205,12 @@ fn a_masks_art_with_an_effect_no_style_holds_is_written_as_it_draws() {
     assert!(apart <= 4, "{apart} pixels differ");
 }
 
-/// On a large canvas no art style is written (the reader scales the styles of a large canvas):
-/// objects with effects are written as their vector art with their geometry effects applied, with a
-/// warning.
+/// On a large canvas no art style of an object is written (the reader scales the styles of a large
+/// canvas): objects with effects are written as their vector art with their geometry effects
+/// applied, with a warning. Type's colors keep their swatch links there: their styles hold no
+/// lengths.
 #[test]
-fn a_large_canvas_writes_no_art_styles() {
+fn a_large_canvas_writes_only_the_art_styles_of_type_colors() {
     let mut doc = Document::new(20000.0, 100.0);
     let n = styled_rect(
         &mut doc,
@@ -8196,6 +8225,33 @@ fn a_large_canvas_writes_no_art_styles() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::LARGE_CANVAS_STYLES), "{:?}", out.warnings);
     assert!(!String::from_utf8(out.program).unwrap().contains("ArtStyle"));
+
+    let mut typed = Document::new(20000.0, 100.0);
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut swatches: Vec<Swatch> = typed.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true });
+    typed.swatches = swatches.into();
+    let fill = linked("Red Ink", red, 0.4);
+    let t = vectorcraft_doc::TextObject::point(
+        vectorcraft_geom::Point::new(20.0, 60.0),
+        "FAR",
+        vectorcraft_doc::CharStyle { size: 24.0, fill: fill.clone(), ..vectorcraft_doc::CharStyle::default() },
+    );
+    let n = text_node(&mut typed, t);
+    let layer = typed.layers[0].id;
+    typed.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&typed, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let mut all = vec![];
+    paths(&read_back(&typed).layers, &mut all);
+    let fills: Vec<String> = all
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(paint(&t.runs[0].style.fill)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills, [paint(&fill)]);
 }
 
 #[test]
