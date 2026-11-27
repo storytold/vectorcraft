@@ -7828,7 +7828,7 @@ fn check_unrelated_interaction_during_a_calling_run(operation: &str) {
         "commit" => s.commit_interaction(),
         "cancel" => s.cancel_interaction(),
         "select" => s.select(|_, selection| selection.objects = vec![b]),
-        _ => unreachable!(),
+        _ => panic!("unknown interaction: {operation}"),
     };
     assert!(matches!(result, Err(EngineError::PluginBusy)), "{operation}: {result:?}");
     assert_eq!(s.doc().unwrap().doc, moved);
