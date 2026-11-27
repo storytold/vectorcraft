@@ -50,6 +50,13 @@ pub(crate) struct SavePdfJob {
     // PLAN: the passwords live in the dialog's settings (a preset change clears them there), so the job holds no copy.
 }
 
+#[cfg(test)]
+impl SavePdfJob {
+    pub(super) fn for_flattener_test(document: u64, flattener: FlattenOptions) -> Self {
+        Self { document, path: None, save_mode: None, flattener: Some(flattener), selection: false }
+    }
+}
+
 /// The open Save PDF dialog (Save PDF or the preset editor) and what the app remembers of it.
 pub(crate) struct SavePdfOpen {
     /// The dialog on the window's host.

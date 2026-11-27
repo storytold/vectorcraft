@@ -477,12 +477,8 @@ mod tests {
         });
         fixture.room(egui::vec2(880.0, 720.0));
         let ctx = fixture.ctx().clone();
-        let mut job = SavePdfJob {
-            path: None,
-            save_mode: None,
-            flattener: Some(FlattenOptions { line_art_ppi: 611.0, ..FlattenOptions::default() }),
-            selection: false,
-        };
+        let document = app.borrow().session.active().unwrap().uid;
+        let mut job = SavePdfJob::for_flattener_test(document, FlattenOptions { line_art_ppi: 611.0, ..FlattenOptions::default() });
         let parent = HostedPdfExport::new(vectorcraft_pdf::APP, vectorcraft_pdf::PdfSettings::default());
         let id = {
             let mut app = app.borrow_mut();
