@@ -73,6 +73,39 @@ fn example_desaturate_moves_every_colour_model_to_grey() {
     assert!(matches!(vectorcraft_plugins::objects::decode(&none), Err(Error::Failed(m)) if m.contains("Select some paths")));
 }
 
+/// A Desaturate run changes colours only: a live shape with fractional coordinates keeps its path
+/// exactly and stays live.
+#[test]
+fn example_desaturate_keeps_the_geometry_exactly() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Document, LiveShape, Node, NodeKind};
+    use vectorcraft_geom::{Affine, PathData, Point, SubPath};
+    use vectorcraft_plugins::objects;
+    let p = Plugin::load(DESATURATE, Limits::default()).unwrap();
+    let mut d = Document::new(2000.0, 2000.0);
+    let layer = d.layers[0].id;
+    let points: Vec<Point> = (1..1000).map(|k| f64::from(k) * 1.234_567_890_123_456_7 / 7.0 + 0.1).map(|x| Point::new(x, x / 3.0)).collect();
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 1.0);
+    let mut n = Node::path(d.alloc_id(), PathData::single(SubPath::polyline(&points, true)), red.clone());
+    if let NodeKind::Path { live, .. } = &mut n.kind {
+        *live = Some(Box::new(LiveShape::Rectangle {
+            w: 10.0 / 3.0,
+            h: 20.0 / 7.0,
+            radii: [0.0; 4],
+            radii_relative: false,
+            kinds: Default::default(),
+            xf: Affine::translate((0.1, 1.0 / 3.0)),
+        }));
+    }
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let before = d.node(id).unwrap().kind.clone();
+    let out = p.run(&objects::encode_input(&d, &[id]), b"{}").unwrap();
+    objects::apply_output(&mut d, &[id], objects::decode(&out).unwrap(), None, &|fx, _| Ok(fx.to_vec())).unwrap();
+    let after = d.node(id).unwrap();
+    assert!(after.kind == before, "the path or its live shape changed");
+    assert!(after.appearance != red, "the fill was not desaturated");
+}
+
 #[test]
 fn input_and_params_reach_the_plugin_and_output_comes_back() {
     let p = Plugin::load(&build(&tpl::module(MANIFEST, tpl::ECHO, "", 1)), Limits::default()).unwrap();
