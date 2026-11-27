@@ -51,7 +51,10 @@ fn open_with(app: &mut VectorcraftApp, name: String, target: Target) -> Result<V
         if !app.session.active().is_some_and(|active| active.uid == document) {
             return Err(tl!("This graphic style belongs to the document that opened the dialog.").to_owned());
         }
-        target.run(app, result.fields.text("name").unwrap_or_default()).map(|_| ())
+        target
+            .run(app, result.fields.text("name").unwrap_or_default())
+            .map(|_| ())
+            .map_err(|reason| crate::i18n::message(crate::i18n::current(), &reason))
     };
     host::open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
