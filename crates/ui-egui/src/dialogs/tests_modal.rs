@@ -293,3 +293,36 @@ fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path()
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len + 1);
     kept(&app, "the dialog");
 }
+
+#[test]
+fn path_sliders_close_when_file_revert_restores_the_artwork() {
+    for (kind, command) in
+        [(simplify_slider::StripKind::Simplify, "object.path.simplify"), (simplify_slider::StripKind::Smooth, "object.path.smooth")]
+    {
+        let mut app = app_with_dense_path();
+        let id = app.session.active().unwrap().selection.objects[0];
+        let dir = vectorcraft_testkit::TempDir::new("path-slider-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("object.move", json!({"dx": 10, "dy": 0})).unwrap();
+        app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 19]]})).unwrap();
+        crate::menus::invoke(&mut app, command, json!({}));
+        settle(&mut app);
+        assert!(simplify_slider::showing_of(&app, kind));
+        assert!(app.session.in_interaction());
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 19]]})).unwrap();
+        let restored = app.session.active().unwrap().doc.clone();
+        frame(&mut app, vec![]);
+        assert!(!simplify_slider::showing_of(&app, kind), "{command}");
+        assert!(!app.session.in_interaction());
+        assert_eq!(app.session.active().unwrap().doc, restored);
+
+        crate::menus::invoke(&mut app, command, json!({}));
+        settle(&mut app);
+        assert!(simplify_slider::showing_of(&app, kind));
+        assert!(app.session.in_interaction());
+    }
+}
