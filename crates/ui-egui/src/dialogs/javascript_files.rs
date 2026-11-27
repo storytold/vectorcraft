@@ -14,7 +14,7 @@
 //! its file name alone, as `svgInteractivity.info` does; `selected` keeps the file as linked.
 
 use craft::behavior::{Selection, keyed};
-use craft::host::PickRequest;
+use craft::host::{PickId, PickRequest, Picked};
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
@@ -61,6 +61,8 @@ struct Form {
     file: String,
     /// The linked file selected in the list, as linked or as the list shows it.
     selected: String,
+    /// The file chooser still waiting for its typed answer.
+    pick: Option<PickId>,
     pending: Option<Pending>,
 }
 
@@ -217,12 +219,25 @@ fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
     if selection.items.first() != selected {
         form.selected = selection.items.into_iter().next().unwrap_or_default();
     }
-    Field::new(caption("File or URL:")).show(ui, |ui, _| {
-        let request = PickRequest::open("javascript").filter("JavaScript", &["js"]);
-        let out = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…")).pick(request).show(ui);
-        // The answer is a path; the dialog links a `file:///` URL ([`crate::io::file_url`]).
-        if let Some(path) = out.picked {
-            form.file = crate::io::file_url(&path);
+    Field::new(caption("File or URL:")).show(ui, |ui, cx| {
+        if let Some(ticket) = form.pick
+            && let Some(answer) = cx.take_pick_answer(ticket)
+        {
+            form.pick = None;
+            // Browser picks supply the file's bytes and basename. Only a filesystem path can be linked.
+            if let Picked::Paths(paths) = answer
+                && let Some(path) = paths.first()
+            {
+                form.file = crate::io::file_url(&path.to_string_lossy());
+            }
+        }
+        let row = PathRow::new(caption("File or URL:"), Bind::bound(&mut form.file)).button(tl!("Choose…")).show(ui);
+        if row.browse
+            && form.pick.is_none()
+            && let Some(host) = cx.env.host()
+        {
+            let request = PickRequest::open("javascript").filter("JavaScript", &["js"]);
+            form.pick = Some(host.files().pick(request));
         }
     });
     let chosen = selected_row(files, &form.selected);
@@ -242,7 +257,7 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    use craft::host::{AppInfo, Host, Picked, ScriptedFiles};
+    use craft::host::{AppInfo, Host, ScriptedFiles};
     use craft::ui::testing::Fixture;
     use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
@@ -379,5 +394,22 @@ mod tests {
         fixture.idle(3);
         let file = form.borrow().file.clone();
         assert!(file.starts_with("file:///") && file.ends_with("/my%20menu.js") && !file.contains('\\'), "{file}");
+    }
+
+    #[test]
+    fn a_browser_file_pick_does_not_invent_a_local_script_url() {
+        let files = Arc::new(ScriptedFiles::held());
+        let form = Rc::new(RefCell::new(Form { file: "https://example.test/menu.js".into(), ..Default::default() }));
+        let shown = Rc::clone(&form);
+        let mut fixture = Fixture::new(move |ui| body(ui, &[], &mut shown.borrow_mut()));
+        fixture.host(Arc::new(Host::builder(AppInfo { id: "test", name: "Test", version: "1.0" }).files(files.clone()).build()));
+        fixture.settle();
+        let choose = fixture.by_label(tl!("Choose…")).expect("the Choose button");
+        fixture.click(&choose);
+        fixture.settle();
+        let picked = Picked::Contents(vec![("menu.js".into(), b"// local script".to_vec())]);
+        assert!(files.answer(picked).is_some(), "Choose… filed a browser pick");
+        fixture.idle(3);
+        assert_eq!(form.borrow().file, "https://example.test/menu.js");
     }
 }

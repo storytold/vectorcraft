@@ -36,6 +36,8 @@ const CMD: &str = "text.setFormat";
 pub(crate) struct Open {
     /// The dialog on the host.
     pub id: DialogId,
+    /// The drawing that owns the text IDs and the preview.
+    document: u64,
     /// The preview on the canvas.
     pub preview: LivePreview,
     /// The `ids`, `start` and `end` the dialog's `text.setFormat` acts on.
@@ -45,6 +47,12 @@ pub(crate) struct Open {
     story: Option<u64>,
     /// The values the dialog opened with.
     initial: DialogFields,
+}
+
+impl Open {
+    fn in_opening_document(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|st| st.uid == self.document)
+    }
 }
 
 /// The three spacing rows: (`text.setFormat` key, field prefix, range).
@@ -108,6 +116,7 @@ fn form(fields: &DialogFields) -> ParamDialog<'_> {
 /// Open Justification on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let document = app.session.active().ok_or("no document open")?.uid;
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
     let mut story = None;
@@ -136,20 +145,24 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let dialog = HostedParamDialog::new(&ctx, KIND, fields.clone(), |f| form(f)).preview_off();
     let id = super::host::open_held(app, dialog, |app, result| {
         let Some(open) = app.justification.take() else { return Ok(()) };
+        if !open.in_opening_document(app) {
+            app.justification = Some(open);
+            return Err(tl!("This dialog was opened in a different document.").to_owned());
+        }
         let p = params(app, &result.fields, &open);
         if !changes(&p) {
             // Nothing to apply: end the preview as production's OK did.
             open.preview.cancel(app);
             return Ok(());
         }
-        let Open { id, preview, targets, story, initial } = open;
+        let Open { id, document, preview, targets, story, initial } = open;
         preview.commit(app, CMD, Value::Object(p)).map(|_| ()).inspect_err(|_| {
             // The dialog stays open on the refusal, with a preview of its own again.
-            app.justification = Some(Open { id, preview: LivePreview::default(), targets, story, initial });
+            app.justification = Some(Open { id, document, preview: LivePreview::default(), targets, story, initial });
         })
     })
     .ok_or("no window")?;
-    app.justification = Some(Open { id, preview: LivePreview::default(), targets, story, initial: fields });
+    app.justification = Some(Open { id, document, preview: LivePreview::default(), targets, story, initial: fields });
     Ok(Value::Null)
 }
 
@@ -200,6 +213,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.justification.take() else { return };
     let shown =
         app.dialogs().and_then(|d| d.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
+    // A document switch ends that document's preview. The active drawing may have started a different one.
+    if !open.in_opening_document(app) {
+        if shown.is_some() {
+            open.preview = LivePreview::default();
+            app.justification = Some(open);
+        }
+        return;
+    }
     // The host lock is released: a command never runs inside `DialogHost::with`.
     let Some((on, fields)) = shown else {
         open.preview.cancel(app);
@@ -432,5 +453,63 @@ mod tests {
         assert!(auto_leadings(&app, other).iter().all(|l| *l == 120.0), "other type keeps its paragraphs");
         app.run("edit.undo", json!({})).unwrap();
         assert!(auto_leadings(&app, c).iter().all(|l| *l == 150.0), "undo restores the hidden frame");
+    }
+
+    fn two_drawings() -> (VectorcraftApp, u64) {
+        let (mut app, id) = app();
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let second = app.run("text.create", json!({"x": 10, "y": 10, "text": "Other drawing"})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(id, second, "local text IDs may match between drawings");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        (app, id)
+    }
+
+    #[test]
+    fn justification_approval_leaves_text_in_the_other_drawing_unchanged() {
+        let (mut app, id) = two_drawings();
+        app.run("ui.justification", json!({})).unwrap();
+        driver::set(&mut app, "autoLeading", json!(180));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        driver::ok(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+        assert!(driver::is_open(&app));
+        assert_eq!(driver::fields(&app).number("autoLeading"), Some(180.0));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        driver::ok(&mut app);
+        assert!(!driver::is_open(&app));
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 180.0);
+    }
+
+    #[test]
+    fn justification_preview_leaves_text_in_the_other_drawing_unchanged() {
+        let (mut app, id) = two_drawings();
+        app.run("ui.justification", json!({})).unwrap();
+        driver::set(&mut app, "autoLeading", json!(180));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        driver::set(&mut app, "preview", json!(true));
+        driver::pump(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        driver::pump(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 180.0);
+        driver::cancel(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 120.0);
+    }
+
+    #[test]
+    fn cancelling_justification_keeps_the_other_drawings_new_interaction() {
+        let (mut app, id) = two_drawings();
+        app.run("ui.justification", json!({})).unwrap();
+        driver::set(&mut app, "autoLeading", json!(180));
+        driver::set(&mut app, "preview", json!(true));
+        driver::pump(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 180.0);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.begin_interaction("New text edit").unwrap();
+        app.session.preview("text.setFormat", &json!({"ids": [id], "autoLeading": 190})).unwrap();
+        driver::cancel(&mut app);
+        assert_eq!(paras(&app, id).0.justification.auto_leading, 190.0);
+        assert!(app.session.in_interaction());
     }
 }

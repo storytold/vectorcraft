@@ -25,14 +25,16 @@ use craft::host::{PickRequest, Picked};
 use craft::table::ui::{
     CellAt, CellDirection, CellEdit, CellGrid, CellSelection, CellSpace, ColumnEdges, GridEdit, GridModel, GridState, LineIndex, Positions,
 };
+use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, PaintUi, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, PaintUi, Politeness, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
     DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id, serde_fields, set_serde_field,
 };
 use craft::ui::display::Text;
 use craft::ui::layout_components::Row;
+use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::FormDialog;
 use craft::ui::primitives::TextRun;
 use craft::ui::runtime::env::{Env, Label, Units};
@@ -48,6 +50,7 @@ use crate::file_asks::{self, Owner};
 
 /// The dialog kind of Graph Data, the key of its dialog on the host.
 pub const KIND: &str = "graphData";
+const WRONG_DOCUMENT: &str = "Graph Data belongs to the document that opened this sheet.";
 
 /// The sheet's size: a row of labels over a graph's categories, a column of labels before its
 /// series; the least rows it shows.
@@ -68,12 +71,13 @@ const ROW_H: f32 = 19.0;
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // The query fails without a graph selected, with the engine's own message.
     let v = app.session.execute("graph.setData", &json!({})).map_err(|e| e.to_string())?;
+    let document = app.session.active().ok_or("no document open")?.uid;
     let graph = app.session.active().and_then(|st| st.selection.objects.iter().find_map(|id| graph_of(&st.doc, *id)).map(|id| (st, id)));
     let scatter = graph.is_some_and(|(st, id)| {
         st.doc.node(id).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| g.kind == vectorcraft_doc::GraphKind::Scatter)
     });
     let id = graph.map(|(_, id)| id.0);
-    let dialog = GraphDataDialog::new(grid_from_data(&v), id, scatter, can_import(app));
+    let dialog = GraphDataDialog::new(grid_from_data(&v), document, id, scatter, can_import(app));
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
@@ -391,9 +395,10 @@ fn graph_grid(app: &mut VectorcraftApp, graph: Option<u64>) -> Result<Grid, Stri
     Ok(grid_from_data(&v))
 }
 
-/// Whether Import Data can ask for a file here: the host has a picker and the app can read files.
+/// Browser picks carry their contents; native picks need a path reader.
 fn can_import(app: &VectorcraftApp) -> bool {
-    file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()
+    file_asks::can(app, craft::host::PickKind::Open)
+        && (app.host.files().browser_saves() || app.services.read_head.is_some() || app.services.read.is_some())
 }
 
 /// Import Data's answer: a tab-separated text file's rows into the sheet that asked for it.
@@ -431,6 +436,7 @@ fn import(app: &mut VectorcraftApp, owner: &Arc<()>, picked: Picked) -> Result<V
 
 /// What the window asked of the app since the last [`pump`].
 struct Asks {
+    document: u64,
     graph: Option<u64>,
     import_owner: Arc<()>,
     apply: Option<Sheet>,
@@ -442,18 +448,28 @@ struct Asks {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let can = can_import(app);
+    let active = app.session.active().map(|doc| doc.uid);
     let asked = dialogs.with(|host| {
         host.get_mut::<GraphDataDialog>().map(|d| {
             d.can_import = can;
+            if active == Some(d.document) {
+                d.held.clear_refusal();
+            }
             d.take_asks()
         })
     });
-    let Some(Asks { graph, import_owner, apply: filed, actions }) = asked else { return };
+    let Some(Asks { document, graph, import_owner, apply: filed, actions }) = asked else { return };
+    let same_document = active == Some(document);
     if let Some(sheet) = filed {
-        if let Err(e) = apply(app, &sheet, graph) {
-            app.status(e);
-        }
-        dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(GraphDataDialog::applied));
+        let answer = if same_document {
+            if let Err(e) = apply(app, &sheet, graph) {
+                app.status(e);
+            }
+            Ok(())
+        } else {
+            Err(Label::from(tl!(WRONG_DOCUMENT)))
+        };
+        dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|dialog| dialog.applied(answer)));
     }
     for action in actions {
         match action {
@@ -473,6 +489,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
                     move |app, picked| import(app, &owner, picked),
                 );
             }
+            Action::Revert if !same_document => app.status(tl!(WRONG_DOCUMENT).to_owned()),
             Action::Revert => match graph_grid(app, graph) {
                 Ok(grid) => {
                     dialogs.with(|host| host.get_mut::<GraphDataDialog>().map(|d| d.replace(grid)));
@@ -657,6 +674,7 @@ pub(crate) struct GraphDataDialog {
     sheet: Sheet,
     state: GridState,
     entry: Entry,
+    document: u64,
     /// The graph the sheet opened on.
     graph: Option<u64>,
     scatter: bool,
@@ -669,7 +687,7 @@ pub(crate) struct GraphDataDialog {
 
 impl GraphDataDialog {
     /// The window over `grid`, the data of `graph`; Switch x/y is on for a `scatter` graph.
-    fn new(grid: Grid, graph: Option<u64>, scatter: bool, can_import: bool) -> Self {
+    fn new(grid: Grid, document: u64, graph: Option<u64>, scatter: bool, can_import: bool) -> Self {
         let sheet = Sheet { grid, ..Sheet::default() };
         let state = GridState::new(CellSelection::cell(CellAt::new(0, 1)), 1.0);
         let mut entry = Entry { text: String::new(), at: (0, 1) };
@@ -680,6 +698,7 @@ impl GraphDataDialog {
             sheet,
             state,
             entry,
+            document,
             graph,
             scatter,
             can_import,
@@ -691,12 +710,18 @@ impl GraphDataDialog {
 
     /// Everything the window asked since the last call, once.
     fn take_asks(&mut self) -> Asks {
-        Asks { graph: self.graph, import_owner: self.import_owner.clone(), apply: self.held.take(), actions: std::mem::take(&mut self.actions) }
+        Asks {
+            document: self.document,
+            graph: self.graph,
+            import_owner: self.import_owner.clone(),
+            apply: self.held.take(),
+            actions: std::mem::take(&mut self.actions),
+        }
     }
 
     /// The pump sent Apply's sheet to the graph; the window stays open and Apply is ready again.
-    fn applied(&mut self) {
-        self.held.answer(Ok(()));
+    fn applied(&mut self, answer: Result<(), Label>) {
+        self.held.answer(answer);
         self.held.finish();
     }
 
@@ -727,6 +752,7 @@ impl StackDialog for GraphDataDialog {
     fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<()>> {
         let GraphDataDialog { sheet, state, entry, scatter, can_import, lines, actions, held, .. } = self;
         let mut pane = Pane { state, entry, lines, actions, scatter: *scatter, can_import: *can_import };
+        let refusal = held.refusal().map(|(reason, _)| reason.clone());
         let shown = FormDialog::new(tl!("Graph Data"), Bind::bound(&mut *sheet))
             .ok_label(tl!("Apply"))
             .ok_enabled(!held.is_waiting())
@@ -734,7 +760,12 @@ impl StackDialog for GraphDataDialog {
             // The sheet owns the scroll; the controls above it stay in view.
             .collection_body(true)
             .shaped(|dialog| dialog.initial_focus(Initial::Default))
-            .show(ui, |ui, _, values| body(ui, values, &mut pane));
+            .show(ui, |ui, _, values| {
+                if let Some(reason) = refusal.clone() {
+                    Notice::new(Tone::Bad, reason).layout(NoticeLayout::Inline).announce(Politeness::Assertive).show(ui);
+                }
+                body(ui, values, &mut pane)
+            });
         // The pass reports a press only in the pass that took the input, so a second pass of the frame files nothing.
         if shown.picked == Some(0) && !held.is_waiting() {
             commit_text(sheet, pane.entry);
@@ -844,6 +875,51 @@ mod tests {
         let closed = app.dialogs().expect("a window").with(|host| host.confirm::<GraphDataDialog>(&ctx));
         assert!(!closed, "Apply leaves the window open");
         pump(app, &ctx);
+    }
+
+    fn sheet_with_matching_graphs() -> (VectorcraftApp, u64) {
+        let (mut app, id) = app_with("1,2\n3,4", "column");
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let other = app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150, "csv": "7,8\n9,10"})).unwrap();
+        assert_eq!(other["id"], id);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        open(&mut app).unwrap();
+        set_field(&app, "grid", json!([[""], ["", "5", "6"]])).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        (app, id)
+    }
+
+    #[test]
+    fn graph_data_apply_cannot_change_the_other_drawings_graph() {
+        let (mut app, id) = sheet_with_matching_graphs();
+        let other = data(&mut app, id);
+        let undo = app.session.active().unwrap().history.undo.len();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id), other);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(read(&app, GraphDataDialog::held_state), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        apply_through_host(&mut app);
+        assert_eq!(data(&mut app, id)["rows"], json!([[5.0, 6.0]]));
+    }
+
+    #[test]
+    fn graph_data_revert_keeps_the_draft_in_the_other_drawing() {
+        let (mut app, id) = sheet_with_matching_graphs();
+        let draft = read(&app, |dialog| dialog.sheet.grid.clone());
+        let revert = |app: &mut VectorcraftApp| {
+            edit(app, |dialog| dialog.actions.push(Action::Revert));
+            pump(app, &crate::testing::ui_context());
+        };
+        revert(&mut app);
+        assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), draft);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let expected = grid_from_data(&data(&mut app, id));
+        revert(&mut app);
+        assert_eq!(read(&app, |dialog| dialog.sheet.grid.clone()), expected);
     }
 
     /// The app with the window drawn each frame as the shell draws it.
@@ -976,6 +1052,27 @@ mod tests {
         assert_eq!(at(&h, 0, 1), "b");
         import(&mut h, Picked::Contents(vec![("small.txt".into(), b"\tc\n".to_vec())]));
         assert_eq!(at(&h, 0, 1), "c");
+    }
+
+    #[test]
+    fn browser_graph_data_import_reads_picked_bytes_without_a_path_reader() {
+        let (mut app, _) = app_with(",original\nQ1,1", "column");
+        app.services.read = None;
+        app.services.read_head = None;
+        let files = Arc::new(ScriptedFiles::held().in_browser());
+        app.host.with_files(files.clone()).install(app.ui_ctx.as_ref().unwrap());
+        app.host = Arc::new(app.host.with_files(files.clone()));
+        open(&mut app).unwrap();
+        let mut h = harness(app);
+        h.run_steps(4);
+        h.get_by_label("Import Data…").click();
+        h.run_steps(3);
+        assert_eq!(files.open(), 1, "the browser can open the Import Data picker");
+        files.answer(Picked::Contents(vec![("data.txt".into(), b"\timported\nQ2\t8".to_vec())]));
+        h.run_steps(4);
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 0, 1)), "imported");
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 1, 0)), "Q2");
+        assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 1, 1)), "8");
     }
 
     #[test]

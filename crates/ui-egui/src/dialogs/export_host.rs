@@ -21,7 +21,10 @@ pub(crate) type After = Option<Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Val
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Export {
     /// Export As.
-    As,
+    As {
+        /// The drawing whose export the dialog configures, when one was open.
+        document: Option<u64>,
+    },
     /// The options of the raster format `format`.
     Raster {
         /// The format's id.
@@ -126,7 +129,7 @@ fn answer(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> 
 
 fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
     match &open.kind {
-        Export::As => export_as::confirm(app, open, fields),
+        Export::As { document } => export_as::confirm(app, *document, fields),
         Export::Raster { .. } => png_options::confirm(app, open, fields),
         Export::Svg { .. } => svg_options::confirm(app, open, fields),
         Export::Eps => eps_options::confirm(app, open, fields),

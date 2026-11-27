@@ -7809,7 +7809,8 @@ fn check_unrelated_interaction_during_a_calling_run(operation: &str) {
     let mut s = session();
     let id = format!("test.engine.callpreview.{operation}");
     let grant = json!(["doc.read", "doc.write", "commands"]);
-    let manifest = format!(r#"{{"id":"{id}","name":"Preview guard","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["object.move"]}}"#);
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Preview guard","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["object.move"]}}"#);
     let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant}));
     let (a, b) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));

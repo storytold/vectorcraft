@@ -790,9 +790,9 @@ fn takes_drop(mixed: (bool, bool), well: Well, drag: &PanelDrag) -> bool {
 
 /// Paints the fill (the primary well) or the stroke with the paint `drag` carries.
 fn drop_paint(app: &mut VectorcraftApp, well: Well, drag: &PanelDrag) {
-    if let PanelDrag::Paint { params, .. } = drag {
+    if let Some(params) = drag.paint_drop_params(app.session.active().map(|st| st.uid)) {
         let cmd = if well == Well::Primary { "paint.setFill" } else { "paint.setStroke" };
-        app.run(cmd, params.clone()).ok();
+        app.run(cmd, params).ok();
     }
 }
 
@@ -1083,6 +1083,33 @@ mod tests {
         assert_eq!(fill.color().map(|c| c.to_hex()), Some("#ff0000".into()), "a drop on the stroke leaves the fill");
         drop_paint(&mut app, Well::Primary, &green);
         assert_eq!(current_paints(&app).0.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+    }
+
+    #[test]
+    fn proxy_drops_keep_the_dragged_process_color_after_switching_documents() {
+        use crate::panel_drag::SwatchRows;
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let name = "Shared Swatch";
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("swatch.new", json!({"name": name, "color": "#ff0000"})).unwrap();
+        let source = app.session.active().unwrap();
+        let paint = source.doc.swatch(name).unwrap().paint.clone();
+        let rows = SwatchRows { document: source.uid, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: true };
+        let drag = PanelDrag::Paint { paint: paint.clone(), params: json!({"swatch": name}), rows: Some(rows), library: None };
+        app.run("swatch.edit", json!({"name": name, "color": "#ff8800"})).unwrap();
+        drop_paint(&mut app, Well::Primary, &drag);
+        assert_eq!(current_paints(&app).0, app.session.active().unwrap().doc.swatch(name).unwrap().paint);
+
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("swatch.new", json!({"name": name, "color": "#0000ff"})).unwrap();
+        let destination = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+        drop_paint(&mut app, Well::Primary, &drag);
+        drop_paint(&mut app, Well::Secondary, &drag);
+        assert_eq!(current_paints(&app), (paint.clone(), paint));
+        assert_eq!(app.session.active().unwrap().doc.swatch(name).unwrap().paint, destination);
     }
 
     #[test]

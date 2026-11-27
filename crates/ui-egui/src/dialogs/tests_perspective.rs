@@ -278,6 +278,67 @@ fn the_presets_manager_exports_to_a_file_named_after_the_preset() {
 }
 
 #[test]
+fn the_presets_manager_imports_browser_contents_and_desktop_paths() {
+    use super::perspective_presets::{self, Action};
+    use vectorcraft_engine::cmd::perspgrid::PRESET_FORMAT;
+
+    let mut app = app();
+    let picker = crate::tests_picks::scripted(&mut app);
+    let ctx = window(&app);
+    let fixture = |name: &str| json!({"format": PRESET_FORMAT, "presets": [{"name": name}]}).to_string();
+    app.run("ui.perspectivePresetsDialog", json!({})).unwrap();
+    let default = "[1P-Normal View]";
+
+    perspective_presets::run(&mut app, Action::Import, default).unwrap();
+    picker.answer_contents(&[("Browser.vcperspective", fixture("Browser").as_bytes())]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("Browser").is_some(), "the selected browser file adds its preset");
+    assert_eq!(field(&app, "selected"), json!("Browser"));
+
+    let dir = vectorcraft_testkit::TempDir::new("perspective-presets-picker");
+    let file = dir.join("Desktop.vcperspective");
+    std::fs::write(&file, fixture("Desktop")).unwrap();
+    perspective_presets::run(&mut app, Action::Import, "Browser").unwrap();
+    picker.answer(&[file.to_str().unwrap()]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("Desktop").is_some(), "the selected desktop file adds its preset");
+    assert_eq!(field(&app, "selected"), json!("Desktop"));
+
+    perspective_presets::run(&mut app, Action::Import, "Desktop").unwrap();
+    picker.cancel();
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert_eq!(app.session.prefs.perspective_presets.len(), 2);
+    assert_eq!(field(&app, "selected"), json!("Desktop"));
+}
+
+#[test]
+fn a_late_perspective_import_leaves_the_reopened_managers_selection_alone() {
+    use super::perspective_presets::{self, Action, KIND};
+    use vectorcraft_engine::cmd::perspgrid::PRESET_FORMAT;
+
+    let mut app = app();
+    let picker = crate::tests_picks::scripted(&mut app);
+    let ctx = window(&app);
+    let preset = |name: &str| json!({"format": PRESET_FORMAT, "presets": [{"name": name}]}).to_string();
+    app.run("ui.perspectivePresetsDialog", json!({})).unwrap();
+    perspective_presets::run(&mut app, Action::Import, "[1P-Normal View]").unwrap();
+    assert_eq!(picker.requests().len(), 1);
+    assert!(host(&app, |h| h.cancel_by_id(&ctx, dialog_id(KIND))));
+    let selected = "[2P-Normal View]";
+    app.run("ui.perspectivePresetsDialog", json!({"selected": selected})).unwrap();
+    picker.answer_contents(&[("First.vcperspective", preset("First").as_bytes())]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("First").is_some(), "the file still imports into saved presets");
+    assert_eq!(field(&app, "selected"), json!(selected), "the reopened manager keeps its choice");
+
+    perspective_presets::run(&mut app, Action::Import, selected).unwrap();
+    picker.answer_contents(&[("Second.vcperspective", preset("Second").as_bytes())]);
+    crate::tests_picks::poll(&mut app, &ctx);
+    assert!(app.session.perspective_preset("Second").is_some());
+    assert_eq!(field(&app, "selected"), json!("Second"), "the current manager selects its own import");
+}
+
+#[test]
 fn perspective_preset_menus_list_the_views_of_each_type() {
     let app = app();
     let entries = crate::menus::menu_entries(&app);

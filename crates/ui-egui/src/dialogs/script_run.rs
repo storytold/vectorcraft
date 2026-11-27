@@ -29,6 +29,7 @@
 //! are not the dialog's default. `selectDlg` opens the host's folder picker in its own folder.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
@@ -276,6 +277,7 @@ impl StackDialog for ScriptNotice {
 /// The dialog of a script's file dialog call: what the run asked for, read from the run's own
 /// request when the dialog opens, so no field of the dialog changes what the person reads.
 pub(crate) struct ScriptFiles {
+    opening: Arc<()>,
     kind: PickerKind,
     prompt: String,
     can_always: bool,
@@ -290,6 +292,7 @@ pub(crate) struct ScriptFiles {
 impl ScriptFiles {
     fn new(p: ScriptPicker) -> Self {
         Self {
+            opening: Arc::new(()),
             kind: p.kind,
             prompt: p.prompt,
             can_always: p.can_always,
@@ -719,8 +722,11 @@ pub(crate) fn settle_files(app: &mut VectorcraftApp, result: DialogResult<FilesA
 }
 
 /// Asks for the files of the kind the running script asked for, starting at the script's file or
-/// folder, with the script's file types; the answer goes to the open file dialog.
+/// folder, with the script's file types; the answer goes to the dialog that opened the picker.
 fn choose(app: &mut VectorcraftApp) {
+    let Some(opening) = with_host(app, |host, _| host.get::<ScriptFiles>().map(|dialog| Arc::clone(&dialog.opening))).flatten() else {
+        return;
+    };
     let Some(p) = app.session.script_picker() else { return };
     let several = p.multiple && p.kind == PickerKind::Open;
     let mut request = match p.kind {
@@ -750,7 +756,11 @@ fn choose(app: &mut VectorcraftApp) {
     file_asks::ask(app, request, Owner::Free, move |app, picked| {
         let chosen = picked.paths().iter().map(|path| path.to_string_lossy().into_owned()).collect();
         let automated = app.file_asks.automated();
-        with_host(app, |host, _| host.get_mut::<ScriptFiles>().map(|dialog| dialog.add(chosen, several, automated)));
+        with_host(app, |host, _| {
+            if let Some(dialog) = host.get_mut::<ScriptFiles>().filter(|dialog| Arc::ptr_eq(&dialog.opening, &opening)) {
+                dialog.add(chosen, several, automated);
+            }
+        });
         Ok(Value::Null)
     });
 }
