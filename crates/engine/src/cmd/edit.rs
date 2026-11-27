@@ -1592,6 +1592,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted object never goes in as a clip group's clipping path, so a copied clipping
+                // path comes back as an ordinary path that the path commands work on (#9227).
+                if let NodeKind::Path { clipping, .. } = &mut c.kind {
+                    *clipping = false;
+                }
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c, d);
