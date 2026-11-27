@@ -144,9 +144,19 @@ impl OwnMode {
 struct TargetOwner {
     key: TargetKey,
     paints: Arc<TargetPaints>,
-    /// The paints the popover owned before its own later edits, each with the stop or point it edited then, newest
-    /// last, so that Undo and Redo of those edits keep it open on the same stop or point.
-    earlier: Vec<(TargetKey, Arc<TargetPaints>)>,
+    /// The history step when the popover took `paints`.
+    step: Option<(u64, u64)>,
+    /// The paints the popover owned before its own later edits, newest last, each with the history step it was
+    /// current at and the stop or point it edited then, so that Undo and Redo of those edits keep it open on the
+    /// same stop or point.
+    earlier: Vec<Earlier>,
+}
+
+#[derive(Clone)]
+struct Earlier {
+    step: Option<(u64, u64)>,
+    key: TargetKey,
+    paints: Arc<TargetPaints>,
 }
 
 struct TargetPaints {
@@ -158,8 +168,8 @@ impl TargetOwner {
     /// The most earlier paints kept.
     const EARLIER: usize = 32;
 
-    fn new(key: TargetKey, paints: Arc<TargetPaints>) -> Self {
-        Self { key, paints, earlier: Vec::new() }
+    fn new(key: TargetKey, paints: Arc<TargetPaints>, step: Option<(u64, u64)>) -> Self {
+        Self { key, paints, step, earlier: Vec::new() }
     }
 
     fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
@@ -169,19 +179,28 @@ impl TargetOwner {
     /// The earlier owned paint and stop or point that the target shows now, as after Undo or Redo of one of the
     /// popover's own edits. A stop selected after Undo that is not the one that paint belonged to matches nothing.
     fn owned_earlier(&self, app: &VectorcraftApp, target: &Target) -> Option<TargetKey> {
-        self.earlier.iter().rev().find(|(key, paints)| key.matches(app, target) && self.owns(app, target, paints)).map(|(key, _)| key.clone())
+        self.earlier.iter().rev().find(|e| e.key.matches(app, target) && self.owns(app, target, &e.paints)).map(|e| e.key.clone())
     }
 
     fn owns(&self, app: &VectorcraftApp, target: &Target, paints: &TargetPaints) -> bool {
         paints.shown == *target.paint() && app.session.gradient_edit_paints(!self.key.fill).is_ok_and(|now| now == paints.edited)
     }
 
-    /// The popover now owns `paints`; the paints it owned until now are kept as earlier ones, with `was`, the stop
-    /// or point they belonged to.
-    fn adopt(&mut self, paints: Arc<TargetPaints>, was: TargetKey) {
+    /// The popover now owns `paints`, taken at history step `step`; the paints it owned until now are kept as earlier
+    /// ones, with `was`, the stop or point they belonged to.
+    fn adopt(&mut self, paints: Arc<TargetPaints>, was: TargetKey, step: Option<(u64, u64)>) {
         let old = std::mem::replace(&mut self.paints, paints);
-        self.earlier.retain(|(_, p)| !Arc::ptr_eq(p, &old));
-        self.earlier.push((was, old));
+        let old_step = std::mem::replace(&mut self.step, step);
+        self.earlier.retain(|e| !Arc::ptr_eq(&e.paints, &old));
+        // Undo and Redo return only to the first or the last paints of one history step. The samples of a live drag
+        // between them replace each other, so a long drag does not push out the paints before it.
+        if let [.., before, last] = self.earlier.as_slice()
+            && before.step == old_step
+            && last.step == old_step
+        {
+            self.earlier.pop();
+        }
+        self.earlier.push(Earlier { step: old_step, key: was, paints: old });
         if self.earlier.len() > Self::EARLIER {
             self.earlier.remove(0);
         }
@@ -592,8 +611,9 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     let Some(key) = TargetKey::of(app, &target) else { return };
     let Ok(edited) = app.session.gradient_edit_paints(!key.fill) else { return };
     let paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
+    let step = app.session.active().map(|st| st.history.step());
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints)));
+        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints, step)));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -643,11 +663,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
+    // The stop or point the paints owned until now belong to, before Undo or Redo or this pass's edits move it.
+    let owned_key = owner.key.clone();
     if let Some(key) = earlier {
         owner.key = key;
     }
-    // The stop or point the paints owned until now belong to, before this pass's edits move it.
-    let owned_key = owner.key.clone();
     let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
@@ -684,7 +704,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     };
     // The popover can continue with the paints resulting from its own edits in this pass.
     if owner.paints.shown != *target.paint() || owner.paints.edited != edited {
-        owner.adopt(Arc::new(TargetPaints { shown: target.paint().clone(), edited }), owned_key);
+        let step = app.session.active().map(|st| st.history.step());
+        owner.adopt(Arc::new(TargetPaints { shown: target.paint().clone(), edited }), owned_key, step);
     }
     dialogs.with(|host| {
         if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
@@ -941,6 +962,59 @@ mod tests {
             assert!(stops[0].opacity < 1.0, "the edit reaches the stop the popover opened on");
             assert_eq!(stops[1].opacity, 1.0, "the neighbor is left alone");
         }
+    }
+
+    #[test]
+    fn redo_after_a_stop_crosses_its_neighbor_does_not_reopen_on_the_neighbor() {
+        let mut app = app();
+        open_at(&mut app, 0, Anchor::Screen(egui::pos2(200.0, 200.0)));
+        let ctx = ctx(&app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.location = Some(75.0);
+        });
+        host::pump(&mut app, &ctx);
+        assert_eq!(app.session.selected_stop(), Some(1), "the stop crossed its neighbor");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app), "Undo returns to the paint it owned on stop 0");
+        app.run("edit.redo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "after Redo, stop 0 is the neighbor");
+    }
+
+    #[test]
+    fn undo_after_a_long_live_drag_keeps_the_popover_open() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let dialogs = app.dialogs().unwrap();
+        let gesture = GestureId::new(1);
+        let pick = |hex: &str| PickedColor::rgb(Srgba::from_hex(hex).unwrap());
+        let before = pick("#00ff00");
+        let original = stops(&app)[1].color.to_hex();
+        let samples = (0..2 * TargetOwner::EARLIER).map(|i| EditEvent::update(gesture, pick(&format!("#{:02x}0000", 40 + i))));
+        for edit in samples.chain([EditEvent::commit(gesture, Mixed::Same(before), pick("#0000ff"))]) {
+            let mut edit = Some(edit);
+            ctx.run_ui(Default::default(), |ui| {
+                let Some(edit) = edit.take() else { return };
+                let mut state = ColorPanelState::default();
+                let mut output = ColorPanel::new(Bind::bound(&mut state), [before.color; 2]).show(ui);
+                output.edits.push((PanelTarget::Foreground, edit));
+                dialogs.with(|host| {
+                    host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.panels.push(output);
+                });
+            })
+            .textures_delta
+            .clear();
+            host::pump(&mut app, &ctx);
+        }
+        assert_eq!(stops(&app)[1].color.to_hex(), "#0000ff");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].color.to_hex(), original, "Undo returns to the paint before the drag");
+        assert!(is_open(&app), "the paint before the drag is still the popover's own");
     }
 
     #[test]
