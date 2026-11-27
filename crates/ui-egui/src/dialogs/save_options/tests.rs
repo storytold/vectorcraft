@@ -513,6 +513,24 @@ fn eps_save_transparency_follows_the_color_preview() {
     assert_eq!(dialog(&mut app).bool("embedFonts"), Some(true));
 }
 
+#[test]
+fn a_native_save_options_draft_cannot_redirect_its_path_to_another_drawing() {
+    let (mut app, written, _) = desktop("original.vectorcraft");
+    assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
+    let draft_path = dialog(&mut app).text("path").unwrap().to_owned();
+    app.run("file.new", json!({"width": 200, "height": 120})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    assert!(!ok(&mut app));
+    assert_eq!(dialog(&mut app).text("path"), Some(draft_path.as_str()));
+    assert!(written.borrow().is_empty());
+    assert!(app.session.active().unwrap().path.is_none());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok(&mut app), "{}", app.ui.status);
+    assert_eq!(written.borrow()[0].0, draft_path);
+    assert!(app.session.documents()[1].path.is_none());
+}
+
 /// #4931: a native file's Version is a menu of the versions VectorCraft writes, the current one
 /// first and chosen, each named by the releases that read it. An older version without
 /// compression saves plain, whatever Use Compression held.

@@ -92,8 +92,8 @@ impl ExportDialogs {
 
 impl Open {
     fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
-        if !matches!(self.kind, Export::Hpgl { .. }) && self.document != app.session.active().map(|doc| doc.uid) {
-            return Err(tl!("Return to the original drawing to export it").into());
+        if !matches!(self.kind, Export::As { .. } | Export::Hpgl { .. }) && self.document != app.session.active().map(|doc| doc.uid) {
+            return Err(tl!("Return to the original drawing to continue").into());
         }
         Ok(())
     }
@@ -108,7 +108,8 @@ pub(super) fn options<L: From<&'static str>>(ids: &[&'static str], labels: &[&'s
 /// replaces the one open, and its record.
 pub(crate) fn open(app: &mut VectorcraftApp, kind: Export, selection: bool, dialog: HostedParamDialog) -> Option<DialogId> {
     let document = match &kind {
-        Export::As { document } | Export::Hpgl { doc: document } => Some(*document),
+        Export::As { document } => *document,
+        Export::Hpgl { doc } => Some(*doc),
         Export::EpsCustom { parent } => app.export_dialogs.find(*parent)?.document,
         _ => app.session.active().map(|doc| doc.uid),
     };
