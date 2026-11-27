@@ -780,7 +780,13 @@ fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
         [n] => crate::i18n::fmt(tl!("Delete the graphic style “{name}”?"), &[("name", n)]),
         _ => crate::i18n::tn(names.len() as u64, "Delete this {n} graphic style?", "Delete these {n} graphic styles?"),
     };
-    crate::dialogs::confirm::ask(app, &message, tl!("Objects using them keep their look but are no longer linked."), "graphicStyle.delete", params);
+    crate::dialogs::confirm::ask_in_document_contents(
+        app,
+        &message,
+        tl!("Objects using them keep their look but are no longer linked."),
+        "graphicStyle.delete",
+        params,
+    );
 }
 
 // ---------- the panel menu ----------
@@ -1167,6 +1173,7 @@ mod tests {
         answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert_eq!(names(&app), before, "the other tab keeps its identically named style");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "This dialog was opened in a different document.");
         assert!(app.session.set_active(0));
         assert!(doc(&app).graphic_style_index("Mine").is_some(), "the source style still needs a fresh confirmation");
     }
@@ -1198,6 +1205,7 @@ mod tests {
         answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert_eq!(doc(&app).graphic_style_index("Mine"), Some(index), "the restored style stays");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
     }
 
     #[test]

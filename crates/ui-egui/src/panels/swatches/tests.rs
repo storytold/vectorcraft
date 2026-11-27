@@ -392,6 +392,7 @@ fn delete_confirmation_keeps_matching_swatches_in_another_drawing() {
     confirm(&mut app, key);
     assert!(doc(&app).swatch("Red").is_some(), "the other tab keeps its identically named swatch");
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "This dialog was opened in a different document.");
     assert!(app.session.set_active(0));
     assert!(doc(&app).swatch("Red").is_some(), "the source swatch still needs a fresh confirmation");
 }
@@ -421,6 +422,7 @@ fn delete_confirmation_keeps_the_swatch_restored_by_revert() {
     confirm(&mut app, key);
     assert_eq!(doc(&app).swatch("Red").expect("the restored swatch stays").paint.color(), saved_color);
     assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
 }
 
 /// Only None and Registration are reserved: a user swatch or color group whose name starts with
