@@ -173,7 +173,9 @@ impl Component for CanvasDrops<'_> {
             let panel = Target::new(rect, view, covered, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
             let style = Target::new(rect, view, covered, |d: &StyleDrag| (d.document == self.document).then(|| Payload::Style(d.clone())));
             let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
-            let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
+            let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| {
+                (d.grabbed.doc == self.document).then(|| Payload::Brush(d.grabbed.clone()))
+            });
             let library = Target::new(rect, view, covered, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
             let panel = cx.drop_target::<PanelDrag, _>(&panel);
             let style = cx.drop_target::<StyleDrag, _>(&style);
@@ -336,7 +338,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
         Payload::Panel(PanelDrag::LibraryGraphic { library, item }) => {
             run(app, "library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]}))
         }
-        Payload::Brush(key) => match hit() {
+        Payload::Brush(key) if app.session.active().is_some_and(|st| st.uid == key.doc) => match hit() {
             None if brush_has_art(app, key) => run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y})),
             None => Ok(()),
             Some(hit) => {
@@ -344,13 +346,14 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 run(app, "brush.apply", json!({"name": key.name, "ids": [owner]}))
             }
         },
+        Payload::Brush(_) => Ok(()),
         Payload::Style(style) if app.session.active().is_some_and(|st| st.uid == style.document) => {
             let Some(hit) = hit() else { return Ok(()) };
             let top = top_object(app, &hit)?;
             run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Style(_) => Ok(()),
-        Payload::Panel(PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
+        Payload::Panel(drag @ PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
                 && let Some((id, points)) = selected_mesh_drop(app, at, zoom)
@@ -359,7 +362,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
                 return run(app, "object.mesh.setPointColor", params);
             }
             let Some(hit) = hit() else { return Ok(()) };
-            let mut params = params.clone();
+            let Some(mut params) = drag.paint_drop_params(app.session.active().map(|st| st.uid)) else { return Ok(()) };
             params["ids"] = json!([owner(app, &hit)?]);
             params["focus"] = json!(false);
             let cmd = crate::panels::proxy_cmd(app, false);

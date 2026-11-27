@@ -48,7 +48,9 @@ fn params_of(result: &ParamResult) -> Value {
 /// Report Results on, lists how many of each chosen replacement it made.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let selected = app.session.active().is_some_and(|d| !d.selection.is_empty());
+    let source = app.session.active().ok_or("no document")?;
+    let document = source.uid;
+    let selected = !source.selection.is_empty();
     let mut params: Vec<Param> = options()
         .into_iter()
         .map(|(key, _, label)| Param::new(key, label, ParamKind::bool(matches!(key, "quotes" | "dashes" | "ellipsis"))))
@@ -66,7 +68,13 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     if !selected {
         dialog.set_field("scope", FieldValue::Text("document".into()));
     }
+    let owner = egui::Id::unique((COMMAND, "opening-drawing"));
+    ctx.data_mut(|data| data.insert_temp(owner, document));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
+        let document = ctx.data(|data| data.get_temp::<u64>(owner));
+        if app.session.active().is_none_or(|st| Some(st.uid) != document) {
+            return Err(tl!("Return to the original drawing to replace its punctuation").into());
+        }
         let r = app.run(COMMAND, params_of(result))?;
         result.remember(&ctx);
         if result.fields.bool("report") == Some(true) {
@@ -164,5 +172,40 @@ mod tests {
         crate::menus::invoke(&mut app, COMMAND, json!({}));
         ok(&mut app);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn smart_punctuation_waits_for_its_original_drawing() {
+        let (mut app, source) = app_with_text("a--b");
+        app.run("select.none", json!({})).unwrap();
+        open(&mut app).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 40, "text": "c--d", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let error = super::super::tests_export::try_confirm(&mut app).expect_err("Smart Punctuation must refuse the other drawing");
+        assert!(error.contains("original drawing"), "{error}");
+        assert_eq!(plain(&app, other), "c--d");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert_eq!(entry(&app, COMMAND).unwrap().fields.unwrap()["scope"], "document");
+        app.run("document.activate", json!({ "index": 0 })).unwrap();
+        ok(&mut app);
+        assert_eq!(plain(&app, source), "a–b");
+    }
+
+    #[test]
+    fn reopened_smart_punctuation_applies_in_its_new_drawing() {
+        let (mut app, source) = app_with_text("a--b");
+        app.run("select.none", json!({})).unwrap();
+        open(&mut app).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 40, "text": "c--d", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.none", json!({})).unwrap();
+        open(&mut app).unwrap();
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), entry(&app, COMMAND).unwrap().id);
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert_eq!(plain(&app, other), "c–d");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(plain(&app, source), "a--b");
     }
 }

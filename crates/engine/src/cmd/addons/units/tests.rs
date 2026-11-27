@@ -50,7 +50,7 @@ fn a_length_comes_back_in_every_unit_in_order() {
 }
 
 #[test]
-fn values_read_as_number_fields_read_them() {
+fn values_accept_units_arithmetic_and_decimal_commas() {
     let mut s = session();
     let pt = |s: &mut Session, p: Value| convert(s, p)["points"].as_f64().unwrap();
     assert!(near(pt(&mut s, json!({"value": "1in/2"})), 36.0));
@@ -72,8 +72,9 @@ fn values_read_as_number_fields_read_them() {
     assert!(near(pt(&mut s, json!({"value": "1,5", "unit": "in"})), 108.0));
     // Each number of a sum reads its own separator.
     assert!(near(pt(&mut s, json!({"value": "100.5 mm-0,5", "unit": "mm"})), 100.0 * 72.0 / 25.4));
-    // A comma in a sum is a decimal comma, as in the number fields: 1,500+2 is 3.5.
-    assert!(near(pt(&mut s, json!({"value": "1,500+2", "unit": "mm"})), 3.5 * 72.0 / 25.4));
+    assert!(near(pt(&mut s, json!({"value": "2x0,125 px"})), 0.25));
+    assert!(near(pt(&mut s, json!({"value": "0,125p6+2"})), 9.5));
+    assert!(near(pt(&mut s, json!({"value": "2p0,5+1"})), 25.5));
     // A sum of 128 signs still reads.
     assert!(near(pt(&mut s, json!({"value": format!("1{}", "+1".repeat(128))})), 129.0));
     // x, X and × multiply as * does, and each counts toward the 128 signs.
@@ -82,6 +83,15 @@ fn values_read_as_number_fields_read_them() {
     assert!(near(pt(&mut s, json!({"value": "0,5×4 in"})), 144.0));
     assert!(near(pt(&mut s, json!({"value": format!("1{}", "x1".repeat(128))})), 1.0));
     assert!(s.execute("addon.units.convert", &json!({"value": format!("1{}", "x1".repeat(129))})).is_err());
+}
+
+#[test]
+fn a_thousands_comma_in_an_arithmetic_operand_is_refused() {
+    let mut s = session();
+    for value in ["1,500+2", "1,000 px+2", "2+-1,000", "2/1,000", "2×1,000 in", "1,000'X2", "5pt+1,000%", "1,000p6+2", "2p1,000+2"] {
+        let result = s.execute("addon.units.convert", &json!({"value": value}));
+        assert!(matches!(result, Err(EngineError::BadParams { .. })), "{value}: {result:?}");
+    }
 }
 
 #[test]

@@ -71,6 +71,30 @@ fn allow_once(app: &mut VectorcraftApp) {
 }
 
 #[test]
+fn a_script_file_reply_does_not_populate_a_reopened_dialog() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "File.openDialog('Choose');"})).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().unwrap().choose = true).unwrap();
+    pump(&mut app);
+    assert_eq!(picker.requests().len(), 1);
+
+    script_run::forget::<ScriptFiles>(&app);
+    script_run::open_picker(&app, app.session.script_picker().unwrap());
+    let old_path = std::env::temp_dir().join("original-script-picker.txt");
+    picker.answer(&[&old_path.to_string_lossy()]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(picked(&app).is_empty(), "the old file chooser must not populate the new open dialog");
+    set(&app, PICKER_KIND, "answer", json!("deny")).unwrap();
+    assert!(confirm(&mut app, PICKER_KIND));
+    finish(&mut app);
+}
+
+#[test]
 fn the_warning_comes_before_the_run_and_cancel_runs_nothing() {
     let mut app = app();
     menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": DRAW, "name": "draw.js"})).unwrap().unwrap();

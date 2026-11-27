@@ -11,7 +11,7 @@
 //! applies and makes objects). What only the art of symbol instances holds needs Object on.
 
 use craft::ui::contract::SaveKey;
-use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::memory::Lifetime;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::expand::{DEFAULT_STEPS, MAX_STEPS};
@@ -22,6 +22,7 @@ use crate::VectorcraftApp;
 pub const KIND: &str = "expand";
 
 const CMD: &str = "object.expand";
+const OPENING_DRAWING: &str = "__openingDrawing";
 
 /// Where the choices OK expanded with are kept for the rest of the app's run.
 const REMEMBER: SaveKey = SaveKey::new("vectorcraft.dialog.expand");
@@ -145,8 +146,11 @@ fn rows() -> Vec<Param> {
 /// every option on before that.
 fn dialog(app: &VectorcraftApp, info: ExpandInfo) -> Result<HostedParamDialog, String> {
     let ctx = app.ui_ctx.as_ref().ok_or("no window")?;
+    let active = app.session.active().ok_or("no document open")?;
+    let mut fields = DialogFields::new();
+    fields.set(OPENING_DRAWING, FieldValue::Json(json!({"uid": active.uid, "reverts": active.reverts})));
     let rows = rows();
-    Ok(HostedParamDialog::new(ctx, KIND, DialogFields::new(), move |fields| {
+    Ok(HostedParamDialog::new(ctx, KIND, fields, move |fields| {
         refresh(info, fields);
         ParamDialog::new(KIND, tl!("Expand"), rows.clone()).remember(REMEMBER).remember_for(Lifetime::Run)
     }))
@@ -154,7 +158,21 @@ fn dialog(app: &VectorcraftApp, info: ExpandInfo) -> Result<HostedParamDialog, S
 
 /// Shows `dialog`; its OK expands.
 fn show(app: &mut VectorcraftApp, dialog: HostedParamDialog) -> Result<Value, String> {
-    crate::dialogs::host::open_held(app, dialog, ok).ok_or("no window")?;
+    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| {
+        let Some(FieldValue::Json(opening)) = result.fields.get(OPENING_DRAWING) else {
+            return Err(tl!("Return to the original drawing to expand the artwork").into());
+        };
+        let active = app
+            .session
+            .active()
+            .filter(|st| Some(st.uid) == opening["uid"].as_u64())
+            .ok_or_else(|| tl!("Return to the original drawing to expand the artwork").to_owned())?;
+        if Some(active.reverts) != opening["reverts"].as_u64() {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        ok(app, result)
+    })
+    .ok_or("no window")?;
     Ok(Value::Null)
 }
 
@@ -283,6 +301,24 @@ mod tests {
         let g = st.doc.node(st.selection.objects[0]).unwrap();
         let NodeKind::Group { children, clip: true } = &g.kind else { panic!("a clip group: {:?}", g.kind) };
         assert!(matches!(children[1].kind, NodeKind::Mesh(_)));
+    }
+
+    #[test]
+    fn expand_keeps_its_draft_when_another_drawing_is_active() {
+        let mut app = app();
+        gradient_rectangle(&mut app);
+        open(&mut app).unwrap();
+        set(&app, "gradient", json!("mesh")).unwrap();
+        gradient_rectangle(&mut app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let before = app.session.active().unwrap().doc.clone();
+        assert!(matches!(press_ok(&mut app), Some(HeldOk::Refused(reason)) if reason.as_str().contains("original drawing")));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &before));
+        assert_eq!(fields(&app).text("gradient"), Some("mesh"));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ok_and_close(&mut app);
+        assert!(expanded_to_a_mesh(&app));
     }
 
     #[test]
@@ -507,5 +543,34 @@ mod tests {
         assert!(!is_open(&app));
         app.run("ui.expandDialog", json!({"immediate": false})).unwrap();
         assert!(is_open(&app));
+    }
+
+    #[test]
+    fn expand_approval_does_not_expand_artwork_restored_by_revert() {
+        let mut app = app();
+        gradient_rectangle(&mut app);
+        let rectangle = app.session.active().unwrap().selection.objects[0];
+        let dir = vectorcraft_testkit::TempDir::new("expand-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("object.move", json!({"dx": 10, "dy": 0})).unwrap();
+        open(&mut app).unwrap();
+        set(&app, "gradient", json!("mesh")).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [rectangle.0]})).unwrap();
+        let restored = app.session.active().unwrap().doc.clone();
+        assert!(matches!(press_ok(&mut app), Some(HeldOk::Refused(_))));
+        assert_eq!(app.session.active().unwrap().doc, restored);
+
+        close(&app);
+        open(&mut app).unwrap();
+        set(&app, "gradient", json!("mesh")).unwrap();
+        ok_and_close(&mut app);
+        let st = app.session.active().unwrap();
+        let art = st.doc.node(st.selection.objects[0]).unwrap();
+        let NodeKind::Group { children, clip: true } = &art.kind else { panic!("expected a clip group") };
+        assert!(matches!(children[1].kind, NodeKind::Mesh(_)));
     }
 }
