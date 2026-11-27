@@ -1095,9 +1095,14 @@ pub(crate) enum LinkAction {
 }
 
 impl LinkAction {
-    /// The actions that apply to an image, `linked` or embedded.
-    pub(crate) fn shown(linked: bool) -> &'static [LinkAction] {
-        if linked { &[LinkAction::Embed, LinkAction::EditOriginal] } else { &[LinkAction::Unembed] }
+    /// The actions that apply to an image, `linked` or embedded. An image placed from a DCS file
+    /// (`dcs`) stays linked, as `links.embed` refuses it, so it has no Embed.
+    pub(crate) fn shown(linked: bool, dcs: bool) -> &'static [LinkAction] {
+        match (linked, dcs) {
+            (true, false) => &[LinkAction::Embed, LinkAction::EditOriginal],
+            (true, true) => &[LinkAction::EditOriginal],
+            (false, _) => &[LinkAction::Unembed],
+        }
     }
 
     /// The action's label in the interface language.
@@ -1119,11 +1124,19 @@ impl LinkAction {
     }
 }
 
-/// Several selected objects that are all images: the ids of the linked ones and of the embedded
-/// ones, in selection order.
+/// Is image `id` of the active document placed from a DCS file (its pixels hold plates), which
+/// `links.embed` refuses?
+pub(crate) fn is_dcs_image(app: &VectorcraftApp, id: u64) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let Some(NodeKind::Image(im)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) else { return false };
+    im.link.is_some() && st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated)
+}
+
+/// Several selected objects that are all images: the ids of the linked ones that can be embedded
+/// and of the embedded ones, in selection order. Images placed from DCS files are in neither.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SeveralImages {
-    /// The linked images.
+    /// The linked images, except those placed from DCS files.
     pub(crate) linked: Vec<u64>,
     /// The embedded images.
     pub(crate) embedded: Vec<u64>,
@@ -1140,13 +1153,18 @@ impl SeveralImages {
         let mut out = SeveralImages::default();
         for id in &st.selection.objects {
             let NodeKind::Image(im) = &st.doc.node(*id)?.kind else { return None };
-            if im.link.is_some() { out.linked.push(id.0) } else { out.embedded.push(id.0) }
+            match &im.link {
+                None => out.embedded.push(id.0),
+                Some(_) if st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated) => {}
+                Some(_) => out.linked.push(id.0),
+            }
         }
         Some(out)
     }
 
-    /// The actions that apply to these images: Embed while one of them is linked, and Unembed…
-    /// while one is embedded and they can be written out. Edit Original opens one file, so the
+    /// The actions that apply to these images: Embed while one of them is linked and not placed
+    /// from a DCS file, and Unembed… while one is embedded and they can be written out. Edit
+    /// Original opens one file, so the
     /// surfaces offer it for one image only.
     pub(crate) fn shown(&self, app: &VectorcraftApp) -> Vec<LinkAction> {
         let mut shown = vec![];
@@ -1234,7 +1252,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return true;
     }
-    for action in LinkAction::shown(linked) {
+    for action in LinkAction::shown(linked, is_dcs_image(app, id)) {
         let at = if *action == LinkAction::EditOriginal { rank::DETAIL } else { rank::GROUP };
         Row::new().fit_rank(at).show(ui, |ui, _| {
             if clicked(&Button::new(action.label().to_string()).show(ui)) {

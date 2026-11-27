@@ -767,6 +767,77 @@ fn several_mixed_images_offer_embed_and_unembed() {
     }
 }
 
+/// A single-file DCS 2.0 file with one Cyan plate, a 2 × 2 grayscale image on a 20 × 10 pt page,
+/// made from scratch as http://www.telegraphics.net/doc/DCS.txt describes it; without a clipping
+/// path it places as a plain linked image.
+fn dcs_file() -> Vec<u8> {
+    let plate = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%EndComments\n20 10 scale\n2 2 8 [2 0 0 -2 0 2] <0000ffff> image\nshowpage\n%%Trailer\n%%EOF\n";
+    let header = |at: usize| {
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 20 10\n%%PlateFile: (Cyan) EPS #{at:010} {:010}\n%%EndComments\n20 10 scale 2 2 8 [2 0 0 -2 0 2] <808080808080808080808080> false 3 colorimage showpage\n%%EOF\n",
+            plate.len()
+        )
+    };
+    let mut out = header(header(0).len()).into_bytes();
+    out.extend(plate.as_bytes());
+    out
+}
+
+/// Images placed from DCS files stay linked (`links.embed` refuses them): with one selected,
+/// neither surface offers Embed; with a DCS image and a linked image selected, Embed embeds the
+/// linked one and leaves the DCS image linked; with a DCS image and an embedded one, only
+/// Unembed… is offered.
+#[test]
+fn several_images_leave_dcs_images_out_of_embed() {
+    let dir = Folder::new("dcs-several");
+    let placed = Cell::new(0);
+    let setup = |with: &'static str| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        placed.set(placed.get() + 1);
+        let dcs = dir.file(&format!("plates-{}.eps", placed.get()), &dcs_file());
+        let r = app.run("file.place", json!({"path": dcs, "at": [50, 50]})).unwrap();
+        let dcs = r["ids"][0].as_u64().unwrap();
+        let png = dir.file(&format!("other-{}.png", placed.get()), &png(30, 20));
+        let other = match with {
+            "linked" => Some(app.run("file.place", json!({"path": png, "at": [200, 50]})).unwrap()["ids"][0].as_u64().unwrap()),
+            "embedded" => Some(app.run("file.place", json!({"path": png, "at": [200, 50], "link": false})).unwrap()["ids"][0].as_u64().unwrap()),
+            _ => None,
+        };
+        let ids: Vec<u64> = [Some(dcs), other].into_iter().flatten().collect();
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        (app, dcs, other)
+    };
+    let alone = || setup("alone").0;
+    {
+        let app = alone();
+        let st = app.session.active().unwrap();
+        let id = st.selection.objects[0];
+        assert!(matches!(st.doc.node(id).unwrap().kind, vectorcraft_doc::NodeKind::Image(_)), "placed as one image");
+    }
+    for (surface, h) in image_surfaces(alone) {
+        assert!(h.shows("Edit Original") && !h.shows("Embed"), "{surface}: one DCS image");
+    }
+    let ids = RefCell::new(vec![]);
+    let with_linked = || {
+        let (app, dcs, other) = setup("linked");
+        ids.borrow_mut().push((dcs, other.unwrap()));
+        app
+    };
+    // Each surface draws its own app, made in this order.
+    for (n, (surface, mut h)) in image_surfaces(with_linked).into_iter().enumerate() {
+        let (dcs, linked) = ids.borrow()[n];
+        assert_eq!(selected(&h.app()).len(), 2, "{surface}");
+        h.click("Embed");
+        let mut app = h.app();
+        assert!(is_embedded(&mut app, linked), "{surface}: the linked image is embedded");
+        assert!(!is_embedded(&mut app, dcs), "{surface}: the DCS image stays linked");
+    }
+    for (surface, h) in image_surfaces(|| setup("embedded").0) {
+        assert!(h.shows("Unembed…") && !h.shows("Embed"), "{surface}: a DCS image and an embedded one");
+    }
+}
+
 /// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
 /// each image there and links each one to its file; with no folder picked, nothing changes.
 #[test]
