@@ -1014,6 +1014,17 @@ pub(super) fn paints_apart(look: &Node) -> bool {
     }
     let mut paths = vec![];
     leaves(look, &mut paths);
+    // A gradient or pattern instance (`Bb … BB`) wraps only the last path of a compound path, the paths before it
+    // keep the default paint: many paths alike, then one that paints with a gradient, are one compound path's
+    // subpaths and its paint (see `compound`), not several paints.
+    if let [rest @ .., last] = paths.as_slice()
+        && rest.len() >= 2
+        && rest.windows(2).all(|w| matches!(w, [a, b] if a.appearance == b.appearance))
+        && last.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. }))
+        && rest.iter().all(|p| p.appearance.items.iter().all(|i| !matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. })))
+    {
+        return false;
+    }
     paths.windows(2).any(|w| matches!(w, [a, b] if a.appearance != b.appearance))
 }
 

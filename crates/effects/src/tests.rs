@@ -148,6 +148,14 @@ fn nine_slice_painted_effects_are_raster_effects() {
     }
 }
 
+/// The effects that leave a colorized image overprinting as a whole are the geometry effects.
+#[test]
+fn image_overprint_reshaping_effects_are_the_geometry_effects() {
+    for id in crate::catalog::catalog_index().keys() {
+        assert_eq!(vectorcraft_doc::overprint::reshapes_only(id), is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));
@@ -701,21 +709,22 @@ fn a_nested_groups_gradient_follows_its_warped_image() {
 }
 
 /// An image under a geometry effect other than a Warp draws as the image does: colorized by
-/// a grayscale image's fill color, and smoothed or not.
+/// a grayscale image's fill color, overprinting as it does, and smoothed or not.
 #[test]
 fn an_image_under_a_geometry_effect_keeps_its_color_and_smoothing() {
     let mut n = (*warp_test_image(1)).clone();
     n.appearance.effects = vec![fx("distort.roughen", json!({"size": 5, "detail": 10}))];
     n.extras_mut().colorize = Some(Box::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    n.extras_mut().colorize_overprint = true;
     n.extras_mut().pixelated = true;
     let art = crate::reshape::reshape(None, &n, None).unwrap();
     let mut seen = vec![];
     art.walk(&mut |c| {
         if matches!(c.kind, NodeKind::Image(_)) {
-            seen.push((c.extras().colorize.clone(), c.extras().pixelated));
+            seen.push((c.extras().colorize.clone(), c.colorize_overprints(), c.extras().pixelated));
         }
     });
-    assert_eq!(seen, vec![(n.extras().colorize.clone(), true)]);
+    assert_eq!(seen, vec![(n.extras().colorize.clone(), true, true)]);
 }
 
 /// What `effects` make of `path` within `budget`.
@@ -2175,5 +2184,25 @@ fn a_pathfinder_effects_precision_is_a_distance_that_scales_with_the_object() {
         crate::scale_effect(&mut e, 2.0);
         crate::scale_effect(&mut e, 0.5);
         assert_eq!(e.params["precision"].as_f64(), Some(8.0), "{id}");
+    }
+}
+
+#[test]
+fn a_pathfinder_effects_stored_precision_that_is_not_a_number_is_the_default() {
+    let d = PathfinderEffectOptions::default().precision;
+    for v in [json!(true), json!(false), json!("1abc"), json!("5 pt"), json!(null), json!([2.0])] {
+        assert_eq!(PathfinderEffectOptions::from_params(&json!({ "precision": v })).precision, d, "{v}");
+    }
+    // A number out of range takes its nearest bound.
+    assert_eq!(PathfinderEffectOptions::from_params(&json!({"precision": 50.0})).precision, *PATHFINDER_EFFECT_PRECISION.end());
+    assert_eq!(PathfinderEffectOptions::from_params(&json!({"precision": 0})).precision, *PATHFINDER_EFFECT_PRECISION.start());
+    // Scale Strokes & Effects scales the precision such an effect evaluates with.
+    for (id, _, _) in PATHFINDER_EFFECTS {
+        for v in [json!(true), json!("1abc")] {
+            let mut e = crate::new_effect(id, &json!({ "precision": v })).unwrap();
+            crate::scale_effect(&mut e, 3.0);
+            let scaled = e.params["precision"].as_f64().unwrap_or(f64::NAN);
+            assert!((scaled - d * 3.0).abs() < 1e-12, "{id} {v}: {scaled}");
+        }
     }
 }
