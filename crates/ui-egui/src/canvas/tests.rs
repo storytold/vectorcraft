@@ -899,6 +899,48 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     assert!(outlined(&mut app), "OK brings ordinary outlines back on the applied dots");
 }
 
+#[test]
+fn halftone_waits_for_the_drawing_that_opened_the_preview() {
+    use crate::dialogs::{halftone, host};
+
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let draw = |app: &mut VectorcraftApp, x| {
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": x, "y": 40, "width": 60, "height": 40})).unwrap();
+        app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    };
+    draw(&mut app, 40);
+    let first = app.session.doc().unwrap().doc.clone();
+    draw(&mut app, 200);
+    let second = app.session.doc().unwrap().doc.clone();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("ui.menuDialog", json!({"command": halftone::CMD})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    let id = app.effect_dialogs.halftone.as_ref().unwrap().id;
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Other drawing's edit").unwrap();
+    let dialogs = app.dialogs().unwrap();
+    dialogs.with(|h| h.set_json_field(&ctx, id, "frequency", json!(25))).unwrap();
+    host::pump(&mut app, &ctx);
+    assert_eq!(app.session.doc().unwrap().doc, second);
+    assert_eq!(app.session.doc().unwrap().interaction.as_ref().unwrap().label, "Other drawing's edit");
+    dialogs.with(|h| h.confirm_by_id(&ctx, id));
+    host::pump(&mut app, &ctx);
+    assert!(app.any_dialog_open());
+    assert_eq!(app.session.doc().unwrap().doc, second);
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    host::pump(&mut app, &ctx);
+    assert!(halftone::previewing(&app));
+    crate::tests::picks::answer_dialog(&mut app, id, &[], true);
+    assert!(!app.any_dialog_open());
+    assert_ne!(app.session.doc().unwrap().doc, first);
+    assert_eq!(app.session.documents()[1].doc, second);
+}
+
 // One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.
 fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
     let (shapes, mut delta) = frame_output(app, ctx);
@@ -962,6 +1004,144 @@ fn an_edit_renders_only_its_part_of_the_canvas() {
     app.run("view.setZoom", json!({"zoom": 2})).unwrap();
     let (_, delta) = frame_output(&mut app, &ctx);
     assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "a new view renders all of it");
+}
+
+/// An edit over art that a part of the canvas would draw with other pixels than the whole canvas
+/// does ([`vectorcraft_render::FrameStats::view_sized`]) renders all of it, on this thread too,
+/// and shows what a fresh renderer draws: a blur cropped to the view, which the frame shown drew,
+/// and an inner glow that fits the view but not the part the edit changed.
+#[test]
+fn an_edit_over_art_drawn_for_the_frames_size_renders_all_of_it() {
+    keeping_color_settings(an_edit_over_art_drawn_for_the_frames_size);
+}
+
+fn an_edit_over_art_drawn_for_the_frames_size() {
+    for cropped in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.canvas.worker_started = true; // every frame on this thread, however long it takes
+        app.canvas.renderer.threads = 2;
+        let (rect, effect) = if cropped {
+            (json!({"x": 0, "y": 0, "width": 400, "height": 300}), json!({"effect": "blur.gaussian", "params": {"radius": 8}}))
+        } else {
+            (json!({"x": 150, "y": 110, "width": 100, "height": 80}), json!({"effect": "stylize.innerGlow", "params": {"blur": 8}}))
+        };
+        let art = app.run("shape.rectangle", rect).unwrap()["id"].clone();
+        let mut effect = effect;
+        effect["ids"] = json!([art]);
+        app.run("effect.apply", effect).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 145, "y": 105, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let outside = app.run("shape.rectangle", json!({"x": 5000, "y": 5000, "width": 10, "height": 10})).unwrap()["id"].clone();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = crate::testing::ui_context();
+        shapes(&mut app, &ctx);
+        // A new view: the next frame renders whole.
+        if let Some(vm) = app.view_mut() {
+            (vm.zoom, vm.center) = if cropped { (16.0, Point::new(150.0, 110.0)) } else { (1.5, Point::new(200.0, 150.0)) };
+        }
+        // Where the canvas texture changed in a frame, and its pixels there.
+        let canvas = |app: &VectorcraftApp, mut delta: egui::TexturesDelta| {
+            let tex = app.canvas.texture.as_ref().map(|t| t.id());
+            let set = delta.set.iter().find(|(t, _)| tex == Some(**t)).and_then(|(_, d)| d.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                (d.pos, img.pixels.clone())
+            });
+            delta.clear();
+            set
+        };
+        let (_, delta) = frame_output(&mut app, &ctx);
+        assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "the first frame renders all of it");
+        assert_eq!(app.canvas.renderer.stats.view_sized > 0, cropped, "the frame shown drew art for its size: {cropped}");
+        assert_eq!(app.canvas.whole_frames, cropped, "the frame records whether its art depends on its size");
+        app.run("paint.setFill", json!({"color": "#00ff00", "ids": [outside]})).unwrap();
+        let (_, delta) = frame_output(&mut app, &ctx);
+        assert!(canvas(&app, delta).is_none(), "an edit outside the view does not upload a new canvas");
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
+        let (_, delta) = frame_output(&mut app, &ctx);
+        let (pos, edited) = canvas(&app, delta).expect("the edit shows");
+        assert!(pos.is_none(), "the edit renders all of it, cropped: {cropped}");
+        assert_eq!(app.canvas.whole_frames, cropped, "the replacement records its own render stats");
+        app.canvas.renderer = vectorcraft_render::Renderer::new();
+        app.canvas.renderer.threads = 2;
+        app.canvas.key = None;
+        let (_, delta) = frame_output(&mut app, &ctx);
+        let fresh = canvas(&app, delta).map(|(_, px)| px);
+        assert!(fresh.as_ref() == Some(&edited), "what a fresh renderer draws, cropped {cropped}: {}", differing(&edited, fresh.as_deref()));
+    }
+}
+
+#[test]
+fn web_partial_redraws_skip_unchanged_view_sensitive_art() {
+    keeping_color_settings(|| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300, "colorMode": "rgb"})).unwrap();
+        app.ui.task_bar = false;
+        app.ui.view.rulers = false;
+        app.canvas.worker_started = true;
+        app.canvas.waits_for_still = true;
+        app.canvas.renderer.threads = 0;
+        let glow = app.run("shape.rectangle", json!({"x": 55, "y": 70, "width": 55, "height": 55})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"ids": [glow], "effect": "stylize.innerGlow", "params": {"blur": 8}})).unwrap();
+        let large = app.run("shape.rectangle", json!({"x": -980, "y": -700, "width": 965, "height": 1010})).unwrap()["id"].clone();
+        app.run("effect.apply", json!({"ids": [large], "effect": "texture.texturizer", "params": {}})).unwrap();
+        let far = app.run("shape.rectangle", json!({"x": 300, "y": 200, "width": 12, "height": 12})).unwrap()["id"].clone();
+        let near = app.run("shape.rectangle", json!({"x": 60, "y": 80, "width": 12, "height": 12})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [near], "color": "#ffffff"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = crate::testing::ui_context();
+        shapes(&mut app, &ctx);
+        if let Some(vm) = app.view_mut() {
+            (vm.zoom, vm.center) = (1.2, Point::new(200.0, 150.0));
+        }
+        // Start from a full raster at the chosen view rather than waiting for the reprojected view to settle.
+        app.canvas.key = None;
+        let read = |app: &mut VectorcraftApp| {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let tex = app.canvas.texture.as_ref().unwrap().id();
+            delta.set.remove(&tex).and_then(|mut uploads| uploads.pop()).expect("the edit uploads canvas pixels")
+        };
+        let first = read(&mut app);
+        assert!(first.pos.is_none());
+        assert!(app.canvas.renderer.stats.view_sized > 0, "single-threaded filter layers depend on the frame size");
+        let egui::ImageData::Color(first) = first.image;
+        let mut composed = (*first).clone();
+        for color in ["#ff0000", "#00ff00"] {
+            app.run("paint.setFill", json!({"ids": [far], "color": color})).unwrap();
+            let delta = read(&mut app);
+            let [x, y] = delta.pos.expect("an edit away from the glow uploads only a patch");
+            let egui::ImageData::Color(patch) = delta.image;
+            for row in 0..patch.height() {
+                let start = (y + row) * composed.width() + x;
+                composed.pixels[start..start + patch.width()].copy_from_slice(&patch.pixels[row * patch.width()..(row + 1) * patch.width()]);
+            }
+        }
+        let key = app.canvas.key.as_ref().unwrap();
+        let view = app.canvas_view().unwrap();
+        let (w, h, view) = frame_view(key.pixel, (key.w, key.h), &view, key.ppp);
+        let (doc, still) = app.canvas.shown.as_ref().unwrap();
+        let drag = vectorcraft_render::RenderOptions { interacting: true, dragging: true, ..still.clone() };
+        let mut cold = vectorcraft_render::Renderer::new();
+        cold.threads = 0;
+        cold.render(doc, w, h, view, &drag);
+        assert!(cold.stats.previewed > 0, "a cold renderer draws the large effect at drag resolution");
+        app.canvas.renderer.render(doc, w, h, view, &drag);
+        assert_eq!(app.canvas.renderer.stats.previewed, 0, "distant canvas patches left the full-resolution effect available for the drag");
+
+        // The old glow's bounds survive successive partial renders, even though neither draws it.
+        app.run("paint.setFill", json!({"ids": [near], "color": "#0202ee"})).unwrap();
+        let overlap = read(&mut app);
+        assert!(overlap.pos.is_none(), "editing inside the old glow's bounds renders the whole frame");
+        app.run("paint.setFill", json!({"ids": [near], "color": "#ffffff"})).unwrap();
+        let restored = read(&mut app);
+        assert!(restored.pos.is_none());
+        let egui::ImageData::Color(restored) = restored.image;
+        assert_eq!(restored.size, composed.size);
+        assert!(restored.pixels == composed.pixels, "partial updates equal a full redraw: {}", differing(&composed.pixels, Some(&restored.pixels)));
+        app.run("effect.apply", json!({"ids": [far], "effect": "stylize.innerGlow", "params": {"blur": 8}})).unwrap();
+        assert!(read(&mut app).pos.is_none(), "the new glow in the part also requires a whole frame");
+    });
 }
 
 /// A canvas more device pixels across than the largest texture side the display supports renders
@@ -1737,10 +1917,15 @@ fn dragging_with_raster_effects() {
 /// without a drag, renders without `dragging` and draws the same.
 #[test]
 fn a_drag_on_the_canvas_draws_raster_effects_at_a_lower_resolution() {
-    keeping_color_settings(a_drag_at_a_lower_resolution);
+    keeping_color_settings(|| a_drag_at_a_lower_resolution(false));
 }
 
-fn a_drag_at_a_lower_resolution() {
+#[test]
+fn a_whole_drag_preview_keeps_the_next_canvas_render_whole() {
+    keeping_color_settings(|| a_drag_at_a_lower_resolution(true));
+}
+
+fn a_drag_at_a_lower_resolution(fits_frame: bool) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
@@ -1763,7 +1948,7 @@ fn a_drag_at_a_lower_resolution() {
     };
     run(&mut app, vec![]);
     if let Some(vm) = app.view_mut() {
-        (vm.zoom, vm.center) = (32.0, Point::new(200.0, 155.0));
+        (vm.zoom, vm.center) = (if fits_frame { 6.4 } else { 32.0 }, Point::new(200.0, 155.0));
     }
     let still = run(&mut app, vec![]).expect("the zoomed view renders");
     assert_eq!(app.canvas.renderer.stats.previewed, 0, "a still frame");
@@ -1771,10 +1956,19 @@ fn a_drag_at_a_lower_resolution() {
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     run(&mut app, vec![egui::Event::PointerMoved(at)]);
     run(&mut app, vec![button(at, true)]);
+    if fits_frame {
+        // Force the first move to draw a whole frame without a previous effect raster.
+        app.canvas.renderer = vectorcraft_render::Renderer::new();
+        app.canvas.key = None;
+    }
     for step in [1.0, 2.0] {
         let drawn = run(&mut app, vec![egui::Event::PointerMoved(at + vec2(13.0, 7.0) * step)]).expect("each frame of the drag renders");
         assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && k.dragging), "step {step}");
         assert_eq!(app.canvas.renderer.stats.previewed, 1, "the filtered content, step {step}");
+        if fits_frame {
+            assert_eq!(app.canvas.renderer.stats.view_sized, 0, "only the drag budget reduced the raster");
+            assert!(app.canvas.whole_frames, "a whole drag preview cannot accept a full-resolution patch");
+        }
         assert!(app.canvas.moved);
         assert!(drawn != still, "the rectangle moved, step {step}");
     }
@@ -1788,9 +1982,15 @@ fn a_drag_at_a_lower_resolution() {
     assert!(fresh.as_ref() == Some(&after), "the frame after the drag is what a fresh renderer draws: {}", differing(&after, fresh.as_deref()));
     // A dialog's preview: an interaction, and no drag.
     app.session.begin_interaction("Texturizer").unwrap();
-    assert!(run(&mut app, vec![]) == Some(after), "a dialog's preview draws the effect at full resolution");
+    app.session.preview("effect.setParams", &json!({"index": 0, "item": null, "ids": [id], "params": {"relief": 20}})).unwrap();
+    let preview = run(&mut app, vec![]).expect("the preview renders");
+    assert!(preview != after, "the preview changes the art");
     assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && !k.dragging));
     assert_eq!(app.canvas.renderer.stats.previewed, 0);
+    app.canvas.renderer = vectorcraft_render::Renderer::new();
+    app.canvas.key = None;
+    let fresh = run(&mut app, vec![]);
+    assert!(fresh.as_ref() == Some(&preview), "a dialog's preview draws the effect at full resolution: {}", differing(&preview, fresh.as_deref()));
 }
 
 /// Where frame `b` differs from `a`: how many pixels, the first, and the largest channel difference.
@@ -1885,10 +2085,10 @@ fn a_drag_over_a_wide_blur() {
     }
 }
 
-/// An interaction's frames stay on the worker once it drew the frame shown, however fast that
-/// frame was: the worker's renderer keeps the effect rasters that made it fast, and this
-/// thread's renderer, without them, would draw the next frame slowly. Without a frame from the
-/// worker, a fast frame renders on this thread as before.
+/// An interaction's whole frames (here after a new zoom) stay on the worker once it drew the frame
+/// shown, however fast that frame was: the worker's renderer keeps the effect rasters that made it
+/// fast, and this thread's renderer, without them, would draw the next frame slowly. Without a
+/// frame from the worker, a fast frame renders on this thread as before.
 #[test]
 fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1901,6 +2101,9 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
         app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
         (app.canvas.from_worker, app.canvas.last_ms) = (from_worker, 1.0);
         app.session.begin_interaction("Preview").unwrap();
+        if let Some(vm) = app.view_mut() {
+            vm.zoom *= 1.25;
+        }
         shapes(&mut app, &ctx);
         let pending = app.canvas.worker.as_ref().and_then(|w| w.pending.as_ref()).is_some_and(|k| k.interacting);
         assert_eq!(pending, from_worker, "sent to the worker: {from_worker}");
@@ -1913,9 +2116,9 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     }
 }
 
-/// A Pen drag over a frame the worker drew draws each move's curve into that frame, here, in the
-/// frame of the move: once the press's frame arrives from the worker, every move shows the
-/// document's revision and queues nothing on the worker. When the frame shown drew effect rasters
+/// A Pen drag over a frame the worker drew draws the press's anchor and each move's curve into
+/// that frame, here, in the frame of the press or the move: each shows the document's revision and
+/// queues nothing on the worker. When the frame shown drew effect rasters
 /// from before their objects moved, when a part drawn here would have differed from it, or when
 /// the part's share of the whole frame's time is over 8 ms, the next move renders on the worker,
 /// and the moves after the worker's frame are drawn here again. A frame of an older revision on
@@ -1936,6 +2139,14 @@ fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
     let (worker, mut side) = WorkerSide::start();
     app.canvas.worker = Some(worker);
     app.canvas.last_ms = 50.0;
+    // A new zoom: the frame shown is the worker's.
+    if let Some(vm) = app.view_mut() {
+        vm.zoom *= 1.25;
+    }
+    frame(&mut app, &ctx, vec![]);
+    assert!(side.render());
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.canvas.from_worker, "the worker drew the frame shown");
     app.select_tool("pen");
     let revision = |app: &VectorcraftApp| Some(app.session.active().unwrap().revision);
     let shown = |app: &VectorcraftApp| app.canvas.key.as_ref().map(|k| k.revision);
@@ -1943,8 +2154,9 @@ fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
     let mut at = app.canvas_view().unwrap().to_screen(Point::new(105.0, 155.0));
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
     frame(&mut app, &ctx, vec![button(at, true)]);
-    assert!(shown(&app) < revision(&app), "the press's frame, the first of the drag, renders on the worker");
-    assert!(side.render());
+    assert_eq!(shown(&app), revision(&app), "the press's anchor, the first frame of the drag, is drawn in its own frame");
+    assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting), "the press's frame is the interaction's");
+    assert!(side.jobs.try_recv().is_err(), "the press queues nothing on the worker");
     let mut drag = |app: &mut VectorcraftApp| {
         at += vec2(9.0, 5.0);
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
@@ -1957,7 +2169,7 @@ fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
     for case in ["moved", "differs", "slow"] {
         match case {
             "moved" => app.canvas.moved = true,
-            "differs" => app.canvas.worker_parts = true,
+            "differs" => app.canvas.whole_frames = true,
             _ => app.canvas.last_ms = 10_000.0,
         }
         drag(&mut app);
@@ -1965,26 +2177,26 @@ fn a_pen_drag_over_a_worker_frame_draws_each_move_in_its_frame() {
         assert!(side.render(), "{case}: the move renders on the worker");
         drag(&mut app);
         assert_eq!(shown(&app), revision(&app), "{case}: after the worker's frame, the next move is drawn here");
-        assert!(!app.canvas.worker_parts, "{case}");
+        assert!(!app.canvas.whole_frames, "{case}");
     }
     // A worker's frame that drew art in a way that depends on its size: the move after it renders
     // on the worker too.
-    app.canvas.worker_parts = true;
+    app.canvas.whole_frames = true;
     drag(&mut app);
     let job = side.jobs.try_iter().last().expect("the move is on the worker");
     let done = crate::render_worker::render(&mut side.renderer, &mut side.kept, job);
     side.done.send(crate::render_worker::Done { ms: 50.0, view_sized: true, ..done }).unwrap();
     drag(&mut app);
-    assert!(app.canvas.worker_parts, "the frame shown drew art that depends on its size");
+    assert!(app.canvas.whole_frames, "the frame shown drew art that depends on its size");
     assert!(shown(&app) < revision(&app) && side.render(), "the move after it renders on the worker");
     drag(&mut app);
     assert_eq!(shown(&app), revision(&app), "after the next worker frame, the move is drawn here");
     // A frame on its way of an older revision: the next move is drawn here, and that frame is not
     // shown when it arrives.
-    app.canvas.worker_parts = true;
+    app.canvas.whole_frames = true;
     drag(&mut app);
     assert!(app.canvas.worker.as_ref().is_some_and(|w| w.pending.is_some()), "a frame is on its way");
-    app.canvas.worker_parts = false;
+    app.canvas.whole_frames = false;
     for late in [false, true] {
         if late {
             assert!(side.render());

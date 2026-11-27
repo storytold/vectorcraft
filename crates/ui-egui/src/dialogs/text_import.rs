@@ -97,8 +97,12 @@ fn starting_fields(app: &VectorcraftApp) -> DialogFields {
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, starting_fields(app), build).held_ok();
+    let drawing = crate::place::import_options_drawing(app, params);
     let params = params.clone();
-    open_held(app, dialog, move |app, result| confirm(app, &params, result));
+    open_held(app, dialog, move |app, result| {
+        crate::place::check_import_options_drawing(app, drawing)?;
+        confirm(app, &params, result)
+    });
     json!({ "dialog": KIND })
 }
 
@@ -242,6 +246,23 @@ mod tests {
         assert_eq!(placed_text(&app).as_deref(), Some("one two\nthree"), "one paragraph per block");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), 1);
         assert_eq!(app.ui.text_import["removeLineReturns"], true, "remembered for the next file");
+    }
+
+    #[test]
+    fn normal_text_place_options_wait_for_the_original_drawing() {
+        let mut app = host::app();
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let file = json!({"name": "notes.txt", "dataBase64": vectorcraft_format::base64_encode(b"one\r\ntwo")});
+        assert_eq!(app.run("file.place", file).unwrap()["dialog"], KIND);
+        host::set(&app, KIND, "removeLineReturns", json!(true));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let error = host::confirm(&mut app, KIND).expect_err("the other drawing must not receive the file");
+        assert!(error.contains("original drawing"), "{error}");
+        assert!(placed_text(&app).is_none());
+        assert_eq!(host::fields(&app, KIND)["removeLineReturns"], true);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host::confirm(&mut app, KIND).unwrap();
+        assert_eq!(placed_text(&app).as_deref(), Some("one two"));
     }
 
     /// Every character set is a choice: one confirmed last comes back on the next text file and

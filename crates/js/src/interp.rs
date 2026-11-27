@@ -308,6 +308,9 @@ pub(crate) struct Interp {
     pub(crate) install_error: Option<String>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
+    /// `ExternalObject` and the XMP classes it loads, once a host has added them
+    /// ([`crate::Realm::define_external_object`]).
+    pub(crate) xmp: Option<crate::xmp_classes::Classes>,
     /// The classes a host added ([`crate::Realm::define_host_classes`]), in the order it added them.
     pub(crate) host_classes: Vec<crate::host_classes::Entry>,
     /// Whether [`Self::write_data`] makes objects of host classes from their [`crate::host_ref`].
@@ -629,6 +632,7 @@ impl Interp {
             held_bytes: 0,
             install_error: None,
             files: None,
+            xmp: None,
             host_classes: Vec::new(),
             write_hosted: false,
             host_objects: crate::host_classes::Made::default(),
@@ -910,6 +914,7 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.objects.extend(self.xmp.iter().flat_map(crate::xmp_classes::Classes::objects));
         roots.objects.extend(self.host_classes.iter().flat_map(crate::host_classes::Entry::objects));
         roots.values.extend(self.symbols.root_values());
         roots.objects.extend(self.symbols.root_objects());
@@ -938,6 +943,7 @@ impl Interp {
             .saturating_add(self.held_bytes)
             .saturating_add(self.held.now.get())
             .saturating_add(self.symbols.registry_bytes())
+            .saturating_add(self.xmp.as_ref().map_or(0, crate::xmp_classes::Classes::bytes))
             .saturating_add(queued);
     }
 
