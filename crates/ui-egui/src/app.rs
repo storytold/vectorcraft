@@ -242,6 +242,7 @@ impl VectorcraftApp {
             three_d_dialog: None,
             three_d: Default::default(),
             export_dialogs: Default::default(),
+            package_document: None,
             web_export: Default::default(),
             flattener_preview: Default::default(),
             flatten_dialog: Default::default(),

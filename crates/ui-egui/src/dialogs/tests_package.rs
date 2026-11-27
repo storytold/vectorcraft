@@ -225,6 +225,37 @@ fn package_dialog(app: &mut VectorcraftApp, out: &str) {
 }
 
 #[test]
+fn package_opening_drawing_is_required_before_saving_or_packaging() {
+    let dir = Folder::new("opening-drawing");
+    let mut app = saved(&dir);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    let destination_path = dir.path("destination.vectorcraft");
+    app.run("document.save", json!({"path": destination_path})).unwrap();
+    let saved_destination = std::fs::read(&destination_path).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+    let out = dir.path("out");
+    package_dialog(&mut app, &out);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    let accepted = press_ok(&mut app);
+    assert!(app.session.active().unwrap().is_dirty(), "Package leaves the different drawing unsaved");
+    assert_eq!(std::fs::read(&destination_path).unwrap(), saved_destination);
+    let package = std::path::Path::new(&out).join("card Folder");
+    assert!(!package.exists());
+    assert!(!accepted && matches!(held_state(&app), Some(HeldOk::Refused(_))));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(press_ok(&mut app));
+    assert!(package.join("card.vectorcraft").is_file());
+    assert!(!package.join("destination.vectorcraft").exists());
+}
+
+#[test]
 fn package_is_written_in_the_background_as_it_is_at_once() {
     let dir = Folder::new("background");
     let gate = Gate::default();
