@@ -66,7 +66,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
         app.status(tl!("no document").to_string());
         return true;
     };
-    let document = st.uid;
+    let document = (st.uid, st.reverts);
     let vars = st.doc.variables.clone();
     let mut fields = DialogFields::new();
     match id {
@@ -136,10 +136,13 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
 /// Runs `command` with what the confirmed `result` says. A data set dialog answers the error, which
 /// keeps it open with what was typed (a taken or empty name); any other command's error goes to the
 /// status line and the dialog closes.
-fn ok(app: &mut VectorcraftApp, document: u64, command: &str, result: &ParamResult) -> Result<(), String> {
+fn ok(app: &mut VectorcraftApp, (document, reverts): (u64, u64), command: &str, result: &ParamResult) -> Result<(), String> {
     let Some(st) = app.session.active().filter(|st| st.uid == document) else {
         return Err(tl!("These changes belong to the document this dialog was opened for.").to_owned());
     };
+    if st.reverts != reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+    }
     let params = params_of(command, result, &st.doc.variables);
     let Err(e) = app.run(command, params) else { return Ok(()) };
     if matches!(command, "dataset.new" | "dataset.set") {
@@ -423,6 +426,44 @@ mod tests {
         ok(&mut app);
         let sets = app.run("dataset.list", json!({})).unwrap();
         assert_eq!(sets["datasets"][0]["values"]["Title"], json!(null));
+    }
+
+    #[test]
+    fn a_data_set_draft_does_not_overwrite_values_restored_by_revert() {
+        let mut app = app_with_variables();
+        let dir = vectorcraft_testkit::TempDir::new("variable-draft-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("dataset.new", json!({"name": "Row", "values": {"Title": "Saved", "Badge": false}})).unwrap();
+        app.run("dataset.select", json!({"name": "Row"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("data-set.vectorcraft")})).unwrap();
+        let uid = app.session.active().unwrap().uid;
+        let reverts = app.session.active().unwrap().reverts;
+        app.run("dataset.set", json!({"name": "Row", "values": {"Title": "In memory", "Badge": true}})).unwrap();
+        assert!(open(&mut app, "dataset.set", None));
+        set(&mut app, &value_key("Title"), json!("Stale draft"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let state = app.session.active().unwrap();
+        assert_eq!(state.uid, uid);
+        assert_ne!(state.reverts, reverts);
+        let undo = state.history.undo.len();
+        let saved = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(saved["datasets"][0]["values"]["Title"], json!({"text": "Saved"}));
+        ok(&mut app);
+        assert_eq!(app.run("dataset.list", json!({})).unwrap(), saved, "the old draft leaves the restored row intact");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(is_open(&app));
+
+        let (ctx, id) = (ctx(&app), open_id(&app));
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(open(&mut app, "dataset.set", None));
+        set(&mut app, &value_key("Title"), json!("Fresh draft"));
+        ok(&mut app);
+        let edited = app.run("dataset.list", json!({})).unwrap();
+        assert_eq!(edited["datasets"][0]["values"]["Title"], json!({"text": "Fresh draft"}));
+        assert_eq!(edited["datasets"][0]["values"]["Badge"], json!({"visible": false}));
     }
 
     #[test]
