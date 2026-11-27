@@ -580,3 +580,41 @@ fn panel_readout_long_location_fits_and_copies_by_pointer_accessibility_and_keyb
     }
     vectorcraft_ui_egui::i18n::set_current(vectorcraft_ui_egui::i18n::Lang::EN);
 }
+
+#[test]
+fn review_4714788866_readout_copy_requires_an_inside_primary_press() {
+    let mut a = App::new();
+    let out = a.document_category("Objects");
+    let id = review_8826_readout_node(&out, LENGTH);
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    let node = &nodes.iter().find(|(node, _)| *node == id).unwrap().1;
+    let b = node.bounds().expect("the actual selectable value's native bounds");
+    let area = Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32));
+    let outside = egui::pos2(area.left() - 1.0, area.center().y);
+    let inside = egui::pos2(area.left() + 1.0, area.center().y);
+    assert!(!area.contains(outside) && area.contains(inside));
+    let layer = a.ctx.layer_id_at(inside).expect("the readout's actual layer");
+    assert_eq!(a.ctx.layer_id_at(outside), Some(layer), "the boundary crossing stays on the same layer");
+    assert!(outside.distance(inside) < a.ctx.options(|o| o.input_options.max_click_dist), "CONTROL: this two-point motion is an ordinary click, not a drag");
+    let before = a.snapshot();
+    let sets = a.app.ui.status_sets;
+    assert_eq!(visible_text_count(&out, COPIED), 0);
+    let pressed = a.frame(vec![Event::PointerMoved(outside), button(outside, true)]);
+    assert!(copies(&pressed).is_empty());
+    let released = a.frame(vec![Event::PointerMoved(inside), button(inside, false)]);
+    assert!(a.ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)), "CONTROL: egui's pointer-wide click flag accepts this gesture");
+    assert!(copies(&released).is_empty(), "starting outside must not copy a value on an inside release");
+    assert_no_delayed_copy(&mut a, "outside-to-inside readout release");
+    assert_eq!(a.app.ui.status_sets, sets, "a rejected copy has no confirmation");
+    assert_eq!(visible_text_count(&a.frame(vec![]), COPIED), 0);
+    assert_eq!(a.snapshot(), before, "the rejected gesture preserves document, selection and history");
+
+    // The same inside position still copies on its first click, including a press/release in
+    // one raw frame. The deadline above lets the rejected pointer-wide click expire first.
+    let accepted = a.frame(vec![Event::PointerMoved(inside), button(inside, true), button(inside, false)]);
+    assert_eq!(copies(&accepted), [LENGTH]);
+    assert_eq!(a.app.ui.status_sets, sets + 1);
+    assert_eq!(visible_text_count(&accepted, COPIED), 1);
+    assert_no_delayed_copy(&mut a, "accepted inside readout press");
+    assert_eq!(a.snapshot(), before);
+}

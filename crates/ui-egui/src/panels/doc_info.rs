@@ -60,15 +60,35 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     // copies nothing, since the click flags below do not say which release they describe.
     let area = shown.interact_rect.intersect(ui.clip_rect());
     let primary = egui::PointerButton::Primary;
-    let release = ui.input(|i| {
-        let mut releases = i.events.iter().filter_map(|e| match e {
-            egui::Event::PointerButton { pos, button, pressed: false, modifiers } if *button == primary => Some((*pos, *modifiers)),
-            _ => None,
-        });
-        let release = releases.next().filter(|_| releases.next().is_none());
+    let press_id = shown.id.with("readout_copy_press");
+    let saved_origin = ui.ctx().data(|d| d.get_temp::<egui::Pos2>(press_id));
+    let (origin, release) = ui.input(|i| {
+        let mut origin = saved_origin;
+        let mut release = None;
+        let mut release_count = 0_usize;
+        // egui clears pointer.press_origin on release. Remember only a press that starts in
+        // this clipped readout, and consume events in order even for a same-frame click.
+        for event in &i.events {
+            if let egui::Event::PointerButton { pos, button, pressed, modifiers } = event
+                && *button == primary
+            {
+                if *pressed {
+                    origin = area.contains(*pos).then_some(*pos);
+                } else {
+                    release_count += 1;
+                    release = Some((origin.take(), *pos, *modifiers));
+                }
+            }
+        }
         let single = i.pointer.button_clicked(primary) && !i.pointer.button_double_clicked(primary) && !i.pointer.button_triple_clicked(primary);
-        release.filter(|_| single)
+        (origin, release.filter(|_| release_count == 1 && single))
     });
+    if origin != saved_origin {
+        ui.ctx().data_mut(|d| match origin {
+            Some(pos) => d.insert_temp(press_id, pos),
+            None => d.remove::<egui::Pos2>(press_id),
+        });
+    }
     let eligible = ui.is_enabled() && !value.is_empty() && area.is_positive();
     ui.ctx().accesskit_node_builder(shown.id, |node| {
         node.set_description(tl!("Copy"));
@@ -76,7 +96,10 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     });
     let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
     eligible
-        && (activated || release.is_some_and(|(pos, keys)| keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())))
+        && (activated
+            || release.is_some_and(|(origin, pos, keys)| {
+                origin.is_some() && keys.is_none() && area.contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id())
+            }))
 }
 
 /// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
