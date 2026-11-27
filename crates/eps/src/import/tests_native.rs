@@ -5569,6 +5569,23 @@ fn right_aligned_point_type_that_differs_from_the_page_differs_as_type() {
     assert!(!r.warnings.iter().any(|w| w.starts_with("the art on the layers differs")), "{:?}", r.warnings);
 }
 
+/// Two text objects on one line, far apart, that the page draws as one piece of type (one string
+/// with the space between them): neither holds half of the piece, but each lies in it and is spelled
+/// by words of it, so the page's type is theirs and nothing is noted as left out.
+#[test]
+fn a_line_the_page_draws_as_one_piece_is_the_type_of_the_text_objects_along_it() {
+    // "20" starts 20 points across the art, "24" where ten spaces after it end (a space in 14 point
+    // Helvetica is 3.892 points wide, "20" 15.568).
+    let doc = text_document(&[("20\r", 0, (8161.5, 8180.0), (0.0, 0.0), 0.0), ("24\r", 0, (8216.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &doc);
+    let page = "0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont 20 61.5 moveto (20          24) show";
+    let r = import(&eps(page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let texts: Vec<String> = text_of(&r.document.layers[0]).iter().map(|t| t.plain_text()).collect();
+    assert_eq!(texts, ["20", "24"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| crate::is_loss(w)), "{:?}", r.warnings);
+}
+
 /// A ligature the page shows by a glyph its font's encoding names `uniE028` (a private-use
 /// character, without the letters it stands for) is the letters of its text object: the page's type
 /// has one, and nothing is noted as left out.

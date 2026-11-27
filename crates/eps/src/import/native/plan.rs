@@ -338,6 +338,12 @@ fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>, laid: bool) -> Vec<
 /// it, as far as strokes round type reach) as type the page draws. How many of the page's text
 /// objects no made type takes, shown or not: none that holds a piece of the object has its words
 /// ([`spelling`]). Past `MAX_PAIRS` comparisons nothing is marked or counted (`None`).
+///
+/// The page can draw the type of several text objects as one piece (one line, the text objects
+/// apart along it): none of them holds half of the piece. Shown made type that lies in a piece (at
+/// least half of where it draws, or round the piece as far as strokes reach) and is spelled by
+/// words of the object that follow one another ([`words_spelling`]) is that part of the piece: it
+/// is marked, and those words are taken.
 fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<usize> {
     let texts = |o: &[Arc<Node>]| o.iter().filter_map(|n| if let NodeKind::Text(_) = &n.kind { Some(n.clone()) } else { None }).collect::<Vec<_>>();
     // Each object's pieces of type, and the words of them that no made type holding it has yet.
@@ -348,20 +354,54 @@ fn see_page_type(content: &mut [Content], shown: &[Vec<Arc<Node>>]) -> Option<us
         return None;
     }
     let holds = |drawn: Rect, r: &Rect| drawn.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(*r).area() >= 0.5 * r.area().max(1e-9);
+    let lies_in = |drawn: Rect, r: &Rect| r.inflate(OUTLINE_REACH, OUTLINE_REACH).intersect(drawn).area() >= 0.5 * drawn.area().max(1e-9);
+    // Every object's words as the page has them: stacked copies of a text object are each spelled by
+    // the same words, which only the first takes.
+    let all_words: Vec<Vec<String>> = objects.iter().map(|o| o.1.clone()).collect();
     for c in content {
         let Content::Made(node, region, seen) = c else { continue };
         // Hidden made type has no region: where it draws, shown, is its own box.
         let Some(drawn) = region.or_else(|| node.visual_bounds()) else { continue };
         let spelled = if let NodeKind::Text(t) = &node.kind { spelling(&t.plain_text()) } else { String::new() };
-        for (rects, words, held) in &mut objects {
+        for ((rects, words, held), all) in objects.iter_mut().zip(&all_words) {
             if rects.iter().any(|r| holds(drawn, r)) {
                 *held = true;
                 *seen |= region.is_some();
                 words.retain(|w| !spelled.contains(w.as_str()));
+            } else if region.is_some()
+                && rects.iter().any(|r| lies_in(drawn, r))
+                && let Some(run) = words_spelling(all, &spelled)
+            {
+                *held = true;
+                *seen = true;
+                // The words it is spelled by, where another text object hasn't taken them yet.
+                for w in all.get(run).into_iter().flatten() {
+                    if let Some(at) = words.iter().position(|left| left == w) {
+                        words.remove(at);
+                    }
+                }
             }
         }
     }
     Some(objects.iter().filter(|(_, words, held)| !held || !words.is_empty()).count())
+}
+
+/// The words of `words` that follow one another and together spell `spelled` (each a
+/// [`spelling`]), the first such run: `None` when there is none, or nothing is spelled.
+fn words_spelling(words: &[String], spelled: &str) -> Option<std::ops::Range<usize>> {
+    if spelled.is_empty() {
+        return None;
+    }
+    (0..words.len()).find_map(|start| {
+        let mut rest = spelled;
+        for (end, w) in words.iter().enumerate().skip(start) {
+            rest = rest.strip_prefix(w.as_str())?;
+            if rest.is_empty() {
+                return Some(start..end + 1);
+            }
+        }
+        None
+    })
 }
 
 /// What goes into each of `infos`' slots when the file's text document can't make the type of every
@@ -551,6 +591,25 @@ fn fill_hidden(infos: &[SlotInfo], stories: &[Option<Arc<Story>>], content: &mut
     for (slot, parts) in unread.iter().zip(assign(&hidden, unread.len())) {
         if let Some(c) = content.get_mut(*slot) {
             *c = Content::Page(parts.into_iter().flat_map(|p| p.iter().cloned()).collect());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::words_spelling;
+
+    /// Made type is part of a piece of the page's type when words of the piece that follow one
+    /// another spell all of it: not when it has letters the words don't, only part of a word, or
+    /// words that aren't next to each other.
+    #[test]
+    fn made_type_is_spelled_by_a_run_of_the_pieces_words() {
+        let words: Vec<String> = ["down", "to", "go", "20", "20"].iter().map(|w| w.to_string()).collect();
+        assert_eq!(words_spelling(&words, "togo"), Some(1..3));
+        assert_eq!(words_spelling(&words, "20"), Some(3..4));
+        assert_eq!(words_spelling(&words, "downtogo2020"), Some(0..5));
+        for other in ["", "tog", "togos", "own", "downgo", "42"] {
+            assert_eq!(words_spelling(&words, other), None, "{other}");
         }
     }
 }
