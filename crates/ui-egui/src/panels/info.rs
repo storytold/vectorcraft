@@ -48,6 +48,47 @@ fn paint_name(p: &Paint) -> Option<String> {
     }
 }
 
+/// One paint's block: its tile, its values, and its name (a swatch's with Show Options, else a
+/// non-solid paint's kind). A paint the selected objects do not share (`mixed`) leaves it empty.
+struct PaintLines {
+    paint: Paint,
+    mixed: bool,
+    /// The monospaced `R: 230` values of a solid color.
+    values: Vec<String>,
+    note: Option<String>,
+}
+
+impl PaintLines {
+    fn of(paint: Paint, mixed: bool, options: bool) -> Self {
+        if mixed {
+            return PaintLines { paint, mixed, values: Vec::new(), note: None };
+        }
+        let (values, note) = match &paint {
+            Paint::Solid { color, .. } => {
+                (color_values(color).into_iter().map(|(k, v)| format!("{k}: {v}")).collect(), paint_name(&paint).filter(|_| options))
+            }
+            other => (Vec::new(), Some(paint_name(other).filter(|_| options).unwrap_or_else(|| other.label()))),
+        };
+        PaintLines { paint, mixed, values, note }
+    }
+}
+
+/// What the panel shows, ready to lay out.
+pub(crate) struct InfoLines {
+    left: Vec<String>,
+    right: Vec<String>,
+    zoom: Option<String>,
+    brush: Option<String>,
+    fill: PaintLines,
+    stroke: PaintLines,
+    /// The font, and the size and tracking, the selected type shares.
+    type_block: Option<(String, String)>,
+}
+
+fn mono(ui: &mut Ui, s: &str) -> bool {
+    super::doc_info::copy_value(ui, s, s, true)
+}
+
 /// One paint's tile and readout. A solid tint's name sits below its channel values.
 /// A mixed paint keeps the tile's room empty.
 fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {

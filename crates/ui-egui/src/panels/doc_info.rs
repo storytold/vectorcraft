@@ -91,7 +91,9 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
     let release = release.filter(|_| release_count == 1 && single);
     if origin != saved_origin {
         ui.ctx().data_mut(|d| match origin {
-            Some(pos) => d.insert_temp(press_id, pos),
+            Some(pos) => {
+                d.insert_temp(press_id, pos);
+            }
             None => d.remove::<egui::Pos2>(press_id),
         });
     }
