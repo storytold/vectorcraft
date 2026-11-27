@@ -103,7 +103,9 @@ fn open_dialog(app: &mut VectorcraftApp, fields: DialogFields, edit: Option<Stri
     let document = app.session.active().ok_or("no document open")?.uid;
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let name = fields.text("name").unwrap_or_default().to_string();
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)).values(Bind::bound(fields))
+    });
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
         if !app.session.active().is_some_and(|active| active.uid == document) {
             return Err(tl!("This symbol belongs to the document that opened the dialog.").to_owned());
@@ -199,6 +201,77 @@ mod document_tests {
 
     use super::super::tests_warp::{accept, set, windowed};
     use super::*;
+
+    #[test]
+    fn keyboard_and_pointer_edits_reach_new_and_existing_symbol_options() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+
+        fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            super::super::host::pump(app, ui.ctx());
+        }
+
+        for editing in [false, true] {
+            let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 40})).unwrap();
+            if editing {
+                app.run("symbol.new", json!({"name": "Badge", "type": "static", "alignToPixelGrid": true})).unwrap();
+            }
+            let mut panel = Panel::new(app, draw);
+            panel.room(egui::vec2(800.0, 800.0));
+            if editing {
+                open_edit(&mut panel.app(), Some("Badge")).unwrap();
+            } else {
+                open(&mut panel.app(), false).unwrap();
+            }
+            panel.frame();
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            assert_eq!(
+                panel.toggled("Align to Pixel Grid"),
+                Some(craft::behavior::Mixed::Same(editing)),
+                "the options open with the symbol's current pixel-alignment setting"
+            );
+            panel.click_role("Name", Role::TEXT_INPUT);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("Keyboard badge");
+            panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["name"], "Keyboard badge");
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["type"], if editing { "static" } else { "dynamic" });
+            panel.click_role(if editing { "Dynamic Symbol" } else { "Static Symbol" }, Role::RADIO_BUTTON);
+            assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))["type"], if editing { "dynamic" } else { "static" });
+            panel.click_role("Align to Pixel Grid", Role::CHECK_BOX);
+            panel.click_role("Enable Guides for 9-Slice Scaling", Role::CHECK_BOX);
+            for (label, key, input, value) in [
+                ("Left", "sliceLeft", "10", 10.0),
+                ("Top", "sliceTop", "20", 20.0),
+                ("Right", "sliceRight", "30", 30.0),
+                ("Bottom", "sliceBottom", "40", 40.0),
+            ] {
+                panel.click_role(label, Role::SPIN_BUTTON);
+                panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+                panel.type_text(input);
+                panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+                assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog_id(KIND))[key], value);
+            }
+            panel.click("OK");
+            assert!(!super::super::tests_warp::open_ids(&panel.app()).contains(&dialog_id(KIND)));
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            let symbol = state.doc.symbols.iter().find(|symbol| symbol.name == "Keyboard badge").unwrap();
+            assert_eq!(symbol.dynamic, editing);
+            assert_eq!(state.doc.symbol_pixel_aligned("Keyboard badge"), !editing);
+            assert_eq!(
+                state.doc.symbol_nine_slice("Keyboard badge"),
+                Some(vectorcraft_doc::SymbolNineSlice { left: 0.1, top: 0.2, right: 0.3, bottom: 0.4 })
+            );
+            assert_eq!(state.doc.symbols.len(), 1);
+            assert_eq!(state.history.undo.len(), undo + 1);
+        }
+    }
 
     #[test]
     fn editing_symbol_options_does_not_rename_another_drawings_symbol() {
