@@ -351,7 +351,8 @@ fn length_row(ui: &mut Ui, label: impl Into<Label>, salt: &str, value: f64, leng
     let label = label.into();
     let mut typed = None;
     Field::new(label.clone()).id_salt(salt).show(ui, |ui, _| {
-        typed = NumberField::length(label.clone(), Bind::given(Some(value)), lengths).id_salt(salt).show(ui).value().copied().flatten();
+        typed =
+            NumberField::length(label.clone(), Bind::given(Some(value)), lengths).id_salt(salt).show(ui).edit.events.committed().copied().flatten();
     });
     typed
 }
@@ -464,7 +465,9 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
             .fixed_decimals(4)
             .id_salt(PIXEL_ASPECT)
             .show(ui)
-            .value()
+            .edit
+            .events
+            .committed()
             .copied()
             .flatten();
         if let Some(n) = typed {
@@ -775,6 +778,112 @@ mod tests {
 
     fn undo_len(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().history.undo.len()
+    }
+
+    fn actual_value(panel: &crate::tests::panel_harness::Panel) -> ArtboardOptionsValue {
+        panel.app().dialogs().unwrap().with(|host| host.get::<ArtboardOptionsDialog>().unwrap().value.clone())
+    }
+
+    #[test]
+    fn canceled_numbers_preserve_the_pending_orientation_and_reference_metadata() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        for (label, typed) in [("Width:", "300"), ("Height:", "250"), ("X:", "25"), ("Y:", "35"), ("Video Ruler Pixel Aspect Ratio:", "1.75")] {
+            let mut app = app();
+            app.run("artboard.new", json!({"x": 400, "y": 0, "width": 50, "height": 100})).unwrap();
+            app.select_tool("artboard");
+            crate::panels::artboards::select(&mut app, 0);
+            app.session.set_tool_option("selected", &json!([0, 1]));
+            let document = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = undo_len(&app);
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(1100.0, 1100.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click("Landscape");
+            let pending = actual_value(&panel);
+            assert_eq!(pending.size_choice, Some(ArtboardSizeChoice::Orientation(true)));
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            assert_eq!(actual_value(&panel), pending, "typing must not discard the pending orientation or reference-point policy");
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert!(!is_open(&panel.app()), "Escape discards the modal for {label}");
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(undo_len(&panel.app()), undo);
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click("Landscape");
+            panel.click("OK");
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            {
+                let app = panel.app();
+                let rects = boards(&app);
+                assert_eq!((rects[0].width(), rects[0].height()), (200.0, 150.0));
+                assert_eq!(
+                    (rects[1].width(), rects[1].height()),
+                    (100.0, 50.0),
+                    "OK still applies the accepted orientation to the other selected artboard"
+                );
+                assert_eq!(undo_len(&app), undo + 1);
+            }
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+        }
+    }
+
+    #[test]
+    fn accepted_width_and_pixel_aspect_commit_before_ok_and_cancel_remains_safe() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        for (label, typed, blur, cancel) in [
+            ("Width:", "300", true, false),
+            ("Width:", "300", false, false),
+            ("Width:", "300", true, true),
+            ("Video Ruler Pixel Aspect Ratio:", "1.75", true, false),
+        ] {
+            let app = app();
+            let document = app.session.active().unwrap().doc.clone();
+            let undo = undo_len(&app);
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(1100.0, 1100.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            if blur {
+                panel.key(Key::Tab, Modifiers::NONE);
+            }
+            panel.click(if cancel { "Cancel" } else { "OK" });
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            if cancel {
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+                assert_eq!(undo_len(&panel.app()), undo);
+            } else {
+                {
+                    let app = panel.app();
+                    let artboard = &app.session.active().unwrap().doc.artboards[0];
+                    if label == "Width:" {
+                        assert_eq!(artboard.rect.width(), 300.0, "OK receives a focused field's accepted value in the same pass");
+                        assert_eq!(artboard.rect.height(), 150.0);
+                    } else {
+                        assert_eq!(artboard.video_ruler_pixel_aspect_ratio, 1.75);
+                    }
+                    assert_eq!(undo_len(&app), undo + 1);
+                }
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+            }
+        }
     }
 
     #[test]
