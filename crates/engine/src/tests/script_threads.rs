@@ -441,12 +441,12 @@ fn a_frame_of_another_document_cannot_be_linked() {
     s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
     area(&mut s, 10.0, 100.0, 40.0, "Elsewhere");
     s.execute("shape.rectangle", &json!({"x": 150, "y": 10, "width": 80, "height": 60})).unwrap();
-    let m = failure(&mut s, "app.documents[0].textFrames[1].nextFrame = app.documents[1].textFrames[0];");
+    let m = failure(&mut s, "app.documents[1].textFrames[1].nextFrame = app.documents[0].textFrames[0];");
     assert!(m.contains("different documents"), "{m}");
     let out = log(
         &mut s,
-        "var d = app.documents[1], p = d.pageItems[0];\
-         try { d.textFrames.areaText(p, undefined, app.documents[0].textFrames[1]); } catch (e) { vc.log(String(e.message)); }\
+        "var d = app.documents[0], p = d.pageItems[0];\
+         try { d.textFrames.areaText(p, undefined, app.documents[1].textFrames[1]); } catch (e) { vc.log(String(e.message)); }\
          vc.log(p.typename); vc.log(d.textFrames.length);",
     );
     assert_eq!(out, vec![json!("baseFrame: the frame is in another document"), json!("PathItem"), json!(1)]);
