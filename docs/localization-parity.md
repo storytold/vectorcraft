@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Brazilian Portuguese: 154 rows for the strings the sibling catalogs translate — smart-filter and print presets, dimension lines, swatches, canvas messages; previously minor: Bosnian (`bs`): complete catalog; previously minor: Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-24 · **Change:** minor (Norwegian (`nb`) catalog added, ported to the embedded-catalog structure; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Brazilian Portuguese: 154 rows for the strings the sibling catalogs translate — smart-filter and print presets, dimension lines, swatches, canvas messages; previously minor: Bosnian (`bs`): complete catalog; previously minor: Vietnamese text: stacked diacritics tested and attach in every form, #4491; previously: Catalan (`ca`) catalog added, complete under the tests)
 
 Per-language status of VectorCraft's interface. How the catalogs work and how to add a language:
 [`development.md` › Localisation](development.md#localisation). Part of
@@ -71,8 +71,9 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Georgian | `ka` | 9,758 rows, 3,740 of them `@msg` and 49 `@msgplural` (counted 2026-11-15): menus, panels, dialogs and plurals (one count-neutral form); the untranslated report lists 1 missing Georgian message; reviewed by a native speaker | full |
 | Turkish | `tr` | 9,784 rows, 3,746 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`); 235 messages, 79 menu strings, 39 `tl!` literals, 16 undo labels and the default swatch names still fall back to English | full |
 | Catalan | `ca` | 8,036 rows, 1,956 of them `@msg` and 51 `@msgplural` (counted 2026-11-17 on `main` at `ee60c51fd9`): the untranslated report lists 1,990 missing messages for it; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
+| Norwegian (Bokmål) | `nb` | 7,355 rows, 1,509 of them `@msg` and 4 `@msgplural` (counted 2026-11-24 on `main` at `19ebdcab54`): menues, literals and messages complete under the tests; one/other plurals; AI-assisted from the English meaning, so wording is consistent with the sibling catalog | full; AI-drafted, native review welcome |
 
-Twenty-seven non-English catalogs in all (registry count, 2026-11-06). Illustrator, as its public documentation lists, ships around two dozen
+Twenty-nine non-English catalogs in all (registry count, 2026-11-24). Illustrator, as its public documentation lists, ships around two dozen
 interface languages (including Polish, Dutch, Turkish, the Nordic languages, Hungarian, and Middle East
 editions with Arabic and Hebrew); it doesn't ship Hindi, Indonesian or Vietnamese.
 
