@@ -1225,11 +1225,14 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
     assert_eq!(p["rect"], json!([10.0, 10.0, 40.0, 20.0]));
     assert_eq!(p[vectorcraft_tools::place::SOURCE_INDEX], 0);
+    assert_eq!(p[vectorcraft_tools::place::CLICK], true);
     assert!(top_children(&s).is_empty(), "the frontend places it");
     assert_eq!(s.tool_options()["names"], json!(["b.png"]), "the cursor goes on to the next file");
     // The frontend consumes the private source identity before placing the file.
     let mut p = p.clone();
-    p.as_object_mut().unwrap().remove(vectorcraft_tools::place::SOURCE_INDEX);
+    for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+        p.as_object_mut().unwrap().remove(key);
+    }
     s.execute("file.place", &p).unwrap();
     // Left out: the second each document was made in.
     let doc = |s: &Session| {

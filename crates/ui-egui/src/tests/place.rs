@@ -1346,6 +1346,26 @@ fn browser_place_same_named_pdfs_keep_each_click_at_full_size() {
     }
 }
 
+/// A deliberate drag keeps its box even when it equals that source's queued dimensions.
+#[test]
+fn browser_place_same_named_pdfs_keep_an_exact_size_drag_box() {
+    let mut app = app();
+    let ctx = window(&app);
+    let picker = scripted(&mut app);
+    let first = pdf(&two_pages(), None);
+    let second = pdf(&[PdfPage::new(200.0, 100.0, "0 g 0 0 20 10 re f"), PdfPage::new(400.0, 100.0, "0 g 0 0 40 10 re f")], None);
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("same.pdf", &first), ("same.pdf", &second)]);
+    poll(&mut app, &ctx);
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(true))]);
+    cursor_gesture(&mut app, vectorcraft_tools::Mods::default(), (110.0, 110.0));
+    assert_eq!(dialog_kind(&app).as_deref(), Some(PDF_IMPORT));
+    answer(&mut app, &[("page", json!(2))]);
+    let st = app.session.active().unwrap();
+    let bounds = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    assert_eq!((bounds.width().round(), bounds.center()), (100.0, vectorcraft_geom::Point::new(60.0, 60.0)));
+}
+
 /// A locked PDF must not make a same-named unlocked PDF discard its deliberate drag size.
 #[test]
 fn browser_place_same_named_pdfs_keep_password_checks_separate() {

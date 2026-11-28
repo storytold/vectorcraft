@@ -669,7 +669,9 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     let ask = app.place.queue_asks || locked || shift_click;
     let mut p = if ask { clicked_at_full_size(app, p) } else { p.clone() };
     if let Some(params) = p.as_object_mut() {
-        params.remove(vectorcraft_tools::place::SOURCE_INDEX);
+        for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+            params.remove(key);
+        }
     }
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
         if ask {
@@ -746,10 +748,13 @@ fn source_index(p: &Value) -> Option<usize> {
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
 /// import options may change its size (another page, another scale): placed as its options place
 /// it at the click (`at`, the center of the box the click gave), as File › Place of that one file
-/// places it, instead of fitted into the box of the first page or the default scale. A drag keeps
-/// its `rect`; one to exactly the queued size gives the same `rect` as a click, and is taken as one.
+/// places it, instead of fitted into the box of the first page or the default scale. The cursor
+/// marks clicks explicitly: a deliberate drag keeps its `rect`, even at exactly the queued size.
 fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
     let mut p = p.clone();
+    if p.get(vectorcraft_tools::place::CLICK) != Some(&Value::Bool(true)) {
+        return p;
+    }
     let Some(name) = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name) else { return p };
     if !matches!(fileio::extension(&name).as_str(), "pdf" | "ai" | "ait" | "dxf") {
         return p;

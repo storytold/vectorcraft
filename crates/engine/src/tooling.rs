@@ -1889,7 +1889,9 @@ impl Session {
                 // The place cursor's file, read within the roots of whoever loaded the cursor.
                 Action::Exec(cmd, mut p) if cmd == "file.place" => {
                     if let Some(params) = p.as_object_mut() {
-                        params.remove(vectorcraft_tools::place::SOURCE_INDEX);
+                        for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+                            params.remove(key);
+                        }
                     }
                     let roots = self.place_queue_roots.clone();
                     if let Some(w) = crate::file_access::confine(roots.as_ref(), || self.execute(&cmd, &p))?.get("warning").and_then(Value::as_str) {
