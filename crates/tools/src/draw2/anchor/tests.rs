@@ -859,6 +859,37 @@ fn anchor_point_shift_mid_drag_constrains_pulled_out_handles() {
     assert!((q.y - 310.0).abs() < 1e-9 && q.x > 160.0, "level with the spine point: {a:?}");
 }
 
+/// Shift on handles pulled out of an anchor constrains them round the anchor in the document a
+/// preview edits (the document as the interaction began), not round where the last preview
+/// showed it, so the handles the command makes stay on the 45° steps.
+#[test]
+fn anchor_point_shift_pulls_out_round_the_anchor_the_preview_edits() {
+    let shift = Mods { shift: true, ..Mods::default() };
+    // The rectangle's corner at (100, 100) as the interaction began.
+    let (began, id) = doc_with_rect();
+    // The document shown: every anchor moved by (10, 20), as a previewed edit left them.
+    let mut shown = began.clone();
+    if let Some(pd) = shown.node_mut(id).and_then(|n| n.path_data_mut()) {
+        for sp in &mut pd.subpaths {
+            for a in &mut sp.anchors {
+                a.p = Point::new(a.p.x + 10.0, a.p.y + 20.0);
+            }
+        }
+    }
+    let (s, p) = (Selection::default(), paint());
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx(&began, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    let c = ToolContext { interaction_doc: Some(&began), ..cx(&shown, &s, &p) };
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 140.0, 92.0).with_mods(shift));
+    match a.last() {
+        Some(Action::Preview(cmd, v)) if cmd == "path.convertAnchor" => {
+            let y = v["y"].as_f64().unwrap_or(f64::NAN);
+            assert!((y - 100.0).abs() < 1e-9, "level with the anchor as the interaction began: {a:?}");
+        }
+        other => panic!("expected a path.convertAnchor preview, got {other:?}"),
+    }
+}
+
 /// #3694: Space held mid-drag on a convert moves the anchor, handles and all.
 #[test]
 fn anchor_point_space_mid_drag_moves_the_anchor() {

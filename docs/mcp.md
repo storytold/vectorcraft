@@ -7902,7 +7902,9 @@ Selected End Points) joins the ends again; `path.join {ids: [a, b], ends: ["last
 (Average & Join, Cmd+Alt+Shift+J) moves two ends to their midpoint and joins them there, the joined anchor a corner or a smooth point, in one
 undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in `ids` or the
 selection (both ends of one, closing it); anything else is refused. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
-`path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); `path.split`,
+`path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools). With the Anchor Point
+tool, a `pointer_gesture` that sets `mods.shift` on `down` moves the anchor; one that leaves Shift off on `down` and sets
+`mods.shift` on later `drag` events pulls out handles at 45° steps round the anchor (General › Constrain Angle). `path.split`,
 at an anchor or at `segment` and `t`, leaves the first anchor of the piece after the cut selected alone, and a Direct
 Selection press on two anchors on top of each other takes the selected one. The paths that `path.cutAtAnchors` and
 `path.split` make keep the source path's fill and stroke settings (weight, paint, caps, joins, dashes, width profile,

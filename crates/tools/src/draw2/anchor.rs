@@ -279,12 +279,25 @@ impl AnchorTool {
         cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai).map(|a| a.p))
     }
 
-    /// Where a selected blend's spine point `ai` is.
+    /// Where anchor `ai` is in the document a preview edits: the document as the interaction
+    /// began, since each preview runs on that, otherwise the document `cx` shows.
+    fn began_anchor_pos(cx: &ToolContext, id: NodeId, si: usize, ai: usize) -> Option<Point> {
+        let d = cx.interaction_doc.unwrap_or(cx.doc);
+        d.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai).map(|a| a.p))
+    }
+
+    /// Where a blend's spine point `ai` is in the spine a spine edit changes: the spine pinned
+    /// from the document as the interaction began (otherwise the document `cx` shows), as
+    /// `object.blend.spine.*` pins it.
     fn spine_pos(cx: &ToolContext, id: NodeId, ai: usize) -> Option<Point> {
-        crate::direct::spines(cx)
-            .into_iter()
-            .find(|(blend, _)| *blend == id)
-            .and_then(|(_, path)| path.subpaths.first()?.anchors.get(ai).map(|a| a.p))
+        let d = cx.interaction_doc.unwrap_or(cx.doc);
+        match d.node(id).map(|n| &n.kind) {
+            Some(vectorcraft_doc::NodeKind::Blend { children, spec }) => {
+                let (path, _) = vectorcraft_doc::live::pin_spine(children, spec)?;
+                path.subpaths.first()?.anchors.get(ai).map(|a| a.p)
+            }
+            _ => None,
+        }
     }
 
     /// Where handles pulled out of an anchor to `p` go: with Shift held, at 45° steps round the
@@ -604,7 +617,7 @@ impl Tool for AnchorTool {
                     State::Convert { id, si, ai, .. } => {
                         // Shift pressed once the drag is under way keeps the pulled-out handles at
                         // 45° steps; Shift at the press moved the anchor instead (`moving`).
-                        let q = Self::pulled_out(cx, p, ev.mods.shift, || Self::anchor_pos(cx, id, si, ai));
+                        let q = Self::pulled_out(cx, p, ev.mods.shift, || Self::began_anchor_pos(cx, id, si, ai));
                         Action::Preview(
                             "path.convertAnchor".into(),
                             json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": q.x, "y": q.y}),
