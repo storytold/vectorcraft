@@ -254,8 +254,9 @@ fn ok(app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
         return Err(why);
     }
     let (cmd, p, _) = s.request(&answer.fields);
-    // OK must validate afresh: the live preview also caches refused requests.
-    s.preview = LivePreview::default();
+    // OK must validate afresh: the live preview also caches refused requests. The preview keeps its interaction, so
+    // the values run again inside it and the commit below keeps that interaction as the undo step.
+    s.preview.rerun_next();
     match s.run_preview(app, cmd, &p) {
         Some(Ok(())) if finish_unchanged_preview(app) => return Ok(()),
         Some(Err(why)) => {
