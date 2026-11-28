@@ -1256,7 +1256,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerOptions",
         "Options for Selection…",
         "",
-        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
+        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. Unchanged OK adds no undo step; edits run layer.setProps in one undo step. Existing names are preserved unless Name is edited or explicitly set; for several rows it sends only the fields set in the dialog",
     ),
     (
         "ui.layerDelete",
