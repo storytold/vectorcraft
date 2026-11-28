@@ -85,31 +85,43 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
 /// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
 /// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
 /// could finish between scheduling a bitmap and the frame looking it up again).
-static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static GATE_SHUT: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+/// Signaled when the gate opens.
+static GATE_OPENED: std::sync::Condvar = std::sync::Condvar::new();
 /// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
 static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
 
-/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
-/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// [`blue_page`] once the gate opens, except on the thread that shut it. Every test here
+/// registers it: the first registration stays, so all of them must agree (open, it is
 /// `blue_page`).
 fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     let here = std::thread::current().id();
     let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let t = std::time::Instant::now();
-    while holder != Some(here) && GATE_SHUT.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 10 {
-        std::thread::sleep(std::time::Duration::from_millis(1));
+    if holder != Some(here) {
+        let mut shut = GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        while *shut {
+            shut = GATE_OPENED.wait(shut).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
     }
     blue_page(p, bytes)
 }
 
-/// Shut the gate for the calling thread's frames.
-fn shut_gate() {
-    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
-    GATE_SHUT.store(true, std::sync::atomic::Ordering::SeqCst);
+/// The gate shut by [`shut_gate`]; dropping it opens the gate, also when the test fails while it
+/// is shut.
+struct Gate;
+
+impl Drop for Gate {
+    fn drop(&mut self) {
+        *GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = false;
+        GATE_OPENED.notify_all();
+    }
 }
 
-fn open_gate() {
-    GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
+/// Shut the gate for the calling thread's frames, until the [`Gate`] is dropped.
+fn shut_gate() -> Gate {
+    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
+    *GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+    Gate
 }
 
 /// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
@@ -129,12 +141,9 @@ fn render(d: &Document, progressive: bool) -> Rendered {
     Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
 }
 
-/// Wait for the background bitmaps (at most 10 s).
+/// Wait for the background bitmaps.
 fn settle() {
-    let t = std::time::Instant::now();
-    while placed_document::busy() && t.elapsed().as_secs() < 10 {
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    placed_document::wait_idle();
     assert!(!placed_document::busy(), "bitmaps still coming");
 }
 
@@ -433,9 +442,9 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let mut r = Renderer::new();
     let generation = placed_document::generation();
     // The first frame shows the placeholders: the worker waits until it is drawn.
-    shut_gate();
+    let gate = shut_gate();
     let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
-    open_gate();
+    drop(gate);
     settle();
     let made = placed_document::made_between(generation, placed_document::generation()).expect("known");
     let files = |keys: &[&str]| keys.iter().map(|k| k.to_string()).collect::<std::collections::HashSet<_>>();
@@ -532,9 +541,10 @@ fn a_placed_document_kept_as_its_preview_draws_the_preview() {
 fn a_document_that_places_itself_draws_a_few_levels_deep_then_stops() {
     let _serial = serial();
     let d = doc_with("loop-1", b"loop");
-    let t = std::time::Instant::now();
+    placed_document::reset_deepest();
     let r = render(&d, false);
-    assert!(t.elapsed().as_secs() < 10);
+    let deepest = placed_document::deepest();
+    assert!((2..=vectorcraft_doc::placed_document::MAX_DEPTH).contains(&deepest), "drawn {deepest} levels deep");
     assert_eq!(&r.pixel(50, 30)[..3], &[0, 0, 255]);
     // On screen too.
     render(&d, true);

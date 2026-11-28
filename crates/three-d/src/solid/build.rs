@@ -2,8 +2,8 @@ use vectorcraft_geom::kurbo::ParamCurveDeriv;
 
 use super::outline::{self, Along, Budget, CURVE_TOLERANCE};
 use super::rings::{
-    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area,
-    solid_rings_traced, square_corners,
+    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, collapse_width, curve_pieces, inset, left,
+    signed_area, solid_rings_traced, square_corners,
 };
 use super::side;
 use super::{
@@ -791,6 +791,35 @@ fn steps(o: &Extrude) -> Vec<Step> {
     out
 }
 
+/// The steps and their shared outline for drawing, surface measurements and mesh export.
+fn extrude_profile(path: &PathData, rule: FillRule, size: f64, o: &Extrude) -> Result<(Vec<Step>, Vec<Ring>), String> {
+    let mut steps = steps(o);
+    let bands = steps.len().saturating_sub(1);
+    let caps = if o.cap { 2 } else { 0 };
+    let most = curve_pieces(path, size, bands, caps)?;
+    let mut rings = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    if let (Some(bevel), [ring]) = (o.bevel, rings.as_slice())
+        && bevel.inside
+        && let Some(width) = collapse_width(ring)
+        && bevel.width > width
+    {
+        // Use one width for the cap and every end of every band. The profile still runs
+        // through the requested depth and meets the wall at the original outline.
+        let scale = width / bevel.width;
+        for step in &mut steps {
+            step.inset *= scale;
+        }
+        steps.dedup_by(|a, b| (a.inset - b.inset).abs() < 1e-9 && (a.t - b.t).abs() < 1e-12);
+    }
+    // The corners the bevel opens are cut square past the miter limit.
+    if let Some(side) = steps.iter().map(|s| s.inset).find(|w| *w != 0.0) {
+        for ring in &mut rings {
+            *ring = square_corners(ring, side);
+        }
+    }
+    Ok((steps, rings))
+}
+
 /// The face a band between steps `s0` and `s1` borders: +1 between two front bevel steps, -1 when
 /// it reaches a back bevel step, and 0 for a wall.
 fn band_face(s0: &Step, s1: &Step) -> f64 {
@@ -957,17 +986,9 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     if o.depth <= 0.0 {
         return plane_faces(path, rule, bounds, view, keep);
     }
-    let steps = steps(&o);
-    // One face for each edge of the outline in each band between two steps, and the two caps:
-    // counted before any point is sampled, and again on the rings, which can have more points
-    // once contours that meet are merged.
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps)?;
-    // Every inset of one extrusion goes the same way: into the shape for a bevel inside, out of it
-    // for one outside. The corners that way opens are cut square past the miter limit.
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o)?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
@@ -1220,12 +1241,9 @@ pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: 
     if o.depth <= 0.0 {
         return Ok(path.bounds().map(|b| end(PlanarFace::Front, b)).into_iter().collect());
     }
-    let steps = steps(&o);
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps)?;
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o)?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
     let edges = traced.iter().map(|r| r.points.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
@@ -1264,12 +1282,9 @@ pub fn extrude_side_size(path: &PathData, rule: FillRule, bounds: Rect, options:
     if o.depth <= 0.0 {
         return None;
     }
-    let steps = steps(&o);
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps).ok()?;
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most).ok()?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o).ok()?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);

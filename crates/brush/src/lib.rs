@@ -309,7 +309,7 @@ pub struct Scatter {
     pub art: Node,
     /// Size range in percent of the art.
     pub size: (f64, f64),
-    /// Spacing range in percent of the (scaled) art width.
+    /// Spacing range in percent of the (scaled) art width, its strokes included.
     pub spacing: (f64, f64),
     /// Perpendicular offset range in percent of the (scaled) art height.
     pub scatter: (f64, f64),

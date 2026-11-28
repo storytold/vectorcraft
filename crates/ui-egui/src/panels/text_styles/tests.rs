@@ -4,6 +4,54 @@ use crate::tests::picks::{answer_dialog, cancel_dialog, open_dialogs, poll, scri
 use crate::tests::synthetic::key_frame;
 use vectorcraft_doc::{NodeId, NodeKind};
 
+#[test]
+fn switching_documents_dismisses_text_styles_row_menus() {
+    use crate::tests::panel_harness::Panel;
+    use vectorcraft_engine::Session;
+
+    for kind in [Kind::Char, Kind::Para] {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let command = format!("{}.new", kind.prefix());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run(&command, json!({"name": "First Style"})).unwrap();
+        let first = style_id(&mut app, kind, "First Style");
+        let source = app.session.active().unwrap().uid;
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run(&command, json!({"name": "Second Style"})).unwrap();
+        let second = style_id(&mut app, kind, "Second Style");
+        let destination = app.session.active().unwrap().uid;
+        assert_eq!(first, second, "the two documents carry styles at the same list index");
+        app.run("window.previousDocument", json!({})).unwrap();
+
+        let draw: fn(&mut VectorcraftApp, &mut Ui) = match kind {
+            Kind::Char => |app, ui| show(app, ui, Kind::Char),
+            Kind::Para => |app, ui| show(app, ui, Kind::Para),
+        };
+        let mut panel = Panel::new(app, draw);
+        let activate = |panel: &mut Panel, index, document| {
+            panel.app().session.execute("document.activate", &json!({"index": index})).unwrap();
+            panel.frame();
+            panel.frame();
+            assert_eq!(panel.app().session.active().unwrap().uid, document);
+        };
+        let has_copy = |panel: &Panel, name: &str| styles(&mut panel.app(), kind).iter().any(|style| style.0 == name);
+        panel.secondary_click("First Style");
+        assert!(panel.menu_item_enabled("Duplicate Style"));
+        activate(&mut panel, 1, destination);
+        assert!(!panel.shows("Duplicate Style"), "the new document does not inherit the row menu");
+        assert!(!has_copy(&panel, "Second Style copy"));
+
+        activate(&mut panel, 0, source);
+        assert!(!panel.shows("Duplicate Style"), "the old row menu does not reappear");
+        assert!(!has_copy(&panel, "First Style copy"));
+
+        activate(&mut panel, 1, destination);
+        panel.secondary_click("Second Style");
+        panel.click_menu_item("Duplicate Style");
+        assert!(has_copy(&panel, "Second Style copy"));
+    }
+}
+
 // PLAN: assumed type-w19 items reachable through `super::*`: `run_action(app, kind, action)`,
 // `StylesPanel { highlight: Vec<String>, .. }` and `StylesPanels { char, para, made }` at
 // `app.ui.text_styles`, `highlighted(app, kind, listed: &[&str]) -> Vec<String>`, `TextStyleAction`, and a

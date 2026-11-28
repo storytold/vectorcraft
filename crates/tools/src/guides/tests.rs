@@ -682,8 +682,8 @@ fn drawn_points_snap_to_ruler_guides_with_smart_guides_on() {
     assert_eq!(snap.press(&off, Point::new(260.0, 315.0), &[], None), Point::new(260.0, 315.0));
 }
 
-/// A drawing tool's snapper reuses its targets while hovering over the same document state, and
-/// gathers them again when it changes, and on every press.
+/// A drawing tool's snapper reuses its targets while hovering and pressing over the same document
+/// state, and gathers them again when it changes.
 #[test]
 fn draw_snap_gathers_once_per_document_state() {
     let (d, _) = doc_with_rect();
@@ -694,17 +694,19 @@ fn draw_snap_gathers_once_per_document_state() {
     let c = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), Point::new(200.0, 200.0));
     assert_eq!(labels(snap.guides()), ["anchor"]);
-    // The same revision: the targets are the ones gathered (the document isn't read again).
+    // The same revision: the targets are the ones gathered (the document isn't read again), for
+    // a hover and for the press after it.
     let c = ToolContext { revision: (1, 1), ..cx(&empty, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), Point::new(200.0, 200.0));
-    // A new revision, or a press, reads it.
+    assert_eq!(snap.press(&c, at, &[], None), Point::new(200.0, 200.0));
+    // A new revision reads it, for a hover and for a press.
     let c = ToolContext { revision: (1, 2), ..cx(&empty, &s, &p) };
     assert_eq!(snap.hover(&c, at, &[], None), at);
     assert!(snap.guides().is_empty());
-    let c = ToolContext { revision: (1, 2), ..cx(&d, &s, &p) };
+    let c = ToolContext { revision: (1, 3), ..cx(&d, &s, &p) };
     assert_eq!(snap.press(&c, at, &[], None), Point::new(200.0, 200.0));
     // The drag keeps what the press gathered, though the document now shows its preview.
-    let c = ToolContext { revision: (1, 3), ..cx(&empty, &s, &p) };
+    let c = ToolContext { revision: (1, 4), ..cx(&empty, &s, &p) };
     assert_eq!(snap.drag(&c, at, None), Point::new(200.0, 200.0));
     snap.clear();
     assert!(snap.guides().is_empty());

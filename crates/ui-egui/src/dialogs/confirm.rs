@@ -89,19 +89,26 @@ pub(crate) struct Question(StandardPrompt);
 struct Asked {
     command: String,
     params: Value,
+    /// The document that must still be active for a document-specific confirmation.
+    document: Option<DocumentOwner>,
     /// The automation roots in force when asked: the command runs under them.
     scope: ScopeHandle,
     /// Automation asked ([`VectorcraftApp::automation_asked`]): the command runs as automation.
     automated: bool,
 }
+
+struct DocumentOwner {
+    uid: u64,
+    reverts: Option<u64>,
+}
+
 wrapped_dialog!(Question, StandardPrompt, KIND);
 
 /// A message with a Close button.
 pub(crate) struct Message(HostedAlert);
 wrapped_dialog!(Message, HostedAlert, MESSAGE);
 
-/// The Type tool's question whether to edit type set in fonts that aren't available; its tag is the
-/// tool's edit token.
+/// The Type tool's question whether to edit type set in fonts that aren't available.
 pub(crate) struct MissingFontQuestion(StandardPrompt);
 wrapped_dialog!(MissingFontQuestion, StandardPrompt, MISSING_FONT_EDIT);
 
@@ -130,6 +137,24 @@ pub(crate) struct ReplaceFiles {
 /// Ask `message` (with an optional `detail` line), both in the UI language; OK runs `command`
 /// with `params`.
 pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
+    ask_for(app, None, message, detail, command, params);
+}
+
+/// Ask about the active document. OK is valid only while that document is active.
+pub(crate) fn ask_in_document(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
+    if let Some(document) = app.session.active().map(|st| DocumentOwner { uid: st.uid, reverts: None }) {
+        ask_for(app, Some(document), message, detail, command, params);
+    }
+}
+
+/// Ask about items in the active document. Reverting its contents invalidates the approval.
+pub(crate) fn ask_in_document_contents(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
+    if let Some(document) = app.session.active().map(|st| DocumentOwner { uid: st.uid, reverts: Some(st.reverts) }) {
+        ask_for(app, Some(document), message, detail, command, params);
+    }
+}
+
+fn ask_for(app: &mut VectorcraftApp, document: Option<DocumentOwner>, message: &str, detail: &str, command: &str, params: Value) {
     let Some(dialogs) = app.dialogs() else {
         app.status(format!("{message} (no window to ask in)"));
         return;
@@ -138,7 +163,7 @@ pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str,
     if !detail.is_empty() {
         prompt = prompt.paragraph(detail.to_string());
     }
-    let asked = Asked { command: command.to_string(), params, scope: ScopeHandle::capture(), automated: app.automation_asked() };
+    let asked = Asked { command: command.to_string(), params, document, scope: ScopeHandle::capture(), automated: app.automation_asked() };
     let prompt = prompt.button(PromptChoice::Proceed, tl!("OK")).button(PromptChoice::Cancel, tl!("Cancel")).tag(asked);
     dialogs.with(|host| host.open(Question(prompt)));
 }
@@ -215,13 +240,15 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
 /// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
 /// stays and the Type tool forgets the edit, as Cancel would.
 pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
-    let token = p.get("token").cloned().unwrap_or(Value::Null);
+    let Some(token) = p.get("token").and_then(Value::as_u64) else {
+        return;
+    };
     let Some(dialogs) = app.dialogs() else {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     };
     if app.any_dialog_open() && !dialogs.with(|host| host.is_open::<MissingFontQuestion>()) {
-        answer_missing_font_edit(app, &token, false);
+        answer_missing_font_edit(app, token, false);
         return;
     }
     let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
@@ -234,14 +261,18 @@ pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
     let prompt = StandardPrompt::custom(tl!("Edit type set in fonts that aren't available?"))
         .paragraph(detail)
         .button(PromptChoice::Proceed, tl!("OK"))
-        .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(token);
-    dialogs.with(|host| host.open(MissingFontQuestion(prompt)));
+        .button(PromptChoice::Cancel, tl!("Cancel"));
+    dialogs.with(|host| {
+        host.open(MissingFontQuestion(prompt));
+        // Replacing a prompt leaves its Cancel in the host. The tool is already waiting on the new token.
+        let _ = host.take::<MissingFontQuestion>();
+    });
+    app.missing_font_edit_token = Some(token);
 }
 
 /// Give the Type tool the answer to [`ask_missing_font_edit`]'s question about the edit `token`
 /// names: with `ok` the edit starts at once; without, the tool forgets it.
-pub(crate) fn answer_missing_font_edit(app: &mut VectorcraftApp, token: &Value, ok: bool) {
+fn answer_missing_font_edit(app: &mut VectorcraftApp, token: u64, ok: bool) {
     app.session.set_tool_option("missingFontEdit", &json!({"token": token, "ok": ok}));
     if ok {
         let r = app.session.tool_poll(app.view_info(), false);
@@ -258,10 +289,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     };
     if let Some(DialogResult::Ok(mut answer)) = dialogs.with(|host| host.take::<Question>())
         && answer.choice == PromptChoice::Proceed
-        && let Some(Asked { command, params, scope, automated }) = answer.take_tag::<Asked>()
-        && let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params)))
+        && let Some(Asked { command, params, document, scope, automated }) = answer.take_tag::<Asked>()
     {
-        app.status(e);
+        let refusal = document.and_then(|owner| match app.session.active() {
+            Some(st) if st.uid == owner.uid => {
+                owner.reverts.filter(|reverts| *reverts != st.reverts).map(|_| tl!("The document was reverted. Reopen this dialog to continue."))
+            }
+            _ => Some(tl!("This dialog was opened in a different document.")),
+        });
+        if let Some(reason) = refusal {
+            app.status(reason);
+        } else if let Err(e) = scope.run(|| crate::file_asks::as_automated(app, automated, |app| app.run(&command, params))) {
+            app.status(e);
+        }
     }
     // The host opens queued messages in `enqueue` order, so the one closed is the oldest.
     while dialogs.with(|host| host.take::<Message>()).is_some() {
@@ -277,13 +317,12 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
     let Some(dialogs) = app.dialogs() else {
         return;
     };
-    let (ok, token) = match dialogs.with(|host| host.take::<MissingFontQuestion>()) {
-        None => return,
-        Some(DialogResult::Ok(mut answer)) => (answer.choice == PromptChoice::Proceed, answer.take_tag::<Value>()),
-        // PLAN: a question the host cancelled carries no tag, so the tool's token is unknown here.
-        Some(_) => (false, None),
-    };
-    answer_missing_font_edit(app, &token.unwrap_or(Value::Null), ok);
+    if let Some(result) = dialogs.with(|host| host.take::<MissingFontQuestion>())
+        && let Some(token) = app.missing_font_edit_token.take()
+    {
+        let ok = matches!(result, DialogResult::Ok(answer) if answer.choice == PromptChoice::Proceed);
+        answer_missing_font_edit(app, token, ok);
+    }
 }
 
 /// The confirmation open now, if one is: its message and detail as shown, and the command OK runs.

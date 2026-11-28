@@ -25,6 +25,8 @@ pub(crate) const CMD: &str = "object.vectorHalftone";
 pub(crate) struct Open {
     /// The dialog's id on the host.
     pub id: DialogId,
+    /// The drawing whose art the dialog previews and changes.
+    document: u64,
     /// The temporary dots the dialog shows while it previews.
     pub preview: LivePreview,
 }
@@ -70,6 +72,7 @@ pub(crate) fn screen_params(live: bool, fields: &DialogFields) -> Vec<Param> {
 /// Opens Object › Vector Halftone, previewing from its first frame.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let document = app.session.active().ok_or("no document")?.uid;
     let defaults = fields();
     let rows = screen_params(false, &DialogFields::new());
     let initial = fields_of(&rows, defaults.as_object().unwrap_or(&Default::default()));
@@ -78,6 +81,10 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         ParamDialog::command(CMD, tl!("Vector Halftone"), rows).previews(true).values(Bind::bound(fields))
     });
     let ok = |app: &mut VectorcraftApp, result: &ParamResult| {
+        let open = app.effect_dialogs.halftone.as_ref().ok_or("the dialog is closed")?;
+        if !open.in_source(app) {
+            return Err(tl!("Return to the original drawing to apply Vector Halftone").into());
+        }
         let params = Value::Object(json_of(&screen_params(false, &result.fields), &result.fields));
         let mut open = app.effect_dialogs.halftone.take().ok_or("the dialog is closed")?;
         let done = std::mem::take(&mut open.preview).commit(app, CMD, params);
@@ -87,18 +94,26 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         done.map(|_| ())
     };
     let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(|app| {
-        if let Some(open) = app.effect_dialogs.halftone.take() {
+        if let Some(open) = app.effect_dialogs.halftone.take()
+            && open.in_source(app)
+            && owns_preview(app)
+        {
             open.preview.cancel(app);
         }
     });
     let id = open_held_with(app, dialog, ok, HeldOptions { cancel: Some(cancel), ..Default::default() }).ok_or("no window")?;
-    app.effect_dialogs.halftone = Some(Open { id, preview: LivePreview::default() });
+    app.effect_dialogs.halftone = Some(Open { id, document, preview: LivePreview::default() });
     Ok(Value::Null)
 }
 
 /// Runs or ends the open dialog's preview for this frame.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.effect_dialogs.halftone.take() else { return };
+    if !open.in_source(app) {
+        open.preview = LivePreview::default();
+        app.effect_dialogs.halftone = Some(open);
+        return;
+    }
     let shown = app.dialogs().and_then(|host| {
         host.with(|h| {
             h.get_by_id::<HostedParamDialog>(open.id).map(|d| {
@@ -117,6 +132,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// Whether the open Object → Vector Halftone dialog is showing its temporary dot group.
 pub(crate) fn previewing(app: &VectorcraftApp) -> bool {
     let Some(open) = app.effect_dialogs.halftone.as_ref() else { return false };
-    app.dialogs().is_some_and(|host| host.with(|h| h.get_by_id::<HostedParamDialog>(open.id).is_some_and(HostedParamDialog::is_previewing)))
-        && app.session.active().and_then(|st| st.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == CMD)
+    open.in_source(app)
+        && owns_preview(app)
+        && app.dialogs().is_some_and(|host| host.with(|h| h.get_by_id::<HostedParamDialog>(open.id).is_some_and(HostedParamDialog::is_previewing)))
+}
+
+impl Open {
+    fn in_source(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|doc| doc.uid == self.document)
+    }
+}
+
+fn owns_preview(app: &VectorcraftApp) -> bool {
+    app.session.active().and_then(|st| st.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == CMD)
 }
