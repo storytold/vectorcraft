@@ -329,14 +329,15 @@ impl Session {
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
+}
 
-    /// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it (Override Character
-    /// Color as set): the Graphic Styles panel's previews.
-    pub fn styled(&self, n: &Node, g: &GraphicStyle) -> Node {
-        let mut n = n.clone();
-        style_node(&mut n, g, &mut None, self.prefs.override_char_color);
-        n
-    }
+/// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it, type's characters too
+/// with `override_char_color` (the preference Override Character Color): the Graphic Styles
+/// panel's previews.
+pub fn styled_node(n: &Node, g: &GraphicStyle, override_char_color: bool) -> Node {
+    let mut n = n.clone();
+    style_node(&mut n, g, &mut None, override_char_color);
+    n
 }
 
 // ---------- commands ----------
@@ -544,38 +545,48 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     let chars = s.prefs.override_char_color;
     let before = s.doc()?.doc.clone();
     s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
-        let id = d.graphic_style_id(i);
-        let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
-        // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
-        // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
-        // source or as a linked object: the graph draws it again from the design.
-        let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && Some(n.id) != src);
-        let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
-            linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
-        set_link(d, &edited, None);
-        // A linked graph series group passes the style to the paths directly inside it, so the graph stores it, and
-        // goes back to the empty appearance the graph draws it with; a linked Axes or Legend group does the same with its
-        // lines and labels. The source and the edited paths keep their look, and a member linked to another style keeps
-        // its look and its link.
-        let mut follow_marks = super::graph::series_group_marks(d, &follow);
-        let edited: HashSet<NodeId> = edited.into_iter().collect();
-        let takes_style = |nid: NodeId| d.node(nid).is_some_and(|n| n.extras().graphic_style.is_none_or(|g| g == id));
-        follow_marks.retain(|nid| Some(*nid) != src && !edited.contains(nid) && takes_style(*nid));
-        super::appearance::clear_stood_for(d, &super::appearance::stood_for(&follow, &follow_marks));
-        let g = d.graphic_styles[i].clone();
-        let mut shared = None;
-        for nid in &follow_marks {
-            apply_style(d, *nid, &g, &mut shared, chars);
-        }
-        super::appearance::capture_series_writes(&before, d, &follow_marks, (true, true), (true, true), false, true);
-        super::graph::capture_label_rows(d, &follow_marks);
-        if let Some(src) = src {
-            let link = (!super::graph::is_design_art(d, src)).then_some(id);
-            set_link(d, &[src], link);
-        }
+        redefine_in(d, &before, i, look, src, chars);
         Ok(())
     })?;
     Ok(json!({ "name": name }))
+}
+
+/// Replace graphic style `i` of `d` with the fills, strokes, effects and transparency of `look`,
+/// keeping its name and id, as Redefine Graphic Style does: the objects still linked to it follow
+/// the new definition, edited ones are unlinked and keep their look, and object `src` (the one the
+/// look comes from, if any) becomes linked. `before` is `d` before the edit; `chars` is Override
+/// Character Color.
+pub(crate) fn redefine_in(d: &mut Document, before: &Document, i: usize, look: GraphicStyle, src: Option<NodeId>, chars: bool) {
+    let id = d.graphic_style_id(i);
+    let name = d.graphic_styles[i].name.clone();
+    let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name, id, ..look });
+    // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
+    // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
+    // source or as a linked object: the graph draws it again from the design.
+    let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && Some(n.id) != src);
+    let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
+        linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
+    set_link(d, &edited, None);
+    // A linked graph series group passes the style to the paths directly inside it, so the graph stores it, and
+    // goes back to the empty appearance the graph draws it with; a linked Axes or Legend group does the same with its
+    // lines and labels. The source and the edited paths keep their look, and a member linked to another style keeps
+    // its look and its link.
+    let mut follow_marks = super::graph::series_group_marks(d, &follow);
+    let edited: HashSet<NodeId> = edited.into_iter().collect();
+    let takes_style = |nid: NodeId| d.node(nid).is_some_and(|n| n.extras().graphic_style.is_none_or(|g| g == id));
+    follow_marks.retain(|nid| Some(*nid) != src && !edited.contains(nid) && takes_style(*nid));
+    super::appearance::clear_stood_for(d, &super::appearance::stood_for(&follow, &follow_marks));
+    let g = d.graphic_styles[i].clone();
+    let mut shared = None;
+    for nid in &follow_marks {
+        apply_style(d, *nid, &g, &mut shared, chars);
+    }
+    super::appearance::capture_series_writes(before, d, &follow_marks, (true, true), (true, true), false, true);
+    super::graph::capture_label_rows(d, &follow_marks);
+    if let Some(src) = src {
+        let link = (!super::graph::is_design_art(d, src)).then_some(id);
+        set_link(d, &[src], link);
+    }
 }
 
 fn style_break_link(s: &mut Session, p: &Value) -> Result<Value> {

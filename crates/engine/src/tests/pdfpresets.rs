@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use crate::Session;
-use crate::cmd::fileio::pdf::DEFAULT_PRESET;
+use vectorcraft_pdf::{APP, default_preset_name};
 
 fn session() -> Session {
     let mut s = Session::new();
@@ -31,14 +31,15 @@ fn built_in_presets_are_listed_and_read_only() {
     let mut s = session();
     let v = s.execute("pdf.preset.list", &json!({})).unwrap();
     let rows = v["presets"].as_array().unwrap();
-    assert_eq!(rows[0]["name"], DEFAULT_PRESET);
+    let default = default_preset_name(APP);
+    assert_eq!(rows[0]["name"], default);
     assert!(rows.iter().all(|r| r["builtIn"] == true && !r["description"].as_str().unwrap().is_empty()));
     let row = |n: &str| rows.iter().find(|r| r["name"] == n).unwrap_or_else(|| panic!("{n}"));
     for n in ["High Quality Print", "Press Quality", "Smallest File Size", "PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4:2010"] {
         assert_eq!(row(n)["builtIn"], true);
     }
     assert!(rows.iter().all(|r| r["supported"] == true), "every built-in standard is written");
-    assert_eq!(row(DEFAULT_PRESET)["settings"]["preserveEditing"], true);
+    assert_eq!(row(&default)["settings"]["preserveEditing"], true);
     // Read-only: neither changed nor deleted, in any case.
     assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "press quality", "compatibility": "1.4"}))));
     assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "default"}))));
@@ -96,7 +97,7 @@ fn presets_export_and_import_round_trip() {
     let r = s.execute("pdf.preset.import", &json!({"data": text})).unwrap();
     assert_eq!(r["imported"], json!(["Proof", "Press Quality 2"]), "a built-in name gets a number");
     assert_eq!(s.prefs.pdf_presets[0], saved[0], "the same preset comes back");
-    let press = vectorcraft_pdf::builtin_preset("Press Quality").unwrap();
+    let press = vectorcraft_pdf::builtin_preset("Press Quality", APP).unwrap();
     assert_eq!(s.prefs.pdf_presets[1].settings, press.settings);
     // replace: saved presets of the same names are overwritten.
     let r = s.execute("pdf.preset.import", &json!({"data": text, "replace": true})).unwrap();

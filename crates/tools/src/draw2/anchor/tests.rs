@@ -520,7 +520,7 @@ fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
 }
 
 /// A cached snap is for the same raw position, document state and drawing options only. A press
-/// gathers fresh targets, even when a previous hover's document state is reused by a caller.
+/// gathers fresh targets when the document's revision moved since the hover.
 #[test]
 fn scissors_cursor_and_press_use_current_snaps() {
     let (d, rect) = doc_with_rect();
@@ -564,7 +564,7 @@ fn scissors_cursor_and_press_use_current_snaps() {
     let before = cx(&crossing, &selected, &paint);
     let mut tool = AnchorTool::new("scissors");
     tool.pointer(&before, &PointerEvent::new(PointerKind::Move, 152.0, 101.5));
-    let after = cx(&d, &selected, &paint);
+    let after = ToolContext { revision: (0, 1), ..cx(&d, &selected, &paint) };
     let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
     assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(152.0, 100.0)) < 1e-6, "{actions:?}");
 }

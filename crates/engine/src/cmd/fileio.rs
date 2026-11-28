@@ -19,6 +19,7 @@
 //! - `metafile`: EMF and WMF export, open and place; PICT open and place.
 //! - `cdr`: `.cdr` drawings of versions 1 to 27 and `.cdt` templates, and `.cmx` files with
 //!   32-bit coordinates, open and place.
+//! - `cmx`: `.cmx` export (a page for each chosen artboard, a layer for each layer with art on it).
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -31,13 +32,14 @@ mod action_batch;
 mod affinity;
 mod batch;
 mod cdr;
+mod cmx;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
-mod importer;
+pub(crate) mod importer;
 pub mod jxlread;
 mod legacy_ai;
 mod load;
@@ -49,6 +51,8 @@ mod jp2read;
 mod metafile;
 mod naming;
 mod native;
+mod pcraftread;
+pub(crate) use pcraftread::is_pcraft;
 mod pcxread;
 pub mod pdf;
 mod pdfimport;
@@ -167,8 +171,8 @@ use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
     export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
-    open_filters, opens_as_other, opens_with_importer, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name,
-    titled_for_export, writable_format,
+    open_filters, opens_as_other, opens_with_importer, place_dialog_filters, place_filters, places_with_importer, plugin_formats, read_extensions,
+    readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]
@@ -261,6 +265,8 @@ mod tests_psdslices;
 mod tests_heifread;
 #[cfg(test)]
 mod tests_jp2read;
+#[cfg(test)]
+mod tests_pcraftread;
 #[cfg(test)]
 mod tests_pcxread;
 #[cfg(test)]

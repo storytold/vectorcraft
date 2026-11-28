@@ -1,19 +1,38 @@
-use super::bar::home_key;
-use super::invoke::menu_dialog;
+use craft::behavior::dock::Action;
+use craft::ui::canvas::{ViewCommands, ViewRequest};
+use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
+
+use super::invoke::open_menu_dialog;
+use super::model::home_key;
 use super::slots::{recent_readable, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::state::{checked, selected_image};
 use super::ui_commands::UI_COMMANDS;
 use super::{Brightness, Face, SaveMode, Value, VectorcraftApp, io, json, next_zoom};
+use crate::UiState;
+use crate::i18n::LangExt as _;
 
 /// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
 /// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`), or a library panel's id
 /// as it is (`library:swatches:pastels`).
-pub(crate) fn normalize_panel(input: &str) -> Option<&'static str> {
+pub(crate) fn normalize_panel(input: &str) -> Option<&str> {
     let name = input.trim();
     crate::state::all_panels()
         .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
         .map(|(id, _)| id)
-        .or_else(|| crate::panels::library_panel::intern(input))
+        .or_else(|| crate::panels::library_panel::parse(input).map(|_| input))
+}
+
+/// The dock panel of the `toolbar` param: a toolbar made with New Toolbar, or the Tools panel.
+pub(super) fn toolbar_panel(ui: &UiState, p: &Value) -> Result<String, String> {
+    let name = crate::custom_toolbars::target(ui, p)?;
+    Ok(name
+        .and_then(|n| crate::custom_toolbars::find(ui, &n))
+        .map_or_else(|| crate::toolbar::TOOLS.to_owned(), |b| crate::custom_toolbars::panel_id(b.id)))
+}
+
+/// Whether the toolbar in dock panel `panel` lays its tools out in two columns.
+pub(super) fn toolbar_double(ui: &UiState, panel: &str) -> bool {
+    crate::panel_docking::column_of(crate::panel_docking::layout_of(ui), panel).is_some_and(|(_, column)| column.steps == Some(2))
 }
 
 /// An optional `{key?: bool}` param: none when it is omitted or null (the commands then toggle).
@@ -116,7 +135,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
         .or_else(|| crate::panels::discover::command(app, id, p))
-        .or_else(|| crate::panels::retype::command(app, id, p))
+        .or_else(|| crate::panels::run_menu_command(app, id, p))
     {
         return Some(r);
     }
@@ -173,7 +192,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Some(params) => io::open_path_with(app, &path, params),
                 None => io::open_path(app, &path),
             },
-            None => io::open_dialog(app).map(|_| Value::Null),
+            None => io::open_dialog(app),
         },
         "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the
@@ -196,7 +215,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         // Without params the save panel picks the file, then its format's options dialog follows.
         "document.exportSelection" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::export_selection(app),
         "document.exportSelection" => {
-            io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
+            io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }, |_, path| Ok(json!({ "path": path })))
         }
         // Bytes sent by an agent go straight to the engine; a path or nothing opens it here.
         "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
@@ -250,27 +269,30 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.exportForScreens" => io::export_for_screens(app, p.clone()),
-        "file.export.png" if s("path").is_none() => io::target_path(app, None, "png").and_then(|path| {
-            let f = vectorcraft_engine::cmd::fileio::format("png").ok_or("no PNG encoder")?;
+        "file.export.png" if s("path").is_none() => {
             let mut params = if p.is_object() { p.clone() } else { json!({}) };
-            params["format"] = json!("png");
-            params["path"] = json!(path);
-            // No artboard named: the artboard in use rather than the first (#5502), or each one the
-            // Artboard tool has selected, one file each.
-            let named = ["useArtboards", "rect"].iter().chain(vectorcraft_engine::cmd::fileio::ARTBOARD_PARAMS.iter()).any(|k| !params[*k].is_null());
-            let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
-            if !named && n > 0 {
-                match crate::panels::artboards::picked(app, n).as_slice() {
-                    [i] => params["artboard"] = json!(i),
-                    several => {
-                        params["artboards"] = json!(several);
-                        params["useArtboards"] = json!(true);
+            io::target_path(app, None, "png", move |app, path| {
+                let f = vectorcraft_engine::cmd::fileio::format("png").ok_or("no PNG encoder")?;
+                params["format"] = json!("png");
+                params["path"] = json!(path);
+                // No artboard named: the artboard in use rather than the first (#5502), or each one the
+                // Artboard tool has selected, one file each.
+                let named =
+                    ["useArtboards", "rect"].iter().chain(vectorcraft_engine::cmd::fileio::ARTBOARD_PARAMS.iter()).any(|k| !params[*k].is_null());
+                let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+                if !named && n > 0 {
+                    match crate::panels::artboards::picked(app, n).as_slice() {
+                        [i] => params["artboard"] = json!(i),
+                        several => {
+                            params["artboards"] = json!(several);
+                            params["useArtboards"] = json!(true);
+                        }
                     }
                 }
-            }
-            crate::dialogs::open_raster_options(app, f, params);
-            Ok(Value::Null)
-        }),
+                crate::dialogs::open_raster_options(app, f, params);
+                Ok(Value::Null)
+            })
+        }
         "file.export.png" => io::export(app, Some("png"), s("path"), p),
         "file.documentSetup" => crate::dialogs::open_document_setup(app),
         "edit.preferences" => {
@@ -398,15 +420,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
         "effect.last" => match app.last_effect.clone() {
-            Some((e, params)) => {
-                let label = vectorcraft_effects::effect_info(&e).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| e.clone());
-                let mut fields = params.as_object().cloned().unwrap_or_default();
-                fields.insert("__effect".into(), json!(e));
-                fields.insert("__label".into(), json!(label));
-                fields.insert("preview".into(), json!(true));
-                app.ui.dialog = Some(crate::state::Dialog { kind: "effect".into(), fields });
-                Ok(Value::Null)
-            }
+            Some((e, params)) => crate::dialogs::effect::open_last(app, &e, params),
             None => Err("no effect applied yet".into()),
         },
         id if id.starts_with("type.recentFont") => {
@@ -455,12 +469,13 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
-            let print = app.session.prefs.display_print_size;
+            let print = app.print_ppi();
             // Selection & Anchor Display › Zoom to Selection: the selection comes to the middle.
             let focus = if app.session.prefs.zoom_to_selection { app.selection_box().map(|b| b.center()) } else { None };
             match app.view_mut() {
                 Some(v) => {
-                    v.zoom = next_zoom(v.zoom, up);
+                    v.zoom = next_zoom(v.zoom, up, print);
+                    v.fit_zoom = None;
                     if let Some(c) = focus {
                         v.center = c;
                     }
@@ -470,7 +485,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "view.setZoom" => {
-            let print = app.session.prefs.display_print_size;
+            let print = app.print_ppi();
             let (zoom, center) = match opt_number(p, "zoom").and_then(|z| Ok((z, opt_point(p, "center")?))) {
                 Ok(given) => given,
                 Err(e) => return Some(Err(e)),
@@ -479,6 +494,8 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = z.clamp(0.0313, 640.0);
+                    // A percentage, not a fit: the first reading of the display keeps it.
+                    v.fit_zoom = None;
                     v.fitted = true;
                     if let Some(c) = center {
                         v.center = c;
@@ -489,7 +506,12 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "view.fitArtboard" | "view.fitAll" | "view.actualSize" => {
-            crate::canvas::fit(app, id);
+            let command = match id {
+                "view.fitArtboard" => ViewCommands::FitArtboard,
+                "view.fitAll" => ViewCommands::FitOnScreen,
+                _ => ViewCommands::ActualPixels,
+            };
+            app.request_view(ViewRequest::Command(command), None);
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
@@ -591,32 +613,31 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 }
             }
         }
-        "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbar" => {
+            let on = !crate::toolbar::shown(&app.ui);
+            crate::toolbar::set_shown(app, on);
+            Ok(json!(on))
+        }
         "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.toolbar_compact);
             app.ui.toolbar_compact = on;
             json!(on)
         }),
         "window.toolbarColumns" => {
-            let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
-                Ok(t) => t,
+            let panel = match toolbar_panel(&app.ui, p) {
+                Ok(panel) => panel,
                 Err(e) => return Some(Err(e)),
             };
-            let double = match toolbar.as_deref().and_then(|name| crate::custom_toolbars::find_mut(&mut app.ui, name)) {
-                Some(b) => &mut b.double,
-                None => &mut app.ui.toolbar_double,
-            };
-            opt_bool(p, "double").map(|on| {
-                let on = on.unwrap_or(!*double);
-                *double = on;
-                json!(on)
+            opt_bool(p, "double").and_then(|on| {
+                let on = on.unwrap_or(!toolbar_double(&app.ui, &panel));
+                let ctx = app.ui_ctx.clone();
+                crate::panel_docking::apply(app, ctx.as_ref(), vec![Action::set_column_steps(panel, if on { 2 } else { 1 })])?;
+                Ok(json!(on))
             })
         }
-        "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
-        "window.toolsBesideCanvas" => opt_bool(p, "on").map(|on| {
-            let on = on.unwrap_or(!app.ui.tools_beside_canvas);
-            app.ui.tools_beside_canvas = on;
-            json!(on)
+        "window.toolbarAdvanced" => opt_bool(p, "advanced").and_then(|advanced| match advanced {
+            Some(advanced) => crate::edit_toolbar::pick_layout(app, advanced).map(|()| json!(advanced)),
+            None => flag(&mut app.ui.toolbar_advanced),
         }),
         "imageTrace.preview" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.image_trace_preview);
@@ -640,6 +661,16 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     Some(r)
 }
 
+/// Pins or unpins a canvas bar (`{pinned?}`, none toggles). The bar settles it on its next pass: pinned where it
+/// shows, or unpinned following its anchor from there.
+fn pin_bar(place: &mut crate::canvas::bar_place::KeyedPlace, p: &Value) -> Result<Value, String> {
+    opt_bool(p, "pinned").map(|pinned| {
+        let pinned = pinned.unwrap_or(!place.place.pinned);
+        place.place.pinned = pinned;
+        json!(pinned)
+    })
+}
+
 /// UI commands, part 6.
 fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
@@ -650,19 +681,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     let r = match id {
         "window.taskBar" => flag(&mut app.ui.task_bar),
         "window.pathfinder.compoundShapes" => flag(&mut app.ui.shape_modes_compound),
-        "window.taskBar.pin" => {
-            let place = &mut app.ui.task_bar_place;
-            opt_bool(p, "pinned").map(|pinned| {
-                let pinned = pinned.unwrap_or(!place.pinned);
-                // Pinning holds the bar where it shows; unpinning lets it follow the selection from
-                // there (the bar turns its pinned spot into an offset when it is next drawn).
-                if pinned && !place.pinned {
-                    place.pin_at = place.shown_at;
-                }
-                place.pinned = pinned;
-                json!(pinned)
-            })
-        }
+        "window.taskBar.pin" => pin_bar(&mut app.ui.task_bar_place, p),
         "window.taskBar.reset" => {
             app.ui.task_bar_place = Default::default();
             Ok(Value::Null)
@@ -688,17 +707,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         // More Options › Reset Bar Actions: every action and chip shows again.
         "window.taskBar.resetActions" => Ok(json!(std::mem::take(&mut app.ui.task_bar_hidden_actions))),
         "window.quickPenToolbar" => flag(&mut app.ui.quick_pen_bar),
-        "window.quickPenToolbar.pin" => {
-            let place = &mut app.ui.quick_pen_bar_place;
-            opt_bool(p, "pinned").map(|pinned| {
-                let pinned = pinned.unwrap_or(!place.pinned);
-                if pinned && !place.pinned {
-                    place.pin_at = place.shown_at;
-                }
-                place.pinned = pinned;
-                json!(pinned)
-            })
-        }
+        "window.quickPenToolbar.pin" => pin_bar(&mut app.ui.quick_pen_bar_place, p),
         "window.quickPenToolbar.reset" => {
             app.ui.quick_pen_bar_place = Default::default();
             Ok(Value::Null)
@@ -725,43 +734,28 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Err(e) => Err(e.to_string()),
             }
         }
-        "window.dock" => {
-            let ui = &mut app.ui;
-            // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
-            // another way since then (Window › Tools, Window › Control). Panels shown with Shift+Tab
-            // in between stay shown. Switching workspaces clears the record (`workspaces::apply`).
-            // A shown toolbar made with New Toolbar counts as a bar Tab hides, so a record with none
-            // of the three bars is of the toolbars made with New Toolbar alone.
-            let custom = ui.custom_toolbars.iter().any(|b| b.shown);
-            let hid = ui.tab_hid.take().filter(|_| !ui.toolbar && !ui.control_bar);
-            let on = if let Some(h) = hid {
-                ui.dock |= h.dock;
-                ui.toolbar = h.toolbar;
-                ui.control_bar = h.control_bar;
-                true
-            } else if ui.dock || ui.toolbar || ui.control_bar || custom {
-                ui.tab_hid = Some(crate::state::TabHid { dock: ui.dock, toolbar: ui.toolbar, control_bar: ui.control_bar });
-                ui.dock = false;
-                ui.toolbar = false;
-                ui.control_bar = false;
-                ui.open_panel = None;
-                false
-            } else {
-                ui.dock = true;
-                ui.toolbar = true;
-                ui.control_bar = true;
-                true
-            };
-            Ok(json!(on))
-        }
-        "window.panels" => {
-            let on = !app.ui.dock;
-            app.ui.dock = on;
-            if !on {
-                app.ui.open_panel = None;
+        "window.dock" => match app.ui_ctx.clone() {
+            // Tab: hide the panels, the toolbars and the Control bar, or show what the last Tab
+            // hid; the window's shell applies it in its next pass.
+            Some(ctx) => {
+                let hidden = craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).hidden;
+                request_chrome_toggle(&ctx, egui::ViewportId::ROOT, if hidden { ChromeToggle::ShowPanels } else { ChromeToggle::Panels });
+                Ok(json!(hidden))
             }
-            Ok(json!(on))
-        }
+            None => Err("no window".into()),
+        },
+        "window.panels" => match app.ui_ctx.clone() {
+            // Shift+Tab: hide or show the panels, leaving the toolbars and the Control bar.
+            Some(ctx) => {
+                let hidden = craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).panels_hidden;
+                request_chrome_toggle(&ctx, egui::ViewportId::ROOT, if hidden { ChromeToggle::ShowPanels } else { ChromeToggle::PanelsKeepTools });
+                if !hidden {
+                    app.ui.open_panel = None;
+                }
+                Ok(json!(hidden))
+            }
+            None => Err("no window".into()),
+        },
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
             Some(b) => {
                 app.ui.brightness = b;
@@ -813,15 +807,13 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
-            let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            let fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
             // Find and Replace has a dialog of its own, which stays open from match to match.
             if cmd == crate::dialogs::find_replace::COMMAND {
                 return Some(crate::dialogs::find_replace::open(app, &fields));
             }
-            fields.insert("__command".into(), json!(cmd));
-            fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
-            app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });
-            Ok(Value::Null)
+            let label = s("label").unwrap_or(cmd.clone());
+            crate::dialogs::command::open(app, &cmd, &label, fields)
         }
         "effect.applyLast" => match app.last_effect.clone() {
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
@@ -840,7 +832,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match id {
         "help.about" => {
-            app.ui.about = true;
+            crate::credits::open(app);
             Ok(Value::Null)
         }
         "help.checkForUpdates" => crate::updates_ui::check(app),
@@ -978,10 +970,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.panelView" => crate::panels::set_view(app, p),
-        "ui.flattenTransparencyDialog" => {
-            crate::dialogs::flatten::open(app);
-            Ok(Value::Null)
-        }
+        "ui.flattenTransparencyDialog" => crate::dialogs::flatten::open(app),
         _ => return None,
     };
     Some(r)
@@ -995,7 +984,6 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::flattener_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
         }
-        "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.tracingPresetsDialog" => {
             crate::dialogs::tracing_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
@@ -1057,7 +1045,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
         "ui.recolorUndo" => crate::dialogs::recolor::step(app, true),
         "ui.recolorRedo" => crate::dialogs::recolor::step(app, false),
-        "ui.dialogReset" => crate::dialogs::reset(app),
+        "ui.dialogReset" => crate::dialogs::host::reset_top(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.svgFilterDialog" => crate::dialogs::svg_filter::open(app, p),
@@ -1069,13 +1057,9 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::canvas::apply_requests(app, r);
             match s("command").as_deref() {
                 Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-                c => match c.and_then(|c| menu_dialog(app, c)) {
-                    Some((kind, fields)) => {
-                        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                        Ok(Value::Null)
-                    }
-                    None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
-                },
+                c => c
+                    .and_then(|c| open_menu_dialog(app, c))
+                    .unwrap_or_else(|| Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into())),
             }
         }
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
@@ -1089,7 +1073,8 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
-        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
+        crate::dialogs::save_pdf::SAVE_SUMMARY => crate::dialogs::save_pdf::save_summary(app, p),
+
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)
@@ -1114,7 +1099,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.pdfPresetDialog" => crate::dialogs::open_pdf_preset(app, p),
         // Save for Office Documents…: its dialog; with options, pick the file (or write `path`).
         "document.exportForOffice" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::office_export::open(app),
-        "document.exportForOffice" => io::save_command_output(app, id, "png", p.clone()).map(|path| json!({ "path": path })),
+        "document.exportForOffice" => io::save_command_output(app, id, "png", p.clone(), |_, path| Ok(json!({ "path": path }))),
         "ui.dxfOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
         "ui.dxfOptionsDialog" => {
             crate::dialogs::dxf_options::open(app, p);
@@ -1227,11 +1212,16 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
         "plugin.dialog" => crate::dialogs::plugin::open(app, p),
+        crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::open_edit(app, p),
+        crate::dialogs::plugin::APPLY_LAST => crate::dialogs::plugin::apply_last(app),
+        crate::dialogs::plugin::LAST => crate::dialogs::plugin::open_last(app),
         "ui.installPlugin" => io::install_plugin(app, p),
+        crate::dialogs::failed_plugins::COMMAND => crate::dialogs::failed_plugins::open(app),
         "plugin.cancelRuns" => Ok(crate::plugin_runs::cancel_all(app)),
         "plugin.hideRuns" => Ok(crate::plugin_runs::hide_all(app)),
         "imageTrace.cancelRuns" => Ok(crate::trace_runs::cancel_all(app)),
         "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
+        "retype.cancelSearch" => Ok(crate::retype_runs::cancel(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
         "ui.runScript" => crate::dialogs::script_run::command(app, p),
         crate::scripts_menu::COMMAND => crate::scripts_menu::run(app, p),
@@ -1279,6 +1269,6 @@ fn go_to_artboard(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     }
     .min(last);
     crate::panels::artboards::select(app, to);
-    crate::canvas::fit(app, "view.fitArtboard");
+    app.request_view(ViewRequest::Command(ViewCommands::FitArtboard), None);
     Ok(json!({ "index": to }))
 }

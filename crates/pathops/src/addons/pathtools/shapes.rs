@@ -7,7 +7,7 @@
 
 use std::f64::consts::{PI, TAU};
 
-use kurbo::{Affine, Point, Vec2};
+use kurbo::{Affine, Line, ParamCurve, PathSeg, Point, Vec2};
 use vectorcraft_geom::corners::cut_corners;
 use vectorcraft_geom::shapes::KAPPA;
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
@@ -22,6 +22,8 @@ pub const MIN_SIZE: f64 = 0.01;
 pub const MAX_SIZE: f64 = 16384.0;
 /// The farthest from the origin a centre may be (pt).
 pub const MAX_CENTER: f64 = 1e7;
+/// A slice narrower than this (degrees), or this close to a whole turn, leaves the whole shape.
+const SLICE_EPS: f64 = 1e-9;
 
 /// The kinds of parametric shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,6 +105,12 @@ impl ShapeKind {
         !matches!(self, ShapeKind::Ellipse | ShapeKind::Ring)
     }
 
+    /// Can it be cut as a slice (`slice_start`, `slice_end`)? The rectangle, ellipse, polygon,
+    /// star and ring.
+    pub fn slices(self) -> bool {
+        matches!(self, ShapeKind::Rectangle | ShapeKind::Ellipse | ShapeKind::Polygon | ShapeKind::Star | ShapeKind::Ring)
+    }
+
     /// The kind's own values `a` and `b` (as fractions of its size), where it has them: a star's
     /// and a ring's inner radius; an arrow's head length and shaft width; a cross's bar offset
     /// (−: up) and arm thickness; a heart's notch depth and the roundness of its point; a gear's
@@ -137,6 +145,13 @@ pub struct ParametricShape {
     pub b: f64,
     /// The corners' radius (pt), each no larger than fits ([`ShapeKind::rounds`]).
     pub radius: f64,
+    /// Where a slice starts and ends ([`ShapeKind::slices`]): degrees clockwise from the shape's
+    /// top, 0 to 360, measured as if the shape were as high as it is wide (45° is a rectangle's
+    /// top right corner). The slice runs clockwise from the start to the end and back through
+    /// the center (a ring's runs back along its hole); the same start and end leave the whole
+    /// shape. Rounded corners are rounded first; the cut leaves sharp corners.
+    pub slice_start: f64,
+    pub slice_end: f64,
 }
 
 /// Where a shape is wrong, as `(param, min, max)`: `param` must be from `min` to `max`.
@@ -146,16 +161,28 @@ impl ParametricShape {
     /// A `kind` of shape about `center`, `width` × `height`, with the kind's defaults.
     pub fn new(kind: ShapeKind, center: Point, width: f64, height: f64) -> Self {
         let [a, b] = kind.values().map(|v| v.map_or(0.0, |v| v.default));
-        Self { kind, center, width, height, rotation: 0.0, count: kind.default_count(), a, b, radius: 0.0 }
+        Self { kind, center, width, height, rotation: 0.0, count: kind.default_count(), a, b, radius: 0.0, slice_start: 0.0, slice_end: 0.0 }
     }
 
-    /// The shape as another kind, keeping its place, size, rotation and corner radius; its count
-    /// and values are the new kind's defaults.
+    /// The shape as another kind, keeping its place, size, rotation, corner radius and slice;
+    /// its count and values are the new kind's defaults.
     pub fn with_kind(self, kind: ShapeKind) -> Self {
         if kind == self.kind {
             return self;
         }
-        Self { radius: self.radius, rotation: self.rotation, ..Self::new(kind, self.center, self.width, self.height) }
+        Self {
+            radius: self.radius,
+            rotation: self.rotation,
+            slice_start: self.slice_start,
+            slice_end: self.slice_end,
+            ..Self::new(kind, self.center, self.width, self.height)
+        }
+    }
+
+    /// Is it cut as a slice: a kind that slices, with a start and an end that differ?
+    pub fn sliced(&self) -> bool {
+        let span = (self.slice_end - self.slice_start).rem_euclid(360.0);
+        self.kind.slices() && span > SLICE_EPS && span < 360.0 - SLICE_EPS
     }
 
     /// The first number out of its range, if any (every number must also be finite).
@@ -173,6 +200,11 @@ impl ParametricShape {
         }
         if !self.rotation.is_finite() {
             return Err(("rotation", -360.0, 360.0));
+        }
+        for (key, v) in [("sliceStart", self.slice_start), ("sliceEnd", self.slice_end)] {
+            if !within(v, 0.0, 360.0) {
+                return Err((key, 0.0, 360.0));
+            }
         }
         if !(MIN_COUNT..=MAX_COUNT).contains(&self.count) {
             return Err(("count", f64::from(MIN_COUNT), f64::from(MAX_COUNT)));
@@ -269,6 +301,9 @@ impl ParametricShape {
         if self.radius > 0.0 && self.kind.rounds() {
             path = cut_corners(&path, &vec![self.radius; path.anchor_count()], &[]).0;
         }
+        if self.sliced() {
+            path = slice(&path, rx, ry, self.slice_start, self.slice_end)?;
+        }
         path.transform(self.frame());
         Some(path)
     }
@@ -341,6 +376,116 @@ fn heart(depth: f64, round: f64, at: &dyn Fn(f64, f64) -> Point) -> SubPath {
         ],
         true,
     )
+}
+
+/// A place on a closed subpath: segment `k` at parameter `t` (0 up to 1).
+type Spot = (usize, f64);
+
+/// Segment `k` of `sp`: a line when it has no handles, else a cubic.
+fn piece(sp: &SubPath, k: usize) -> PathSeg {
+    let c = sp.segment(k);
+    if sp.segment_is_line(k) { PathSeg::Line(Line::new(c.p0, c.p3)) } else { PathSeg::Cubic(c) }
+}
+
+/// Where the ray from the origin along `dir` crosses closed `sp` (the farthest crossing), or
+/// `None` when it misses. `reach` is longer than any point of `sp` is from the origin.
+fn crossing(sp: &SubPath, dir: Vec2, reach: f64) -> Option<Spot> {
+    let n = sp.segment_count();
+    let ray = Line::new(Point::ZERO, (dir.normalize() * reach).to_point());
+    let mut best: Option<(f64, Spot)> = None;
+    for k in 0..n {
+        for hit in piece(sp, k).intersect_line(ray) {
+            if best.is_none_or(|(far, _)| hit.line_t > far) {
+                best = Some((hit.line_t, (k, hit.segment_t.clamp(0.0, 1.0))));
+            }
+        }
+    }
+    let (_, (k, t)) = best?;
+    // The end of one segment is the start of the next.
+    Some(if t >= 1.0 { ((k + 1) % n, 0.0) } else { (k, t) })
+}
+
+/// Append to `out`, whose last anchor is at `from` on closed `sp`, the stretch of `sp` from
+/// `from` forward to `to`: all the way round when `to` is not after `from` on one segment. The
+/// anchors of `sp` it passes keep their handles and kind.
+fn walk(sp: &SubPath, from: Spot, to: Spot, out: &mut Vec<Anchor>) {
+    let n = sp.segment_count();
+    let mut emit = |k: usize, t0: f64, t1: f64| {
+        if t1 - t0 <= 1e-12 {
+            return;
+        }
+        let seg = piece(sp, k).subsegment(t0..t1);
+        let end = seg.end();
+        let whole_end = t1 >= 1.0;
+        let kind = if whole_end { sp.anchors.get((k + 1) % n).map_or(AnchorKind::Corner, |a| a.kind) } else { AnchorKind::Corner };
+        match seg {
+            PathSeg::Cubic(c) => {
+                if let Some(last) = out.last_mut() {
+                    last.h_out = c.p1;
+                }
+                out.push(Anchor { p: end, h_in: c.p2, h_out: end, kind });
+            }
+            _ => out.push(Anchor { p: end, h_in: end, h_out: end, kind }),
+        }
+    };
+    let ((k0, t0), (k1, t1)) = (from, to);
+    if k0 == k1 && t1 > t0 {
+        emit(k0, t0, t1);
+        return;
+    }
+    emit(k0, t0, 1.0);
+    let mut k = (k0 + 1) % n;
+    while k != k1 {
+        emit(k, 0.0, 1.0);
+        k = (k + 1) % n;
+    }
+    emit(k1, 0.0, t1);
+}
+
+/// The point at `at` on `sp`.
+fn point_at(sp: &SubPath, at: Spot) -> Point {
+    piece(sp, at.0).eval(at.1)
+}
+
+/// `path` (an outline about the origin, upright, `rx` × `ry` half its size) cut from `start` to
+/// `end` degrees clockwise from the top, measured as if `rx` and `ry` were equal: one contour
+/// runs from the center out along the start, round to the end and back to the center; a contour
+/// with a hole (a ring) runs round the outside from the start to the end, then back along the
+/// hole. `None` when a cut misses the outline.
+fn slice(path: &PathData, rx: f64, ry: f64, start: f64, end: f64) -> Option<PathData> {
+    let dir = |deg: f64| {
+        let (s, c) = deg.to_radians().sin_cos();
+        Vec2::new(s * rx, -c * ry)
+    };
+    let far = path.anchors().flat_map(|(_, _, a)| [a.p, a.h_in, a.h_out]).fold(0.0, |m: f64, p| m.max(p.to_vec2().hypot()));
+    let reach = 2.0 * far + 1.0;
+    let (d0, d1) = (dir(start), dir(end));
+    let mut anchors = vec![];
+    match path.subpaths.as_slice() {
+        [outer] => {
+            let (a, b) = (crossing(outer, d0, reach)?, crossing(outer, d1, reach)?);
+            anchors.push(Anchor::corner(Point::ZERO));
+            anchors.push(Anchor::corner(point_at(outer, a)));
+            walk(outer, a, b, &mut anchors);
+        }
+        [outer, hole] => {
+            let (a, b) = (crossing(outer, d0, reach)?, crossing(outer, d1, reach)?);
+            let (ha, hb) = (crossing(hole, d0, reach)?, crossing(hole, d1, reach)?);
+            anchors.push(Anchor::corner(point_at(outer, a)));
+            walk(outer, a, b, &mut anchors);
+            if let Some(last) = anchors.last_mut() {
+                last.kind = AnchorKind::Corner;
+            }
+            anchors.push(Anchor::corner(point_at(hole, hb)));
+            walk(hole, hb, ha, &mut anchors);
+        }
+        _ => return None,
+    }
+    // Where the cut meets the outline the corners are sharp.
+    if let Some(last) = anchors.last_mut() {
+        last.kind = AnchorKind::Corner;
+    }
+    Some(PathData::single(SubPath::new(anchors, true)))
 }
 
 /// The affine map taking each of `from` to the point of `to` at its index, worked out from
@@ -556,6 +701,93 @@ mod tests {
         }
     }
 
+    fn sliced(kind: ShapeKind, start: f64, end: f64) -> ParametricShape {
+        ParametricShape { slice_start: start, slice_end: end, ..shape(kind) }
+    }
+
+    #[test]
+    fn an_ellipse_sliced_from_the_top_to_the_right_is_its_top_right_quarter() {
+        let p = sliced(ShapeKind::Ellipse, 0.0, 90.0).path().unwrap();
+        assert_eq!(p.subpaths.len(), 1);
+        assert!(p.subpaths[0].closed);
+        assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 50.0), "it starts at the center");
+        let b = p.bounds().unwrap();
+        assert!((b.x0 - 100.0).abs() < 1e-9 && (b.x1 - 140.0).abs() < 1e-9 && (b.y0 - 20.0).abs() < 1e-9 && (b.y1 - 50.0).abs() < 1e-9, "{b:?}");
+        let whole = shape(ShapeKind::Ellipse).path().unwrap().subpaths[0].area().abs();
+        assert!((p.subpaths[0].area().abs() / whole - 0.25).abs() < 1e-6);
+        // The other way round: the three quarters left.
+        let rest = sliced(ShapeKind::Ellipse, 90.0, 0.0).path().unwrap();
+        assert!((rest.subpaths[0].area().abs() / whole - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn slice_angles_are_measured_as_if_the_shape_were_square() {
+        // From 45° to 135°: from the top right corner to the bottom right one, through the center.
+        let p = sliced(ShapeKind::Rectangle, 45.0, 135.0).path().unwrap();
+        let pts: Vec<Point> = p.anchors().map(|(_, _, a)| a.p).collect();
+        let want = [Point::new(100.0, 50.0), Point::new(140.0, 20.0), Point::new(140.0, 80.0)];
+        assert_eq!(pts.len(), 3, "{pts:?}");
+        assert!(pts.iter().zip(want).all(|(a, b)| a.distance(b) < 1e-9), "{pts:?}");
+        assert!(p.anchors().all(|(_, _, a)| !a.has_in() && !a.has_out()), "straight sides stay straight");
+    }
+
+    #[test]
+    fn every_kind_that_slices_is_cut_and_the_others_ignore_it() {
+        for kind in ShapeKind::ALL {
+            let whole = shape(kind).path().unwrap();
+            let cut = sliced(kind, 30.0, 200.0);
+            let p = cut.path().unwrap();
+            if !kind.slices() {
+                assert!(!cut.sliced());
+                assert_eq!(p, whole, "{kind:?}");
+                continue;
+            }
+            assert!(cut.sliced(), "{kind:?}");
+            assert_eq!(p.subpaths.len(), 1, "{kind:?}: one contour, a ring's included");
+            assert!(closed(&p) && within_box(&p, &cut), "{kind:?}");
+            let area = |p: &PathData| p.subpaths.iter().map(|s| s.signed_area()).sum::<f64>().abs();
+            assert!(area(&p) < area(&whole) && area(&p) > 0.0, "{kind:?}: {} of {}", area(&p), area(&whole));
+            // Rounded corners first, then the cut.
+            if kind.rounds() {
+                let round = ParametricShape { radius: 4.0, ..cut }.path().unwrap();
+                assert!(round.anchor_count() > p.anchor_count(), "{kind:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_sliced_ring_runs_back_along_its_hole() {
+        let half = sliced(ShapeKind::Ring, 0.0, 180.0).path().unwrap();
+        let whole = shape(ShapeKind::Ring).path().unwrap();
+        let area = |p: &PathData| p.subpaths.iter().map(|s| s.signed_area()).sum::<f64>().abs();
+        assert_eq!(half.subpaths.len(), 1);
+        assert!((area(&half) / area(&whole) - 0.5).abs() < 1e-6, "{}", area(&half) / area(&whole));
+        assert!(half.bounds().unwrap().x0 >= 100.0 - 1e-9, "the right half");
+    }
+
+    #[test]
+    fn the_same_start_and_end_leave_the_whole_shape() {
+        for (start, end) in [(0.0, 0.0), (90.0, 90.0), (0.0, 360.0), (360.0, 0.0)] {
+            let s = sliced(ShapeKind::Star, start, end);
+            assert!(!s.sliced());
+            assert_eq!(s.path(), shape(ShapeKind::Star).path(), "{start} {end}");
+        }
+    }
+
+    #[test]
+    fn a_sliced_shape_moved_turned_or_stretched_is_recovered() {
+        for kind in ShapeKind::ALL.into_iter().filter(|k| k.slices()) {
+            let s = ParametricShape { rotation: 20.0, ..sliced(kind, 300.0, 100.0) };
+            let p = s.path().unwrap();
+            let xf = Affine::translate((40.0, -15.0)) * Affine::rotate_about(0.5, s.center);
+            let r = s.recover(&p.transformed(xf)).unwrap_or_else(|| panic!("{kind:?} moved and turned"));
+            assert_eq!((r.slice_start, r.slice_end), (300.0, 100.0));
+            let along = s.frame() * Affine::scale_non_uniform(1.5, 0.5) * s.frame().inverse();
+            let r = s.recover(&p.transformed(along)).unwrap_or_else(|| panic!("{kind:?} stretched"));
+            assert!((r.width - 120.0).abs() < 1e-6 && (r.height - 30.0).abs() < 1e-6, "{kind:?} {r:?}");
+        }
+    }
+
     #[test]
     fn numbers_out_of_range_are_refused() {
         let s = shape(ShapeKind::Star);
@@ -570,6 +802,9 @@ mod tests {
             (ParametricShape { radius: -1.0, ..s }, "radius"),
             (ParametricShape { rotation: f64::INFINITY, ..s }, "rotation"),
             (ParametricShape { center: Point::new(1e300, 0.0), ..s }, "center"),
+            (ParametricShape { slice_start: -1.0, ..s }, "sliceStart"),
+            (ParametricShape { slice_end: 360.5, ..s }, "sliceEnd"),
+            (ParametricShape { slice_end: f64::NAN, ..s }, "sliceEnd"),
         ];
         for (shape, key) in bad {
             assert_eq!(shape.check().map_err(|e| e.0), Err(key));
@@ -579,9 +814,10 @@ mod tests {
 
     #[test]
     fn with_kind_keeps_the_place_and_takes_the_new_kinds_defaults() {
-        let s = ParametricShape { rotation: 30.0, radius: 4.0, count: 9, ..shape(ShapeKind::Polygon) };
+        let s = ParametricShape { rotation: 30.0, radius: 4.0, count: 9, slice_start: 10.0, slice_end: 50.0, ..shape(ShapeKind::Polygon) };
         let star = s.with_kind(ShapeKind::Star);
         assert_eq!((star.center, star.width, star.rotation, star.radius, star.count, star.a), (s.center, 80.0, 30.0, 4.0, 5, 0.5));
+        assert_eq!((star.slice_start, star.slice_end), (10.0, 50.0));
         let arrow = star.with_kind(ShapeKind::Arrow);
         assert_eq!((arrow.count, arrow.a, arrow.b), (6, 0.4, 0.4));
         assert_eq!(arrow.check(), Ok(()));

@@ -6,6 +6,7 @@
 
 pub mod blend;
 pub mod cms;
+pub mod css;
 pub mod freeform;
 pub mod gradient;
 pub mod harmony;
@@ -14,6 +15,7 @@ pub mod oklab;
 pub mod palette_io;
 pub mod recolor;
 pub mod swatch;
+pub mod wcag;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};

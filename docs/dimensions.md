@@ -36,19 +36,25 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   before the second click: the rubber band, Shift and the dimension start from where the art puts
   the point then. When that art is deleted before the second click, the point goes back to where
   it was picked.
-  With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
-  preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
+  With Use Preview Bounds on (Preferences › General), a Linear point can land on the preview
+  bounds of a path, a compound path, stroked type, or a group or layer with fills, strokes or
+  effects of its own, wherever those bounds reach past the object's geometric bounds. The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
-  describes measuring a stroked segment by snapping onto its preview bounds. VectorCraft snaps to
-  the four corners of those bounds only, not to their edges, by its own rules: a click within 8
-  pixels of a corner lands on it instead of on the anchor at the same corner of the object's
-  geometric bounds, and any other anchor, of that object or of other art, that is nearer the
-  pointer than the corner takes the point instead. A corner that is also an anchor, as on a path
-  without a stroke, takes the anchor, and so does another path's anchor right on the corner. The
-  corners of a group's own strokes or effects, of type, of paths made into guides and of the
-  members of a compound path on their own are not snapped to. The point is linked to the path (in a compound path, to the member
-  whose own bounds reach nearest to the corner), is held against its anchors and shows the
-  "anchor" label. It does not start construction guides for the second point. For an object that
+  describes measuring a stroked segment by snapping onto its preview bounds. VectorCraft's own
+  rules decide where the point lands on them: a click within 8 pixels of a corner lands on it
+  instead of on the anchor at the same corner of the object's geometric bounds, and any other
+  anchor, of that object or of other art, that is nearer the pointer than the corner takes the
+  point instead. A corner that is also an anchor, as on a path without a stroke, takes the anchor,
+  and so does another path's anchor right on the corner. A click that no anchor, corner, line end,
+  guide, grid or pixel snapping places lands on the nearest point of an edge of the preview bounds
+  within 8 pixels when that edge is nearer the pointer than any segment or dimension line, and
+  shows the "path" label. The corners and edges of paths made into guides and of the members of a
+  compound path on their own are not snapped to. A point on a corner or an edge is linked to the
+  path (in a compound path, group or layer, to the member path whose own bounds reach nearest to
+  the corner, and for an edge to the member holding its nearer corner) and is held against its
+  anchors. A point on the preview bounds of type, or held by type in a group, has no link and
+  stays where it was picked. A point on a corner shows the "anchor" label. Neither kind of point
+  starts construction guides for the second point. For an object that
   is not rotated, a horizontal or vertical dimension between two such corners measures, when it
   is drawn, the outside of the stroke, the width or height that W and H show in the Transform and
   Properties panels. The point then moves with the path's anchors, so a later change to the
@@ -84,6 +90,27 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   line goes where the pointer is. This is VectorCraft's own rule. With Smart Guides and
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
+  The
+  [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
+  describes plotting an object's horizontal and vertical dimensions by holding Alt
+  (Option on macOS) over its path. With Alt held, hovering a path shows a box through the path's
+  outermost points, as a Smart Guide when Smart Guides are on and in the tool's own color when
+  they are off, with its width and height beside the pointer when Measurement Labels are on.
+  Clicking the path, then moving and clicking, places a dimension of the whole path; dragging out
+  from the path places it on release. The rest is VectorCraft's own rule. With
+  the pointer above or below the box the dimension measures the path's width, between its
+  leftmost and rightmost points; to the left or right of the box it measures the height, between
+  the topmost and bottommost points; past a corner, the side the pointer is farther out on
+  decides. The points are read from the segments the path draws, curves included, and an anchor
+  that starts no segment is left out. They are read again whenever the path changes, so a turned
+  path shows its new overall width or height rather than that of its bounding box before the
+  turn. The line keeps its distance from the whole path when the path changes or the dimension
+  changes orientation. With Use Preview Bounds on, the box and the dimension reach the outside of
+  the path's strokes, the width or height that W and H show: each outermost point moves out to the
+  edge of the box the strokes paint (a member of a compound path takes the compound path's
+  strokes, with an arrowhead only where the compound path draws one on that member), and a dimension placed that way measures to there again when the path or its strokes
+  change. Geometry effects are not included. Alt has this effect only before the first point is
+  clicked.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
@@ -133,7 +160,9 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+same place as a reflection, nor for a dimension of a whole path whose box through the path's
+outermost points stays where it was, as after Reverse Path Direction or a reflection across the
+middle of that box. An unlinked aligned dimension that is reflected, or scaled by a
 negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
@@ -171,17 +200,26 @@ another document.
 
 ## Commands
 
-- `dimension.create`: two points, or a source (segment, angle, circle, arc, points), the mode,
-  the orientation of a linear dimension (`aligned`, the default, `horizontal` or `vertical`),
-  offset and style; returns the group id and label. `offset` is the distance of the dimension
-  line from the first point: along the left normal of a → b for an aligned dimension, downward
-  for a horizontal one and leftward for a vertical one. A negative offset goes the other way.
+- `dimension.create`: two points, or a source (segment, angle, circle, arc, points, extent), the
+  mode, the orientation of a linear dimension (`aligned`, the default, `horizontal` or
+  `vertical`), offset and style; returns the group id and label. `{"kind":"extent","node":<id>}`
+  measures a whole path, linear only: between its leftmost and rightmost points when horizontal
+  or aligned, and its topmost and bottommost points when vertical. With `"preview":true` (what
+  the tool records with Use Preview Bounds on; `false` when omitted, and any value other than
+  `true` or `false` is an error) those points move out to the outside of the path's strokes. A
+  version without the extent source does not open a file that holds one, and a version without
+  `preview` measures such a dimension between the points themselves. `offset` is the distance of
+  the dimension line from the first point: along the left normal of a → b for an aligned
+  dimension, downward for a horizontal one and leftward for a vertical one. A negative offset goes
+  the other way.
 - `dimension.update`: restyle or move existing dimensions, or change the orientation of linear
-  ones. A new orientation keeps the line on the side of the points it was on. `at: [x,y]`, applied
-  after `offset`, puts a linear dimension's line through the point, gives an angular dimension's
-  arc a radius of the point's distance from the vertex (at least 12 points), or turns a radius or
-  diameter line toward it, keeping what the dimension measures. An update that
-  changes nothing records no undo step.
+  ones. A new orientation keeps the line on the side of the points it was on. For a dimension of
+  a whole path, a new orientation that would put the line more than 1,000,000 pt from its first
+  point is an error unless the update also gives `offset`. `at: [x,y]`, applied after `offset`,
+  puts a linear dimension's line through the point, gives an angular dimension's arc a radius of
+  the point's distance from the vertex (at least 12 points), or turns a radius or diameter line
+  toward it, keeping what the dimension measures. An update that changes nothing records no undo
+  step.
 - `dimension.applyToAll`: every dimension takes one dimension's style, in one undo step.
 - `tool.select {"tool":"dimension"}` and
   `tool.setOption {"tool":"dimension","values":{"mode":"linear","style":{"units":"mm","scale":"1:10"}}}`

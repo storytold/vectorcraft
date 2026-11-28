@@ -16,8 +16,16 @@ pub const MAX_SIDE: u32 = 4096;
 pub const MAX_PIXELS: u32 = 1 << 21;
 /// The share of the eye's distance a panel is cut at in front of the eye.
 const NEAREST: f64 = 1e-3;
-/// How far apart (points of view depth) two panels may be and still tie.
-const TIE: f64 = 1e-4;
+/// How far apart (the sine of the angle) two panels' normals may be for the panels to lie in one
+/// plane.
+const PARALLEL: f64 = 1e-9;
+/// How far apart two parallel panels' planes may be for the panels to lie in one plane: rounding,
+/// as this many times the precision of a number at their distance from the origin for each hinge
+/// that placed them.
+const COPLANAR: f64 = 16.0 * f64::EPSILON;
+/// How far across a panel's plane (the cosine to its normal) a fold's step may go and still count
+/// as along it.
+const ALONG: f64 = 1e-6;
 /// The light's direction: above, to the left of and toward the viewer.
 const LIGHT: [f64; 3] = [-0.37, 0.56, 0.74];
 
@@ -259,6 +267,13 @@ struct Mapped {
     shade: f32,
 }
 
+impl Mapped {
+    fn flat_at(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        let [u, v, w] = mul(&self.inverse, [x, y, 1.0]);
+        (w > 0.0 && w.is_finite()).then(|| (u / w, v / w)).filter(|(u, v)| u.is_finite() && v.is_finite())
+    }
+}
+
 fn mul(m: &[[f64; 3]; 3], v: V3) -> V3 {
     [dot(m[0], v), dot(m[1], v), dot(m[2], v)]
 }
@@ -278,11 +293,11 @@ fn invert(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
     inv.iter().flatten().all(|v| v.is_finite()).then_some(inv)
 }
 
-fn map_panel(camera: &Camera, f: &super::FoldedPanel) -> Option<Mapped> {
+fn map_panel(camera: &Camera, pose: &super::Pose) -> Option<Mapped> {
     let r = camera.rotation();
-    let turn = |v: V3| mul(&r, f.pose.turn(v));
+    let turn = |v: V3| mul(&r, pose.turn(v));
     let (a, b) = (turn([1.0, 0.0, 0.0]), turn([0.0, 1.0, 0.0]));
-    let o = camera.to_view(f.pose.t);
+    let o = camera.to_view(pose.t);
     let (cx, cy) = (f64::from(camera.width) / 2.0 + camera.pan[0], f64::from(camera.height) / 2.0 + camera.pan[1]);
     let normal = turn([0.0, 0.0, 1.0]);
     let (w, k, printed) = match camera.eye() {
@@ -326,27 +341,33 @@ struct Target {
     panel: Vec<u16>,
 }
 
-/// One panel's fill: its map, rank (for ties), panel number and colors.
+/// One panel's fill: its map, rank and plane (for ties: the plane of every panel by its index, as
+/// [`planes`] gives them), panel number and colors.
 struct Fill<'a> {
     mapped: &'a Mapped,
+    /// The group's comparison plane, or this panel when grouping is bypassed.
+    plane: &'a Mapped,
     rank: u16,
+    planes: &'a [u16],
     panel: u16,
     print: Option<&'a Print>,
+    /// The flat point the map is about ([`Folded::origin`]): a flat point less it is what
+    /// `mapped` maps.
+    origin: [f64; 2],
     inside: [f32; 4],
     outside: [f32; 4],
 }
 
 impl Fill<'_> {
-    /// The document point under pixel center `(x, y)`, or `None` behind the eye.
+    /// The flat point (less [`Fill::origin`]) under pixel center `(x, y)`, or `None` behind the eye.
     fn flat_at(&self, x: f64, y: f64) -> Option<(f64, f64)> {
-        let [u, v, w] = mul(&self.mapped.inverse, [x, y, 1.0]);
-        (w > 0.0 && w.is_finite()).then(|| (u / w, v / w)).filter(|(u, v)| u.is_finite() && v.is_finite())
+        self.mapped.flat_at(x, y)
     }
 
     /// The color of the panel at flat point `(u, v)`, `footprint` points across a pixel.
     fn color(&self, u: f64, v: f64, footprint: f64) -> [f32; 4] {
         let base = if self.mapped.printed {
-            let p = self.print.map_or([0.0; 4], |pr| pr.sample(Point::new(u, -v), footprint));
+            let p = self.print.map_or([0.0; 4], |pr| pr.sample(Point::new(u + self.origin[0], -(v + self.origin[1])), footprint));
             let under = 1.0 - p[3] / 255.0;
             [p[0] + self.outside[0] * under, p[1] + self.outside[1] * under, p[2] + self.outside[2] * under, 255.0]
         } else {
@@ -367,11 +388,15 @@ impl Fill<'_> {
         for col in first as usize..=last as usize {
             let x = col as f64 + 0.5;
             let Some((u, v)) = self.flat_at(x, y) else { continue };
-            let [a, b, c] = self.mapped.depth;
-            let z = u * a + v * b + c;
+            let Some((pu, pv)) = self.plane.flat_at(x, y) else { continue };
+            let [a, b, c] = self.plane.depth;
+            let z = pu * a + pv * b + c;
             let i = row * target.width + col;
-            let (Some(&zb), Some(&rb)) = (target.depth.get(i), target.rank.get(i)) else { continue };
-            let wins = z > zb + TIE || ((z - zb).abs() <= TIE && self.rank > rb);
+            let (Some(&zb), Some(&rb), Some(&pb)) = (target.depth.get(i), target.rank.get(i), target.panel.get(i)) else { continue };
+            // Members of a plane have the same comparison depth and stack by rank. Distinct
+            // planes compare by depth, then by their number at an exact crossing.
+            let plane = |p: u16| usize::from(p).checked_sub(1).and_then(|p| self.planes.get(p));
+            let wins = z.total_cmp(&zb).then_with(|| plane(self.panel).cmp(&plane(pb))).then(self.rank.cmp(&rb)).then(self.panel.cmp(&pb)).is_gt();
             if !wins {
                 continue;
             }
@@ -442,6 +467,161 @@ fn flat_rings(panel: &Panel, scale: f64) -> Option<Vec<Vec<[f64; 2]>>> {
     Some(polygon(&panel.outline, tolerance)?.into_iter().map(|r| r.into_iter().map(|p| [p.x, -p.y]).collect()).collect())
 }
 
+/// The rank (from 1) each panel of `folded.order` takes in a depth tie, the higher one drawn. Each
+/// fold puts a panel in a layer next to its parent in [`Folded::stack`]: behind the parent's printed
+/// side for a positive angle, in front of it for a negative one, level with it for 0°. Layers are
+/// compared fold by fold from the stack's root (the largest panel, whichever panel is the base), so
+/// a panel folded back over its parent's parent lands between the two at any depth. A tie, between
+/// panels in one plane, goes to the panel whose layer is nearer the viewer across that plane (the
+/// side of the plane `camera` sees). Two folds into one layer stack by the stack's order, the later
+/// one nearer seen from one side of their plane and the earlier one seen
+/// from the other, and the panels folded on from each stay with it. Two panels folded flat onto each other
+/// (±180°) tie in depth everywhere they overlap. A panel that comes back onto the plane of a panel
+/// it branched from, after leaving it, takes the side of that plane it came back from for every
+/// step up to the one it left by: the side the nearest panel out of the plane lies on from the
+/// hinge it joins the plane at ([`super::Stack::toward_parent`]). `planes` gives each panel's plane, as
+/// [`planes`] does.
+fn tie_ranks(folded: &Folded, camera: &Camera, planes: &[u16]) -> Vec<u16> {
+    let n = folded.panels.len();
+    // Each panel's layer holds a step per fold up to the base: past the panels a blank can have,
+    // the order alone decides. So it does when every panel lies where it lies flat (a fold amount
+    // of 0), as panels there do not overlap.
+    if n > super::MAX_PANELS || folded.order.len() > super::MAX_PANELS || folded.panels.iter().all(|f| f.pose == super::Pose::IDENTITY) {
+        return (1..=folded.order.len()).map(|r| u16::try_from(r).unwrap_or(u16::MAX)).collect();
+    }
+    // The step each panel takes off its parent: the parent's printed side, negated for a positive
+    // angle; none for a 0° hinge or a panel without a parent.
+    // The parents are those of [`Folded::stack`], so the panels stack the same about any base.
+    let stack = &folded.stack;
+    let parent_of = |c: usize| stack.parent.get(c).copied().flatten();
+    let mut step: Vec<Option<V3>> = vec![None; n];
+    for c in 0..n {
+        let Some(p) = parent_of(c) else { continue };
+        let Some(h) = folded.hinges.iter().find(|h| (h.a, h.b) == (p, c) || (h.a, h.b) == (c, p)) else { continue };
+        let (Some(parent), Some(slot)) = (folded.panels.get(p), step.get_mut(c)) else { continue };
+        let [x, y, z] = parent.pose.normal();
+        *slot = match h.angle {
+            a if a > 0.0 => Some([-x, -y, -z]),
+            a if a < 0.0 => Some([x, y, z]),
+            _ => None,
+        };
+    }
+    // Each panel's layer, from the base out: +1 for a step toward the viewer across the panel's
+    // plane, -1 for one away from it, 0 for one along it. Comparing these in order puts a panel next
+    // to its parent, before any later step, however many folds deep.
+    // Each panel's place in the stack's order.
+    let mut place = vec![0usize; n];
+    for (i, &pi) in stack.order.iter().enumerate() {
+        if let Some(slot) = place.get_mut(pi) {
+            *slot = i;
+        }
+    }
+    // Each step also carries the place in `folded.order` of the panel that took it, so panels whose
+    // steps match up to a fold that branches stack by that branch: the later panel nearer seen from
+    // one side of their plane, the earlier one seen from the other, so the two sides show opposite
+    // panels. The rest of a branch stays with it.
+    // Whether the view sees each panel's printed side.
+    let sees_print: Vec<bool> = folded.panels.iter().map(|f| map_panel(camera, &f.pose).is_none_or(|m| m.printed)).collect();
+    // The nearest panel out of `pi`'s plane on its way to the base, and the side of that plane it
+    // lies on from the hinge it joins the panels in the plane at: 1 the side `n_view` points to, -1
+    // the other; `None` when every panel on the way lies in the plane. The plane is the one
+    // [`planes`] gives, the same that decides which panels tie, so a ramp however shallow leaves it
+    // and a stack folded a hair short of flat goes by depth instead.
+    let approach = |pi: usize, n_view: V3| -> Option<(usize, i8)> {
+        let (mut child, mut up) = (pi, parent_of(pi));
+        for _ in 0..n {
+            let c = up?;
+            if planes.get(c) != planes.get(pi)
+                && let Some(Some(way)) = stack.toward_parent.get(child)
+            {
+                let d = dot(*way, n_view);
+                if d != 0.0 {
+                    return Some((c, if d > 0.0 { 1 } else { -1 }));
+                }
+            }
+            (child, up) = (c, parent_of(c));
+        }
+        None
+    };
+    let layer = |pi: usize| -> Vec<(i8, i64)> {
+        let Some(f) = folded.panels.get(pi) else { return vec![] };
+        let printed = sees_print.get(pi).copied().unwrap_or(true);
+        let n_view = {
+            let [x, y, z] = f.pose.normal();
+            if printed { [x, y, z] } else { [-x, -y, -z] }
+        };
+        let mut out = vec![];
+        let mut at = Some(pi);
+        // From the nearest panel out of the plane on the way to the base, every step counts as on
+        // the side of the plane that panel lies on: a panel that comes round onto the plane of a
+        // panel it branched from lies on the side it came back from, whatever its folds before.
+        let (back_at, back_side) = approach(pi, n_view).map_or((None, 0), |(c, s)| (Some(c), s));
+        let mut returned = false;
+        // A panel's chain to the base is at most the panel count long.
+        for _ in 0..n {
+            let Some(c) = at else { break };
+            returned |= Some(c) == back_at;
+            if let Some(Some(s)) = step.get(c) {
+                let d = if returned { f64::from(back_side) } else { dot(*s, n_view) };
+                // Branches off one panel stack one way seen from that panel's printed side and the
+                // other way from its back, so the panels of one plane that compare a step off one
+                // parent agree, however the parent is turned.
+                let branch = place.get(c).map_or(i64::MAX, |&p| i64::try_from(p).unwrap_or(i64::MAX));
+                // A parent seen edge on gives no side: the panel that took the step gives it, and
+                // when that is edge on too, the largest part of the view's normal does. Each choice
+                // gives two panels of one plane the same sign however an edge-on dot rounds, and
+                // each turns over with the side of the plane the view is on.
+                let faces = |f: &super::FoldedPanel| {
+                    let d = dot(f.pose.normal(), n_view);
+                    (d.abs() > ALONG).then_some(d >= 0.0)
+                };
+                // The view's normal in the root's flat terms, so this too is the same about any base.
+                let largest = || {
+                    let m = folded.panels.get(stack.root).map_or(super::Pose::IDENTITY.m, |r| r.pose.m);
+                    let local = [0, 1, 2].map(|j| (0..3).map(|i| m[i][j] * n_view[i]).sum::<f64>());
+                    local.into_iter().max_by(|a, b| a.abs().total_cmp(&b.abs())).is_none_or(|v| v >= 0.0)
+                };
+                let parent = parent_of(c).and_then(|p| folded.panels.get(p));
+                let parent_faces = parent.map_or(Some(true), faces).or_else(|| folded.panels.get(c).and_then(faces)).unwrap_or_else(largest);
+                let branch = if parent_faces { branch } else { -branch };
+                // Any step that is not along the plane counts whole, so a step seen from two panels
+                // of one plane counts the same for both.
+                out.push((i8::from(d > ALONG) - i8::from(d < -ALONG), branch));
+            }
+            at = parent_of(c);
+        }
+        out.reverse();
+        out
+    };
+    // Layers compared step by step, a missing step as none.
+    let compare = |a: &[(i8, i64)], b: &[(i8, i64)]| {
+        (0..a.len().max(b.len()))
+            .map(|k| a.get(k).copied().unwrap_or((0, 0)).cmp(&b.get(k).copied().unwrap_or((0, 0))))
+            .find(|o| o.is_ne())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    };
+    // A panel alone in its plane ties with no other, so its layer is not worked out.
+    let mut in_plane = vec![0usize; planes.iter().map(|&p| usize::from(p) + 1).max().unwrap_or(0)];
+    for &p in planes {
+        if let Some(c) = in_plane.get_mut(usize::from(p)) {
+            *c += 1;
+        }
+    }
+    let alone = |pi: usize| planes.get(pi).and_then(|&p| in_plane.get(usize::from(p))).is_some_and(|&c| c <= 1);
+    let mut keys: Vec<(Vec<(i8, i64)>, usize)> =
+        folded.order.iter().enumerate().map(|(i, &pi)| (if alone(pi) { vec![] } else { layer(pi) }, i)).collect();
+    // Then by the stack's order, for panels that stack as one.
+    let placed = |i: usize| folded.order.get(i).and_then(|&pi| place.get(pi)).copied().unwrap_or(usize::MAX);
+    keys.sort_by(|a, b| compare(&a.0, &b.0).then(placed(a.1).cmp(&placed(b.1))).then(a.1.cmp(&b.1)));
+    let mut ranks = vec![0u16; folded.order.len()];
+    for (r, &(_, i)) in keys.iter().enumerate() {
+        if let Some(slot) = ranks.get_mut(i) {
+            *slot = u16::try_from(r + 1).unwrap_or(u16::MAX);
+        }
+    }
+    ranks
+}
+
 /// `scene` drawn; `None` when the view is not usable (a size of 0, a side over [`MAX_SIDE`], more
 /// than [`MAX_PIXELS`] pixels, or a value that is not finite). Panels whose map is not finite, or whose outline has more than
 /// [`super::MAX_POLYGON_POINTS`] points, are left out.
@@ -456,10 +636,28 @@ pub fn render(scene: &Scene) -> Option<Image> {
         Target { width, height, color: vec![0; pixels * 4], depth: vec![f64::NEG_INFINITY; pixels], rank: vec![0; pixels], panel: vec![0; pixels] };
     let (inside, outside) = (opaque(scene.inside), opaque(scene.outside));
     let near = camera.eye().map(|(eye, _)| eye * NEAREST);
-    for (rank, &pi) in scene.folded.order.iter().enumerate() {
+    let planes = planes(scene.folded, scene.blank);
+    let ranks = tie_ranks(scene.folded, &camera, &planes);
+    // Panels are drawn by their poses about the blank's middle (`FoldedPanel::local`), with the flat
+    // points and the view's center moved to match.
+    let o = scene.folded.origin;
+    let local = Camera { center: [camera.center[0] - o[0], camera.center[1] - o[1], camera.center[2] - o[2]], ..camera };
+    for (&pi, &rank) in scene.folded.order.iter().zip(&ranks) {
         let (Some(panel), Some(f)) = (scene.blank.panels.get(pi), scene.folded.panels.get(pi)) else { continue };
-        let Some(mapped) = map_panel(&camera, f) else { continue };
+        let Some(mapped) = map_panel(&local, &f.local) else { continue };
+        let plane = if scene.folded.panels.len() <= super::MAX_PANELS {
+            planes.get(pi).and_then(|kind| {
+                planes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, k)| *k == kind)
+                    .find_map(|(i, _)| scene.folded.panels.get(i).and_then(|f| map_panel(&local, &f.local)))
+            })
+        } else {
+            None
+        };
         let Some(rings) = flat_rings(panel, camera.scale) else { continue };
+        let rings: Vec<Vec<[f64; 2]>> = rings.into_iter().map(|r| r.into_iter().map(|[u, v]| [u - o[0], v - o[1]]).collect()).collect();
         let projected: Vec<Vec<[f64; 2]>> = rings
             .iter()
             .map(|r| match near {
@@ -480,15 +678,71 @@ pub fn render(scene: &Scene) -> Option<Image> {
             .collect();
         let fill = Fill {
             mapped: &mapped,
-            rank: u16::try_from(rank + 1).unwrap_or(u16::MAX),
+            plane: plane.as_ref().unwrap_or(&mapped),
+            rank,
+            planes: &planes,
             panel: u16::try_from(pi + 1).unwrap_or(u16::MAX),
             print: scene.print,
+            origin: [o[0], o[1]],
             inside,
             outside,
         };
         fill.rings(&mut target, &projected);
     }
     Some(Image { width: camera.width, height: camera.height, pixels: target.color, panels: target.panel })
+}
+
+/// The plane each panel of `folded` lies in, as a number shared by the panels in one plane: their
+/// normals parallel to within [`PARALLEL`] and their planes as far apart as rounding leaves them
+/// ([`COPLANAR`] at their distance from [`Folded::origin`] for each hinge between them and the
+/// base). Each panel's bounds corners are measured by its pose about [`Folded::origin`]
+/// ([`super::FoldedPanel::local`]). Past [`super::MAX_PANELS`] panels, one plane for all.
+fn planes(folded: &Folded, blank: &Blank) -> Vec<u16> {
+    let n = folded.panels.len();
+    if n > super::MAX_PANELS {
+        return vec![0; n];
+    }
+    let length = |v: V3| dot(v, v).sqrt();
+    struct Plane {
+        normal: V3,
+        at: V3,
+        size: f64,
+        depth: usize,
+        corners: [V3; 4],
+    }
+    let separation = |normal: V3, at: V3, points: &[V3; 4]| {
+        points.iter().map(|p| dot(normal, [p[0] - at[0], p[1] - at[1], p[2] - at[2]]).abs()).fold(0.0, f64::max)
+    };
+    let mut kinds: Vec<Vec<Plane>> = vec![];
+    folded
+        .panels
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let o = folded.origin;
+            let bounds = blank.panels.get(i).and_then(|p| p.outline.bounds());
+            let middle = bounds.map_or([0.0; 3], |b| [b.center().x - o[0], -b.center().y - o[1], 0.0]);
+            let flat =
+                bounds.map_or([middle; 4], |b| [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1)].map(|(x, y)| [x - o[0], -y - o[1], 0.0]));
+            let corners = flat.map(|p| f.local.apply(p));
+            let (normal, at) = (f.local.normal(), f.local.apply(middle));
+            let size = flat.iter().chain(&corners).map(|&p| length(p)).fold(0.0, f64::max);
+            let same = |p: &Plane| {
+                let m = p.normal;
+                let c = [normal[1] * m[2] - normal[2] * m[1], normal[2] * m[0] - normal[0] * m[2], normal[0] * m[1] - normal[1] * m[0]];
+                let apart = separation(m, p.at, &corners).max(separation(normal, at, &p.corners));
+                // Saturating: a `Folded` built by a caller may carry any depth.
+                let hinges = f64::from(u32::try_from(f.depth.saturating_add(p.depth).saturating_add(1)).unwrap_or(u32::MAX));
+                length(c) <= PARALLEL && apart <= COPLANAR * hinges * (1.0 + size.max(p.size))
+            };
+            let k = kinds.iter().position(|group| group.iter().all(&same)).unwrap_or_else(|| {
+                kinds.push(vec![]);
+                kinds.len() - 1
+            });
+            kinds[k].push(Plane { normal, at, size, depth: f.depth, corners });
+            u16::try_from(k).unwrap_or(u16::MAX)
+        })
+        .collect()
 }
 
 #[cfg(test)]

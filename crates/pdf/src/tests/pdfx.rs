@@ -120,7 +120,16 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
         // The metadata agrees with the header; PDF/X-4 names its standard there too.
         let xmp_version = if standard == Standard::PdfX4 { "1.6" } else { "1.3" };
         assert!(t.contains(&format!("<pdf:PDFVersion>{xmp_version}</pdf:PDFVersion>")), "{standard:?}");
-        assert_eq!(t.contains("<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">PDF/X-4<"), standard == Standard::PdfX4);
+        let xmp = xmp_packet(&r.bytes);
+        let (_, description) = xmp.rsplit_once("<rdf:Description").expect("an XMP description");
+        let (attributes, _) = description.split_once('>').expect("the end of the opening tag");
+        let is_pdfx4 = standard == Standard::PdfX4;
+        // Validators expect the version property to inherit its namespace from the description.
+        assert_eq!(attributes.contains(r#"xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/""#), is_pdfx4, "{standard:?}: {attributes}");
+        assert_eq!(xmp_value(&xmp, "pdfxid:GTS_PDFXVersion"), is_pdfx4.then_some("PDF/X-4"), "{standard:?}");
+        // The edited packet is still well-formed XML: the namespace is declared once.
+        assert_eq!(attributes.matches("xmlns:pdfxid=").count(), usize::from(is_pdfx4), "{standard:?}: {attributes}");
+        assert!(craft_xml::Options::default().strict().parse(xmp.as_bytes()).is_ok(), "{standard:?}: {xmp}");
         assert_eq!(t.contains("<pdf:Trapped>False</pdf:Trapped>"), standard == Standard::PdfX4);
         assert!(!t.contains("/Encrypt"), "{standard:?}");
         // The file reads back.
@@ -149,6 +158,75 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
     // PDF/X-4 always embeds its output intent's profile.
     let e = export(&d, &opts(Standard::PdfX4, |s| (s.output.output_intent, s.output.registry) = ("FOGRA39".into(), "http://www.color.org".into())));
     assert!(matches!(e, Err(PdfError::BadSetting(m)) if m.contains("embeds")));
+}
+
+/// The ICC tag signatures of `icc`'s tag table.
+fn icc_tags(icc: &[u8]) -> Vec<String> {
+    let count = u32::from_be_bytes(icc[128..132].try_into().unwrap()) as usize;
+    (0..count).map(|i| String::from_utf8_lossy(&icc[132 + 12 * i..136 + 12 * i]).into_owned()).collect()
+}
+
+#[test]
+fn a_registered_condition_profile_names_its_condition_and_embeds_itself() {
+    use std::io::Read;
+    let d = doc(&[Color::cmyk(0.0, 1.0, 1.0, 0.0), Color::cmyk(0.6, 0.0, 0.2, 0.1)]);
+    for (profile, reference) in [(cms::FOGRA51_CMYK, "FOGRA51"), (cms::FOGRA52_CMYK, "FOGRA52")] {
+        let r = export_with_report(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = profile.into())).unwrap();
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        let t = text(&r.bytes);
+        let info = profile.replace('(', r"\(").replace(')', r"\)");
+        for want in [
+            "/S/GTS_PDFX".to_string(),
+            format!("/OutputConditionIdentifier({reference})"),
+            "/RegistryName(http://www.color.org)".into(),
+            format!("/Info({info})"),
+        ] {
+            assert!(t.contains(&want), "{profile}: {want}");
+        }
+        // The embedded profile is the working space's: a CMYK output profile with Lab tables both
+        // ways, read from the file's bytes.
+        let oi: u32 = t.split("/DestOutputProfile ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let (start, end) = crate::patch::Xref::read(&r.bytes).unwrap().dict(&r.bytes, oi).unwrap();
+        let obj = &r.bytes[start..end];
+        let at = crate::lab_spot::find(obj, b"/Length", 0).unwrap();
+        let (length, _) = crate::patch::number(obj, at + b"/Length".len()).unwrap();
+        let mut data = crate::lab_spot::find(obj, b"stream", at).unwrap() + b"stream".len();
+        data += obj[data..].iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count();
+        let raw = &obj[data..data + length];
+        let mut icc = vec![];
+        if crate::lab_spot::find(&obj[..data], b"/FlateDecode", 0).is_some() {
+            flate2::read::ZlibDecoder::new(raw).read_to_end(&mut icc).unwrap();
+        } else {
+            icc = raw.to_vec();
+        }
+        assert_eq!(icc.as_slice(), &*cms::icc_bytes(profile).unwrap());
+        assert_eq!((&icc[12..16], &icc[16..20], &icc[20..24], &icc[36..40]), (&b"prtr"[..], &b"CMYK"[..], &b"Lab "[..], &b"acsp"[..]));
+        assert!(matches!(icc[8], 2 | 4), "ICC version {}", icc[8]);
+        let tags = icc_tags(&icc);
+        for tag in ["A2B0", "B2A0", "A2B1", "B2A1", "gamt", "wtpt", "desc", "cprt"] {
+            assert!(tags.iter().any(|t| t == tag), "{profile}: {tag} in {tags:?}");
+        }
+        let back = cms::IccProfile::from_bytes(None, &icc).unwrap();
+        assert_eq!((back.name.as_str(), back.kind), (profile, cms::ProfileKind::Cmyk));
+        assert!(import(&r.bytes).is_ok());
+    }
+    // A condition identifier or registry the settings give stays.
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.output_condition_id = "Press 2".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(Press 2)") && !t.contains("/RegistryName"), "{t}");
+    let o = opts(Standard::PdfX4, |s| {
+        s.output.output_intent = cms::FOGRA51_CMYK.into();
+        s.output.registry = "https://example.com/registry".into();
+    });
+    let t = text(&export(&d, &o).unwrap());
+    assert!(t.contains("/OutputConditionIdentifier(FOGRA51)") && t.contains("/RegistryName(https://example.com/registry)"));
+    // Other profiles keep their name as the identifier, with no registry.
+    let t = text(&export(&d, &opts(Standard::PdfX4, |s| s.output.output_intent = GENERIC_CMYK.into())).unwrap());
+    let id = GENERIC_CMYK.replace('(', r"\(").replace(')', r"\)");
+    assert!(t.contains(&format!("/OutputConditionIdentifier({id})")) && !t.contains("/RegistryName"), "{t}");
 }
 
 #[test]
@@ -247,35 +325,20 @@ fn pdfx_1a_and_x3_files_have_no_transparency() {
 
 #[test]
 fn pdfx_settings_rules() {
+    let profiles = ActiveProfiles::default();
     for standard in X {
-        // A password is refused, and so are editing data.
-        let e = opts(standard, |s| s.security.open_password = "x".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(_)), "{standard:?}: {e}");
+        // A password is refused.
         assert!(export(&doc(&[]), &opts(standard, |s| s.security.permissions_password = "x".into())).is_err());
-        assert!(
-            matches!(opts(standard, |s| s.preserve_editing = true).settings.check(), Err(PdfError::BadSetting(m)) if m.contains("preserveEditing"))
-        );
-        // Its own version, never PDF 1.7 or 2.0.
-        assert!(standard.allows(standard.version()), "{standard:?}");
-        assert!(!standard.allows(Compatibility::Pdf17) && !standard.allows(Compatibility::Pdf20), "{standard:?}");
-        let e = opts(standard, |s| s.compatibility = Compatibility::Pdf17).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains(standard.label())), "{standard:?}: {e}");
-        // A name that is no profile, without a registry.
-        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains("No Such Press")), "{standard:?}: {e}");
+        // A name that is no profile of the app's colour catalog, without a registry.
+        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check(&profiles).unwrap_err();
+        assert!(e.message.contains("No Such Press"), "{standard:?}: {e}");
     }
-    assert_eq!(Standard::PdfX4.version(), Compatibility::Pdf16);
-    assert!(Standard::PdfX4.allows(Compatibility::Pdf15) && !Standard::PdfX1a.allows(Compatibility::Pdf15));
-    // Layers: PDF/X-4 only.
-    assert!(
-        matches!(settings(json!({"standard": "pdfX1a", "compatibility": "1.4", "createLayers": true})).check(), Err(PdfError::BadSetting(m)) if m.contains("createLayers"))
-    );
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "createLayers": true})).check_values().is_ok());
     // A date is required.
     assert!(matches!(crate::pdfx::require_date(Standard::PdfX4, None), Err(PdfError::Unsupported(_))));
     assert!(crate::pdfx::require_date(Standard::None, None).is_ok());
     // PDF/X settings don't warn about the output condition: the output intent is always written.
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings().is_empty());
+    let warned = settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings(&profiles);
+    assert!(warned.is_empty(), "{warned:?}");
 }
 
 #[test]

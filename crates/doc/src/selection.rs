@@ -12,6 +12,9 @@ pub type AnchorRef = (usize, usize);
 /// (subpath index, segment index) inside a path.
 pub type SegmentRef = (usize, usize);
 
+/// The most objects [`Selection::add_all`] adds by looking for each one in the selected objects.
+const FEW_TO_ADD: usize = 8;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
@@ -20,8 +23,9 @@ pub struct Selection {
     /// `objects` with no entry here is fully selected; `segments` distinguishes segment picks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
-    /// Explicitly selected segments. Their endpoints in `anchors` move with them, but are not
-    /// selected anchor points: Delete cuts connections and their anchor squares stay hollow.
+    /// Explicitly selected segments. Their endpoints in `anchors` move with them (the arrow keys
+    /// bend a curved one instead), but are not selected anchor points: Delete cuts connections and
+    /// their anchor squares stay hollow.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
@@ -183,6 +187,48 @@ impl Selection {
             self.key_anchor = None;
         }
     }
+    /// Select `id` itself in place of the selected object around it, keeping the rest of that
+    /// object selected. The outermost selected object that holds `id` (a group, or a compound path
+    /// selected whole) and every selected object between it and `id` leave the selection. In their
+    /// place go, at the outermost one's position, the objects inside them on the way down to `id`,
+    /// level by level: at each level the objects beside the one that holds `id`, and at the last
+    /// level `id` and the objects beside it, each level in stacking order. A Shaper Group's
+    /// original shapes, and objects that are hidden, locked or on a locked artboard
+    /// ([`Document::is_editable`]), are not taken in.
+    ///
+    /// When `id` is also selected itself, it keeps its place in the selection.
+    ///
+    /// Returns whether the selection changed. It does not change when `id` is not inside a selected
+    /// object, is inside one that is partly selected (anchors or segments), is one of a selected
+    /// Shaper Group's original shapes, or is hidden, locked or on a locked artboard itself.
+    pub fn expand_to(&mut self, doc: &Document, id: NodeId) -> bool {
+        let Some(chain) = doc.ancestry(id) else { return false };
+        let Some(top) = chain.iter().position(|a| self.contains(*a)) else { return false };
+        let holder = chain[top];
+        if self.anchors.contains_key(&holder) || self.segments.contains_key(&holder) {
+            return false;
+        }
+        let editable = doc.editable();
+        let mut members = Vec::new();
+        for pair in chain[top..].windows(2) {
+            let Some(n) = doc.node(pair[0]) else { return false };
+            let originals = usize::from(n.extras().shaper.is_some());
+            let children = n.children().map(Vec::as_slice).unwrap_or_default();
+            if children.iter().take(originals).any(|c| c.id == pair[1]) {
+                return false;
+            }
+            members.extend(children.iter().skip(originals).map(|c| c.id).filter(|c| editable(*c) && (*c == id || *c != pair[1])));
+        }
+        if !members.contains(&id) {
+            return false;
+        }
+        let around: HashSet<NodeId> = chain[top..chain.len() - 1].iter().copied().collect();
+        let at = self.objects.iter().take_while(|o| **o != holder).filter(|o| !around.contains(o)).count();
+        self.remove_all(around);
+        let selected: HashSet<NodeId> = self.objects.iter().copied().collect();
+        self.objects.splice(at..at, members.into_iter().filter(|m| !selected.contains(m)));
+        true
+    }
     /// [`Self::add`] for each of `ids` in order, going through the selected objects once.
     pub fn add_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.each(ids, false);
@@ -197,14 +243,24 @@ impl Selection {
     /// carry its current activation, so a removal drops every slot of the id at once.
     fn each(&mut self, ids: impl IntoIterator<Item = NodeId>, toggle: bool) {
         use std::collections::hash_map::{Entry, HashMap};
-        let mut ids = ids.into_iter().peekable();
-        if ids.peek().is_none() {
+        let ids: Vec<NodeId> = ids.into_iter().collect();
+        if ids.is_empty() {
             return;
         }
         self.target = None;
         self.slices.clear();
         self.symbol_part = None;
         self.on_path_member = None;
+        // Up to [`FEW_TO_ADD`] objects to add are each looked for in the selected objects; more go
+        // through a table of the selected objects.
+        if !toggle && ids.len() <= FEW_TO_ADD {
+            for id in ids {
+                if !self.objects.contains(&id) {
+                    self.objects.push(id);
+                }
+            }
+            return;
+        }
         let mut live: HashMap<NodeId, usize> = self.objects.iter().map(|id| (*id, 0)).collect();
         let mut added: Vec<(NodeId, usize)> = Vec::new();
         let mut removed = false;

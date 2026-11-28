@@ -63,6 +63,10 @@ pub struct NodeExtras {
     /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
     /// pixels are transparent. `None`: the image shows its own pixels.
     pub colorize: Option<Box<vectorcraft_color::Paint>>,
+    /// Attributes panel › Overprint Fill on a colorized image: its color prints over the inks
+    /// below instead of knocking them out. It counts only while [`Self::colorize`] is set
+    /// ([`crate::Node::colorize_overprints`]).
+    pub colorize_overprint: bool,
     /// Pathfinder panel › Make Compound Shape: this group is a compound shape
     /// ([`Node::is_compound_shape`], [`crate::compound_shape`]).
     pub compound_shape: bool,
@@ -92,6 +96,9 @@ pub struct NodeExtras {
     /// (top left, top right, bottom right, bottom left in pixel space) stand on the page when they
     /// do not make a parallelogram, which its transform alone could place ([`crate::image_quad`]).
     pub image_quad: Option<Box<[Point; 4]>>,
+    /// Generated art object: the generator plug-in and parameters its group's children were drawn
+    /// with (`plugin.generate`); its ordinary group children hold its art ([`crate::generated`]).
+    pub generated: Option<Box<crate::generated::GeneratedArt>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -115,6 +122,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     live_paint_gaps: None,
     objects_on_path: None,
     colorize: None,
+    colorize_overprint: false,
     compound_shape: false,
     shape_mode: crate::ShapeMode::Add,
     symbol_overrides: Vec::new(),
@@ -124,6 +132,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     warp_piece: false,
     clip_pieces: false,
     image_quad: None,
+    generated: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

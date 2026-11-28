@@ -409,7 +409,7 @@ impl FolderStore {
     /// names that file.
     pub(crate) fn take(file: std::fs::File, path: &std::path::Path) -> std::result::Result<Lock, String> {
         match file.try_lock() {
-            Ok(()) if Self::still_named(&file, path) => Ok(Lock::Held(Box::new(file))),
+            Ok(()) if Self::still_named(&file, path) => Ok(Lock::Held(Box::new(crate::store::LockedFile::new(file)))),
             Ok(()) | Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
             // The lock file was removed meanwhile, and locking it failed instead.
             Err(std::fs::TryLockError::Error(_)) if !Self::still_named(&file, path) => Ok(Lock::Busy),
@@ -472,6 +472,11 @@ impl RecoveryStore for FolderStore {
             Self::create_area(dir)?;
             Self::own_area(dir)?;
         }
+        // A read refuses a link (`read`), and a write must too: the atomic writer replaces the
+        // target of a link, which would put the copy over a file outside the store.
+        if std::fs::symlink_metadata(&f).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         vectorcraft_format::write_atomic(&f, bytes).map_err(|e| Self::file_error(&f, &e))
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
@@ -493,7 +498,9 @@ impl RecoveryStore for FolderStore {
         Self::lock_area(&dir)
     }
     fn still_held(&self, area: &str, hold: &(dyn std::any::Any + Send + Sync)) -> bool {
-        let (Some(file), Ok(dir)) = (hold.downcast_ref::<std::fs::File>(), self.area(area)) else { return true };
+        let (Some(file), Ok(dir)) = (hold.downcast_ref::<crate::store::LockedFile>().map(crate::store::LockedFile::file), self.area(area)) else {
+            return true;
+        };
         let path = dir.join(LOCK_FILE);
         // Only a lock file or folder that is gone, or another one in its place, ends the hold. One
         // that can't be read now (a network folder that doesn't answer) still counts as held.
@@ -874,6 +881,11 @@ struct Meta {
     /// images were kept apart: the document entry holds them).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     images: BTreeMap<String, ImageRef>,
+    /// A command a script ran opened or changed the document since the person last saved it
+    /// ([`crate::DocState::by_script`]): the commands scripts run treat the restored document as
+    /// one a script opened.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    by_script: bool,
 }
 
 /// One of a copy's images: its entry in the copy's area.
@@ -1033,10 +1045,13 @@ impl RecoveryJob {
         let meta_name = format!("{}{META_EXT}", self.file);
         // The details name the images, so a crash between writing the document and its details
         // would pair the new document with the old copy's images: when the new document has
-        // images the old details don't name, they name both until the new document is in.
-        let old = read_meta(store, &self.file).images;
-        if meta.images.iter().any(|(k, r)| old.get(k).is_none_or(|o| o.blob != r.blob)) {
+        // images the old details don't name, they name both until the new document is in. Likewise
+        // when a script's command changed the document since the old details: they say so first.
+        let old_meta = read_meta(store, &self.file);
+        let old = old_meta.images;
+        if (meta.by_script && !old_meta.by_script) || meta.images.iter().any(|(k, r)| old.get(k).is_none_or(|o| o.blob != r.blob)) {
             let mut both = meta.clone();
+            both.by_script |= old_meta.by_script;
             for (k, r) in old {
                 both.images.entry(k).or_insert(r);
             }
@@ -1195,6 +1210,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             links_from: st.links_from.clone().filter(|_| st.path.is_none()),
             // Filled in as the copy is written.
             images: BTreeMap::new(),
+            by_script: st.by_script.is_some(),
         };
         out.push(RecoveryJob { uid: st.uid, file, title, meta, save, store: store.clone() });
     }
@@ -1456,8 +1472,18 @@ fn targets(s: &mut Session, store: &dyn RecoveryStore, cmd: &str, p: &Value) -> 
 /// (for Save As) and format. The copy moves into this session's area (another crash keeps it).
 fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> Result<Value> {
     let bytes = store.read(&format!("{file}{DOC_EXT}")).map_err(EngineError::Other)?;
-    let meta_bytes = store.read(&format!("{file}{META_EXT}")).unwrap_or_default();
-    let meta: Meta = serde_json::from_slice(&meta_bytes).unwrap_or_default();
+    // A details entry that is missing or can't be parsed does not say whether a script's command
+    // changed the document: the copy restores as one a script opened, and the details written for
+    // it say so.
+    let read = store.read(&format!("{file}{META_EXT}")).ok().and_then(|b| serde_json::from_slice::<Meta>(&b).ok().map(|m| (m, b)));
+    let (meta, meta_bytes) = match read {
+        Some(both) => both,
+        None => {
+            let meta = Meta { by_script: true, ..Meta::default() };
+            let bytes = serde_json::to_vec_pretty(&meta).map_err(|e| EngineError::Other(e.to_string()))?;
+            (meta, bytes)
+        }
+    };
     let (mut doc, _, mut warnings) = fileio::decode_native_file(&bytes).map_err(|e| EngineError::Other(format!("recovery copy `{file}`: {e}")))?;
     // A frame whose first paragraph continues from the frame before draws it without the
     // paragraph's first-line indent and list marker.
@@ -1497,8 +1523,10 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
         for (blob, data) in &blobs {
             store.write(&format!("{area}/{blob}"), data).map_err(EngineError::Other)?;
         }
-        store.write(&format!("{mine}{DOC_EXT}"), &bytes).map_err(EngineError::Other)?;
+        // The details go first: a crash in between leaves no copy without them (a copy is its
+        // document entry), and the copy in the old area stays whole.
         store.write(&format!("{mine}{META_EXT}"), &meta_bytes).map_err(EngineError::Other)?;
+        store.write(&format!("{mine}{DOC_EXT}"), &bytes).map_err(EngineError::Other)?;
     }
     // The copy's images in its old area go with the area, once no copy is left there.
     store.remove(&format!("{file}{DOC_EXT}")).map_err(EngineError::Other)?;
@@ -1519,6 +1547,9 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     st.imported_from = meta.imported_from.clone();
     st.import_losses = meta.import_losses.clone();
     st.format = SAVE_FORMATS.iter().copied().find(|f| *f == meta.format).unwrap_or("vectorcraft");
+    if meta.by_script {
+        st.by_script = Some(crate::doc_state::ByScript::Opened);
+    }
     if let Some(pdf) = meta.native_pdf_compatible {
         st.save_options.insert("pdfCompatible".into(), json!(pdf));
     }

@@ -1,20 +1,98 @@
-use serde_json::json;
+use craft::i18n::Folder;
+use craft::ui::dialog::{DialogHost, DialogId, dialog_id};
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::{choose_shown, click, row_clicked, row_double_clicked, shown};
-use crate::tests_labels::painted_text;
+use super::{ArtboardsDialog, COMMAND, KIND, choose_shown, merge_chosen, shown};
 use crate::{VectorcraftApp, menus};
+
+/// An app with the window the dialogs open in.
+pub(super) fn new_app() -> VectorcraftApp {
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
+}
+
+/// The window context of `app`.
+pub(super) fn ctx(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().expect("the test context")
+}
+
+/// Runs `f` on the host the dialogs live on.
+pub(super) fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
+    app.dialogs().expect("a window").with(f)
+}
+
+/// Sets `field` of the open dialog `id` as its control would.
+pub(super) fn set(app: &VectorcraftApp, id: DialogId, field: &str, value: Value) -> Result<(), String> {
+    let ctx = ctx(app);
+    host(app, |h| h.set_json_field(&ctx, id, field, value))
+}
+
+/// OK on the open dialog `id`, then the frame's pump that runs its command. `false` when OK is refused.
+pub(super) fn confirm(app: &mut VectorcraftApp, id: DialogId) -> bool {
+    let ctx = ctx(app);
+    let accepted = host(app, |h| h.confirm_by_id(&ctx, id));
+    crate::dialogs::host::pump(app, &ctx);
+    accepted
+}
 
 fn names(v: &[&str]) -> Vec<String> {
     v.iter().map(|s| s.to_string()).collect()
 }
 
 #[test]
-fn the_search_filters_artboards_by_name_ignoring_case() {
-    let n = names(&["Cover", "Page 2", "Back cover", "Inside"]);
-    assert_eq!(shown(&n, ""), vec![0, 1, 2, 3]);
-    assert_eq!(shown(&n, "  COVER "), vec![0, 2]);
-    assert_eq!(shown(&n, "zzz"), Vec::<usize>::new());
+fn canceling_a_keyboard_relation_choice_restores_the_original_selection_rule() {
+    use craft::ui::contract::Role;
+
+    let mut app = new_app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let inside = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let edge = app.run("shape.rectangle", json!({"x": 90, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    panel.room(egui::vec2(800.0, 600.0));
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Select", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "inside");
+    panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "overlap");
+    panel.click("OK");
+    let mut actual = panel.app().session.active().unwrap().selection.objects.clone();
+    let mut expected = vec![vectorcraft_doc::NodeId(inside), vectorcraft_doc::NodeId(edge)];
+    actual.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(actual, expected);
+
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Select", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "inside");
+    panel.click("OK");
+    assert_eq!(panel.app().session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(inside)]);
+}
+
+/// A 100 × 100 document with a Banner artboard at x 150, an object in each artboard, and nothing selected.
+fn banner() -> (VectorcraftApp, u64) {
+    let mut app = new_app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 0, "width": 200, "height": 50, "name": "Banner"})).unwrap();
+    let inside = app.run("shape.rectangle", json!({"x": 160, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    (app, inside)
+}
+
+#[test]
+fn the_search_filters_artboards_by_name_ignoring_case_and_accents() {
+    let folder = Folder::new("en");
+    let n = names(&["Cover", "Page 2", "Back cover", "Inside", "Café"]);
+    assert_eq!(shown(&n, "", &folder), vec![0, 1, 2, 3, 4]);
+    assert_eq!(shown(&n, "  COVER ", &folder), vec![0, 2]);
+    assert_eq!(shown(&n, "zzz", &folder), Vec::<usize>::new());
+    assert_eq!(shown(&n, "cafe", &folder), vec![4], "an accent folds");
 }
 
 #[test]
@@ -28,98 +106,58 @@ fn select_all_and_none_act_on_the_rows_shown() {
 }
 
 #[test]
-fn clicks_choose_toggle_and_extend_rows() {
-    let rows = [0, 2, 3, 5];
-    let mut c = vec![];
-    let a = click(&mut c, None, 2, &rows, false, false);
-    assert_eq!((c.clone(), a), (vec![2], Some(2)));
-    // Shift adds the rows shown between the last one clicked and this one.
-    let a = click(&mut c, a, 5, &rows, true, false);
-    assert_eq!((c.clone(), a), (vec![2, 3, 5], Some(2)));
-    // Cmd/Ctrl toggles a row.
-    let a = click(&mut c, a, 3, &rows, false, true);
-    assert_eq!((c.clone(), a), (vec![2, 5], Some(3)));
-    let a = click(&mut c, a, 0, &rows, false, true);
-    assert_eq!((c.clone(), a), (vec![0, 2, 5], Some(0)));
-    // A plain click chooses that row alone; Shift without an anchor does too.
-    let a = click(&mut c, a, 3, &rows, false, false);
-    assert_eq!((c.clone(), a), (vec![3], Some(3)));
-    let a = click(&mut c, None, 5, &rows, true, false);
-    assert_eq!((c.clone(), a), (vec![5], Some(5)));
-    // Board 4, chosen but hidden by the search, stays chosen through a plain click.
-    c.push(4);
-    click(&mut c, a, 2, &rows, false, false);
-    assert_eq!(c, vec![2, 4]);
-}
-
-#[test]
-fn select_by_artboards_lists_the_artboards_and_selects_on_ok() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    app.run("artboard.new", json!({"x": 150, "y": 0, "width": 200, "height": 50, "name": "Banner"})).unwrap();
-    let inside = app.run("shape.rectangle", json!({"x": 160, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    app.run("select.none", json!({})).unwrap();
-    let entries = menus::menu_entries(&app);
-    let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Selection Tools"] && e.label == "Select by Artboards…").unwrap();
-    let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-    menus::invoke(&mut app, &cmd, p);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.kind, super::KIND);
-    assert_eq!(d.fields["artboards"], json!([0]), "the active artboard is chosen");
-    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    for s in ["Select by Artboards", "Artboard 1", "Banner", "100 × 100 pt", "200 × 50 pt", "Chosen: 1 of 2", "Overlapping", "Select All", "None"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("artboards".into(), json!([]));
-    assert!(!(super::SPEC.ok_enabled.unwrap())(&app, app.ui.dialog.as_ref().unwrap()), "OK is off with nothing chosen");
-    let d = app.ui.dialog.as_mut().unwrap();
-    d.fields.insert("artboards".into(), json!([1]));
-    d.fields.insert("relation".into(), json!("inside"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+fn select_by_artboards_opens_on_the_active_artboard_and_selects_on_ok() {
+    let (mut app, inside) = banner();
+    menus::invoke(&mut app, COMMAND, Value::Null);
+    let id = dialog_id(KIND);
+    assert_eq!(host(&app, |h| h.get::<ArtboardsDialog>().map(|d| d.fields.artboards.clone())), Some(vec![0]), "the active artboard is chosen");
+    // With nothing chosen OK is refused, and the dialog stays.
+    set(&app, id, "artboards", json!([])).unwrap();
+    assert!(!confirm(&mut app, id), "OK is off with nothing chosen");
+    assert!(host(&app, |h| h.is_open::<ArtboardsDialog>()));
+    set(&app, id, "artboards", json!([1])).unwrap();
+    set(&app, id, "relation", json!("inside")).unwrap();
+    assert!(confirm(&mut app, id));
+    assert!(host(&app, |h| !h.is_open::<ArtboardsDialog>()));
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(inside)]);
 }
 
 #[test]
-fn the_rows_report_their_choice_as_the_selected_state() {
-    use egui::accesskit::Role;
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    app.run("artboard.new", json!({"x": 150, "y": 0, "width": 200, "height": 50, "name": "Banner"})).unwrap();
-    app.run("view.goToArtboard", json!({"index": 0})).unwrap();
-    menus::invoke(&mut app, super::COMMAND, serde_json::Value::Null);
-    let tree = crate::widgets::accessibility_tests::tree(|ui| crate::dialogs::show(&mut app, ui.ctx()));
-    let mut rows: Vec<_> =
-        tree.iter().filter(|n| n.role() == Role::ListItem).map(|n| (n.label().map(str::to_string), n.is_selected(), n.toggled())).collect();
-    rows.sort_by(|a, b| a.0.cmp(&b.0));
-    assert_eq!(
-        rows,
-        [(Some("1 Artboard 1 100 × 100 pt".to_string()), Some(true), None), (Some("2 Banner 200 × 50 pt".to_string()), Some(false), None)]
-    );
+fn select_by_artboards_draws_its_artboards_and_buttons() {
+    let (app, _) = banner();
+    let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    menus::invoke(&mut p.app(), COMMAND, Value::Null);
+    p.frame();
+    for name in ["Banner", "Select All", "OK", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
 }
 
 #[test]
-fn double_clicking_a_row_fits_its_artboard_and_keeps_the_choice() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+fn a_search_keeps_the_choice_it_hides_and_a_double_click_fits_its_artboard() {
+    // Boards 0 and 1 chosen, the search shows 0 and 2: picking row 2 leaves hidden board 1 chosen and drops shown board 0.
+    assert_eq!(merge_chosen(&[0, 1], &[0, 2], &[2]), vec![1, 2]);
+    // Nothing picked among the rows shown: the hidden choice stays, so a search never loses it.
+    assert_eq!(merge_chosen(&[1], &[0, 2], &[]), vec![1]);
+
+    let mut app = new_app();
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     for x in [150, 300] {
         app.run("artboard.new", json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
     }
     app.run("view.goToArtboard", json!({"index": 0})).unwrap();
-    menus::invoke(&mut app, super::COMMAND, serde_json::Value::Null);
-    let mut d = app.ui.dialog.take().unwrap();
-    d.fields.insert("artboards".into(), json!([0, 1]));
-    // The search shows boards 0 and 2: row 2 is the second row, but board 2 is the one fitted.
-    let rows = [0, 2];
-    row_clicked(&mut d, 2, &rows, egui::Modifiers::NONE);
-    // Board 1, hidden by the search, stays chosen.
-    assert_eq!(d.fields["artboards"], json!([1, 2]), "the first click chooses the row among those shown");
-    // The dialog frame lends the dialog to its body while the app still shows it.
-    app.ui.dialog = Some(d.clone());
-    row_double_clicked(&mut app, &mut d, 2);
-    assert_eq!(d.fields["artboards"], json!([0, 1]), "the double-click puts the choice back");
+    menus::invoke(&mut app, COMMAND, Value::Null);
+    let id = dialog_id(KIND);
+    set(&app, id, "artboards", json!([0, 1])).unwrap();
+    // The activation the list reports for a double click on row 2, as the body queues it.
+    host(&app, |h| h.get_mut::<ArtboardsDialog>().map(|d| d.go_to = Some(2))).unwrap();
+    let window = ctx(&app);
+    crate::dialogs::host::pump(&mut app, &window);
     assert_eq!(app.view().unwrap().artboard, 2, "the artboard is active");
-    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert!(host(&app, |h| h.is_open::<ArtboardsDialog>()), "the dialog stays open");
+    assert_eq!(
+        host(&app, |h| h.get::<ArtboardsDialog>().map(|d| (d.fields.artboards.clone(), d.go_to))),
+        Some((vec![0, 1], None)),
+        "the choice is kept, the request done"
+    );
 }

@@ -84,8 +84,15 @@ fn a_piece_s_appearance_inherits_or_replaces() {
         ..Appearance::default()
     };
     let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
-    let piece =
-        |fills: Option<Vec<Paint>>, strokes: Option<Vec<OutStroke>>| Piece { path: PathData::default(), rule: FillRule::NonZero, fills, strokes };
+    let piece = |fills: Option<Vec<Paint>>, strokes: Option<Vec<OutStroke>>| Piece {
+        path: PathData::default(),
+        rule: FillRule::NonZero,
+        fills,
+        strokes,
+        look: Look::default(),
+        fill_looks: vec![],
+        stroke_looks: vec![],
+    };
     assert_eq!(appearance(&base, &piece(None, None)), base, "inherited");
     let ap = appearance(&base, &piece(Some(vec![red.clone()]), Some(vec![])));
     assert_eq!(ap.items.len(), 1);
@@ -152,6 +159,21 @@ fn faults_refuse_the_whole_result_by_field() {
     assert!(e.to_string().contains("documentData"), "{e}");
     let declined = decode(br#"{"error":"nothing to do"}"#, Scope::Object, FillRule::NonZero).unwrap_err();
     assert_eq!(declined, Error::Failed("nothing to do".into()));
+}
+
+/// A top-level `notice` is ignored, as a filter-only key a live effect may hand back; other
+/// unknown top-level keys still refuse the result.
+#[test]
+fn a_notice_is_ignored_and_other_top_level_keys_refused() {
+    let ok = json!({"path": square(), "fills": [red()]});
+    let decode_top = |top: Value| decode(&serde_json::to_vec(&top).unwrap(), Scope::Object, FillRule::NonZero);
+    let pieces = decode_top(json!({"objects": [ok], "notice": "Done"})).unwrap();
+    assert_eq!(pieces.len(), 1);
+    assert_eq!(decode_top(json!({"objects": [ok], "notice": 12})).unwrap().len(), 1);
+    for key in ["note", "notices", "message"] {
+        let e = decode_top(json!({"objects": [ok], key: "Done"})).unwrap_err().to_string();
+        assert!(e.contains(&format!("{key}:")) && e.contains("returns only `objects` and `notice`"), "{key}: {e}");
+    }
 }
 
 /// A key a paint does not have, at any level of it, refuses the result and is named; it is not
@@ -332,4 +354,148 @@ fn linked_spot_stop_plates_are_kept() {
     };
     assert_eq!(plates(&pieces[0].fills.as_ref().unwrap()[0]), [Some([0.0; 4]), Some([0.1, 0.2, 0.3, 0.4])]);
     assert_eq!(plates(&pieces[0].strokes.as_ref().unwrap()[0].paint), [None, Some([0.1, 0.2, 0.3, 0.4])]);
+}
+
+/// A host check for these tests: Drop Shadow anywhere, Roughen on a piece only, nothing else.
+fn shadows_only(e: &Effect, row: bool) -> std::result::Result<(), String> {
+    match e.id.as_str() {
+        "stylize.dropShadow" => Ok(()),
+        "distort.roughen" if !row => Ok(()),
+        id => Err(format!("not taken: {id}")),
+    }
+}
+
+fn with_looks(pieces: Value) -> Result<Vec<Piece>> {
+    decode_with(&out(pieces), Scope::Object, FillRule::NonZero, Some(shadows_only))
+}
+
+/// Without `appearanceOutput`, a piece, a fill and a stroke still have no opacity, blending mode
+/// or effects: each refuses the result, naming the field.
+#[test]
+fn api2_and_undeclared_effects_still_refuse_piece_appearance() {
+    for (piece, at) in [
+        (json!({"path": square(), "opacity": 0.5}), "objects[0].opacity"),
+        (json!({"path": square(), "blend": "Multiply"}), "objects[0].blend"),
+        (json!({"path": square(), "effects": []}), "objects[0].effects"),
+        (json!({"path": square(), "fills": [{"paint": red(), "opacity": 0.5}]}), "objects[0].fills[0]"),
+        (json!({"path": square(), "strokes": [{"paint": red(), "blend": "Screen"}]}), "objects[0].strokes[0].blend"),
+    ] {
+        let e = decode(&out(json!([piece])), Scope::Object, FillRule::NonZero).unwrap_err().to_string();
+        assert!(e.contains(&format!("{at}:")), "{at}: {e}");
+    }
+}
+
+/// With `appearanceOutput`, a piece and each fill and stroke it returns take an opacity, a blending
+/// mode by its identifier and effect records the host lets in; a fill carrying them is
+/// `{"paint", …}`. The fills and strokes are dressed with them, with the effects after their own;
+/// a piece without any compares as one from an effect that declares nothing.
+#[test]
+fn piece_and_row_opacity_blend_and_effects_decode_in_order() {
+    let shadow = json!({"id": "stylize.dropShadow", "params": {"x": 2}});
+    let pieces = with_looks(json!([
+        {"path": square(), "opacity": 0.5, "blend": "Multiply", "effects": [{"id": "distort.roughen"}, shadow],
+         "fills": [red(), {"paint": red(), "opacity": 0.25, "blend": "ColorBurn", "effects": [shadow]}],
+         "strokes": [{"paint": red(), "width": 2, "opacity": 0, "effects": [{"id": "stylize.dropShadow", "visible": false}]}]},
+        {"path": square(), "fills": [red()]},
+    ]))
+    .unwrap();
+    let look = &pieces[0].look;
+    assert_eq!((look.opacity, look.blend), (Some(0.5), Some(BlendMode::Multiply)));
+    assert_eq!(look.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["distort.roughen", "stylize.dropShadow"]);
+    assert_eq!(look.effects[1].params, json!({"x": 2}));
+    assert_eq!(pieces[0].fill_looks.len(), 2);
+    assert!(pieces[0].fill_looks[0].is_empty());
+    assert_eq!((pieces[0].fill_looks[1].opacity, pieces[0].fill_looks[1].blend), (Some(0.25), Some(BlendMode::ColorBurn)));
+    assert_eq!(pieces[0].stroke_looks[0].opacity, Some(0.0));
+    assert!(!pieces[0].stroke_looks[0].effects[0].visible);
+    let plain = decode(&out(json!([{"path": square(), "fills": [red()]}])), Scope::Object, FillRule::NonZero).unwrap();
+    assert_eq!(pieces[1], plain[0], "no look");
+    // Dressed: the second fill and the stroke take their looks, the stroke's effect after its own.
+    let mut own = StrokeLayer::new(Paint::solid(Color::BLACK), 3.0);
+    own.effects.push(Effect { id: "stylize.outerGlow".into(), params: Value::Null, visible: true });
+    let base = Appearance {
+        items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::WHITE))), AppearanceItem::Stroke(own)],
+        ..Default::default()
+    };
+    let ap = appearance(&base, &pieces[0]);
+    let fills: Vec<&FillLayer> = ap.items.iter().filter_map(|i| if let AppearanceItem::Fill(f) = i { Some(f) } else { None }).collect();
+    assert_eq!((fills[0].opacity, fills[0].blend), (1.0, BlendMode::Normal));
+    assert_eq!((fills[1].opacity, fills[1].blend, fills[1].effects.len()), (0.25, BlendMode::ColorBurn, 1));
+    let Some(AppearanceItem::Stroke(s)) = ap.items.iter().find(|i| !i.is_fill()) else { panic!("a stroke") };
+    assert_eq!(s.opacity, 0.0);
+    assert_eq!(s.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow", "stylize.dropShadow"]);
+    // On one fill: each copy takes its own fill's look.
+    let copies = items(&base.items[0], &pieces[0]);
+    let opacity: Vec<f32> = copies.iter().map(|i| if let AppearanceItem::Fill(f) = i { f.opacity } else { -1.0 }).collect();
+    assert_eq!(opacity, [1.0, 0.25]);
+}
+
+/// Every bad look refuses the whole result, naming the field: an opacity that is not a number from
+/// 0 to 1, a blending mode that is not an identifier exactly, an `effects` that is not a list, a
+/// record with another key or an id the host refuses (a plug-in effect, a geometry effect on a
+/// fill), and the limits of 16 records in a list and 4,096 in a result.
+#[test]
+fn invalid_appearance_field_refuses_every_piece_and_names_field() {
+    let ok = json!({"path": square(), "opacity": 0.5});
+    let shadow = json!({"id": "stylize.dropShadow"});
+    for (piece, at) in [
+        (json!({"path": square(), "opacity": 1.5}), "objects[1].opacity"),
+        (json!({"path": square(), "opacity": -0.01}), "objects[1].opacity"),
+        (json!({"path": square(), "opacity": "0.5"}), "objects[1].opacity"),
+        (json!({"path": square(), "opacity": null}), "objects[1].opacity"),
+        (json!({"path": square(), "blend": "multiply"}), "objects[1].blend"),
+        (json!({"path": square(), "blend": "Color Burn"}), "objects[1].blend"),
+        (json!({"path": square(), "blend": 2}), "objects[1].blend"),
+        (json!({"path": square(), "effects": shadow}), "objects[1].effects"),
+        (json!({"path": square(), "effects": [{"id": "stylize.dropShadow", "order": 1}]}), "objects[1].effects[0].order"),
+        (json!({"path": square(), "effects": [{"id": ""}]}), "objects[1].effects[0]"),
+        (json!({"path": square(), "effects": [{"id": "plugin.test.self"}]}), "objects[1].effects[0]"),
+        (json!({"path": square(), "effects": [shadow, {"id": "stylize.nope"}]}), "objects[1].effects[1]"),
+        (json!({"path": square(), "fills": [{"paint": red(), "effects": [{"id": "distort.roughen"}]}]}), "objects[1].fills[0].effects[0]"),
+        (json!({"path": square(), "fills": [{"paint": red(), "tint": 1}]}), "objects[1].fills[0].tint"),
+        (json!({"path": square(), "strokes": [{"paint": red(), "opacity": 2}]}), "objects[1].strokes[0].opacity"),
+        (json!({"path": square(), "effects": vec![shadow.clone(); MAX_LOOK_EFFECTS + 1]}), "objects[1].effects"),
+    ] {
+        let e = with_looks(json!([ok, piece])).unwrap_err().to_string();
+        assert!(e.contains(&format!("{at}:")), "{at}: {e}");
+    }
+    let e = with_looks(json!([{"path": square(), "effects": [{"id": "plugin.test.self"}]}])).unwrap_err().to_string();
+    assert!(e.contains("not taken: plugin.test.self"), "{e}");
+    // 256 pieces of 16 records each fit; one more record does not.
+    let full = json!({"path": square(), "effects": vec![shadow.clone(); MAX_LOOK_EFFECTS]});
+    let mut many = vec![full.clone(); MAX_RESULT_EFFECTS / MAX_LOOK_EFFECTS];
+    assert_eq!(with_looks(Value::from(many.clone())).unwrap().len(), MAX_RESULT_EFFECTS / MAX_LOOK_EFFECTS);
+    many.push(json!({"path": square(), "fills": [{"paint": red(), "effects": [shadow]}]}));
+    let e = with_looks(Value::from(many)).unwrap_err().to_string();
+    assert!(
+        e.contains(&format!("objects[{}].fills[0].effects[0]: a result carries at most {MAX_RESULT_EFFECTS}", MAX_RESULT_EFFECTS / MAX_LOOK_EFFECTS)),
+        "{e}"
+    );
+    // A host that has set no check lets no record in.
+    let e = decode_with(&out(json!([{"path": square(), "effects": [shadow]}])), Scope::Object, FillRule::NonZero, Some(no_effects)).unwrap_err();
+    assert!(e.to_string().contains("objects[0].effects[0]:"), "{e}");
+}
+
+/// An effect on a fill or a stroke sits among that fill's or stroke's own effects, so the fills
+/// and strokes it returns take an opacity and a blending mode but no `effects`, even an empty
+/// list; its pieces still take effects of their own.
+#[test]
+fn rows_of_an_effect_on_a_fill_or_stroke_take_no_effects() {
+    let shadow = json!({"id": "stylize.dropShadow"});
+    for (scope, piece, at) in [
+        (Scope::Fill, json!({"path": square(), "fills": [{"paint": red(), "effects": [shadow]}]}), "objects[0].fills[0].effects"),
+        (Scope::Fill, json!({"path": square(), "fills": [{"paint": red(), "effects": []}]}), "objects[0].fills[0].effects"),
+        (Scope::Stroke, json!({"path": square(), "strokes": [{"paint": red(), "effects": [shadow]}]}), "objects[0].strokes[0].effects"),
+    ] {
+        let e = decode_with(&out(json!([piece])), scope, FillRule::NonZero, Some(shadows_only)).unwrap_err().to_string();
+        assert!(e.contains(&format!("{at}:")), "{at}: {e}");
+    }
+    for (scope, piece) in [
+        (Scope::Fill, json!({"path": square(), "effects": [shadow], "fills": [{"paint": red(), "opacity": 0.5, "blend": "Screen"}]})),
+        (Scope::Stroke, json!({"path": square(), "effects": [shadow], "strokes": [{"paint": red(), "width": 1, "opacity": 0.5}]})),
+        (Scope::Object, json!({"path": square(), "fills": [{"paint": red(), "effects": [shadow]}]})),
+    ] {
+        let pieces = decode_with(&out(json!([piece])), scope, FillRule::NonZero, Some(shadows_only));
+        assert!(pieces.is_ok(), "{scope:?}: {pieces:?}");
+    }
 }

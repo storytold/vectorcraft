@@ -1,9 +1,10 @@
-//! Design tokens (four UI brightness levels), fonts and egui style.
+//! The user's interface choices (brightness, accent, colour scheme) and how they select the root theme.
 
-use std::sync::Arc;
-
-use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle, Visuals};
+use craft::theme::{AppSizes, ModeChoice, Rgba, ThemeId};
+use egui::{FontFamily, FontId};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, LazyLock};
+use vectorcraft_engine::Prefs;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Brightness {
@@ -65,22 +66,21 @@ impl Accent {
     pub fn parse(s: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|a| a.id().eq_ignore_ascii_case(s))
     }
-    /// (accent, accent_strong) on dark panels and on light ones; the strong one fills buttons
-    /// with white lettering.
-    fn colors(self, dark: bool) -> (u32, u32) {
+    /// The accent's seed colour (`0xRRGGBB`) on dark panels and on light ones.
+    fn seed_hex(self, dark: bool) -> u32 {
         match (self, dark) {
-            (Accent::Coral, true) => (0xf06a52, 0xe8573f),
-            (Accent::Coral, false) => (0xd9472f, 0xd14a33),
-            (Accent::Blue, true) => (0x5b96ff, 0x2f74f0),
-            (Accent::Blue, false) => (0x2563eb, 0x1f5ad6),
-            (Accent::Violet, true) => (0xa98bff, 0x7c55f0),
-            (Accent::Violet, false) => (0x7146dc, 0x6a3fd4),
-            (Accent::Green, true) => (0x3fcf8e, 0x1f9d63),
-            (Accent::Green, false) => (0x16955a, 0x14874f),
-            (Accent::Amber, true) => (0xf5b544, 0xc47f0e),
-            (Accent::Amber, false) => (0xb06d06, 0xb06d06),
-            (Accent::Pink, true) => (0xf36aa3, 0xdb3f7c),
-            (Accent::Pink, false) => (0xcc3672, 0xc22e69),
+            (Accent::Coral, true) => 0xf06a52,
+            (Accent::Coral, false) => 0xd9472f,
+            (Accent::Blue, true) => 0x5b96ff,
+            (Accent::Blue, false) => 0x2563eb,
+            (Accent::Violet, true) => 0xa98bff,
+            (Accent::Violet, false) => 0x7146dc,
+            (Accent::Green, true) => 0x3fcf8e,
+            (Accent::Green, false) => 0x16955a,
+            (Accent::Amber, true) => 0xf5b544,
+            (Accent::Amber, false) => 0xb06d06,
+            (Accent::Pink, true) => 0xf36aa3,
+            (Accent::Pink, false) => 0xcc3672,
         }
     }
 }
@@ -108,680 +108,137 @@ impl Scheme {
     }
 }
 
-/// All colours and metrics the UI uses. Never hard-code a colour in a widget.
-#[derive(Clone, Copy, Debug)]
-pub struct Tokens {
-    pub dark: bool,
-    pub app_bar: Color32,
-    pub panel: Color32,
-    pub panel_darker: Color32,
-    pub input: Color32,
-    pub input_border: Color32,
-    pub border: Color32,
-    pub divider: Color32,
-    pub text: Color32,
-    pub text_dim: Color32,
-    pub text_disabled: Color32,
-    pub icon: Color32,
-    pub hover: Color32,
-    pub tool_active: Color32,
-    pub accent: Color32,
-    pub accent_strong: Color32,
-    pub row_selected: Color32,
-    pub pasteboard: Color32,
-    pub ruler: Color32,
-    pub ruler_tick: Color32,
-    pub smart_guide: Color32,
-    pub guide: Color32,
-    pub measure_bg: Color32,
-    pub button: Color32,
-    pub radius: u8,
-    /// Field values, button labels, link labels.
-    pub text_strong: Color32,
-    /// Panel tab strips, doc-tab bar, dock header.
-    pub tab_strip: Color32,
-    /// Outline of secondary (outlined) buttons.
-    pub button_border: Color32,
-    /// Default Layer 1 selection colour and selected-anchor fill.
-    pub selection: Color32,
-    pub anchor_selected: Color32,
-    /// Active item text in tool flyouts.
-    pub flyout_active: Color32,
-    /// Hint-bar / tab-bar heights etc. scale with this base font size.
-    pub font_size: f32,
-    /// Window Close button (custom title bar) when hovered, and its glyph there.
-    pub caption_close: Color32,
-    pub caption_close_text: Color32,
-    /// What preview images mark (Flattener Preview highlights).
-    pub highlight: Color32,
-    /// The bleed outline around artboards (Document Setup → Bleed).
-    pub bleed: Color32,
-    /// An artboard's Show Center Mark and Show Cross Hairs (Artboard Options), drawn over its
-    /// paper in every brightness.
-    pub artboard_mark: Color32,
-    /// Error marks (a missing linked file).
-    pub error: Color32,
-    /// Warning marks (a modified linked file).
-    pub warning: Color32,
-    /// Success marks (a message of level `success`).
-    pub success: Color32,
-    /// Rotation gizmo axes, also labelled X, Y and Z.
-    pub axis_x: Color32,
-    pub axis_y: Color32,
-    pub axis_z: Color32,
+/// A built-in theme's id; the ids are constants, so the fallback never shows.
+fn theme_id(id: &str) -> ThemeId {
+    ThemeId::parse(id).unwrap_or_else(|_| ThemeId::suite_default())
 }
 
-impl Tokens {
-    pub fn for_brightness(b: Brightness) -> Self {
-        let hex = |s: u32| Color32::from_rgb((s >> 16) as u8, (s >> 8) as u8, s as u8);
-        // The Craft look: cool slate greys, flat faces with soft corners, and one accent (the app
-        // icon's coral) for what is on, chosen or focused. The four brightness levels share the
-        // style and differ only in their greys.
-        let base = Tokens {
-            dark: true,
-            app_bar: hex(0x0b0d12),
-            panel: hex(0x181b22),
-            panel_darker: hex(0x13161c),
-            input: hex(0x0f1116),
-            input_border: hex(0x2c323e),
-            border: hex(0x06070a),
-            divider: hex(0x232832),
-            text: hex(0xdfe4ec),
-            text_dim: hex(0x969faf),
-            text_disabled: hex(0x5a6271),
-            icon: hex(0xc9d0dc),
-            hover: hex(0x262b35),
-            tool_active: hex(0x2f3541),
-            accent: hex(0xf06a52),
-            accent_strong: hex(0xe8573f),
-            row_selected: hex(0x3a2a2c),
-            pasteboard: hex(0x101217),
-            ruler: hex(0x13161c),
-            ruler_tick: hex(0x6f788a),
-            smart_guide: hex(0xff3dfc),
-            guide: hex(0x4affff),
-            measure_bg: Color32::from_rgba_unmultiplied(24, 27, 34, 235),
-            button: hex(0x282d37),
-            radius: 4,
-            text_strong: hex(0xffffff),
-            tab_strip: hex(0x0f1116),
-            button_border: hex(0x4a5363),
-            selection: hex(0x4f80ff),
-            anchor_selected: hex(0x3d82ff),
-            flyout_active: hex(0xff8a74),
-            font_size: 13.0,
-            caption_close: hex(0xc42b1c),
-            caption_close_text: Color32::WHITE,
-            highlight: hex(0xff3030),
-            bleed: hex(0xf03030),
-            artboard_mark: hex(0x808080),
-            error: hex(0xe34850),
-            warning: hex(0xf0a330),
-            success: hex(0x45af63),
-            axis_x: hex(0xef6058),
-            axis_y: hex(0x45af63),
-            axis_z: hex(0x378ef0),
-        };
-        match b {
-            Brightness::Dark => base,
-            // Charcoal, the default.
-            Brightness::MediumDark => Tokens {
-                app_bar: hex(0x1b1f27),
-                panel: hex(0x272c36),
-                panel_darker: hex(0x21262f),
-                tab_strip: hex(0x1e222a),
-                input: hex(0x1a1e26),
-                input_border: hex(0x3a414e),
-                border: hex(0x11141a),
-                divider: hex(0x323946),
-                text: hex(0xe4e9f1),
-                text_dim: hex(0x99a2b2),
-                text_disabled: hex(0x626b7a),
-                icon: hex(0xccd3de),
-                hover: hex(0x353c49),
-                tool_active: hex(0x3d4553),
-                row_selected: hex(0x4a3236),
-                pasteboard: hex(0x1e222a),
-                ruler: hex(0x21262f),
-                ruler_tick: hex(0x7c8597),
-                measure_bg: Color32::from_rgba_unmultiplied(39, 44, 54, 235),
-                button: hex(0x39404d),
-                button_border: hex(0x5a6476),
-                ..base
-            },
-            Brightness::MediumLight => Tokens {
-                dark: false,
-                app_bar: hex(0xc4cad4),
-                panel: hex(0xd3d8e0),
-                panel_darker: hex(0xc9cfd8),
-                tab_strip: hex(0xc4cad4),
-                input: hex(0xe9ecf1),
-                input_border: hex(0x9aa2b0),
-                border: hex(0xa9b0bc),
-                divider: hex(0xbcc3ce),
-                text: hex(0x1b1f27),
-                text_strong: hex(0x000000),
-                text_dim: hex(0x4a5160),
-                text_disabled: hex(0x7d8594),
-                icon: hex(0x272c36),
-                hover: hex(0xc5ccd6),
-                tool_active: hex(0xb6bec9),
-                accent: hex(0xd9472f),
-                accent_strong: hex(0xd14a33),
-                flyout_active: hex(0xc23e28),
-                row_selected: hex(0xe7c4bd),
-                pasteboard: hex(0xb9c0cb),
-                ruler: hex(0xccd2db),
-                ruler_tick: hex(0x4a5160),
-                measure_bg: Color32::from_rgba_unmultiplied(211, 216, 224, 235),
-                button: hex(0xc9d0da),
-                button_border: hex(0x8a93a2),
-                ..base
-            },
-            Brightness::Light => Tokens {
-                dark: false,
-                app_bar: hex(0xe6e9ee),
-                panel: hex(0xf3f5f8),
-                panel_darker: hex(0xe9ecf1),
-                tab_strip: hex(0xe6e9ee),
-                input: hex(0xffffff),
-                input_border: hex(0xc3c9d3),
-                border: hex(0xd0d5dd),
-                divider: hex(0xdde1e8),
-                text: hex(0x1b1f27),
-                text_strong: hex(0x000000),
-                text_dim: hex(0x58606e),
-                text_disabled: hex(0x9aa1ad),
-                icon: hex(0x2a303b),
-                hover: hex(0xe3e7ed),
-                tool_active: hex(0xd5dbe3),
-                accent: hex(0xd9472f),
-                accent_strong: hex(0xd14a33),
-                flyout_active: hex(0xc23e28),
-                row_selected: hex(0xf8d9d2),
-                pasteboard: hex(0xdfe3e9),
-                ruler: hex(0xeceff3),
-                ruler_tick: hex(0x58606e),
-                measure_bg: Color32::from_rgba_unmultiplied(243, 245, 248, 235),
-                button: hex(0xe3e7ed),
-                button_border: hex(0xa4abb8),
-                ..base
-            },
+/// The root theme the saved interface preferences select: its id, its fixed mode (the four
+/// brightness levels decide light or dark, never the system) and the accent seed. Classic keeps its
+/// own blue and Modern's coral is in its theme files, so both return no seed there.
+pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
+    let brightness = Brightness::parse(&prefs.ui_brightness).unwrap_or_default();
+    let accent = Accent::parse(&prefs.ui_accent).unwrap_or_default();
+    let scheme = Scheme::parse(&prefs.ui_color_scheme).unwrap_or_default();
+    let dark = matches!(brightness, Brightness::Dark | Brightness::MediumDark);
+    let mode = if dark { ModeChoice::Dark } else { ModeChoice::Light };
+    match scheme {
+        Scheme::Classic => {
+            let id = match brightness {
+                Brightness::MediumDark => "craft.artcraft",
+                Brightness::MediumLight => "craft.pro-light-gray",
+                Brightness::Dark | Brightness::Light => "craft.pro",
+            };
+            (theme_id(id), mode, None)
         }
-    }
-
-    /// The Classic colour scheme at brightness `b`: neutral greys with a blue accent, a dark
-    /// pressed tool and blue-grey selected rows, on the Modern metrics (corners, sizes).
-    pub fn classic(b: Brightness) -> Self {
-        let hex = |s: u32| Color32::from_rgb((s >> 16) as u8, (s >> 8) as u8, s as u8);
-        let base = Tokens {
-            app_bar: hex(0x262626),
-            panel: hex(0x323232),
-            panel_darker: hex(0x282828),
-            input: hex(0x1f1f1f),
-            input_border: hex(0x464646),
-            border: hex(0x1b1b1b),
-            divider: hex(0x3f3f3f),
-            text: hex(0xd8d8d8),
-            text_dim: hex(0xa8a8a8),
-            text_disabled: hex(0x6e6e6e),
-            icon: hex(0xcfcfcf),
-            hover: hex(0x444444),
-            tool_active: hex(0x1d1d1d),
-            accent: hex(0x378ef0),
-            accent_strong: hex(0x1473e6),
-            row_selected: hex(0x484b50),
-            pasteboard: hex(0x1e1e1e),
-            ruler: hex(0x2f2f2f),
-            ruler_tick: hex(0x8a8a8a),
-            measure_bg: Color32::from_rgba_unmultiplied(92, 92, 92, 235),
-            button: hex(0x444444),
-            text_strong: hex(0xf5f5f5),
-            tab_strip: hex(0x282828),
-            button_border: hex(0x6a6a6a),
-            flyout_active: hex(0x54b2f7),
-            ..Tokens::for_brightness(Brightness::Dark)
-        };
-        match b {
-            Brightness::Dark => base,
-            Brightness::MediumDark => Tokens {
-                // A shade below the panels, so the cards stand out from the window behind them.
-                app_bar: hex(0x464646),
-                panel: hex(0x535353),
-                panel_darker: hex(0x424242),
-                tab_strip: hex(0x424242),
-                input: hex(0x454545),
-                input_border: hex(0x5f5f5f),
-                border: hex(0x383838),
-                divider: hex(0x4b4b4b),
-                text: hex(0xd1d1d1),
-                text_strong: hex(0xffffff),
-                text_dim: hex(0xb0b0b0),
-                text_disabled: hex(0x7a7a7a),
-                icon: hex(0xc2c2c2),
-                hover: hex(0x606060),
-                tool_active: hex(0x303030),
-                row_selected: hex(0x52677c),
-                pasteboard: hex(0x606060),
-                ruler: hex(0x333333),
-                button: hex(0x535353),
-                button_border: hex(0x747474),
-                ..base
-            },
-            Brightness::MediumLight => Tokens {
-                dark: false,
-                app_bar: hex(0xa9a9a9),
-                panel: hex(0xb8b8b8),
-                panel_darker: hex(0xaaaaaa),
-                tab_strip: hex(0xa6a6a6),
-                input: hex(0xd6d6d6),
-                input_border: hex(0x8c8c8c),
-                border: hex(0x969696),
-                divider: hex(0x9e9e9e),
-                text: hex(0x1f1f1f),
-                text_strong: hex(0x000000),
-                text_dim: hex(0x3c3c3c),
-                text_disabled: hex(0x7c7c7c),
-                icon: hex(0x2a2a2a),
-                hover: hex(0xc8c8c8),
-                tool_active: hex(0x969696),
-                row_selected: hex(0x9fb4d6),
-                pasteboard: hex(0xa0a0a0),
-                ruler: hex(0xc2c2c2),
-                ruler_tick: hex(0x4a4a4a),
-                measure_bg: Color32::from_rgba_unmultiplied(184, 184, 184, 235),
-                button: hex(0xcacaca),
-                button_border: hex(0x7a7a7a),
-                flyout_active: hex(0x1473e6),
-                ..base
-            },
-            Brightness::Light => Tokens {
-                dark: false,
-                app_bar: hex(0xe4e4e4),
-                panel: hex(0xf0f0f0),
-                panel_darker: hex(0xe2e2e2),
-                tab_strip: hex(0xdddddd),
-                input: hex(0xffffff),
-                input_border: hex(0xb4b4b4),
-                border: hex(0xcfcfcf),
-                divider: hex(0xd6d6d6),
-                text: hex(0x1f1f1f),
-                text_strong: hex(0x000000),
-                text_dim: hex(0x4b4b4b),
-                text_disabled: hex(0x9a9a9a),
-                icon: hex(0x303030),
-                hover: hex(0xdddddd),
-                tool_active: hex(0xcdcdcd),
-                row_selected: hex(0xc8daf7),
-                pasteboard: hex(0xdcdcdc),
-                ruler: hex(0xeaeaea),
-                ruler_tick: hex(0x5a5a5a),
-                measure_bg: Color32::from_rgba_unmultiplied(240, 240, 240, 235),
-                button: hex(0xe0e0e0),
-                button_border: hex(0x9a9a9a),
-                flyout_active: hex(0x1473e6),
-                ..base
-            },
+        Scheme::Modern => {
+            let id = match brightness {
+                Brightness::Dark | Brightness::Light => "craft.vectorcraft-modern",
+                Brightness::MediumDark | Brightness::MediumLight => "craft.vectorcraft-modern-medium",
+            };
+            let seed = (accent != Accent::Coral).then(|| {
+                let h = accent.seed_hex(dark);
+                Rgba::rgb((h >> 16) as u8, (h >> 8) as u8, h as u8)
+            });
+            (theme_id(id), mode, seed)
         }
-    }
-
-    /// The tokens for `b` in `scheme`; Modern takes `accent`, Classic has its own blue.
-    pub fn for_scheme(scheme: Scheme, b: Brightness, accent: Accent) -> Self {
-        match scheme {
-            Scheme::Modern => Self::for_brightness(b).with_accent(accent),
-            Scheme::Classic => Self::classic(b),
-        }
-    }
-
-    /// These tokens with `accent`: the accent, buttons filled with it, the active item in flyouts and
-    /// selected rows (the panel tinted towards it).
-    pub fn with_accent(self, accent: Accent) -> Self {
-        let hex = |s: u32| Color32::from_rgb((s >> 16) as u8, (s >> 8) as u8, s as u8);
-        let (a, strong) = accent.colors(self.dark);
-        let (a, strong) = (hex(a), hex(strong));
-        let tint = |k: f32| {
-            let mix = |p: u8, q: u8| (f32::from(p) + (f32::from(q) - f32::from(p)) * k).round() as u8;
-            Color32::from_rgb(mix(self.panel.r(), a.r()), mix(self.panel.g(), a.g()), mix(self.panel.b(), a.b()))
-        };
-        Tokens {
-            accent: a,
-            accent_strong: strong,
-            flyout_active: if self.dark { a } else { strong },
-            row_selected: tint(if self.dark { 0.24 } else { 0.2 }),
-            tool_active: tint(if self.dark { 0.3 } else { 0.24 }),
-            ..self
-        }
-    }
-
-    pub fn get(ctx: &egui::Context) -> Tokens {
-        ctx.data(|d| d.get_temp::<Tokens>(egui::Id::NULL)).unwrap_or_else(|| Tokens::for_brightness(Brightness::default()))
-    }
-    pub fn cr(&self) -> CornerRadius {
-        CornerRadius::same(self.radius)
     }
 }
 
-/// The toolbar, the panel dock and the icon rail are cards: `body` drawn on the panel colour with
-/// soft corners, `margin` of the window's frame colour around it.
-pub fn card<R>(ui: &mut egui::Ui, t: &Tokens, margin: egui::Margin, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    egui::Frame::NONE
-        .fill(t.app_bar)
-        .inner_margin(margin)
-        .show(ui, |ui| {
-            egui::Frame::NONE
-                .fill(t.panel)
-                .corner_radius(CARD_RADIUS)
-                .show(ui, |ui| {
-                    ui.set_min_size(ui.available_size());
-                    body(ui)
-                })
-                .inner
-        })
-        .inner
+/// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
+/// where the sets give pills, the Home title is 26-point with a 36-point call to action, 28-point New and Open with 16
+/// points beside their labels and 24-point link rows. Home's margin and the gaps between its title, actions, sections,
+/// headings and links are the framework's page tokens, which follow its spacing scale (`space.gap.*`). The compact set
+/// takes the reference app's metrics:
+/// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 16-point glyphs in
+/// icon buttons, 5-point control corners, 8-point menus and 10-point windows, 33-point panel tabs, 310-point dock
+/// columns with 14-point column bars and 38-point icon columns, 29-point menu rows, and dialogs 22 points inside their
+/// edge with 28-point buttons at least 72 points wide.
+/// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
+/// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
+const SIZES: &[u8] = br#"{
+    "all": {
+        "radius.button": 4,
+        "typography.display.size": 26,
+        "typography.display.line_height": 32,
+        "size.page.action": 36,
+        "size.page.button": 28,
+        "size.page.button_side": 16,
+        "size.page.link": 24
+    },
+    "compact": {
+        "size.control.md": 26,
+        "size.button": 24,
+        "size.icon.glyph_md": 16,
+        "size.rail.width": 38,
+        "size.dock.column": 310,
+        "size.bar.column": 14,
+        "size.panel_header": 33,
+        "size.bar.tab": 35,
+        "size.bar.tab_large": 44,
+        "space.pad.regular": 10,
+        "space.gap.row": 5,
+        "radius.control": 5,
+        "radius.surface": 8,
+        "radius.window": 10,
+        "size.dialog.button": 72,
+        "size.dialog.button_height": 28,
+        "size.row.menu": 29,
+        "space.pad.dialog": 22,
+        "typography.body.size": 12,
+        "typography.body.line_height": 17,
+        "typography.body_strong.size": 12,
+        "typography.body_strong.line_height": 17,
+        "typography.label.size": 11.5,
+        "typography.label.line_height": 17,
+        "typography.caption.size": 10.5,
+        "typography.caption.line_height": 15
+    }
+}"#;
+
+/// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
+/// new value each frame would resolve the tokens again each frame.
+pub fn app_sizes() -> Arc<AppSizes> {
+    static SHARED: LazyLock<Arc<AppSizes>> = LazyLock::new(|| Arc::new(AppSizes::parse_or_default(SIZES)));
+    Arc::clone(&SHARED)
 }
-
-/// The corner radius of [`card`]s and floating windows.
-pub const CARD_RADIUS: u8 = 8;
-
-/// Selected text in the text fields `ui` draws from here on is in the strong text colour. egui
-/// paints it in the selection stroke's colour, the accent, which is hard to read on the selection's
-/// accent tint (#1465). For fields that draw their own frame: egui's frame takes its focus ring from
-/// the same stroke.
-pub fn strong_selected_text(ui: &mut egui::Ui) {
-    ui.visuals_mut().selection.stroke.color = Tokens::get(ui.ctx()).text_strong;
-}
-
-pub const FONT_UI: &str = "ui";
-pub const FONT_UI_SEMIBOLD: &str = "ui-semibold";
-pub const FONT_MONO: &str = "mono";
 
 pub fn semibold(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Name(FONT_UI_SEMIBOLD.into()))
+    FontId::new(size, FontFamily::Name(craft::ui::fonts::SEMIBOLD.into()))
 }
 pub fn mono(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Name(FONT_MONO.into()))
-}
-
-/// Installs the interface's fonts and binds the families the panels and dialogs draw in
-/// ([`FONT_UI`], [`FONT_UI_SEMIBOLD`], [`FONT_MONO`]). egui 0.37 only bundles its own faces when
-/// its `default_fonts` feature is on (this crate enables it); without any face a family lays out
-/// tofu, and the `egui_kittest` harness alone panics on a missing glyph. Every context that shows
-/// these families needs this once: [`crate::VectorcraftApp::ui`] calls it on its first pass, and
-/// an embedder that draws the panels or dialogs without it calls it when it makes the context. It
-/// replaces the context's font definitions: add other fonts after it, or keep these families in
-/// definitions of one's own. Without the `interface-fonts` feature the families are egui's built-in
-/// fonts (and craft-fonts' faces in a build with them), which lack some symbols the panels show
-/// (→ ▾ ● ✓).
-pub fn install_fonts(ctx: &egui::Context) {
-    ctx.set_fonts(interface_fonts());
-}
-
-/// The definitions [`install_fonts`] installs. [`crate::VectorcraftApp::ui`] keeps them to tell
-/// whether egui applied them at once or deferred them to the next pass (it must not take input
-/// or draw with fallback metrics while they are pending).
-pub fn interface_fonts() -> FontDefinitions {
-    let mut fonts = FontDefinitions::default();
-    let (ui, semi, mono) = interface_faces(&mut fonts);
-    let stack = |fonts: &FontDefinitions, family: FontFamily| fonts.families.get(&family).cloned().unwrap_or_default();
-    let (fallback, monospace) = (stack(&fonts, FontFamily::Proportional), stack(&fonts, FontFamily::Monospace));
-    // Without its own monospace face, `mono` is egui's; with it, the face falls back to the text's.
-    let mono_fallback = if mono.is_empty() { monospace } else { fallback.clone() };
-    let family =
-        |faces: Vec<&str>, fallback: &[String]| -> Vec<String> { faces.into_iter().map(str::to_owned).chain(fallback.iter().cloned()).collect() };
-    fonts.families.insert(FontFamily::Proportional, family(ui.clone(), &fallback));
-    fonts.families.insert(FontFamily::Name(FONT_UI_SEMIBOLD.into()), family(semi, &fallback));
-    fonts.families.insert(FontFamily::Name(FONT_UI.into()), family(ui, &fallback));
-    fonts.families.insert(FontFamily::Name(FONT_MONO.into()), family(mono, &mono_fallback));
-    add_craft_fonts(&mut fonts);
-    fonts
-}
-
-/// The interface's own faces, added to `fonts`: the names of the regular, semibold and monospace
-/// faces that head their families, in order.
-#[cfg(feature = "interface-fonts")]
-fn interface_faces(fonts: &mut FontDefinitions) -> (Vec<&'static str>, Vec<&'static str>, Vec<&'static str>) {
-    let add = |f: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
-        f.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
-    };
-    add(fonts, "SourceSans3", include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"));
-    // Inter is drawn a little smaller than its size: its letters are wider than Source Sans's, and
-    // the panels are laid out for those.
-    let inter =
-        |bytes: &'static [u8]| Arc::new(FontData::from_static(bytes).tweak(egui::epaint::text::FontTweak { scale: 0.92, ..Default::default() }));
-    fonts.font_data.insert("Inter".to_owned(), inter(include_bytes!("../../../assets/fonts/Inter-Regular.ttf")));
-    fonts.font_data.insert("Inter-SemiBold".to_owned(), inter(include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf")));
-    add(fonts, "SourceSans3-Semibold", include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"));
-    add(fonts, "JetBrainsMono", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"));
-    (vec!["Inter", "SourceSans3"], vec!["Inter-SemiBold", "SourceSans3-Semibold"], vec!["JetBrainsMono"])
-}
-
-/// Without the `interface-fonts` feature the interface has no faces of its own: every family is egui's.
-#[cfg(not(feature = "interface-fonts"))]
-fn interface_faces(_fonts: &mut FontDefinitions) -> (Vec<&'static str>, Vec<&'static str>, Vec<&'static str>) {
-    (Vec::new(), Vec::new(), Vec::new())
-}
-
-/// The egui name of a craft-fonts face.
-pub(crate) fn craft_font_name(f: &vectorcraft_text::CraftFont) -> String {
-    format!("craft-fonts {} {}", f.family, f.style)
-}
-
-/// The Japanese, Georgian and Devanagari craft-fonts faces (when built with `CRAFT_FONTS_DIR`) as fallbacks at
-/// the end of every family, after the app's own fonts and before the installed fonts `ui_fonts`
-/// adds: BIZ UDPGothic first (bold first in the semibold family), then the Mincho faces, then Noto
-/// Sans Georgian. Each face sits on the baseline of the first face of the family it is in (see
-/// `ui_fonts::baseline_copies`).
-fn add_craft_fonts(fonts: &mut FontDefinitions) {
-    // The name of each face's copy in each family.
-    let mut copies: std::collections::HashMap<(FontFamily, String), String> = std::collections::HashMap::new();
-    for f in vectorcraft_text::CRAFT_FONTS
-        .iter()
-        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr"))
-    {
-        let name = craft_font_name(f);
-        for (copy, data, families) in crate::ui_fonts::baseline_copies(fonts, &name, &FontData::from_static(f.bytes)) {
-            for family in families {
-                copies.insert((family, name.clone()), copy.clone());
-            }
-            fonts.font_data.insert(copy, Arc::new(data));
-        }
-    }
-    for (family, stack) in fonts.families.iter_mut() {
-        let bold = *family == FontFamily::Name(FONT_UI_SEMIBOLD.into());
-        let copy = |f: &vectorcraft_text::CraftFont| {
-            let name = craft_font_name(f);
-            copies.get(&(family.clone(), name.clone())).cloned().unwrap_or(name)
-        };
-        stack.extend(vectorcraft_text::craft_fonts::japanese_ui_fonts(bold).into_iter().map(copy));
-        stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(copy));
-        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(copy));
-        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Gujr")).map(copy));
-    }
-}
-
-/// Apply tokens to egui's global style.
-pub fn apply(ctx: &egui::Context, b: Brightness) {
-    apply_with(ctx, b, Accent::default(), Scheme::default());
-}
-
-/// [`apply`] with an accent colour and colour scheme.
-pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Scheme) {
-    let t = Tokens::for_scheme(scheme, b, accent);
-    ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
-    // egui keeps a style for each system theme and by default follows the system's setting. The
-    // chosen brightness sets egui's theme, so these colors stay in force when the system's setting
-    // differs or changes. A change of theme starts from the current style, which keeps settings
-    // such as the tool tip delay.
-    let theme = if t.dark { egui::Theme::Dark } else { egui::Theme::Light };
-    if ctx.theme() != theme {
-        ctx.set_style_of(theme, ctx.global_style());
-    }
-    ctx.set_theme(theme);
-    let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
-    v.panel_fill = t.panel;
-    v.window_fill = t.panel;
-    v.extreme_bg_color = t.input;
-    v.faint_bg_color = t.panel_darker;
-    v.window_stroke = Stroke::new(1.0, t.border);
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
-    v.selection.bg_fill = t.accent.gamma_multiply(0.55);
-    v.selection.stroke = Stroke::new(1.0, t.accent);
-    v.hyperlink_color = t.accent;
-    v.override_text_color = Some(t.text);
-    v.popup_shadow = egui::epaint::Shadow { offset: [0, 4], blur: 14, spread: 0, color: Color32::from_black_alpha(if t.dark { 120 } else { 60 }) };
-    v.window_shadow = egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(if t.dark { 140 } else { 70 }) };
-    let w = &mut v.widgets;
-    craft_ui::theme::WidgetPalette { noninteractive: t.panel, inactive: t.button, hovered: t.hover, active: t.tool_active, open: t.hover }.apply_to(
-        w,
-        t.cr(),
-        Stroke::new(1.0, t.text),
-    );
-    w.noninteractive.bg_stroke = Stroke::new(1.0, t.divider);
-    w.inactive.bg_stroke = Stroke::NONE;
-    w.hovered.bg_stroke = Stroke::new(1.0, t.input_border);
-    w.active.bg_stroke = Stroke::new(1.0, t.accent);
-    ctx.set_visuals(v);
-    ctx.global_style_mut(|s| {
-        s.spacing.item_spacing = egui::vec2(6.0, 5.0);
-        s.spacing.button_padding = egui::vec2(6.0, 2.0);
-        s.spacing.interact_size = egui::vec2(24.0, 24.0);
-        s.spacing.menu_margin = egui::Margin::same(6);
-        s.spacing.slider_width = 120.0;
-        // Every scroll area shows its bar while it has more to show, in a column of its own,
-        // not only while the pointer is over it (#5941).
-        s.spacing.scroll = crate::widgets::list_scroll_style();
-        s.text_styles = [
-            (TextStyle::Small, FontId::proportional(11.0)),
-            (TextStyle::Body, FontId::proportional(13.0)),
-            (TextStyle::Button, FontId::proportional(13.0)),
-            (TextStyle::Heading, FontId::new(15.0, FontFamily::Name(FONT_UI_SEMIBOLD.into()))),
-            (TextStyle::Monospace, FontId::new(11.5, FontFamily::Name(FONT_MONO.into()))),
-        ]
-        .into();
-        s.animation_time = 0.08;
-    });
+    FontId::monospace(size)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The saved strings are what Preferences and old settings files hold.
     #[test]
     fn brightness_roundtrip() {
         for b in Brightness::ALL {
             assert_eq!(Brightness::parse(b.id()), Some(b));
             assert_eq!(Brightness::parse(b.label()), Some(b));
         }
-        assert!(!Tokens::for_brightness(Brightness::Light).dark);
     }
 
-    /// #1662: a slider's rail (`button_border`, see `widgets::slider`) stands out from the panel
-    /// in every brightness.
+    /// A size `app_sizes` cannot read is only logged and dropped, which brings the pill buttons back unnoticed.
     #[test]
-    fn slider_rails_show_on_every_panel() {
-        for b in Brightness::ALL {
-            for scheme in Scheme::ALL {
-                let t = Tokens::for_scheme(scheme, b, Accent::default());
-                let gap = (i32::from(t.button_border.r()) - i32::from(t.panel.r())).abs();
-                assert!(gap >= 24, "{scheme:?} {b:?}: rail {:?} on panel {:?}", t.button_border, t.panel);
+    fn the_app_sizes_are_read_whole() {
+        assert!(AppSizes::parse(SIZES).is_ok_and(|sizes| !sizes.is_empty()));
+    }
+
+    /// Home's margin and gaps are the framework's page tokens: no size set gives them points of its own, so they follow
+    /// the framework's spacing scale.
+    #[test]
+    fn home_spacing_follows_the_framework_tokens() {
+        let sets: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(SIZES).unwrap();
+        for (set, sizes) in &sets {
+            let keys = sizes.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default();
+            for key in keys {
+                assert!(!key.starts_with("size.page.gap.") && key != "size.page.margin", "{set} sets {key}");
             }
         }
-    }
-
-    /// Classic keeps the Modern corners and the cards' frame, and has its own blue accent
-    /// whatever accent is chosen.
-    #[test]
-    fn classic_scheme_keeps_the_corners_and_its_blue() {
-        for b in Brightness::ALL {
-            let (modern, classic) = (Tokens::for_brightness(b), Tokens::for_scheme(Scheme::Classic, b, Accent::Pink));
-            assert_eq!(classic.radius, modern.radius);
-            assert_eq!(classic.dark, modern.dark, "{b:?}");
-            assert_ne!(classic.app_bar, classic.panel, "{b:?}: the cards need a frame");
-            assert_eq!(classic.accent, Color32::from_rgb(0x37, 0x8e, 0xf0));
-            assert_eq!(Scheme::parse(Scheme::Classic.id()), Some(Scheme::Classic));
-        }
-    }
-
-    /// #3818: the brightness chosen in Preferences stays in force when the system's light or dark
-    /// setting differs from it or changes while the app runs. Tool tips keep the theme's panel fill
-    /// and text color instead of egui's own white box and gray text.
-    #[test]
-    fn the_theme_holds_whatever_the_system_theme() {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0));
-        for b in Brightness::ALL {
-            for scheme in Scheme::ALL {
-                for (first, then) in [(egui::Theme::Dark, egui::Theme::Light), (egui::Theme::Light, egui::Theme::Dark)] {
-                    let t = Tokens::for_scheme(scheme, b, Accent::default());
-                    let ctx = egui::Context::default();
-                    let mut time = 0.0;
-                    let mut tip = None;
-                    for i in 0..5 {
-                        time += 0.5;
-                        let system_theme = Some(if i == 0 { first } else { then });
-                        let events = if i == 1 { vec![egui::Event::PointerMoved(egui::pos2(30.0, 15.0))] } else { vec![] };
-                        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, system_theme, ..Default::default() };
-                        let mut out = ctx.run_ui(input, |ui| {
-                            if i == 0 {
-                                apply_with(ui.ctx(), b, Accent::default(), scheme);
-                                ui.ctx().global_style_mut(|s| s.interaction.tooltip_delay = 0.0);
-                            }
-                            ui.button("Hover me").on_hover_text("Tip text");
-                        });
-                        out.textures_delta.clear();
-                        // The tool tip's text color, and the fill of the box drawn behind it.
-                        let mut shapes: Vec<&egui::Shape> = Vec::new();
-                        let mut open: Vec<&egui::Shape> = out.shapes.iter().rev().map(|c| &c.shape).collect();
-                        while let Some(shape) = open.pop() {
-                            match shape {
-                                egui::Shape::Vec(inner) => open.extend(inner.iter().rev()),
-                                shape => shapes.push(shape),
-                            }
-                        }
-                        tip = shapes.iter().enumerate().find_map(|(n, shape)| match shape {
-                            egui::Shape::Text(s) if s.galley.text() == "Tip text" => {
-                                let fill = shapes[..n].iter().rev().find_map(|behind| match behind {
-                                    egui::Shape::Rect(r) if r.rect.contains(s.pos) && r.fill.a() > 0 => Some(r.fill),
-                                    _ => None,
-                                });
-                                Some((s.fallback_color, fill))
-                            }
-                            _ => None,
-                        });
-                    }
-                    let v = ctx.global_style().visuals.clone();
-                    let what = format!("{scheme:?} {b:?}, system {first:?} then {then:?}");
-                    assert_eq!((v.window_fill, v.override_text_color), (t.panel, Some(t.text)), "{what}");
-                    assert_eq!(tip, Some((t.text, Some(t.panel))), "{what}: the tool tip's text and box");
-                    assert!(contrast(t.text, t.panel) >= 4.5, "{what}: the tool tip's text against its box, {}", contrast(t.text, t.panel));
-                }
-            }
-        }
-    }
-
-    /// The contrast ratio of two opaque colors, from 1 (the same) to 21 (black on white), as WCAG 2
-    /// defines it.
-    fn contrast(a: egui::Color32, b: egui::Color32) -> f32 {
-        let luminance = |c: egui::Color32| {
-            let channel = |v: u8| {
-                let v = f32::from(v) / 255.0;
-                if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
-            };
-            0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
-        };
-        let (a, b) = (luminance(a), luminance(b));
-        (a.max(b) + 0.05) / (a.min(b) + 0.05)
-    }
-
-    /// Changing brightness keeps the interface settings made after the theme was applied, such as
-    /// General › Show Tool Tips' delay.
-    #[test]
-    fn changing_brightness_keeps_other_interface_settings() {
-        let ctx = egui::Context::default();
-        apply(&ctx, Brightness::Dark);
-        ctx.global_style_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
-        apply(&ctx, Brightness::Light);
-        assert_eq!(ctx.global_style().interaction.tooltip_delay, f32::INFINITY);
-        assert_eq!(ctx.global_style().visuals.window_fill, Tokens::for_brightness(Brightness::Light).panel);
     }
 }

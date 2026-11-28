@@ -26,8 +26,10 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("magicWand", "Magic Wand Tool", Some("Y"), "tool-magic-wand")],
     &[
         t("lasso", "Lasso Tool", Some("Q"), "tool-lasso"),
-        // Enclosing Lasso's tool, kept out of `addons::GROUPS` so that `all_tools` lists it once.
-        t(crate::addons::enclosing_lasso::ID, "Enclosing Lasso Tool", None, "tool-lasso"),
+        // Enclosing Lasso's and Polygonal Lasso's tools, kept out of `addons::GROUPS` so that
+        // `all_tools` lists each once.
+        t(crate::addons::enclosing_lasso::ID, "Enclosing Lasso Tool", None, "tool-lasso-enclosing"),
+        t(crate::addons::polygonal_lasso::ID, "Polygonal Lasso Tool", None, "dc-lasso-polygonal"),
     ],
     &[
         t("pen", "Pen Tool", Some("P"), "tool-pen"),
@@ -35,6 +37,8 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("deleteAnchor", "Delete Anchor Point Tool", Some("-"), "tool-pen-delete"),
         t("anchorPoint", "Anchor Point Tool", Some("Shift+C"), "tool-anchor"),
         t(crate::quickpen::ID, "Quick Pen Tool", Some("Alt+P"), "tool-quick-pen"),
+        // Smart Pen's tool, kept out of `addons::GROUPS` so that `all_tools` lists it once.
+        t(crate::addons::smart_pen::ID, "Smart Pen Tool", None, "spline-pointer"),
     ],
     &[t("curvature", "Curvature Tool", Some("Shift+~"), "tool-curvature")],
     &[
@@ -117,29 +121,29 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
     &[t("dimension", "Dimension Tool", None, "tool-dimension")],
     &[
         t("symbolSprayer", "Symbol Sprayer Tool", Some("Shift+S"), "tool-symbol"),
-        t("symbolShifter", "Symbol Shifter Tool", None, "tool-symbol"),
-        t("symbolScruncher", "Symbol Scruncher Tool", None, "tool-symbol"),
-        t("symbolSizer", "Symbol Sizer Tool", None, "tool-symbol"),
-        t("symbolSpinner", "Symbol Spinner Tool", None, "tool-symbol"),
-        t("symbolStainer", "Symbol Stainer Tool", None, "tool-symbol"),
-        t("symbolScreener", "Symbol Screener Tool", None, "tool-symbol"),
-        t("symbolStyler", "Symbol Styler Tool", None, "tool-symbol"),
+        t("symbolShifter", "Symbol Shifter Tool", None, "tool-symbol-shifter"),
+        t("symbolScruncher", "Symbol Scruncher Tool", None, "tool-symbol-scruncher"),
+        t("symbolSizer", "Symbol Sizer Tool", None, "tool-symbol-sizer"),
+        t("symbolSpinner", "Symbol Spinner Tool", None, "tool-symbol-spinner"),
+        t("symbolStainer", "Symbol Stainer Tool", None, "tool-symbol-stainer"),
+        t("symbolScreener", "Symbol Screener Tool", None, "tool-symbol-screener"),
+        t("symbolStyler", "Symbol Styler Tool", None, "tool-symbol-styler"),
     ],
     &[
         t("columnGraph", "Column Graph Tool", Some("J"), "tool-graph"),
-        t("stackedColumnGraph", "Stacked Column Graph Tool", None, "tool-graph"),
-        t("barGraph", "Bar Graph Tool", None, "tool-graph"),
-        t("stackedBarGraph", "Stacked Bar Graph Tool", None, "tool-graph"),
-        t("lineGraph", "Line Graph Tool", None, "tool-graph"),
-        t("areaGraph", "Area Graph Tool", None, "tool-graph"),
-        t("scatterGraph", "Scatter Graph Tool", None, "tool-graph"),
-        t("pieGraph", "Pie Graph Tool", None, "tool-graph"),
-        t("radarGraph", "Radar Graph Tool", None, "tool-graph"),
+        t("stackedColumnGraph", "Stacked Column Graph Tool", None, "tool-graph-stacked-column"),
+        t("barGraph", "Bar Graph Tool", None, "tool-graph-bar"),
+        t("stackedBarGraph", "Stacked Bar Graph Tool", None, "tool-graph-stacked-bar"),
+        t("lineGraph", "Line Graph Tool", None, "tool-graph-line"),
+        t("areaGraph", "Area Graph Tool", None, "tool-graph-area"),
+        t("scatterGraph", "Scatter Graph Tool", None, "tool-graph-scatter"),
+        t("pieGraph", "Pie Graph Tool", None, "tool-graph-pie"),
+        t("radarGraph", "Radar Graph Tool", None, "tool-graph-radar"),
     ],
     &[
         t("artboard", "Artboard Tool", Some("Shift+O"), "tool-artboard"),
         t("slice", "Slice Tool", Some("Shift+K"), "tool-slice"),
-        t("sliceSelection", "Slice Selection Tool", None, "tool-slice"),
+        t("sliceSelection", "Slice Selection Tool", None, "tool-slice-select"),
     ],
     &[
         t("hand", "Hand Tool", Some("H"), "tool-hand"),

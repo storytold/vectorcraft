@@ -2,7 +2,7 @@
 //! their places until its text is edited ([`vectorcraft_doc::FileFonts`]): drawn as it is in the
 //! same PDF whose font is installed, saved and read back so, and in the substitute once edited.
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::geom::Point as KPoint;
 use krilla::page::PageSettings;
 use krilla::text::{Font, GlyphId, KrillaGlyph, TextDirection};
