@@ -236,6 +236,35 @@ fn flat_triangles_stop_at_their_budget() {
 }
 
 #[test]
+fn an_inside_bevel_stays_inside_a_collapsing_convex_outline() {
+    for points in [
+        vec![Point::new(30.0, 26.0), Point::new(100.0, 26.0), Point::new(100.0, 28.0), Point::new(30.0, 28.0)],
+        vec![Point::new(0.0, 0.0), Point::new(56.0, 42.0), Point::new(55.6, 44.2), Point::new(-0.4, 2.2)],
+        vec![Point::new(0.0, 0.0), Point::new(6.0, 0.0), Point::new(3.0, 4.0)],
+    ] {
+        let mut path = BezPath::new();
+        path.move_to(points[0]);
+        for &point in &points[1..] {
+            path.line_to(point);
+        }
+        path.close_path();
+        let (path, bounds) = shape(&path);
+        let bevel = Bevel { shape: BevelShape::Cove, width: 4.3, height: 10.3, inside: true, ..Bevel::default() };
+        let options = Extrude { depth: 17.2, bevel: Some(bevel), ..Extrude::default() };
+        let solid = extrude_meshed(&path, FillRule::NonZero, bounds, options, front()).unwrap();
+        assert!(!solid.facets.is_empty());
+        for point in solid.facets.iter().flat_map(|facet| facet.contours.iter().flatten()) {
+            for (&a, &b) in points.iter().zip(points.iter().cycle().skip(1)) {
+                assert!((b - a).cross(*point - a) >= -1e-8, "{point:?} escaped {points:?}");
+            }
+        }
+        let mesh = solid.mesh().unwrap();
+        assert!(mesh.parts.contains(&MeshPart::Front), "the front cap has area");
+        assert!(closed(&mesh), "the cap and bands meet for {points:?}");
+    }
+}
+
+#[test]
 fn a_beveled_extrusion_stays_closed() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);
@@ -543,10 +572,32 @@ fn join_numbers_each_parts_corners_after_the_last() {
     square(&mut b, 0.0, 0.0, 10.0, false);
     let (p, r) = shape(&b);
     let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
-    let both = Mesh::join([one.clone(), one.clone()]);
+    let both = Mesh::join([one.clone(), one.clone()]).unwrap();
     assert_eq!(both.triangles.len(), 2 * one.triangles.len());
     assert!(both.triangles.iter().all(|t| t.iter().all(|i| (*i as usize) < both.positions.len())));
     assert_eq!(both.triangles[one.triangles.len()][0], one.triangles[0][0] + one.positions.len() as u32);
+    assert!(both.is_consistent());
+    assert_eq!(both.uvs.len(), 2 * one.uvs.len());
+    assert_eq!(both.parts.len(), 2 * one.parts.len());
+}
+
+#[test]
+fn join_refuses_a_mesh_whose_lists_do_not_match() {
+    let mut b = BezPath::new();
+    square(&mut b, 0.0, 0.0, 10.0, false);
+    let (p, r) = shape(&b);
+    let one = plane_mesh(&p, FillRule::NonZero, r, front()).unwrap();
+    for broken in [
+        Mesh { uvs: vec![], ..one.clone() },
+        Mesh { parts: vec![], ..one.clone() },
+        Mesh { normals: vec![], ..one.clone() },
+        Mesh { uvs: vec![[f64::NAN, 0.0]; one.uvs.len()], ..one.clone() },
+        Mesh { positions: vec![[f64::INFINITY, 0.0, 0.0]; one.positions.len()], ..one.clone() },
+        Mesh { triangles: vec![[0, 1, u32::MAX]], parts: vec![MeshPart::Front], ..one.clone() },
+    ] {
+        assert!(!broken.is_consistent());
+        assert!(Mesh::join([one.clone(), broken]).is_err());
+    }
 }
 
 /// A mesh's positions and normals as bits, and its triangles.

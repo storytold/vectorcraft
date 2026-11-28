@@ -1,6 +1,6 @@
-//! Untrusted plug-ins never crash the app: mutated and garbage modules handed to `plugin.install`,
-//! and plug-ins returning hostile output (random JSON in the object model's shape: huge or
-//! malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
+//! Untrusted plug-ins never crash the app: mutated and garbage modules, and modules whose
+//! `vc_manifest` custom section holds garbage, handed to `plugin.install`, and plug-ins returning
+//! hostile output (random JSON in the object model's shape: huge or malformed coordinates, unknown ids, broken paints and gradients, junk of every type) as object
 //! filters (`plugin.run`) or live effects (`effect.apply`), and plug-ins running bulk memory
 //! instructions (`memory.fill`, `memory.copy`, `memory.init`, `data.drop`) on ranges in, at and past
 //! the ends of memory and the data segment, under small and default budgets. Each run must end as
@@ -620,7 +620,11 @@ proptest! {
         }
         let mut s = rich_session();
         s.execute("select.all", &json!({})).unwrap();
-        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone()] {
+        // A module whose `vc_manifest` custom section holds the garbage.
+        let section = tpl::custom_section(vectorcraft_plugins::manifest::MANIFEST_SECTION, &garbage);
+        let sectioned = tpl::with_field(&tpl::module(&tpl::manifest("fuzz.section", "filter", "{}"), tpl::ECHO, "", 1), &section).unwrap();
+        let sectioned = wat::parse_str(sectioned).unwrap();
+        for module in [bytes, [b"\0asm\x01\0\0\0".as_slice(), &garbage].concat(), garbage.clone(), sectioned] {
             let r = catch_quiet(|| {
                 if let Ok(info) = install(&mut s, &module) {
                     let _ = s.execute("plugin.run", &json!({"id": info["id"]}));
@@ -707,9 +711,10 @@ proptest! {
     }
 
     /// Manifests with hostile `commands` (junk of every type, bad and repeated ids, labels with
-    /// control and bidirectional override characters, a `menu` naming another menu, junk
-    /// parameters) parse to an error or to commands whose menu labels show no hidden character and
-    /// that sit under Plug-ins alone; installing one and running each of its commands ends as an
+    /// control and bidirectional override characters, a `menu` of any shape naming any menu, junk
+    /// parameters) at API level 1 or 2 parse to an error or to commands whose menu labels show no
+    /// hidden character and that sit under Plug-ins, or at level 2 in one of the menus a manifest
+    /// may name, with the plug-in's name; installing one and running each of its commands ends as an
     /// error or an edit, never a panic, and the document then renders and exports.
     #[test]
     fn hostile_manifest_commands_never_crash(
@@ -723,7 +728,17 @@ proptest! {
                         1 => "[a-z\u{0007}\n]{1,8}".prop_map(Value::from),
                         1 => arb_junk(),
                     ],
-                    prop_oneof![Just(Value::Null), Just(json!("File")), arb_junk()],
+                    prop_oneof![
+                        Just(Value::Null),
+                        Just(json!("File")),
+                        Just(json!({"path": ["Select"], "after": "Inverse"})),
+                        Just(json!({"path": ["Object", "Path"]})),
+                        Just(json!({"path": ["File"]})),
+                        Just(json!({"path": ["Select"], "after": "\u{202E}Inverse"})),
+                        arb_junk().prop_map(|j| json!({"path": j})),
+                        arb_junk().prop_map(|j| json!({"path": ["Select"], "after": j})),
+                        arb_junk(),
+                    ],
                     prop_oneof![Just(Value::Null), Just(json!({"by": {"type": "number", "min": 0, "max": 10, "default": 2}})), arb_junk()],
                 )
                     .prop_map(|(id, label, menu, params)| {
@@ -742,8 +757,9 @@ proptest! {
         ),
         junk in prop::option::weighted(0.1, arb_junk()),
         given in prop_oneof![Just(json!({})), Just(json!({"by": 3})), arb_junk()],
+        api in 1u32..=2,
     ) {
-        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind});
+        let mut m = json!({"id": "fuzz.commands", "name": "Fuzz \u{202E}Commands", "kind": kind, "api": api});
         if matches!(kind, "exporter" | "importer") {
             m["extensions"] = json!(["fz"]);
         }
@@ -756,6 +772,12 @@ proptest! {
                 let shown = c.shown_label();
                 prop_assert!(!shown.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
                 prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+                let placed = c.menu_label(&man.name);
+                prop_assert!(!placed.chars().any(|ch| ch.is_control() || matches!(ch, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", placed);
+                if let Some(place) = &c.place {
+                    prop_assert!(api >= 2 && vectorcraft_plugins::manifest::MENU_PLACES.contains(&place.path), "{:?}", place);
+                    prop_assert!(placed.ends_with(')') && placed.len() > shown.len(), "a placed item names its plug-in: {}", placed);
+                }
             }
         }
         let mut s = rich_session();
@@ -774,7 +796,9 @@ proptest! {
         let ran = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
         prop_assert!(ran.is_empty() || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
         for (id, menu) in &ran {
-            prop_assert!(menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect"), "{id}: {menu:?}");
+            let submenu = menu.len() == 3 && menu[1] == "Plug-ins" && matches!(menu[0], "Object" | "Effect");
+            let place = api >= 2 && vectorcraft_plugins::manifest::MENU_PLACES.contains(&menu.as_slice());
+            prop_assert!(submenu || place, "{id}: {menu:?}");
         }
         renders(&s, "after hostile commands")?;
         vectorcraft_plugins::registry::remove("fuzz.commands");
@@ -882,6 +906,77 @@ proptest! {
         vectorcraft_plugins::registry::revoke("fuzz.inputs");
     }
 
+    /// Manifests with a hostile `context` (unknown, repeated and oddly cased sections, long lists,
+    /// junk of every type) with any `api`, kind and permissions parse to an error or to a filter, or
+    /// a live effect with commands, at `api` 3 or later asking for each section once, whose
+    /// `permissions` list `doc.read` so that installing it asks for approval. One that installs and
+    /// echoes its input, with or without a selection, leaves the document as it was, and it still
+    /// renders.
+    #[test]
+    fn hostile_manifest_context_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        commands in any::<bool>(),
+        names in prop::collection::vec(prop::sample::select(vec!["settings", "artboards", "layers", "swatches", "Layers", "document", ""]), 0..6),
+        long in prop::option::weighted(0.1, 5usize..300),
+        context in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
+        api in prop_oneof![2 => Just(json!(3)), 1 => Just(json!(2)), 1 => Just(json!(4)), 1 => arb_junk()],
+        permissions in prop_oneof![Just(Value::Null), Just(json!([])), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.read", "effect.render"])), Just(json!(["doc.write"]))],
+        select in any::<bool>(),
+    ) {
+        let mut m = json!({"id": "fuzz.context", "name": "Context", "kind": kind, "api": api});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        if commands {
+            m["commands"] = json!([{"id": "c", "label": "C"}]);
+        }
+        if !permissions.is_null() {
+            m["permissions"] = permissions;
+        }
+        m["context"] = match (context, long) {
+            (_, Some(n)) => json!(vec!["layers"; n]),
+            (Some(Value::Null) | None, None) => json!(names),
+            (Some(junk), None) => junk,
+        };
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            let sections = man.context_sections();
+            prop_assert_eq!(sections.len(), man.context.len(), "{}", text);
+            prop_assert!(sections.iter().enumerate().all(|(i, k)| !sections[..i].contains(k)), "{}", text);
+            let kind_ok = man.kind == Kind::Filter || (man.kind == Kind::Effect && !man.commands.is_empty());
+            prop_assert!(sections.is_empty() || (kind_ok && man.api >= 3), "{}", text);
+            let reads = man.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == "doc.read"));
+            prop_assert!(sections.is_empty() || (man.asks_permissions() && reads), "{}", text);
+        }
+        let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
+        let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();
+        let data = vectorcraft_format::base64_encode(&module);
+        let grant = json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]);
+        let before = s.doc().unwrap().doc.clone();
+        let r = catch_quiet(|| {
+            let installed = s.execute("plugin.install", &json!({"dataBase64": data, "grant": grant})).is_ok();
+            let _ = s.execute(if select { "select.all" } else { "select.none" }, &json!({}));
+            let ran = installed && s.execute("plugin.run", &json!({"id": "fuzz.context"})).is_ok();
+            if installed {
+                for c in s.commands().into_iter().filter(|c| c.id.starts_with("plugin.fuzz.context.")) {
+                    let _ = s.execute(c.id, &json!({}));
+                }
+            }
+            (installed, ran)
+        });
+        let (installed, ran) = r.map_err(|msg| TestCaseError::fail(format!("panicked running {text}: {msg}")))?;
+        prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        if ran {
+            prop_assert!(s.doc().unwrap().doc.layers == before.layers, "an echo changed the document: {}", text);
+        }
+        renders(&s, &text)?;
+        vectorcraft_plugins::registry::remove("fuzz.context");
+        vectorcraft_plugins::registry::revoke("fuzz.context");
+    }
+
     /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,
     /// control characters, too long), values, lengths up to about 1 MiB and pointers in and out of
     /// its memory runs to an output, or on a small budget to its instruction budget, never a panic;
@@ -916,6 +1011,7 @@ proptest! {
         let store = Store(std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id())));
         let _ = std::fs::remove_dir_all(&store.0);
         let folder = store.0.clone();
+        vectorcraft_engine::store::grant_keys::keep_grant_keys_in_memory();
         let mut s = Session::new();
         s.allow_plugin_grants_from_requests();
         s.attach_plugin_store(folder.clone());

@@ -304,7 +304,7 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
             warn(&mut warnings, PAST_CLASSIC_RANGE);
         }
         let bytes = match opts.version {
-            Version::Hpgl => plain(&by_pen),
+            Version::Hpgl => craft_plotter::hpgl::write::write_hpgl(&by_pen),
             Version::Hpgl2 => encoded(&by_pen, &pens),
         };
         out.push(HpglOutput { bytes, pens: pens.clone(), warnings, setting_notes });
@@ -509,27 +509,6 @@ fn inner_first(left: Vec<(usize, Vec<(i64, i64)>)>, outer: &[Vec<usize>], waitin
         }
     }
     paths.extend(held.into_iter().flatten());
-}
-
-/// HP-GL: `IN;`, each pen's paths as `PU` and `PD`, `PU;SP0;`.
-fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
-    let mut s = String::from("IN;");
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        s.push_str(&format!("PU;SP{};", i + 1));
-        for path in paths {
-            let Some(((x, y), rest)) = path.split_first() else { continue };
-            s.push_str(&format!("PU{x},{y};PD"));
-            for (k, (x, y)) in rest.iter().enumerate() {
-                if k > 0 {
-                    s.push(',');
-                }
-                s.push_str(&format!("{x},{y}"));
-            }
-            s.push(';');
-        }
-    }
-    s.push_str("PU;SP0;");
-    s.into_bytes()
 }
 
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.

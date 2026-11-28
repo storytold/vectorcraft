@@ -51,6 +51,40 @@ pub use driver::{envelope_ink, layout_inputs, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
+#[cfg(test)]
+thread_local! {
+    /// The steps laying out text took on this thread ([`layout_work`]).
+    static LAYOUT_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The runs paragraphs looked through on this thread ([`paragraph_runs_read`]).
+    static PARAGRAPH_RUNS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Adds `n` steps to [`layout_work`].
+#[cfg(test)]
+pub(crate) fn count_layout_work(n: usize) {
+    LAYOUT_WORK.set(LAYOUT_WORK.get().saturating_add(n));
+}
+
+/// The steps laying out text took on this thread: the bytes shaped, the clusters the single-line
+/// composer read, and the pairs of a break and a line start the every-line composer weighed.
+#[cfg(test)]
+pub(crate) fn layout_work() -> usize {
+    LAYOUT_WORK.get()
+}
+
+/// Adds one run to [`paragraph_runs_read`].
+#[cfg(test)]
+pub(crate) fn count_paragraph_run() {
+    PARAGRAPH_RUNS_READ.set(PARAGRAPH_RUNS_READ.get().saturating_add(1));
+}
+
+/// The runs that shaping a paragraph and finding its Character Direction stretches looked through
+/// on this thread.
+#[cfg(test)]
+pub(crate) fn paragraph_runs_read() -> usize {
+    PARAGRAPH_RUNS_READ.get()
+}
+
 /// Is glyph `g` a later glyph of the cluster of glyph `prev` before it (a combining mark the shaper
 /// set as a glyph of its own)? A list marker's glyphs stand for no character and are not.
 fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
@@ -63,7 +97,7 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
 /// Empty for a glyph of one character.
 fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
-    craft_font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
+    craft::font_catalog::ligature_caret_stops(text, g.byte, g.len, |count| {
         if let Some(length) = upright {
             let (cell, top) = upright_extent(g);
             g.face
@@ -211,6 +245,8 @@ impl Ctx<'_> {
         // Only the paragraph's own runs (they are in order), not every run of the text.
         let first = self.runs.partition_point(|(rr, _)| rr.end <= r.start);
         for (rr, st) in self.runs.iter().skip(first).take_while(|(rr, _)| rr.start < r.end) {
+            #[cfg(test)]
+            count_paragraph_run();
             let (a, b) = (rr.start.max(r.start), rr.end.min(r.end));
             let Some(d) = st.char_direction.filter(|_| a < b) else { continue };
             let (a, b) = (a - r.start, b - r.start);

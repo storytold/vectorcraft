@@ -1,8 +1,9 @@
 use super::*;
 
-/// XML 1.0 literal attribute whitespace is normalized to spaces; references retain the value.
+/// Escape a double-quoted attribute, retaining VectorCraft's apostrophe entity spelling.
 pub(super) fn xml_attr_escape(s: &str) -> String {
-    xml_escape(s).replace('\t', "&#9;").replace('\n', "&#10;").replace('\r', "&#13;")
+    let escaped = craft_xml::esc_attr(s);
+    if escaped.contains('\'') { escaped.replace('\'', "&apos;") } else { escaped }
 }
 
 /// Escape type for XML content. Characters XML 1.0 does not allow are dropped, except the line
@@ -12,21 +13,15 @@ pub(super) fn xml_text(s: &str) -> String {
         .chars()
         .filter_map(|c| match c {
             '\u{b}' | '\u{c}' => Some(' '),
-            c if valid_xml_value(c.encode_utf8(&mut [0; 4])) => Some(c),
+            c if craft_xml::is_xml_char(c) => Some(c),
             _ => None,
         })
         .collect();
     xml_escape(&s)
 }
 
-/// `s` without the characters XML 1.0 does not allow, ready for a double-quoted attribute.
-pub(super) fn xml_attr_valid(s: &str) -> String {
-    let s: String = s.chars().filter(|c| valid_xml_value(c.encode_utf8(&mut [0; 4]))).collect();
-    xml_attr_escape(&s)
-}
-
 pub(super) fn valid_xml_value(s: &str) -> bool {
-    s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
+    s.chars().all(craft_xml::is_xml_char)
 }
 
 /// An XML name without a colon (an NCName): a letter or `_`, then [`xml_name_char`]s.

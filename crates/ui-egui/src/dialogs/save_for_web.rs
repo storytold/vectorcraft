@@ -1,104 +1,255 @@
-//! File → Export → Save for Web (Legacy) (`saveForWeb`, Ctrl/Cmd+Alt+Shift+S): the art previewed
-//! as the web image Save writes, beside the original (Original, Optimized, 2-Up and 4-Up views,
-//! each with its file size and download time), and the settings: format (GIF, JPEG, PNG-8,
-//! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
-//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color,
-//! Restore Generated Table, a double-click that shifts a color to one picked in the Color Picker,
-//! and Unshift All Colors), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
-//! slices and HTML output, and presets.
+//! File → Export → Save for Web (Legacy) (`saveForWeb`, Ctrl/Cmd+Alt+Shift+S): the framework's
+//! hosted Save for Web dialog ([`HostedSaveForWeb`]) over the engine's web export.
 //!
-//! Fields are the `document.exportForWeb` settings (`webExport.settings` gives them; set one with
-//! `ui.dialog.set`, or `preset` to load a preset), plus the dialog's own: `__view` (`original`,
-//! `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` (connection speed),
-//! `__color` (the colour table's selected colour, by source: the one Lock, Transparent and Web
-//! Shift edit, and where a Shift-click range starts), `__colors` (every selected color, by source,
-//! which Delete Color deletes; when it is empty, `__color` alone), `__editColor` (a source color:
-//! the Color Picker opens on it, as a double-click on its swatch opens it), `__presetName` (shown while saving a
-//! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
-//! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
-//! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
-//! takes the settings it finds, and `__optimized` holds its result. Save… remembers
-//! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
-//! Browser opens the HTML page (`file.saveForWeb.browser`). While Alt (Option on macOS) is held,
-//! Cancel reads Reset, which puts the remembered settings back and leaves the dialog open
-//! (`ui.dialogReset`). The previews are what Save writes:
-//! [`webexport::preview_image`], decoded back, cached until the art or a setting changes.
+//! The dialog owns its settings and draws; this module answers what it asks for, once per frame
+//! ([`pump`]): the encoded pictures of its panes ([`webexport::render`] and
+//! [`webexport::preview_image`], decoded back, so the previews are what Save writes), the colour
+//! table edits ([`color_table`]), the preset list (`webExport.presets.*`), Optimize to File Size…
+//! (`webExport.optimizeToFileSize`), Preview in Browser (`file.saveForWeb.browser`) and the path
+//! of Save…. Save… remembers the settings and writes the files (`file.saveForWeb`); Done only
+//! remembers them (`webExport.settings`).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::webexport::{
-    self, SPEEDS, SliceScope, TableColor, WebFormat, WebMetadata, WebOutput, WebRender, WebSettings, download_seconds, hex,
-};
-use vectorcraft_render::AntiAlias;
-use vectorcraft_render::encode::quantize::{Dither, Reduction};
-use vectorcraft_render::encode::web::ColorSort;
+use serde_json::{Value, json};
+use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::webexport::{self, Optimized, WebOutput, WebRender, WebSettings};
+use vectorcraft_render::encode::quantize::Reduction;
 
-use super::png_options::color_button;
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, io, widgets};
+use craft::behavior::PixelSize;
+use craft::host::PickRequest;
+use craft::theme::Srgba;
+use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
+use craft::ui::patterns::form_dialogs::{
+    BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart,
+    PALETTE_COLOR_KEY, SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices,
+    WebVariant,
+};
+use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
+use craft::ui::runtime::requests::PathRequest;
+use egui::load::SizedTexture;
+
+use super::preview_folders;
+use crate::file_asks::{self, Owner};
+use crate::{VectorcraftApp, io};
+
+pub(super) mod color_table;
 
 pub const KIND: &str = "saveForWeb";
+const WRONG_DOCUMENT: &str = "Save for Web belongs to the document that opened the dialog.";
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Save for Web").into(),
-    body,
-    confirm,
-    ok: Some("Save…"),
-    ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
-    discard: Some("Done"),
-    reset: Some(reset),
-    min_width: PREVIEW_W + GAP + SIDE_W,
-    inputs: |_| &["path", "preset"],
-    ..DialogSpec::FORM
-};
+/// What the open dialog's pump keeps between frames: data keyed by its inputs, never UI state.
+#[derive(Default)]
+pub(crate) struct WebExport {
+    document: Option<(u64, u64)>,
+    opening: Arc<()>,
+    /// The rendering of the art before optimisation, by [`render_key`].
+    render: Option<(String, Result<Arc<WebRender>, String>)>,
+    /// The Original pane's picture, `None` while the dialog has not been given the current rendering's.
+    original: Option<SizedTexture>,
+    /// The last Optimize to File Size result with the art it measured ([`art_key`]).
+    optimized: Option<Value>,
+    /// The engine's `colorTable` value: the edits the colour table's buttons made.
+    table: Value,
+    /// The engine's settings the dialog has no option for ([`KEPT`]), as the dialog opened on them
+    /// or Optimize to File Size found them: the previews, Save… and the presets use them. A preset
+    /// picked in the dialog does not change them.
+    kept: Value,
+}
 
-/// The preview area (panes and their captions) and the settings column.
-const PREVIEW_W: f32 = 620.0;
-/// The narrowest the panes get in a narrow window.
-const MIN_PREVIEW_W: f32 = 240.0;
-const PREVIEW_H: f32 = 470.0;
-const SIDE_W: f32 = 296.0;
-const GAP: f32 = 16.0;
-/// Label column and field widths of the settings column.
-const LABEL_W: f32 = 96.0;
-const FIELD_W: f32 = 190.0;
-/// A pane's caption height.
-const CAPTION_H: f32 = 34.0;
+/// The engine's settings keys the dialog does not show; they pass through it unchanged.
+const KEPT: [&str; 2] = ["transparencyDither", "transparencyDitherAmount"];
 
-/// The views (`__view`) and their tabs.
-const VIEWS: [&str; 4] = ["original", "optimized", "2up", "4up"];
-const VIEW_LABELS: [&str; 4] = ["Original", "Optimized", "2-Up", "4-Up"];
-/// Zoom choices (`__zoom`: `fit` or a percentage).
-const ZOOMS: [&str; 5] = ["fit", "50", "100", "200", "400"];
-const ZOOM_LABELS: [&str; 5] = ["Fit in View", "50%", "100%", "200%", "400%"];
-/// Palette sizes offered (any 2–256 can be typed).
-const COLOR_COUNTS: [&str; 8] = ["2", "4", "8", "16", "32", "64", "128", "256"];
-/// Matte values and their labels (`Other`: a colour).
-const MATTES: [&str; 3] = ["none", "white", "black"];
-const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
-/// JPEG quality steps: (label, quality).
-const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), ("Very High", 80), ("Maximum", 100)];
-/// Optimize to File Size's Start With (`__optimizeStart`) and Use (`__optimizeUse`) choices.
-const START_WITH: [(&str, &str); 2] = [("current", "Current Settings"), ("auto", "Auto Select GIF/JPEG")];
-const SIZE_USE: [(&str, &str); 3] = [("allSlices", "Total of All Slices"), ("eachSlice", "Each Slice"), ("currentSlice", "Current Slice")];
-/// The fields of Optimize to File Size's rows.
-const OPTIMIZE_FIELDS: [&str; 3] = ["__optimizeK", "__optimizeStart", "__optimizeUse"];
+/// The [`KEPT`] keys of the engine's settings `s`.
+fn kept_of(s: &WebSettings) -> Value {
+    let engine = s.to_json();
+    Value::Object(KEPT.iter().filter_map(|k| engine.get(*k).map(|v| ((*k).to_string(), v.clone()))).collect())
+}
+
+/// The key of the Original pane's texture in the pump's [`TextureStore`]; the panes use their index.
+const ORIGINAL: usize = usize::MAX;
+
+/// The pump's textures: one per pane and the original.
+fn textures(ctx: &egui::Context) -> TextureStore<usize> {
+    let nearest = egui::TextureOptions { magnification: egui::TextureFilter::Nearest, ..egui::TextureOptions::LINEAR };
+    TextureStore::in_context(ctx, "save-for-web", TextureStoreOptions::frames().filter(nearest))
+}
+
+/// The engine's reduction for a colour-table choice of the dialog (which offers six of them).
+fn reduction_of(table: ColorTable) -> Reduction {
+    match table {
+        ColorTable::Perceptual => Reduction::Perceptual,
+        ColorTable::Selective => Reduction::Selective,
+        ColorTable::Restrictive => Reduction::Web,
+        ColorTable::BlackWhite => Reduction::BlackWhite,
+        ColorTable::Grayscale => Reduction::Gray,
+        // Exact, and a table the engine has no reduction of its own for, take the adaptive palette.
+        _ => Reduction::Adaptive,
+    }
+}
+
+/// The dialog's colour-table choice for an engine reduction.
+fn table_of(reduction: Reduction) -> ColorTable {
+    match reduction {
+        Reduction::Perceptual => ColorTable::Perceptual,
+        Reduction::Selective => ColorTable::Selective,
+        Reduction::Adaptive => ColorTable::Adaptive,
+        Reduction::Web => ColorTable::Restrictive,
+        Reduction::BlackWhite => ColorTable::BlackWhite,
+        Reduction::Gray => ColorTable::Grayscale,
+    }
+}
+
+/// The dialog's options for the engine's settings `s`, over the dialog's defaults for what the engine has no setting
+/// of. A width or a height given alone keeps the proportions of `natural`, the image at 100%. The engine's
+/// `colorTable` is the host's edited table ([`WebExport::table`]); the dialog's colour-table choice is the engine's
+/// reduction.
+pub(super) fn options_of(s: &WebSettings, natural: Option<PixelSize>) -> SaveForWebOptions {
+    let mut v = serde_json::to_value(SaveForWebOptions::default()).unwrap_or(Value::Null);
+    if let (Some(o), Value::Object(engine)) = (v.as_object_mut(), s.to_json()) {
+        for (key, value) in engine {
+            if o.contains_key(&key) {
+                o.insert(key, value);
+            }
+        }
+        o.insert("colorTable".into(), serde_json::to_value(table_of(s.reduction)).unwrap_or(Value::Null));
+        // The dialog names JPEG `jpeg` and holds the matte as RGB; it has no None matte, which shows as white.
+        if s.format == webexport::WebFormat::Jpg {
+            o.insert("format".into(), json!("jpeg"));
+        }
+        o.insert("matte".into(), json!(s.matte_rgb().ok().flatten().unwrap_or([255; 3])));
+        o.insert("convertSrgb".into(), json!(s.convert_to_srgb));
+        o.insert("percent".into(), json!(s.percent.unwrap_or(100.0)));
+        if s.metadata == webexport::WebMetadata::Contact {
+            o.insert("metadata".into(), json!("copyrightAndContact"));
+        }
+        // The dialog's whole image is the engine's no slices, and its user slices the engine's every slice.
+        // shortcut: the selected slices are the document's in the engine; the dialog starts with none picked.
+        let slices = match s.slices {
+            webexport::SliceScope::None => json!("all"),
+            webexport::SliceScope::All => json!("user"),
+            webexport::SliceScope::Selected => json!({"selected": []}),
+        };
+        o.insert("slices".into(), slices);
+        o.insert("html".into(), json!(s.output == WebOutput::Html));
+        let scaled = |side: u32, from: u32, to: u32| ((f64::from(side) * f64::from(to) / f64::from(from.max(1))).round() as u32).max(1);
+        let size = match (s.width, s.height, natural) {
+            (Some(width), Some(height), _) => Some((width, height)),
+            (Some(width), None, Some(n)) => Some((width, scaled(width, n.width, n.height))),
+            (None, Some(height), Some(n)) => Some((scaled(height, n.height, n.width), height)),
+            _ => None,
+        };
+        o.insert("size".into(), size.map_or(Value::Null, |(width, height)| json!({"width": width, "height": height})));
+    }
+    serde_json::from_value(v).unwrap_or_default()
+}
+
+/// The engine's settings JSON for the dialog's `options`, the edited colour `table`, the `kept`
+/// settings the dialog does not show ([`WebExport::kept`]) and an optional `path`: what
+/// `webExport.settings`, `document.exportForWeb` and `file.saveForWeb` read.
+fn settings_of(options: &SaveForWebOptions, table: &Value, kept: &Value, path: Option<&str>) -> Value {
+    let mut v = serde_json::to_value(options).unwrap_or(Value::Null);
+    if let Some(o) = v.as_object_mut() {
+        if let Some(kept) = kept.as_object() {
+            o.extend(kept.clone());
+        }
+        let [r, g, b] = options.matte;
+        o.insert("matte".into(), json!(format!("#{r:02x}{g:02x}{b:02x}")));
+        o.remove("colorTable");
+        o.insert("reduction".into(), json!(reduction_of(options.color_table).id()));
+        if !table.is_null() {
+            o.insert("colorTable".into(), table.clone());
+        }
+        // The keys the engine names its own way (see `options_of`).
+        o.insert("convertToSrgb".into(), json!(options.convert_srgb));
+        if o.get("metadata").and_then(Value::as_str) == Some("copyrightAndContact") {
+            o.insert("metadata".into(), json!("contact"));
+        }
+        let slices = match &options.slices {
+            WebSlices::All => "none",
+            WebSlices::User => "all",
+            _ => "selected",
+        };
+        o.insert("slices".into(), json!(slices));
+        o.insert("output".into(), json!(if options.html { "html" } else { "images" }));
+        let size = options.size;
+        o.insert("width".into(), json!(size.map(|s| s.width)));
+        o.insert("height".into(), json!(size.map(|s| s.height)));
+        o.insert("percent".into(), if size.is_some() { Value::Null } else { json!(options.percent) });
+        if let Some(p) = path {
+            o.insert("path".into(), json!(p));
+        }
+    }
+    v
+}
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.session.active().ok_or("no document")?;
-    let mut fields = settings_fields(&remembered(app));
-    let slices = app.session.active().is_some_and(|st| !st.doc.slice_layout().is_empty());
-    fields.extend([
-        ("__view".into(), json!("2up")),
-        ("__zoom".into(), json!("100")),
-        ("__kbps".into(), json!(56.6)),
-        ("__hasSlices".into(), json!(slices)),
-    ]);
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
+    let active = app.session.active().ok_or("no document")?;
+    let document = (active.uid, active.reverts);
+    let host = app.dialogs().ok_or("no window")?;
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    // Settle a completed opening while its settings and source are still available.
+    if let Some(DialogResult::Ok(result)) = host.with(|dialog| dialog.take::<HostedSaveForWeb>()) {
+        finish(app, result);
+    }
+    let s = remembered(app);
+    app.web_export = WebExport {
+        document: Some(document),
+        table: serde_json::to_value(&s.color_table).unwrap_or_default(),
+        kept: kept_of(&s),
+        ..WebExport::default()
+    };
+    let (name, artboards, slices) = {
+        let st = app.session.active().ok_or("no document")?;
+        let slices: Vec<WebSlice> = st
+            .doc
+            .slice_layout()
+            .iter()
+            .map(|a| {
+                let rect = egui::Rect::from_min_max(egui::pos2(a.rect.x0 as f32, a.rect.y0 as f32), egui::pos2(a.rect.x1 as f32, a.rect.y1 as f32));
+                WebSlice::new(a.number as u32, rect)
+            })
+            .collect();
+        (st.doc.title.clone(), st.doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>(), slices)
+    };
+    // The dialog sizes the output against the image at 100%.
+    let natural = WebSettings { width: None, height: None, percent: None, ..s.clone() };
+    let (size, original) = match render_for(app, &natural) {
+        Ok((key, r)) => {
+            let texture = original_texture(&ctx, &key, &r);
+            app.web_export.original = Some(texture);
+            (PixelSize::new(r.width, r.height), texture)
+        }
+        // The panes show why the rendering failed; the Original pane has nothing to show.
+        Err(_) => {
+            let blank = egui::ColorImage::from_rgba_unmultiplied([1, 1], &[0; 4]);
+            (PixelSize::new(1, 1), textures(&ctx).put(&ctx, ORIGINAL, Revision::of(&"blank"), blank).sized())
+        }
+    };
+    let mut dialog = HostedSaveForWeb::new(name, size, original)
+        .document(WebDocument::vector(artboards))
+        .formats(vec![WebFormat::Gif, WebFormat::Jpeg, WebFormat::Png8, WebFormat::Png24])
+        .color_tables(vec![
+            ColorTable::Perceptual,
+            ColorTable::Selective,
+            ColorTable::Adaptive,
+            ColorTable::Restrictive,
+            ColorTable::BlackWhite,
+            ColorTable::Grayscale,
+        ])
+        .options(options_of(&s, Some(size)))
+        .presets(dialog_presets(app))
+        .optimize()
+        .browser_preview(if io::is_web(app) { BrowserPreview::Unavailable(tl!("Needs the desktop app").into()) } else { BrowserPreview::Available });
+    if !slices.is_empty() {
+        dialog = dialog.slices(slices);
+    }
+    if io::is_web(app) {
+        dialog = dialog.ok_label(tl!("Download"));
+    }
+    host.with(|h| h.open(dialog));
     Ok(Value::Null)
 }
 
@@ -111,59 +262,18 @@ fn remembered(app: &VectorcraftApp) -> WebSettings {
     s
 }
 
-/// Reset (Cancel with Alt or Option held, or `ui.dialogReset`): the settings go back to the
-/// remembered ones on the document's active artboard ([`remembered`]), and a pending `preset`, a
-/// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
-/// selected color table entries are dropped. The view, zoom, connection speed and `path` stay,
-/// nothing is remembered or written, and the dialog stays open.
-fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    for key in ["preset", "discard", "__presetName", "__color", "__colors"] {
-        d.fields.remove(key);
-    }
-    d.fields.extend(settings_fields(&remembered(app)));
-    Ok(())
-}
-
-/// The settings as dialog fields.
-fn settings_fields(s: &WebSettings) -> Map<String, Value> {
-    s.to_json().as_object().cloned().unwrap_or_default()
-}
-
-/// The settings fields of the dialog (the `document.exportForWeb` params).
-fn params(d: &Dialog) -> Value {
-    let mut p = form::params(d);
-    if let Some(o) = p.as_object_mut() {
-        o.remove("discard");
-    }
-    p
-}
-
-/// A `preset` field (set by an agent, or the preset list) replaces the settings with the preset's.
-fn apply_preset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
-    let Some(name) = d.fields.remove("preset") else { return Ok(()) };
-    let s = app.session.web_settings(&json!({ "preset": name }))?;
-    d.fields.extend(settings_fields(&s));
-    Ok(())
-}
-
-/// The settings the fields describe.
-fn settings_of(app: &VectorcraftApp, d: &Dialog) -> Result<WebSettings, String> {
-    app.session.web_settings(&params(d))
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut d = d.clone();
-    apply_preset(app, &mut d)?;
-    let p = params(&d);
-    // Done remembers the settings; Save… remembers them and writes the files.
-    app.run("webExport.settings", p.clone())?;
-    if d.bool("discard") {
-        app.ui.dialog = None;
-        return Ok(json!({ "remembered": true }));
-    }
-    let r = save(app, p)?;
-    app.ui.dialog = None;
-    Ok(r)
+/// The saved presets and the built-in ones as the dialog lists them; the built-in ones come first.
+fn dialog_presets(app: &VectorcraftApp) -> Vec<WebPreset> {
+    let all = app.session.web_presets();
+    let built_in = all.len().saturating_sub(app.session.prefs.web_export_presets.len());
+    all.iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let mut preset = WebPreset::new(p.name.clone(), options_of(&p.settings, None));
+            preset.built_in = i < built_in;
+            preset
+        })
+        .collect()
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
@@ -189,31 +299,25 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
     let ext = if s.output == WebOutput::Html { "html" } else { s.format.ext() };
-    let path = io::target_path(app, path, ext)?;
-    if let Some(o) = p.as_object_mut() {
-        o.insert("path".into(), json!(path));
-    }
-    let r = app.run("document.exportForWeb", p)?;
-    let n = r["files"].as_array().map_or(0, Vec::len);
-    if n > 1 && !has_warnings(&r) {
-        app.status(format!("Saved {n} files beside {path}"));
-    } else {
-        io::report_saved(app, &path, &r);
-    }
-    Ok(r)
+    io::target_path(app, path, ext, move |app, path| {
+        if let Some(o) = p.as_object_mut() {
+            o.insert("path".into(), json!(path));
+        }
+        let r = app.run("document.exportForWeb", p)?;
+        let n = r["files"].as_array().map_or(0, Vec::len);
+        if n > 1 && !has_warnings(&r) {
+            app.status(format!("Saved {n} files beside {path}"));
+        } else {
+            io::report_saved(app, &path, &r);
+        }
+        Ok(r)
+    })
 }
 
 /// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
 /// [`io::report_saved`] shows them in the status bar as a save's notes.
 fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
-}
-
-/// The preview page's name from the document's title `stem`: one file name in the preview folder.
-/// `file_stem` gives back a title it can't take a stem of ("../.."), so one with a separator or of
-/// dots only is "Untitled".
-pub(super) fn preview_name(stem: &str) -> &str {
-    if stem.trim().is_empty() || stem.contains(['/', '\\']) || stem.chars().all(|c| c == '.') { "Untitled" } else { stem }
 }
 
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
@@ -226,13 +330,13 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
     app.refuse_automation("file.saveForWeb.browser")?;
     let stem = app.session.active().map(|st| vectorcraft_engine::cmd::fileio::file_stem(&st.doc.title)).ok_or("no document")?;
     let dir = temp_folder()?;
-    let path = format!("{dir}/{}.html", preview_name(&stem));
+    let path = format!("{dir}/{}.html", preview_folders::preview_name(&stem));
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.insert("path".into(), json!(path));
         o.insert("output".into(), json!("html"));
     }
-    let r = app.run("document.exportForWeb", q).inspect_err(|_| remove_preview_folder(&dir))?;
+    let r = app.run("document.exportForWeb", q).inspect_err(|_| preview_folders::remove_preview_folder(&dir))?;
     app.open_url(&io::file_url(&path));
     if has_warnings(&r) {
         io::report_saved(app, &path, &r);
@@ -240,222 +344,10 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
     Ok(json!({ "path": path, "warnings": r["warnings"] }))
 }
 
-/// The age at which a later browser preview removes an earlier preview's folder.
-#[cfg(not(target_arch = "wasm32"))]
-const PREVIEW_KEEP: std::time::Duration = std::time::Duration::from_secs(3600);
-
-/// The folder Save for Web's browser previews go to inside the system's temporary folder.
-const ROOT: &str = "VectorCraft Save for Web";
-
 /// The folder a browser preview goes to: a new one for each preview, in the system's temporary
-/// folder ([`temp_folder_under`]).
+/// folder ([`preview_folders::temp_folder_under`]).
 fn temp_folder() -> Result<String, String> {
-    temp_folder_under(ROOT)
-}
-
-/// A new folder for a browser preview in the system's temporary folder, under the folder named
-/// `root` ([`preview_folder_under`]).
-#[cfg(not(target_arch = "wasm32"))]
-pub(super) fn temp_folder_under(root: &str) -> Result<String, String> {
-    #[cfg(test)]
-    if let Some(tmp) = TEST_TMP.with_borrow(Clone::clone) {
-        return preview_folder_under(&tmp, root, PREVIEW_KEEP);
-    }
-    preview_folder_under(&std::env::temp_dir(), root, PREVIEW_KEEP)
-}
-
-#[cfg(all(test, not(target_arch = "wasm32")))]
-thread_local! {
-    /// The folder this test thread's browser previews go to instead of the system's temporary
-    /// folder, when set.
-    pub(super) static TEST_TMP: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
-}
-
-/// Remove the folder `dir` made for a browser preview whose files could not all be written, so
-/// a failed preview leaves no folder behind. The log says when it can't be removed.
-pub(super) fn remove_preview_folder(dir: &str) {
-    if let Err(e) = std::fs::remove_dir_all(dir) {
-        log::warn!("vectorcraft: the browser preview folder {dir} can't be removed: {e}");
-    }
-}
-
-/// A new folder for a Save for Web browser preview in the temporary folder `tmp`
-/// ([`preview_folder_under`] with `VectorCraft Save for Web`).
-#[cfg(all(test, not(target_arch = "wasm32")))]
-pub(super) fn preview_folder_in(tmp: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
-    preview_folder_under(tmp, ROOT, keep)
-}
-
-/// A new folder for a browser preview in the temporary folder `tmp`: inside the folder named `root`
-/// ([`preview_folder`]), or, when that folder can't be used, directly in `tmp`, named `root`, a
-/// space, the process id and a count. The log says why the shared folder wasn't used. Each preview
-/// first removes the folders of that name in `tmp` last changed `keep` or longer ago
-/// ([`remove_old`]). Previews under one `root` never remove the folders of another.
-#[cfg(not(target_arch = "wasm32"))]
-pub(super) fn preview_folder_under(tmp: &std::path::Path, root: &str, keep: std::time::Duration) -> Result<String, String> {
-    let beside = format!("{root} ");
-    remove_old(tmp, &beside, keep);
-    preview_folder(&tmp.join(root), keep).or_else(|e| {
-        log::warn!("vectorcraft: a browser preview can't use {e}, so the preview goes to a new folder of its own");
-        new_folder(tmp, &beside)
-    })
-}
-
-/// A new folder in `root` ([`new_folder`]). `root` is made when it is missing. An existing `root`
-/// is refused when it is a link or not a folder, or, on unix, when it belongs to another user or
-/// users other than its owner can write to it. Before the new folder is made, the preview folders
-/// in `root` last changed `keep` or longer ago are removed ([`remove_old`]).
-#[cfg(not(target_arch = "wasm32"))]
-pub(super) fn preview_folder(root: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
-    match private_folder().recursive(true).create(root) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => return Err(format!("{}: {e}", root.display())),
-    }
-    let m = std::fs::symlink_metadata(root).map_err(|e| format!("{}: {e}", root.display()))?;
-    if let Some(why) = refused(&m) {
-        return Err(format!("{}: {}", root.display(), why));
-    }
-    remove_old(root, "", keep);
-    new_folder(root, "")
-}
-
-/// Removes the preview folders in `dir` last changed `keep` or longer ago: folders (not links)
-/// named `prefix` followed by `<digits>-<digits>`, on unix only those the current user owns. Other
-/// entries are left alone.
-#[cfg(not(target_arch = "wasm32"))]
-fn remove_old(dir: &std::path::Path, prefix: &str, keep: std::time::Duration) {
-    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        if !is_preview_name(&e.file_name(), prefix) {
-            continue;
-        }
-        // `DirEntry::metadata` doesn't follow a link, so a link is never a folder here.
-        let Ok(m) = e.metadata() else { continue };
-        let old = m.modified().ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= keep);
-        if old && m.is_dir() && mine(&m) {
-            // Best effort: one that can't be removed now is tried again by the next preview.
-            let _ = std::fs::remove_dir_all(e.path());
-        }
-    }
-}
-
-/// A new folder in `parent` named `prefix` followed by the process id, `-` and a count of the
-/// process's previews; on unix only its owner can open it. A name that is already taken, by an
-/// earlier process with the same id or by anyone else, is skipped for the next count.
-#[cfg(not(target_arch = "wasm32"))]
-fn new_folder(parent: &std::path::Path, prefix: &str) -> Result<String, String> {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    loop {
-        let dir = parent.join(format!("{prefix}{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
-        match private_folder().create(&dir) {
-            Ok(()) => return Ok(dir.to_string_lossy().replace('\\', "/")),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(format!("{}: {e}", dir.display())),
-        }
-    }
-}
-
-/// A builder for folders that only their owner can read, write or open (mode 0o700).
-#[cfg(unix)]
-fn private_folder() -> std::fs::DirBuilder {
-    let mut b = std::fs::DirBuilder::new();
-    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
-    b
-}
-
-/// A builder for folders: a plain one outside unix.
-#[cfg(all(not(unix), not(target_arch = "wasm32")))]
-fn private_folder() -> std::fs::DirBuilder {
-    std::fs::DirBuilder::new()
-}
-
-/// Why a preview root whose metadata (of the root itself, not what a link points to) is `m` can't
-/// be used, or `None` when it can.
-#[cfg(not(target_arch = "wasm32"))]
-fn refused(m: &std::fs::Metadata) -> Option<&'static str> {
-    if m.file_type().is_symlink() {
-        Some("it is a link")
-    } else if !m.is_dir() {
-        Some("it is not a folder")
-    } else if !mine(m) {
-        Some("it belongs to another user")
-    } else if others_can_write(m) {
-        Some("other users can write to it")
-    } else {
-        None
-    }
-}
-
-/// Whether the current user owns the file with metadata `m`.
-#[cfg(unix)]
-fn mine(m: &std::fs::Metadata) -> bool {
-    std::os::unix::fs::MetadataExt::uid(m) == rustix::process::geteuid().as_raw()
-}
-
-/// Whether the current user owns the file with metadata `m`: always true outside unix.
-#[cfg(all(not(unix), not(target_arch = "wasm32")))]
-fn mine(_: &std::fs::Metadata) -> bool {
-    true
-}
-
-/// Whether users other than the owner of the file with metadata `m` can write to it.
-#[cfg(unix)]
-fn others_can_write(m: &std::fs::Metadata) -> bool {
-    std::os::unix::fs::MetadataExt::mode(m) & 0o022 != 0
-}
-
-/// Whether users other than the owner of the file with metadata `m` can write to it: always false
-/// outside unix.
-#[cfg(all(not(unix), not(target_arch = "wasm32")))]
-fn others_can_write(_: &std::fs::Metadata) -> bool {
-    false
-}
-
-/// Whether `name` is a preview folder's name: `prefix`, then digits, `-` and digits.
-#[cfg(not(target_arch = "wasm32"))]
-fn is_preview_name(name: &std::ffi::OsStr, prefix: &str) -> bool {
-    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    name.to_str().and_then(|n| n.strip_prefix(prefix)).and_then(|n| n.split_once('-')).is_some_and(|(a, b)| digits(a) && digits(b))
-}
-
-#[cfg(target_arch = "wasm32")]
-pub(super) fn temp_folder_under(_: &str) -> Result<String, String> {
-    Err("no file system here".into())
-}
-
-// ---------- previews ----------
-
-/// What a pane shows.
-#[derive(Clone)]
-struct Shot {
-    texture: egui::TextureHandle,
-    size: [u32; 2],
-    /// The file's size (bytes); `None` for the original.
-    bytes: Option<usize>,
-    colors: Arc<Vec<TableColor>>,
-    mapped: Arc<Vec<[u8; 3]>>,
-}
-
-/// The previews of the open dialog: the rendering (until the art or the image size changes) and
-/// the optimised panes by settings.
-#[derive(Clone, Default)]
-struct Cache {
-    render_key: String,
-    render: Option<Result<Arc<WebRender>, String>>,
-    original: Option<Shot>,
-    shots: Vec<(String, Result<Shot, String>)>,
-}
-
-/// Temp-memory key for the Save for Web preview render, original image and optimised shot textures.
-fn cache_id() -> egui::Id {
-    egui::Id::unique("save-for-web-previews")
-}
-
-/// The texture of straight RGBA pixels.
-fn texture(ctx: &egui::Context, name: &str, px: &[u8], [w, h]: [u32; 2]) -> egui::TextureHandle {
-    let img = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], px);
-    let opts = egui::TextureOptions { magnification: egui::TextureFilter::Nearest, ..egui::TextureOptions::LINEAR };
-    ctx.load_texture(name, img, opts)
+    preview_folders::temp_folder_under(preview_folders::ROOT)
 }
 
 /// What the rendering for `s` depends on: the active document, its revision and the settings that
@@ -476,524 +368,10 @@ fn render_key(app: &VectorcraftApp, s: &WebSettings) -> Option<String> {
     ))
 }
 
-/// The rendering for `s` and the optimised image for each of `panes`, from the cache when nothing
-/// they depend on changed.
-fn previews(app: &VectorcraftApp, ctx: &egui::Context, s: &WebSettings, panes: &[WebSettings]) -> (Result<Shot, String>, Vec<Result<Shot, String>>) {
-    let (Some(st), Some(render_key)) = (app.session.active(), render_key(app, s)) else { return (Err("no document".into()), vec![]) };
-    let doc = &st.doc;
-    let mut cache: Cache = ctx.data(|m| m.get_temp(cache_id())).unwrap_or_default();
-    if cache.render_key != render_key || cache.render.is_none() {
-        let r = webexport::render(doc, s).map(Arc::new);
-        cache.original = r.as_ref().ok().map(|r| Shot {
-            texture: texture(ctx, "save-for-web-original", &r.rgba, [r.width, r.height]),
-            size: [r.width, r.height],
-            bytes: None,
-            colors: Arc::default(),
-            mapped: Arc::default(),
-        });
-        cache = Cache { render_key, render: Some(r), original: cache.original, shots: vec![] };
-    }
-    let original = match (&cache.render, &cache.original) {
-        (Some(Ok(_)), Some(o)) => Ok(o.clone()),
-        (Some(Err(e)), _) => Err(e.clone()),
-        _ => Err("nothing to preview".into()),
-    };
-    let mut shots = Vec::with_capacity(panes.len());
-    let mut kept = Vec::with_capacity(panes.len());
-    for (i, p) in panes.iter().enumerate() {
-        let key = p.to_json().to_string();
-        let shot = match cache.shots.iter().find(|(k, _)| *k == key) {
-            Some((_, s)) => s.clone(),
-            None => match &cache.render {
-                Some(Ok(r)) => optimise(ctx, doc, r, p, i),
-                Some(Err(e)) => Err(e.clone()),
-                None => Err("nothing to preview".into()),
-            },
-        };
-        kept.push((key, shot.clone()));
-        shots.push(shot);
-    }
-    cache.shots = kept;
-    ctx.data_mut(|m| m.insert_temp(cache_id(), cache));
-    (original, shots)
-}
-
-fn optimise(ctx: &egui::Context, doc: &vectorcraft_doc::Document, r: &WebRender, s: &WebSettings, pane: usize) -> Result<Shot, String> {
-    let o = webexport::preview_image(doc, &r.rgba, r.width, r.height, s)?;
-    let (px, w, h) = webexport::decode(&o)?;
-    Ok(Shot {
-        texture: texture(ctx, &format!("save-for-web-{pane}"), &px, [w, h]),
-        size: [w, h],
-        bytes: Some(o.bytes.len()),
-        colors: Arc::new(o.colors),
-        mapped: Arc::new(o.mapped),
-    })
-}
-
-/// The two lighter settings 4-Up offers beside the current ones: lower quality, fewer colours, or
-/// for PNG-24 a palette and a JPEG.
-fn alternates(s: &WebSettings) -> [WebSettings; 2] {
-    let with = |f: &dyn Fn(&mut WebSettings)| {
-        let mut a = s.clone();
-        f(&mut a);
-        a
-    };
-    match s.format {
-        WebFormat::Jpg => [with(&|a| a.quality /= 2), with(&|a| a.quality /= 4)],
-        WebFormat::Gif | WebFormat::Png8 => [with(&|a| a.colors = (a.colors / 2).max(2)), with(&|a| a.colors = (a.colors / 4).max(2))],
-        WebFormat::Png24 => [
-            with(&|a| {
-                a.format = WebFormat::Png8;
-                a.colors = 256;
-            }),
-            with(&|a| a.format = WebFormat::Jpg),
-        ],
-    }
-}
-
-// ---------- the dialog ----------
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    if app.session.active().is_none() {
-        return true;
-    }
-    if let Err(e) = apply_preset(app, d) {
-        app.status(e);
-    }
-    if d.fields.remove("__optimizeOpen").is_some_and(|v| v == json!(true)) {
-        open_optimize_rows(app, ui, d);
-    }
-    if d.fields.remove("__optimizeGo").is_some_and(|v| v == json!(true))
-        && let Err(e) = optimize_to_size(app, d)
-    {
-        app.status(e);
-    }
-    take_shift(d);
-    let settings = settings_of(app, d);
-    let mut browser = false;
-    // In a window too narrow for both, the panes are narrower, so the settings beside them and the
-    // buttons below stay in view. The room is the screen's (the window's own width follows what it
-    // drew last), less a column for the bar of the body while it scrolls; the settings column is as
-    // wide as it was drawn last.
-    let bar = if super::modal::body_view(ui).is_some() { ui.spacing().scroll.allocated_width() } else { 0.0 };
-    let room = ui.ctx().content_rect().width() - 2.0 * (f32::from(super::MARGIN) + super::EDGE_GAP) - bar;
-    let rest_id = egui::Id::unique("save-for-web-beside-panes");
-    let rest = ui.ctx().data(|m| m.get_temp::<f32>(rest_id)).unwrap_or(ui.spacing().item_spacing.x + GAP + SIDE_W);
-    let preview_w = (room.min(ui.available_width()) - rest).clamp(MIN_PREVIEW_W, PREVIEW_W);
-    let row = ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width(preview_w);
-            browser = preview_area(app, ui, d, &settings, preview_w);
-        });
-        ui.add_space(GAP);
-        ui.vertical(|ui| {
-            ui.set_width(SIDE_W);
-            side(app, ui, d, settings.as_ref().ok());
-        });
-    });
-    let drawn = row.response.rect.width() - preview_w;
-    if (ui.ctx().data_mut(|m| std::mem::replace(m.get_temp_mut_or(rest_id, rest), drawn)) - drawn).abs() > 0.5 {
-        ui.ctx().request_repaint();
-    }
-    optimize_on_enter(ui.ctx(), d);
-    if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
-        app.status(e);
-    }
-    // A double-clicked swatch (or an agent's `__editColor`) opens the Color Picker last, over the
-    // dialog as it now is.
-    if let Some(source) = d.fields.remove("__editColor").and_then(|v| v.as_str().map(String::from)) {
-        let start = d.fields.remove("__editStart").and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| source.clone());
-        edit_color(d, &source, &start);
-    }
-    false
-}
-
-/// The view tabs, the panes (`width` wide) and the zoom and speed row. Returns whether Preview in
-/// Browser was clicked.
-fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>, width: f32) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let view = VIEWS.iter().position(|v| *v == d.str("__view")).unwrap_or(2);
-    if let Some(i) = widgets::tab_bar(ui, &VIEW_LABELS, view) {
-        d.fields.insert("__view".into(), json!(VIEWS[i]));
-    }
-    ui.add_space(4.0);
-    let (area, resp) = ui.allocate_exact_size(egui::vec2(width, PREVIEW_H), egui::Sense::click_and_drag());
-    let pan_id = egui::Id::unique("save-for-web-pan");
-    let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
-    if resp.dragged() {
-        pan += resp.drag_delta();
-        ui.ctx().data_mut(|m| m.insert_temp(pan_id, pan));
-    }
-    match settings {
-        Err(e) => {
-            ui.painter().rect_filled(area, 2.0, t.pasteboard);
-            ui.painter().text(area.center(), egui::Align2::CENTER_CENTER, format!("⚠ {e}"), egui::FontId::proportional(12.5), t.text);
-        }
-        Ok(s) => {
-            let alts = alternates(s);
-            let panes: Vec<WebSettings> = if view == 3 { vec![s.clone(), alts[0].clone(), alts[1].clone()] } else { vec![s.clone()] };
-            // The current settings' image is made in every view: the colour table shows its colours.
-            let (original, shots) = previews(app, ui.ctx(), s, &panes);
-            let zoom = d.str("__zoom").parse::<f32>().ok().filter(|z| z.is_finite() && *z > 0.0).map(|z| z / 100.0);
-            let kbps = d.f64("__kbps", 56.6);
-            let Some(checker) = app.session.active().map(|st| crate::canvas::checker_texture(ui.ctx(), &st.doc.setup, None)) else { return false };
-            let cells: Vec<(egui::Rect, Pane)> = match view {
-                0 => vec![(area, Pane::Original)],
-                1 => vec![(area, Pane::Optimized(0))],
-                2 => split(area, 2, 1).into_iter().zip([Pane::Original, Pane::Optimized(0)]).collect(),
-                _ => split(area, 2, 2).into_iter().zip([Pane::Original, Pane::Optimized(0), Pane::Optimized(1), Pane::Optimized(2)]).collect(),
-            };
-            for (rect, pane) in cells {
-                let (shot, settings) = match pane {
-                    Pane::Original => (&original, None),
-                    Pane::Optimized(i) => (shots.get(i).unwrap_or(&original), panes.get(i)),
-                };
-                let selected = view == 3 && matches!(pane, Pane::Optimized(0));
-                draw_pane(ui, rect, shot, settings, zoom, pan, (checker.0.id(), checker.1), selected, kbps);
-                // 4-Up: clicking a lighter alternate takes its settings.
-                if let (Pane::Optimized(1..), Some(a)) = (pane, settings)
-                    && resp.clicked()
-                    && resp.interact_pointer_pos().is_some_and(|p| rect.contains(p))
-                {
-                    d.fields.extend(settings_fields(a));
-                }
-            }
-        }
-    }
-    ui.add_space(6.0);
-    let mut browser = false;
-    // Preview in Browser goes on a row of its own when the panes are too narrow for it beside the
-    // two lists.
-    let label = "Preview in Browser";
-    let button_w = widgets::button_width(ui, label);
-    let mut beside = false;
-    let mut button = |ui: &mut egui::Ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, label));
-            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
-        });
-    };
-    ui.horizontal(|ui| {
-        let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
-        let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
-        if let Some(i) = zoom {
-            d.fields.insert("__zoom".into(), json!(ZOOMS[i]));
-            ui.ctx().data_mut(|m| m.insert_temp(pan_id, egui::Vec2::ZERO));
-        }
-        let kbps = d.f64("__kbps", 56.6);
-        let labels: Vec<String> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
-        let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-        let speed = ui.name_inputs(tl!("Download:"), |ui| widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0));
-        if let Some(i) = speed
-            && let Some(s) = SPEEDS.get(i)
-        {
-            d.fields.insert("__kbps".into(), json!(s));
-        }
-        beside = ui.available_width() >= button_w;
-        if beside {
-            button(ui);
-        }
-    });
-    if !beside {
-        ui.add_space(4.0);
-        ui.horizontal(button);
-    }
-    browser
-}
-
-#[derive(Clone, Copy)]
-enum Pane {
-    Original,
-    /// The optimised image of the current settings (0) or an alternate (1, 2).
-    Optimized(usize),
-}
-
-/// `area` cut into `cols` × `rows` panes with a gap.
-fn split(area: egui::Rect, cols: usize, rows: usize) -> Vec<egui::Rect> {
-    let gap = 6.0;
-    let w = (area.width() - gap * (cols as f32 - 1.0)) / cols as f32;
-    let h = (area.height() - gap * (rows as f32 - 1.0)) / rows as f32;
-    (0..rows)
-        .flat_map(|r| (0..cols).map(move |c| (c, r)))
-        .map(|(c, r)| egui::Rect::from_min_size(area.min + egui::vec2(c as f32 * (w + gap), r as f32 * (h + gap)), egui::vec2(w, h)))
-        .collect()
-}
-
-/// `kbps` as the speed list shows it.
-fn speed_label(kbps: f64) -> String {
-    if kbps >= 1024.0 { format!("{} Mbps", kbps / 1024.0) } else { format!("{kbps} Kbps") }
-}
-
-/// A file size as the captions show it.
-fn size_label(bytes: usize) -> String {
-    if bytes < 1024 {
-        format!("{bytes} bytes")
-    } else if bytes < 1 << 20 {
-        format!("{:.1}K", bytes as f64 / 1024.0)
-    } else {
-        format!("{:.2}M", bytes as f64 / f64::from(1 << 20))
-    }
-}
-
-/// One pane: the image over the transparency grid at `zoom` (`None`: fit), moved by `pan`, and
-/// its caption: what it is, its size and download time, and its colours or quality.
-#[allow(clippy::too_many_arguments)]
-fn draw_pane(
-    ui: &egui::Ui,
-    rect: egui::Rect,
-    shot: &Result<Shot, String>,
-    settings: Option<&WebSettings>,
-    zoom: Option<f32>,
-    pan: egui::Vec2,
-    (checker, cell): (egui::TextureId, f32),
-    selected: bool,
-    kbps: f64,
-) {
-    let t = Tokens::get(ui.ctx());
-    let image = egui::Rect::from_min_max(rect.min, egui::pos2(rect.max.x, rect.max.y - CAPTION_H));
-    let p = ui.painter().with_clip_rect(image);
-    p.rect_filled(image, 0.0, t.pasteboard);
-    let font = egui::FontId::proportional(11.5);
-    let (first, second, third) = match shot {
-        Err(e) => {
-            p.text(image.center(), egui::Align2::CENTER_CENTER, format!("⚠ {e}"), font.clone(), t.text);
-            ("".into(), String::new(), String::new())
-        }
-        Ok(shot) => {
-            let size = egui::vec2(shot.size[0] as f32, shot.size[1] as f32);
-            let scale = zoom.unwrap_or_else(|| (image.width() / size.x).min(image.height() / size.y).min(1.0));
-            let shown = egui::Rect::from_center_size(image.center() + pan, size * scale);
-            let uv = egui::Rect::from_min_max(egui::Pos2::ZERO, (shown.size() / (2.0 * cell)).to_pos2());
-            p.image(checker, shown, uv, egui::Color32::WHITE);
-            p.image(shot.texture.id(), shown, egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-            match (settings, shot.bytes) {
-                (Some(s), Some(bytes)) => {
-                    let secs = download_seconds(bytes, kbps);
-                    let time =
-                        if secs < 1.0 { tl!("< 1 sec").into() } else { crate::i18n::fmt(tl!("{secs} sec"), &[("secs", &secs.ceil().to_string())]) };
-                    let detail = match s.format {
-                        WebFormat::Jpg => crate::i18n::fmt(tl!("Quality {quality}"), &[("quality", &s.quality.to_string())]),
-                        WebFormat::Png24 => String::new(),
-                        _ => crate::i18n::tn(shot.colors.len() as u64, "{n} color", "{n} colors"),
-                    };
-                    (s.format.label().to_string(), format!("{}  {time} @ {}", size_label(bytes), speed_label(kbps)), detail)
-                }
-                _ => (tl!("Original").into(), format!("{} × {} px", shot.size[0], shot.size[1]), String::new()),
-            }
-        }
-    };
-    let stroke = if selected { egui::Stroke::new(1.5, t.accent) } else { egui::Stroke::new(1.0, t.border) };
-    ui.painter().rect_stroke(image, 0.0, stroke, egui::StrokeKind::Inside);
-    let caption = egui::Rect::from_min_max(egui::pos2(rect.min.x, image.max.y), rect.max).shrink2(egui::vec2(4.0, 3.0));
-    let p = ui.painter().with_clip_rect(caption);
-    p.text(caption.left_top(), egui::Align2::LEFT_TOP, first, font.clone(), t.text_strong);
-    p.text(caption.left_bottom(), egui::Align2::LEFT_BOTTOM, second, font.clone(), t.text_dim);
-    p.text(caption.right_bottom(), egui::Align2::RIGHT_BOTTOM, third, font, t.text_dim);
-}
-
-// ---------- the settings column ----------
-
-/// `(value, label)` pairs of a keyed enum.
-fn pairs<T: Copy>(all: &[T], key: fn(T) -> &'static str, label: fn(T) -> &'static str) -> Vec<(&'static str, &'static str)> {
-    all.iter().map(|v| (key(*v), label(*v))).collect()
-}
-
-fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
-    presets_row(app, ui, d, s);
-    optimize_rows(ui, d, s, &art_key(app));
-    widgets::divider(ui);
-    let list_h = super::modal::list_height(ui, PREVIEW_H - 40.0);
-    egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(list_h).auto_shrink([false, true]).show(ui, |ui| {
-        let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
-            form::choice(ui, d, key, label, (LABEL_W, FIELD_W), options);
-        };
-        choice(ui, d, "format", tl!("Format:"), &pairs(&WebFormat::ALL, WebFormat::id, WebFormat::label));
-        let format = s.map_or(WebFormat::Gif, |s| s.format);
-        match format {
-            WebFormat::Gif | WebFormat::Png8 => {
-                let reduction = d.str("reduction");
-                choice(ui, d, "reduction", tl!("Reduction:"), &pairs(&Reduction::ALL, Reduction::id, Reduction::label));
-                // Another reduction makes a new palette.
-                if d.str("reduction") != reduction {
-                    restore_table(d);
-                }
-                colors_row(ui, d);
-                choice(ui, d, "dither", tl!("Dither:"), &pairs(&Dither::ALL, Dither::id, Dither::label));
-                if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
-                    slider_row(ui, d, "ditherAmount", tl!("Amount:"), "%");
-                }
-                check_pair(ui, d, ("transparency", tl!("Transparency")), ("interlaced", tl!("Interlaced")));
-                matte_row(ui, d);
-                slider_row(ui, d, "webSnap", tl!("Web Snap:"), "%");
-                if format == WebFormat::Gif {
-                    slider_row(ui, d, "lossy", tl!("Lossy:"), "%");
-                }
-            }
-            WebFormat::Jpg => {
-                quality_row(ui, d);
-                check_pair(ui, d, ("progressive", tl!("Progressive")), ("optimized", tl!("Optimized")));
-                widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "embedProfile", tl!("ICC Profile")));
-                matte_row(ui, d);
-            }
-            WebFormat::Png24 => {
-                check_pair(ui, d, ("transparency", tl!("Transparency")), ("interlaced", tl!("Interlaced")));
-                matte_row(ui, d);
-            }
-        }
-        widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "convertToSrgb", tl!("Convert to sRGB")));
-        choice(ui, d, "metadata", tl!("Metadata:"), &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
-        if format.palette() {
-            widgets::divider(ui);
-            if let Err(e) = color_table(ui, d, s) {
-                app.status(e);
-            }
-        }
-        widgets::divider(ui);
-        image_size(app, ui, d, s);
-        widgets::divider(ui);
-        if d.bool("__hasSlices") {
-            choice(ui, d, "slices", tl!("Slices:"), &pairs(&SliceScope::ALL, SliceScope::key, SliceScope::label));
-        }
-        choice(ui, d, "output", tl!("Output:"), &pairs(&WebOutput::ALL, WebOutput::key, WebOutput::label));
-    });
-}
-
-/// The preset list (the settings' preset, else "[Unnamed]") with Save and Delete.
-fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
-    let presets = app.session.web_presets();
-    let saved = app.session.prefs.web_export_presets.len();
-    let current = s.and_then(|s| presets.iter().rposition(|p| p.settings == *s));
-    let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
-    // The built-in presets come first (translated); the saved ones are names.
-    let builtins = presets.len().saturating_sub(saved);
-    let labels = super::shown_names(crate::i18n::current(), &names, |k| k < builtins);
-    let mut run: Option<(&str, Value)> = None;
-    widgets::label_row(ui, tl!("Preset:"), LABEL_W, |ui| {
-        let shown = current.and_then(|i| labels.get(i).copied()).unwrap_or(tl!("[Unnamed]"));
-        if let Some(i) = widgets::dropdown_names(ui, "sfw-preset", shown, &labels, FIELD_W - 60.0)
-            && let Some(p) = presets.get(i)
-        {
-            d.fields.extend(settings_fields(&p.settings));
-        }
-        let editing = d.fields.contains_key("__presetName");
-        if widgets::icon_button(ui, "save", tl!("Save the settings as a preset"), editing, 24.0).clicked() {
-            match editing {
-                true => _ = d.fields.remove("__presetName"),
-                false => _ = d.fields.insert("__presetName".into(), json!("")),
-            }
-        }
-        let user = current.filter(|i| *i + saved >= presets.len());
-        let del =
-            ui.add_enabled(user.is_some(), |ui: &mut egui::Ui| widgets::icon_button(ui, "trash-2", tl!("Delete this saved preset"), false, 24.0));
-        if del.clicked()
-            && let Some(name) = user.and_then(|i| names.get(i))
-        {
-            run = Some(("webExport.presets.delete", json!({ "name": name })));
-        }
-    });
-    if d.fields.contains_key("__presetName") {
-        widgets::label_row(ui, tl!("Name:"), LABEL_W, |ui| {
-            form::text(ui, d, "__presetName", FIELD_W - 70.0);
-            let name = d.str("__presetName");
-            if ui.add_enabled(!name.trim().is_empty(), |ui: &mut egui::Ui| widgets::flat_button(ui, tl!("Save"), 52.0)).clicked() {
-                let mut p = params(d);
-                p["name"] = json!(name.trim());
-                run = Some(("webExport.presets.save", p));
-            }
-        });
-    }
-    if let Some((id, p)) = run {
-        match app.run(id, p) {
-            Ok(_) => _ = d.fields.remove("__presetName"),
-            Err(e) => app.status(e),
-        }
-    }
-}
-
-/// The optimized file size of the settings `s` on the active document as it is now: from the preview
-/// cache when the cache holds that document at its current revision, else made through [`previews`],
-/// which keeps the image for the preview drawn later in the same frame.
-fn previewed_bytes(app: &VectorcraftApp, ui: &egui::Ui, s: &WebSettings) -> Option<usize> {
-    let key = s.to_json().to_string();
-    let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
-    let cached = cache
-        .filter(|c| Some(&c.render_key) == render_key(app, s).as_ref())
-        .and_then(|c| c.shots.into_iter().find(|(k, _)| *k == key))
-        .and_then(|(_, shot)| shot.ok())
-        .and_then(|shot| shot.bytes);
-    cached.or_else(|| previews(app, ui.ctx(), s, std::slice::from_ref(s)).1.into_iter().next()?.ok()?.bytes)
-}
-
-/// Optimize to File Size…: the button opens rows ([`open_optimize_rows`]) for the desired size in
-/// K, Start With and, with slices, Use; OK or Enter runs [`optimize_to_size`] and Cancel
-/// closes the rows. A line gives the size it found and whether that is within the desired size
-/// ([`optimized_result`]).
-fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art: &str) {
-    if d.fields.contains_key("__optimizeK") {
-        widgets::label_row(ui, tl!("Desired File Size:"), LABEL_W, |ui| {
-            let k = d.f64("__optimizeK", 32.0);
-            if let Some(v) = widgets::range_field(ui, "sfw-optimize-k", k, 0.001..=webexport::MAX_DESIRED_K, "K", 3, 100.0) {
-                d.fields.insert("__optimizeK".into(), json!(v));
-            }
-        });
-        form::choice(ui, d, "__optimizeStart", tl!("Start With:"), (LABEL_W, FIELD_W), &START_WITH);
-        if d.bool("__hasSlices") {
-            form::choice(ui, d, "__optimizeUse", tl!("Use:"), (LABEL_W, FIELD_W), &SIZE_USE);
-        }
-        widgets::label_row(ui, "", LABEL_W, |ui| {
-            if widgets::flat_button(ui, tl!("OK"), 64.0).clicked() {
-                d.fields.insert("__optimizeGo".into(), json!(true));
-            }
-            if widgets::flat_button(ui, tl!("Cancel"), 64.0).clicked() {
-                for k in OPTIMIZE_FIELDS {
-                    d.fields.remove(k);
-                }
-            }
-        });
-    } else {
-        widgets::label_row(ui, "", LABEL_W, |ui| {
-            if widgets::flat_button(ui, tl!("Optimize to File Size…"), FIELD_W).clicked() {
-                d.fields.insert("__optimizeOpen".into(), json!(true));
-            }
-        });
-    }
-    if let Some(r) = optimized_result(d, s, art) {
-        let size = size_label(r["bytes"].as_u64().unwrap_or(0) as usize);
-        let target = size_label(r["targetBytes"].as_u64().unwrap_or(0) as usize);
-        let text = if r["achieved"] == json!(true) {
-            crate::i18n::fmt(tl!("{size}, within {target}"), &[("size", &size), ("target", &target)])
-        } else {
-            crate::i18n::fmt(tl!("No setting tried fits in {target}; the smallest is {size}"), &[("size", &size), ("target", &target)])
-        };
-        widgets::label_row(ui, "", LABEL_W, |ui| {
-            widgets::dim_label(ui, &text);
-        });
-    }
-}
-
-/// An Enter while the Optimize to File Size rows ([`optimize_rows`]) are open is their OK: it does
-/// not save. Run after every control of the dialog has drawn, it runs the search unless a control
-/// took the press (an open dropdown), a field refused the value typed in it, or Ctrl, Cmd or Alt was
-/// held, which the size field does not commit.
-pub(super) fn optimize_on_enter(ctx: &egui::Context, d: &mut Dialog) {
-    if !d.fields.contains_key("__optimizeK") || !crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
-        return;
-    }
-    let held = ctx.input(|i| {
-        i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, modifiers, .. } if modifiers.ctrl || modifiers.command || modifiers.alt))
-    });
-    let refused = ctx.data(|m| m.get_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
-    widgets::reject_dialog_commit(ctx);
-    if !held && !refused {
-        d.fields.insert("__optimizeGo".into(), json!(true));
-        ctx.request_repaint();
-    }
-}
-
-/// The last Optimize to File Size result (`__optimized`) while it still holds: the settings are the
-/// ones it found and the art (`art`, from [`art_key`]) is the art it measured.
-pub(super) fn optimized_result<'a>(d: &'a Dialog, s: Option<&WebSettings>, art: &str) -> Option<&'a Value> {
-    d.fields.get("__optimized").filter(|r| r["art"] == json!(art) && s.is_some_and(|s| r["settings"] == s.to_json()))
+/// The last Optimize to File Size result while the art (from [`art_key`]) is the art it measured.
+/// That the settings are the ones it found is the dialog's rule.
+pub(super) fn optimized_result<'a>(optimized: &'a Option<Value>, art: &str) -> Option<&'a Value> {
+    optimized.as_ref().filter(|r| r["art"] == json!(art))
 }
 
 /// The active document, its revision and its selected objects and slices, which an Optimize to File
@@ -1004,554 +382,418 @@ pub(super) fn art_key(app: &VectorcraftApp) -> String {
     app.session.active().map_or_else(String::new, |st| format!("{}:{}:{:?}:{:?}", st.uid, st.revision, st.selection.objects, st.selection.slices))
 }
 
-/// `bytes` in K, rounded up to the Desired File Size field's 0.001 K so the size it asks for holds
-/// them. The product is taken in `u128`, which holds any `usize` times 1000 on every target.
-pub(super) fn size_k(bytes: usize) -> f64 {
-    (bytes as u128 * 1000).div_ceil(1024).max(1) as f64 / 1000.0
+/// The rendering for `s`, made again only when [`render_key`] differs from the kept one. A new
+/// rendering makes the Original pane's picture stale ([`WebExport::original`]).
+fn render_for(app: &mut VectorcraftApp, s: &WebSettings) -> Result<(String, Arc<WebRender>), String> {
+    let key = render_key(app, s).ok_or("no document")?;
+    if app.web_export.render.as_ref().is_none_or(|(k, _)| *k != key) {
+        let st = app.session.active().ok_or("no document")?;
+        app.web_export.render = Some((key.clone(), webexport::render(&st.doc, s).map(Arc::new)));
+        app.web_export.original = None;
+    }
+    match &app.web_export.render {
+        Some((_, Ok(r))) => Ok((key, r.clone())),
+        Some((_, Err(e))) => Err(e.clone()),
+        None => Err("nothing to preview".into()),
+    }
 }
 
-/// Optimize to File Size… (`__optimizeOpen`): opens the rows with Current Settings and Total of All
-/// Slices, the desired size starting at the size the current settings give what that Use measures:
-/// the image slices' files together when there are slices, else the preview's file (32 K when it
-/// cannot be measured).
-fn open_optimize_rows(app: &mut VectorcraftApp, ui: &egui::Ui, d: &mut Dialog) {
-    let bytes = if d.bool("__hasSlices") {
-        let mut p = params(d);
-        if let Some(o) = p.as_object_mut() {
-            o.insert("desiredK".into(), json!(webexport::MAX_DESIRED_K));
-            o.insert("use".into(), json!("allSlices"));
-        }
-        let r = app.run("webExport.optimizeToFileSize", p).ok();
-        r.filter(|r| r["achieved"] == json!(true)).and_then(|r| r["bytes"].as_u64()).map(|b| b as usize)
-    } else {
-        settings_of(app, d).ok().and_then(|s| previewed_bytes(app, ui, &s))
+/// The Original pane's picture of the rendering `r` made under `key`.
+fn original_texture(ctx: &egui::Context, key: &str, r: &WebRender) -> SizedTexture {
+    let image = egui::ColorImage::from_rgba_unmultiplied([r.width as usize, r.height as usize], &r.rgba);
+    textures(ctx).get_or_put(ctx, ORIGINAL, Revision::of(&key), move || image).sized()
+}
+
+/// The optimised image for `s`: the file Save writes, with the colour table of an indexed format.
+fn encoded(app: &mut VectorcraftApp, s: &WebSettings) -> Result<Optimized, String> {
+    let (_, r) = render_for(app, s)?;
+    let st = app.session.active().ok_or("no document")?;
+    webexport::preview_image(&st.doc, &r.rgba, r.width, r.height, s)
+}
+
+/// The pane of `wanted`: `s`'s optimised image decoded back, as a picture of the pump's textures.
+fn optimise(ctx: &egui::Context, doc: &Document, r: &WebRender, key: &str, s: &WebSettings, wanted: &WantedVariant) -> WebVariant {
+    let (index, revision) = (wanted.index, wanted.request.revision);
+    let decoded = webexport::preview_image(doc, &r.rgba, r.width, r.height, s).and_then(|o| webexport::decode(&o).map(|d| (o, d)));
+    let (o, (px, w, h)) = match decoded {
+        Ok(d) => d,
+        Err(e) => return WebVariant::failed(index, revision, e),
     };
-    let k = bytes.map_or(32.0, size_k);
-    d.fields.insert("__optimizeK".into(), json!(k));
-    d.fields.insert("__optimizeStart".into(), json!("current"));
-    d.fields.insert("__optimizeUse".into(), json!("allSlices"));
+    let image = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &px);
+    let texture = textures(ctx).get_or_put(ctx, index, Revision::of(&(key, s.to_json().to_string())), move || image);
+    let variant = WebVariant::new(index, revision, texture.sized(), o.bytes.len() as u64);
+    if s.format.palette() {
+        variant.colors(u16::try_from(o.colors.len()).unwrap_or(256)).palette(o.colors.iter().map(|c| c.source).collect())
+    } else {
+        variant
+    }
 }
 
-/// Optimize to File Size's OK: `webExport.optimizeToFileSize` with the dialog's settings and the
-/// rows' values; the settings it finds replace the dialog's, the rows close and `__optimized`
-/// keeps the result. An error leaves the settings and the rows as they are.
-pub(super) fn optimize_to_size(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
-    let mut p = params(d);
+/// Everything the open dialog asked for in its last pass.
+struct Asked {
+    id: DialogId,
+    options: SaveForWebOptions,
+    tables: Vec<ColorTableEvent>,
+    presets: Vec<WebPresetEvent>,
+    optimize_open: bool,
+    optimize: Option<OptimizeRequest>,
+    browser: bool,
+    path: Option<PathRequest>,
+}
+
+impl Asked {
+    /// Takes the requests, so a second pass of the frame finds none.
+    fn take(d: &mut HostedSaveForWeb) -> Self {
+        Self {
+            id: d.id(),
+            options: d.current().clone(),
+            tables: d.take_table_events(),
+            presets: d.take_preset_events(),
+            optimize_open: d.take_optimize_open(),
+            optimize: d.take_optimize_request(),
+            browser: d.take_browser_preview(),
+            path: d.pick_path(),
+        }
+    }
+}
+
+/// Runs `f` on the open Save for Web dialog; `None` when none is open.
+fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut HostedSaveForWeb) -> R) -> Option<R> {
+    host.with(|h| h.get_mut::<HostedSaveForWeb>().map(f))
+}
+
+fn document_problem(app: &VectorcraftApp) -> Option<&'static str> {
+    match (app.web_export.document, app.session.active()) {
+        (Some((uid, reverts)), Some(active)) if uid == active.uid => {
+            (reverts != active.reverts).then(|| tl!("The document was reverted. Reopen this dialog to continue."))
+        }
+        _ => Some(tl!(WRONG_DOCUMENT)),
+    }
+}
+
+/// Answers the open dialog once per frame: its result when it closed, else its requests.
+/// Colour requests (the matte, a palette cell) are routed by the host-wide colour picker routing;
+/// a palette cell's pick is applied to the table by [`take_palette_pick`].
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(host) = app.dialogs() else { return };
+    match host.with(|h| h.take::<HostedSaveForWeb>()) {
+        Some(DialogResult::Ok(result)) => return finish(app, result),
+        Some(_) if on_dialog(&host, |_| ()).is_none() => {
+            app.web_export = WebExport::default();
+            return;
+        }
+        _ => {}
+    }
+    let Some(asked) = on_dialog(&host, Asked::take) else { return };
+    if let Some(reason) = document_problem(app) {
+        let restore = asked.tables.iter().any(|event| matches!(event.edit, ColorTableEdit::Restore));
+        if restore {
+            color_table::restore(&mut app.web_export.table);
+            let marks = color_table::marks(&app.web_export.table);
+            on_dialog(&host, |dialog| dialog.set_marks(marks));
+        }
+        let requested = asked.path.is_some()
+            || asked.browser
+            || asked.optimize_open
+            || asked.optimize.is_some()
+            || asked.tables.iter().any(|event| !matches!(event.edit, ColorTableEdit::Restore));
+        update_presets(app, &host, asked.presets, restore);
+        if requested {
+            on_dialog(&host, HostedSaveForWeb::cancel_requests);
+            app.status(reason);
+        }
+        return;
+    }
+    // The framework keeps the result line while the settings are the ones it found; the art is the app's.
+    let art = art_key(app);
+    if app.web_export.optimized.is_some() && optimized_result(&app.web_export.optimized, &art).is_none() {
+        on_dialog(&host, HostedSaveForWeb::forget_optimized);
+        app.web_export.optimized = None;
+    }
+    if !asked.tables.is_empty() {
+        edit_table(app, ctx, &host, &asked);
+    }
+    let marks = color_table::marks(&app.web_export.table);
+    on_dialog(&host, |d| d.set_marks(marks));
+    update_presets(app, &host, asked.presets, !asked.tables.is_empty());
+    if asked.optimize_open {
+        let bytes = optimize_start(app, &asked.options);
+        on_dialog(&host, |d| d.answer_optimize_start(bytes));
+    }
+    if let Some(req) = &asked.optimize {
+        let answer = run_optimize(app, req);
+        on_dialog(&host, |d| d.answer_optimize(answer.map_err(Into::into)));
+    }
+    if asked.browser {
+        let p = settings_of(&asked.options, &app.web_export.table, &app.web_export.kept, None);
+        if let Err(e) = browser_preview(app, &p) {
+            app.status(e);
+        }
+    }
+    if let Some(req) = asked.path {
+        ask_path(app, &host, asked.id, req, &asked.options);
+    }
+    let wanted = on_dialog(&host, HostedSaveForWeb::wanted_variants).unwrap_or_default();
+    if !wanted.is_empty() {
+        answer_variants(app, ctx, &host, &wanted);
+    }
+}
+
+/// The encodes the dialog wants, as pictures, and the Original pane's picture when the rendering is new.
+fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, wanted: &[WantedVariant]) {
+    let (table, kept) = (app.web_export.table.clone(), app.web_export.kept.clone());
+    let mut answers = Vec::with_capacity(wanted.len());
+    for w in wanted {
+        let (index, revision) = (w.index, w.request.revision);
+        let settings = app.session.web_settings(&settings_of(&w.request.options, &table, &kept, None));
+        let rendered = settings.and_then(|s| render_for(app, &s).map(|(key, r)| (s, key, r)));
+        answers.push(match (rendered, app.session.active()) {
+            (Ok((s, key, r)), Some(st)) => optimise(ctx, &st.doc, &r, &key, &s, w),
+            (Err(e), _) => WebVariant::failed(index, revision, e),
+            (Ok(_), None) => WebVariant::failed(index, revision, "no document"),
+        });
+    }
+    let fresh = match (&app.web_export.original, &app.web_export.render) {
+        (None, Some((key, Ok(r)))) => Some(original_texture(ctx, key, r)),
+        _ => None,
+    };
+    if let Some(texture) = fresh {
+        app.web_export.original = Some(texture);
+        on_dialog(host, |d| d.set_original(texture));
+    }
+    on_dialog(host, |d| answers.into_iter().for_each(|v| d.set_variant(v)));
+}
+
+/// Applies the colour table edits the dialog filed. A Delete clears the dialog's colour selection.
+fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, asked: &Asked) {
+    let shown = match shown_colors(app, &asked.options) {
+        Ok(shown) => shown,
+        Err(e) => return app.status(e),
+    };
+    let mut deleted = false;
+    for event in &asked.tables {
+        match color_table::apply(&mut app.web_export.table, &event.edit, &event.colors, &shown) {
+            Ok(()) => deleted |= matches!(event.edit, ColorTableEdit::Delete),
+            Err(e) => app.status(e),
+        }
+    }
+    if deleted {
+        let id = asked.id;
+        host.with(|h| h.set_json_field(ctx, id, "colorSelection", json!([])).ok());
+    }
+}
+
+/// The source colours of the palette the dialog's settings `options` show, with the table as it stands.
+fn shown_colors(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Result<Vec<[u8; 3]>, String> {
+    let settings = app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None))?;
+    Ok(encoded(app, &settings)?.colors.iter().map(|c| c.source).collect())
+}
+
+/// The Color Picker's OK for the colour table cell `key` of the open dialog `parent`: the cell's colour `from`
+/// is shifted to `to` in the table at once, so Done or Save in the dialog's next pass keeps the shift. A colour
+/// the palette no longer shows is not shifted, and a refused shift shows in the status line. `false` when
+/// `parent` is not Save for Web or `key` is not its palette, and the picker answers the row instead.
+pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key: &str, from: Srgba, to: Srgba) -> bool {
+    let Some(host) = app.dialogs() else { return false };
+    if key != PALETTE_COLOR_KEY {
+        return false;
+    }
+    let Some(options) = host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(parent).map(|d| d.current().clone())) else {
+        return false;
+    };
+    if let Some(reason) = document_problem(app) {
+        app.status(reason);
+        return true;
+    }
+    let rgb = |c: Srgba| {
+        let [r, g, b, _] = c.to_rgba().0;
+        [r, g, b]
+    };
+    let edit = ColorTableEdit::Shift(rgb(to));
+    let shifted = shown_colors(app, &options).and_then(|shown| color_table::apply(&mut app.web_export.table, &edit, &[rgb(from)], &shown));
+    if let Err(e) = shifted {
+        app.status(e);
+    }
+    true
+}
+
+/// Runs what the preset list asked for and shows a failure in the status line.
+fn update_presets(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, events: Vec<WebPresetEvent>, table_changed: bool) {
+    let refresh = table_changed || !events.is_empty();
+    for event in events {
+        let r = match event {
+            WebPresetEvent::Saved(p) => {
+                let mut v = settings_of(&p.options, &app.web_export.table, &app.web_export.kept, None);
+                v["name"] = json!(p.name);
+                app.run("webExport.presets.save", v)
+            }
+            // The reference app's list has no rename: it is a save under the new name and a delete of the old.
+            WebPresetEvent::Renamed { from, to, .. } => rename_preset(app, &from, &to),
+            WebPresetEvent::Deleted(name) => app.run("webExport.presets.delete", json!({ "name": name })),
+            _ => continue,
+        };
+        if let Err(e) = r {
+            app.status(e);
+        }
+    }
+    if refresh {
+        let presets = dialog_presets(app);
+        on_dialog(host, |d| d.set_presets(presets));
+    }
+}
+
+/// Saves the preset `from` under `to`, then deletes `from`.
+fn rename_preset(app: &mut VectorcraftApp, from: &str, to: &str) -> Result<Value, String> {
+    let preset = app.session.web_presets().into_iter().find(|p| p.name == from).ok_or_else(|| format!("no preset named {from}"))?;
+    let mut v = preset.settings.to_json();
+    v["name"] = json!(to);
+    app.run("webExport.presets.save", v)?;
+    app.run("webExport.presets.delete", json!({ "name": from }))
+}
+
+/// Whether the active document has slices.
+fn has_slices(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| !st.doc.slice_layout().is_empty())
+}
+
+/// The `webExport.optimizeToFileSize` params: `options`, the desired size and, with slices, what it covers.
+fn optimize_params(app: &VectorcraftApp, options: &SaveForWebOptions, desired_k: f64, start: Option<&str>, scope: &str) -> Value {
+    let mut p = settings_of(options, &app.web_export.table, &app.web_export.kept, None);
     if let Some(o) = p.as_object_mut() {
-        o.insert("desiredK".into(), d.fields.get("__optimizeK").cloned().unwrap_or(Value::Null));
-        let start = d.str("__optimizeStart");
-        if !start.is_empty() {
+        o.insert("desiredK".into(), json!(desired_k));
+        if let Some(start) = start {
             o.insert("startWith".into(), json!(start));
         }
-        let scope = d.str("__optimizeUse");
-        if d.bool("__hasSlices") && !scope.is_empty() {
+        if has_slices(app) {
             o.insert("use".into(), json!(scope));
         }
     }
-    let r = app.run("webExport.optimizeToFileSize", p)?;
-    if let Some(found) = r["settings"].as_object() {
-        d.fields.extend(found.clone());
+    p
+}
+
+/// The size Optimize to File Size… starts at, in bytes: what the current settings give what Use
+/// measures, the image slices' files together when there are slices, else the image's file.
+fn optimize_start(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Option<u64> {
+    if has_slices(app) {
+        let p = optimize_params(app, options, webexport::MAX_DESIRED_K, None, "allSlices");
+        let r = app.run("webExport.optimizeToFileSize", p).ok()?;
+        return r["achieved"].as_bool().filter(|a| *a).and_then(|_| r["bytes"].as_u64());
     }
-    for k in OPTIMIZE_FIELDS {
-        d.fields.remove(k);
-    }
-    let result =
-        json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) });
-    d.fields.insert("__optimized".into(), result);
-    Ok(r)
+    let s = app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None)).ok()?;
+    encoded(app, &s).ok().map(|o| o.bytes.len() as u64)
 }
 
-/// Two checkboxes side by side.
-fn check_pair(ui: &mut egui::Ui, d: &mut Dialog, (a, a_label): (&str, &str), (b, b_label): (&str, &str)) {
-    widgets::label_row(ui, "", LABEL_W, |ui| {
-        ui.allocate_ui(egui::vec2(FIELD_W / 2.0, 20.0), |ui| {
-            ui.set_min_width(FIELD_W / 2.0);
-            form::check(ui, d, a, a_label);
-        });
-        form::check(ui, d, b, b_label);
-    });
-}
-
-/// A 0–100 slider bound to `d.fields[key]`, its value shown with `suffix`.
-fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix: &str) {
-    widgets::label_row(ui, label, LABEL_W, |ui| {
-        let mut v = d.f64(key, 0.0).round().clamp(0.0, 100.0) as u8;
-        ui.spacing_mut().slider_width = FIELD_W - 60.0;
-        if widgets::slider(ui, egui::Slider::new(&mut v, 0..=100).suffix(suffix)).changed() {
-            d.fields.insert(key.into(), json!(v));
-        }
-    });
-}
-
-/// The palette size: the usual counts, or any 2–256.
-fn colors_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, tl!("Colors:"), LABEL_W, |ui| {
-        let mut n = d.f64("colors", 128.0).round().clamp(2.0, 256.0) as u16;
-        if let Some(c) = widgets::dropdown(ui, "sfw-colors", &n.to_string(), &COLOR_COUNTS, 80.0).and_then(|i| COLOR_COUNTS.get(i)) {
-            n = c.parse().unwrap_or(n);
-            d.fields.insert("colors".into(), json!(n));
-        }
-        if let Some(n) = widgets::range_field(ui, "sfw-colors-n", f64::from(n), 2.0..=256.0, "", 0, 52.0) {
-            d.fields.insert("colors".into(), json!(n as u16));
-        }
-    });
-}
-
-/// JPEG quality: a named step, then the exact value.
-fn quality_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    let q = d.f64("quality", 60.0).round().clamp(0.0, 100.0) as u8;
-    let step = QUALITIES.iter().rev().find(|(_, v)| q >= *v).map_or("Low", |(l, _)| *l);
-    widgets::label_row(ui, tl!("Quality:"), LABEL_W, |ui| {
-        let labels = QUALITIES.map(|(l, _)| l);
-        if let Some((_, v)) = widgets::dropdown(ui, "sfw-quality", step, &labels, FIELD_W).and_then(|i| QUALITIES.get(i)) {
-            d.fields.insert("quality".into(), json!(v));
-        }
-    });
-    slider_row(ui, d, "quality", "", "");
-}
-
-/// The matte: none, white, black or a colour.
-fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    let matte = d.str("matte");
-    let at = MATTES.iter().position(|v| matte.eq_ignore_ascii_case(v)).unwrap_or(3);
-    widgets::label_row(ui, tl!("Matte:"), LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "sfw-matte", MATTE_LABELS[at], &MATTE_LABELS, 120.0) {
-            d.fields.insert("matte".into(), json!(MATTES.get(i).copied().unwrap_or("#808080")));
-        }
-        if at == 3 {
-            color_button(ui, d, "matte");
-        }
-    });
-}
-
-/// The colour table of the current settings' preview: swatches (the selected ones ringed; locked
-/// ones with a square, web-safe ones with a diamond, transparent ones over the grid), the buttons
-/// that edit the selected colour, Delete Color and the table's menu, plus the sort order. A click
-/// selects one color, a Shift-click the colors from the anchor, and a Ctrl-click
-/// (Command-click on macOS) adds or removes one; a double-click on an opaque color asks for the
-/// Color Picker (`__editColor`), and a color shifted by hand shows its source color at the upper
-/// left and its new color at the lower right. Returns an error for a deletion that would leave
-/// no color.
-fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Result<(), String> {
-    let t = Tokens::get(ui.ctx());
-    let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
-    let key = s.map(|s| s.to_json().to_string());
-    let shot = cache.and_then(|c| c.shots.into_iter().find(|(k, _)| Some(k) == key.as_ref())).and_then(|(_, s)| s.ok());
-    let Some(shot) = shot else {
-        widgets::subheader(ui, tl!("Color Table"));
-        widgets::dim_label(ui, tl!("Shown with the optimised preview."));
-        // A Custom table the preview can't use (a deletion that left only colors mapped to
-        // transparent) can still go back to the generated palette.
-        if s.is_some_and(|s| s.color_table.is_custom()) && widgets::flat_button_fit(ui, tl!("Restore Generated Table"), 88.0).clicked() {
-            restore_table(d);
-        }
-        return Ok(());
+/// `webExport.optimizeToFileSize` for the dialog's request. The settings it finds replace the
+/// dialog's, and the result is kept with the art it measured.
+fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<OptimizeAnswer, String> {
+    let start = match req.start {
+        OptimizeStart::Auto => "auto",
+        _ => "current",
     };
-    let table = s.map(|s| s.color_table.clone()).unwrap_or_default();
-    widgets::subheader(ui, &crate::i18n::tn(shot.colors.len() as u64, "Color Table ({n} color)", "Color Table ({n} colors)"));
-    if table.is_custom() {
-        widgets::dim_label(ui, tl!("Custom"));
+    let scope = match req.scope {
+        OptimizeScope::EachSlice => "eachSlice",
+        OptimizeScope::CurrentSlice => "currentSlice",
+        _ => "allSlices",
+    };
+    let p = optimize_params(app, &req.options, req.desired_k, Some(start), scope);
+    let r = app.run("webExport.optimizeToFileSize", p)?;
+    let found = app.session.web_settings(&r["settings"])?;
+    app.web_export.table = serde_json::to_value(&found.color_table).unwrap_or_default();
+    app.web_export.kept = kept_of(&found);
+    app.web_export.optimized = Some(
+        json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) }),
+    );
+    let natural = WebSettings { width: None, height: None, percent: None, ..found.clone() };
+    let natural = render_for(app, &natural).ok().map(|(_, r)| PixelSize::new(r.width, r.height));
+    Ok(OptimizeAnswer::new(
+        Some(options_of(&found, natural)),
+        r["bytes"].as_u64().unwrap_or(0),
+        r["targetBytes"].as_u64().unwrap_or(0),
+        r["achieved"] == json!(true),
+    ))
+}
+
+/// Answers Save…'s request for a path. Bad settings never open a save panel; the web downloads, so
+/// the suggested name stands in for the path.
+fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id: DialogId, req: PathRequest, options: &SaveForWebOptions) {
+    let settings = match app.session.web_settings(&settings_of(options, &app.web_export.table, &app.web_export.kept, None)) {
+        Ok(s) => s,
+        Err(e) => {
+            on_dialog(host, HostedSaveForWeb::cancel_requests);
+            return app.status(e);
+        }
+    };
+    let key = req.key.clone();
+    if io::is_web(app) {
+        return answer_path(app, id, &key, PathBuf::from(req.file_name.unwrap_or_default()));
     }
-    let selected = d.str("__color");
-    let picked = selection(d);
-    // (colour shown, source, transparent, locked, web-safe, mapped by hand)
-    let rows: Vec<(TableColor, bool)> = shot
-        .colors
-        .iter()
-        .map(|c| (*c, false))
-        .chain(
-            shot.mapped
-                .iter()
-                .map(|c| (TableColor { color: *c, source: *c, transparent: true, locked: false, web_shifted: false, shifted: false }, true)),
-        )
-        .collect();
-    const CELL: f32 = 15.0;
-    let per_row = ((SIDE_W - 8.0) / (CELL + 2.0)).floor().max(1.0) as usize;
-    let lines = rows.len().div_ceil(per_row).max(1);
-    let (area, _) = ui.allocate_exact_size(egui::vec2(SIDE_W - 8.0, lines as f32 * (CELL + 2.0)), egui::Sense::hover());
-    // The colors that can be selected, in table order (for Shift-click ranges).
-    let order: Vec<String> = rows.iter().filter(|(c, mapped)| !c.transparent || *mapped).map(|(c, _)| hex(c.source)).collect();
-    let mut clicked = None;
-    let mut edit = None;
-    let p = ui.painter();
-    for (i, (c, mapped)) in rows.iter().enumerate() {
-        let r = egui::Rect::from_min_size(
-            area.min + egui::vec2((i % per_row) as f32 * (CELL + 2.0), (i / per_row) as f32 * (CELL + 2.0)),
-            egui::vec2(CELL, CELL),
-        );
-        let [red, g, b] = c.color;
-        let fill = egui::Color32::from_rgb(red, g, b);
-        if c.transparent {
-            // Half the colour (a mapped one), half the grid.
-            p.rect_filled(r, 0.0, egui::Color32::WHITE);
-            p.rect_filled(egui::Rect::from_min_size(r.min, r.size() / 2.0), 0.0, egui::Color32::from_gray(200));
-            p.rect_filled(egui::Rect::from_min_size(r.center(), r.size() / 2.0), 0.0, egui::Color32::from_gray(200));
-            if *mapped {
-                p.add(egui::Shape::convex_polygon(vec![r.left_top(), r.right_top(), r.left_bottom()], fill, egui::Stroke::NONE));
+    let ext = if settings.output == WebOutput::Html { "html" } else { settings.format.ext() };
+    let mut pick = PickRequest::save("export").suggested_extension(ext);
+    if let Some(name) = &req.file_name {
+        pick = pick.file_name(name.clone());
+    }
+    for f in &req.filters {
+        let extensions: Vec<&str> = f.extensions.iter().map(String::as_str).collect();
+        pick = pick.filter(f.name.clone(), &extensions);
+    }
+    // A cancelled panel has no path.
+    let opening = app.web_export.opening.clone();
+    file_asks::ask(app, pick, Owner::Free, move |app, picked| {
+        if !Arc::ptr_eq(&opening, &app.web_export.opening) {
+            return Ok(Value::Null);
+        }
+        if let Some(reason) = document_problem(app) {
+            if let Some(host) = app.dialogs() {
+                on_dialog(&host, HostedSaveForWeb::cancel_requests);
             }
-        } else {
-            p.rect_filled(r, 0.0, fill);
-            if c.shifted {
-                // Shifted by hand: the source color at the upper left, the new one at the lower right.
-                let [red, g, b] = c.source;
-                p.add(egui::Shape::convex_polygon(
-                    vec![r.left_top(), r.right_top(), r.left_bottom()],
-                    egui::Color32::from_rgb(red, g, b),
-                    egui::Stroke::NONE,
-                ));
-            }
+            app.status(reason);
+            return Ok(Value::Null);
         }
-        let mark = if c.color.iter().map(|v| u32::from(*v)).sum::<u32>() > 380 { egui::Color32::BLACK } else { egui::Color32::WHITE };
-        if c.locked {
-            p.rect_filled(egui::Rect::from_min_size(r.right_bottom() - egui::vec2(5.0, 5.0), egui::vec2(4.0, 4.0)), 0.0, mark);
-        }
-        if !c.transparent && vectorcraft_render::encode::quantize::web_safe(c.color) == c.color {
-            let m = r.center();
-            p.add(egui::Shape::convex_polygon(
-                vec![m + egui::vec2(0.0, -2.5), m + egui::vec2(2.5, 0.0), m + egui::vec2(0.0, 2.5), m + egui::vec2(-2.5, 0.0)],
-                mark,
-                egui::Stroke::NONE,
-            ));
-        }
-        // The transparent entry itself isn't a colour to edit.
-        let pickable = !c.transparent || *mapped;
-        let ringed = pickable && picked.iter().any(|h| h.eq_ignore_ascii_case(&hex(c.source)));
-        p.rect_stroke(r, 0.0, egui::Stroke::new(if ringed { 2.0 } else { 1.0 }, if ringed { t.accent } else { t.border }), egui::StrokeKind::Outside);
-        if !pickable {
-            continue;
-        }
-        let resp = ui.interact(r, swatch_id(&hex(c.source)), egui::Sense::click());
-        if resp.clicked() {
-            clicked = Some(hex(c.source));
-        }
-        // A double-click edits an opaque color: the picker opens on the color as shown, or on the
-        // source color for a color already shifted by hand.
-        if resp.double_clicked() && !c.transparent {
-            edit = Some((hex(c.source), hex(if c.shifted { c.source } else { c.color })));
-        }
-    }
-    if let Some(c) = clicked {
-        let m = ui.input(|i| i.modifiers);
-        pick(d, &order, &c, m.shift, m.command);
-    }
-    if let Some((source, start)) = edit {
-        d.fields.insert("__editColor".into(), json!(source));
-        d.fields.insert("__editStart".into(), json!(start));
-    }
-    let shifted = |c: &str| table.shifted.keys().any(|k| k.eq_ignore_ascii_case(c));
-    // The colors the table shows, by source: Lock, Transparent, Web Shift and Delete Color act only
-    // on these.
-    let palette: Vec<String> =
-        shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
-    let shown = palette.iter().any(|p| p.eq_ignore_ascii_case(&selected));
-    ui.add_space(4.0);
-    let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
-    ui.horizontal(|ui| {
-        ui.add_enabled_ui(shown, |ui| {
-            for (list, on_label, off_label) in [
-                ("transparent", tl!("Restore"), tl!("Transparent")),
-                ("webShift", tl!("Unshift"), tl!("Web Shift")),
-                ("locked", tl!("Unlock"), tl!("Lock")),
-            ] {
-                let current = match list {
-                    "transparent" => &table.transparent,
-                    "webShift" => &table.web_shift,
-                    _ => &table.locked,
-                };
-                // A color shifted by hand stays locked until it is unshifted.
-                let fixed = list == "locked" && shifted(&selected);
-                let is_on = on(current) || fixed;
-                let label = if is_on { on_label } else { off_label };
-                if ui.add_enabled(!fixed, |ui: &mut egui::Ui| widgets::flat_button(ui, label, 88.0)).clicked() {
-                    toggle(d, list, &selected, !is_on);
-                    // Web Shift replaces a shift by hand.
-                    if list == "webShift" && !is_on {
-                        unshift(d, &selected);
-                    }
+        match picked.first_path() {
+            Some(path) => answer_path(app, id, &key, path),
+            None => {
+                if let Some(host) = app.dialogs() {
+                    on_dialog(&host, HostedSaveForWeb::cancel_requests);
                 }
             }
-        });
+        }
+        Ok(Value::Null)
     });
-    // Delete Color (the button and the table's menu) and Restore Generated Table. Delete Color
-    // takes only selected colors the table shows (`palette`, by source).
-    let deletable = !selected_in(d, &palette).is_empty();
-    let (mut delete, mut restore, mut unshift_all) = (false, false, false);
-    ui.horizontal(|ui| {
-        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, deletable, 24.0).clicked();
-        let menu = widgets::icon_button(ui, "menu", tl!("Color Table"), false, 24.0);
-        let open = menu.clicked();
-        let _ = widgets::popover(&menu, open, |ui| {
-            if widgets::menu_item(ui, tl!("Delete Color"), deletable, false) {
-                delete = true;
-                ui.close();
-            }
-            if widgets::menu_item(ui, tl!("Restore Generated Table"), table.is_custom(), false) {
-                restore = true;
-                ui.close();
-            }
-            if widgets::menu_item(ui, tl!("Unshift All Colors"), !table.shifted.is_empty() || !table.web_shift.is_empty(), false) {
-                unshift_all = true;
-                ui.close();
-            }
-        });
-    });
-    let sort = table.sort;
-    widgets::label_row(ui, tl!("Order:"), LABEL_W, |ui| {
-        let labels = ColorSort::ALL.map(ColorSort::label);
-        if let Some(i) = widgets::dropdown(ui, "sfw-sort", sort.label(), &labels, FIELD_W)
-            && let Some(o) = ColorSort::ALL.get(i)
-        {
-            set_table(d, "sort", json!(o.id()));
-        }
-    });
-    if restore {
-        restore_table(d);
-    }
-    if unshift_all {
-        unshift_all_colors(d);
-    }
-    if delete {
-        delete_colors(d, &palette)?;
-    }
-    Ok(())
 }
 
-/// The selected colors (by source) that `palette`, the colors the table shows, holds.
-pub(super) fn selected_in(d: &Dialog, palette: &[String]) -> Vec<String> {
-    selection(d).into_iter().filter(|c| palette.iter().any(|p| p.eq_ignore_ascii_case(c))).collect()
-}
-
-/// The colour table's selected colors, by source: `__colors`, else `__color`.
-pub(super) fn selection(d: &Dialog) -> Vec<String> {
-    let many: Vec<String> =
-        d.fields.get("__colors").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect();
-    if !many.is_empty() {
-        return many;
-    }
-    let one = d.str("__color");
-    if one.is_empty() { vec![] } else { vec![one.to_ascii_lowercase()] }
-}
-
-/// A click on the table's color `color`: it alone is selected and becomes the anchor (`__color`);
-/// with `shift`, the colors from the anchor to it in table order (`order`), the anchor unchanged;
-/// with `command` (Ctrl, or Command on macOS), it is added to the selection and becomes the anchor,
-/// or taken out, and the anchor moves to the last color left in the selection.
-pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, command: bool) {
-    let color = color.to_ascii_lowercase();
-    let at = |c: &str| order.iter().position(|o| o.eq_ignore_ascii_case(c));
-    if shift && let (Some(a), Some(b)) = (at(&d.str("__color")), at(&color)) {
-        let range: Vec<String> = order[a.min(b)..=a.max(b)].iter().map(|c| c.to_ascii_lowercase()).collect();
-        d.fields.insert("__colors".into(), json!(range));
-        return;
-    }
-    let mut set = selection(d);
-    let anchor = if command {
-        match set.iter().position(|c| *c == color) {
-            Some(i) => {
-                set.remove(i);
-                set.last().cloned()
-            }
-            None => {
-                set.push(color.clone());
-                Some(color)
-            }
-        }
-    } else {
-        set = vec![color.clone()];
-        Some(color)
-    };
-    d.fields.insert("__colors".into(), json!(set));
-    match anchor {
-        Some(c) => d.fields.insert("__color".into(), json!(c)),
-        None => d.fields.remove("__color"),
-    };
-}
-
-/// Delete Color: the selected colors join the color table's `deleted` list and leave its other
-/// lists. The first deletion fixes the palette (`customPalette`) to `palette`, the table's colors
-/// (by source) with the deleted ones, so the colors left do not change. A deletion that leaves no
-/// color, or only colors mapped to transparent, is refused with nothing changed. Only selected
-/// colors that `palette` holds are deleted; when it holds none of them, the table is left as it is
-/// and the selection is cleared. The selection is cleared after a deletion too.
-pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), String> {
-    let picked = selected_in(d, palette);
-    if picked.is_empty() {
-        d.fields.remove("__colors");
-        d.fields.remove("__color");
-        return Ok(());
-    }
-    let list = |d: &Dialog, key: &str| -> Vec<String> {
-        d.fields
-            .get("colorTable")
-            .and_then(|t| t.get(key))
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(str::to_ascii_lowercase)
-            .collect()
-    };
-    let mut custom = list(d, "customPalette");
-    if custom.is_empty() {
-        custom = palette.iter().map(|c| c.to_ascii_lowercase()).collect();
-    }
-    let mut deleted = list(d, "deleted");
-    for c in &picked {
-        if !deleted.contains(c) {
-            deleted.push(c.clone());
-        }
-    }
-    // A color has to stay that is neither deleted nor mapped to transparent.
-    let clear: Vec<String> = list(d, "transparent").into_iter().filter(|c| !picked.contains(c)).collect();
-    if custom.iter().all(|c| deleted.contains(c) || clear.contains(c)) {
-        return Err(webexport::KEEP_ONE.into());
-    }
-    for key in ["locked", "transparent", "webShift"] {
-        if list(d, key).iter().any(|c| picked.contains(c)) {
-            for c in &picked {
-                toggle(d, key, c, false);
-            }
-        }
-    }
-    for c in &picked {
-        unshift(d, c);
-    }
-    set_table(d, "customPalette", json!(custom));
-    set_table(d, "deleted", json!(deleted));
-    d.fields.remove("__colors");
-    d.fields.remove("__color");
-    Ok(())
-}
-
-/// Restore Generated Table: no deleted colors and no fixed palette; the reduction makes the
-/// palette again.
-pub(super) fn restore_table(d: &mut Dialog) {
-    set_table(d, "deleted", json!([]));
-    set_table(d, "customPalette", json!([]));
-}
-
-/// The id of the color table's swatch for the source color `source` (`#rrggbb`).
-pub(super) fn swatch_id(source: &str) -> egui::Id {
-    egui::Id::unique(("sfw-swatch", source.to_ascii_lowercase()))
-}
-
-/// The field of the Color Picker's OK over Save for Web: the color the edited swatch shifts to.
-const SHIFT_TO: &str = "__shiftTo";
-
-/// The Color Picker over the dialog for the color table's source color `source`, on `start`; its
-/// OK shifts the color ([`shift_color`]) and its Cancel leaves the table as it was. Nothing opens
-/// when either is not a color.
-pub(super) fn edit_color(d: &mut Dialog, source: &str, start: &str) {
-    let (Some(_), Some(c)) = (vectorcraft_color::Color::from_hex(source), vectorcraft_color::Color::from_hex(start)) else { return };
-    d.fields.insert("__shiftSource".into(), json!(source));
-    *d = super::color_picker::over_effect(d, SHIFT_TO, c);
-}
-
-/// Back from the Color Picker: its OK's color shifts the color it was opened for.
-fn take_shift(d: &mut Dialog) {
-    let source = d.fields.remove("__shiftSource");
-    if let (Some(to), Some(source)) = (d.fields.remove(SHIFT_TO), source)
-        && let (Some(to), Some(source)) = (to.as_str(), source.as_str())
-    {
-        shift_color(d, source, to);
+/// Gives the dialog `id` the path its request `key` asked for.
+fn answer_path(app: &VectorcraftApp, id: DialogId, key: &str, path: PathBuf) {
+    if let Some(host) = app.dialogs() {
+        host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(id).map(|d| d.answer_path(key, path)));
     }
 }
 
-/// Shift the source color `source` to `to` (`colorTable.shifted`), wherever it is in the image; it
-/// is no longer web-shifted. Picking the source color itself takes the shift away. The color
-/// becomes the selection. Nothing changes when either is not a color.
-pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) {
-    let hex = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
-    let (Some(source), Some(to)) = (hex(source), hex(to)) else { return };
-    unshift(d, &source);
-    if to != source {
-        let mut map = shifts(d);
-        map.insert(source.clone(), json!(to));
-        set_table(d, "shifted", Value::Object(map));
+/// The dialog closed with Save… or Done: the settings are remembered, and with a path the files are
+/// written. Failures show in the status line; the dialog has closed.
+fn finish(app: &mut VectorcraftApp, result: SaveForWebResult) {
+    let problem = document_problem(app).filter(|_| result.path.is_some());
+    let table = std::mem::take(&mut app.web_export.table);
+    let kept = std::mem::take(&mut app.web_export.kept);
+    app.web_export = WebExport::default();
+    if let Some(reason) = problem {
+        return app.status(reason);
     }
-    toggle(d, "webShift", &source, false);
-    d.fields.insert("__colors".into(), json!([source]));
-    d.fields.insert("__color".into(), json!(source));
-}
-
-/// The `colorTable.shifted` field.
-fn shifts(d: &Dialog) -> Map<String, Value> {
-    d.fields.get("colorTable").and_then(|t| t.get("shifted")).and_then(Value::as_object).cloned().unwrap_or_default()
-}
-
-/// Take the shift by hand of the source color `source` away.
-pub(super) fn unshift(d: &mut Dialog, source: &str) {
-    let mut map = shifts(d);
-    let before = map.len();
-    map.retain(|k, _| !k.eq_ignore_ascii_case(source));
-    if map.len() != before {
-        set_table(d, "shifted", Value::Object(map));
+    let params = settings_of(&result.options, &table, &kept, None);
+    if let Err(e) = app.run("webExport.settings", params.clone()) {
+        return app.status(e);
+    }
+    let Some(path) = result.path else { return };
+    let mut p = params;
+    // The web downloads, so the name the panel stood in for is no path.
+    if !io::is_web(app) {
+        p["path"] = json!(path.to_string_lossy().replace('\\', "/"));
+    }
+    if let Err(e) = save(app, p) {
+        app.status(e);
     }
 }
 
-/// Unshift All Colors: no color is shifted by hand or web-shifted.
-pub(super) fn unshift_all_colors(d: &mut Dialog) {
-    set_table(d, "shifted", json!({}));
-    set_table(d, "webShift", json!([]));
-}
-
-/// Add `color` to the colour table's `list`, or take it out.
-pub(super) fn toggle(d: &mut Dialog, list: &str, color: &str, add: bool) {
-    let mut v: Vec<Value> = d.fields.get("colorTable").and_then(|t| t.get(list)).and_then(Value::as_array).cloned().unwrap_or_default();
-    v.retain(|c| !c.as_str().is_some_and(|c| c.eq_ignore_ascii_case(color)));
-    if add {
-        v.push(json!(color.to_ascii_lowercase()));
-    }
-    set_table(d, list, Value::Array(v));
-}
-
-/// Set one key of the `colorTable` field.
-pub(super) fn set_table(d: &mut Dialog, key: &str, value: Value) {
-    let table = d.fields.entry("colorTable").or_insert_with(|| json!({}));
-    if !table.is_object() {
-        *table = json!({});
-    }
-    table[key] = value;
-}
-
-/// Image Size: width and height in pixels (proportional) or a percentage, anti-aliasing, Clip to
-/// Artboard and which artboard.
-fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
-    widgets::subheader(ui, tl!("Image Size"));
-    let Some(st) = app.session.active() else { return };
-    let region = s.and_then(|s| webexport::region(&st.doc, s).ok());
-    let (w, h) = region.map_or((0, 0), |(r, scale)| vectorcraft_render::region_pixels(r, scale));
-    let set = |d: &mut Dialog, key: &str, v: Value| {
-        for k in ["width", "height", "percent"] {
-            d.fields.insert(k.into(), Value::Null);
-        }
-        d.fields.insert(key.into(), v);
-    };
-    widgets::label_row(ui, tl!("W:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::range_field(ui, "sfw-w", f64::from(w), 1.0..=f64::INFINITY, " px", 0, 80.0) {
-            set(d, "width", json!(v));
-        }
-        widgets::field_label(ui, tl!("H:"));
-        if let Some(v) = widgets::range_field(ui, "sfw-h", f64::from(h), 1.0..=f64::INFINITY, " px", 0, 80.0) {
-            set(d, "height", json!(v));
-        }
-    });
-    let percent = region.map_or(100.0, |(_, scale)| (scale * 100.0 * 100.0).round() / 100.0);
-    widgets::label_row(ui, tl!("Percent:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::plain_field(ui, "sfw-pct", percent, "%", 2, 80.0) {
-            set(d, "percent", json!(v));
-        }
-    });
-    form::choice(ui, d, "antiAlias", tl!("Anti-aliasing:"), (LABEL_W, FIELD_W), &pairs(&AntiAlias::ALL, AntiAlias::id, AntiAlias::label));
-    widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "clipToArtboard", tl!("Clip to Artboard")));
-    let boards = &st.doc.artboards;
-    if boards.len() > 1 && d.bool("clipToArtboard") {
-        let names: Vec<&str> = boards.iter().map(|a| a.name.as_str()).collect();
-        let at = s.and_then(|s| s.artboard).unwrap_or(0).min(names.len() - 1);
-        widgets::label_row(ui, tl!("Artboard:"), LABEL_W, |ui| {
-            if let Some(i) = widgets::dropdown_names(ui, "sfw-artboard", names.get(at).copied().unwrap_or_default(), &names, FIELD_W) {
-                d.fields.insert("artboard".into(), json!(i));
-            }
-        });
-    }
-}
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod tests_table;
