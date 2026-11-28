@@ -23,10 +23,11 @@ use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
+use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
 use craft::ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
@@ -391,20 +392,40 @@ fn color_row(
 /// the marks, the Video Ruler Pixel Aspect Ratio and, under Global, the two preferences. The reference
 /// point is the one the Transform panel shares (#1876); X and Y are where it lies on the rulers, counted
 /// from the ruler origin (#1212), and a new Width or Height keeps it where it was.
+///
+/// The groups are a section gap apart: the preset, the size and position, the colors, the marks and Global.
 fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &Setup) {
-    let lengths = s.lengths;
-    let (was, w0, h0) = (v.placed(), v.width, v.height);
-    let (choice, fit) = artboard_size_controls(ui, &s.presets, w0, h0, Some(s.fit_bounds.map(|b| b.is_some())));
-    let mut refi = v.reference;
-    let picked = choice.is_some();
-    if let Some(choice) = choice {
-        if let Some((w, h)) = choice.size_for(w0, h0) {
-            v.set_rect(artboard_rect(was, refi, None, None, Some(w), Some(h), false));
+    Stack::new().gap(Gap::Section).fill_width().show(ui, |ui, _| {
+        let (was, w0, h0) = (v.placed(), v.width, v.height);
+        let (choice, fit) = artboard_size_controls(ui, &s.presets, w0, h0, Some(s.fit_bounds.map(|b| b.is_some())));
+        let picked = choice.is_some();
+        if let Some(choice) = choice {
+            if let Some((w, h)) = choice.size_for(w0, h0) {
+                v.set_rect(artboard_rect(was, v.reference, None, None, Some(w), Some(h), false));
+            }
+            v.size_choice = Some(choice);
+            (v.ref_x, v.ref_y, v.fit) = (v.reference % 3, v.reference / 3, false);
         }
-        v.size_choice = Some(choice);
-        (v.ref_x, v.ref_y, v.fit) = (refi % 3, refi / 3, false);
-    }
-    ui.add_space(8.0);
+        Stack::new().fill_width().show(ui, |ui, _| place_rows(ui, v, s, (was, w0, h0), picked, fit));
+        Stack::new().fill_width().show(ui, |ui, _| {
+            background_row(ui, cx, v, s);
+            guide_label_row(ui, cx, v);
+        });
+        Stack::new().fill_width().show(ui, |ui, _| mark_rows(ui, v));
+        Stack::new().fill_width().show(ui, |ui, _| {
+            Text::new(tl!("Global")).show(ui);
+            check(ui, tl!("Fade Region Outside Artboard"), FADE, &mut v.fade);
+            check(ui, tl!("Update While Dragging"), UPDATE_WHILE_DRAGGING, &mut v.update_while_dragging);
+        });
+    });
+}
+
+/// Name, Width and Height, the reference point with X and Y, and a Fit chosen from the Preset menu. `was`, `w0` and
+/// `h0` are the artboard's rectangle, width and height before this pass's edits; `picked` is whether a size was chosen
+/// this pass.
+fn place_rows(ui: &mut Ui, v: &mut ArtboardOptionsValue, s: &Setup, (was, w0, h0): (Rect, f64, f64), picked: bool, fit: Option<bool>) {
+    let lengths = s.lengths;
+    let mut refi = v.reference;
     let name = Label::from(tl!("Name:"));
     Field::new(name.clone()).id_salt("name").show(ui, |ui, _| {
         TextField::new(name.clone(), Bind::bound(&mut v.name)).show(ui);
@@ -450,10 +471,10 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
         v.set_rect(bounds);
         (v.fit, v.size_choice) = (true, None);
     }
-    ui.add_space(8.0);
-    background_row(ui, cx, v, s);
-    guide_label_row(ui, cx, v);
-    ui.add_space(8.0);
+}
+
+/// The marks and the Video Ruler Pixel Aspect Ratio.
+fn mark_rows(ui: &mut Ui, v: &mut ArtboardOptionsValue) {
     check(ui, tl!("Show Center Mark"), "showCenterMark", &mut v.show_center_mark);
     check(ui, tl!("Show Cross Hairs"), "showCrossHairs", &mut v.show_cross_hairs);
     check(ui, tl!("Show Video Safe Areas"), "showVideoSafeAreas", &mut v.show_video_safe_areas);
@@ -471,10 +492,6 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
             v.pixel_aspect = n;
         }
     });
-    ui.add_space(8.0);
-    Text::new(tl!("Global")).show(ui);
-    check(ui, tl!("Fade Region Outside Artboard"), FADE, &mut v.fade);
-    check(ui, tl!("Update While Dragging"), UPDATE_WHILE_DRAGGING, &mut v.update_while_dragging);
 }
 
 /// Background Color: None, White and Black (in the document's color mode), Custom and Select Custom Color….
