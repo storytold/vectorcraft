@@ -81,6 +81,24 @@ fn apply_and_remove_brush_with_undo() {
     assert!(s.execute("brush.apply", &json!({"name": "Nope"})).is_err());
 }
 
+/// #8552: removing the current brush from a stroke stops it being current, so the Paintbrush draws
+/// plain strokes again; removing another brush leaves the current one, and Undo restores it.
+#[test]
+fn removing_the_current_brush_stops_it_being_current() {
+    let mut s = session();
+    let current = |s: &mut Session| s.execute("brush.list", &json!({})).unwrap()["current"].clone();
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    let b = rect(&mut s, 100.0, 10.0, 50.0, 50.0);
+    s.execute("brush.apply", &json!({"name": "6 pt. Flat", "ids": [b.0]})).unwrap();
+    s.execute("brush.apply", &json!({"name": "Charcoal", "ids": [a.0]})).unwrap();
+    s.execute("brush.remove", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(current(&mut s), "Charcoal", "removing another brush keeps the current one");
+    s.execute("brush.remove", &json!({"ids": [a.0]})).unwrap();
+    assert!(current(&mut s).is_null());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), "Charcoal");
+}
+
 /// The own brush settings of the first stroke of `id`.
 fn own_options(s: &Session, id: NodeId) -> Value {
     Value::Object(node(s, id).appearance.stroke().map(|st| st.brush_options.clone()).unwrap_or_default())

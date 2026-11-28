@@ -91,15 +91,23 @@ pub(super) fn brush_apply(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn brush_remove(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = brush_targets(&s.doc()?.doc, &roots(s, p)?);
     s.edit("Remove Brush Stroke", |d, _| {
+        let current = brush::current(d);
+        let mut removed_current = false;
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
                 for it in &mut n.appearance.items {
                     if let AppearanceItem::Stroke(st) = it {
+                        removed_current |= st.brush.is_some() && st.brush == current;
                         st.brush = None;
                         st.brush_options.clear();
                     }
                 }
             }
+        }
+        // Applying a brush also made it current, and nothing else in the UI clears it, so without
+        // this every later Paintbrush stroke keeps the brush the user just removed (#8552).
+        if removed_current {
+            d.unknown.remove(brush::CURRENT_KEY);
         }
         Ok(())
     })?;
