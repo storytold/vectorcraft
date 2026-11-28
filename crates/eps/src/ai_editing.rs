@@ -306,7 +306,8 @@ fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep
     // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
     let scale = canvas_scale(doc);
     // The objects that may keep their effects in an art style, as they are before baking (not on
-    // a large canvas, whose scale the styles' strokes and effects would need).
+    // a large canvas, whose scale the styles' strokes and effects would need; there only the styles
+    // that link type's colors to their swatches are written, which hold no lengths).
     let styled = writer::styled_objects(doc);
     let (symbol_styled, pattern_styled) = writer::styled_definitions(doc);
     let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;

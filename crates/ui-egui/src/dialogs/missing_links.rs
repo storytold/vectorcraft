@@ -105,8 +105,10 @@ impl<W: Copy> Asked<W> {
 
 /// What the questions about one open's linked files keep between their dialogs: the files still
 /// asked about, the modified images to offer for update afterwards and the open's notes.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LinkAsk {
+    /// The document that owns the linked-file IDs.
+    pub(crate) document: u64,
     /// The missing files still asked about (`[{name, path, ids}]`), the next one first.
     pub(crate) missing: Vec<Value>,
     /// The ids of the images whose file was modified.
@@ -353,7 +355,11 @@ fn questions_for(app: &VectorcraftApp, r: &Value, web: bool) -> (Vec<String>, Ve
 /// Opens the dialog about the first of `missing`, keeping what the questions after it need
 /// ([`LinkAsk`]). A window that isn't up has nothing to show a question in.
 fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, notes: &[String]) {
-    let ask = LinkAsk { missing, modified, notes: notes.to_vec(), back: false };
+    let Some(document) = app.session.active().map(|st| st.uid) else { return };
+    open_ask(app, LinkAsk { document, missing, modified, notes: notes.to_vec(), back: false });
+}
+
+fn open_ask(app: &mut VectorcraftApp, ask: LinkAsk) {
     let Some(dialogs) = app.dialogs() else { return };
     let dialog = MissingLinksDialog::new(app, ask.clone());
     app.link_asks = Some(ask);
@@ -415,7 +421,7 @@ fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, one: &str, other: &str) -> Opt
         return Some(changed_on_disk_status(ids.len()));
     }
     let detail = crate::i18n::tn(ids.len() as u64, one, other);
-    super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
+    super::confirm::ask_in_document(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
     None
 }
 
@@ -436,9 +442,16 @@ pub(crate) fn changed_on_disk_status(n: usize) -> String {
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let Some(result) = dialogs.with(|h| h.take::<MissingLinksDialog>()) else { return };
-    let ask = app.link_asks.take().unwrap_or_default();
+    let Some(ask) = app.link_asks.take() else { return };
     let Some(answer) = result.ok() else { return show_notes_again(app, &ask) };
-    let LinkAsk { missing, modified, notes, .. } = ask;
+    if app.session.active().is_none_or(|st| st.uid != ask.document) {
+        app.status(tl!("This dialog was opened in a different document."));
+        if app.session.documents().iter().any(|st| st.uid == ask.document) {
+            open_ask(app, ask);
+        }
+        return;
+    }
+    let LinkAsk { document, missing, modified, notes, .. } = ask;
     let done = match answer {
         MissingLinksAnswer::FindInFolder(folder) => {
             super::find_links::from_missing_links(app, missing.clone(), modified.clone(), notes.clone(), &folder).map(|()| None)
@@ -450,7 +463,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         Ok(None) => {}
         Err(e) => {
             app.status(e);
-            open(app, missing, modified, &notes);
+            open_ask(app, LinkAsk { document, missing, modified, notes, back: false });
         }
     }
 }
@@ -585,6 +598,84 @@ mod tests {
 
     fn row(n: u64) -> Value {
         json!({ "name": format!("{n}.png"), "path": format!("/gone/{n}.png"), "ids": [n] })
+    }
+
+    fn check_replacing_a_missing_file_stays_in_the_opening_drawing(native_picker: bool) {
+        let name = if native_picker { "different-drawing-picker" } else { "different-drawing-path" };
+        let (mut app, dir, _) = opened_without_links(name);
+        let missing = drive::fields::<MissingLinksDialog>(&app)["missing"][0].clone();
+        let id = missing["ids"][0].as_u64().unwrap();
+        let picker = crate::tests::picks::scripted(&mut app);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let mut second_ids = Vec::new();
+        for name in ["second-one.png", "second-two.png"] {
+            let path = dir.join(name);
+            std::fs::write(&path, png([0, 200, 0])).unwrap();
+            let place = app.run("file.place", json!({"path": path.to_string_lossy()})).unwrap();
+            second_ids.push(place["ids"][0].as_u64().unwrap());
+        }
+        assert!(second_ids.contains(&id), "the same ID refers to a different linked file");
+        let params = json!({"ids": [id]});
+        let original_path = app.run("links.check", params.clone()).unwrap()["links"][0]["path"].clone();
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        if native_picker {
+            drive::answer::<MissingLinksDialog>(&mut app, &[], true);
+            assert_eq!(picker.requests().len(), 1);
+        }
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        let replacement = replacement.to_string_lossy();
+        if native_picker {
+            picker.answer(&[&replacement]);
+            drive::frame(&mut app);
+            drive::pump(&mut app);
+        } else {
+            drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement))], true);
+        }
+
+        assert_eq!(app.session.active_index(), Some(1));
+        let after = app.run("links.check", params).unwrap()["links"][0]["path"].clone();
+        assert_eq!(after, original_path, "the second drawing must keep its original link");
+        assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+        assert_eq!(drive::fields::<MissingLinksDialog>(&app)["missing"][0], missing);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement))], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 1, "the opening drawing can still replace its file");
+        assert_eq!(asked_name(&app), "b.png", "the remaining missing file is still offered");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn typed_missing_file_replacement_keeps_the_other_drawing_untouched() {
+        check_replacing_a_missing_file_stays_in_the_opening_drawing(false);
+    }
+
+    #[test]
+    fn delayed_missing_file_picker_keeps_the_other_drawing_untouched() {
+        check_replacing_a_missing_file_stays_in_the_opening_drawing(true);
+    }
+
+    #[test]
+    fn a_missing_file_folder_search_starts_only_in_the_opening_drawing() {
+        use crate::dialogs::find_links::FindLinksDialog;
+
+        let (mut app, dir, _) = opened_without_links("different-drawing-search");
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let folder = [("searchFolder", json!(dir.to_string_lossy()))];
+        drive::answer::<MissingLinksDialog>(&mut app, &folder, true);
+        assert!(drive::is_open::<MissingLinksDialog>(&app));
+        assert!(!drive::is_open::<FindLinksDialog>(&app));
+        assert_eq!(app.session.active_index(), Some(1));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        drive::answer::<MissingLinksDialog>(&mut app, &folder, true);
+        assert!(drive::is_open::<FindLinksDialog>(&app));
+        assert_eq!(app.session.active_index(), Some(0));
+        drive::answer::<FindLinksDialog>(&mut app, &[], false);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// Replace relinks the first file and asks about the next; Ignore keeps its preview.
@@ -892,5 +983,53 @@ mod tests {
         assert!(super::super::confirm::open_question(&app).is_none());
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn accepting_a_modified_link_offer_does_not_update_another_drawing() {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-modified-switch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = drive::app();
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.session.prefs.update_links = "askWhenModified".into();
+        let mut ids = vec![];
+        for name in ["first.png", "second.png"] {
+            let path = dir.join(name);
+            std::fs::write(&path, png([200, 0, 0])).unwrap();
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("file.place", json!({"path": path.to_string_lossy()})).unwrap();
+            let links = app.run("links.list", json!({})).unwrap();
+            ids.push(links["links"][0]["id"].as_u64().unwrap());
+            let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
+            std::fs::write(&path, png([0, 0, 200])).unwrap();
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2)))
+                .unwrap();
+        }
+        assert_eq!(ids[0], ids[1], "the same ID refers to different files");
+        let answer = |app: &mut VectorcraftApp| {
+            let question = crate::tests::picks::open_dialogs(app).pop().unwrap().id;
+            crate::tests::picks::answer_dialog(app, question, &[], true);
+        };
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        answer(&mut app);
+        let foreign_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        answer(&mut app);
+        let original_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+        let _ = std::fs::remove_dir_all(dir);
+        assert_eq!(foreign_modified, 1, "the second drawing's link still needs approval");
+        assert_eq!(original_modified, 0, "approval updates the first drawing's link");
     }
 }

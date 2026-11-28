@@ -3803,8 +3803,9 @@ fn fill_area_press_does_not_search_a_hover_position_it_passed() {
 #[test]
 fn fill_area_clip_keeps_outline_pieces_on_the_mask_edge() {
     let unit = Rect::new(0.0, 0.0, 100.0, 100.0);
-    let clip =
-        |shape: PathData, mask: &PathData, rule: FillRule| super::fill_area::clip_to(po::Shape::new(shape, FillRule::NonZero, 1), false, mask, rule);
+    let clip = |shape: PathData, mask: &PathData, rule: FillRule| {
+        super::fill_area::clip_to(po::Shape::new(shape, FillRule::NonZero, 1), false, mask, rule, &mut vec![])
+    };
     let kept = clip(shapes::rectangle(unit), &shapes::rectangle(unit), FillRule::NonZero).expect("the sides on the mask's edge");
     assert_eq!(kept.path.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>(), 4, "{:?}", kept.path);
     let outside = shapes::rectangle(Rect::new(-0.005, -0.005, 100.005, 100.005));

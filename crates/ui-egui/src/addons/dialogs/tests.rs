@@ -76,11 +76,27 @@ fn new_app() -> VectorcraftApp {
 /// Two rectangles without a stroke, both selected.
 fn two_rects() -> VectorcraftApp {
     let mut app = new_app();
+    select_two_rects(&mut app);
+    app
+}
+
+fn select_two_rects(app: &mut VectorcraftApp) {
     app.run("paint.setStroke", json!({"none": true})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 10})).unwrap();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 40, "height": 40})).unwrap();
     app.run("select.all", json!({})).unwrap();
+}
+
+fn two_drawings() -> VectorcraftApp {
+    let mut app = two_rects();
+    app.run("file.new", json!({"width": 700, "height": 500})).unwrap();
+    select_two_rects(&mut app);
+    activate(&mut app, 0);
     app
+}
+
+fn activate(app: &mut VectorcraftApp, index: usize) {
+    app.run("document.activate", json!({"index": index})).unwrap();
 }
 
 fn two_circles() -> VectorcraftApp {
@@ -279,4 +295,69 @@ fn opening_a_second_add_on_dialog_closes_the_first_and_rolls_back_its_preview() 
     frame(&mut app);
     assert_eq!(app.dialogs().unwrap().with(|h| h.open_dialogs().len()), 1);
     assert_eq!(x0(&app, 1), 100.0, "the first preview rolled back");
+}
+
+#[test]
+fn an_add_on_preview_waits_for_its_opening_drawing() {
+    let mut app = two_drawings();
+    open_item(&mut app, "Arrange Tools", "Arrange in Grid…");
+    let id = dialog_id(&app);
+    set(&app, id, "layout", json!("row"));
+    set(&app, id, "preview", json!(true));
+    frame(&mut app);
+    assert_eq!(x0(&app, 1), 30.0, "previewed in the opening drawing");
+
+    activate(&mut app, 1);
+    let undo = undo_len(&app);
+    frame(&mut app);
+    assert_eq!((x0(&app, 1), undo_len(&app)), (100.0, undo), "the other drawing never shows the preview");
+    assert!(!app.session.in_interaction());
+
+    activate(&mut app, 0);
+    assert_eq!(x0(&app, 1), 100.0, "the old preview rolled back when leaving the drawing");
+    frame(&mut app);
+    assert_eq!(x0(&app, 1), 30.0, "the retained settings preview again on the original drawing");
+    cancel(&app, id);
+    frame(&mut app);
+    assert_eq!(x0(&app, 1), 100.0);
+}
+
+#[test]
+fn an_add_on_confirmation_does_not_edit_another_drawing_before_the_pump() {
+    let mut app = two_drawings();
+    let source_undo = undo_len(&app);
+    open_item(&mut app, "Arrange Tools", "Arrange in Grid…");
+    let id = dialog_id(&app);
+    set(&app, id, "layout", json!("row"));
+    set(&app, id, "preview", json!(false));
+    assert!(confirm(&app, id));
+    activate(&mut app, 1);
+    let target_undo = undo_len(&app);
+    frame(&mut app);
+    assert_eq!((x0(&app, 1), undo_len(&app)), (100.0, target_undo), "the other drawing is never rearranged or given an undo step");
+    assert_eq!(app.session.active_index(), Some(1));
+    activate(&mut app, 0);
+    assert_eq!((x0(&app, 1), undo_len(&app)), (100.0, source_undo));
+}
+
+#[test]
+fn an_add_on_cancel_leaves_the_other_drawings_interaction_running() {
+    let mut app = two_drawings();
+    open_item(&mut app, "Arrange Tools", "Arrange in Grid…");
+    let id = dialog_id(&app);
+    set(&app, id, "layout", json!("row"));
+    set(&app, id, "preview", json!(true));
+    frame(&mut app);
+    assert_eq!(x0(&app, 1), 30.0);
+
+    activate(&mut app, 1);
+    app.session.begin_interaction("Other drawing's edit").unwrap();
+    app.session.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    let other = app.session.active().unwrap().doc.clone();
+    cancel(&app, id);
+    let context = ctx(&app);
+    super::pump(&mut app, &context);
+    let active = app.session.active().unwrap();
+    assert_eq!(active.interaction.as_ref().map(|edit| edit.label.as_str()), Some("Other drawing's edit"));
+    assert_eq!(active.doc, other);
 }

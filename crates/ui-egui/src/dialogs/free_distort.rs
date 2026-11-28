@@ -86,8 +86,9 @@ fn doc_point([x, y]: [f64; 2]) -> Point {
 }
 
 /// The corners the box's `now` moves `before` to. A corner the box did not move stays as it was, so
-/// a click that moved nothing changes nothing. A moved corner stays inside the document `shown`,
-/// or, when it lies outside already, goes no farther out.
+/// a click that moved nothing changes nothing. A coordinate the move left alone is kept exactly as
+/// it was, so a nudge along one axis does not round the other. A moved coordinate stays inside the
+/// document `shown`, or, when it lies outside already, goes no farther out.
 fn moved(before: [[f64; 2]; 4], given: [Point; 4], now: [Point; 4], shown: DocRect) -> [[f64; 2]; 4] {
     let (lo, hi) = ([shown.x0 / SIDE, shown.y0 / SIDE], [shown.x1 / SIDE, shown.y1 / SIDE]);
     let mut c = before;
@@ -97,7 +98,11 @@ fn moved(before: [[f64; 2]; 4], given: [Point; 4], now: [Point; 4], shown: DocRe
             continue;
         }
         let target = [to.x / SIDE, to.y / SIDE];
+        let delta = [to.x - was.x, to.y - was.y];
         for (k, v) in corner.iter_mut().enumerate() {
+            if delta[k].abs() <= 1e-9 {
+                continue;
+            }
             // `max` then `min`, as the bounds may be reversed by a degenerate view.
             *v = round(target[k].max(lo[k].min(*v)).min(hi[k].max(*v)));
         }
@@ -162,4 +167,65 @@ fn pad(ui: &mut egui::Ui, fields: &mut DialogFields, aspect: f64) -> Response {
         fields.set("corners", FieldValue::Json(json!(after)));
     }
     shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    use egui::{Key, Modifiers};
+    use vectorcraft_doc::NodeId;
+
+    fn shown(app: &VectorcraftApp) -> [[f64; 2]; 4] {
+        app.dialogs().unwrap().with(|host| corners(host.get::<HostedParamDialog>().unwrap().fields()))
+    }
+
+    fn applied(app: &VectorcraftApp, id: NodeId) -> Value {
+        app.session.active().unwrap().doc.node(id).unwrap().appearance.effects[0].params["corners"].clone()
+    }
+
+    #[test]
+    fn axis_nudges_keep_the_other_coordinate_exact_through_preview_and_ok() {
+        let precise =
+            [[0.012345678901, 0.123456789012], [1.012345678901, 0.234567890123], [0.987654321098, 1.012345678901], [0.123456789012, 0.987654321098]];
+        for (key, axis) in [(Key::ArrowRight, 0), (Key::ArrowDown, 1)] {
+            for save in [false, true] {
+                let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                let id = NodeId(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap());
+                app.run("select.set", json!({"ids": [id.0]})).unwrap();
+                app.run("effect.apply", json!({"effect": FREE_DISTORT, "ids": [id.0], "item": null, "params": {"corners": precise}})).unwrap();
+                let original = app.session.active().unwrap().doc.clone();
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(900.0, 900.0));
+                panel.app().run("effect.dialog", json!({"effect": FREE_DISTORT, "index": 0, "item": null})).unwrap();
+                panel.frame();
+                panel.frame();
+                assert_eq!(shown(&panel.app()), precise, "the fractional fixture reaches the real canvas unchanged");
+                // A handle reached by a pointer leaves no keyboard-picked part; arrows nudge the whole box.
+                panel.click("Top right corner");
+                assert_eq!(shown(&panel.app()), precise, "a click without motion changes no corner");
+                panel.key(key, Modifiers::NONE);
+                let after = shown(&panel.app());
+                for i in 0..4 {
+                    assert_ne!(after[i][axis], precise[i][axis], "the actual key moves every corner on its requested axis");
+                    assert_eq!(after[i][1 - axis], precise[i][1 - axis], "an axis nudge must not round the other coordinate");
+                }
+                assert_eq!(applied(&panel.app(), id), json!(after), "the normal effect preview receives the exact corners");
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(panel.app().effect_dialogs.effect.is_none());
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + usize::from(save));
+                if save {
+                    assert_eq!(applied(&panel.app(), id), json!(after));
+                    panel.app().run("edit.undo", json!({})).unwrap();
+                }
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+        }
+    }
 }
