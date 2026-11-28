@@ -986,10 +986,10 @@ pub struct UiState {
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
     /// Last AI layer naming settings other than the shared Ollama connection (scope and depth).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub layer_naming_settings: Value,
     /// Ollama server, vision model and name language, shared by the AI dialogs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub ollama_settings: Value,
     /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
     /// the panel menu's View Artboard Contents Only.

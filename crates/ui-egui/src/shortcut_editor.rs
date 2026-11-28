@@ -481,6 +481,8 @@ const GROUPS: &[(&str, &str)] = &[
     ("ui.loadCharStyles", "Window › Character Styles"),
     ("ui.loadParaStyles", "Window › Paragraph Styles"),
     ("ui.missingFontsDialog", "Type"),
+    #[cfg(not(target_arch = "wasm32"))]
+    ("ui.nameLayers", "Window › Layers"),
     ("ui.newArtboard", "Window › Artboards"),
     ("ui.newBrush", "Window › Brushes"),
     ("ui.newCharStyle", "Window › Character Styles"),

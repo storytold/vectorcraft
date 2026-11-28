@@ -136,7 +136,7 @@ fn host_of(rest: &str) -> Option<String> {
     let host = if let Some(v6) = hostport.strip_prefix('[') {
         let (host, tail) = v6.split_once(']')?;
         if !tail.is_empty() {
-            let Some(port) = tail.strip_prefix(':') else { return None };
+            let port = tail.strip_prefix(':')?;
             if port.is_empty() || !port.bytes().all(|b| b.is_ascii_digit()) {
                 return None;
             }
