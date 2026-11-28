@@ -359,6 +359,10 @@ pub struct VectorcraftApp {
     /// leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// The instant `now_override`'s zero stands for, so [`Self::instant`] reads the same test clock
+    /// as an [`craft::ui::runtime::motion::Instant`].
+    #[cfg(test)]
+    pub(crate) clock_origin: craft::ui::runtime::motion::Instant,
     /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
     /// so tests can drive a failed switch (production has no such field).
     #[cfg(test)]
