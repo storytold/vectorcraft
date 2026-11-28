@@ -5533,6 +5533,10 @@ already walks Image Trace. Short agent entry points:
   for new art become no fill and a 0.5 pt black stroke; with New Art Has Basic Appearance off, new art then takes the
   selection's appearance, as after any command.
 
+For an existing brush, approving Brush Options without changing its trimmed name or options closes the dialog
+without rewriting the brush, changing the document revision or adding Undo. A changed name or option is saved in
+one step. A brush deleted while its dialog is open still gives an error on approval.
+
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
 objects become one group, and `art` is `null` when nothing is selected or `ids` name no object. In the app, the
@@ -17253,6 +17257,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Brush Options: untouched approval preserves the brush, document revision and Undo; changed settings save in one step. Native UI and automation covered. Scores and estimates unchanged. |
 | 2026-11-27 | Shape Control bar: canceled numeric edits restore future-tool settings and coupled radii along with selected artwork; retired edits cannot overwrite a different tool. Native scrub, keyboard, next-shape and Undo cases covered. Scores and estimates unchanged. |
 | 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
