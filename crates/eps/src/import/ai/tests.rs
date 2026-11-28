@@ -6440,13 +6440,16 @@ fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
     }
 }
 
+/// A `]` without its `[` looks at a few operand stack slots, not at every slot below it: hundreds
+/// of thousands of them look at no more than four slots each.
 #[test]
 fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let n = 200_000;
     let body = format!("{}\n{}\n", "1 ".repeat(n), "] ".repeat(n));
-    let started = std::time::Instant::now();
+    let before = read::array_slots();
     let _ = read(stream(&layer(&body)).as_bytes());
-    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+    let slots = read::array_slots() - before;
+    assert!(slots <= 4 * u64::try_from(n).unwrap(), "{n} brackets looked at {slots} slots");
 }
 
 #[test]
@@ -10918,9 +10921,9 @@ fn an_objects_on_path_record_that_doesnt_fit_leaves_a_plain_group() {
 }
 
 /// The path and objects of a group are measured once however many records name it: a thousand
-/// copies of a record open about as fast as one copy followed by 999 records whose path id is
-/// missing, when the group opens live, when its long path has no length, and when its first object
-/// is a group of many paths and its last object has no bounds.
+/// copies of a record measure as many paths and objects as one copy followed by 999 records whose
+/// path id is missing, when the group opens live, when its long path has no length, and when its
+/// first object is a group of many paths and its last object has no bounds.
 #[test]
 fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
     use vectorcraft_testkit::ai::{on_path_member, on_path_options, on_path_record};
@@ -10945,23 +10948,18 @@ fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
         let unresolved = copy.replace(ids[0], "0a6d1e52-ffff-4000-8000-000000000000");
         let one = format!("{}{copy}{}{}", &record[..start], unresolved.repeat(999), &record[end..]);
         let many = format!("{}{}{}", &record[..start], copy.repeat(1000), &record[end..]);
-        let time = |data: &str| {
-            let started = std::time::Instant::now();
+        let measure = |data: &str| {
+            let before = read::on_path_measured();
             let doc = read_ok(&format!("{data}{}", layer(&group))).doc;
-            let elapsed = started.elapsed();
+            let measured = read::on_path_measured() - before;
             let g = art(&doc)[0].clone();
             assert_eq!(g.children().unwrap().len(), n, "{why}");
             assert_eq!(g.extras().objects_on_path.is_some(), live, "{why}");
-            elapsed
+            measured
         };
-        // The fastest of three runs each, taken in turn, so that other tests running at the same
-        // time weigh on both.
-        let (mut fastest_one, mut fastest_many) = (std::time::Duration::MAX, std::time::Duration::MAX);
-        for _ in 0..3 {
-            fastest_one = fastest_one.min(time(&one));
-            fastest_many = fastest_many.min(time(&many));
-        }
-        assert!(fastest_many < fastest_one * 5, "{why}: one copy: {fastest_one:?}, 1000 copies: {fastest_many:?}");
+        let (measured_one, measured_many) = (measure(&one), measure(&many));
+        assert!(measured_one > 0, "{why}");
+        assert_eq!(measured_many, measured_one, "{why}: 1000 copies measured {measured_many} times, one copy {measured_one}");
     }
 }
 

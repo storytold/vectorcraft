@@ -38,6 +38,12 @@ struct Gathered {
     chars: HashMap<char, usize>,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many glyphs [`FileFontGlyphs::fits`] has compared with another glyph on this thread.
+    static COMPARED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 impl FileFontGlyphs {
     /// The font of `family` and `style` (made with `info` the first time): its index.
     pub fn font(&mut self, family: &str, style: &str, info: impl FnOnce() -> FileFontInfo) -> usize {
@@ -59,6 +65,10 @@ impl FileFontGlyphs {
         let mut new: HashMap<char, &FileGlyph> = HashMap::new();
         for g in glyphs {
             let kept = f.chars.get(&g.ch).and_then(|&k| f.glyphs.get(k)).or_else(|| new.get(&g.ch).copied());
+            #[cfg(test)]
+            if kept.is_some() {
+                COMPARED.set(COMPARED.get() + 1);
+            }
             match kept {
                 Some(k) if k.outline != g.outline || k.advance != g.advance => return false,
                 Some(_) => {}
@@ -178,15 +188,16 @@ mod tests {
     }
 
     /// A long string of one character compares each glyph with that character's once, not with
-    /// every one before it: a quarter of a million of them fit at once.
+    /// every one before it: a quarter of a million of them fit at once, with fewer comparisons
+    /// than glyphs.
     #[test]
     fn a_long_string_of_one_character_fits_in_linear_time() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let mut g = FileFontGlyphs::default();
-            let f = g.font("F", "Regular", FileFontInfo::default);
-            tx.send(g.fits(f, &vec![glyph('A'); 250_000])).ok();
-        });
-        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(20)), Ok(true));
+        let n = 250_000;
+        let mut g = FileFontGlyphs::default();
+        let f = g.font("F", "Regular", FileFontInfo::default);
+        let before = COMPARED.get();
+        assert!(g.fits(f, &vec![glyph('A'); n]));
+        let compared = COMPARED.get() - before;
+        assert!(compared < u64::try_from(n).unwrap(), "{n} glyphs: {compared} comparisons");
     }
 }
