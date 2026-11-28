@@ -51,16 +51,13 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
         return;
     };
     // A dialog still open from an earlier click closes without an answer, and its preview is rolled back. The new
-    // dialog has its id (the dialog's kind), so the earlier dialog's held answer, with its OK and cancel hook, serves
-    // the new one.
-    let mut held = None;
+    // dialog has the same id (the dialog's kind), and its own held answer and cancel hook replace the earlier ones.
     if let Some(mut old) = app.addon_dialogs.tangent_radius.take() {
         if let Some(host) = app.dialogs() {
             host.with(|h| {
                 h.cancel_by_id(&ctx, old.id);
                 let _ = h.take_by_id::<HostedParamDialog>(old.id);
             });
-            held = Some(host);
         }
         take_preview(app, &mut old).cancel(app);
     }
@@ -76,11 +73,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
             take_preview(app, &mut open).cancel(app);
         }
     });
-    let opened = match held {
-        Some(host) => Some(host.with(|h| h.open(dialog.held_ok()))),
-        None => open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }),
-    };
-    match opened {
+    match open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }) {
         Some(id) => {
             app.addon_dialogs.tangent_radius =
                 Some(Open { id, click: p.clone(), doc, tried: None, note: None, preview: LivePreview::default(), shown_in: doc });
