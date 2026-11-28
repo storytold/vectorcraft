@@ -95,6 +95,37 @@ pages describe it.
   rotation and light rings on the artboard are part of the options dialog only. The panel's Lighting tab has the
   lighting widget instead ([Lighting widget](#lighting-widget)).
 
+## 3D meshes
+
+The meshes that Export 3D Object writes come from the `three-d` crate's `Mesh`, built from the same faces the effect
+draws. The vector facets on the canvas and in SVG and PDF do not change with what follows. Besides positions,
+normals and triangles, a mesh carries:
+
+- **Normals.** A corner takes its face's normal. Where two bands of one bevel meet, the shared corners take the mean of
+  the two bands' normals, unless the bevel turns there by 60° or more (a Step profile's turns) or one of the bands lies
+  flat toward the front or back; caps, walls and the edges between a bevel and a cap or wall stay hard. On Inflate's
+  puffed front and back each corner takes the surface's own normal. The bevel settings shape its profile into a
+  rounded curve or an ornamental one ([the help page](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html));
+  the smoothing rule and the 60° crease are VectorCraft's own.
+- **Texture coordinates** for every corner, each from 0 to 1, u to the right and v down, as glTF 2.0 places
+  `TEXCOORD_0` (<https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html>). Caps, Rotate's plane and Inflate's
+  front and back take each corner's art point, before any twist or taper, in the bounds of the whole object, which all
+  of its parts share; the back is not mirrored. Extrude & Bevel's bevels and walls and Inflate's walls take u along each contour of the outline from its
+  first point, as the distance over the contour's length, so the seam at the first point has corners at both 0 and 1,
+  and v across the side from the front cap's edge to the back cap's. Revolve's side takes u around the sweep from its
+  start and v along each contour of the profile; its end caps span the disk they close, and its cut sides take each
+  corner's profile point in the profile's bounds. An axis with no extent takes 0.5. These layouts are VectorCraft's
+  own.
+- **A part for each triangle**: `Front` (a front cap, Rotate's plane, Inflate's front), `Back`, `Side` (walls and
+  Revolve's swept side), `FrontBevel`, `BackBevel`, `Cap` (Revolve's end caps) and `Cut` (the flat sides of a Revolve
+  of less than 360°).
+
+The exported files write the normals and the texture coordinates of every corner: OBJ's `vt` (up from the bottom),
+glTF's `TEXCOORD_0` and USD's `primvars:st` (up from the bottom). A face with mapped graphics writes the coordinates
+of its texture instead, laid out as the graphics are ([Graphics](#graphics)). The files do not write the parts. A
+mesh whose lists do not match, or that holds a value that is not a number, stops the export with an error before any
+file is written.
+
 ## Extrude & Bevel
 
 The art is the front face; its outline is extruded backwards by **Depth** (0–2,000 pt), so seen straight on the
@@ -115,8 +146,9 @@ object is where the art was.
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
-cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
-narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
+cut square across instead; at the other corners the miter is limited to four times the width. An inside bevel on
+a single straight triangle or parallelogram with ordinary miters stops before its edges meet, keeping the requested
+bevel height. Other outlines can still fold where a bevel is wider than a narrow part of the shape. Each facet has a seam ([Seams](#seams)).
 
 ### Custom bevels
 
@@ -689,15 +721,18 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   meet, again on the merged outline, which can have more points (bars crossing in a grid trace every hole between
   them); past it, the shape is too complex for the effect.
 - The faces drawn, exported and made by **Object › Expand Appearance** keep the shape's curves: the caps of
-  Extrude & Bevel, the flat face of Rotate, and the edges of the walls and bevels where they meet a cap are cubic
-  curves, with smooth anchors where the art's are smooth, while visibility and depth are worked out on the
-  sampled points. Without perspective and bevel each curve maps exactly. With perspective, a curve is split into
-  cubics until each lies within 0.001 pt of the projected outline. A face inset or outset by a bevel follows its
-  sampled outline within the sampling tolerance above, one curve for each sampled edge through its two sampled
-  points, so the cap and the walls next to it draw the edge they share as the same curves. The edges between two bevel steps or two wall slices, a
-  piece of curve that does not fit after 8 halvings, an edge of a twisted wall cut into pieces, and the curves
-  past 1,048,576 for one solid stay straight. The tolerances and limits are VectorCraft's own values. Inflate's
-  faces are polygons.
+  Extrude & Bevel, the flat face of Rotate, and every edge of the walls and bevels along the art's curves (at a
+  cap, between two bevel steps and between two wall slices) are cubic curves, with smooth anchors where the
+  art's are smooth, while visibility and depth are worked out on the sampled points. Without perspective and
+  bevel each curve maps exactly. With perspective, a curve is split into cubics until each lies within 0.001 pt
+  of the projected outline. A face inset or outset by a bevel follows its sampled outline within the sampling
+  tolerance above, one curve for each sampled edge through its two sampled points, so two faces that meet draw
+  the edge they share as the same curves. A twist cuts a wall's edge into pieces at points of the art's curve,
+  so each piece follows the same curve as the cap it meets. Inflate keeps the curves of its flat back, of its
+  side walls and of its front and puffed back where they meet the outline, within the sampling tolerance there;
+  the inside of a puffed surface stays flat facets. A piece of curve that does not fit after 8 halvings, the
+  curves past 1,048,576 for one solid, and the cells' edges left once Inflate has looked at 4,194,304 edges of
+  the outline to find them, stay straight. The tolerances and limits are VectorCraft's own values.
 - Inflate also limits the work of filling its grid, which grows with the outline's points times the grid cells its
   outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
   across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a

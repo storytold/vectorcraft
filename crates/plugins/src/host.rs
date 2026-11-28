@@ -97,6 +97,10 @@ pub const MAX_STORAGE_CALLS: usize = 10_000;
 /// pass it returns [`STORAGE_BUDGET`].
 pub const MAX_STORAGE_BYTES: usize = 1 << 30;
 
+/// Bytes a storage call reads or writes for each instruction it costs the run, counted as for
+/// [`MAX_STORAGE_BYTES`]: the 1 GiB a run may move costs 16,777,216 instructions.
+pub const STORAGE_BYTES_PER_FUEL: u64 = 64;
+
 /// What `vc_call` returns: the command ran, and `vc_call_result` reads its result.
 pub const CALL_OK: i32 = 0;
 /// What `vc_call` or `vc_call_result` returns: the id, the arguments or the buffer doesn't lie
@@ -162,6 +166,19 @@ impl std::fmt::Display for CallPending {
 }
 
 impl wasmi::errors::HostError for CallPending {}
+
+/// What a storage call ends the run with when the instructions it may take can't pay for its bytes
+/// ([`STORAGE_BYTES_PER_FUEL`]); the host reports why ([`Run::storage_stop`]).
+#[derive(Debug)]
+pub(crate) struct StorageStop;
+
+impl std::fmt::Display for StorageStop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("storage call")
+    }
+}
+
+impl wasmi::errors::HostError for StorageStop {}
 
 /// One host import: its name, its type and the permission it needs.
 pub struct Import {
@@ -365,6 +382,18 @@ pub(crate) struct Run {
     storage: Option<Arc<dyn Storage>>,
     storage_calls: usize,
     storage_bytes: usize,
+    /// The instructions of the call's budget not yet handed to the store, which storage calls also
+    /// pay from; the host keeps it up to date around each slice.
+    pub(crate) fuel_left: u64,
+    /// Bytes storage reads copied into the module's memory beyond the bytes the storage counted for
+    /// them, such as a settings value answered from memory; they cost instructions at the same rate.
+    copied_bytes: u64,
+    /// Instructions the last storage call cost ([`STORAGE_BYTES_PER_FUEL`]), still to be taken.
+    fuel_owed: u64,
+    /// Why the call ends after a storage call: the instruction budget when it needed more
+    /// instructions than it could take, or the deadline or Cancel, checked before a storage call
+    /// takes from [`Run::fuel_left`] and after every storage call.
+    pub(crate) storage_stop: Option<Error>,
     /// The commands `vc_call` may run (the manifest's `commandAllowlist`), once the module has
     /// loaded and when the run has something to run them ([`Run::allow_calls`]); `None` otherwise.
     allowed: Option<Vec<String>>,
@@ -395,6 +424,10 @@ impl Run {
             storage: None,
             storage_calls: 0,
             storage_bytes: 0,
+            fuel_left: 0,
+            copied_bytes: 0,
+            fuel_owed: 0,
+            storage_stop: None,
             allowed: None,
             calls: 0,
             call_bytes: 0,
@@ -527,16 +560,48 @@ impl Run {
     /// Makes one storage call with `call`, on the plug-in's storage and a [`Meter`] holding the
     /// run's storage bytes left, and counts the call and the bytes it read and wrote → the code for
     /// a run that has used up its calls or has no storage, else what `call` returns.
-    fn metered<T>(&mut self, call: impl FnOnce(&dyn Storage, &mut Meter) -> std::result::Result<T, StorageError>) -> std::result::Result<T, i32> {
+    ///
+    /// The run's storage bytes cost one instruction for each whole [`STORAGE_BYTES_PER_FUEL`]
+    /// bytes, counted over the run, so splitting a transfer into calls costs the same. The meter
+    /// also holds no more bytes than the `held` instructions in the store pay for, with
+    /// [`Run::fuel_left`] too while the deadline and Cancel have not come ([`Meter::gated`]), so
+    /// the call stops before a read or write they can't pay for; one the storage bytes left would
+    /// allow sets [`Run::storage_stop`]. What the call costs goes to [`Run::fuel_owed`].
+    fn metered<T>(
+        &mut self,
+        held: u64,
+        call: impl FnOnce(&dyn Storage, &mut Meter) -> std::result::Result<T, StorageError>,
+    ) -> std::result::Result<T, i32> {
         if self.storage_calls >= MAX_STORAGE_CALLS {
             return Err(STORAGE_BUDGET);
         }
         self.storage_calls += 1;
         let Some(store) = self.storage.clone() else { return Err(STORAGE_UNAVAILABLE) };
-        let mut meter = Meter::new(MAX_STORAGE_BYTES.saturating_sub(self.storage_bytes) as u64);
+        let before = self.storage_bytes as u64;
+        let by_bytes = MAX_STORAGE_BYTES.saturating_sub(self.storage_bytes) as u64;
+        // Bytes up to the end of the last whole unit `fuel` instructions pay for.
+        let by_fuel = |fuel: u64| {
+            let units = (before / STORAGE_BYTES_PER_FUEL).saturating_add(fuel).saturating_add(1);
+            units.saturating_mul(STORAGE_BYTES_PER_FUEL).saturating_sub(before).saturating_sub(1)
+        };
+        // Bytes past what the store's fuel pays for are read or written only before the deadline
+        // and Cancel, as the host hands out the rest of the budget only then.
+        let left = by_bytes.min(by_fuel(held.saturating_add(self.fuel_left)));
+        let mut meter = Meter::gated(left, by_fuel(held), self.deadline.at);
         let done = call(store.as_ref(), &mut meter);
         // What the call read before it failed counts too.
         self.storage_bytes = self.storage_bytes.saturating_add(usize::try_from(meter.used()).unwrap_or(usize::MAX));
+        self.fuel_owed = (self.storage_bytes as u64 / STORAGE_BYTES_PER_FUEL).saturating_sub(before / STORAGE_BYTES_PER_FUEL);
+        // A read or write the run's storage bytes alone allow was refused for its instructions, or
+        // for the deadline or Cancel.
+        let refused = meter.refused();
+        if matches!(done, Err(StorageError::Budget)) && refused > 0 && refused <= by_bytes.saturating_sub(meter.used()) {
+            self.storage_stop = Some(match meter.stopped() {
+                Some(storage::Gate::Cancel) => Error::Cancelled,
+                Some(storage::Gate::Deadline) => Error::Limit(TIME_BUDGET.into()),
+                None => Error::Limit("instruction budget".into()),
+            });
+        }
         done.map_err(|e| storage_code(&e))
     }
 
@@ -549,8 +614,8 @@ impl Run {
     }
 
     /// `vc_settings_get` and `vc_cache_read`: copies the value of the key at `name` into the
-    /// `out_cap` bytes at `out` when it fits → its length.
-    fn storage_read(&mut self, area: Area, memory: &mut [u8], name: (usize, usize), out: (usize, usize)) -> i32 {
+    /// `out_cap` bytes at `out` when it fits → its length. The store holds `held` instructions.
+    fn storage_read(&mut self, area: Area, memory: &mut [u8], name: (usize, usize), out: (usize, usize), held: u64) -> i32 {
         let key = match Self::storage_name(memory, name.0, name.1) {
             Ok(key) => key,
             Err(code) => return code,
@@ -559,7 +624,8 @@ impl Run {
             return STORAGE_OUTSIDE_MEMORY;
         }
         // The storage counts what it read whether or not the value fits the buffer.
-        let got = self.metered(|store, meter| match area {
+        let counted = self.storage_bytes;
+        let got = self.metered(held, |store, meter| match area {
             Area::Settings => store.setting(&key, meter),
             Area::Cache => store.cache_entry(&key, meter),
         });
@@ -573,12 +639,18 @@ impl Run {
             && let Some(dest) = memory.get_mut(out.0..out.0 + value.len())
         {
             dest.copy_from_slice(&value);
+            // Bytes copied that the storage didn't count, counted over the run like the others.
+            let uncounted = (value.len() as u64).saturating_sub(self.storage_bytes.saturating_sub(counted) as u64);
+            let before = self.copied_bytes / STORAGE_BYTES_PER_FUEL;
+            self.copied_bytes = self.copied_bytes.saturating_add(uncounted);
+            self.fuel_owed = self.fuel_owed.saturating_add(self.copied_bytes / STORAGE_BYTES_PER_FUEL - before);
         }
         len
     }
 
-    /// `vc_settings_set` and `vc_cache_write`: sets the key at `name` to the `value` bytes.
-    fn storage_write(&mut self, area: Area, memory: &[u8], name: (usize, usize), value: (usize, usize)) -> i32 {
+    /// `vc_settings_set` and `vc_cache_write`: sets the key at `name` to the `value` bytes. The
+    /// store holds `held` instructions.
+    fn storage_write(&mut self, area: Area, memory: &[u8], name: (usize, usize), value: (usize, usize), held: u64) -> i32 {
         let key = match Self::storage_name(memory, name.0, name.1) {
             Ok(key) => key,
             Err(code) => return code,
@@ -587,7 +659,7 @@ impl Run {
         if bytes.len() > area.max_value() {
             return STORAGE_FULL;
         }
-        let written = self.metered(|store, meter| match area {
+        let written = self.metered(held, |store, meter| match area {
             Area::Settings => store.set_setting(&key, bytes, meter),
             Area::Cache => store.set_cache_entry(&key, bytes, meter),
         });
@@ -595,8 +667,8 @@ impl Run {
     }
 
     /// `vc_settings_delete` and `vc_cache_clear`: removes the key at `name`, or with `vc_cache_clear`
-    /// and a `name` of no bytes, every cache entry.
-    fn storage_remove(&mut self, area: Area, memory: &[u8], name: (usize, usize)) -> i32 {
+    /// and a `name` of no bytes, every cache entry. The store holds `held` instructions.
+    fn storage_remove(&mut self, area: Area, memory: &[u8], name: (usize, usize), held: u64) -> i32 {
         let key = match (area, name.1) {
             (Area::Cache, 0) => None,
             _ => match Self::storage_name(memory, name.0, name.1) {
@@ -604,7 +676,7 @@ impl Run {
                 Err(code) => return code,
             },
         };
-        let removed = self.metered(|store, meter| match (area, key) {
+        let removed = self.metered(held, |store, meter| match (area, key) {
             (Area::Settings, Some(key)) => store.delete_setting(&key, meter),
             (Area::Cache, Some(key)) => store.remove_cache_entry(&key),
             (_, None) => store.clear_cache().map(|_| true),
@@ -616,7 +688,7 @@ impl Run {
         }
     }
 
-    fn progress(&mut self, done: i64, total: i64) {
+    pub(crate) fn progress(&mut self, done: i64, total: i64) {
         let total = u64::try_from(total).unwrap_or(0);
         let done = u64::try_from(done).unwrap_or(0);
         let done = if total > 0 { done.min(total) } else { done };
@@ -638,12 +710,12 @@ impl Run {
         vectorcraft_doc::cancel::progress(done, total, PROGRESS_STEP);
     }
 
-    fn cancelled(&self) -> i32 {
+    pub(crate) fn cancelled(&self) -> i32 {
         i32::from(vectorcraft_doc::cancel::is_cancelled() || self.deadline.passed())
     }
 
     /// Writes the `len` bytes at `ptr` in `memory` as a line of `level` → what `vc_log` returns.
-    fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
+    pub(crate) fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
         let Some(level) = LogLevel::from_code(level) else { return LOG_BAD_LEVEL };
         let Some(bytes) = ptr.checked_add(len).and_then(|end| memory.get(ptr..end)) else { return LOG_OUTSIDE_MEMORY };
         if self.report.truncated {
@@ -700,6 +772,35 @@ fn memory_and_host<'a>(caller: &'a mut Caller<'_, Host>) -> Option<(&'a mut [u8]
     Some(memory.data_and_store_mut(caller))
 }
 
+/// Takes what the last storage call cost ([`Run::fuel_owed`]) from the `held` instructions in the
+/// store, then from [`Run::fuel_left`]. A call that needed more instructions than those, or that
+/// ended after the deadline or Cancel (checked in that order, as after a `vc_call`), ends the run
+/// with [`StorageStop`] and the reason in [`Run::storage_stop`].
+fn pay_storage(caller: &mut Caller<'_, Host>, held: u64) -> std::result::Result<(), wasmi::Error> {
+    let run = &mut caller.data_mut().run;
+    let owed = std::mem::take(&mut run.fuel_owed);
+    if run.storage_stop.is_none() {
+        run.storage_stop = if owed > held.saturating_add(run.fuel_left) {
+            Some(Error::Limit("instruction budget".into()))
+        } else if run.deadline.passed() {
+            Some(Error::Limit(TIME_BUDGET.into()))
+        } else if vectorcraft_doc::cancel::is_cancelled() {
+            Some(Error::Cancelled)
+        } else {
+            None
+        };
+    }
+    if run.storage_stop.is_some() {
+        return Err(wasmi::Error::host(StorageStop));
+    }
+    let from_store = owed.min(held);
+    run.fuel_left = run.fuel_left.saturating_sub(owed - from_store);
+    if from_store > 0 {
+        caller.set_fuel(held - from_store)?;
+    }
+    Ok(())
+}
+
 /// An i32 argument as the unsigned offset or length it stands for.
 fn offset(v: i32) -> usize {
     v as u32 as usize
@@ -726,18 +827,34 @@ pub(crate) fn linker(engine: &Engine, granted: &[Permission]) -> Linker<Host> {
         if !granted.contains(&permission) {
             continue;
         }
-        let _ = linker.func_wrap(MODULE, get, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, out: i32, out_cap: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_read(area, data, (offset(key), offset(key_len)), (offset(out), offset(out_cap)))
-        });
-        let _ = linker.func_wrap(MODULE, set, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, value: i32, value_len: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_write(area, data, (offset(key), offset(key_len)), (offset(value), offset(value_len)))
-        });
-        let _ = linker.func_wrap(MODULE, remove, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32| -> i32 {
-            let Some((data, host)) = memory_and_host(&mut caller) else { return STORAGE_OUTSIDE_MEMORY };
-            host.run.storage_remove(area, data, (offset(key), offset(key_len)))
-        });
+        // A storage call pays for its bytes before it returns ([`pay_storage`]).
+        let _ = linker.func_wrap(
+            MODULE,
+            get,
+            move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, out: i32, out_cap: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_read(area, data, (offset(key), offset(key_len)), (offset(out), offset(out_cap)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            },
+        );
+        let _ = linker.func_wrap(
+            MODULE,
+            set,
+            move |mut caller: Caller<'_, Host>, key: i32, key_len: i32, value: i32, value_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_write(area, data, (offset(key), offset(key_len)), (offset(value), offset(value_len)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            },
+        );
+        let _ =
+            linker.func_wrap(MODULE, remove, move |mut caller: Caller<'_, Host>, key: i32, key_len: i32| -> std::result::Result<i32, wasmi::Error> {
+                let held = caller.get_fuel().unwrap_or(0);
+                let Some((data, host)) = memory_and_host(&mut caller) else { return Ok(STORAGE_OUTSIDE_MEMORY) };
+                let code = host.run.storage_remove(area, data, (offset(key), offset(key_len)), held);
+                pay_storage(&mut caller, held).map(|()| code)
+            });
     }
     if granted.contains(&Permission::Commands) {
         // A call that can be made pauses the run: the host makes it with what the run was given to

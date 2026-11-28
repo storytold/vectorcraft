@@ -2,17 +2,21 @@
 //! the selected images: what it preserves, where it aligns in the old bounds, and whether it is
 //! clipped to them.
 //!
-//! Fields: `ids` (the images; null: the selected ones), `preserve` (transforms|bounds|fileDimensions|fit|fill), `align`
-//! (topLeft … bottomRight) and `clip`. OK runs `links.placementOptions` with them: one undo step.
+//! Fields: `preserve` (transforms|bounds|fileDimensions|fit|fill), `align` (0-8, row by row from
+//! the top left) and `clip`. OK runs `links.placementOptions` with them and `ids` (null: the
+//! selected images): one undo step.
 
+// PLAN: assumed craft_ui paths for ParamDialog, ParamKind, Param, DialogFields, FieldValue, HostedParamDialog and Label.
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use super::form;
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+use crate::dialogs::tool_options::reference_param;
 
-pub(super) const KIND: &str = "placementOptions";
+const KEY: &str = "placementOptions";
+const OPENING: &str = "__opening";
 const CMD: &str = "links.placementOptions";
 /// (value, label) of each Preserve choice.
 const PRESERVE: [(&str, &str); 5] = [
@@ -23,53 +27,145 @@ const PRESERVE: [(&str, &str); 5] = [
     ("fill", "Bounds (Fill Proportionally)"),
 ];
 /// The alignment points, row by row from the top left (the reference point widget's order).
-const ALIGN: [&str; 9] = ["topLeft", "top", "topRight", "left", "center", "right", "bottomLeft", "bottom", "bottomRight"];
-const LABEL: f32 = 90.0;
+pub(crate) const ALIGN: [&str; 9] = ["topLeft", "top", "topRight", "left", "center", "right", "bottomLeft", "bottom", "bottomRight"];
+/// The centre, for a name `ALIGN` does not list.
+const CENTRE: usize = 4;
+/// Bounds stretches the art into the old bounds: with it there is nothing to align or clip.
+const FREE: [&str; 4] = ["transforms", "fileDimensions", "fit", "fill"];
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Placement Options").into(), body, confirm, min_width: 400.0, max_width: Some(420.0), ..DialogSpec::FORM };
+fn params() -> Vec<Param> {
+    let options = PRESERVE.iter().map(|(value, label)| ((*value).to_owned(), Label::from(tl!(label).to_owned()))).collect();
+    vec![
+        Param::new("preserve", tl!("Preserve:"), ParamKind::choice(options, Some("transforms".into()))),
+        reference_param("align", tl!("Alignment:")).enabled_when_in("preserve", FREE),
+        Param::new("clip", tl!("Clip to Bounding Box"), ParamKind::bool(false)).enabled_when_in("preserve", FREE),
+    ]
+}
 
 /// Open the dialog on the placement options of images `ids` (default: the selected ones).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let active = app.session.active().ok_or("no document open")?;
+    let source = (active.uid, active.reverts);
     let ids = p.get("ids").cloned().unwrap_or(Value::Null);
     let r = app.session.execute(CMD, &json!({ "ids": ids })).map_err(|e| e.to_string())?;
-    let mut fields = r["placement"].clone();
-    fields["ids"] = ids;
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let placement = &r["placement"];
+    let align = ALIGN.iter().position(|a| Some(*a) == placement["align"].as_str()).unwrap_or(CENTRE);
+    let mut fields = DialogFields::from_pairs([
+        ("preserve", FieldValue::Text(placement["preserve"].as_str().unwrap_or("transforms").to_owned())),
+        ("align", FieldValue::Int(align as i64)),
+        ("clip", FieldValue::Bool(placement["clip"].as_bool().unwrap_or(false))),
+    ]);
+    fields.set(OPENING, FieldValue::Json(json!({"uid": source.0, "reverts": source.1, "ids": ids})));
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let dialog = HostedParamDialog::new(&ctx, KEY, fields, |fields| {
+        ParamDialog::new(KEY, tl!("Placement Options"), params())
+            .values(Bind::bound(fields))
+            .footer_note(tl!("Applies when the linked file is relinked or updated."))
+    })
+    .held_ok();
+    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| {
+        let f = &result.fields;
+        let Some(FieldValue::Json(opening)) = f.get(OPENING) else { return Err("the Placement Options target is missing".into()) };
+        let Some(active) = app.session.active().filter(|document| Some(document.uid) == opening["uid"].as_u64()) else {
+            return Err(tl!("Placement Options can only change the document where it was opened.").to_owned());
+        };
+        if Some(active.reverts) != opening["reverts"].as_u64() {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
+        let align = f.int("align").and_then(|i| usize::try_from(i).ok()).and_then(|i| ALIGN.get(i).copied()).unwrap_or(ALIGN[CENTRE]);
+        let params = json!({ "ids": opening["ids"], "preserve": f.text("preserve"), "align": align, "clip": f.bool("clip").unwrap_or(false) });
+        app.run(CMD, params).map(|_| ())
+    })
+    .ok_or("no window")?;
     Ok(Value::Null)
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let r = app.run(CMD, Value::Object(d.fields.clone()));
-    if r.is_ok() {
-        app.ui.dialog = None;
-    }
-    r
-}
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    use vectorcraft_engine::Session;
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    form::choice(ui, d, "preserve", tl!("Preserve:"), (LABEL, 240.0), &PRESERVE);
-    ui.add_space(8.0);
-    // Bounds stretches the art into the old bounds: nothing to align or clip.
-    let free = d.str("preserve") != "bounds";
-    ui.add_enabled_ui(free, |ui| {
-        widgets::label_row(ui, tl!("Alignment:"), LABEL, |ui| {
-            let current = ALIGN.iter().position(|a| *a == d.str("align")).unwrap_or(4);
-            if let Some(i) = widgets::reference_point_named(ui, current, tl!("Alignment:"))
-                && let Some(a) = ALIGN.get(i)
-            {
-                d.fields.insert("align".into(), json!(a));
-            }
+    use super::*;
+
+    #[test]
+    fn held_placement_options_keep_the_link_and_undo_in_the_opening_document() {
+        let dir = vectorcraft_testkit::TempDir::new("placement-options-document");
+        let path = dir.join("linked.png");
+        let image = Image::from_raw(2, 2, ChannelLayout::Rgba, SampleType::U8, vec![255; 16]).unwrap();
+        std::fs::write(&path, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let link = |app: &mut VectorcraftApp| {
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("file.place", json!({"path": path, "at": [100, 100], "link": true})).unwrap()["ids"][0].as_u64().unwrap()
+        };
+        let source_link = link(&mut app);
+        let other_link = link(&mut app);
+        assert_eq!(source_link, other_link, "different documents reuse this object ID");
+        let settings = |app: &mut VectorcraftApp| {
+            let placement = app.run(CMD, json!({"ids": [source_link]})).unwrap()["placement"].clone();
+            (placement, app.session.active().unwrap().history.undo.len())
+        };
+        let other = settings(&mut app);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let starting = settings(&mut app);
+        app.run("ui.placementOptionsDialog", json!({"ids": [source_link]})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(KEY);
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "preserve", json!("fit")).unwrap();
+            assert!(!host.confirm_by_id(&ctx, id));
+            assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
         });
-        ui.add_space(8.0);
-        widgets::label_row(ui, "", LABEL, |ui| {
-            let clip = d.bool("clip");
-            if widgets::check(ui, tl!("Clip to Bounding Box"), clip, free) {
-                d.fields.insert("clip".into(), json!(!clip));
-            }
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert_eq!(settings(&mut app), other, "the other link and its undo history are preserved");
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(settings(&mut app), starting);
+        assert!(crate::dialogs::tests::confirm(&mut app));
+        let (placement, steps) = settings(&mut app);
+        assert_eq!(placement["preserve"], json!("fit"));
+        assert_eq!(steps, starting.1 + 1);
+    }
+
+    #[test]
+    fn held_placement_options_do_not_edit_a_link_restored_by_file_revert() {
+        let dir = vectorcraft_testkit::TempDir::new("placement-options-revert");
+        let path = dir.join("linked.png");
+        let image = Image::from_raw(2, 2, ChannelLayout::Rgba, SampleType::U8, vec![255; 16]).unwrap();
+        std::fs::write(&path, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let link = app.run("file.place", json!({"path": path, "at": [100, 100], "link": true})).unwrap()["ids"][0].as_u64().unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let placement = |app: &mut VectorcraftApp| app.run(CMD, json!({"ids": [link]})).unwrap()["placement"].clone();
+        let original = placement(&mut app);
+        app.run(CMD, json!({"ids": [link], "preserve": "fill"})).unwrap();
+        open(&mut app, &json!({"ids": [link]})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialog = dialog_id(KEY);
+        let host = app.dialogs().unwrap();
+        host.with(|h| {
+            h.set_json_field(&ctx, dialog, "preserve", json!("fit")).unwrap();
+            assert!(!h.confirm_by_id(&ctx, dialog));
         });
-    });
-    ui.add_space(6.0);
-    widgets::dim_label(ui, tl!("Applies when the linked file is relinked or updated."));
-    false
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert_eq!(placement(&mut app), original);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(host.with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        host.with(|h| h.cancel_by_id(&ctx, dialog));
+        open(&mut app, &json!({"ids": [link]})).unwrap();
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[("preserve", json!("fit"))], true);
+        assert_eq!(placement(&mut app)["preserve"], "fit");
+    }
 }

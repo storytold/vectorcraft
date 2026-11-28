@@ -708,12 +708,17 @@ fn metadata_template_errors() {
     assert!(e.to_string().contains("larger than 8 MB"), "{e}");
     let e = s.execute("file.info.applyTemplate", &json!({"data": " ".repeat(vectorcraft_pdf::MAX_TEMPLATE_BYTES + 1), "mode": "keep"})).unwrap_err();
     assert!(e.to_string().contains("larger than 8 MB"), "{e}");
+    let encoded = "A".repeat(vectorcraft_pdf::MAX_TEMPLATE_BYTES.div_ceil(3) * 4 + 1);
+    let e = s.execute("file.info.applyTemplate", &json!({"dataBase64": encoded, "mode": "keep"})).unwrap_err();
+    assert!(e.to_string().contains("larger than 8 MB"), "{e}");
     for bad in [
         json!({"data": xmp, "mode": "merge"}),
         json!({"data": xmp}),
         json!({"data": xmp, "mode": 3}),
         json!({"mode": "keep"}),
         json!({"data": xmp, "path": not_xmp.to_str().unwrap(), "mode": "keep"}),
+        json!({"data": xmp, "dataBase64": "SGVsbG8=", "mode": "keep"}),
+        json!({"dataBase64": "!", "mode": "keep"}),
         json!({"path": dir.join("missing.xmp").to_str().unwrap(), "mode": "keep"}),
         json!({"path": not_xmp.to_str().unwrap(), "mode": "keep"}),
         json!({"path": big.to_str().unwrap(), "mode": "keep"}),

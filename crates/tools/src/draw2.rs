@@ -50,6 +50,11 @@ pub const SMOOTH_MIN_TOLERANCE: f64 = SMOOTH_MIN_FIDELITY / 640.0;
 /// pixels) at the lowest zoom (3.13 %).
 pub const SMOOTH_MAX_TOLERANCE: f64 = 100.0 / 0.0313;
 
+/// The range (points) of `path.smoothRegion`'s `radius`, `path.joinScrub`'s `tolerance` and
+/// `path.eraseSegments`' `width`, which the tools send as screen pixels divided by the zoom.
+/// VectorCraft's own range.
+pub const REACH_RANGE: (f64, f64) = (0.001, 1000.0);
+
 /// Whether segment `i` of `sp` is straight, so the Smooth tool leaves it as it is: its handles lie
 /// on the line through its ends, and the segment runs from one end to the other without turning back.
 pub fn segment_is_straight(sp: &SubPath, i: usize) -> bool {
@@ -86,6 +91,11 @@ pub fn pressure_size(size: f64, variation: f64, pressure: f64) -> f64 {
 
 /// The narrowest a Blob Brush or Eraser stroke gets, in points (their Size field's minimum).
 pub const MIN_BRUSH_SIZE: f64 = 0.1;
+
+/// The modes the Blob Brush's Size takes (`sizeMode`). The Eraser's Size takes every
+/// [`vectorcraft_brush::Variation`].
+pub const BLOB_SIZE_MODES: [vectorcraft_brush::Variation; 3] =
+    [vectorcraft_brush::Variation::Fixed, vectorcraft_brush::Variation::Pressure, vectorcraft_brush::Variation::StylusWheel];
 
 /// A pen's tilt as a lean on the page (each tilt's tangent) and its angle from upright in degrees,
 /// as Pointer Events' tiltX and tiltY convert to an altitude and an azimuth.
@@ -375,6 +385,7 @@ pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    // The loop skips ids that are already listed.
     let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
         if seen.insert(id) {

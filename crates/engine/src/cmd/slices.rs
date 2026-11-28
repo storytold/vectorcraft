@@ -189,6 +189,11 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 impl Session {
+    /// The selected slices, including selected objects that are object slices.
+    pub fn selected_slice_ids(&self) -> Vec<NodeId> {
+        self.active().map_or_else(Vec::new, |st| selected_slices(&st.doc, &st.selection))
+    }
+
     /// View → Hide Slices.
     pub fn slices_hidden(&self) -> bool {
         self.menu.slices_hidden

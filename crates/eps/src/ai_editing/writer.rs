@@ -69,7 +69,7 @@ pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths tha
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
     "repeats, placed documents, intertwines and distorted images are written as their art in the editing data for other apps";
-pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort more than 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
+pub(super) const DEEP_DISTORTED: &str = "images changed by Perspective Distort or Free Distort nested 8 deep in opacity masks, symbols, live objects and pattern tiles are written as the nearest parallelogram in the editing data for other apps";
 pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
@@ -974,8 +974,9 @@ impl<'a> Writer<'a> {
             self.warn(w);
         }
         let moved = bounds && self.wrap_on_bounds(n, state);
-        // A gradient mesh's drawn look is paths, which hold nothing: it is written at any depth.
-        if self.nest < MAX_NEST || matches!(n.kind, NodeKind::Mesh(_)) {
+        // A gradient mesh's drawn look is paths, and a distorted image's is clipped copies of its
+        // image, which hold nothing: they are written at any depth.
+        if self.nest < MAX_NEST || matches!(n.kind, NodeKind::Mesh(_)) || n.is_distorted_image() {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
             self.nest += 1;
             self.drawn += 1;
@@ -1622,6 +1623,18 @@ impl<'a> Writer<'a> {
         if !self.take_objects(stub) {
             return;
         }
+        // The art styles that hold the swatch links of its colors, its thread's too.
+        let members: Vec<&vectorcraft_doc::TextObject> = match thread {
+            Some(thread) => thread
+                .iter()
+                .filter_map(|id| match &doc.node(*id)?.kind {
+                    NodeKind::Text(t) => Some(t.as_ref()),
+                    _ => None,
+                })
+                .collect(),
+            None => vec![t],
+        };
+        self.link_type_colors(&members);
         let placed = if let Some(thread) = thread {
             // A thread is checked for what it loses, in every frame, when its story is written.
             let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);

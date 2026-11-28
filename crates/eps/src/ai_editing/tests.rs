@@ -5088,6 +5088,89 @@ fn kinsoku_settings_come_back_on_each_paragraph() {
     assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
 }
 
+/// Type in spot inks (CMYK, RGB and Lab) and a global process color, as its fill and as its
+/// stroke, at full strength and at a tint: each color reads back linked to its swatch at its tint, with no warning, as key 5
+/// of the run's paint names an art style of one paint that holds the link. A link to a process
+/// swatch that isn't global still warns: the editing data can't hold it.
+#[test]
+fn type_in_spot_and_global_colors_reads_back_linked_at_its_tint() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut doc = Document::new(300.0, 200.0);
+    doc.swatches = vec![
+        Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false },
+        Swatch { name: "White Ink".into(), paint: solid(white), global: true, spot: true },
+        Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true },
+        Swatch { name: "Sky".into(), paint: solid(SKY), global: true, spot: true },
+        Swatch { name: "Mint".into(), paint: solid(MINT), global: true, spot: true },
+        Swatch { name: "Brand".into(), paint: solid(BRAND), global: true, spot: false },
+        Swatch { name: "Ink".into(), paint: solid(GOLD), global: false, spot: false },
+    ]
+    .into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let stroked = |fill: Paint, stroke: Paint| CharStyle { size: 24.0, fill, stroke, stroke_width: 1.0, ..CharStyle::default() };
+    let mut t = TextObject::point(Point::new(20.0, 60.0), "", style(24.0, Color::BLACK));
+    t.runs = vec![
+        TextRun::new("WHITE ", stroked(linked("White Ink", white, 1.0), Paint::None)),
+        TextRun::new("RED ", stroked(linked("Red Ink", red, 0.4), linked("Brand", BRAND, 0.6))),
+        TextRun::new("SKY ", stroked(linked("Sky", SKY, 0.75), linked("Red Ink", red, 1.0))),
+        TextRun::new("MINT ", stroked(linked("Mint", MINT, 0.3), Paint::None)),
+        TextRun::new("BRAND", stroked(linked("Brand", BRAND, 1.0), linked("White Ink", white, 0.5))),
+    ];
+    let n = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let runs = |d: &Document| {
+        let mut all = vec![];
+        paths(&d.layers, &mut all);
+        all.iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.runs.iter().map(|r| (r.text.clone(), paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(runs(&read_back(&doc)), runs(&doc));
+    let mut process = doc.clone();
+    let id = process.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = process.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.fill = linked("Ink", GOLD, 1.0);
+    }
+    assert_eq!(export_ai_editing(&process, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+}
+
+/// Type whose story isn't written (a thread the text document can't hold, written as outlines)
+/// leaves no art style for its colors behind.
+#[test]
+fn type_written_as_outlines_leaves_no_style_for_its_colors() {
+    use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut doc = Document::new(300.0, 200.0);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true });
+    doc.swatches = swatches.into();
+    let inked = CharStyle { size: 12.0, fill: linked("Red Ink", red, 1.0), ..CharStyle::default() };
+    let mut first = TextObject::point(Point::ZERO, "A story in a spot ink that runs on.", inked.clone());
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 20.0, 120.0, 60.0)) };
+    first.xf = Affine::IDENTITY;
+    // Point type can't be a frame of a thread: the text document doesn't hold the thread.
+    let mut second = TextObject::point(Point::new(20.0, 120.0), "", inked.clone());
+    second.runs = vec![TextRun::new("", inked)];
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("%AI11_BeginTextDocument"), "the thread was written as type");
+    assert!(!text.contains("/SimpleStyle"), "{text}");
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -8122,11 +8205,12 @@ fn a_masks_art_with_an_effect_no_style_holds_is_written_as_it_draws() {
     assert!(apart <= 4, "{apart} pixels differ");
 }
 
-/// On a large canvas no art style is written (the reader scales the styles of a large canvas):
-/// objects with effects are written as their vector art with their geometry effects applied, with a
-/// warning.
+/// On a large canvas no art style of an object is written (the reader scales the styles of a large
+/// canvas): objects with effects are written as their vector art with their geometry effects
+/// applied, with a warning. Type's colors keep their swatch links there: their styles hold no
+/// lengths.
 #[test]
-fn a_large_canvas_writes_no_art_styles() {
+fn a_large_canvas_writes_only_the_art_styles_of_type_colors() {
     let mut doc = Document::new(20000.0, 100.0);
     let n = styled_rect(
         &mut doc,
@@ -8141,6 +8225,33 @@ fn a_large_canvas_writes_no_art_styles() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::LARGE_CANVAS_STYLES), "{:?}", out.warnings);
     assert!(!String::from_utf8(out.program).unwrap().contains("ArtStyle"));
+
+    let mut typed = Document::new(20000.0, 100.0);
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let mut swatches: Vec<Swatch> = typed.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Red Ink".into(), paint: solid(red), global: true, spot: true });
+    typed.swatches = swatches.into();
+    let fill = linked("Red Ink", red, 0.4);
+    let t = vectorcraft_doc::TextObject::point(
+        vectorcraft_geom::Point::new(20.0, 60.0),
+        "FAR",
+        vectorcraft_doc::CharStyle { size: 24.0, fill: fill.clone(), ..vectorcraft_doc::CharStyle::default() },
+    );
+    let n = text_node(&mut typed, t);
+    let layer = typed.layers[0].id;
+    typed.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&typed, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let mut all = vec![];
+    paths(&read_back(&typed).layers, &mut all);
+    let fills: Vec<String> = all
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(paint(&t.runs[0].style.fill)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills, [paint(&fill)]);
 }
 
 #[test]
@@ -9307,6 +9418,57 @@ fn a_masked_copy_nested_too_deep_for_its_mask_keeps_all_of_its_pixels() {
     let masks = String::from_utf8_lossy(&out.program).matches("(AI9_Mask)").count();
     assert_eq!(sizes.len() - whole, masks, "{sizes:?}");
     assert!(whole >= 2, "the first copy and a copy whose mask is left out: {sizes:?}");
+}
+
+/// A distorted image in the art of an opacity mask written at the deepest level a mask takes is
+/// written as its pieces, as an undistorted image there is written whole: the mask keeps its art.
+#[test]
+fn a_distorted_image_in_a_mask_at_the_nesting_limit_keeps_its_pixels() {
+    // GUARDS: the distorted image was written there as an empty group, so the mask hid the object.
+    let masks = |distorted: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut masked = speckled_photo(&mut doc);
+        let mut art = speckled_photo(&mut doc);
+        if distorted {
+            let q = [(40.0, 10.0), (100.0, 10.0), (148.0, 138.0), (20.0, 138.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+            art.set_image_corners(q).unwrap();
+        }
+        masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }));
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(masked) });
+        // Each isolated instance is written as its art, a level deeper: the masked object's mask
+        // art is at the limit.
+        for i in 1..writer::MAX_NEST - 1 {
+            let mut inner = instance(&mut doc, &format!("S{}", i - 1), Affine::IDENTITY);
+            inner.isolate = true;
+            doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(inner) });
+        }
+        let mut outer = instance(&mut doc, &format!("S{}", writer::MAX_NEST - 2), Affine::IDENTITY);
+        outer.isolate = true;
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS), "{:?}", out.warnings);
+        // Each mask read back, by whether its art holds an image.
+        let back = read_back(&doc);
+        let mut found = vec![];
+        let mut look = |n: &Node| {
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut image = false;
+                m.art.walk(&mut |c| image |= matches!(c.kind, NodeKind::Image(_)));
+                found.push(image);
+            }
+        };
+        for l in &back.layers {
+            l.walk(&mut look);
+        }
+        for s in &back.symbols {
+            s.art.walk(&mut look);
+        }
+        found
+    };
+    let (plain, distorted) = (masks(false), masks(true));
+    assert!(!plain.is_empty() && plain.iter().all(|i| *i), "{plain:?}");
+    assert_eq!(distorted, plain);
 }
 
 /// [`warped_photo`] linked to `/Users/someone/Job/art/photo.png`, in folder `art` next to the

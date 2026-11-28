@@ -671,6 +671,48 @@ fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
     s.execute("text.setPathHandle", &handle(Value::Null)).unwrap();
 }
 
+/// Range edits, Set Text, area and on-path type and the glyph commands refuse a param of the wrong
+/// type with an error naming the param, and leave the document and the undo history as they were:
+/// text that is not a string, a byte offset that is fractional or negative, and a point that is not
+/// two numbers. Null counts as a param left out, which keeps its default.
+#[test]
+fn text_edits_refuse_a_param_of_the_wrong_type() {
+    use crate::tests::not_refused;
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let frame = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let line = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 400}, {"x": 400, "y": 400}]})).unwrap()["id"].clone();
+    let string = |k: &str| format!("`{k}` must be a string");
+    let whole = "`start` must be a whole number".to_string();
+    let point = "`at` must be a point: [x, y]".to_string();
+    let calls: Vec<(String, Value, String)> = [
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 1, "insert": 5}), string("insert")),
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 3, "insert": ["x"]}), string("insert")),
+        ("text.setText", json!({"ids": [id.0], "text": true}), string("text")),
+        ("text.createInPath", json!({"path": frame, "mode": 1}), string("mode")),
+        ("text.createInPath", json!({"path": frame, "text": true}), string("text")),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "text": "a", "at": [1, "y"]}), point.clone()),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "at": [100]}), point.clone()),
+        ("text.createInPath", json!({"path": frame, "text": "a", "at": "start"}), point),
+        ("text.touchType", json!({"id": id.0, "start": 1.5, "dy": 2}), whole.clone()),
+        ("text.touchType", json!({"id": id.0, "start": -1, "dy": 2}), whole.clone()),
+        ("text.glyphAlternates", json!({"id": id.0, "start": 1.5}), whole.clone()),
+        ("text.setGlyphAlternate", json!({"id": id.0, "start": -1, "gid": null}), whole),
+    ]
+    .into_iter()
+    .map(|(cmd, p, msg)| (cmd.to_string(), p, msg))
+    .collect();
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    // Null keeps each default: nothing inserted, area type with no text, no start point.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 1, "insert": null})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "bc");
+    let r = s.execute("text.createInPath", &json!({"path": frame, "mode": null, "text": null, "at": null})).unwrap();
+    let t = obj(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(matches!(t.kind, TextKind::Area { .. }) && t.plain_text().is_empty(), "{:?}", t.kind);
+    s.execute("text.createInPath", &json!({"path": line, "mode": "onPath", "text": "a", "at": [100, 400]})).unwrap();
+}
+
 /// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
 fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
     let t = obj(s, id);
@@ -3206,6 +3248,24 @@ fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
     typed(&|s| {
         s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
     });
+}
+
+/// An effect applied while typing waits for its session to end keeps the typing as its own step
+/// first, and the effect's own step still keeps the effect it applied.
+#[test]
+fn an_effect_applied_while_typing_waits_keeps_its_effect_on_its_step() {
+    let mut s = session();
+    s.prefs.real_time_drawing = false;
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello");
+    s.select_tool("type", v).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    click(&mut s, b.x1 - 1.0, b.center().y);
+    s.tool_text(" world", v).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [id.0]})).unwrap();
+    assert_eq!(undo_labels(&s).iter().rev().take(2).collect::<Vec<_>>(), ["Feather", "Typing"]);
+    let h = s.doc().unwrap().history.undo.last().unwrap();
+    assert_eq!(h.effect(), Some("stylize.feather"));
 }
 
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the

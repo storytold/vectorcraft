@@ -1014,6 +1014,17 @@ pub(super) fn paints_apart(look: &Node) -> bool {
     }
     let mut paths = vec![];
     leaves(look, &mut paths);
+    // A gradient or pattern instance (`Bb … BB`) wraps only the last path of a compound path, the paths before it
+    // keep the default paint: many paths alike, then one that paints with a gradient, are one compound path's
+    // subpaths and its paint (see `compound`), not several paints.
+    if let [rest @ .., last] = paths.as_slice()
+        && rest.len() >= 2
+        && rest.windows(2).all(|w| matches!(w, [a, b] if a.appearance == b.appearance))
+        && last.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. }))
+        && rest.iter().all(|p| p.appearance.items.iter().all(|i| !matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. })))
+    {
+        return false;
+    }
     paths.windows(2).any(|w| matches!(w, [a, b] if a.appearance != b.appearance))
 }
 
@@ -1750,6 +1761,14 @@ pub(crate) struct ParsedStyle {
 /// parses it. `None` when the section doesn't define it.
 pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
     crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// The color type takes from art style `parsed` when a character's fill or stroke names it (key 5
+/// of its paint, `ate`): a style of one paint whose paint is a color with a swatch, at its tint and
+/// linked to that swatch ([`crate::import::ai::style::ArtStyle::simple_color`]). `None` for any
+/// other style.
+pub(crate) fn parsed_type_color(parsed: &ParsedStyle) -> Option<&Paint> {
+    parsed.style.simple_color.as_ref().map(|(paint, _)| paint)
 }
 
 /// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a

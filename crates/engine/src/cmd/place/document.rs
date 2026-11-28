@@ -177,6 +177,13 @@ fn opened_document_art(
         super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
+    // The native file does not store type's layout bounds. Measure them before cropping or
+    // copying the art, so the placed group keeps the positions of aligned point type.
+    for warning in crate::Session::refresh_text_bounds(&mut l.doc) {
+        if !l.warnings.contains(&warning) {
+            l.warnings.push(warning);
+        }
+    }
     let n = l.doc.artboards.len();
     let board = (page as usize).checked_sub(1).and_then(|i| l.doc.artboards.get(i)).map(|a| a.rect);
     let artboards = if n == 1 { "artboard" } else { "artboards" };
@@ -333,7 +340,7 @@ fn read_source(
     }
     let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
     let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
-    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None, file_font: Default::default() };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
@@ -468,7 +475,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         let Some(blob) = out.images.get(&p.key) else { continue };
         match vectorcraft_doc::placed_document::full_bytes(&p, blob) {
             Some(bytes) => {
-                out.images.insert(p.key.clone(), ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone() });
+                out.images.insert(
+                    p.key.clone(),
+                    ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone(), file_font: Default::default() },
+                );
             }
             None => {
                 previews.insert(p.key);

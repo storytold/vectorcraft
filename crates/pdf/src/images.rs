@@ -29,7 +29,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
@@ -528,6 +528,22 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
     }
 }
 
+/// Are samples of type `t` grey (with or without alpha)? [`recode`] keeps such pixels grey.
+fn grey_type(t: ExtendedColorType) -> bool {
+    use ExtendedColorType as T;
+    matches!(t, T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16)
+}
+
+/// Does the image in `bytes` hold grey samples, which [`recode`] keeps grey whatever the Output
+/// settings? Reads only its header; `false` for one that can't be read.
+pub(crate) fn is_grey(bytes: &[u8]) -> bool {
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()
+        .and_then(|r| r.into_decoder().ok())
+        .is_some_and(|d| grey_type(d.original_color_type()))
+}
+
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
@@ -554,8 +570,7 @@ pub(crate) fn recode(
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
     let Ok(mut decoder) = reader.into_decoder() else { return keep };
     let dims = decoder.dimensions();
-    use ExtendedColorType as T;
-    let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
+    let grey = grey_type(decoder.original_color_type());
     // Pixels in a profile they are converted from are decoded, whatever the Compression settings.
     // Grey pixels keep their profile unless the destination is sRGB ([`ToSrgb::grey`]).
     let then = to_srgb.and_then(|t| t.then);
@@ -685,11 +700,17 @@ pub(crate) fn recode(
     Recoded { image, warning: rule.instead, note, unconverted }
 }
 
+/// Whether coverage `cover` (one byte a pixel) only covers or doesn't, as a 1-bit image mask's
+/// does: what the Monochrome settings resample, and kept so.
+pub(crate) fn bilevel_coverage(cover: &[u8]) -> bool {
+    cover.iter().all(|v| *v == 0 || *v == 255)
+}
+
 /// A colorized image's coverage (one sample a pixel, `w` × `h`, see
 /// [`ImageBlob::coverage`]) placed `size` points wide and high, resampled as the Compression
 /// settings `c` ask for monochrome images (when every sample is 0 or 255) or grayscale ones.
 pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c: &CompressionSettings) -> Option<(u32, u32, Vec<u8>)> {
-    let mono = cover.iter().all(|v| *v == 0 || *v == 255);
+    let mono = bilevel_coverage(&cover);
     let rule = rule(c, if mono { Kind::Mono } else { Kind::Gray });
     let to = sized(&rule, (w, h), size);
     if to == (w, h) {
@@ -838,6 +859,21 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     }
     let back = if clip { 0 } else { 255 };
     Some(img.pixels().map(|p| ((u32::from(p[0]) * u32::from(p[3]) + back * (255 - u32::from(p[3])) + 127) / 255) as u8).collect())
+}
+
+/// The alpha of each pixel of image `blob` (255 for an image without alpha), when it is `width` ×
+/// `height` pixels. `None` for a CMYK image, another size, or one too large to hold as RGBA or
+/// that can't be decoded; as in [`mask_alpha`], the size is read from the header first.
+pub(crate) fn image_alpha(blob: &ImageBlob, width: u32, height: u32) -> Option<Vec<u8>> {
+    if blob.is_cmyk() {
+        return None;
+    }
+    let reader = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?;
+    if reader.into_dimensions().ok()? != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+        return None;
+    }
+    let img = decoded(&blob.bytes)?.into_rgba8();
+    (img.dimensions() == (width, height)).then(|| img.pixels().map(|p| p[3]).collect())
 }
 
 /// Opaque colour `samples` (grey, RGB, or CMYK ink amounts, as `space` says) as a JPEG at
