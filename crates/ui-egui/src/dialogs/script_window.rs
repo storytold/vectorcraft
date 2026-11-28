@@ -23,16 +23,18 @@ use craft::behavior::{Selection, SelectionChange, keyed};
 use craft::theme::Variant;
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Scroll, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, RowHeight, Scroll, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::display::{Progress, Text};
 use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow};
 use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Env;
 use craft::ui::runtime::focus::Initial;
 use craft::ui::runtime::keys::take_submit;
 use craft::ui::runtime::overlay;
 use craft::ui::sections::{DialogRole, FooterButton, GroupBox};
+use craft::ui::style::StyleCx;
 use craft::ui::text::TextField;
 use craft::ui::value_drag::Slider;
 use egui::Ui;
@@ -50,15 +52,13 @@ pub const KIND: &str = "scriptWindow";
 /// The most of the dialog's content shown at once; a larger dialog scrolls.
 const MAX_SHOWN: egui::Vec2 = egui::vec2(960.0, 640.0);
 
-/// The height of a list box row in the engine's layout, and the room the layout adds around the
-/// rows.
-const LIST_ROW: f32 = 18.0;
+/// The room the engine's layout adds around a list box's rows.
 const LIST_PAD: f32 = 6.0;
 
-/// How many rows a list box `height` tall shows; it scrolls the rest, inside the dialog's own
-/// scroll.
-fn list_rows(height: f32) -> u16 {
-    let rows = ((height - LIST_PAD) / LIST_ROW).floor();
+/// How many rows `row` tall a list box `height` tall shows; it scrolls the rest, inside the
+/// dialog's own scroll.
+fn list_rows(height: f32, row: f32) -> u16 {
+    let rows = ((height - LIST_PAD) / row).floor();
     if rows.is_finite() { rows.clamp(1.0, f32::from(u16::MAX)) as u16 } else { 1 }
 }
 
@@ -517,11 +517,13 @@ fn control(ui: &mut Ui, drafts: &BTreeMap<u64, String>, place: &Place, (i, n, pr
             // Screen readers read the box as a list box, by its name or the static text before
             // it, with the selected item as its value. The box has no opener to keep the keyboard
             // focus, so a press on a row gives it the focus and the arrow keys go on from that row.
+            // The rows it shows are as many as fit in its height at the height the list draws them.
+            let row = RowHeight::Control.of(&StyleCx::of_env(ui.ctx(), &Env::of(ui)));
             let out = List::<usize>::options(list_name(n, prompt))
                 .focus_on_press(true)
                 .id_salt(salt)
                 .enabled(enabled)
-                .max_rows(list_rows(n.rect.h))
+                .max_rows(list_rows(n.rect.h, row))
                 .selection(Bind::given(selection))
                 .show_items(ui, &source, &mut |k, _| ListRow::new(n.items.get(*k).cloned().unwrap_or_default()));
             // A click activates a row; the arrow keys and typed letters select one.

@@ -801,14 +801,18 @@ fn an_arrow_key_and_a_click_in_a_list_box_give_the_script_the_change() {
     step(&mut app, Vec::new());
     access_nodes(&mut app);
     let nodes = access_nodes(&mut app);
-    let b = nodes
-        .iter()
-        .map(|(_, n)| n)
-        .find(|n| n.role() == egui::accesskit::Role::ListItem && n.label() == Some("plum"))
-        .and_then(egui::accesskit::Node::bounds)
-        .unwrap_or_else(|| panic!("no plum row"));
-    // The top half of the row: the OK button below the list starts in the row's lower half.
-    let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, b.y0 as f32 + 4.0);
+    let bounds = |role: egui::accesskit::Role, label: Option<&str>| {
+        nodes
+            .iter()
+            .map(|(_, n)| n)
+            .find(|n| n.role() == role && (label.is_none() || n.label() == label))
+            .and_then(egui::accesskit::Node::bounds)
+            .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+    };
+    let (list, ok) = (bounds(egui::accesskit::Role::ListBox, None), bounds(egui::accesskit::Role::Button, Some("OK")));
+    assert!(list.y1 <= ok.y0, "the list box ends above the OK button below it: {list:?} {ok:?}");
+    let b = bounds(egui::accesskit::Role::ListItem, Some("apple"));
+    let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, ((b.y0 + b.y1) * 0.5) as f32);
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
     step(&mut app, vec![egui::Event::PointerMoved(at)]);
     step(&mut app, vec![button(true)]);
@@ -816,7 +820,7 @@ fn an_arrow_key_and_a_click_in_a_list_box_give_the_script_the_change() {
     assert!(until_window(&mut app), "the change handler runs again");
     give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
     assert!(!until_window(&mut app));
-    assert_eq!(log(&app), json!([[1, [1, 2]]]), "the arrow key picked pear, the click picked plum, and the script was told each time");
+    assert_eq!(log(&app), json!([[1, [1, 0]]]), "the arrow key picked pear, the click picked apple, and the script was told each time");
 }
 
 #[test]
