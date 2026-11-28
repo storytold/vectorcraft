@@ -1,15 +1,19 @@
 //! File › Scripts › Other Script… (`ui.runScript`): the chooser, the warning and its preference,
 //! a run advanced frame by frame, Stop, and the questions a run and quitting ask.
 
+use std::sync::{Arc, Mutex};
+
 use craft::host::{PickKind, Picked};
 use craft::ui::dialog::{DialogResult, StackDialog};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::clipboard::SVG;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
 use vectorcraft_engine::script::folder::Clock;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
+use super::sysclip::{Board, fake, writes, written};
 use crate::dialogs::script_run::{
     self, BY_PERSON, CLOSE_KIND, FilesAnswer, GROWTH_KIND, GrowthQuestion, KIND, PICKER_KIND, RunQuestion, ScriptFiles,
 };
@@ -612,38 +616,48 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     finish(&mut app);
 }
 
+/// Whether the app wrote the fake system clipboard since `seen` writes, once the formats it is making
+/// are written. `seen` becomes the new count.
+fn offered(app: &mut VectorcraftApp, board: &Arc<Mutex<Board>>, seen: &mut usize) -> bool {
+    let _ = app.written_clipboard_text();
+    let now = writes(board);
+    std::mem::replace(seen, now) != now
+}
+
 #[test]
 fn a_scripts_copy_is_offered_to_other_apps_when_the_run_ends() {
-    let mut app = app();
+    let (fake, board) = fake();
+    let services = crate::Services { clipboard: Some(Box::new(fake)), ..Default::default() };
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    app.run("file.new", json!({})).unwrap();
     app.session.prefs.show_external_script_warning = false;
-    app.clipboard_out = None;
+    let mut seen = writes(&board);
     let draw = "vc.run('shape.rectangle', {x:0,y:0,width:10,height:10});";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": draw })).unwrap().unwrap();
     finish(&mut app);
-    assert!(app.clipboard_out.is_none(), "a run without a Copy offers nothing");
+    assert!(!offered(&mut app, &board, &mut seen), "a run without a Copy offers nothing");
     let copy = "vc.run('select.all', {}); app.copy();";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": copy })).unwrap().unwrap();
     finish(&mut app);
-    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+    assert!(offered(&mut app, &board, &mut seen));
+    assert!(written(&board).contains(&SVG), "{:?}", written(&board));
     // A Copy of what the clipboard already holds is offered again.
-    app.clipboard_out = None;
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": copy })).unwrap().unwrap();
     finish(&mut app);
-    assert!(app.clipboard_out.is_some());
+    assert!(offered(&mut app, &board, &mut seen));
     // A Copy inside a batch of commands counts too, also of what the clipboard already holds.
-    app.clipboard_out = None;
     let batch = "vc.run('select.all', {}); vc.run('command.batch', {commands: [{command: 'edit.copy', params: {}}]});";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": batch })).unwrap().unwrap();
     finish(&mut app);
-    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+    assert!(offered(&mut app, &board, &mut seen));
+    assert!(written(&board).contains(&SVG), "{:?}", written(&board));
     // A clipboard an import replaced after the Copy is not offered.
-    app.clipboard_out = None;
     let import =
         "app.copy(); vc.run('clipboard.importSvg', {svg: '<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>'});";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": import })).unwrap().unwrap();
     finish(&mut app);
     assert_eq!(app.ui.status, "Ran script");
-    assert!(app.clipboard_out.is_none());
+    assert!(!offered(&mut app, &board, &mut seen));
     // An import in a batch that fails and is rolled back leaves the copied clipboard to be offered.
     let rolled_back = "app.copy(); try { vc.run('command.batch', {commands: [{command: 'clipboard.importSvg', params: {svg: '<svg \
                        xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>'}}, {command: 'no.such', params: {}}]}); } \
@@ -651,25 +665,25 @@ fn a_scripts_copy_is_offered_to_other_apps_when_the_run_ends() {
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": rolled_back })).unwrap().unwrap();
     finish(&mut app);
     assert_eq!(app.ui.status, "Ran script");
-    assert!(app.clipboard_out.is_some());
+    assert!(offered(&mut app, &board, &mut seen));
     // A run that copies and then fails leaves the clipboard and what other apps were offered alone.
-    app.clipboard_out = None;
     let fails = "app.cut(); throw new Error('stop');";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": fails })).unwrap().unwrap();
     finish(&mut app);
-    assert!(app.clipboard_out.is_none());
+    assert!(!offered(&mut app, &board, &mut seen));
     assert_eq!(objects(&app), 1);
     // A Copy with nothing selected copies nothing, and other apps keep what they were offered.
     let empty = "vc.run('select.none', {}); app.copy();";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": empty })).unwrap().unwrap();
     finish(&mut app);
     assert_eq!(app.ui.status, "Ran script");
-    assert!(app.clipboard_out.is_none());
+    assert!(!offered(&mut app, &board, &mut seen));
     // A run that automation takes to its end at once offers its Copy too.
     app.session.script_frames = false;
     let reply = app.run("script.run", json!({ "source": copy, "name": "t.js" })).unwrap();
     assert_eq!(reply["copied"], true);
-    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+    assert!(offered(&mut app, &board, &mut seen));
+    assert!(written(&board).contains(&SVG), "{:?}", written(&board));
 }
 
 /// With two files picked, the file dialog lists them in a scrolled group named Picked files.
