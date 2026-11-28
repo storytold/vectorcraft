@@ -1214,10 +1214,12 @@ fn a_list_longer_than_the_room_left_is_not_read() {
     before.extend((2..2 + wide).flat_map(|f| [(f, 1), (1, f)]));
     let order: Vec<usize> = (0..2 + wide).collect();
     // Room for the lists (a quarter of the pairs) but not for 1's list, and room for it.
-    for room in [before.len().div_ceil(4), wide - 1, wide + 3] {
+    // With too little room only 0's one-entry list is read; with room for both, 1's list as well.
+    for (room, want) in [(before.len().div_ceil(4), 1), (wide - 1, 1), (wide + 3, wide + 1)] {
         super::LIST_ENTRIES_READ.with(|read| read.set(0));
         let (drawn, taken) = in_pairs_order(&order, &before, &[], room);
         let read = super::LIST_ENTRIES_READ.with(|read| read.get());
+        assert_eq!(read, want, "room {room}: {read} entries read, {taken} steps");
         assert!(read <= taken && taken <= room, "room {room}: {read} entries read, {taken} steps");
         assert_eq!(drawn.len(), order.len());
     }

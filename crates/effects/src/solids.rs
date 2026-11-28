@@ -1181,8 +1181,10 @@ impl Placed {
 }
 
 /// The most pairs of faces [`local_order`] compares, together with the steps it takes to break
-/// rings of them ([`drawn_in_pairs_order`]), and the most pairs [`cut_stroke_faces`] compares; the
-/// pairs they have not reached by then keep the order of their depths.
+/// rings of them ([`drawn_in_pairs_order`]), and the most pairs [`cut_stroke_faces`] compares. A
+/// pair not compared by then adds no constraint on the order (the pairs that were compared can
+/// still move its faces), and once the steps run out the first face left by depth goes next only
+/// when no face can.
 const MAX_LOCAL_CHECKS: usize = 4_000_000;
 
 /// The polygon of `f` and the sign of its turns, when `f` is a face turned toward the viewer other
